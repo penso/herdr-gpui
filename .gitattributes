@@ -8,3 +8,7 @@ skills/** text eol=lf
 # Conflicts are rebuilt by Cargo rather than resolved by hand; `just hooks`
 # configures the driver. Without it Git falls back to its ordinary merge.
 Cargo.lock merge=cargo-lock
+
+# The daemon's Rust tests compare the native app's JSON fixtures byte for
+# byte with what they write, so a Windows checkout must not turn LF to CRLF.
+ios/HerdrRemoteCore/Tests/HerdrRemoteCoreTests/Fixtures/** text eol=lf

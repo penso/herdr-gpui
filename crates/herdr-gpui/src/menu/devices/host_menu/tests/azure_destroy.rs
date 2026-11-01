@@ -35,8 +35,11 @@ fn removing_an_azure_device_deletes_its_machine_unless_asked_not_to(cx: &mut Tes
     view.read_with(cx, |view, _| {
         let host = host(view);
         assert!(host.destroy);
-        assert_eq!(super::super::remove_label(host), "Delete VM");
-        let note = super::super::removal_note(host);
+        assert_eq!(
+            super::super::remove_label(host).replace(['\u{2068}', '\u{2069}'], ""),
+            "Delete VM"
+        );
+        let note = super::super::removal_note(host).replace(['\u{2068}', '\u{2069}'], "");
         assert!(
             note.starts_with("Delete the VM Build box (herdr-vm) at Azure"),
             "{note}"

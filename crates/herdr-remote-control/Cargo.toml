@@ -26,12 +26,14 @@ server = [
     "dep:hyper-util",
     "dep:if-addrs",
     "dep:maud",
+    "dep:mdns-sd",
     "dep:p256",
     "dep:pulldown-cmark",
     "dep:rcgen",
     "dep:rustls",
     "dep:sha2",
     "dep:socket2",
+    "dep:sysinfo",
     "dep:time",
     "dep:tokio",
     "dep:tokio-rustls",
@@ -57,6 +59,8 @@ rustix                        = { features = ["system"], workspace = true }
 serde.workspace               = true
 serde_json.workspace          = true
 thiserror.workspace           = true
+# A host's own `[remote]` table, read by `enroll`.
+toml.workspace                = true
 # Settings edits to the `[remote]` table.
 toml_edit.workspace           = true
 tracing.workspace             = true
@@ -74,12 +78,16 @@ hyper          = { optional = true, workspace = true }
 hyper-util     = { optional = true, workspace = true }
 if-addrs       = { optional = true, workspace = true }
 maud           = { optional = true, workspace = true }
+# Advertises the daemon over Bonjour so phones nearby find it to pair.
+mdns-sd        = { optional = true, workspace = true }
 p256           = { optional = true, workspace = true }
 pulldown-cmark = { optional = true, workspace = true }
 rcgen          = { optional = true, workspace = true }
 rustls         = { optional = true, workspace = true }
 sha2           = { optional = true, workspace = true }
 socket2        = { optional = true, workspace = true }
+# This computer's CPU and memory, shown above its workspaces on a phone.
+sysinfo        = { optional = true, workspace = true }
 time           = { optional = true, workspace = true }
 tokio          = { optional = true, workspace = true }
 tokio-rustls   = { optional = true, workspace = true }
@@ -93,7 +101,9 @@ x509-parser    = { optional = true, workspace = true }
 [target.'cfg(unix)'.dependencies]
 
 [dev-dependencies]
-p256.workspace      = true
-roxmltree.workspace = true
-tempfile.workspace  = true
-tower.workspace     = true
+futures-util.workspace      = true
+p256.workspace              = true
+roxmltree.workspace         = true
+tempfile.workspace          = true
+tokio-tungstenite.workspace = true
+tower.workspace             = true

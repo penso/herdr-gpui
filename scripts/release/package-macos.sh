@@ -7,10 +7,12 @@ version_check "$1"
 [[ -f $2 && -f $3 && -d $4 ]] || fail 'Two binary files and an existing output directory required'
 [[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
 # The app starts chats with the herdr-acp beside its executable, runs the
-# herdr-remote-control beside it as a user service, and runs automations in
-# the herdr-automate there, and Herdr 2 terminals in the herdr-core there;
-# each build leaves all four beside its herdr-gpui (herdr-core fetched pinned).
-companions=(herdr-acp herdr-remote-control herdr-automate herdr-core)
+# herdr-remote-control beside it as a user service, runs automations in the
+# herdr-automate there, starts herdr-nearby (nearby pairing over Bluetooth)
+# while its pairing dialog is open, and runs Herdr 2 terminals in the
+# herdr-core there; each build leaves all five beside its herdr-gpui
+# (herdr-core fetched pinned).
+companions=(herdr-acp herdr-remote-control herdr-automate herdr-nearby herdr-core)
 for companion in "${companions[@]}"; do
     [[ -f $(dirname -- "$2")/$companion && -f $(dirname -- "$3")/$companion ]] || fail "A $companion beside each binary required"
 done

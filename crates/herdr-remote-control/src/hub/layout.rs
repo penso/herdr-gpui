@@ -3,7 +3,9 @@
 //! a daemon.
 
 use herdr_chat_protocol::{EndpointId, TOKEN};
-use herdr_client::protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot};
+use herdr_client::protocol::{
+    AgentStatus, ClientShellAgent, ClientShellSnapshot, ClientShellWorktree,
+};
 use std::collections::HashSet;
 
 /// The most chats one daemon may list; the rest are left out.
@@ -25,6 +27,9 @@ pub(crate) struct Workspace {
     pub(crate) branch: Option<String>,
     /// The folder a new tab or chat in it starts in.
     pub(crate) cwd: String,
+    /// The repository checkout it is, which groups a repository's linked
+    /// worktrees under it as Herdr UI's sidebar does.
+    pub(crate) worktree: Option<ClientShellWorktree>,
     pub(crate) chats: Vec<Chat>,
     pub(crate) terminals: Vec<Terminal>,
 }
@@ -50,9 +55,20 @@ pub(crate) struct Terminal {
     /// Its panes in the snapshot's order; never empty for a listed tab.
     pub(crate) panes: Vec<TerminalPane>,
     pub(crate) zoomed: bool,
-    /// The agent Herdr detects in it, such as `claude` run in a shell, and
-    /// its status: the most pressing when several panes hold one.
-    pub(crate) agent: Option<(Option<String>, AgentStatus)>,
+    /// The agent Herdr detects in it, such as `claude` run in a shell: the
+    /// most pressing when several panes hold one.
+    pub(crate) agent: Option<TerminalAgent>,
+}
+
+/// An agent Herdr detects in a terminal tab, outside any chat.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TerminalAgent {
+    pub(crate) name: Option<String>,
+    pub(crate) status: AgentStatus,
+    /// The pane it runs in, which a phone opens for it.
+    pub(crate) pane: String,
+    /// What it works on, as its terminal title says.
+    pub(crate) title: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -142,6 +158,14 @@ fn agent_kind(agent: &ClientShellAgent) -> Option<String> {
         .cloned()
 }
 
+/// What `agent` works on: the title it set, else its terminal's.
+fn agent_title(agent: &ClientShellAgent) -> Option<&str> {
+    [&agent.title, &agent.terminal_title_stripped]
+        .into_iter()
+        .flatten()
+        .find_map(|title| herdr_client::text::caption(title))
+}
+
 /// The workspaces of `snapshot` in its order, each with its chat panes (one
 /// per pane, at most [`MAX_CHATS`] in all) and the tabs that hold none.
 pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
@@ -158,12 +182,7 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                     .find(|pane| pane.pane_id == agent.pane_id)
                     .and_then(|pane| pane.label.as_deref())
                     .and_then(herdr_client::text::caption)
-                    .or_else(|| {
-                        [&agent.title, &agent.terminal_title_stripped]
-                            .into_iter()
-                            .flatten()
-                            .find_map(|title| herdr_client::text::caption(title))
-                    })
+                    .or_else(|| agent_title(agent))
                     .map(str::to_owned)
                     .unwrap_or_else(|| tab_label(snapshot, &agent.tab_id));
                 (
@@ -213,7 +232,12 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                         .iter()
                         .filter(|agent| agent.tab_id == tab.tab_id)
                         .max_by_key(|agent| urgency(agent.agent_status))
-                        .map(|agent| (agent_kind(agent), agent.agent_status));
+                        .map(|agent| TerminalAgent {
+                            name: agent_kind(agent),
+                            status: agent.agent_status,
+                            pane: agent.pane_id.clone(),
+                            title: agent_title(agent).map(str::to_owned),
+                        });
                     let terminal = Terminal {
                         tab: tab.tab_id.clone(),
                         label: herdr_client::text::tab_label(snapshot, tab).to_owned(),
@@ -231,6 +255,7 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                 label: workspace.label.clone(),
                 branch: workspace.branch.clone(),
                 cwd: workspace.new_workspace_cwd.clone(),
+                worktree: workspace.worktree.clone(),
                 chats,
                 terminals,
             }

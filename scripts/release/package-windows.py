@@ -8,7 +8,8 @@ the zip carries herdr-gpui-launcher.exe, the windowed launcher that starts it wi
 console window from Explorer or the Start menu, herdr-acp.exe, which the app
 starts chats with, herdr-remote-control.exe, the remote control daemon the
 app runs as a scheduled task, herdr-automate.exe, the automation daemon,
-and herdr-core.exe, which runs Herdr 2 terminals; the build leaves all four
+herdr-nearby.exe, the Bluetooth helper for nearby pairing and presence, and
+herdr-core.exe, which runs Herdr 2 terminals; the build leaves them all
 beside herdr-gpui.exe (herdr-core.exe fetched pinned).
 """
 import argparse
@@ -45,7 +46,8 @@ def package(version, target, binary, launcher, output_dir, notices):
     if not launcher.is_file():
         raise ValueError("Launcher file required")
     companions = [binary.parent / name for name in ("herdr-acp.exe", "herdr-remote-control.exe",
-                                                         "herdr-automate.exe", "herdr-core.exe")]
+                                                         "herdr-automate.exe", "herdr-nearby.exe",
+                                                         "herdr-core.exe")]
     for companion in companions:
         if not companion.is_file():
             raise ValueError(f"A {companion.name} beside the binary required")

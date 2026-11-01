@@ -8,6 +8,7 @@ use super::{
 };
 use crate::{
     HerdrWindow,
+    i18n::fl,
     motion::{self, ENTER, Toggle},
     search_input::SearchInput,
     window::Flash,
@@ -61,7 +62,7 @@ impl Annotations {
         }
         let input = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder("Describe the change\u{2026}", cx);
+            input.set_placeholder_with(|| fl!("browser-notes-describe"), cx);
             input
         });
         tab.input = Some(input.clone());
@@ -196,7 +197,7 @@ impl HerdrWindow {
     pub(crate) fn toggle_shown_annotating(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.zoomed_tab(cx).filter(|tab| tab.location.is_some()) {
             Some(tab) => self.toggle_annotating(tab.id, window, cx),
-            None => self.show_flash(Flash::warning("No page to annotate"), cx),
+            None => self.show_flash(Flash::warning(fl!("browser-notes-no-page")), cx),
         }
     }
 
@@ -210,10 +211,7 @@ impl HerdrWindow {
         notes.armed = !notes.armed;
         if notes.armed {
             self.arm_page(id);
-            self.show_flash(
-                Flash::success("Click an element or select text to note it"),
-                cx,
-            );
+            self.show_flash(Flash::success(fl!("browser-notes-armed")), cx);
         } else {
             notes.pending = None;
             notes.editing = None;
@@ -310,18 +308,12 @@ impl HerdrWindow {
             // The user's comment on the older result carries over.
             Some(index) => notes.notes[index].anchor = note.anchor,
             None if notes.notes.len() >= MAX_NOTES => {
-                self.show_flash(
-                    Flash::warning("Clear sent notes or remove some before adding more"),
-                    cx,
-                );
+                self.show_flash(Flash::warning(fl!("browser-notes-full")), cx);
                 return;
             }
             None => notes.notes.push(note),
         }
-        self.show_flash(
-            Flash::success("The page added a result; send it to the agent"),
-            cx,
-        );
+        self.show_flash(Flash::success(fl!("browser-notes-result")), cx);
         cx.notify();
     }
 
@@ -335,10 +327,7 @@ impl HerdrWindow {
     ) {
         if self.tab_notes(id).notes.len() >= MAX_NOTES {
             self.reveal_page(id);
-            self.show_flash(
-                Flash::warning("Clear sent notes or remove some before adding more"),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("browser-notes-full")), cx);
             return;
         }
         // The picker hid its overlay for the screenshot; WebKit takes it
@@ -479,7 +468,7 @@ impl HerdrWindow {
                 return;
             };
             let Some(edited) = Note::new(anchor, &text) else {
-                self.show_flash(Flash::warning("Write what should change first"), cx);
+                self.show_flash(Flash::warning(fl!("browser-notes-empty-note")), cx);
                 return;
             };
             let notes = self.tab_notes(id);
@@ -498,7 +487,7 @@ impl HerdrWindow {
         };
         let Some(mut note) = Note::new(draft.anchor.clone(), &text) else {
             self.tab_notes(id).pending = Some(draft);
-            self.show_flash(Flash::warning("Write what should change first"), cx);
+            self.show_flash(Flash::warning(fl!("browser-notes-empty-note")), cx);
             return;
         };
         note.image = draft.image;

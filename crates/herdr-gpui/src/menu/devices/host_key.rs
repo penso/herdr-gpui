@@ -9,6 +9,7 @@ use super::{
     setup,
 };
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_client::{HostKeyScan, NewHostKey, SshFailure};
 
@@ -59,14 +60,26 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
-            Ok(HostKeyScan::Refused(SshFailure::HostKey)) => format!(
-                "The host key of {target} differs from the one you trusted before. Someone could be intercepting the connection; check it in a terminal."
+            Ok(HostKeyScan::Refused(SshFailure::HostKey)) => {
+                fl!("add-device-key-changed", target = target)
+            }
+            Ok(HostKeyScan::Refused(failure)) => fl!(
+                "add-device-ssh-failed",
+                target = target,
+                error = failure.to_string(),
             ),
-            Ok(HostKeyScan::Refused(failure)) => format!("SSH to {target}: {failure}"),
             // The key check passed, so the probe failed for a reason this
             // dialog cannot tell apart; the terminal shows it.
-            Ok(HostKeyScan::Trusted) => format!("SSH to {target}: {}", SshFailure::HostKey),
-            Err(error) => format!("Fetch the host key of {target}: {error}"),
+            Ok(HostKeyScan::Trusted) => fl!(
+                "add-device-ssh-failed",
+                target = target,
+                error = SshFailure::HostKey.to_string(),
+            ),
+            Err(error) => fl!(
+                "add-device-key-fetch-failed",
+                target = target,
+                error = error.to_string(),
+            ),
         };
         tracing::warn!(
             category = "device_setup",
@@ -151,13 +164,12 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .gap(px(8.))
-            .child(format!(
-                "{target} is not a known host yet. Trust it only if this fingerprint matches the host's own key:"
-            ))
+            .child(fl!("add-device-key-unknown", target = target))
             .child(fingerprints)
-            .child(div().text_color(rgb(theme.muted)).child(format!(
-                "On the host, ssh-keygen -lf {host_file} prints it. Trusting adds the key to {}.",
-                key.known_hosts().display()
+            .child(div().text_color(rgb(theme.muted)).child(fl!(
+                "add-device-key-check",
+                host_file = host_file,
+                known_hosts = key.known_hosts().display().to_string(),
             )))
     }
 }

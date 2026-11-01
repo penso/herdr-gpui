@@ -11,6 +11,7 @@
 //! back to the window, host, and connection generation that posted it. The
 //! window then resolves the target through the toast path, which rejects a
 //! reconnected inbox or a restarted daemon instead of guessing.
+// i18n: migrated
 
 #[cfg(target_os = "linux")]
 mod freedesktop;
@@ -299,11 +300,13 @@ impl HerdrWindow {
     ) {
         let index = self.selected_endpoint;
         let snapshot = self.endpoints[index].live.snapshot.clone();
+        let title = crate::i18n::fl!("notifications-preview-attention");
+        let body = crate::i18n::fl!("notifications-preview-attention-body");
         let mut notice = crate::notifications::Notice::new(
             herdr_client::protocol::SemanticNotification {
                 kind: herdr_client::protocol::SemanticNotificationKind::NeedsAttention,
-                title: "Needs attention".into(),
-                body: Some("QA preview: an agent is waiting for your input.".into()),
+                title: title.clone(),
+                body: Some(body.clone()),
                 sound: None,
                 agent: None,
                 workspace_id: snapshot
@@ -317,6 +320,7 @@ impl HerdrWindow {
         )
         // Previews keep their own text rather than the pane's context.
         .preview()
+        .with_message(title, body)
         .with_snapshot(snapshot.as_deref());
         // Retained like a real post, so a click resolves through the same path.
         notice.posted = true;

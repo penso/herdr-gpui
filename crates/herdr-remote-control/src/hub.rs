@@ -5,12 +5,15 @@
 //! daemon data: the same trust boundary as Herdr UI's chat views.
 
 mod api;
+mod attach;
 mod chat;
 mod daemon;
 mod layout;
 
 pub(crate) use api::ApiMethod;
 pub(crate) use chat::{Chat, Event, Summary, View};
+#[cfg(test)]
+pub(crate) use layout::TerminalAgent;
 pub(crate) use layout::{Chat as ChatRow, Layout, Terminal, TerminalPane, Workspace};
 
 use herdr_chat_protocol::{Agent, Command, EndpointId, Rejection};
@@ -59,6 +62,14 @@ pub enum Error {
     // keep-sorted end
 }
 
+/// A workspace [`Hub::create_workspace`] opened, and the pane its chat
+/// starts in.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct CreatedWorkspace {
+    pub(crate) pane: String,
+    pub(crate) workspace: String,
+}
+
 pub(crate) struct Hub {
     api: api::Api,
     /// Owns the worker that projects the layout; dropping it disconnects.
@@ -102,26 +113,39 @@ impl Hub {
     /// for tests that must not reach a real Herdr.
     #[cfg(test)]
     pub(crate) fn offline(layout: Layout) -> Arc<Self> {
-        Arc::new(Self::offline_in(layout, None))
+        Arc::new(Self::offline_in(layout, None, None))
+    }
+
+    /// An offline hub whose API calls go to the socket beside
+    /// `client_socket`, for tests that answer them themselves.
+    #[cfg(all(test, unix))]
+    pub(crate) fn offline_with_api(layout: Layout, client_socket: PathBuf) -> Arc<Self> {
+        Arc::new(Self::offline_in(layout, None, Some(client_socket)))
     }
 
     /// An offline hub that connects to the chats of `layout` in `chat_dir`,
     /// for tests that serve a chat program of their own.
     #[cfg(all(test, unix))]
     pub(crate) fn offline_with_chats(layout: Layout, chat_dir: PathBuf) -> Arc<Self> {
-        let hub = Self::offline_in(layout, Some(chat_dir));
+        let hub = Self::offline_in(layout, Some(chat_dir), None);
         hub.reconcile(&hub.layout());
         Arc::new(hub)
     }
 
     #[cfg(test)]
-    fn offline_in(layout: Layout, chat_dir: Option<PathBuf>) -> Self {
+    fn offline_in(
+        layout: Layout,
+        chat_dir: Option<PathBuf>,
+        client_socket: Option<PathBuf>,
+    ) -> Self {
         let (sender, receiver) = watch::channel(Arc::new(layout));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         Self {
-            // No socket answers here, so a request fails rather than reach
-            // a real Herdr.
-            api: api::Api::new(Some(PathBuf::from("/nonexistent/herdr-client.sock"))),
+            // No socket answers there unless a test serves one, so a request
+            // fails rather than reach a real Herdr.
+            api: api::Api::new(Some(
+                client_socket.unwrap_or_else(|| PathBuf::from("/nonexistent/herdr-client.sock")),
+            )),
             _daemon: daemon::Daemon::offline(sender),
             layout: receiver,
             chats: Mutex::new(HashMap::new()),
@@ -198,13 +222,13 @@ impl Hub {
     }
 
     /// A new workspace in `cwd`, on a new worktree when `branch` is given,
-    /// with a chat running `agent` in it. Returns the workspace's id.
+    /// with a chat running `agent` in it.
     pub(crate) async fn create_workspace(
         &self,
         cwd: &str,
         branch: Option<&str>,
         agent: Agent,
-    ) -> Result<String> {
+    ) -> Result<CreatedWorkspace> {
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         let opened = self
             .api
@@ -228,7 +252,7 @@ impl Hub {
                 .await?;
             let (_, pane) = created_tab(&response).ok_or(Error::Response)?;
             self.run_line(&pane, &command_line(agent)).await?;
-            return Ok(workspace);
+            return Ok(CreatedWorkspace { workspace, pane });
         };
         let created = self
             .api
@@ -239,16 +263,20 @@ impl Hub {
             .await?;
         let pane = created["root_pane"]["pane_id"]
             .as_str()
-            .ok_or(Error::Response)?;
+            .ok_or(Error::Response)?
+            .to_owned();
         let worktree = created["workspace"]["workspace_id"]
             .as_str()
             .ok_or(Error::Response)?
             .to_owned();
         // The worktree's first pane is a shell in its folder; the program
         // path rides in this line because the pane was not made with it.
-        self.run_line(pane, &direct_command_line(program, agent))
+        self.run_line(&pane, &direct_command_line(program, agent))
             .await?;
-        Ok(worktree)
+        Ok(CreatedWorkspace {
+            workspace: worktree,
+            pane,
+        })
     }
 
     /// Types `line` and Enter into `pane`, as Herdr UI starts a chat.

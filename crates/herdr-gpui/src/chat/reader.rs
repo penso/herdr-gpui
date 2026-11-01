@@ -175,7 +175,7 @@ impl HerdrWindow {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
             } else if !pane.selection.is_empty() {
                 self.show_flash(
-                    crate::window::Flash::warning("Select less text to copy"),
+                    crate::window::Flash::warning(crate::i18n::fl!("chat-select-less")),
                     cx,
                 );
             }

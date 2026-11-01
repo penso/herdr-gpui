@@ -10,6 +10,8 @@ fn device(id: &str, name: &str) -> Device {
         last_seen_ms: None,
         push: false,
         connected: false,
+        via: None,
+        hosts: Vec::new(),
     }
 }
 

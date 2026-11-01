@@ -8,6 +8,7 @@ mod accessibility;
 mod actions;
 mod agent_notes;
 mod agent_skill;
+mod ago;
 mod app;
 #[cfg(any(target_os = "macos", windows, test))]
 mod app_badge;
@@ -71,6 +72,7 @@ mod github;
 mod group_menu;
 mod group_terminals;
 mod herdr_settings;
+mod host_build;
 mod i18n;
 mod icon_font_notice;
 mod icons;
@@ -156,6 +158,7 @@ mod words;
 mod worktree;
 mod worktree_banner;
 mod worktree_identity;
+mod worktree_landing;
 mod worktree_notes;
 mod worktree_scripts;
 

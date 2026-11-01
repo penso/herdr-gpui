@@ -23,6 +23,7 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Open alerts per repository. The section is a triage list, not a mirror:
 /// GitHub's own page holds the rest, and the count says how many there are.
+// i18n: data
 pub(super) const QUERY: &str = r#"query($owner: String!, $repo: String!) {
   repository(owner: $owner, name: $repo) {
     hasVulnerabilityAlertsEnabled

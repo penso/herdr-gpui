@@ -8,12 +8,16 @@ use super::{
     rich::Fence,
     visual::{MAX_DIAGRAM_SOURCE, Source, VisualId, Visuals},
 };
-use crate::release_notes::{self, Line};
+use crate::{
+    i18n::fl,
+    release_notes::{self, Line},
+};
 use herdr_chat_protocol::{
     Author, EntryId, EntryKind, MAX_QUESTION_ANSWERS, MAX_QUESTION_TEXT, QuestionAnswer,
     ToolContent, Transcript,
 };
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::Write as _,
     rc::Rc,
@@ -33,7 +37,9 @@ pub(super) const MESSAGE: release_notes::Limits = release_notes::Limits {
 };
 
 /// What ends an answer cut at [`MESSAGE`].
-const CUT: &str = "The rest of this answer is too long to show here; Copy takes all of it.";
+fn cut_note() -> String {
+    fl!("chat-answer-cut")
+}
 
 /// Markdown prose as rich blocks, or as lines when it is too large to be
 /// rich.
@@ -49,7 +55,7 @@ fn prose(text: &str, visuals: &mut Visuals) -> Part {
 fn message_lines(text: &str) -> Rc<[Line]> {
     let (mut lines, cut) = release_notes::parse_within(text, MESSAGE);
     if cut {
-        lines.push(release_notes::note(CUT));
+        lines.push(release_notes::note(&cut_note()));
     }
     lines.into()
 }
@@ -74,10 +80,10 @@ const NOTICE_LABEL: usize = 240;
 const FOLDED_THOUGHT: usize = 120;
 
 /// What a tool call's title reads as, before it is cut to a header.
-fn tool_label(title: &str) -> &str {
+fn tool_label(title: &str) -> Cow<'_, str> {
     match title {
-        "request_user_input" | "request_user_input_async" => "Ask user",
-        _ => title,
+        "request_user_input" | "request_user_input_async" => Cow::Owned(fl!("chat-tool-ask-user")),
+        _ => Cow::Borrowed(title),
     }
 }
 
@@ -86,7 +92,7 @@ fn tool_label(title: &str) -> &str {
 
 /// A tool call's header.
 pub(super) fn tool_header(title: &str) -> String {
-    crate::notifications::safe_text(tool_label(title), TOOL_HEADER)
+    crate::notifications::safe_text(&tool_label(title), TOOL_HEADER)
 }
 
 /// A notice's folded line, or the label above its answers.
@@ -109,12 +115,15 @@ pub(crate) fn tool_text(content: &ToolContent) -> Option<String> {
     match content {
         ToolContent::Text { text } => Some(text.clone()),
         ToolContent::Diff { old, new, path } => Some(match old {
-            Some(old) => format!("{path}\nBefore:\n{old}\nAfter:\n{new}"),
-            None => format!("{path}\nNew file:\n{new}"),
+            // Each label is a line of its own, between the file's text.
+            Some(old) => format!(
+                "{path}\n{}\n{old}\n{}\n{new}",
+                fl!("chat-diff-before"),
+                fl!("chat-diff-after")
+            ),
+            None => format!("{path}\n{}\n{new}", fl!("chat-diff-new-file")),
         }),
-        ToolContent::Terminal { id } => Some(format!(
-            "Terminal {id}: output is available in the program's terminal view."
-        )),
+        ToolContent::Terminal { id } => Some(fl!("chat-tool-terminal", id = id.to_string())),
         ToolContent::Image { .. } => None,
     }
 }
@@ -286,7 +295,7 @@ impl Prepared {
                     match super::summary::summary(&lines) {
                         Some(mut summary) => {
                             if cut {
-                                summary.lines.push(release_notes::note(CUT));
+                                summary.lines.push(release_notes::note(&cut_note()));
                             }
                             Body::Summary(summary)
                         }
@@ -345,6 +354,14 @@ impl Prepared {
         self.visuals.retain(&live);
     }
 
+    /// Drops the prepared bodies and their selectable text, keeping the
+    /// pictures, so the next [`Self::update`] writes every label again in
+    /// the language now shown.
+    pub(crate) fn forget_text(&mut self) {
+        self.bodies.clear();
+        self.text.clear();
+    }
+
     /// Starts over, as after a snapshot that may reuse entry ids.
     pub(crate) fn clear(&mut self) {
         self.bodies.clear();
@@ -365,10 +382,15 @@ pub(super) fn answers_text(answers: &[QuestionAnswer]) -> String {
         if index > 0 {
             source.push_str("\n\n");
         }
-        let _ = write!(source, "**Question {}**\n\n", index + 1);
+        let _ = write!(
+            source,
+            "**{}**\n\n",
+            fl!("chat-question-number", number = index + 1)
+        );
+        let answer_label = format!("\n\n**{}**\n\n", fl!("chat-question-answer"));
         for (label, text) in [
             ("", &answer.question),
-            ("\n\n**Answer**\n\n", &answer.answer),
+            (answer_label.as_str(), &answer.answer),
         ] {
             source.push_str(label);
             let end = text.floor_char_boundary(remaining.min(text.len()));
@@ -381,7 +403,7 @@ pub(super) fn answers_text(answers: &[QuestionAnswer]) -> String {
         }
     }
     if truncated {
-        source.push_str("\n\n… (answers truncated)");
+        let _ = write!(source, "\n\n{}", fl!("chat-question-truncated"));
     }
     source
 }
@@ -493,7 +515,7 @@ fn message(text: &str, author: Author, visuals: &mut Visuals) -> Vec<Part> {
         parts.push(prose(&markdown, visuals));
     }
     if cut {
-        let note = release_notes::note(CUT);
+        let note = release_notes::note(&cut_note());
         match parts.last_mut() {
             // Lines cut for their own length already end with the note.
             Some(Part::Text(lines)) if lines.last() == Some(&note) => {}

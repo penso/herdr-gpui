@@ -14,7 +14,9 @@ struct QRScanner: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: ScannerController, context: Context) {}
 }
 
-final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+// The metadata delegate is called on the main queue (`queue: .main`); the
+// preconcurrency conformance checks that at run time.
+final class ScannerController: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
     private let onCode: (String) -> Void
     private let session = AVCaptureSession()
     private var preview: AVCaptureVideoPreviewLayer?

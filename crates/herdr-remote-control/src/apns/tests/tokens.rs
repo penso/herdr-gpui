@@ -67,6 +67,8 @@ fn merge_keeps_push_to_start_and_replaces_activities() {
             pane: "old".to_owned(),
             token: token(1),
         }],
+        alert: None,
+        notify_key: None,
         push_to_start: Some(token(2)),
     };
     stored.merge(Registration {
@@ -80,6 +82,8 @@ fn merge_keeps_push_to_start_and_replaces_activities() {
                 token: token(4),
             },
         ],
+        alert: None,
+        notify_key: None,
         push_to_start: None,
     });
     assert_eq!(stored.push_to_start, Some(token(2)));
@@ -93,6 +97,8 @@ fn merge_keeps_push_to_start_and_replaces_activities() {
 
     stored.merge(Registration {
         activities: Vec::new(),
+        alert: None,
+        notify_key: None,
         push_to_start: Some(token(5)),
     });
     assert_eq!(stored.push_to_start, Some(token(5)));
@@ -111,6 +117,8 @@ fn forgets_invalid_tokens_and_ended_activities() {
                 token: token(2),
             },
         ],
+        alert: None,
+        notify_key: None,
         push_to_start: Some(token(3)),
     };
     assert!(stored.forget(&token(1)));
@@ -129,6 +137,8 @@ fn round_trips_through_the_device_store_slot() {
             pane: "a".to_owned(),
             token: token(1),
         }],
+        alert: None,
+        notify_key: None,
         push_to_start: Some(token(2)),
     };
     let value = stored.to_stored().unwrap();

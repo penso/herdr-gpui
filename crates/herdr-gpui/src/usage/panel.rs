@@ -2,10 +2,8 @@
 //! the selected host, its account, every limit with its pace, whatever else
 //! its service reports, and links to the service's own pages.
 
-use super::{
-    Access, KeychainGrants, Reading, model::Provider, render::ago, service::Service, ui::Ui,
-};
-use crate::{menu::Page, window::HerdrWindow};
+use super::{Access, KeychainGrants, Reading, model::Provider, service::Service, text, ui::Ui};
+use crate::{i18n::fl, menu::Page, window::HerdrWindow};
 use gpui::{prelude::*, *};
 use std::time::{Instant, SystemTime};
 
@@ -98,17 +96,12 @@ impl HerdrWindow {
             .unwrap_or_default();
         let updated = entry
             .and_then(|entry| entry.updated)
-            .map(|at| {
-                format!(
-                    "Updated {} ago",
-                    ago(now.duration_since(at).unwrap_or_default())
-                )
-            })
+            .map(|at| text::updated(now.duration_since(at).unwrap_or_default()))
             .unwrap_or_else(|| {
                 if self.usage.busy() {
-                    "Updating…".into()
+                    fl!("usage-updating")
                 } else {
-                    "Not updated yet".into()
+                    fl!("usage-not-updated-yet")
                 }
             });
         let host = self
@@ -139,7 +132,7 @@ impl HerdrWindow {
                                 .truncate()
                                 .text_size(small)
                                 .text_color(rgb(theme.muted))
-                                .child(format!("{updated} · {host}")),
+                                .child(fl!("usage-panel-subtitle", updated = updated, host = host)),
                         ),
                 )
                 .child(
@@ -198,7 +191,7 @@ impl HerdrWindow {
             .child(self.usage_action(
                 "usage-refresh-row",
                 "icons/refresh.svg",
-                "Refresh",
+                fl!("usage-refresh"),
                 cx.listener(|this, _, _, cx| {
                     this.usage.refresh(Instant::now());
                     cx.notify();
@@ -208,7 +201,7 @@ impl HerdrWindow {
                 self.usage_action(
                     "usage-dashboard",
                     "icons/chart.svg",
-                    "Usage Dashboard",
+                    fl!("usage-dashboard"),
                     move |_, _, cx| cx.open_url(url),
                 )
             }))
@@ -216,7 +209,7 @@ impl HerdrWindow {
                 self.usage_action(
                     "usage-status",
                     "icons/pulse.svg",
-                    "Status Page",
+                    fl!("usage-status-page"),
                     move |_, _, cx| cx.open_url(url),
                 )
             }));
@@ -304,19 +297,12 @@ impl HerdrWindow {
         let name = provider.name();
         let (text, label) = match access {
             Access::Needed => (
-                format!(
-                    "{name}'s sign-in is kept in the macOS Keychain, so reading it makes macOS ask \
-                     for permission. Choose Always Allow to see these numbers at launch without \
-                     being asked again."
-                ),
-                "Allow Keychain Access",
+                fl!("usage-keychain-needed", name = name),
+                fl!("usage-keychain-allow"),
             ),
             Access::Denied => (
-                format!(
-                    "macOS was not allowed to share {name}'s sign-in. Try again to have macOS \
-                     ask once more."
-                ),
-                "Try Again",
+                fl!("usage-keychain-denied", name = name),
+                fl!("usage-keychain-try-again"),
             ),
         };
         div()
@@ -346,7 +332,7 @@ impl HerdrWindow {
         &self,
         id: &'static str,
         icon: &'static str,
-        label: &'static str,
+        label: String,
         action: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> impl IntoElement {
         let theme = &self.theme;
@@ -379,23 +365,24 @@ impl HerdrWindow {
 /// Where each of the provider's settings goes and how to find its value.
 fn setup(service: &dyn Service, ui: &Ui) -> AnyElement {
     ui.block()
-        .child(ui.heading("Set up"))
+        .child(ui.heading(fl!("usage-setup")))
         .children(service.meta().settings.iter().map(|setting| {
-            let variables = if setting.env.is_empty() {
-                String::new()
+            let key = format!("[usage.providers.{}] {}", service.meta().id, setting.name);
+            let key = if setting.env.is_empty() {
+                key
             } else {
-                format!(" or {}", setting.env.join(", "))
+                fl!(
+                    "usage-setup-setting-or-env",
+                    setting = key,
+                    variables = setting.env.join(", ")
+                )
             };
             div()
                 .flex()
                 .flex_col()
                 .gap(px(2.))
                 .text_size(ui.small())
-                .child(format!(
-                    "[usage.providers.{}] {}{variables}",
-                    service.meta().id,
-                    setting.name
-                ))
+                .child(key)
                 .child(div().text_color(ui.muted()).child(setting.help))
         }))
         .into_any_element()

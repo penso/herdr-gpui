@@ -87,18 +87,16 @@ fn prepare(
     report(cloud::Step::CheckingHerdr);
     if !install::installed(relay_command(settings, id)?, &cancelled)? {
         if !approved {
-            return Err(cloud::Error::Install(format!(
-                "Herdr is not installed in the sandbox {id}; allow installing it and try again"
-            ))
+            return Err(cloud::Error::Install(install::Failure::NotInstalled {
+                machine: Some(id.to_string()),
+                retry: install::Retry::Allow,
+            })
             .into());
         }
         report(cloud::Step::InstallingHerdr);
         install::install(relay_command(settings, id)?, &cancelled)?;
         if !install::installed(relay_command(settings, id)?, &cancelled)? {
-            return Err(cloud::Error::Install(
-                "the installer finished but Herdr is not on the expected paths".into(),
-            )
-            .into());
+            return Err(cloud::Error::Install(install::Failure::Missing).into());
         }
     }
     // Commands such as Teleport's need the server the entrypoint starts.

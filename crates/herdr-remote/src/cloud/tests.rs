@@ -9,19 +9,6 @@ mod discard;
 pub mod server;
 
 #[test]
-fn steps_read_as_short_status_words() {
-    assert_eq!(Step::Creating.text(), "Creating…");
-    assert_eq!(Step::Connecting.text(), "Connecting…");
-    assert_eq!(Step::Starting.text(), "Starting…");
-    assert_eq!(
-        Step::Building("pending".into()).text(),
-        "Building (pending)…"
-    );
-    assert_eq!(Step::CheckingHerdr.text(), "Checking for Herdr…");
-    assert_eq!(Step::InstallingHerdr.text(), "Installing Herdr…");
-}
-
-#[test]
 fn every_provider_names_itself_and_its_machines() {
     for &provider in CloudProvider::ALL {
         assert!(!name(provider).is_empty());

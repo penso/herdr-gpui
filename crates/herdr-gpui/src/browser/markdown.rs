@@ -10,6 +10,7 @@ use std::{
 };
 
 const STYLE: &str = include_str!("markdown.css");
+// i18n: data
 const CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; \
     img-src herdr-preview: http://herdr-preview.localhost https://herdr-preview.localhost https:";
 /// Schemes a link or image may use; relative URLs are always kept.
@@ -58,6 +59,7 @@ pub(super) fn page(source: &str, file_name: &str) -> String {
         .filter(|title| !title.is_empty())
         .unwrap_or(file_name);
     format!(
+        // i18n: data
         "<!doctype html>\n<html><head><meta charset=\"utf-8\">\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
          <meta http-equiv=\"Content-Security-Policy\" content=\"{CSP}\">\

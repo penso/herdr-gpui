@@ -1,8 +1,11 @@
 //! The background monitors the window polls as it ticks: plan usage, system
 //! load, listening ports, agent checkpoints, and port forwards, each on the
 //! hosts it watches.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow};
+use crate::checkpoint;
+use crate::i18n::{Localize, fl};
 use gpui::Context;
 
 impl HerdrWindow {
@@ -111,7 +114,7 @@ impl HerdrWindow {
             let (true, true, Some(host), Some(snapshot)) = (
                 enabled,
                 endpoint.enabled && live.status.is_connected(),
-                crate::checkpoint::host_for(&endpoint.connection.target, live.local_daemon_peer),
+                checkpoint::host_for(&endpoint.connection.target, live.local_daemon_peer),
                 live.latest_snapshot(),
             ) else {
                 continue;
@@ -124,14 +127,11 @@ impl HerdrWindow {
         let (changed, restored) = self.checkpoints.poll();
         for restored in restored {
             let flash = match restored.result {
-                Ok(()) => Flash::success(format!(
-                    "Restored a checkpoint of {}",
-                    restored.checkout.branch
+                Ok(()) => Flash::success(fl!(
+                    "window-notices-checkpoint-restored",
+                    branch = restored.checkout.branch
                 )),
-                Err(error) => Flash::warning(format!(
-                    "Checkpoint not restored: {}",
-                    crate::checkpoint::describe(&error)
-                )),
+                Err(error) => Flash::warning(not_restored(&error)),
             };
             self.show_flash(flash, cx);
         }
@@ -190,3 +190,29 @@ impl HerdrWindow {
         }
     }
 }
+
+/// Why a restore failed: the error's message, then the cause a failed Git
+/// script or checkpoint worker carries, so Git's own output or the SSH
+/// failure stays in view. Git's and GitHub's own errors already keep their
+/// output in their messages.
+pub(super) fn not_restored(error: &herdr_vcs::Error) -> String {
+    let cause = match error {
+        herdr_vcs::Error::Checkpoint(checkpoint::Error::Script(cause)) => cause.localize(),
+        // The system's own words, kept as they are in every language.
+        herdr_vcs::Error::Checkpoint(checkpoint::Error::Thread(cause)) => cause.to_string(),
+        _ => {
+            return fl!(
+                "window-notices-checkpoint-not-restored",
+                error = error.localize()
+            );
+        }
+    };
+    fl!(
+        "window-notices-checkpoint-not-restored-cause",
+        error = error.localize(),
+        cause = cause
+    )
+}
+
+#[cfg(test)]
+mod tests;

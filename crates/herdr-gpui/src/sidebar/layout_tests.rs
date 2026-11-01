@@ -37,7 +37,7 @@ mod device_multi_select;
 #[cfg(all(test, feature = "azure"))]
 mod device_removing;
 #[cfg(test)]
-mod device_sessions_row;
+mod device_sessions_unfold;
 #[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
@@ -84,6 +84,8 @@ mod probe_scale;
 mod probes;
 #[cfg(test)]
 mod repository_icons;
+#[cfg(test)]
+mod resize_grip;
 #[cfg(test)]
 mod row_drag;
 #[cfg(test)]
@@ -737,6 +739,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         held_keys: Default::default(),
         // No AppKit event to read; a test that needs one supplies its own.
         key_press: || None,
+        landing_launch: None,
         key_layout: |_| None,
         file_transfer: None,
         presentation: Default::default(),

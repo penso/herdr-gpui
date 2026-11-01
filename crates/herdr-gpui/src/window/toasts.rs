@@ -1,5 +1,9 @@
+// i18n: migrated
 use super::HerdrWindow;
-use crate::notifications::{Notice, VISIBLE_LIMIT};
+use crate::{
+    i18n::fl,
+    notifications::{Notice, VISIBLE_LIMIT},
+};
 use gpui::{prelude::*, *};
 use herdr_client::protocol::{SemanticNotification, SemanticNotificationKind, ToastHerdrPosition};
 use std::{sync::TryLockError, task::Poll, time::Instant};
@@ -137,19 +141,20 @@ impl HerdrWindow {
     ) {
         let (title, body) = match kind {
             SemanticNotificationKind::NeedsAttention => (
-                "Needs attention",
-                "QA preview: an agent is waiting for your input.",
+                fl!("notifications-preview-attention"),
+                fl!("notifications-preview-attention-body"),
             ),
-            SemanticNotificationKind::Finished => {
-                ("Finished", "QA preview: an agent has completed its task.")
-            }
+            SemanticNotificationKind::Finished => (
+                fl!("notifications-preview-finished"),
+                fl!("notifications-preview-finished-body"),
+            ),
             SemanticNotificationKind::UpdateInstalled => (
-                "Update installed",
-                "QA preview only. No update was installed.",
+                fl!("notifications-preview-update"),
+                fl!("notifications-preview-update-body"),
             ),
             SemanticNotificationKind::Custom => (
-                "Custom notification",
-                "QA preview: a custom notification message.",
+                fl!("notifications-preview-custom"),
+                fl!("notifications-preview-custom-body"),
             ),
         };
         let snapshot = self.endpoints[self.selected_endpoint].live.snapshot.clone();
@@ -162,8 +167,8 @@ impl HerdrWindow {
         let mut notice = Notice::new(
             SemanticNotification {
                 kind,
-                title: title.into(),
-                body: Some(body.into()),
+                title: title.clone(),
+                body: Some(body.clone()),
                 sound: None,
                 agent: None,
                 workspace_id: target.and_then(|s| s.focused_workspace_id.clone()),
@@ -175,6 +180,7 @@ impl HerdrWindow {
         )
         // Previews keep their own text rather than the pane's context.
         .preview()
+        .with_message(title, body)
         .with_snapshot(snapshot.as_deref());
         // Each QA action immediately presents its own card, even offline.
         for endpoint in &mut self.endpoints {

@@ -52,10 +52,12 @@ fn a_refused_target_without_a_user_names_the_login_ssh_tried(cx: &mut gpui::Test
             let Step::Confirm(request, offer) = &setup.step else {
                 panic!("expected the key offer");
             };
-            let question = offer.question(
-                request.target(),
-                setup.claim.as_ref().map(setup::Claim::user),
-            );
+            let question = offer
+                .question(
+                    request.target(),
+                    setup.claim.as_ref().map(setup::Claim::user),
+                )
+                .replace(['\u{2068}', '\u{2069}'], "");
             assert!(question.contains("SSH keys for the user test"));
             assert!(question.contains("name@pi4.local"));
         });

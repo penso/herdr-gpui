@@ -20,7 +20,7 @@ use crate::{
         Settings,
         setup::{self, AddRequest, Device, Overview, State},
     },
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -173,7 +173,9 @@ impl SettingsWindow {
                 tracing::error!(category = "container_worker", error_kind = ?error.kind(), "Could not start the container settings worker");
                 if let Some(card) = &mut self.container_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }

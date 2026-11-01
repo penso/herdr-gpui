@@ -1,7 +1,7 @@
 use super::*;
 
 fn read(text: &str, column: u16) -> Option<(String, Option<u32>, Range<u16>)> {
-    frame_link(&frame(text, 60, 1), column, 0, 0, 60).and_then(|link| match link.target {
+    frame_link(&frame(text, 60, 1), column, 0, 0..60, 0..1).and_then(|link| match link.target {
         RowTarget::Path { path, line, .. } => Some((path, line, link.columns)),
         RowTarget::Web(_)
         | RowTarget::External(_)

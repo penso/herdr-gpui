@@ -2,6 +2,10 @@
 //! UI thread, and the local workspace that carries a setup needing prompts.
 
 use super::{Page, discover::Discovery, setup};
+
+mod offer;
+
+use crate::i18n::fl;
 use crate::{
     HerdrWindow, NavigationTarget,
     search_input::{Changed, SearchInput},
@@ -11,6 +15,7 @@ use herdr_client::{
     HostKeys, HostProbe, Method, NewHostKey, SshFailure,
     protocol::{ClientKeyCode, ClientKeyKind, ClientPaneInputEvent},
 };
+pub(super) use offer::Offer;
 
 pub(in crate::menu) struct Setup {
     pub(super) fields: [Entity<SearchInput>; 3],
@@ -70,113 +75,6 @@ pub(super) enum Step {
     Opening(setup::Request, LocalSpace),
 }
 
-/// Why setup has to continue in a terminal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Offer {
-    Install,
-    Update,
-    /// SSH needs a prompt, or saving without a terminal failed.
-    Terminal,
-    /// Herdr restarts the host's server before saving, once confirmed.
-    Restart,
-    /// SSH accepted none of the user's keys: install one with the password,
-    /// so the device then connects without a prompt.
-    InstallKey,
-}
-
-impl Offer {
-    /// `None` when Herdr is present, so the device is saved without a terminal.
-    pub(super) fn for_probe(probe: HostProbe) -> Option<Self> {
-        match probe {
-            HostProbe::Running | HostProbe::Stopped => None,
-            HostProbe::Missing => Some(Self::Install),
-            HostProbe::Outdated => Some(Self::Update),
-            HostProbe::SshFailed(SshFailure::Auth) => Some(Self::InstallKey),
-            HostProbe::SshFailed(_) => Some(Self::Terminal),
-        }
-    }
-
-    /// `user` is the login `ssh` resolved for the target, when known: a target
-    /// without one logs in as the local user, which may not be the account
-    /// the user's keys are installed for.
-    pub(super) fn question(self, target: &str, user: Option<&str>) -> String {
-        if cfg!(windows) {
-            return self.terminal_instructions(target, user);
-        }
-        match self {
-            Self::Install => {
-                format!("Herdr was not detected on {target}. Should we install it?")
-            }
-            Self::Update => {
-                format!("The Herdr on {target} is too old for this app. Should we update it?")
-            }
-            Self::Terminal => format!(
-                "Setting up {target} needs your input, such as an SSH password or host key. Continue in a local terminal?"
-            ),
-            Self::Restart => format!(
-                "Restart the Herdr server on {target}? A local terminal asks you to confirm."
-            ),
-            Self::InstallKey => match implied_user(target, user) {
-                Some(user) => format!(
-                    "{target} accepted none of your SSH keys for the user {user}. If you log in there as someone else, change the target to {} and press Enter to check it. Otherwise, install your key for {user}? A local terminal runs ssh-copy-id, which asks for the password once, then saves the device.",
-                    with_user(target, "name")
-                ),
-                None => format!(
-                    "{target} accepted none of your SSH keys. Install your key there? A local terminal runs ssh-copy-id, which asks for the password once, then saves the device."
-                ),
-            },
-        }
-    }
-
-    fn action(self) -> &'static str {
-        match self {
-            Self::Install => "Install",
-            Self::Update => "Update",
-            Self::Terminal | Self::Restart => "Open terminal",
-            Self::InstallKey => "Set up key login",
-        }
-    }
-
-    /// Windows cannot run a setup on a local terminal yet (see
-    /// `setup::terminal_setup`), so the user runs Herdr's own command in one.
-    fn terminal_instructions(self, target: &str, user: Option<&str>) -> String {
-        let reason = match self {
-            Self::Install => "Herdr was not detected there".into(),
-            Self::Update => "its Herdr is too old for this app".into(),
-            Self::Terminal => "SSH needs your input, such as a password or host key".into(),
-            Self::Restart => "its Herdr server has to restart".into(),
-            Self::InstallKey => match implied_user(target, user) {
-                Some(user) => format!(
-                    "it accepted none of your SSH keys for the user {user} (use {} to log in as someone else)",
-                    with_user(target, "name")
-                ),
-                None => "it accepted none of your SSH keys".into(),
-            },
-        };
-        format!(
-            "Setting up {target} needs a terminal: {reason}. Run `herdr machine add {target}` in a terminal, then add the device again."
-        )
-    }
-}
-
-/// The resolved login, only when `target` does not name one itself: the
-/// dialog then has not shown which account SSH tried.
-fn implied_user<'a>(target: &str, user: Option<&'a str>) -> Option<&'a str> {
-    let named = target
-        .strip_prefix("ssh://")
-        .unwrap_or(target)
-        .contains('@');
-    user.filter(|_| !named)
-}
-
-/// `target` logging in as `user`; an `ssh://` URI takes the user inside it.
-fn with_user(target: &str, user: &str) -> String {
-    match target.strip_prefix("ssh://") {
-        Some(rest) => format!("ssh://{user}@{rest}"),
-        None => format!("{user}@{target}"),
-    }
-}
-
 /// The local workspace request whose root pane will run the setup command.
 pub(super) struct LocalSpace {
     pub(super) request: String,
@@ -201,10 +99,12 @@ impl HerdrWindow {
             let input = cx.new(SearchInput::new);
             input.update(cx, |input, cx| {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-                input.set_placeholder(
-                    ["user@hostname or SSH alias", "The SSH target", "default"][index],
-                    cx,
-                );
+                match index {
+                    0 => input.set_placeholder_with(|| fl!("add-device-target-placeholder"), cx),
+                    1 => input.set_placeholder_with(|| fl!("add-device-label-placeholder"), cx),
+                    // Herdr's default session's name.
+                    _ => input.set_placeholder("default", cx), // i18n: data
+                }
             });
             input
         });
@@ -326,15 +226,26 @@ impl HerdrWindow {
             })
             .flatten();
         setup.fields[0].update(cx, |field, cx| field.set_completion(ghost, cx));
-        let mut body = div().id("device-setup-body").debug_selector(|| "device-setup-body".into())
+        let mut body = div()
+            .id("device-setup-body")
+            .debug_selector(|| "device-setup-body".into())
             .flex_1()
-            .min_h_0().overflow_y_scroll().p(px(16.)).flex().flex_col().gap(px(12.))
-            .child(div().flex_none().text_color(rgb(theme.subtext()))
-                .child("Herdr checks the host over SSH and saves the device. If Herdr is missing or SSH needs your input, setup continues in a local workspace."));
+            .min_h_0()
+            .overflow_y_scroll()
+            .p(px(16.))
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(
+                div()
+                    .flex_none()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("add-device-intro")),
+            );
         for (index, (label, field)) in [
-            "SSH target",
-            "Label (optional)",
-            "Remote session (optional)",
+            fl!("add-device-target"),
+            fl!("add-device-label"),
+            fl!("add-device-session"),
         ]
         .into_iter()
         .zip(&setup.fields)
@@ -369,21 +280,17 @@ impl HerdrWindow {
         }
         let status = match &setup.step {
             Step::Form => None,
-            Step::Checking(request) => Some(format!("Checking Herdr on {}…", request.target())),
+            Step::Checking(request) => Some(fl!("add-device-checking", target = request.target())),
             Step::AwaitingLocalNetwork(request) => {
                 Some(super::local_network::waiting_status(request.target()))
             }
-            Step::Saving(request, HostProbe::Stopped) => Some(format!(
-                "Herdr is installed on {} but not running. Starting it…",
-                request.target()
-            )),
-            Step::Saving(request, _) => Some(format!(
-                "Herdr is running on {}. Saving the device…",
-                request.target()
-            )),
+            Step::Saving(request, HostProbe::Stopped) => {
+                Some(fl!("add-device-starting", target = request.target()))
+            }
+            Step::Saving(request, _) => Some(fl!("add-device-saving", target = request.target())),
             Step::Saved | Step::SavedWarning(_) => None,
             Step::FetchingKey(request) => {
-                Some(format!("Fetching the host key of {}…", request.target()))
+                Some(fl!("add-device-fetching-key", target = request.target()))
             }
             Step::TrustKey(request, key) => {
                 body = body.child(self.render_host_key(request.target(), key));
@@ -394,9 +301,9 @@ impl HerdrWindow {
                 setup.claim.as_ref().map(setup::Claim::user),
             )),
             Step::Verifying(request, _) => {
-                Some(format!("Checking {} is not saved yet…", request.target()))
+                Some(fl!("add-device-verifying", target = request.target()))
             }
-            Step::Activating(..) | Step::Opening(..) => Some("Opening a local workspace…".into()),
+            Step::Activating(..) | Step::Opening(..) => Some(fl!("add-device-opening")),
         };
         if let Some(status) = status {
             body = body.child(
@@ -431,7 +338,7 @@ impl HerdrWindow {
             .flex()
             .justify_end()
             .gap(px(8.));
-        let cancel = button("device-setup-cancel", "Cancel".into(), true)
+        let cancel = button("device-setup-cancel", fl!("add-device-cancel").into(), true)
             .on_click(cx.listener(|this, _, _, cx| this.cancel_device_step(cx)));
         footer = match &setup.step {
             Step::Confirm(..) if cfg!(windows) => footer.child(cancel),
@@ -444,15 +351,24 @@ impl HerdrWindow {
                 .child(cancel),
             // Enter does not trust a key: only this button does.
             Step::TrustKey(..) => footer.child(cancel).child(
-                button("device-setup-trust", "Trust key".into(), true)
-                    .on_click(cx.listener(|this, _, _, cx| this.trust_host_key(cx))),
+                button(
+                    "device-setup-trust",
+                    fl!("add-device-trust-key").into(),
+                    true,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.trust_host_key(cx))),
             ),
             step => {
                 let ready = matches!(step, Step::Form);
                 footer.child(
                     button(
                         "device-setup-submit",
-                        if ready { "Add device" } else { "Checking…" }.into(),
+                        if ready {
+                            fl!("add-device-submit")
+                        } else {
+                            fl!("add-device-submit-checking")
+                        }
+                        .into(),
                         ready,
                     )
                     .on_click(cx.listener(|this, _, _, cx| this.submit_device_setup(cx))),
@@ -573,7 +489,11 @@ impl HerdrWindow {
             Err(error) => {
                 tracing::warn!(category = "device_setup", "Could not claim device");
                 if !self.refuse_duplicate(&error, cx) {
-                    self.set_device_error(Some(format!("Check {}: {error}", request.target())));
+                    self.set_device_error(Some(fl!(
+                        "add-device-check-failed",
+                        target = request.target(),
+                        error = error.to_string(),
+                    )));
                     if let Some(form) = &mut self.menu.device_setup {
                         form.step = Step::Confirm(request, Offer::Terminal);
                     }
@@ -619,16 +539,21 @@ impl HerdrWindow {
                     if let HostProbe::SshFailed(failure) = probe
                         && offer != Offer::InstallKey
                     {
-                        self.set_device_error(Some(format!(
-                            "SSH to {}: {failure}",
-                            request.target()
+                        self.set_device_error(Some(fl!(
+                            "add-device-ssh-failed",
+                            target = request.target(),
+                            error = failure.to_string(),
                         )));
                     }
                     offer
                 }
             },
             Err(error) => {
-                self.set_device_error(Some(format!("Check {}: {error}", request.target())));
+                self.set_device_error(Some(fl!(
+                    "add-device-check-failed",
+                    target = request.target(),
+                    error = error.to_string(),
+                )));
                 Offer::Terminal
             }
         };
@@ -761,7 +686,10 @@ impl HerdrWindow {
                     "Device setup verification failed"
                 );
                 if !self.refuse_duplicate(&error, cx) {
-                    self.set_device_error(Some(format!("Open a local workspace: {error}")));
+                    self.set_device_error(Some(fl!(
+                        "add-device-open-failed",
+                        error = error.to_string()
+                    )));
                     if let Some(form) = &mut self.menu.device_setup {
                         form.step = Step::Confirm(request, offer);
                     }
@@ -836,7 +764,9 @@ impl HerdrWindow {
                     Method::WorkspaceCreate,
                     serde_json::json!({
                         "focus": true,
-                        "label": format!("Set up {}", request.label()),
+                        // Written into the daemon, which every client
+                        // shows, so it is not in this window's language.
+                        "label": format!("Set up {}", request.label()), // i18n: data
                     }),
                 )
                 .map(|id| (id, boot))
@@ -877,7 +807,10 @@ impl HerdrWindow {
         if let Some(form) = &mut self.menu.device_setup {
             form.step = Step::Confirm(request, offer);
         }
-        self.set_device_error(Some(format!("Open a local workspace: {error}")));
+        self.set_device_error(Some(fl!(
+            "add-device-open-failed",
+            error = error.to_string()
+        )));
         cx.notify();
     }
 
@@ -904,7 +837,7 @@ impl HerdrWindow {
             {
                 form.step = Step::Confirm(request.clone(), space.offer);
             }
-            this.set_device_error(Some(format!("Open a local workspace: {error}")));
+            this.set_device_error(Some(fl!("add-device-open-failed", error = error)));
             cx.notify();
         };
         let current = local.live.status.is_connected()
@@ -941,7 +874,7 @@ impl HerdrWindow {
             .flatten()
             .filter(|(workspace, pane)| !workspace.is_empty() && !pane.is_empty());
         let Some((workspace, pane)) = created else {
-            return fail(self, "Unexpected daemon response".into(), cx);
+            return fail(self, fl!("add-device-unexpected-response"), cx);
         };
         let (workspace, pane) = (workspace.to_owned(), pane.to_owned());
         let sent = local

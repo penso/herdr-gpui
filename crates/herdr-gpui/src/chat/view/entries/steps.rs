@@ -2,17 +2,13 @@
 //! quiet line each, its state's mark and its title.
 
 use super::{Hues, tool_header};
-use crate::{HerdrWindow, chat::chats::ChatPane, fonts::StyledFont};
+use crate::{HerdrWindow, chat::chats::ChatPane, fonts::StyledFont, i18n::fl};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{EntryId, EntryKind, ToolStatus};
 
 /// `12 steps`, beside a sub-agent's state.
 pub(super) fn steps_label(count: usize) -> String {
-    if count == 1 {
-        "1 step".to_owned()
-    } else {
-        format!("{count} steps")
-    }
+    fl!("chat-tool-steps", count = count)
 }
 
 impl HerdrWindow {

@@ -21,7 +21,7 @@ use crate::{
         setup::{self, AddRequest, Key, Overview},
     },
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -174,7 +174,9 @@ impl SettingsWindow {
                 tracing::error!(category = "daytona_worker", error_kind = ?error.kind(), "Could not start Daytona settings worker");
                 if let Some(card) = &mut self.daytona_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -322,7 +324,7 @@ impl SettingsWindow {
                         fl!("settings-cloud-daytona-sandboxes", count = *count)
                     }
                     (_, Some(Err(error))) => {
-                        fl!("settings-cloud-key-unusable", error = error.to_string())
+                        fl!("settings-cloud-key-unusable", error = error.localize())
                     }
                     (_, None) => fl!("settings-cloud-checking"),
                 },

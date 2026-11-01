@@ -64,7 +64,8 @@ impl HerdrWindow {
                 this.resize_chat_input(drag, InputSize::Rows(rows), cx);
             }),
         )
-        .child(
+        .child(crate::panel_resize::Grip::new(
+            Axis::Vertical,
             div()
                 .id("chat-input-resize")
                 .debug_selector(|| "chat-input-resize".into())
@@ -78,7 +79,6 @@ impl HerdrWindow {
                 .h(px(HANDLE))
                 .occlude()
                 .cursor(CursorStyle::ResizeUpDown)
-                .hover(|style| style.bg(rgba(crate::panel_resize::RESIZE_HOVER)))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, event: &MouseDownEvent, _, cx| {
@@ -98,7 +98,7 @@ impl HerdrWindow {
                     });
                     cx.new(|_| EmptyView)
                 }),
-        )
+        ))
     }
 
     fn resize_chat_input(&mut self, drag: &InputDrag, size: InputSize, cx: &mut Context<Self>) {

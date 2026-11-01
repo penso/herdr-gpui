@@ -1,20 +1,12 @@
 //! What can go wrong reading or driving `herdr-automate` on a host.
 
-use std::{io, path::PathBuf};
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // keep-sorted start
     #[error("{path} is already approved on {host}")]
     Approved { path: String, host: String },
-    #[error("Could not read the herdr-automate build at {}", path.display())]
-    Binary {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-    #[error("The copy on the host did not match this app's build; nothing was installed")]
-    Checksum,
+    #[error(transparent)]
+    Build(#[from] crate::host_build::Error),
     #[error("herdr-automate printed output this app cannot read")]
     Json(#[source] serde_json::Error),
     #[error("herdr-automate is not installed on this host")]
@@ -27,8 +19,6 @@ pub enum Error {
     NotRead { host: String },
     #[error("Automations are turned off in Herdr UI: Settings, Sidebar, Show automations")]
     Off,
-    #[error("Cannot tell this host's platform from `uname -sm`: {0}")]
-    Platform(String),
     #[error(
         "herdr-automate on this host speaks report protocol {found}; this app reads {expected}. Update this app."
     )]

@@ -132,6 +132,20 @@ impl Authority {
         })
     }
 
+    /// Signs `message` with the CA's key, as P-256 ECDSA over SHA-256 in
+    /// IEEE P1363 form (r || s); `None` for a CA whose key is not P-256.
+    /// The phone checks it against the certificate it pinned at pairing.
+    pub(crate) fn sign(&self, message: &[u8]) -> Option<[u8; 64]> {
+        use p256::{ecdsa::signature::Signer as _, pkcs8::DecodePrivateKey as _};
+        let key = self.issuer.key();
+        if key.algorithm() != &PKCS_ECDSA_P256_SHA256 {
+            return None;
+        }
+        let secret = p256::SecretKey::from_pkcs8_der(&key.serialize_der()).ok()?;
+        let signature: p256::ecdsa::Signature = p256::ecdsa::SigningKey::from(secret).sign(message);
+        Some(signature.to_bytes().into())
+    }
+
     /// SHA-256 of the CA certificate, as uppercase colon-separated hex: what
     /// the pairing QR carries and both screens show.
     pub(crate) fn fingerprint(&self) -> &str {
@@ -143,8 +157,8 @@ impl Authority {
         &self.ca_pem
     }
 
-    /// The CA certificate as DER.
-    #[cfg(test)]
+    /// The CA certificate as DER: what a presence challenge carries, for
+    /// the phone to check against the fingerprint it pinned.
     pub(crate) fn ca_der(&self) -> &[u8] {
         &self.ca_der
     }

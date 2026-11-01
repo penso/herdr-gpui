@@ -131,7 +131,7 @@ pub(super) fn remove(id: &str) -> Result<()> {
 fn remove_with(executable: &std::ffi::OsStr, id: &str) -> Result<()> {
     if !herdr_client::valid_profile_id(id) {
         tracing::warn!(category = "device_remove", "Invalid profile ID");
-        return Err(Error::SetupInput("This device has no saved profile.").into());
+        return Err(Error::NoProfile.into());
     }
     let (status, _, stderr) = run_cli(executable, &["machine", "remove", id], REMOVE_TIMEOUT)?;
     if status.success() {
@@ -152,7 +152,7 @@ pub(super) fn rename(id: &str, label: &str) -> Result<()> {
 
 fn rename_with(executable: &std::ffi::OsStr, id: &str, label: &str) -> Result<()> {
     if !herdr_client::valid_profile_id(id) {
-        return Err(Error::SetupInput("This device has no saved profile.").into());
+        return Err(Error::NoProfile.into());
     }
     // The `=` form keeps a label that starts with `-` from reading as a flag.
     let (status, _, stderr) = run_cli(
@@ -248,10 +248,7 @@ pub(super) fn device_label(label: &str, target: &str) -> Result<String> {
         label
     };
     if label.is_empty() || label.len() > LABEL_LIMIT || label.chars().any(char::is_control) {
-        return Err(Error::SetupInput(
-            "Device names are at most 128 bytes, without control characters.",
-        )
-        .into());
+        return Err(Error::InvalidLabel.into());
     }
     Ok(label.to_owned())
 }
@@ -279,10 +276,7 @@ impl Request {
                 .is_some_and(|(user, _)| user.contains(':'))
             || target.chars().any(|c| c.is_whitespace() || c.is_control())
         {
-            return Err(Error::SetupInput(
-                "Enter an SSH target such as user@hostname or an SSH alias.",
-            )
-            .into());
+            return Err(Error::InvalidTarget.into());
         }
         let label = device_label(label, target)?;
         let session = if session.is_empty() {
@@ -296,9 +290,7 @@ impl Request {
                 .bytes()
                 .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
         {
-            return Err(Error::SetupInput(
-                "Session names use letters, digits, dots, underscores, or hyphens (at most 64 bytes), excluding '.' and '..'.",
-            ).into());
+            return Err(Error::InvalidSession.into());
         }
         Ok(Self {
             target: target.into(),
@@ -477,12 +469,11 @@ pub(super) enum SaveOutcome {
 }
 
 impl SaveOutcome {
+    /// The message the dialog shows once the device is saved, if any.
     pub(super) fn warning(self) -> Option<&'static str> {
         match self {
             Self::Ready => None,
-            Self::ExistingServer => Some(
-                "Device added with the existing Herdr server. Version or startup differences may affect recovery after SSH disconnects.",
-            ),
+            Self::ExistingServer => Some("devices-setup-existing-server"),
         }
     }
 }
@@ -562,11 +553,14 @@ fn save_with(
 }
 
 /// How `machine add` ends when the running server must be restarted first.
+// i18n: data
 const RESTART_REFUSAL: &str = "remote server is not ready for saved machines";
 
 /// The profile ID from `Saved SSH machine <id>. Remote server is ready.`
 fn saved_id(stdout: &[u8]) -> Option<String> {
     String::from_utf8_lossy(stdout).lines().find_map(|line| {
+        // The CLI's own output, in English.
+        // i18n: data
         let id = line.strip_prefix("Saved SSH machine ")?.split('.').next()?;
         herdr_client::valid_profile_id(id).then(|| id.to_owned())
     })
@@ -703,8 +697,7 @@ impl TerminalSetup {
 pub(super) fn terminal_setup(request: &Request, install_key: bool) -> Result<TerminalSetup> {
     request.remember_host_keys()?;
     let app = std::env::current_exe()?;
-    let dir = crate::preferences::state_dir()
-        .ok_or(Error::SetupInput("Herdr UI has no state directory."))?;
+    let dir = crate::preferences::state_dir().ok_or(Error::NoStateDirectory)?;
     let mut command = setup_command(
         app.as_os_str(),
         crate::daemon::executable().as_os_str(),
@@ -721,11 +714,7 @@ pub(super) fn terminal_setup(request: &Request, install_key: bool) -> Result<Ter
 /// It carries no environment, so its length depends only on the two paths.
 #[cfg(unix)]
 fn relay_line(app: &std::path::Path, socket: &std::path::Path) -> Result<String> {
-    let word = |path: &std::path::Path| {
-        path.to_str()
-            .map(quote)
-            .ok_or(Error::SetupInput("The setup paths must be UTF-8."))
-    };
+    let word = |path: &std::path::Path| path.to_str().map(quote).ok_or(Error::NonUtf8SetupPath);
     Ok(format!(
         "{} {} {}",
         word(app)?,
@@ -738,7 +727,7 @@ fn relay_line(app: &std::path::Path, socket: &std::path::Path) -> Result<String>
 /// run `herdr machine add` in a terminal instead and never calls this.
 #[cfg(windows)]
 pub(super) fn terminal_setup(_: &Request, _: bool) -> Result<TerminalSetup> {
-    Err(Error::SetupInput("Setting up a device in a terminal is unavailable on Windows.").into())
+    Err(Error::TerminalSetupUnavailable.into())
 }
 
 #[cfg(test)]

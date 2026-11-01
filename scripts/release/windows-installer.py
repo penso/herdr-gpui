@@ -105,7 +105,8 @@ def build(version, target, archive, output_dir, iscc, sign=False):
             release.extractall(temp)
         source = Path(temp) / root
         for required in ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe",
-                         "herdr-remote-control.exe", "herdr-automate.exe", "herdr-core.exe"):
+                         "herdr-remote-control.exe", "herdr-automate.exe", "herdr-nearby.exe",
+                         "herdr-core.exe"):
             if not (source / required).is_file():
                 raise ValueError(f"Release zip has no {required}")
         arguments = iscc_arguments(version, target, source, output_dir, sign)

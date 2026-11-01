@@ -2259,6 +2259,23 @@ each host. Remote hosts use the terminal's SSH trust and authentication policy,
 and the UI thread never blocks. The GUI connection's API does not expose layouts,
 process details or agent sessions, which is why Teleport uses the CLI.
 
+## Where A New Worktree Opens
+
+The New worktree dialog's **Opens in** row of icons chooses what the checkout's
+first pane shows: **Terminal**, the shell Herdr opens there, or one of the
+agents installed on the host, such as `claude` or `codex`, which the window
+starts in that shell with `herdr agent start` once the checkout exists, even if
+the dialog was closed while the daemon was still creating it. While the new
+shell is still starting, a busy refusal is retried for up to ten seconds, and
+only while the pane still holds the terminal the creation returned, as the
+orchestrator's dispatch does. The agents are looked up on the host when the
+dialog opens. The choice you create with is offered first in the next dialog,
+in every window and after a restart; one the host lacks falls back to Terminal.
+The row shows only for a checkout made on the shown host whose `herdr` CLI the
+window can script, so not for a bare socket, WSL, or a Windows client, and not
+when the dialog sends the checkout to another host. A failed start is reported
+in the window and leaves the shell running in the new checkout.
+
 ## Smart Dispatch
 
 When more than one host is connected, the New worktree dialog (its branch form)
@@ -2666,7 +2683,12 @@ its dashes turn solid once its target is verified:
 
 A plain URL is read from its row. One that reaches the pane's right edge may
 wrap onto the next row; a daemon that offers `pane.link.resolve` reads it
-whole, and otherwise it needs explicit terminal hyperlink metadata. Paths are
+whole, and otherwise it needs explicit terminal hyperlink metadata. A file
+path or `file://` address that fills a row to the right edge and goes on in
+the next is read across those rows, up to 16 of them. The rest may start the
+next row, where the terminal wraps it, or follow an indent, where an agent
+wraps its own output under a list item. Once the whole path is found on disk,
+every row of it is underlined, and a click on any of them opens it. Paths are
 not links in panes on SSH hosts, whose files live on that host.
 
 A file opens in your terminal editor at the printed line, in a new pane split

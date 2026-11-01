@@ -86,9 +86,10 @@ fn a_terminal_tab_shows_the_agent_herdr_detects_in_it() {
     let layout = project(&snapshot(json!([idle, blocked])));
     let (_, terminal) = layout.terminal("p2").unwrap();
     // Several agents in one tab: the most pressing one shows.
+    let shown = terminal.agent.as_ref().unwrap();
     assert_eq!(
-        terminal.agent,
-        Some((Some("claude".to_owned()), AgentStatus::Blocked))
+        (shown.name.as_deref(), shown.status, shown.pane.as_str()),
+        (Some("claude"), AgentStatus::Blocked, "p9")
     );
     let plain = project(&snapshot(json!([])));
     assert_eq!(plain.terminal("p2").unwrap().1.agent, None);

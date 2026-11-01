@@ -6,6 +6,7 @@ use super::super::{
     chats::ChatInput,
     widgets::{ActionMode, Component, Document, Form, Input, Key, Value, bounded_input},
 };
+use crate::i18n::{Localize, fl};
 use crate::{
     HerdrWindow,
     config::{Theme, corners},
@@ -367,7 +368,7 @@ impl HerdrWindow {
         let prompt = match request.document.prompt(prefix, &form.values) {
             Ok(prompt) => prompt,
             Err(error) => {
-                pane.error = Some(error.to_string());
+                pane.error = Some(error.localize());
                 cx.notify();
                 return;
             }
@@ -378,7 +379,7 @@ impl HerdrWindow {
         if mode == ActionMode::Send
             && (!pane.attached() || !pane.session.transcript().status.accepts_prompts())
         {
-            pane.error = Some("The agent is not ready to receive this form".into());
+            pane.error = Some(fl!("chat-form-not-ready"));
             cx.notify();
             return;
         }
@@ -389,7 +390,7 @@ impl HerdrWindow {
                 || !pane.attachments.is_empty()
                 || pane.uploading > 0)
         {
-            pane.error = Some("Finish your current message before sending this form".into());
+            pane.error = Some(fl!("chat-form-busy"));
             cx.notify();
             return;
         }

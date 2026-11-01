@@ -1,6 +1,9 @@
 use super::*;
 use uuid::Uuid;
 
+mod alerts;
+mod presence;
+
 #[test]
 fn a_copy_skips_the_changes_it_already_holds() {
     let epoch = Uuid::new_v4();

@@ -1,6 +1,7 @@
 //! What a VS Code tab shows until its page is there: why it is empty, the
 //! license to accept, or that VS Code is starting.
 use super::code::Reach;
+use crate::i18n::{Localize, fl};
 use crate::{
     HerdrWindow,
     code_server::{Launcher, Startup},
@@ -17,33 +18,29 @@ impl HerdrWindow {
     ) -> AnyElement {
         let startup = Launcher::startup(cx, &self.config.code);
         let text: SharedString = if !super::EMBEDDED {
-            "This build cannot show pages in the window.".into()
+            fl!("browser-vscode-unsupported").into()
         } else if let Some(message) = failure {
-            format!("Could not show this page: {message}").into()
+            fl!("browser-page-failed", error = message.to_string()).into()
         } else {
             match startup {
                 Startup::Address if self.config.code.url.is_none() => {
-                    "Set the VS Code server in Settings to show VS Code here.".into()
+                    fl!("browser-vscode-no-server").into()
                 }
-                Startup::Finding => "Looking for VS Code\u{2026}".into(),
-                Startup::Missing => "VS Code is not installed. Install it, or set the address \
-                                     of a server you run in Settings."
-                    .into(),
+                Startup::Finding => fl!("browser-vscode-finding").into(),
+                Startup::Missing => fl!("browser-vscode-missing").into(),
                 Startup::Consent => return self.render_code_consent(cx),
-                Startup::Idle | Startup::Starting { .. } => {
-                    "Starting VS Code\u{2026} (the first run downloads it)".into()
-                }
+                Startup::Idle | Startup::Starting { .. } => fl!("browser-vscode-starting").into(),
                 Startup::Failed { error, .. } => {
-                    return self.render_code_unreachable(error.to_string().into());
+                    return self.render_code_unreachable(error.localize().into());
                 }
                 Startup::Address | Startup::Ready { .. } => match &self.browser.code_server.state {
                     Reach::Failed { message, .. } => {
                         return self.render_code_unreachable(message.clone());
                     }
                     Reach::Ready { server, .. } => {
-                        format!("Loading VS Code {}\u{2026}", server.short_commit()).into()
+                        fl!("browser-vscode-loading", commit = server.short_commit()).into()
                     }
-                    Reach::Unknown | Reach::Asking => "Connecting to VS Code\u{2026}".into(),
+                    Reach::Unknown | Reach::Asking => fl!("browser-vscode-connecting").into(),
                 },
             }
         };
@@ -76,14 +73,14 @@ impl HerdrWindow {
                     div()
                         .text_color(rgb(theme.foreground))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child("Cannot reach the VS Code server"),
+                        .child(fl!("browser-vscode-unreachable")),
                 )
                 .child(div().text_color(rgb(theme.muted)).child(message))
                 .child(
                     div()
                         .text_color(rgb(theme.muted))
                         .text_sm()
-                        .child("Retrying\u{2026}"),
+                        .child(fl!("browser-vscode-retrying")),
                 ),
         )
     }

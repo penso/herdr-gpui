@@ -59,7 +59,10 @@ fn results_read_as_data_in_the_prompt() {
     assert!(text.contains("   Note: Use it everywhere\n"));
     // The notes panel, which only builds that show pages have, names it.
     #[cfg(any(target_os = "macos", windows))]
-    assert_eq!(noted.anchor.summary(), "Page result: Picked variant B");
+    assert_eq!(
+        noted.anchor.summary(),
+        "Page result: \u{2068}Picked variant B\u{2069}"
+    );
 }
 
 #[test]

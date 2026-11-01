@@ -49,10 +49,9 @@ fn the_bar_leads_the_expanded_sidebar_and_widens_its_column(cx: &mut gpui::TestA
         cx.update(|_, cx| view.read(cx).sidebar_column_width(1000.)),
         Some(expected)
     );
-    // Settings moves to the bar; the footer keeps the picker and Sessions.
+    // Settings moves to the bar; the footer keeps the picker.
     assert!(cx.debug_bounds("activity-settings").is_some());
     assert!(cx.debug_bounds("device-settings").is_none());
-    assert!(cx.debug_bounds("device-sessions").is_some());
     assert!(cx.debug_bounds("device-footer-initials").is_some());
 }
 

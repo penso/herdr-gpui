@@ -8,9 +8,9 @@ pub enum Error {
     #[error("{0} must be https (http only on loopback) with no credentials, query, or fragment.")]
     Url(&'static str),
     #[error("{0} is not valid.")]
-    Field(&'static str),
+    Field(crate::cloud::Value),
     #[error("{0} must be UTF-8.")]
-    Encoding(&'static str),
+    Encoding(crate::cloud::Value),
     #[error("Coder needs {0}. Set it in Settings > Cloud devices.")]
     Missing(&'static str),
     #[error("Coder sign-in required.")]
@@ -78,7 +78,7 @@ pub enum Error {
     #[error("{0}")]
     Storage(#[source] Box<crate::Error>),
     #[error("Coder {0} worker stopped.")]
-    Worker(&'static str),
+    Worker(crate::cloud::Worker),
     /// A display name a command gave that more than one template has.
     #[error("Several Coder templates are shown as {name} ({matches}); name one by its name or ID.")]
     AmbiguousTemplate { name: String, matches: String },

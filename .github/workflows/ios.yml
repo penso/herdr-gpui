@@ -1,0 +1,86 @@
+name: iOS
+
+# The native app in ios/ (docs/ios-app-plan.md). Pull requests run the
+# Swift package tests and an unsigned simulator build; main uploads a
+# TestFlight build once the `testflight` environment holds the App Store
+# Connect key (ios/tools/testflight.sh says what it needs).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '!ios/**/*.md'
+      # Design mockups: their own project, not built here.
+      - '!ios/Mockups/**'
+      # The daemon's wire types, which write the Swift tests' fixtures.
+      - 'crates/herdr-remote-control/src/native.rs'
+      - 'crates/herdr-remote-control/src/native/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - '!ios/**/*.md'
+      # Design mockups: their own project, not built here.
+      - '!ios/Mockups/**'
+      # The daemon's wire types, which write the Swift tests' fixtures.
+      - 'crates/herdr-remote-control/src/native.rs'
+      - 'crates/herdr-remote-control/src/native/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: Swift tests and simulator build
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Show the Xcode in use
+        run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Swift package tests (fixtures shared with the daemon's Rust tests)
+        run: cd ios/HerdrRemoteCore && swift test
+      - name: Unsigned simulator build of the app and its extensions
+        run: |
+          cd ios
+          xcodegen -q
+          xcodebuild -project HerdrRemote.xcodeproj -scheme HerdrRemote \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO -quiet build
+
+  testflight:
+    name: TestFlight upload
+    needs: check
+    if: >-
+      github.repository == 'penso/herdr-gpui' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: macos-26
+    timeout-minutes: 45
+    environment: testflight
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Archive and upload
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: sh ios/tools/testflight.sh

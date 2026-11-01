@@ -11,12 +11,14 @@
 
 mod check;
 mod current;
+pub(crate) mod errors;
 #[cfg(test)]
 pub(crate) mod leak_tests;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use check::check;
+pub(crate) use errors::Localize;
 pub(crate) use herdr_i18n::FluentValue;
 use herdr_i18n::{Catalog, Direction, FluentArgs, Language, Locale, Pseudo};
 use std::sync::LazyLock;
@@ -179,6 +181,12 @@ impl CurrentLocale {
 /// to check. Like Slow Animations, it is read where there is no app context.
 pub(crate) fn shown_pseudo() -> Option<Pseudo> {
     current::catalog()?.locale().pseudo()
+}
+
+/// The locale the windows show, for caches of text written in it to
+/// notice a switch. Read where there is no app context, as [`shown_pseudo`] is.
+pub(crate) fn shown_locale() -> Option<Locale> {
+    current::catalog().map(|catalog| catalog.locale().clone())
 }
 
 /// Which way the windows lay their chrome out: the shown locale's

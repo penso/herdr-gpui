@@ -47,7 +47,7 @@ fn create_form_owns_text_validates_and_returns_focus(cx: &mut TestAppContext) {
         let view = view.read(cx);
         assert!(view.menu.session_edit.is_none());
         assert!(view.menu.focus.is_focused(window));
-        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert_eq!(view.menu.page, Some(Page::Devices));
     });
 }
 
@@ -101,7 +101,7 @@ fn delete_confirmation_is_centered_and_cancel_returns_to_picker(cx: &mut TestApp
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert!(view.menu.session_edit.is_none());
-        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert_eq!(view.menu.page, Some(Page::Devices));
         assert!(view.sessions.mutation.is_none());
     });
 }
@@ -301,6 +301,22 @@ fn confirmed_current_session_handoff_retires_only_matching_targets(cx: &mut Test
                     session: "demo".into()
                 }
             );
+        })
+    });
+}
+
+#[gpui::test]
+fn a_reconnect_for_deletion_keeps_the_device_unfolded(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            view.menu.page = Some(Page::Devices);
+            view.unfold_device(0);
+            let local = view.endpoints[0].id.clone();
+            // Reconnecting closes the menu the way this reset does.
+            view.keep_picker_open(|view| view.menu.reset());
+            assert_eq!(view.menu.page, Some(Page::Devices));
+            assert_eq!(view.menu.unfolded_device, Some(local));
         })
     });
 }

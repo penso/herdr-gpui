@@ -20,10 +20,13 @@ fn frames_parse_and_bad_ones_are_refused() {
         Err(Error::Truncated)
     ));
     assert!(matches!(parse(b"a\0-\0"), Err(Error::Truncated)));
-    assert!(matches!(parse(b"../x\x00-\x000\x00"), Err(Error::Field(_))));
+    assert!(matches!(
+        parse(b"../x\x00-\x000\x00"),
+        Err(Error::Field(Field::ContextPath))
+    ));
     assert!(matches!(
         parse(b"/etc/x\x00-\x000\x00"),
-        Err(Error::Field(_))
+        Err(Error::Field(Field::ContextPath))
     ));
 }
 

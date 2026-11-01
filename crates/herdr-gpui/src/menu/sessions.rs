@@ -1,25 +1,22 @@
-//! The sessions popup: the named sessions on this machine and the ones each
-//! saved device reports, grouped under the device they run on and led by the
-//! device this window is on.
+//! The sessions a device unfolds in the device picker: the named sessions on
+//! this machine, or the ones a saved device reports, each under the device it
+//! runs on.
 //! Both lists are probes — a session socket outlives its daemon, and a device's
-//! sessions cost an SSH round trip — so this page is the only thing that asks.
+//! sessions cost an SSH round trip — so only an unfolded device asks.
+// i18n: migrated
+use super::devices::picker::Line;
 use super::{Page, colors, devices};
+use crate::i18n::fl;
 use crate::{HerdrWindow, endpoint::Endpoint, sessions::DeviceScan};
 use gpui::{prelude::*, *};
 use herdr_client::{ConnectTarget, LocalSession};
 mod management;
-pub(super) use management::Edit;
 
-/// A line in the popup, in the order it is painted. Only a row can be selected,
-/// so navigation walks the `Row` entries and skips headers and notes.
-enum Entry {
-    /// A section title. It carries a selector because the order of the sections
-    /// is what says which device the list is leading with, and a device's own
-    /// title is named after it.
-    Header {
-        selector: String,
-        text: String,
-    },
+pub(super) use management::{Edit, Target};
+
+/// A line under an unfolded device, in the order it is painted. Only a row can
+/// be selected, so navigation walks the `Row` entries and skips notes.
+pub(super) enum Entry {
     /// A muted note, carrying the selector diagnostics and tests look for.
     Muted {
         selector: String,
@@ -37,15 +34,15 @@ enum Entry {
 /// What a row attaches to. A device keeps its endpoint id rather than an index,
 /// so a catalog change between paint and click cannot pick the wrong one, and it
 /// names the session itself, because a device has many.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(super) enum Row {
     Local(String),
     Device { id: String, session: String },
-    Add(management::Target),
+    Add(Target),
 }
 
 /// What one row paints. Both kinds share one shape so they cannot drift apart.
-struct Spec {
+pub(super) struct Spec {
     label: SharedString,
     detail: SharedString,
     /// Running locally, or connected remotely.
@@ -55,7 +52,7 @@ struct Spec {
 }
 
 impl Entry {
-    fn row(&self) -> Option<&Row> {
+    pub(super) fn row(&self) -> Option<&Row> {
         match self {
             Self::Row { row, .. } => Some(row),
             _ => None,
@@ -65,7 +62,7 @@ impl Entry {
 
 /// The session a saved device attaches to. Asking the host what else it runs
 /// would be an SSH round trip this popup does not take.
-fn target_session(target: &ConnectTarget) -> String {
+pub(super) fn target_session(target: &ConnectTarget) -> String {
     match target {
         ConnectTarget::Ssh { session, .. }
         | ConnectTarget::Wsl { session, .. }
@@ -79,21 +76,26 @@ fn target_session(target: &ConnectTarget) -> String {
 
 /// The state word a session paints, whether it was probed on this machine or
 /// reported by its host.
-fn state_word(running: bool) -> &'static str {
-    if running { "running" } else { "stopped" }
+fn state_word(running: bool) -> String {
+    if running {
+        fl!("sessions-menu-running")
+    } else {
+        fl!("sessions-menu-stopped")
+    }
 }
 
 impl HerdrWindow {
     pub(super) fn finish_session_departure(&mut self) {
         // Selection is an ordinal shared with keyboard navigation. Once a row
         // disappears it must not transfer to the action now occupying its slot.
-        if self.sessions.departure.is_some() && self.menu.page == Some(Page::Sessions) {
+        if self.sessions.departure.is_some() && self.menu.page == Some(Page::Devices) {
             self.menu.selected = None;
         }
         self.sessions.finish_departure();
     }
 
-    /// Open the local and remote session list above the footer button.
+    /// Opens the device picker with the device this window is on unfolded to
+    /// its sessions, anchored where the footer's picker sits.
     pub(crate) fn open_sessions(
         &mut self,
         anchor: Point<Pixels>,
@@ -106,11 +108,16 @@ impl HerdrWindow {
         // Anchor to the control, not the pointer: every click position leaves the
         // same clear gap above the button.
         self.menu.anchor = anchor;
-        // Probe again on every open. The list from the last open paints at once,
-        // so the popup is never blank while the new scan runs.
-        self.sessions.refresh();
-        self.menu.page = Some(Page::Sessions);
-        self.menu.selected = Some(0);
+        self.menu.page = Some(Page::Devices);
+        self.unfold_device(self.selected_endpoint);
+        // The keys start on the session this window is on, among the others
+        // they are opened to choose from.
+        let current = self.picker_ordinal(
+            |line| matches!(line, Line::Session(Entry::Row { spec, .. }) if spec.checked),
+        );
+        if current.is_some() {
+            self.menu.selected = current;
+        }
     }
 
     /// The socket this window's local endpoint would dial. `Local` resolves
@@ -119,69 +126,30 @@ impl HerdrWindow {
         self.endpoints[0].connection.target.socket_path().ok()
     }
 
-    /// Every painted line, in paint order: the device this window is on leads,
-    /// then this machine's sessions, then the devices left over.
-    fn session_entries(&self) -> Vec<Entry> {
-        let current = self.selected_endpoint;
+    /// The lines device `index` unfolds: its sessions, the notes that explain
+    /// them, and its Add Session row. Index 0 is this machine.
+    pub(super) fn device_session_entries(&self, index: usize) -> Vec<Entry> {
         let mut entries = Vec::new();
         if let Some(error) = &self.sessions.mutation_error {
             entries.push(Entry::Error(error.clone()));
         }
-        // The device this window is on leads with its own sessions, which is what
-        // makes the list worth opening from there.
-        if let Some(endpoint) = self.endpoints.get(current).filter(|_| current != 0) {
-            entries.push(Entry::Header {
-                selector: "sessions-current-device".to_owned(),
-                text: format!("{} · CURRENT DEVICE", endpoint.label.to_uppercase()),
-            });
-            self.device_entries(&mut entries, endpoint, current);
-        }
-        entries.push(Entry::Header {
-            selector: "sessions-local-header".to_owned(),
-            text: "LOCAL SESSIONS".to_owned(),
-        });
-        self.local_entries(&mut entries);
-        // This machine's scan error belongs to its own section, not to the device
-        // sections that follow it.
-        if let Some(error) = &self.sessions.error {
-            entries.push(Entry::Error(error.clone()));
-        }
-        let others: Vec<usize> = (1..self.endpoints.len())
-            .filter(|index| *index != current)
-            .collect();
-        if !others.is_empty() || current == 0 {
-            entries.push(Entry::Header {
-                selector: "sessions-others-header".to_owned(),
-                text: if current == 0 {
-                    "REMOTE DEVICES".to_owned()
-                } else {
-                    "OTHER DEVICES".to_owned()
-                },
-            });
-        }
-        if others.is_empty() && current == 0 {
-            entries.push(Entry::Muted {
-                selector: "sessions-no-devices".to_owned(),
-                text: "No saved devices. Add one from the device picker.".to_owned(),
-            });
-        }
-        // Each device names itself: the rows under it are its sessions, not the
-        // host and target that used to be the whole of one.
-        for index in others {
-            let endpoint = &self.endpoints[index];
-            entries.push(Entry::Header {
-                selector: format!("sessions-device-{}", endpoint.id),
-                text: endpoint.label.to_uppercase(),
-            });
+        if index == 0 {
+            self.local_entries(&mut entries);
+            // This machine's scan error belongs to its own sessions, not to a
+            // saved device's.
+            if let Some(error) = &self.sessions.error {
+                entries.push(Entry::Error(error.clone()));
+            }
+        } else if let Some(endpoint) = self.endpoints.get(index) {
             self.device_entries(&mut entries, endpoint, index);
         }
         entries
     }
 
-    /// One saved device's sessions, under the device's own title. The session it
+    /// One saved device's sessions, under the device's own row. The session it
     /// was saved with leads, and stands in for the list while that is still
     /// arriving or could not be read at all, so a host is never unreachable from
-    /// this popup just because its session list is.
+    /// the picker just because its session list is.
     fn device_entries(&self, entries: &mut Vec<Entry>, endpoint: &Endpoint, index: usize) {
         let saved = target_session(&endpoint.connection.target);
         let attached = self.selected_endpoint == index;
@@ -210,7 +178,7 @@ impl HerdrWindow {
                         .map(|session| {
                             (
                                 session.name.clone(),
-                                state_word(session.running).to_owned(),
+                                state_word(session.running),
                                 session.running,
                                 attached && session.name == saved,
                             )
@@ -220,13 +188,13 @@ impl HerdrWindow {
             }
             Some(DeviceScan::Sessions(_)) => (
                 vec![fallback()],
-                Some("No sessions on this device.".to_owned()),
+                Some(fl!("sessions-menu-no-device-sessions")),
             ),
             Some(DeviceScan::Failed(error)) => (vec![fallback()], Some(error.clone())),
             // A disabled device is never dialled, so it must not claim to be
             // waiting for an answer that is not coming.
-            None if !endpoint.enabled => (vec![fallback()], Some("Disabled".to_owned())),
-            None => (vec![fallback()], Some("Checking…".to_owned())),
+            None if !endpoint.enabled => (vec![fallback()], Some(fl!("sessions-menu-disabled"))),
+            None => (vec![fallback()], Some(fl!("sessions-menu-checking"))),
         };
         for (name, detail, online, checked) in rows {
             entries.push(Entry::Row {
@@ -250,7 +218,7 @@ impl HerdrWindow {
             });
         }
         if let Some(host) = endpoint.connection.target.remote_host() {
-            entries.push(self.add_session_entry(management::Target::Device {
+            entries.push(self.add_session_entry(Target::Device {
                 id: endpoint.id.clone(),
                 host,
             }));
@@ -264,9 +232,9 @@ impl HerdrWindow {
             entries.push(Entry::Muted {
                 selector: "sessions-empty".to_owned(),
                 text: if self.sessions.scanning {
-                    "Checking…".to_owned()
+                    fl!("sessions-menu-checking")
                 } else {
-                    "No sessions on this machine.".to_owned()
+                    fl!("sessions-menu-no-local-sessions")
                 },
             });
         }
@@ -280,25 +248,14 @@ impl HerdrWindow {
         {
             entries.push(Entry::Muted {
                 selector: "sessions-stopped".to_owned(),
-                text: "Stopped sessions start their daemon when selected.".to_owned(),
+                text: fl!("sessions-menu-stopped-note"),
             });
         }
         entries.extend(self.sessions.entries.iter().map(|session| Entry::Row {
             row: Row::Local(session.name.clone()),
             spec: self.local_session_spec(session),
         }));
-        entries.push(self.add_session_entry(management::Target::Local));
-    }
-
-    /// The child index of each selectable row, which is what navigation and the
-    /// scroll handle both address.
-    fn row_children(entries: &[Entry]) -> Vec<usize> {
-        entries
-            .iter()
-            .enumerate()
-            .filter(|(_, entry)| entry.row().is_some())
-            .map(|(index, _)| index)
-            .collect()
+        entries.push(self.add_session_entry(Target::Local));
     }
 
     fn local_session_spec(&self, session: &LocalSession) -> Spec {
@@ -313,9 +270,13 @@ impl HerdrWindow {
         }
     }
 
-    fn sessions_row(
+    /// One session row under its device. `row` counts the session rows painted
+    /// so far and names the row's selectors; `ordinal` is its place among the
+    /// picker's selectable lines, which hover and the keys address.
+    pub(super) fn sessions_row(
         &self,
         row: usize,
+        ordinal: usize,
         choice: Row,
         selected: bool,
         spec: &Spec,
@@ -345,6 +306,7 @@ impl HerdrWindow {
             .as_ref()
             .filter(|departure| matches_target(&departure.target))
             .map(|departure| departure.remaining(crate::motion::now()));
+        // Two lines plus padding; a wrapped note makes the row taller.
         let height = font.line_height() * 2. + 16.;
         let removal = choice.clone();
         let removal_target = self.management_target(&choice);
@@ -360,7 +322,7 @@ impl HerdrWindow {
             .id(("session-entry", row))
             .debug_selector(move || format!("sessions-row-{row}"))
             .p(px(8.))
-            .h(px(height))
+            .min_h(px(height))
             .line_height(px(font.line_height()))
             .rounded(px(crate::config::corners::CONTROL))
             .flex_none()
@@ -391,12 +353,15 @@ impl HerdrWindow {
                             .child(spec.label.clone()),
                     )
                     .child(
+                        // Wraps rather than cutting a note short: the popup's
+                        // width is the device list's, not the note's.
                         div()
-                            .truncate()
+                            .debug_selector(move || format!("sessions-detail-{row}"))
+                            .min_w_0()
                             .text_size(px(font.size * 0.85))
                             .text_color(rgb(theme.muted))
                             .child(if deleting {
-                                "Deleting…".into()
+                                fl!("sessions-menu-deleting").into()
                             } else {
                                 spec.detail.clone()
                             }),
@@ -454,7 +419,7 @@ impl HerdrWindow {
             })
             .on_hover(cx.listener(move |this, hovered, _, cx| {
                 if *hovered {
-                    this.menu.selected = Some(row);
+                    this.menu.selected = Some(ordinal);
                     cx.notify();
                 }
             }))
@@ -467,9 +432,8 @@ impl HerdrWindow {
                 .debug_selector(move || format!("sessions-departing-{row}"))
                 // Keep the anchored popup's height and every row position stable
                 // until the fade finishes; then remove the row in one update.
-                .h(px(height))
+                // The row sizes the wrapper, so a wrapped note keeps its height.
                 .flex_none()
-                .overflow_hidden()
                 .opacity(remaining)
                 .child(view)
                 .into_any_element()
@@ -478,78 +442,36 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn render_sessions(&self, cx: &mut Context<Self>) -> AnyElement {
-        if self.menu.session_edit.is_some() {
-            return self.render_session_edit(cx).into_any_element();
-        }
-        self.render_session_list(cx)
-    }
-
-    pub(super) fn render_session_list(&self, cx: &mut Context<Self>) -> AnyElement {
+    /// A note under an unfolded device: why its list is empty or partial, or
+    /// what went wrong. `None` for a row, which [`Self::sessions_row`] paints.
+    pub(super) fn session_note(&self, entry: &Entry) -> Option<AnyElement> {
         let theme = &self.theme;
         let font = &self.config.ui;
-        let entries = self.session_entries();
-        let children = Self::row_children(&entries);
-        let selected = self.menu.selected;
-        let mut view = div()
-            .id("sessions-scroll")
-            .debug_selector(|| "sessions-list".into())
-            .max_h(devices::list_height(self.menu.anchor.y))
-            .overflow_y_scroll()
-            .track_scroll(&self.menu.sessions_scroll)
-            .flex()
-            .flex_col()
-            .gap(px(4.));
-        for (child, entry) in entries.iter().enumerate() {
-            let ordinal = children.iter().position(|index| *index == child);
-            view = match entry {
-                Entry::Header { selector, text } => {
-                    let selector = selector.clone();
-                    view.child(
-                        div()
-                            .debug_selector(move || selector.clone())
-                            .p(px(8.))
-                            .text_color(rgb(theme.muted))
-                            .child(text.clone()),
-                    )
-                }
-                Entry::Muted { selector, text } => {
-                    let selector = selector.clone();
-                    view.child(
-                        div()
-                            .debug_selector(move || selector.clone())
-                            .px(px(8.))
-                            .py(px(2.))
-                            .text_size(px(font.size * 0.85))
-                            .text_color(rgb(theme.muted))
-                            .child(text.clone()),
-                    )
-                }
-                Entry::Error(text) => view.child(
-                    div()
-                        .debug_selector(|| "sessions-error".into())
-                        .px(px(8.))
-                        .py(px(2.))
-                        .text_size(px(font.size * 0.85))
-                        .text_color(colors::danger(theme))
-                        .child(text.clone()),
-                ),
-                Entry::Row { row, spec } => view.child(self.sessions_row(
-                    ordinal.unwrap_or_default(),
-                    row.clone(),
-                    ordinal == selected,
-                    spec,
-                    cx,
-                )),
-            };
+        let note = div().px(px(8.)).py(px(2.)).text_size(px(font.size * 0.85));
+        match entry {
+            Entry::Muted { selector, text } => {
+                let selector = selector.clone();
+                Some(
+                    note.debug_selector(move || selector.clone())
+                        .text_color(rgb(theme.muted))
+                        .child(text.clone())
+                        .into_any_element(),
+                )
+            }
+            Entry::Error(text) => Some(
+                note.debug_selector(|| "sessions-error".into())
+                    .text_color(colors::danger(theme))
+                    .child(text.clone())
+                    .into_any_element(),
+            ),
+            Entry::Row { .. } => None,
         }
-        view.into_any_element()
     }
 
     /// Attach to a row's session. The row is what the caller painted, not an
     /// index into a list computed again here: a device list that refreshed in
     /// between would otherwise have the click name a different session.
-    fn choose_session(&mut self, row: Row, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn choose_session(&mut self, row: Row, window: &mut Window, cx: &mut Context<Self>) {
         if self.sessions.mutation.is_some() {
             return;
         }
@@ -585,6 +507,7 @@ impl HerdrWindow {
         }
     }
 
+    /// Keys for the open Add Session or Delete Session form.
     pub(super) fn sessions_key(
         &mut self,
         event: &KeyDownEvent,
@@ -598,52 +521,6 @@ impl HerdrWindow {
         }
         cx.stop_propagation();
         window.prevent_default();
-        if self.menu.session_edit.is_some() {
-            self.session_edit_key(event, window, cx);
-            return;
-        }
-        let entries = self.session_entries();
-        let children = Self::row_children(&entries);
-        match event.keystroke.key.as_str() {
-            "up" | "down" if !children.is_empty() => {
-                let count = children.len();
-                let up = event.keystroke.key == "up";
-                let index = match self.menu.selected {
-                    Some(index) => (index.min(count - 1) + if up { count - 1 } else { 1 }) % count,
-                    None if up => count - 1,
-                    None => 0,
-                };
-                self.menu.selected = Some(index);
-                self.menu.sessions_scroll.scroll_to_item(children[index]);
-                cx.notify();
-            }
-            "enter" if !children.is_empty() => {
-                let row = self
-                    .menu
-                    .selected
-                    .and_then(|selected| children.get(selected))
-                    .and_then(|child| entries.get(*child))
-                    .and_then(Entry::row)
-                    .cloned();
-                if let Some(row) = row {
-                    self.choose_session(row, window, cx);
-                }
-            }
-            "escape" => self.dismiss_menu(window, cx),
-            "backspace" | "delete" => {
-                if let Some(row) = self
-                    .menu
-                    .selected
-                    .and_then(|selected| children.get(selected))
-                    .and_then(|child| entries.get(*child))
-                    .and_then(Entry::row)
-                    .cloned()
-                {
-                    let target = self.management_target(&row);
-                    self.confirm_session_delete(row, target, window, cx);
-                }
-            }
-            _ => {}
-        }
+        self.session_edit_key(event, window, cx);
     }
 }
