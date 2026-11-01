@@ -1,7 +1,9 @@
 //! Keeping the window's view of the daemon current: resending geometry only
 //! when it actually changed, renaming the OS window after the focused space,
 //! and reporting focus to the authoritative inbox as well as the wire.
+// i18n: migrated
 
+use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
 use crate::{WINDOW_TITLE, sidebar, state::LiveState};
 use gpui::{Context, Pixels, Point, Window};
@@ -127,7 +129,7 @@ impl HerdrWindow {
                 // next poll or paint retries them once the worker drains. A
                 // status error would outlive the retry that already fixed it.
                 Err(herdr_client::Error::Full) => {}
-                Err(error) => self.local_error = Some(format!("Resize: {error}")),
+                Err(error) => self.local_error = Some(fl!("window-input-resize-failed", error = error.localize())),
             }
         }
     }

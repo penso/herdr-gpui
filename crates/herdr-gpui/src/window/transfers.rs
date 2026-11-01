@@ -1,6 +1,8 @@
 //! Large files travel on an independent SSH stream; the daemon input lane stays
 //! responsive. Only completed copies can paste paths, into their captured target.
+// i18n: migrated
 
+use crate::i18n::{Localize, fl};
 use super::{HerdrWindow, pending_input::Delivery};
 use crate::{connection::ConnectionBridge, fonts::StyledFont, terminal::InputTarget};
 use gpui::{prelude::*, *};
@@ -58,8 +60,9 @@ impl Drop for FileTransfer {
 fn transfer_progress(sent: u64, total: u64) -> (f32, String) {
     let size = |bytes: u64| {
         let mut value = bytes as f64;
-        let mut unit = "B";
-        for next in ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB"] {
+        // Selectors of window-input-size.
+        let mut unit = "b";
+        for next in ["kib", "mib", "gib", "tib", "pib", "eib"] {
             if value < 1024. {
                 break;
             }
@@ -67,7 +70,11 @@ fn transfer_progress(sent: u64, total: u64) -> (f32, String) {
             unit = next;
         }
         let number = format!("{value:.1}");
-        format!("{} {unit}", number.trim_end_matches(".0"))
+        fl!(
+            "window-input-size",
+            value = number.trim_end_matches(".0").to_owned(),
+            unit = unit
+        )
     };
     let fraction = if total == 0 {
         0.
@@ -76,7 +83,12 @@ fn transfer_progress(sent: u64, total: u64) -> (f32, String) {
     };
     (
         fraction,
-        format!("{} / {} ({:.0}%)", size(sent), size(total), fraction * 100.),
+        fl!(
+            "window-input-copy-progress",
+            sent = size(sent),
+            total = size(total),
+            percent = format!("{:.0}", fraction * 100.)
+        ),
     )
 }
 
@@ -192,10 +204,10 @@ impl HerdrWindow {
             return Delivery::Refused;
         }
         if self.file_transfer.is_some() {
-            self.local_error = Some("Files not pasted: another copy is running".into());
+            self.local_error = Some(fl!("window-input-files-busy"));
             self.local_transfer_notice(
-                "Copy not started",
-                "Another file copy is still running. Cancel it or wait for it to finish.".into(),
+                &fl!("window-input-copy-not-started"),
+                fl!("window-input-copy-not-started-body"),
                 cx,
             );
             return Delivery::Refused;
@@ -216,9 +228,9 @@ impl HerdrWindow {
             paths[0]
                 .file_name()
                 .map(|name| crate::notifications::safe_text(&name.to_string_lossy(), 160))
-                .unwrap_or_else(|| "File".into())
+                .unwrap_or_else(|| fl!("window-input-copy-file"))
         } else {
-            format!("{} files", paths.len())
+            fl!("window-input-copy-files", count = paths.len())
         };
         let cancelled = Arc::new(AtomicBool::new(false));
         let sent = Arc::new(AtomicU64::new(0));
@@ -254,19 +266,20 @@ impl HerdrWindow {
                             let handle = this.endpoints[this.selected_endpoint].connection.handle.as_ref().ok_or(crate::Error::NotConnected)?;
                             ConnectionBridge::send_input(handle, &transfer.boot, &transfer.target, ClientPaneInputEvent::Paste(text))?;
                             Ok(())
-                        }).err().map(|error: crate::Error| error.to_string())
+                        }).err().map(|error: crate::Error| error.localize())
                     }
-                    Ok(_) => Some(herdr_client::Error::UploadCancelled.to_string()),
+                    Ok(_) => Some(herdr_client::Error::UploadCancelled.localize()),
                     Err(error) => {
+                        // i18n: data
                         crate::storage_warning::warn_storage_failure("File transfer", error);
-                        Some(error.to_string())
+                        Some(error.localize())
                     }
                 };
                 let accepted = error.is_none();
                 if current && !matches!(&result, Err(herdr_client::Error::UploadCleanup { .. })) {
                     match error {
-                        None => this.local_transfer_notice("Copy complete", "Remote file paths pasted. Files remain in the remote temporary directory until removed.".into(), cx),
-                        Some(error) => this.local_transfer_notice(if cancelled { "Copy cancelled" } else { "Copy failed" }, error, cx),
+                        None => this.local_transfer_notice(&fl!("window-input-copy-complete"), fl!("window-input-copy-complete-body"), cx),
+                        Some(error) => this.local_transfer_notice(&if cancelled { fl!("window-input-copy-cancelled") } else { fl!("window-input-copy-failed") }, error, cx),
                     }
                 }
                 accepted
@@ -281,7 +294,7 @@ impl HerdrWindow {
             };
             if cleanup_failed {
                 let _ = this.update(cx, |this, cx| {
-                    this.local_transfer_notice("Remote cleanup failed", format!("No path was pasted. Temporary files may remain on the original host ({endpoint_label})."), cx);
+                    this.local_transfer_notice(&fl!("window-input-cleanup-failed"), fl!("window-input-cleanup-failed-body", device = endpoint_label), cx);
                 });
             }
             let _ = this.update(cx, |this, cx| {
@@ -320,11 +333,11 @@ impl HerdrWindow {
         let (sent, total, cancelled) = transfer.shown;
         let (fraction, progress) = transfer_progress(sent, total);
         let title = if cancelled {
-            "Cancelling..."
+            fl!("window-input-copy-cancelling")
         } else if total > 0 && sent >= total {
-            "Finalizing copy..."
+            fl!("window-input-copy-finishing")
         } else {
-            "Copying..."
+            fl!("window-input-copying")
         };
         let accent = self.theme.primary();
         let realm = window.viewport_size().width;
@@ -375,7 +388,11 @@ impl HerdrWindow {
                         .id("cancel-file-transfer")
                         .debug_selector(|| "cancel-file-transfer".into())
                         .cursor_pointer()
-                        .child(if cancelled { "Cancelling" } else { "Cancel" })
+                        .child(if cancelled {
+                            fl!("window-input-copy-cancel-pressed")
+                        } else {
+                            fl!("window-input-copy-cancel")
+                        })
                         .on_click(cx.listener(|this, _, _, cx| {
                             cx.stop_propagation();
                             if let Some(transfer) = &this.file_transfer {

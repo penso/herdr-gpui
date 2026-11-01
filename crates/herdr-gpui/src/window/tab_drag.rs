@@ -10,7 +10,9 @@
 //! once. Each kind moves among its own, since Herdr tabs always lead a strip.
 //!
 //! Dropped outside the window, a tab opens in a new window (`tab_tear`).
+// i18n: migrated
 
+use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
 use crate::{
     browser::{GroupId, Pick, Store},
@@ -414,7 +416,7 @@ impl HerdrWindow {
                 });
                 self.tab_drag = Some(drag);
             }
-            Err(error) => self.local_error = Some(format!("Tab move not sent: {error}")),
+            Err(error) => self.local_error = Some(fl!("window-input-tab-move-failed", error = error.localize())),
         }
     }
 

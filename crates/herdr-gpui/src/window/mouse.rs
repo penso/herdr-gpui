@@ -2,7 +2,9 @@
 //! Shift keeps a gesture local; a forwarded drag stays with its pressed target.
 //! A pane's right-click reaches the application only when Herdr routes it there,
 //! or when it is held with Herdr's `ui.right_click_passthrough_modifier`.
+// i18n: migrated
 
+use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
 use crate::{
     connection::ConnectionBridge,
@@ -134,7 +136,7 @@ impl HerdrWindow {
                     .mouse_event(ClientMouseKind::Up(button), Modifiers::default()),
             )
         {
-            self.local_error = Some(format!("Mouse release not sent: {error}"));
+            self.local_error = Some(fl!("window-input-mouse-release-failed", error = error.localize()));
             cx.notify();
         }
     }
@@ -185,7 +187,7 @@ impl HerdrWindow {
         ) {
             Ok(()) => true,
             Err(error) => {
-                self.local_error = Some(format!("Mouse input not sent: {error}"));
+                self.local_error = Some(fl!("window-input-mouse-failed", error = error.localize()));
                 cx.notify();
                 false
             }
@@ -676,7 +678,7 @@ impl HerdrWindow {
             }
             Err(error) => {
                 drop(state);
-                self.local_error = Some(format!("Scroll not sent: {error}"));
+                self.local_error = Some(fl!("window-input-scroll-failed", error = error.localize()));
                 cx.notify();
             }
         }
@@ -919,7 +921,7 @@ impl HerdrWindow {
             Err(error) => {
                 drop(state);
                 self.split_drag = None;
-                self.local_error = Some(format!("Pane resize not sent: {error}"));
+                self.local_error = Some(fl!("window-input-pane-resize-failed", error = error.localize()));
                 cx.notify();
             }
         }
