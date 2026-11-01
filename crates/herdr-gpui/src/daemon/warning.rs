@@ -17,11 +17,12 @@ impl LocalPeerWarning {
 
     pub(crate) fn notice(&self, now: std::time::Instant) -> crate::notifications::Notice {
         use herdr_client::protocol::{SemanticNotification, SemanticNotificationKind};
+        let (title, body) = (fl!("daemon-warning-title"), self.body());
         crate::notifications::Notice::local_feedback_multiline(
             SemanticNotification {
                 kind: SemanticNotificationKind::NeedsAttention,
-                title: fl!("daemon-warning-title"),
-                body: Some(self.body()),
+                title: title.clone(),
+                body: Some(body.clone()),
                 sound: None,
                 agent: None,
                 workspace_id: None,
@@ -31,6 +32,10 @@ impl LocalPeerWarning {
             },
             now,
         )
+        // The cleanup above is for daemon text. This is the app's own: Fluent
+        // messages, whose direction marks a right-to-left language needs, and
+        // a command whose path `body` already refused when it was unsafe.
+        .with_message(title, body)
     }
 
     fn body(&self) -> String {
