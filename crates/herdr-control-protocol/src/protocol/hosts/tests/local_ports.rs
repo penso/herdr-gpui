@@ -1,5 +1,7 @@
 use super::*;
 
+const _: () = assert!(LOCAL_PORTS_WAIT_SECONDS <= MAX_WAIT_SECONDS);
+
 #[test]
 fn local_port_requests_have_a_stable_wire_form() {
     let request = Request::Host(Call {
@@ -18,7 +20,6 @@ fn local_port_requests_have_a_stable_wire_form() {
     let listing = serde_json::to_string(&HostOp::LocalPorts).unwrap();
     assert_eq!(listing, r#"{"op":"local_ports"}"#);
     assert_eq!(HostOp::LocalPorts.wait_seconds(), LOCAL_PORTS_WAIT_SECONDS);
-    assert!(LOCAL_PORTS_WAIT_SECONDS <= MAX_WAIT_SECONDS);
     assert_eq!(
         HostOp::SignalPort {
             port: 1,

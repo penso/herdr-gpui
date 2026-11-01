@@ -328,7 +328,8 @@ impl LocalPorts {
         self.report
     }
 
-    /// Whether a scan is running, so a refresh can be asked of it.
+    /// Whether a scan is running.
+    #[cfg(test)]
     pub(crate) fn running(&self) -> bool {
         self.worker.is_some()
     }

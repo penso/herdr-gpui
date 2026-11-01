@@ -6,7 +6,7 @@ use crate::{
     i18n::leak_tests::{assert_translated, draw, under_en_xa},
     sidebar::ActivityPanel,
 };
-use gpui::{AppContext as _, px, size};
+use gpui::{px, size};
 
 #[test]
 fn the_ports_section_and_its_question_show_only_messages_under_en_xa() {
