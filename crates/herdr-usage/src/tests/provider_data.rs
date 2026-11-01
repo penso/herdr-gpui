@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::Text;
 use crate::{
     model::{SESSION, Section},
     probe::{Response, json_field},
@@ -43,27 +44,35 @@ fn claude_reads_every_window_account_and_detail() {
         [
             (Kind::Session, 3, Some(SESSION)),
             (Kind::Weekly, 15, Some(WEEK)),
-            (Kind::Named("Fable".into()), 0, Some(WEEK)),
+            (Kind::Named(Text::service("Fable")), 0, Some(WEEK)),
         ]
     );
     assert_eq!(report.windows[0].resets_at, Some(at(1_790_324_400)));
     assert_eq!(
         report.account,
         Account {
-            email: Some("me@example.com".into()),
-            plan: Some("Max 20x".into()),
+            email: Some(Text::service("me@example.com")),
+            plan: Some(Text::service("Max 20x")),
         }
     );
     assert_eq!(
         report.sections,
         [
             Section::Shares {
-                title: "This week by surface".into(),
-                shares: vec![("Claude Code".into(), 90.), ("Chats".into(), 10.)],
+                title: Text::message("usage-claude-week-by-surface"),
+                shares: vec![
+                    (Text::service("Claude Code"), 90.),
+                    (Text::service("Chats"), 10.)
+                ],
             },
             Section::Facts {
-                title: "Extra usage".into(),
-                facts: vec![("This month".into(), "12.34 EUR of 50.00 EUR".into())],
+                title: Text::message("usage-claude-extra-usage"),
+                facts: vec![(
+                    Text::message("usage-claude-this-month"),
+                    Text::message("usage-claude-spent-of")
+                        .arg("used", "12.34 EUR")
+                        .arg("limit", "50.00 EUR")
+                )],
             },
         ]
     );
@@ -109,7 +118,7 @@ const CODEX: &str = r#"{"email":"me@example.com","plan_type":"pro","rate_limit":
 fn codex_windows_are_known_by_length_not_slot() {
     let report = codex::parse(CODEX).unwrap();
     assert_eq!(report.provider, provider("codex"));
-    assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+    assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
     assert_eq!(report.windows.len(), 1);
     assert_eq!(report.windows[0].kind, Kind::Weekly);
     assert_eq!(report.windows[0].resets_at, Some(at(1_790_786_634)));
@@ -173,11 +182,16 @@ fn every_provider_is_registered_once_with_its_icon() {
             assert!(url.starts_with("https://"), "{url}");
         }
         for setting in provider.service().meta().settings {
+            // The app checks each message's English; its ID names the
+            // provider's own file.
             assert!(
-                !setting.help.trim().is_empty(),
-                "{}.{}",
+                setting
+                    .message
+                    .starts_with(&format!("usage-{}-setting-", provider.id())),
+                "{}.{}: {}",
                 provider.id(),
-                setting.name
+                setting.name,
+                setting.message
             );
         }
     }

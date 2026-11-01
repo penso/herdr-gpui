@@ -6,6 +6,8 @@
 //! balance only; the CLI session also reads the plan and the weekly limit.
 //! Everything CodexBar reads is ported.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -29,15 +31,12 @@ static META: Meta = Meta::new("codebuff", "Codebuff")
         Setting::new(
             "api_key",
             &["CODEBUFF_API_KEY"],
-            "A Codebuff API key from https://www.codebuff.com. It reads the credit balance \
-             only; without it, the session from `codebuff login` is used, which also reads \
-             the plan and weekly limit.",
+            "usage-codebuff-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["CODEBUFF_API_URL"],
-            "An https URL that replaces https://www.codebuff.com, e.g. for a staging server. \
-             Other schemes are ignored so the token never travels unencrypted.",
+            "usage-codebuff-setting-base-url",
         ),
     ]);
 
@@ -119,22 +118,27 @@ pub(crate) fn parse(
     let mut windows = Vec::new();
     match total {
         Some(total) if total > 0. => windows.push(Window::new(
-            Kind::Named("Credits".into()),
+            Kind::Named(Text::message("usage-codebuff-credits")),
             spent / total * 100.,
             resets_at,
             None,
         )),
         // No usable quota: shown as spent rather than as a healthy bar.
         _ if used.is_some() || remaining.is_some() => windows.push(Window::new(
-            Kind::Named("Credits".into()),
+            Kind::Named(Text::message("usage-codebuff-credits")),
             100.,
             resets_at,
             None,
         )),
         _ => {}
     }
-    let balances =
-        remaining.map(|left| Balance::new("Remaining", left, Unit::Count("credits".into())));
+    let balances = remaining.map(|left| {
+        Balance::new(
+            Text::message("usage-codebuff-remaining"),
+            left,
+            Unit::Count(Count::Credits),
+        )
+    });
     let auto_top_up = ["autoTopupEnabled", "auto_topup_enabled"]
         .iter()
         .find_map(|key| usage.get(*key).and_then(Value::as_bool));
@@ -181,21 +185,28 @@ pub(crate) fn parse(
         .and_then(|details| details.get("status"))
         .and_then(text)
     {
-        facts.push(("Subscription".to_owned(), title_case(&status)));
+        facts.push((
+            Text::message("usage-codebuff-subscription"),
+            Text::service(title_case(&status)),
+        ));
     }
     if let Some(enabled) = auto_top_up {
         facts.push((
-            "Auto top-up".to_owned(),
-            if enabled { "On" } else { "Off" }.to_owned(),
+            Text::message("usage-codebuff-auto-top-up"),
+            if enabled {
+                Text::message("usage-codebuff-on")
+            } else {
+                Text::message("usage-codebuff-off")
+            },
         ));
     }
     let section = (!facts.is_empty()).then(|| Section::Facts {
-        title: "Account".into(),
+        title: Text::message("usage-codebuff-account"),
         facts,
     });
     let account = Account {
-        email,
-        plan: plan.map(|plan| title_case(&plan)),
+        email: email.map(Text::service),
+        plan: plan.map(|plan| Text::service(title_case(&plan))),
     };
     Ok(Report::new(Provider(&Codebuff), account, windows)
         .with_balances(balances)
@@ -239,14 +250,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(report.windows.len(), 1);
-        assert_eq!(report.windows[0].kind, Kind::Named("Credits".into()));
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::message("usage-codebuff-credits"))
+        );
         assert!((report.windows[0].used - 25.).abs() < 1e-4);
         assert_eq!(
             report.balances,
             vec![Balance::new(
-                "Remaining",
+                Text::message("usage-codebuff-remaining"),
                 75.,
-                Unit::Count("credits".into())
+                Unit::Count(Count::Credits)
             )]
         );
         assert_eq!(report.account, Account::default());
@@ -263,12 +277,15 @@ mod tests {
             "email": "dev@example.com"
         }"#;
         let report = parse(usage, Some(subscription), Some("cli@example.com".into())).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
         let credits = report
             .windows
             .iter()
-            .find(|window| window.kind == Kind::Named("Credits".into()))
+            .find(|window| window.kind == Kind::Named(Text::message("usage-codebuff-credits")))
             .unwrap();
         assert!((credits.used - 40.).abs() < 1e-4);
         assert!(credits.resets_at.is_some());
@@ -283,8 +300,20 @@ mod tests {
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected account facts");
         };
-        assert_eq!(facts[0], ("Subscription".to_owned(), "Active".to_owned()));
-        assert_eq!(facts[1], ("Auto top-up".to_owned(), "On".to_owned()));
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-codebuff-subscription"),
+                Text::service("Active")
+            )
+        );
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-codebuff-auto-top-up"),
+                Text::message("usage-codebuff-on")
+            )
+        );
     }
 
     #[test]

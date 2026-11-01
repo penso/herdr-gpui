@@ -21,6 +21,7 @@
 //! storage (where kimi.ai keeps `access_token`), retrying the next browser
 //! session when one is rejected, and multiple labeled web accounts.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -45,39 +46,19 @@ static META: Meta = Meta::new("kimi", "Kimi Code")
         Setting::new(
             "api_key",
             &["KIMI_CODE_API_KEY"],
-            "A Kimi Code API key from the Kimi Code console (https://www.kimi.com/code/console, \
-             or https://www.kimi.ai/code/console for International). Not needed when the \
-             Kimi Code CLI is signed in on the host.",
+            "usage-kimi-setting-api-key",
         ),
-        Setting::new(
-            "region",
-            &[],
-            "Which Kimi service the credentials belong to: \"china\" (the default, kimi.com) \
-             or \"international\" (kimi.ai). Moonshot Open Platform keys belong to the \
-             moonshot provider instead.",
-        ),
+        Setting::new("region", &[], "usage-kimi-setting-region"),
         Setting::new(
             "base_url",
             &["KIMI_CODE_BASE_URL"],
-            "An https Kimi Code API base to use with the API key instead of \
-             https://api.kimi.com, for a compatible proxy. Setting it stops the CLI's \
-             sign-in from being used.",
+            "usage-kimi-setting-base-url",
         ),
-        Setting::new(
-            "token",
-            &["KIMI_AUTH_TOKEN"],
-            "Your Kimi web session, for the membership pool and plan, or on its own. Sign in \
-             at https://www.kimi.com/code/console, open Developer Tools → Application → \
-             Cookies → https://www.kimi.com, and copy the value of the `kimi-auth` cookie \
-             (a JWT starting with eyJ), without its name. On kimi.ai, copy `access_token` \
-             from Local Storage instead. Not needed when Kimi is listed in show_providers \
-             and you are signed in with Chrome or Safari.",
-        ),
+        Setting::new("token", &["KIMI_AUTH_TOKEN"], "usage-kimi-setting-token"),
         Setting::new(
             "cookie",
             &["KIMI_MANUAL_COOKIE"],
-            "Instead of token, a whole Kimi Cookie header that includes kimi-auth, as \
-             \"kimi-auth=value; …\".",
+            "usage-kimi-setting-cookie",
         ),
     ]);
 
@@ -286,18 +267,22 @@ impl Usage {
             })
         });
         let requests = |(used, limit): (f64, f64)| {
-            format!(
-                "{} of {}",
-                group(used.round() as i64),
-                group(limit.round() as i64)
-            )
+            Text::message("usage-kimi-of")
+                .arg("used", group(used.round() as i64))
+                .arg("limit", group(limit.round() as i64))
         };
-        let facts: Vec<(String, String)> = [
-            ("Weekly requests", self.weekly_requests.map(requests)),
-            ("Rate limit requests", self.session_requests.map(requests)),
+        let facts: Vec<(Text, Text)> = [
+            (
+                Text::message("usage-kimi-weekly-requests"),
+                self.weekly_requests.map(requests),
+            ),
+            (
+                Text::message("usage-kimi-rate-limit-requests"),
+                self.session_requests.map(requests),
+            ),
         ]
         .into_iter()
-        .filter_map(|(label, value)| Some((label.to_owned(), value?)))
+        .filter_map(|(label, value)| Some((label, value?)))
         .collect();
         let windows = [self.session, self.weekly, self.monthly]
             .into_iter()
@@ -307,13 +292,13 @@ impl Usage {
             Provider(&Kimi),
             Account {
                 email: None,
-                plan: self.plan,
+                plan: self.plan.map(Text::service),
             },
             windows,
         )
         .with_sections(distinct.map(Section::Limit).into_iter().chain(
             (!facts.is_empty()).then(|| Section::Facts {
-                title: "Requests".into(),
+                title: Text::message("usage-kimi-requests"),
                 facts,
             }),
         ))
@@ -450,7 +435,7 @@ pub(crate) fn parse_stats(body: &str) -> Option<Stats> {
         }
         let ratio = limit.ratio.filter(|ratio| ratio.is_finite())?;
         Some(Window::new(
-            Kind::Named("Code 7-day".into()),
+            Kind::Named(Text::message("usage-kimi-code-weekly")),
             ratio * 100.,
             limit.reset_time.as_ref().and_then(Timestamp::time),
             Some(WEEK),
@@ -473,7 +458,7 @@ pub(crate) fn parse_plan(body: &str) -> Option<String> {
 }
 
 fn total_usage() -> Kind {
-    Kind::Named("Total usage".into())
+    Kind::Named(Text::message("usage-kimi-total-usage"))
 }
 
 /// A ratio pool, unless it is a zero placeholder next to populated counts
@@ -711,7 +696,10 @@ mod tests {
     #[test]
     fn reads_request_counts() {
         let report = parse_code(COUNTS).unwrap().report();
-        assert_eq!(report.account.plan.as_deref(), Some("Moderato"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Moderato")
+        );
         let session = &report.windows[0];
         assert_eq!(session.kind, Kind::Session);
         assert!((session.used - 69.5).abs() < 1e-4);
@@ -724,10 +712,20 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Requests".into(),
+                title: Text::message("usage-kimi-requests"),
                 facts: vec![
-                    ("Weekly requests".into(), "214 of 2,048".into()),
-                    ("Rate limit requests".into(), "139 of 200".into()),
+                    (
+                        Text::message("usage-kimi-weekly-requests"),
+                        Text::message("usage-kimi-of")
+                            .arg("used", "214")
+                            .arg("limit", "2,048")
+                    ),
+                    (
+                        Text::message("usage-kimi-rate-limit-requests"),
+                        Text::message("usage-kimi-of")
+                            .arg("used", "139")
+                            .arg("limit", "200")
+                    ),
                 ],
             }]
         );
@@ -753,7 +751,10 @@ mod tests {
         assert_eq!(session.used, 0.);
         assert_eq!(session.resets_at, Some(at("2026-09-16T20:15:44Z")));
         let monthly = &report.windows[1];
-        assert_eq!(monthly.kind, Kind::Named("Total usage".into()));
+        assert_eq!(
+            monthly.kind,
+            Kind::Named(Text::message("usage-kimi-total-usage"))
+        );
         assert!((monthly.used - 0.56).abs() < 1e-4);
         assert_eq!(monthly.length, Some(MONTH));
     }
@@ -793,14 +794,20 @@ mod tests {
             r#"{"subscription":{"active":true,"status":"SUBSCRIPTION_STATUS_ACTIVE","goods":{"title":"Allegretto"}}}"#,
         );
         let report = usage.report();
-        assert_eq!(report.account.plan.as_deref(), Some("Allegretto"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Allegretto")
+        );
         assert_eq!(report.windows.len(), 3);
-        assert_eq!(report.windows[2].kind, Kind::Named("Total usage".into()));
+        assert_eq!(
+            report.windows[2].kind,
+            Kind::Named(Text::message("usage-kimi-total-usage"))
+        );
         assert_eq!(report.windows[2].percent(), 42);
         // The Code 7-day ratio differs from the weekly counts, so it shows.
         assert!(matches!(
             &report.sections[0],
-            Section::Limit(window) if window.kind == Kind::Named("Code 7-day".into()) && window.percent() == 50
+            Section::Limit(window) if window.kind == Kind::Named(Text::message("usage-kimi-code-weekly")) && window.percent() == 50
         ));
     }
 

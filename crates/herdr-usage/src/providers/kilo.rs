@@ -9,6 +9,8 @@
 //! pass state has no `subscription` object: only the plan name is read from
 //! such answers.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -32,9 +34,7 @@ static META: Meta = Meta::new("kilo", "Kilo")
     .settings(&[Setting::new(
         "api_key",
         &["KILO_API_KEY"],
-        "A Kilo API key from https://app.kilo.ai (Profile → API keys). Without one, the \
-         Kilo CLI's sign-in in ~/.local/share/kilo/auth.json is used; run `kilo auth \
-         login` to create it.",
+        "usage-kilo-setting-api-key",
     )]);
 
 impl Service for Kilo {
@@ -101,19 +101,26 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             Some(MONTH),
         ));
         let base = (total - pass.bonus).max(0.);
-        let mut text = format!("{} of {}", usd(used), usd(base));
-        if pass.bonus > 0. {
-            text.push_str(&format!(" (+ {} bonus)", usd(pass.bonus)));
-        }
-        facts.push(("Kilo Pass".to_owned(), text));
+        let text = if pass.bonus > 0. {
+            Text::message("usage-kilo-pass-bonus")
+                .arg("used", usd(used))
+                .arg("base", usd(base))
+                .arg("bonus", usd(pass.bonus))
+        } else {
+            Text::message("usage-kilo-pass-used")
+                .arg("used", usd(used))
+                .arg("base", usd(base))
+        };
+        facts.push((Text::message("usage-kilo-pass"), text));
     }
     if let Some((enabled, method)) = top_up {
         facts.push((
-            "Auto top-up".to_owned(),
+            Text::message("usage-kilo-top-up"),
+            // The payment method, such as visa, or the amount, as Kilo sends it.
             match (enabled, method) {
-                (false, _) => "Off".to_owned(),
-                (true, Some(method)) => method,
-                (true, None) => "On".to_owned(),
+                (false, _) => Text::message("usage-kilo-off"),
+                (true, Some(method)) => Text::service(method),
+                (true, None) => Text::message("usage-kilo-on"),
             },
         ));
     }
@@ -121,20 +128,32 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let balances = credits.and_then(|credits| {
         let total = credits.total?;
         let remaining = credits.remaining.unwrap_or((total - credits.used).max(0.));
-        Some(Balance::new("Credits left", remaining, credits.unit).out_of(total))
+        Some(
+            Balance::new(
+                Text::message("usage-kilo-credits-left"),
+                remaining,
+                credits.unit,
+            )
+            .out_of(total),
+        )
     });
 
     if windows.is_empty() && balances.is_none() && plan.is_none() {
         return Err(invalid());
     }
-    Ok(
-        Report::new(Provider(&Kilo), Account { email: None, plan }, windows)
-            .with_balances(balances)
-            .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Plan".into(),
-                facts,
-            })),
+    Ok(Report::new(
+        Provider(&Kilo),
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
+        windows,
     )
+    .with_balances(balances)
+    .with_sections((!facts.is_empty()).then(|| Section::Facts {
+        title: Text::message("usage-kilo-plan"),
+        facts,
+    })))
 }
 
 /// The batch answer is an array, an object keyed by index, or, for one
@@ -261,7 +280,7 @@ fn credits(payload: Option<&Value>) -> Option<Credits> {
             used,
             total,
             remaining,
-            Unit::Count("credits".into()),
+            Unit::Count(Count::Credits),
         ));
     }
 
@@ -485,10 +504,20 @@ mod tests {
     #[test]
     fn reads_credit_blocks_and_the_pass() {
         let report = parse(PASS).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Starter"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Starter")
+        );
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits left", 19., Unit::Currency("USD".into())).out_of(19.)]
+            vec![
+                Balance::new(
+                    Text::message("usage-kilo-credits-left"),
+                    19.,
+                    Unit::Currency("USD".into())
+                )
+                .out_of(19.)
+            ]
         );
         assert_eq!(report.windows.len(), 1);
         let pass = &report.windows[0];
@@ -498,10 +527,19 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Plan".into(),
+                title: Text::message("usage-kilo-plan"),
                 facts: vec![
-                    ("Kilo Pass".into(), "$0.00 of $19.00 (+ $9.50 bonus)".into()),
-                    ("Auto top-up".into(), "Off".into()),
+                    (
+                        Text::message("usage-kilo-pass"),
+                        Text::message("usage-kilo-pass-bonus")
+                            .arg("used", "$0.00")
+                            .arg("base", "$19.00")
+                            .arg("bonus", "$9.50")
+                    ),
+                    (
+                        Text::message("usage-kilo-top-up"),
+                        Text::message("usage-kilo-off")
+                    ),
                 ],
             }]
         );
@@ -515,16 +553,29 @@ mod tests {
           {"result":{"data":{"json":{"enabled":true,"paymentMethod":"visa"}}}}
         ]"#;
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kilo Pass Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kilo Pass Pro")
+        );
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits left", 75., Unit::Count("credits".into())).out_of(100.)]
+            vec![
+                Balance::new(
+                    Text::message("usage-kilo-credits-left"),
+                    75.,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(100.)
+            ]
         );
         assert!(report.windows.is_empty());
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("facts expected");
         };
-        assert_eq!(facts[0], ("Auto top-up".into(), "visa".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-kilo-top-up"), Text::service("visa"))
+        );
     }
 
     #[test]
@@ -535,16 +586,29 @@ mod tests {
           {"result":{"data":{"enabled":true,"amountCents":5000,"paymentMethod":null}}}
         ]"#;
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kilo Pass"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kilo Pass")
+        );
         assert_eq!(report.windows[0].percent(), 5);
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits left", 0., Unit::Currency("USD".into())).out_of(0.)]
+            vec![
+                Balance::new(
+                    Text::message("usage-kilo-credits-left"),
+                    0.,
+                    Unit::Currency("USD".into())
+                )
+                .out_of(0.)
+            ]
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("facts expected");
         };
-        assert_eq!(facts[1], ("Auto top-up".into(), "$50".into()));
+        assert_eq!(
+            facts[1],
+            (Text::message("usage-kilo-top-up"), Text::service("$50"))
+        );
     }
 
     #[test]

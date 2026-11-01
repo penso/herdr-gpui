@@ -6,6 +6,7 @@
 //! are not ported: one key is read, so configure the group to watch.
 //! Daily totals use UTC days, where CodexBar passes the Mac's time zone.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -23,14 +24,12 @@ static META: Meta = Meta::new("sub2api", "sub2api").settings(&[
     Setting::new(
         "api_key",
         &["SUB2API_API_KEY"],
-        "A sub2api group API key (sk-…), created in your sub2api deployment's dashboard \
-             under API keys. Usage is scoped to that key's group.",
+        "usage-sub2api-setting-api-key",
     ),
     Setting::new(
         "base_url",
         &["SUB2API_BASE_URL"],
-        "Your sub2api deployment, e.g. https://sub2api.example.com. HTTPS is required, \
-             except plain HTTP on a loopback address such as http://127.0.0.1:8080.",
+        "usage-sub2api-setting-base-url",
     ),
 ]);
 
@@ -126,17 +125,17 @@ fn parse(body: &str) -> Result<Report> {
     } else if let Some(quota) = &usage.quota {
         let quota_unit = quota.unit.as_deref().unwrap_or(&unit);
         windows.extend(limit(
-            Kind::Named("Quota".into()),
+            Kind::Named(Text::message("usage-sub2api-quota")),
             quota.used,
             Some(quota.limit),
         ));
         facts.push((
-            "Quota".to_owned(),
-            format!(
+            Text::message("usage-sub2api-quota"),
+            Text::service(format!(
                 "{} / {}",
                 money(quota.used, quota_unit),
                 money(quota.limit, quota_unit)
-            ),
+            )),
         ));
     }
     let rates: Vec<Window> = usage
@@ -149,7 +148,13 @@ fn parse(body: &str) -> Result<Report> {
                 "5h" => (Kind::Session, Kind::Session.length()),
                 "1d" => (Kind::Daily, Kind::Daily.length()),
                 "7d" => (Kind::Weekly, Kind::Weekly.length()),
-                _ => (Kind::Named(format!("{} limit", rate.window.trim())), None),
+                _ => (
+                    Kind::Named(
+                        Text::message("usage-sub2api-window-limit")
+                            .arg("window", rate.window.trim()),
+                    ),
+                    None,
+                ),
             };
             Window::new(
                 kind,
@@ -169,47 +174,62 @@ fn parse(body: &str) -> Result<Report> {
     };
 
     if let Some(totals) = &usage.usage {
-        for (title, total) in [("Today", &totals.today), ("All time", &totals.total)] {
+        for (requests, tokens, total) in [
+            (
+                Text::message("usage-sub2api-today-requests"),
+                Text::message("usage-sub2api-today-tokens"),
+                &totals.today,
+            ),
+            (
+                Text::message("usage-sub2api-all-time-requests"),
+                Text::message("usage-sub2api-all-time-tokens"),
+                &totals.total,
+            ),
+        ] {
             let Some(total) = total else {
                 continue;
             };
+            facts.push((requests, Text::service(group(total.requests.unwrap_or(0)))));
             facts.push((
-                format!("{title} requests"),
-                group(total.requests.unwrap_or(0)),
-            ));
-            facts.push((
-                format!("{title} tokens"),
-                format!(
+                tokens,
+                Text::service(format!(
                     "{} · {}",
                     group(total.total_tokens.unwrap_or(0)),
                     money(total.actual_cost.unwrap_or(0.), "USD")
-                ),
+                )),
             ));
         }
     }
     if let Some(expires) = expires.filter(|at| Timestamp::Text(at.clone()).time().is_some()) {
         facts.push((
-            "Expires".into(),
-            expires.get(..10).unwrap_or(&expires).to_owned(),
+            Text::message("usage-sub2api-expires"),
+            Text::service(expires.get(..10).unwrap_or(&expires)),
         ));
     }
     let plan = usage.plan_name.filter(|plan| !plan.trim().is_empty());
-    Ok(
-        Report::new(Provider(&Sub2api), Account { email: None, plan }, windows)
-            .with_balances(
-                usage
-                    .balance
-                    .map(|balance| Balance::new("Balance", balance, currency(&unit))),
-            )
-            .with_sections(
-                rate_sections
-                    .into_iter()
-                    .chain((!facts.is_empty()).then(|| Section::Facts {
-                        title: "Usage summary".into(),
-                        facts,
-                    })),
-            ),
+    Ok(Report::new(
+        Provider(&Sub2api),
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
+        windows,
     )
+    .with_balances(usage.balance.map(|balance| {
+        Balance::new(
+            Text::message("usage-sub2api-balance"),
+            balance,
+            currency(&unit),
+        )
+    }))
+    .with_sections(
+        rate_sections
+            .into_iter()
+            .chain((!facts.is_empty()).then(|| Section::Facts {
+                title: Text::message("usage-sub2api-usage-summary"),
+                facts,
+            })),
+    ))
 }
 
 fn currency(unit: &str) -> Unit {
@@ -217,12 +237,12 @@ fn currency(unit: &str) -> Unit {
     if code.len() == 3 && code.chars().all(|c| c.is_ascii_uppercase()) {
         Unit::Currency(code)
     } else {
-        Unit::Count(unit.trim().to_owned())
+        Unit::Count(crate::model::Count::Named(unit.trim().to_owned()))
     }
 }
 
 fn money(amount: f64, unit: &str) -> String {
-    Balance::new("", amount, currency(unit)).amount_text()
+    Balance::new(Text::service(""), amount, currency(unit)).amount_text()
 }
 
 #[derive(Deserialize)]
@@ -284,7 +304,7 @@ struct Total {
 mod tests {
     use super::*;
 
-    fn facts(report: &Report) -> &[(String, String)] {
+    fn facts(report: &Report) -> &[(Text, Text)] {
         report
             .sections
             .iter()
@@ -318,7 +338,7 @@ mod tests {
         let quota = report
             .windows
             .iter()
-            .find(|window| window.kind == Kind::Named("Quota".into()))
+            .find(|window| window.kind == Kind::Named(Text::message("usage-sub2api-quota")))
             .unwrap();
         assert_eq!(quota.used, 25.);
         let session = report
@@ -340,10 +360,35 @@ mod tests {
         assert_eq!(weekly.used, 20.);
         assert!(report.balances.is_empty());
         let facts = facts(&report);
-        assert!(facts.contains(&("Today requests".into(), "4".into())));
-        assert!(facts.contains(&("Today tokens".into(), "1,200 · $1.25".into())));
-        assert!(facts.contains(&("All time requests".into(), "40".into())));
-        assert!(facts.contains(&("Expires".into(), "2026-08-01".into())));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-sub2api-quota"),
+                    Text::service("$25.00 / $100.00")
+                ),
+                (
+                    Text::message("usage-sub2api-today-requests"),
+                    Text::service("4")
+                ),
+                (
+                    Text::message("usage-sub2api-today-tokens"),
+                    Text::service("1,200 · $1.25")
+                ),
+                (
+                    Text::message("usage-sub2api-all-time-requests"),
+                    Text::service("40")
+                ),
+                (
+                    Text::message("usage-sub2api-all-time-tokens"),
+                    Text::service("12,000 · $25.00")
+                ),
+                (
+                    Text::message("usage-sub2api-expires"),
+                    Text::service("2026-08-01")
+                ),
+            ]
+        );
     }
 
     #[test]
@@ -373,8 +418,14 @@ mod tests {
                 (Kind::Monthly, 30.)
             ]
         );
-        assert_eq!(report.account.plan.as_deref(), Some("Claude Team"));
-        assert!(facts(&report).contains(&("Expires".into(), "2026-08-15".into())));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Claude Team")
+        );
+        assert!(facts(&report).contains(&(
+            Text::message("usage-sub2api-expires"),
+            Text::service("2026-08-15")
+        )));
     }
 
     #[test]

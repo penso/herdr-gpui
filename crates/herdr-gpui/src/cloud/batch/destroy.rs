@@ -46,7 +46,7 @@ pub(crate) fn start(
                 batch,
                 index,
                 DeviceState::Failed,
-                Some("Herdr UI could not start a worker for it"),
+                Some("Herdr UI could not start a worker for it"), // i18n: data
             );
         }
     }

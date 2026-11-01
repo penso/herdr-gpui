@@ -12,6 +12,7 @@
 //! Everything CodexBar reads is ported; the page is read by plain text
 //! search where CodexBar uses regular expressions.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -59,19 +60,11 @@ pub(crate) struct Ollama;
 static META: Meta = Meta::new("ollama", "Ollama")
     .dashboard("https://ollama.com/settings")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "The ollama.com browser session, needed for quota. Sign in at \
-             https://ollama.com/signin, open Developer Tools → Application → Cookies → \
-             https://ollama.com, copy the session cookie (wos-session, or __Secure-session \
-             on older sign-ins), and paste it as \"name=value\".",
-        ),
+        Setting::new("cookie", &[], "usage-ollama-setting-cookie"),
         Setting::new(
             "api_key",
             &["OLLAMA_API_KEY", "OLLAMA_KEY"],
-            "An Ollama API key from https://ollama.com/settings/keys. It only verifies \
-             access: Ollama shows quota on its website, not through the API.",
+            "usage-ollama-setting-api-key",
         ),
     ]);
 
@@ -140,13 +133,17 @@ pub(crate) fn parse_tags(body: &str) -> Result<Report> {
         Provider(&Ollama),
         Account {
             email: None,
-            plan: Some("API key".into()),
+            plan: Some(Text::message("usage-ollama-api-key")),
         },
         Vec::new(),
     )
     .with_sections([Section::Facts {
-        title: "Ollama Cloud".into(),
-        facts: vec![("Models".into(), tags.models.len().to_string())],
+        // The product's name.
+        title: Text::service("Ollama Cloud"),
+        facts: vec![(
+            Text::message("usage-ollama-models"),
+            Text::service(tags.models.len().to_string()),
+        )],
     }]))
 }
 
@@ -165,7 +162,7 @@ pub(crate) fn parse(html: &str) -> Result<Report> {
             block(html, HOURLY_LABEL).map(|block| {
                 (
                     block,
-                    Kind::Named("Hourly".into()),
+                    Kind::Named(Text::message("usage-ollama-hourly")),
                     Duration::from_secs(3600),
                 )
             })
@@ -188,8 +185,8 @@ pub(crate) fn parse(html: &str) -> Result<Report> {
     .map(|((used, resets_at), kind, length)| Window::new(kind, used, resets_at, Some(length)))
     .collect();
     let account = Account {
-        email: email(html),
-        plan: plan(html).map(|plan| title_case(&plan)),
+        email: email(html).map(Text::service),
+        plan: plan(html).map(|plan| Text::service(title_case(&plan))),
     };
     Ok(Report::new(Provider(&Ollama), account, windows))
 }
@@ -457,8 +454,11 @@ mod tests {
     fn reads_monthly_included_credits() {
         let report = parse(MONTHLY_PAGE).unwrap();
         assert_eq!(report.provider.id(), "ollama");
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
-        assert_eq!(report.account.email.as_deref(), Some("user@example.com"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("user@example.com")
+        );
         assert_eq!(report.windows.len(), 1);
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
@@ -469,7 +469,7 @@ mod tests {
     #[test]
     fn reads_legacy_session_and_weekly_windows() {
         let report = parse(LEGACY_PAGE).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Free"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Free"));
         let session = &report.windows[0];
         assert_eq!(session.kind, Kind::Session);
         assert!((session.used - 0.1).abs() < 1e-4);
@@ -478,6 +478,11 @@ mod tests {
         assert_eq!(weekly.kind, Kind::Weekly);
         assert!((weekly.used - 0.7).abs() < 1e-4);
         assert_eq!(weekly.resets_at, at("2026-02-02T00:00:00Z"));
+        let hourly = parse("<span>Hourly usage</span><span>5% used</span>").unwrap();
+        assert_eq!(
+            hourly.windows[0].kind,
+            Kind::Named(Text::message("usage-ollama-hourly"))
+        );
     }
 
     #[test]
@@ -512,10 +517,16 @@ mod tests {
         let report =
             parse_tags(r#"{"models":[{"name":"gpt-oss:120b"},{"name":"qwen3"}]}"#).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("API key"));
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-ollama-api-key"))
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Models".to_owned(), "2".to_owned()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-ollama-models"), Text::service("2"))
+        );
     }
 }

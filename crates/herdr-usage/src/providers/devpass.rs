@@ -4,6 +4,7 @@
 //! Publishable keys cannot read plan state. As in CodexBar, there is no local
 //! sign-in or dashboard cookie to find.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -24,8 +25,7 @@ static META: Meta = Meta::new("devpass", "DevPass")
     .settings(&[Setting::new(
         "api_key",
         &["DEVPASS_API_KEY"],
-        "A regular LLM Gateway API key from https://devpass.llmgateway.io/dashboard. \
-         Publishable keys cannot read plan usage.",
+        "usage-devpass-setting-api-key",
     )]);
 
 impl Service for Devpass {
@@ -47,23 +47,33 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let data = json::<Envelope>(body)?.data.ok_or_else(invalid)?;
     let key_used = money(&data.usage)?;
     let key_limit = data.limit.as_deref().map(money).transpose()?;
-    let mut key_facts = vec![("All-time key usage".into(), usd(key_used))];
+    let mut key_facts = vec![(
+        Text::message("usage-devpass-key-usage"),
+        Text::service(usd(key_used)),
+    )];
     if let Some(limit) = key_limit {
-        key_facts.push(("Key spending limit".into(), usd(limit)));
+        key_facts.push((
+            Text::message("usage-devpass-key-limit"),
+            Text::service(usd(limit)),
+        ));
     }
     let key_section = Section::Facts {
-        title: "API key (all time)".into(),
+        title: Text::message("usage-devpass-api-key"),
         facts: key_facts,
     };
     let plan = match data.dev_plan.as_str() {
         "none" => {
-            let mut spend = Balance::new("Key usage (all time)", key_used, usd_unit());
+            let mut spend = Balance::new(
+                Text::message("usage-devpass-key-spend"),
+                key_used,
+                usd_unit(),
+            );
             if let Some(limit) = key_limit {
                 spend = spend.out_of(limit);
             }
             let account = Account {
                 email: None,
-                plan: Some("Pay as you go".into()),
+                plan: Some(Text::message("usage-devpass-pay-as-you-go")),
             };
             return Ok(Report::new(Provider(&Devpass), account, Vec::new())
                 .with_balances([spend])
@@ -104,25 +114,33 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         ));
     }
     let credits = Section::Facts {
-        title: "DevPass credits".into(),
+        title: Text::message("usage-devpass-credits"),
         facts: vec![
             (
-                "Cycle used".into(),
-                format!("{} / {}", usd(used), usd(limit)),
+                Text::message("usage-devpass-cycle-used"),
+                Text::service(format!("{} / {}", usd(used), usd(limit))),
             ),
-            ("Cycle remaining".into(), usd(remaining)),
             (
-                "Premium weekly".into(),
-                format!("{} / {}", usd(weekly_used), usd(weekly_limit)),
+                Text::message("usage-devpass-cycle-remaining"),
+                Text::service(usd(remaining)),
+            ),
+            (
+                Text::message("usage-devpass-premium-weekly"),
+                Text::service(format!("{} / {}", usd(weekly_used), usd(weekly_limit))),
             ),
         ],
     };
     let account = Account {
         email: None,
-        plan: Some(plan.into()),
+        plan: Some(Text::service(plan)),
     };
     Ok(Report::new(Provider(&Devpass), account, windows)
-        .with_balances([Balance::new("Plan credits left", remaining, usd_unit()).out_of(limit)])
+        .with_balances([Balance::new(
+            Text::message("usage-devpass-credits-left"),
+            remaining,
+            usd_unit(),
+        )
+        .out_of(limit)])
         .with_sections([credits, key_section]))
 }
 
@@ -131,7 +149,7 @@ fn usd_unit() -> Unit {
 }
 
 fn usd(amount: f64) -> String {
-    Balance::new("", amount, usd_unit()).amount_text()
+    Balance::new(Text::service(""), amount, usd_unit()).amount_text()
 }
 
 /// Amounts arrive as unsigned decimal strings; anything else is a changed
@@ -177,7 +195,10 @@ mod tests {
     #[test]
     fn plan_credits_and_premium_week_become_windows() {
         let report = parse(PRO).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("DevPass Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("DevPass Pro")
+        );
         assert_eq!(report.windows.len(), 2);
         // Windows are ordered by kind: weekly before monthly.
         let monthly = &report.windows[1];
@@ -192,6 +213,16 @@ mod tests {
         assert_eq!(report.balances[0].amount, 212.);
         assert_eq!(report.balances[0].total, Some(237.));
         assert_eq!(report.sections.len(), 2);
+        let Section::Facts { facts, .. } = &report.sections[0] else {
+            panic!("expected credit facts");
+        };
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-devpass-cycle-used"),
+                Text::service("$25.00 / $237.00")
+            )
+        );
     }
 
     #[test]
@@ -200,7 +231,10 @@ mod tests {
             "devPlanCreditsUsed":null}}"#;
         let report = parse(body).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Pay as you go"));
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-devpass-pay-as-you-go"))
+        );
         assert_eq!(report.balances[0].amount, 3.5);
         assert_eq!(report.balances[0].total, Some(10.));
     }

@@ -8,6 +8,7 @@
 //! discovered slug back to its config; this port rediscovers it each time
 //! instead, since it never writes the config.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -32,15 +33,12 @@ static META: Meta = Meta::new("fireworks", "Fireworks")
         Setting::new(
             "api_key",
             &["FIREWORKS_API_KEY", "FIREWORKS_KEY"],
-            "A Fireworks API key from https://app.fireworks.ai/settings/users/api-keys. \
-             It reads the account's billing summary.",
+            "usage-fireworks-setting-api-key",
         ),
         Setting::new(
             "account_slug",
             &["FIREWORKS_ACCOUNT_SLUG"],
-            "The Fireworks account id, needed only when the API key can see several \
-             accounts. Find it in the account switcher on https://app.fireworks.ai or \
-             with `firectl whoami`.",
+            "usage-fireworks-setting-account-slug",
         ),
     ]);
 
@@ -173,22 +171,25 @@ pub(crate) fn parse(body: &str, slug: &str) -> Result<Report> {
         }
     }
     let account = Section::Facts {
-        title: "Account".into(),
-        facts: vec![("Slug".into(), slug.to_owned())],
+        title: Text::message("usage-fireworks-account"),
+        facts: vec![(Text::message("usage-fireworks-slug"), Text::service(slug))],
     };
     let report = Report::new(Provider(&Fireworks), Account::default(), Vec::new());
     Ok(match currency {
         Some(code) => report
             .with_balances([Balance::new(
-                "Spend, last 30 days",
+                Text::message("usage-fireworks-spend"),
                 total,
                 Unit::Currency(code),
             )])
             .with_sections([account]),
         None => report.with_sections([
             Section::Facts {
-                title: "Spend, last 30 days".into(),
-                facts: vec![("Rated spend".into(), "None".into())],
+                title: Text::message("usage-fireworks-spend"),
+                facts: vec![(
+                    Text::message("usage-fireworks-rated-spend"),
+                    Text::message("usage-fireworks-none"),
+                )],
             },
             account,
         ]),
@@ -272,8 +273,8 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Account".into(),
-                facts: vec![("Slug".into(), "acme".into())],
+                title: Text::message("usage-fireworks-account"),
+                facts: vec![(Text::message("usage-fireworks-slug"), Text::service("acme"))],
             }]
         );
     }

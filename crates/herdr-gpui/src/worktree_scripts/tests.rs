@@ -12,6 +12,7 @@ use herdr_client::protocol::ClientPaneInputEvent;
 use serde_json::{Value, json};
 use std::sync::atomic::AtomicBool;
 
+mod en_xa;
 mod flow;
 mod review;
 

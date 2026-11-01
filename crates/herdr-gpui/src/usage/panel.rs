@@ -3,7 +3,11 @@
 //! its service reports, and links to the service's own pages.
 
 use super::{Access, KeychainGrants, Reading, model::Provider, service::Service, text, ui::Ui};
-use crate::{i18n::fl, menu::Page, window::HerdrWindow};
+use crate::{
+    i18n::{self, Localize, fl},
+    menu::Page,
+    window::HerdrWindow,
+};
 use gpui::{prelude::*, *};
 use std::time::{Instant, SystemTime};
 
@@ -144,19 +148,24 @@ impl HerdrWindow {
                         .items_end()
                         .text_color(rgb(theme.muted))
                         .children(
-                            account
-                                .email
-                                .map(|email| div().max_w_full().truncate().child(email)),
+                            account.email.map(|email| {
+                                div().max_w_full().truncate().child(text::words(&email))
+                            }),
                         )
-                        .children(account.plan.map(|plan| div().text_size(small).child(plan))),
+                        .children(
+                            account
+                                .plan
+                                .map(|plan| div().text_size(small).child(text::words(&plan))),
+                        ),
                 ),
         );
         // A sign-in waiting on Keychain access is explained below instead.
         let errors = reading
             .filter(|r| r.access.is_none())
-            .and_then(|r| r.error.clone())
+            .and_then(|r| r.error.as_deref())
             .into_iter()
-            .chain(entry.and_then(|entry| entry.error.clone()));
+            .chain(entry.and_then(|entry| entry.error.as_deref()))
+            .map(Localize::localize);
         for error in errors {
             view = view.child(
                 div()
@@ -383,7 +392,11 @@ fn setup(service: &dyn Service, ui: &Ui) -> AnyElement {
                 .gap(px(2.))
                 .text_size(ui.small())
                 .child(key)
-                .child(div().text_color(ui.muted()).child(setting.help))
+                .child(
+                    div()
+                        .text_color(ui.muted())
+                        .child(i18n::message(setting.message, &[])),
+                )
         }))
         .into_any_element()
 }

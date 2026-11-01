@@ -7,6 +7,7 @@
 //! CodexBar's cookie cache and retrying of several browser sessions are not
 //! ported: the first matching session is used.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -28,10 +29,7 @@ static META: Meta = Meta::new("replicate", "Replicate")
     .settings(&[Setting::new(
         "cookie",
         &[],
-        "Sign in at https://replicate.com/account/billing, open Developer Tools > \
-         Application > Cookies > https://replicate.com, and copy sessionid (and csrftoken \
-         when present) as one \"sessionid=value; csrftoken=value\" header. An API token \
-         does not work here.",
+        "usage-replicate-setting-cookie",
     )]);
 
 impl Service for Replicate {
@@ -179,20 +177,27 @@ pub(crate) fn parse(
         .as_deref()
         .and_then(money);
     let usd = || Unit::Currency("USD".into());
-    let mut balances = vec![Balance::new("Spent this month", spent, usd())];
+    let mut balances = vec![Balance::new(
+        Text::message("usage-replicate-spent-this-month"),
+        spent,
+        usd(),
+    )];
     if let Some(balance) = balance {
-        balances.push(Balance::new("Credit balance", balance, usd()));
+        balances.push(Balance::new(
+            Text::message("usage-replicate-credit-balance"),
+            balance,
+            usd(),
+        ));
     }
     let account = Section::Facts {
-        title: "Account".into(),
+        title: Text::message("usage-replicate-account"),
         facts: vec![(
             if owner.organization {
-                "Organization"
+                Text::message("usage-replicate-organization")
             } else {
-                "User"
-            }
-            .into(),
-            owner.username.clone(),
+                Text::message("usage-replicate-user")
+            },
+            Text::service(owner.username.clone()),
         )],
     };
     Ok(
@@ -295,7 +300,20 @@ mod tests {
         let owner = owner(PAGE).unwrap();
         let report = parse(&owner, INVOICES, Some(r#"{"unused_credit":"80.0"}"#), now()).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Spent this month");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-replicate-spent-this-month")
+        );
+        let Section::Facts { facts, .. } = &report.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(
+            facts,
+            &[(
+                Text::message("usage-replicate-user"),
+                Text::service("demo-user")
+            )]
+        );
         assert!((report.balances[0].amount - 12.4).abs() < 1e-9);
         assert_eq!(report.balances[1].amount, 80.);
         let without = parse(&owner, INVOICES, Some(r#"{"unused_credit":"NaN"}"#), now()).unwrap();

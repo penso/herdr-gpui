@@ -12,6 +12,7 @@ use crate::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
+        text::Text,
         values::{decimal, invalid},
     },
 };
@@ -26,8 +27,7 @@ static META: Meta = Meta::new("vercel", "Vercel AI Gateway")
     .settings(&[Setting::new(
         "api_key",
         &["AI_GATEWAY_API_KEY"],
-        "An AI Gateway API key from the Vercel dashboard: AI Gateway > API Keys. The \
-         balance is the key's team, so use a key of the team to show.",
+        "usage-vercel-setting-api-key",
     )]);
 
 impl Service for Vercel {
@@ -61,8 +61,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let usd = || Unit::Currency("USD".into());
     Ok(
         Report::new(Provider(&Vercel), Account::default(), Vec::new()).with_balances([
-            Balance::new("Available balance", balance, usd()),
-            Balance::new("Lifetime spend", spent, usd()),
+            Balance::new(
+                Text::message("usage-vercel-available-balance"),
+                balance,
+                usd(),
+            ),
+            Balance::new(Text::message("usage-vercel-lifetime-spend"), spent, usd()),
         ]),
     )
 }
@@ -92,8 +96,8 @@ mod tests {
         assert_eq!(
             texts,
             [
-                ("Available balance", "$95.50".to_owned()),
-                ("Lifetime spend", "$4.50".to_owned()),
+                ("usage-vercel-available-balance", "$95.50".to_owned()),
+                ("usage-vercel-lifetime-spend", "$4.50".to_owned()),
             ]
         );
         assert!(

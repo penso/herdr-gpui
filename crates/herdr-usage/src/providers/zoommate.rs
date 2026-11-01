@@ -10,6 +10,8 @@
 //! 30-day `credits/history` dashboard; and CodexBar's per-host narrowing of
 //! the parent-domain cookies, since the probe takes one cookie header.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -36,23 +38,8 @@ static META: Meta = Meta::new("zoommate", "ZoomMate")
     .dashboard("https://zoommate.zoom.us/#/?settings=credit-usage")
     .status_page("https://www.zoomstatus.com")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "Your Zoom session cookies. Sign in at https://zoommate.zoom.us, open Developer \
-             Tools > Application > Cookies for https://zoommate.zoom.us (Zoom's sign-in \
-             cookies such as _zm_ssid, _zm_lang and cf_clearance live on zoom.us), and \
-             paste them all as \"name=value; name2=value2\". They are exchanged for a \
-             short-lived token on every refresh.",
-        ),
-        Setting::new(
-            "token",
-            &[],
-            "A bearer token instead of cookies: on https://zoommate.zoom.us open Developer \
-             Tools > Network, reload the AI credit usage page, select the credits/status \
-             request and copy its Authorization header without \"Bearer \". It expires \
-             after about an hour.",
-        ),
+        Setting::new("cookie", &[], "usage-zoommate-setting-cookie"),
+        Setting::new("token", &[], "usage-zoommate-setting-token"),
     ]);
 
 impl Service for Zoommate {
@@ -145,26 +132,44 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         )]
     };
     let balance = if unlimited {
-        Balance::new("Credits used", used, Unit::Count("credits".into()))
+        Balance::new(
+            Text::message("usage-zoommate-credits-used"),
+            used,
+            Unit::Count(Count::Credits),
+        )
     } else {
         let left = status.remaining_credit.unwrap_or(cap - used).max(0.);
-        Balance::new("Credits left", left, Unit::Count("credits".into())).out_of(cap)
+        Balance::new(
+            Text::message("usage-zoommate-credits-left"),
+            left,
+            Unit::Count(Count::Credits),
+        )
+        .out_of(cap)
     };
     let mut facts = Vec::new();
     if unlimited {
-        facts.push(("Budget".into(), "Unlimited".into()));
+        facts.push((
+            Text::message("usage-zoommate-budget"),
+            Text::message("usage-zoommate-unlimited"),
+        ));
     }
     if let Some(overage) = status.overage_credit.filter(|overage| *overage > 0.) {
-        facts.push(("Overage".into(), format!("{overage:.2} credits")));
+        facts.push((
+            Text::message("usage-zoommate-overage"),
+            Text::message("usage-zoommate-overage-credits").arg("credits", format!("{overage:.2}")),
+        ));
     }
     if status.is_quota_available == Some(false) {
-        facts.push(("Quota".into(), "Exhausted".into()));
+        facts.push((
+            Text::message("usage-zoommate-quota"),
+            Text::message("usage-zoommate-exhausted"),
+        ));
     }
     Ok(
         Report::new(Provider(&Zoommate), Account::default(), windows)
             .with_balances([balance])
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Credits".into(),
+                title: Text::message("usage-zoommate-credits"),
                 facts,
             })),
     )
@@ -228,7 +233,20 @@ mod tests {
         let body = STATUS_BODY.replace("\"is_unlimited\": false", "\"is_unlimited\": true");
         let report = parse(&body).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Credits used");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-zoommate-credits-used")
+        );
+        let Section::Facts { facts, .. } = &report.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-zoommate-budget"),
+                Text::message("usage-zoommate-unlimited")
+            )
+        );
         assert_eq!(report.balances[0].amount, 678.);
     }
 

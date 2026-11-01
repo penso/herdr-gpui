@@ -5,6 +5,8 @@
 //! workspaces with the earliest expiry. The Warp app's own sign-in is not
 //! read, as CodexBar does not read it either.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -42,8 +44,7 @@ static META: Meta = Meta::new("warp", "Warp")
     .settings(&[Setting::new(
         "api_key",
         &["WARP_API_KEY", "WARP_TOKEN"],
-        "A Warp API key (wk-…). In Warp open your profile menu, then Settings → Platform → \
-         API Keys, and create one. See https://docs.warp.dev/reference/cli/api-keys.",
+        "usage-warp-setting-api-key",
     )]);
 
 impl Service for Warp {
@@ -128,9 +129,9 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let remaining: i64 = grants.iter().map(|grant| grant.remaining()).sum();
     let bonus = (granted > 0 || remaining > 0).then(|| {
         let balance = Balance::new(
-            "Add-on credits",
+            Text::message("usage-warp-add-on-credits"),
             remaining.max(0) as f64,
-            Unit::Count("credits".into()),
+            Unit::Count(Count::Credits),
         );
         if granted > 0 {
             balance.out_of(granted as f64)
@@ -144,11 +145,13 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .filter_map(|grant| Some((grant.expires()?, grant.remaining())))
         .min_by_key(|(at, _)| *at);
     let mut facts = vec![(
-        "Monthly credits".to_owned(),
+        Text::message("usage-warp-monthly-credits"),
         if unlimited {
-            "Unlimited".to_owned()
+            Text::message("usage-warp-unlimited")
         } else {
-            format!("{} of {}", group(used), group(limit))
+            Text::message("usage-warp-used-of")
+                .arg("used", group(used))
+                .arg("limit", group(limit))
         },
     )];
     if let Some((at, _)) = expiring {
@@ -159,21 +162,24 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .sum();
         let date = chrono::DateTime::<chrono::Utc>::from(at).format("%b %-d, %Y");
         facts.push((
-            "Next add-on expiry".to_owned(),
-            format!("{} credits on {date}", group(soonest)),
+            Text::message("usage-warp-next-add-on-expiry"),
+            Text::message("usage-warp-credits-on")
+                .arg("credits", soonest)
+                .arg("count", group(soonest))
+                .arg("date", date.to_string()),
         ));
     }
     Ok(Report::new(
         Provider(&Warp),
         Account {
             email: None,
-            plan: unlimited.then(|| "Unlimited".to_owned()),
+            plan: unlimited.then(|| Text::message("usage-warp-unlimited")),
         },
         vec![monthly],
     )
     .with_balances(bonus)
     .with_sections([Section::Facts {
-        title: "Credits".into(),
+        title: Text::message("usage-warp-credits"),
         facts,
     }]))
 }
@@ -313,13 +319,21 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Monthly credits".to_owned(), "5 of 1,500".to_owned())
+            (
+                Text::message("usage-warp-monthly-credits"),
+                Text::message("usage-warp-used-of")
+                    .arg("used", "5")
+                    .arg("limit", "1,500")
+            )
         );
         assert_eq!(
             facts[1],
             (
-                "Next add-on expiry".to_owned(),
-                "10 credits on Mar 1, 2026".to_owned()
+                Text::message("usage-warp-next-add-on-expiry"),
+                Text::message("usage-warp-credits-on")
+                    .arg("credits", 10)
+                    .arg("count", "10")
+                    .arg("date", "Mar 1, 2026")
             )
         );
     }
@@ -331,7 +345,10 @@ mod tests {
               {"isUnlimited":true,"requestLimit":0,"requestsUsedSinceLastRefresh":0}}}}}"#,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Unlimited"));
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-warp-unlimited"))
+        );
         assert_eq!(report.windows[0].percent(), 0);
         assert!(report.balances.is_empty());
     }

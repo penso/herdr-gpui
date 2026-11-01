@@ -7,6 +7,8 @@
 //! profile in turn; here the first browser with abacus.ai cookies is used,
 //! and nothing is cached.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -26,14 +28,7 @@ pub(crate) struct Abacus;
 
 static META: Meta = Meta::new("abacus", "Abacus AI")
     .dashboard("https://apps.abacus.ai/chatllm/admin/compute-points-usage")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Sign in to https://apps.abacus.ai, open Developer Tools > Application > Cookies \
-         for https://apps.abacus.ai, and copy its session cookies (names containing \
-         \"session\", \"auth\", or \"sid\"). Paste them as \"name=value; name2=value2\"; \
-         the whole Cookie header of any apps.abacus.ai request also works.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-abacus-setting-cookie")]);
 
 impl Service for Abacus {
     fn meta(&self) -> &'static Meta {
@@ -91,8 +86,17 @@ pub(crate) fn parse(points: &str, billing: Option<&str>) -> Result<Report> {
         let start = reset.checked_sub_months(chrono::Months::new(1))?;
         (reset - start).to_std().ok()
     });
-    let window = Window::new(Kind::Named("Credits".into()), percent, resets_at, length);
-    let credits = Balance::new("Credits used", used.max(0.), Unit::Count("credits".into()));
+    let window = Window::new(
+        Kind::Named(Text::message("usage-abacus-credits")),
+        percent,
+        resets_at,
+        length,
+    );
+    let credits = Balance::new(
+        Text::message("usage-abacus-credits-used"),
+        used.max(0.),
+        Unit::Count(Count::Credits),
+    );
     let credits = if total > 0. {
         credits.out_of(total)
     } else {
@@ -100,7 +104,10 @@ pub(crate) fn parse(points: &str, billing: Option<&str>) -> Result<Report> {
     };
     Ok(Report::new(
         Provider(&Abacus),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
         vec![window],
     )
     .with_balances([credits]))
@@ -155,7 +162,7 @@ mod tests {
         let billing = r#"{"success": true, "result": {"nextBillingDate": "2026-10-15T00:00:00Z",
             "currentTier": "Pro"}}"#;
         let report = parse(POINTS, Some(billing)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         let window = &report.windows[0];
         assert!((window.used - 25.).abs() < 1e-4);
         assert!(window.resets_at.is_some());
@@ -163,7 +170,14 @@ mod tests {
         assert_eq!(window.length, Some(Duration::from_secs(30 * 86_400)));
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits used", 5000., Unit::Count("credits".into())).out_of(20000.)]
+            vec![
+                Balance::new(
+                    Text::message("usage-abacus-credits-used"),
+                    5000.,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(20000.)
+            ]
         );
     }
 

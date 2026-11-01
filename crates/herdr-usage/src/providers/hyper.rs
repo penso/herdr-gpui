@@ -4,6 +4,8 @@
 //! back to an API key from the config or `HYPER_API_KEY`, as CodexBar's Auto
 //! mode does. The service reports only a balance: no plan, limit, or reset.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -24,19 +26,8 @@ pub(crate) struct Hyper;
 static META: Meta = Meta::new("hyper", "Charm Hyper")
     .dashboard("https://hyper.charm.land")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["HYPER_API_KEY"],
-            "A Charm Hyper API key from https://hyper.charm.land. Used when no browser \
-             session is available or the session has expired.",
-        ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Sign in at https://hyper.charm.land, open Developer Tools > Application > \
-             Cookies > https://hyper.charm.land, and copy every cookie there as one \
-             \"name=value; name2=value2\" header.",
-        ),
+        Setting::new("api_key", &["HYPER_API_KEY"], "usage-hyper-setting-api-key"),
+        Setting::new("cookie", &[], "usage-hyper-setting-cookie"),
     ]);
 
 impl Service for Hyper {
@@ -101,19 +92,16 @@ pub(crate) fn parse(body: &str, source: Source) -> Result<Report> {
         .ok_or_else(invalid)?;
     let account = Account {
         email: None,
-        plan: Some(
-            match source {
-                Source::Session => "Browser session",
-                Source::Key => "API key",
-            }
-            .into(),
-        ),
+        plan: Some(match source {
+            Source::Session => Text::message("usage-hyper-browser-session"),
+            Source::Key => Text::message("usage-hyper-api-key"),
+        }),
     };
     Ok(
         Report::new(Provider(&Hyper), account, Vec::new()).with_balances([Balance::new(
-            "Hypercredits",
+            Text::message("usage-hyper-hypercredits"),
             balance,
-            Unit::Count("HC".into()),
+            Unit::Count(Count::Named("HC".into())),
         )]),
     )
 }
@@ -134,9 +122,15 @@ mod tests {
         assert!(report.windows.is_empty());
         assert_eq!(report.balances.len(), 1);
         assert_eq!(report.balances[0].amount, 42.5);
-        assert_eq!(report.balances[0].unit, Unit::Count("HC".into()));
+        assert_eq!(
+            report.balances[0].unit,
+            Unit::Count(Count::Named("HC".into()))
+        );
         assert_eq!(report.balances[0].amount_text(), "42.50 HC");
-        assert_eq!(report.account.plan.as_deref(), Some("API key"));
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-hyper-api-key"))
+        );
     }
 
     #[test]

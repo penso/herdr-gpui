@@ -5,6 +5,7 @@
 //! cost. CodexBar's per-provider cost chart is shown as shares. Everything
 //! CodexBar reads is ported.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -29,14 +30,12 @@ static META: Meta = Meta::new("clawrouter", "ClawRouter")
         Setting::new(
             "api_key",
             &["CLAWROUTER_API_KEY"],
-            "A ClawRouter policy API key, created at \
-             https://clawrouter.openclaw.ai/dashboard/access.",
+            "usage-clawrouter-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["CLAWROUTER_BASE_URL"],
-            "Optional HTTPS service root or /v1 URL of another ClawRouter deployment. \
-             Defaults to https://clawrouter.openclaw.ai.",
+            "usage-clawrouter-setting-base-url",
         ),
     ]);
 
@@ -87,25 +86,27 @@ fn parse(body: &str) -> Result<Report> {
     let mut balances = Vec::new();
     let mut facts = vec![
         (
-            "Requests".to_owned(),
-            format!(
-                "{} · {} succeeded · {} failed",
-                group(summary.request_count),
-                group(summary.success_count),
-                group(summary.error_count)
-            ),
+            Text::message("usage-clawrouter-requests"),
+            Text::message("usage-clawrouter-request-counts")
+                .arg("requests", group(summary.request_count))
+                .arg("succeeded", group(summary.success_count))
+                .arg("failed", group(summary.error_count)),
         ),
         (
-            "Tokens".to_owned(),
-            format!(
-                "{} · {} input · {} output",
-                group(summary.total_tokens),
-                group(summary.input_tokens),
-                group(summary.output_tokens)
-            ),
+            Text::message("usage-clawrouter-tokens"),
+            Text::message("usage-clawrouter-token-counts")
+                .arg("tokens", group(summary.total_tokens))
+                .arg("input", group(summary.input_tokens))
+                .arg("output", group(summary.output_tokens)),
         ),
-        ("Actual cost".to_owned(), format!("${actual:.6}")),
-        ("Budget ledger".to_owned(), budget.ledger.clone()),
+        (
+            Text::message("usage-clawrouter-actual-cost"),
+            Text::service(format!("${actual:.6}")),
+        ),
+        (
+            Text::message("usage-clawrouter-budget-ledger"),
+            Text::service(&budget.ledger),
+        ),
     ];
     match (spent, limit) {
         (Some(spent), Some(limit)) => {
@@ -119,17 +120,25 @@ fn parse(body: &str) -> Result<Report> {
                 ));
             }
             balances.push(
-                Balance::new("Spent this month", spent, Unit::Currency("USD".into())).out_of(limit),
+                Balance::new(
+                    Text::message("usage-clawrouter-spent-this-month"),
+                    spent,
+                    Unit::Currency("USD".into()),
+                )
+                .out_of(limit),
             );
-            let mut text = format!("${spent:.6} / ${limit:.2}");
-            if let Some(remaining) = remaining {
-                text.push_str(&format!(" · ${remaining:.6} remaining"));
-            }
-            facts.push(("Monthly budget".into(), text));
+            let amount = format!("${spent:.6} / ${limit:.2}");
+            let text = match remaining {
+                Some(remaining) => Text::message("usage-clawrouter-budget-remaining")
+                    .arg("amount", amount)
+                    .arg("remaining", format!("${remaining:.6}")),
+                None => Text::service(amount),
+            };
+            facts.push((Text::message("usage-clawrouter-monthly-budget"), text));
         }
         _ if actual > 0. => {
             balances.push(Balance::new(
-                "Spent this month",
+                Text::message("usage-clawrouter-spent-this-month"),
                 actual,
                 Unit::Currency("USD".into()),
             ));
@@ -143,48 +152,46 @@ fn parse(body: &str) -> Result<Report> {
         .sum();
     let routed = providers.iter().take(SHOWN_PROVIDERS).map(|provider| {
         (
-            name(&provider.provider).to_owned(),
-            format!(
-                "{} requests · ${:.6} · {} tokens",
-                group(provider.request_count),
-                dollars(provider.actual_cost_micros),
-                group(provider.total_tokens)
-            ),
+            name(&provider.provider),
+            Text::message("usage-clawrouter-provider-usage")
+                .arg("requests", group(provider.request_count))
+                .arg(
+                    "cost",
+                    format!("${:.6}", dollars(provider.actual_cost_micros)),
+                )
+                .arg("tokens", group(provider.total_tokens)),
         )
     });
     let routed = Section::Facts {
-        title: "Routed providers".into(),
+        title: Text::message("usage-clawrouter-routed-providers"),
         facts: routed.collect(),
     };
     let shares = (total > 0).then(|| Section::Shares {
-        title: "Provider cost".into(),
+        title: Text::message("usage-clawrouter-provider-cost"),
         shares: providers
             .iter()
             .take(SHOWN_PROVIDERS)
             .map(|provider| {
                 (
-                    name(&provider.provider).to_owned(),
+                    name(&provider.provider),
                     (provider.actual_cost_micros.max(0) as f64 / total as f64 * 100.) as f32,
                 )
             })
             .collect(),
     });
     let account = Account {
-        email: Some(format!("{} routed providers", providers.len())),
-        plan: Some(
-            if budget.configured {
-                "Managed monthly budget"
-            } else {
-                "Unmetered"
-            }
-            .into(),
-        ),
+        email: Some(Text::message("usage-clawrouter-routed-count").arg("count", providers.len())),
+        plan: Some(if budget.configured {
+            Text::message("usage-clawrouter-managed-budget")
+        } else {
+            Text::message("usage-clawrouter-unmetered")
+        }),
     };
     Ok(Report::new(Provider(&Clawrouter), account, windows)
         .with_balances(balances)
         .with_sections(
             [Section::Facts {
-                title: "Usage".into(),
+                title: Text::message("usage-report-usage"),
                 facts,
             }]
             .into_iter()
@@ -193,10 +200,10 @@ fn parse(body: &str) -> Result<Report> {
         ))
 }
 
-fn name(provider: &str) -> &str {
+fn name(provider: &str) -> Text {
     match provider.trim() {
-        "" => "Unknown",
-        name => name,
+        "" => Text::message("usage-clawrouter-unknown"),
+        name => Text::service(name),
     }
 }
 
@@ -327,10 +334,13 @@ mod tests {
     fn reads_a_monthly_budget() {
         let report = parse(BUDGETED).unwrap();
         assert_eq!(
-            report.account.plan.as_deref(),
-            Some("Managed monthly budget")
+            report.account.plan,
+            Some(Text::message("usage-clawrouter-managed-budget"))
         );
-        assert_eq!(report.account.email.as_deref(), Some("2 routed providers"));
+        assert_eq!(
+            report.account.email,
+            Some(Text::message("usage-clawrouter-routed-count").arg("count", 2))
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert!((window.used - 0.024).abs() < 1e-4);
@@ -344,7 +354,13 @@ mod tests {
             panic!("expected routed providers");
         };
         assert_eq!(facts[0].0, "openai");
-        assert_eq!(facts[0].1, "4 requests · $0.004000 · 42,000 tokens");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-clawrouter-provider-usage")
+                .arg("requests", "4")
+                .arg("cost", "$0.004000")
+                .arg("tokens", "42,000")
+        );
         let Section::Shares { shares, .. } = &report.sections[2] else {
             panic!("expected cost shares");
         };
@@ -355,7 +371,10 @@ mod tests {
     fn unmetered_policies_show_spend_only() {
         let report = parse(UNMETERED).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Unmetered"));
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-clawrouter-unmetered"))
+        );
         assert_eq!(report.balances[0].text(), "$1.25");
         let Section::Facts { facts, .. } = &report.sections[1] else {
             panic!("expected routed providers");

@@ -13,6 +13,7 @@ use super::{
     snapshot::{
         PaneInfoResult, SnapshotResult, TabCreated, TabList, WorkspaceCreated, WorktreeCreated,
     },
+    warning::Warning,
 };
 use herdr_client::{protocol::ClientShellSnapshot, shell_quote};
 use std::{collections::HashMap, io::Seek, sync::atomic::AtomicBool, time::Duration};
@@ -105,7 +106,7 @@ pub struct Candidate {
 }
 
 /// Where the teleported workspace ended up.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Outcome {
     pub endpoint_id: String,
     pub workspace_id: String,
@@ -113,7 +114,7 @@ pub struct Outcome {
     pub repo_key: String,
     pub branch: String,
     /// Things that did not carry over, for the user to see.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Warning>,
 }
 
 /// The repositories open in `snapshot`, one per Git common directory, each
@@ -191,9 +192,10 @@ pub fn run(
             );
             match asked {
                 Err(Error::Cancelled) => return Err(Error::Cancelled),
-                Err(error) => {
-                    warnings.push(format!("No handoff note from {}: {error}", pane.pane_id))
-                }
+                Err(error) => warnings.push(Warning::NoHandoffNote {
+                    pane: Some(pane.pane_id.clone()),
+                    source: error,
+                }),
                 Ok(()) => {}
             }
         }
@@ -271,7 +273,10 @@ pub fn run(
                     Ok(reference) => agent.resume_argv(&reference, flags),
                     Err(Error::Cancelled) => return Err(Error::Cancelled),
                     Err(error) => {
-                        warnings.push(format!("{} started afresh: {error}", agent.binary()));
+                        warnings.push(Warning::AgentStartedAfresh {
+                            agent: *agent,
+                            source: error,
+                        });
                         agent.start_argv(None)
                     }
                 })
@@ -285,10 +290,10 @@ pub fn run(
             }
         };
         if let Action::Missing(program) = &plan.action {
-            warnings.push(format!(
-                "{program} is not installed on {}",
-                destination.place.label
-            ));
+            warnings.push(Warning::ProgramMissing {
+                program: program.clone(),
+                host: destination.place.label.clone(),
+            });
         }
         if let Some(argv) = line {
             launches.push((target, argv));
@@ -304,12 +309,9 @@ pub fn run(
         });
         match installed {
             Ok(credentials::Installed::Complete) => {}
-            Ok(credentials::Installed::WithoutEnvrc) => warnings.push(
-                "The repository tracks .envrc, so GH_TOKEN was not added; git pull and push still work"
-                    .to_owned(),
-            ),
+            Ok(credentials::Installed::WithoutEnvrc) => warnings.push(Warning::EnvrcTracked),
             Err(Error::Cancelled) => return Err(Error::Cancelled),
-            Err(error) => warnings.push(format!("GitHub access was not set up: {error}")),
+            Err(error) => warnings.push(Warning::GitHubAccess { source: error }),
         }
     }
 

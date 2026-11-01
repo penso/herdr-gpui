@@ -3,7 +3,7 @@
 //! says otherwise with the header's icons; a note being written always shows
 //! the notes, so the composer is never hidden.
 use super::Review;
-use crate::{HerdrWindow, browser::TabId};
+use crate::{HerdrWindow, browser::TabId, i18n::fl};
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 
@@ -90,9 +90,13 @@ impl HerdrWindow {
             Panel::Files => (
                 "review-toggle-files",
                 "icons/panel-left.svg",
-                "Changed files",
+                fl!("review-changed-files"),
             ),
-            Panel::Notes => ("review-toggle-notes", "icons/panel-right.svg", "Notes"),
+            Panel::Notes => (
+                "review-toggle-notes",
+                "icons/panel-right.svg",
+                fl!("review-notes"),
+            ),
         };
         let count = match panel {
             // Only notes the agent does not have yet.
@@ -138,7 +142,7 @@ impl HerdrWindow {
             })
             .tooltip(move |_, cx| {
                 cx.new(|_| crate::usage::Hint {
-                    text: hint.into(),
+                    text: hint.clone().into(),
                     foreground,
                     surface,
                 })

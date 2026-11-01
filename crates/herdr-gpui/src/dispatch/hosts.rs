@@ -5,6 +5,7 @@
 use super::{Candidate, History, Load, Picker, Repository, Sandbox, Setup};
 use crate::{
     HerdrWindow,
+    i18n::fl,
     menu::Page,
     teleport::{FreshOrigin, HostRepositories, Place, host_for, open_repositories},
     window::Flash,
@@ -249,7 +250,10 @@ impl HerdrWindow {
                 if dialog {
                     self.dismiss_menu(window, cx);
                 }
-                self.show_flash(Flash::success(format!("Created on {host}")), cx);
+                self.show_flash(
+                    Flash::success(fl!("dispatch-created", host = host.clone())),
+                    cx,
+                );
                 // Like a local creation, a new worktree runs its setup script,
                 // once the window has followed it there.
                 if let Some(checkout) = created.checkout {
@@ -273,7 +277,11 @@ impl HerdrWindow {
             }
             Err(error) => {
                 self.show_flash(
-                    Flash::warning(format!("Not created on {host}: {error}")),
+                    Flash::warning(fl!(
+                        "dispatch-not-created",
+                        host = host.clone(),
+                        error = error
+                    )),
                     cx,
                 );
             }

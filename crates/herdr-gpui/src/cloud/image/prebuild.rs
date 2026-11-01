@@ -4,6 +4,7 @@
 //! wherever it is drawn, and a notice reports how each ended.
 
 use crate::cloud::image::{Checkout, Error, Unsupported, builds};
+use crate::i18n::{Localize, fl};
 use crate::{
     HerdrWindow,
     cloud::{
@@ -67,10 +68,10 @@ impl HerdrWindow {
                     Ok(Some(recipe)) => {
                         match builds::ensure(provider, support, &recipe, &stopped, &|_| {}) {
                             Ok(_) => Ended::Built,
-                            Err(error) => Ended::Failed(error.to_string()),
+                            Err(error) => Ended::Failed(error.localize()),
                         }
                     }
-                    Err(error) => Ended::Failed(error.to_string()),
+                    Err(error) => Ended::Failed(error.localize()),
                 };
                 send(ended);
             },
@@ -81,18 +82,27 @@ impl HerdrWindow {
                 let name = crate::cloud::name(provider);
                 let (title, body) = match ended {
                     Ended::Built => (
-                        format!("{name} image ready"),
-                        format!("New {}s for {notice_label} start from it.", crate::cloud::noun(provider)),
+                        fl!("cloud-image-ready", provider = name),
+                        fl!(
+                            "cloud-image-ready-detail",
+                            noun = crate::cloud::noun(provider),
+                            checkout = notice_label.as_str()
+                        ),
                     ),
                     Ended::NoRecipe => (
-                        format!("No {name} image to build"),
-                        format!(
-                            "{notice_label} has no .herdr/sandbox/Dockerfile or dev container to build from."
+                        fl!("cloud-image-no-recipe", provider = name),
+                        fl!(
+                            "cloud-image-no-recipe-detail",
+                            checkout = notice_label.as_str()
                         ),
                     ),
                     Ended::Failed(error) => (
-                        format!("{name} image build failed"),
-                        format!("{notice_label}: {error}"),
+                        fl!("cloud-image-failed", provider = name),
+                        fl!(
+                            "cloud-image-failed-detail",
+                            checkout = notice_label.as_str(),
+                            error = error
+                        ),
                     ),
                 };
                 this.local_transfer_notice(&title, body, cx);

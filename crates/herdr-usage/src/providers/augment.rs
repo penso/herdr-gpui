@@ -11,6 +11,8 @@
 //! and its cached copy of the last working cookies. Here an expired cookie
 //! shows as rejected until the browser session is refreshed.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -30,15 +32,7 @@ pub(crate) struct Augment;
 static META: Meta = Meta::new("augment", "Augment")
     .dashboard("https://app.augmentcode.com/account/subscription")
     .status_page("https://status.augmentcode.com")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Your app.augmentcode.com browser session, used when the Auggie CLI is not signed \
-         in. Sign in at https://app.augmentcode.com, open Developer Tools → Application → \
-         Cookies → https://app.augmentcode.com, and copy the session cookies (such as \
-         `_session`, `session`, `web_rpc_proxy_session`, or `auth0`), pasted as one \
-         header: \"name=value; name2=value2\".",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-augment-setting-cookie")]);
 
 impl Service for Augment {
     fn meta(&self) -> &'static Meta {
@@ -100,7 +94,9 @@ pub(crate) fn parse_web(credits: &str, subscription: Option<&str>) -> Result<Rep
             .and_then(Timestamp::time),
         plan: subscription
             .as_ref()
-            .and_then(|subscription| subscription.plan_name.clone()),
+            .and_then(|subscription| subscription.plan_name.clone())
+            .filter(|plan| !plan.trim().is_empty())
+            .map(Text::service),
     };
     let email = subscription.and_then(|subscription| subscription.email);
     Ok(usage.report(email))
@@ -179,9 +175,15 @@ pub(crate) fn parse_cli(output: &str) -> Result<Report> {
         used: Some(used.unwrap_or((limit - remaining).max(0.))),
         limit: Some(limit),
         cycle_end,
-        plan: plan.or_else(|| {
-            monthly.map(|monthly| format!("{} credits/month", group(monthly.round() as i64)))
-        }),
+        plan: plan
+            .filter(|plan| !plan.trim().is_empty())
+            .map(Text::service)
+            .or_else(|| {
+                monthly.map(|monthly| {
+                    Text::message("usage-augment-credits-per-month")
+                        .arg("amount", group(monthly.round() as i64))
+                })
+            }),
     };
     Ok(usage.report(None))
 }
@@ -191,7 +193,7 @@ struct Usage {
     used: Option<f64>,
     limit: Option<f64>,
     cycle_end: Option<SystemTime>,
-    plan: Option<String>,
+    plan: Option<Text>,
 }
 
 impl Usage {
@@ -208,13 +210,20 @@ impl Usage {
             let remaining = self
                 .remaining
                 .unwrap_or_else(|| (limit - self.used.unwrap_or(0.)).max(0.));
-            Balance::new("Credits left", remaining, Unit::Count("credits".into())).out_of(limit)
+            Balance::new(
+                Text::message("usage-augment-credits-left"),
+                remaining,
+                Unit::Count(Count::Credits),
+            )
+            .out_of(limit)
         });
         Report::new(
             Provider(&Augment),
             Account {
-                email: email.filter(|email| !email.trim().is_empty()),
-                plan: self.plan.filter(|plan| !plan.trim().is_empty()),
+                email: email
+                    .filter(|email| !email.trim().is_empty())
+                    .map(Text::service),
+                plan: self.plan,
             },
             vec![window],
         )
@@ -283,12 +292,19 @@ mod tests {
                        9 days remaining in this billing cycle (ends 6/9/2026)\n\
                        For more detail, visit https://app.augmentcode.com/account\n";
         let report = parse_cli(output).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Max Plan"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Max Plan")
+        );
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Credits left", 319_054., Unit::Count("credits".into()))
-                    .out_of(450_000.)
+                Balance::new(
+                    Text::message("usage-augment-credits-left"),
+                    319_054.,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(450_000.)
             ]
         );
         let window = &report.windows[0];
@@ -307,8 +323,12 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Credits left", 11_657., Unit::Count("credits".into()))
-                    .out_of(964_827.)
+                Balance::new(
+                    Text::message("usage-augment-credits-left"),
+                    11_657.,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(964_827.)
             ]
         );
         assert_eq!(report.windows[0].percent(), 99);
@@ -330,8 +350,14 @@ mod tests {
         let subscription = r#"{"planName":"Developer","billingPeriodEnd":"2026-07-01T00:00:00Z",
             "email":"dev@example.com","organization":null}"#;
         let report = parse_web(credits, Some(subscription)).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
-        assert_eq!(report.account.plan.as_deref(), Some("Developer"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Developer")
+        );
         assert_eq!(report.windows[0].percent(), 10);
         assert_eq!(
             report.windows[0].resets_at,
@@ -339,7 +365,14 @@ mod tests {
         );
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits left", 15., Unit::Count("credits".into())).out_of(100.)]
+            vec![
+                Balance::new(
+                    Text::message("usage-augment-credits-left"),
+                    15.,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(100.)
+            ]
         );
     }
 

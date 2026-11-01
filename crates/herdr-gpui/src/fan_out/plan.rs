@@ -107,19 +107,17 @@ pub(crate) struct DiffStat {
 
 impl DiffStat {
     pub(crate) fn summary(&self) -> String {
+        use crate::i18n::fl;
         if *self == Self::default() {
-            return "No changes yet".to_owned();
+            return fl!("fan-out-no-changes");
         }
-        let plural = |count: u64, one: &str, many: &str| {
-            format!("{count} {}", if count == 1 { one } else { many })
-        };
         let mut parts = vec![format!("+{} −{}", self.additions, self.deletions)];
-        parts.push(plural(self.files, "file", "files"));
+        parts.push(fl!("fan-out-diff-files", count = self.files));
         if self.untracked > 0 {
-            parts.push(format!("{} untracked", self.untracked));
+            parts.push(fl!("fan-out-diff-untracked", count = self.untracked));
         }
         if self.commits > 0 {
-            parts.push(plural(self.commits, "commit", "commits"));
+            parts.push(fl!("fan-out-diff-commits", count = self.commits));
         }
         parts.join(" · ")
     }
@@ -139,6 +137,7 @@ pub(crate) fn stats_script<S: AsRef<str>>(checkouts: &[S], base: &str) -> String
     for (index, checkout) in checkouts.iter().enumerate() {
         let path = shell_quote(checkout.as_ref());
         script.push_str(&format!(
+            // i18n: data
             r#"if git -C {path} rev-parse --git-dir >/dev/null 2>&1; then
 printf '\036%s\n' {index}
 git -C {path} diff --numstat {base} -- 2>/dev/null || :

@@ -10,6 +10,7 @@
 //! completed day's activity separately to fill a history chart; only the
 //! 30-day totals are shown here.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -36,29 +37,27 @@ static META: Meta = Meta::new("openrouter", "OpenRouter")
         Setting::new(
             "api_key",
             &["OPENROUTER_API_KEY"],
-            "An OpenRouter API key (sk-or-v1-…) from https://openrouter.ai/settings/keys. \
-             A Management API key also works and adds the last 30 days of activity.",
+            "usage-openrouter-setting-api-key",
         ),
         Setting::new(
             "management_api_key",
             &["OPENROUTER_MANAGEMENT_API_KEY"],
-            "Optional Management API key from https://openrouter.ai/settings/management-keys, \
-             used only for the last 30 days of account activity.",
+            "usage-openrouter-setting-management-api-key",
         ),
         Setting::new(
             "base_url",
             &["OPENROUTER_API_URL"],
-            "Optional HTTPS API URL for a proxy. Defaults to https://openrouter.ai/api/v1.",
+            "usage-openrouter-setting-base-url",
         ),
         Setting::new(
             "http_referer",
             &["OPENROUTER_HTTP_REFERER"],
-            "Optional client URL sent as the HTTP-Referer header.",
+            "usage-openrouter-setting-http-referer",
         ),
         Setting::new(
             "x_title",
             &["OPENROUTER_X_TITLE"],
-            "Optional client title sent as the X-Title header. Defaults to Herdr.",
+            "usage-openrouter-setting-x-title",
         ),
     ]);
 
@@ -147,7 +146,7 @@ pub(crate) fn parse(
     }
     let balance = credits.as_ref().map(|credits| {
         Balance::new(
-            "Credits",
+            Text::message("usage-openrouter-credits"),
             (credits.total_credits - credits.total_usage).max(0.),
             Unit::Currency("USD".into()),
         )
@@ -165,7 +164,7 @@ pub(crate) fn parse(
     let plan = key
         .as_ref()
         .and_then(|key| key.is_free_tier)
-        .and_then(|free| free.then(|| "Free tier".to_owned()));
+        .and_then(|free| free.then(|| Text::message("usage-openrouter-free-tier")));
     Ok(Report::new(
         Provider(&Openrouter),
         Account { email: None, plan },
@@ -195,12 +194,24 @@ fn activity_facts(rows: &[Activity]) -> Section {
         .filter(|model| !model.is_empty())
         .collect();
     Section::Facts {
-        title: "Last 30 days".into(),
+        title: Text::message("usage-openrouter-last-30-days"),
         facts: vec![
-            ("Spend".into(), usd(spend)),
-            ("Requests".into(), group(requests.round() as i64)),
-            ("Tokens".into(), group(tokens.round() as i64)),
-            ("Models".into(), models.len().to_string()),
+            (
+                Text::message("usage-openrouter-spend"),
+                Text::service(usd(spend)),
+            ),
+            (
+                Text::message("usage-openrouter-requests"),
+                Text::service(group(requests.round() as i64)),
+            ),
+            (
+                Text::message("usage-openrouter-tokens"),
+                Text::service(group(tokens.round() as i64)),
+            ),
+            (
+                Text::message("usage-openrouter-models"),
+                Text::service(models.len().to_string()),
+            ),
         ],
     }
 }
@@ -265,40 +276,57 @@ impl KeyData {
             Some("daily") => Kind::Daily,
             Some("weekly") => Kind::Weekly,
             Some("monthly") => Kind::Monthly,
-            _ => Kind::Named("API key limit".into()),
+            _ => Kind::Named(Text::message("usage-openrouter-api-key-limit")),
         };
         let length = kind.length();
         Some(Window::new(kind, spent / limit * 100., None, length))
     }
 
     fn facts(&self) -> Section {
+        let money = |amount: f64| Text::service(usd(amount));
         let mut facts = Vec::new();
         match self.limit() {
             Some(limit) => {
-                facts.push(("Spending cap".into(), usd(limit)));
+                facts.push((Text::message("usage-openrouter-spending-cap"), money(limit)));
                 if let Some(spent) = self.spent(limit) {
-                    facts.push(("Cap remaining".into(), usd(limit - spent)));
+                    facts.push((
+                        Text::message("usage-openrouter-cap-remaining"),
+                        money(limit - spent),
+                    ));
                 }
                 if let Some(usage) = self.usage {
-                    facts.push(("Key used".into(), usd(usage)));
+                    facts.push((Text::message("usage-openrouter-key-used"), money(usage)));
                 }
             }
-            None => facts.push(("Spending cap".into(), "No limit configured".into())),
+            None => facts.push((
+                Text::message("usage-openrouter-spending-cap"),
+                Text::message("usage-openrouter-no-limit"),
+            )),
         }
+        // OpenRouter's own word for the cap's window, such as `monthly`.
         if let Some(reset) = self.reset() {
-            facts.push(("Reset window".into(), reset.to_owned()));
+            facts.push((
+                Text::message("usage-openrouter-reset-window"),
+                Text::service(reset),
+            ));
         }
         for (label, value) in [
-            ("Today", self.usage_daily),
-            ("This week", self.usage_weekly),
-            ("This month", self.usage_monthly),
+            (Text::message("usage-openrouter-today"), self.usage_daily),
+            (
+                Text::message("usage-openrouter-this-week"),
+                self.usage_weekly,
+            ),
+            (
+                Text::message("usage-openrouter-this-month"),
+                self.usage_monthly,
+            ),
         ] {
             if let Some(value) = value {
-                facts.push((label.into(), usd(value)));
+                facts.push((label, money(value)));
             }
         }
         Section::Facts {
-            title: "API key".into(),
+            title: Text::message("usage-openrouter-api-key"),
             facts,
         }
     }
@@ -342,9 +370,43 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&("Spending cap".into(), "$20.00".into())));
-        assert!(facts.contains(&("Cap remaining".into(), "$15.00".into())));
-        assert!(facts.contains(&("This month".into(), "$4.00".into())));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-openrouter-spending-cap"),
+                    Text::service("$20.00")
+                ),
+                (
+                    Text::message("usage-openrouter-cap-remaining"),
+                    Text::service("$15.00")
+                ),
+                (
+                    Text::message("usage-openrouter-key-used"),
+                    Text::service("$5.00")
+                ),
+                (
+                    Text::message("usage-openrouter-reset-window"),
+                    Text::service("monthly")
+                ),
+                (
+                    Text::message("usage-openrouter-today"),
+                    Text::service("$1.00")
+                ),
+                (
+                    Text::message("usage-openrouter-this-week"),
+                    Text::service("$2.00")
+                ),
+                (
+                    Text::message("usage-openrouter-this-month"),
+                    Text::service("$4.00")
+                ),
+            ]
+        );
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-openrouter-credits")
+        );
     }
 
     #[test]
@@ -357,13 +419,19 @@ mod tests {
         .unwrap();
         assert!(report.windows.is_empty());
         assert!(report.balances.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Free tier"));
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-openrouter-free-tier"))
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
         assert_eq!(
             facts[0],
-            ("Spending cap".to_owned(), "No limit configured".to_owned())
+            (
+                Text::message("usage-openrouter-spending-cap"),
+                Text::message("usage-openrouter-no-limit")
+            )
         );
     }
 
@@ -380,15 +448,33 @@ mod tests {
         let Some(Section::Facts { title, facts }) = report.sections.last() else {
             panic!("expected facts");
         };
-        assert_eq!(title, "Last 30 days");
+        assert_eq!(title, &Text::message("usage-openrouter-last-30-days"));
         assert_eq!(
             facts,
             &vec![
-                ("Spend".to_owned(), "$1.50".to_owned()),
-                ("Requests".to_owned(), "5".to_owned()),
-                ("Tokens".to_owned(), "1,650".to_owned()),
-                ("Models".to_owned(), "2".to_owned()),
+                (
+                    Text::message("usage-openrouter-spend"),
+                    Text::service("$1.50")
+                ),
+                (
+                    Text::message("usage-openrouter-requests"),
+                    Text::service("5")
+                ),
+                (
+                    Text::message("usage-openrouter-tokens"),
+                    Text::service("1,650")
+                ),
+                (Text::message("usage-openrouter-models"), Text::service("2")),
             ]
+        );
+    }
+
+    #[test]
+    fn a_cap_without_a_known_window_is_the_key_limit() {
+        let report = parse(Some(r#"{"data":{"limit":10,"usage":2}}"#), None, None).unwrap();
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::message("usage-openrouter-api-key-limit"))
         );
     }
 

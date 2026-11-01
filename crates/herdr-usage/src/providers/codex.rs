@@ -1,6 +1,7 @@
 //! Codex plan usage, read with the Codex CLI's ChatGPT sign-in, falling back
 //! to OpenCode's OpenAI OAuth sign-in. API keys do not provide plan usage.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -73,33 +74,40 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .next()
         .map(|window| {
             Section::Limit(Window {
-                kind: Kind::Named("Code review".into()),
+                kind: Kind::Named(Text::message("usage-codex-code-review")),
                 ..window
             })
         });
     let resets = usage
         .rate_limit_reset_credits
         .map(|credits| Section::Facts {
-            title: "Limit reset credits".into(),
-            facts: vec![("Available".into(), credits.available_count.to_string())],
+            title: Text::message("usage-codex-reset-credits"),
+            facts: vec![(
+                Text::message("usage-codex-available"),
+                Text::service(credits.available_count.to_string()),
+            )],
         });
     let credits = usage.credits.map(|credits| Section::Facts {
-        title: "Credits".into(),
+        title: Text::message("usage-codex-credits"),
         facts: vec![(
-            "Balance".into(),
+            Text::message("usage-codex-balance"),
             if credits.unlimited.unwrap_or(false) {
-                "Unlimited".into()
+                Text::message("usage-codex-unlimited")
             } else {
-                credits.balance.unwrap_or_else(|| "0".into())
+                Text::service(credits.balance.unwrap_or_else(|| "0".into()))
             },
         )],
     });
     let account = Account {
-        email: usage.email.filter(|email| !email.trim().is_empty()),
-        plan: usage
+        email: usage
+            .email
+            .filter(|email| !email.trim().is_empty())
+            .map(Text::service),
+        plan: (usage
             .plan_type
             .map(|plan| title_case(&plan))
-            .filter(|plan| !plan.is_empty()),
+            .filter(|plan| !plan.is_empty()))
+        .map(Text::service),
     };
     Ok(Report::new(Provider(&Codex), account, windows)
         .with_sections(review.into_iter().chain(resets).chain(credits)))

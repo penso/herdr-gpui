@@ -9,7 +9,7 @@ mod icons;
 mod panel;
 mod render;
 mod section;
-mod text;
+pub(crate) mod text;
 mod ui;
 
 #[cfg(test)]

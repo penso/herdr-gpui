@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::Text;
 
 const QUOTA: &str = r#"{"virtual_key_name":"fixture-team","budgets":[
       {"id":"year","max_limit":1000,"current_usage":100,"reset_duration":"1Y"},
@@ -23,33 +24,54 @@ fn now() -> SystemTime {
 #[test]
 fn parses_budgets_limits_and_models() {
     let report = parse(QUOTA, now()).unwrap();
-    assert_eq!(report.account.email.as_deref(), Some("fixture-team"));
-    assert_eq!(report.account.plan.as_deref(), Some("Engineering"));
+    assert_eq!(
+        report.account.email.as_ref().map(Text::as_str),
+        Some("fixture-team")
+    );
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("Engineering")
+    );
     assert_eq!(report.windows.len(), 2);
     let month = report
         .windows
         .iter()
-        .find(|window| window.kind == Kind::Named("Engineering · Monthly".into()))
+        .find(|window| {
+            window.kind
+                == Kind::Named(
+                    Text::message("usage-bifrost-periodic")
+                        .arg("budget", "Engineering")
+                        .arg("period", "monthly"),
+                )
+        })
         .unwrap();
     assert!((month.used - 33.736).abs() < 0.001);
     assert_eq!(month.resets_at, None);
-    assert_eq!(report.balances[0].label, "Monthly");
+    assert_eq!(
+        report.balances[0].label,
+        Text::message("usage-bifrost-period").arg("period", "monthly")
+    );
     assert_eq!(report.balances[0].amount, 42.17);
     assert_eq!(report.balances[0].total, Some(125.));
     let limits: Vec<_> = report
         .sections
         .iter()
         .filter_map(|section| match section {
-            Section::Limit(window) => Some((window.kind.title().to_owned(), window.percent())),
+            Section::Limit(window) => Some((window.kind.clone(), window.percent())),
             _ => None,
         })
         .collect();
+    let pool = |limit: &'static str| {
+        Text::message("usage-bifrost-sourced-limit")
+            .arg("source", "Team pool")
+            .arg("limit", Text::message(limit))
+    };
     assert_eq!(
         limits,
         [
-            ("Tokens".to_owned(), 35),
-            ("Requests".to_owned(), 2),
-            ("Team pool Tokens".to_owned(), 0),
+            (Kind::Named(Text::message("usage-bifrost-tokens")), 35),
+            (Kind::Named(Text::message("usage-bifrost-requests")), 2),
+            (Kind::Named(pool("usage-bifrost-tokens")), 0),
         ]
     );
     let facts = |title: &str| {
@@ -59,14 +81,41 @@ fn parses_budgets_limits_and_models() {
         })
     };
     assert_eq!(
-        facts("Rate limits").unwrap(),
-        [("Team pool Requests".to_owned(), "Unavailable".to_owned())]
+        facts("usage-bifrost-rate-limits").unwrap(),
+        [(
+            pool("usage-bifrost-requests"),
+            Text::message("usage-bifrost-unavailable")
+        )]
     );
     assert_eq!(
-        facts("Models").unwrap(),
-        [("gpt-4o".to_owned(), "$5.00 · 1.2M tokens".to_owned())]
+        facts("usage-bifrost-models").unwrap(),
+        [(
+            Text::service("gpt-4o"),
+            Text::message("usage-bifrost-model-cost")
+                .arg("cost", "$5.00")
+                .arg("tokens", "1.2M")
+        )]
     );
-    assert_eq!(facts("Budgets").unwrap().len(), 2);
+    let budgets = facts("usage-bifrost-budgets").unwrap();
+    assert_eq!(
+        budgets,
+        [
+            (
+                Text::service("Engineering"),
+                Text::message("usage-bifrost-amount-period")
+                    .arg("amount", "$42.17 / $125.00")
+                    .arg("period", "monthly")
+            ),
+            (
+                Text::message("usage-bifrost-budget-id")
+                    .arg("budget", Text::message("usage-bifrost-budget"))
+                    .arg("id", "year"),
+                Text::message("usage-bifrost-amount-period")
+                    .arg("amount", "$100.00 / $1000.00")
+                    .arg("period", "yearly")
+            ),
+        ]
+    );
 }
 
 #[test]
@@ -96,7 +145,10 @@ fn unlimited_budget_keeps_spend_without_window() {
     )
     .unwrap();
     assert!(report.windows.is_empty());
-    assert_eq!(report.balances[0].label, "Spend");
+    assert_eq!(
+        report.balances[0].label,
+        Text::message("usage-bifrost-spend")
+    );
     assert_eq!(report.balances[0].total, None);
     let empty = parse(r#"{"virtual_key_name":"svc","budgets":null}"#, now()).unwrap();
     assert!(empty.balances.is_empty());
@@ -113,7 +165,9 @@ fn inactive_key_without_quotas_is_rejected() {
         now(),
     )
     .unwrap();
-    assert!(matches!(&report.sections[0], Section::Facts { title, .. } if title == "Virtual key"));
+    assert!(
+        matches!(&report.sections[0], Section::Facts { title, .. } if title == "usage-bifrost-virtual-key")
+    );
 }
 
 #[test]

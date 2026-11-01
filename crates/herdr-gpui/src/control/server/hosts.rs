@@ -201,8 +201,8 @@ fn usage(view: &HerdrWindow, now: SystemTime) -> Response {
         .unwrap_or_default();
     let note = if !view.config.usage.show {
         Some("Usage is turned off ([usage] show in the settings)".to_owned())
-    } else if let Some(error) = entry.and_then(|entry| entry.error.clone()) {
-        Some(error)
+    } else if let Some(error) = entry.and_then(|entry| entry.error.as_deref()) {
+        Some(error.to_string())
     } else if entry.is_none() {
         Some(format!("Herdr UI has not read usage on {host} yet"))
     } else if usage.is_empty() {
@@ -219,22 +219,34 @@ pub(super) fn usage_info(reading: &crate::usage::Reading, now: SystemTime) -> Us
     let report = reading.report.as_ref();
     UsageInfo {
         provider: reading.provider.name().to_owned(),
-        account: report.and_then(|report| report.account.email.clone()),
-        plan: report.and_then(|report| report.account.plan.clone()),
+        account: report.and_then(|report| {
+            report
+                .account
+                .email
+                .as_ref()
+                .map(crate::usage::text::english)
+        }),
+        plan: report.and_then(|report| {
+            report
+                .account
+                .plan
+                .as_ref()
+                .map(crate::usage::text::english)
+        }),
         windows: report
             .map(|report| {
                 report
                     .windows
                     .iter()
                     .map(|window| UsageWindow {
-                        label: window.kind.title().to_owned(),
+                        label: crate::usage::text::english_title(&window.kind),
                         used_percent: window.used,
                         resets_in_seconds: window.resets_in(now).map(|left| left.as_secs()),
                     })
                     .collect()
             })
             .unwrap_or_default(),
-        error: reading.error.clone(),
+        error: reading.error.as_ref().map(ToString::to_string),
     }
 }
 

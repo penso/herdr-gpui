@@ -3,6 +3,7 @@
 //! requests grouped by what each waits on. Pure, so it is tested without a
 //! window.
 
+use crate::i18n::fl;
 use crate::orchestrator::{
     Backend, CheckState, HerdrSession, Item, PrStatus, Provider, Review, Run, RunState,
 };
@@ -38,13 +39,13 @@ impl Sort {
         Self::Title,
     ];
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> String {
         match self {
-            Self::Updated => "Recently updated",
-            Self::Newest => "Newest",
-            Self::Oldest => "Oldest",
-            Self::Priority => "Priority",
-            Self::Title => "Title",
+            Self::Updated => fl!("orchestrator-sort-updated"),
+            Self::Newest => fl!("orchestrator-sort-newest"),
+            Self::Oldest => fl!("orchestrator-sort-oldest"),
+            Self::Priority => fl!("orchestrator-sort-priority"),
+            Self::Title => fl!("orchestrator-sort-title"),
         }
     }
 
@@ -104,15 +105,15 @@ pub(crate) enum Status {
 }
 
 impl Status {
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> String {
         match self {
-            Self::Starting => "starting",
-            Self::Working => "working",
-            Self::NeedsInput => "needs input",
-            Self::Idle => "idle",
-            Self::Done => "done",
-            Self::Failed => "failed",
-            Self::Stopped => "stopped",
+            Self::Starting => fl!("orchestrator-status-starting"),
+            Self::Working => fl!("orchestrator-status-working"),
+            Self::NeedsInput => fl!("orchestrator-status-needs-input"),
+            Self::Idle => fl!("orchestrator-status-idle"),
+            Self::Done => fl!("orchestrator-status-done"),
+            Self::Failed => fl!("orchestrator-status-failed"),
+            Self::Stopped => fl!("orchestrator-status-stopped"),
         }
     }
 

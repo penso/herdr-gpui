@@ -8,6 +8,7 @@
 //! `Bearer ` prefix (as `DEVIN_AUTHORIZATION` holds it) is not accepted,
 //! since the probe cannot strip a prefix from a secret.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -31,17 +32,12 @@ static META: Meta = Meta::new("devin", "Devin")
         Setting::new(
             "token",
             &["DEVIN_BEARER_TOKEN"],
-            "Sign in to https://app.devin.ai, open your organization's Usage & Limits \
-             page, then in Developer Tools > Network select the successful \
-             billing/quota/usage request and copy its Authorization request header \
-             without the leading \"Bearer \". The value is a browser session token and \
-             expires with that session.",
+            "usage-devin-setting-token",
         ),
         Setting::new(
             "organization",
             &["DEVIN_ORGANIZATION", "DEVIN_ORG"],
-            "The x-cog-org-id request header of the same request (an org-… or org_… \
-             id). An organization slug or its app.devin.ai URL also works.",
+            "usage-devin-setting-organization",
         ),
     ]);
 
@@ -192,17 +188,25 @@ pub(crate) fn parse(body: &str, organization: &str) -> Result<Report> {
         .filter(|amount| amount.is_finite() && *amount >= 0.);
     Ok(Report::new(
         Provider(&Devin),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
         daily.into_iter().chain(weekly).collect(),
     )
-    .with_balances(
-        overage.map(|amount| {
-            Balance::new("Extra usage balance", amount, Unit::Currency("USD".into()))
-        }),
-    )
+    .with_balances(overage.map(|amount| {
+        Balance::new(
+            Text::message("usage-devin-extra-usage"),
+            amount,
+            Unit::Currency("USD".into()),
+        )
+    }))
     .with_sections([Section::Facts {
-        title: "Organization".into(),
-        facts: vec![("Name".into(), organization.to_owned())],
+        title: Text::message("usage-devin-organization"),
+        facts: vec![(
+            Text::message("usage-devin-name"),
+            Text::service(organization),
+        )],
     }]))
 }
 
@@ -275,7 +279,10 @@ mod tests {
             report.windows[1].resets_at,
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_781_424_000))
         );
-        assert_eq!(report.account.plan.as_deref(), Some("Team Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Team Pro")
+        );
         assert_eq!(report.balances[0].amount, 12.5);
     }
 

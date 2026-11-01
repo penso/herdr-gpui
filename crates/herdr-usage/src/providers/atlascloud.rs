@@ -11,6 +11,7 @@ use crate::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
+        text::Text,
         values::{decimal, invalid},
     },
 };
@@ -25,9 +26,7 @@ static META: Meta = Meta::new("atlascloud", "Atlas Cloud")
     .settings(&[Setting::new(
         "api_key",
         &["ATLASCLOUD_API_KEY"],
-        "A standard Atlas Cloud API key from https://www.atlascloud.ai/console. It needs \
-         account balance read permission: use the account owner's key, or an Account Admin \
-         or Finance key for a team. A public key ID (ak_…) cannot authenticate.",
+        "usage-atlascloud-setting-api-key",
     )]);
 
 impl Service for Atlascloud {
@@ -63,7 +62,11 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .ok_or_else(invalid)?;
     Ok(
         Report::new(Provider(&Atlascloud), Account::default(), Vec::new()).with_balances([
-            Balance::new("Available balance", amount, Unit::Currency("USD".into())),
+            Balance::new(
+                Text::message("usage-atlascloud-available-balance"),
+                amount,
+                Unit::Currency("USD".into()),
+            ),
         ]),
     )
 }

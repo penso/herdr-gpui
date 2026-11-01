@@ -10,7 +10,11 @@ use super::{
     panel::PANEL_GAP,
     text,
 };
-use crate::{config::status_bar::Detail, i18n::fl, window::HerdrWindow};
+use crate::{
+    config::status_bar::Detail,
+    i18n::{Localize, fl},
+    window::HerdrWindow,
+};
 use gpui::{prelude::*, *};
 use std::{
     cell::Cell,
@@ -35,8 +39,9 @@ impl HerdrWindow {
         // A host that could not be read at all says so, but only while
         // there is nothing older to show.
         let host_error = entry
-            .and_then(|entry| entry.error.clone())
-            .filter(|_| shown.is_empty());
+            .and_then(|entry| entry.error.as_deref())
+            .filter(|_| shown.is_empty())
+            .map(Localize::localize);
         if !self.config.usage.show || (shown.is_empty() && host_error.is_none()) {
             return None;
         }

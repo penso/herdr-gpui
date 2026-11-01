@@ -11,6 +11,7 @@
 //! One script starts at a time. Its job is fenced by the selection epoch and
 //! connection generation it began under, like a menu action, so a reply from
 //! a replaced connection never opens a tab or types into one.
+// i18n: migrated
 
 mod config;
 mod error;
@@ -24,7 +25,13 @@ pub(crate) use launch::SCRIPT_ENV;
 pub(crate) use launch::{Checkout, command_line, created_tab, main_checkout};
 pub(crate) use trust::{Grant, Trust};
 
-use crate::{HerdrWindow, NavigationTarget, menu::Page, state::Answer, window::Flash};
+use crate::{
+    HerdrWindow, NavigationTarget,
+    i18n::{Localize, fl},
+    menu::Page,
+    state::Answer,
+    window::Flash,
+};
 use gpui::{prelude::*, *};
 use herdr_client::{Method, protocol::ClientPaneInputEvent};
 use std::sync::{
@@ -248,7 +255,11 @@ impl HerdrWindow {
             self.worktree_script = None;
             if requested {
                 self.show_flash(
-                    Flash::warning(format!("No {} script in {}", kind.name(), config::PATH)),
+                    Flash::warning(fl!(
+                        "worktree-scripts-none",
+                        kind = kind.name(),
+                        path = config::PATH
+                    )),
                     cx,
                 );
             }
@@ -305,9 +316,10 @@ impl HerdrWindow {
             return;
         };
         // Kept on screen rather than flashed: a broken file needs reading.
-        self.local_error = Some(format!(
-            "The {} script did not start: {error}",
-            job.launch.kind.name()
+        self.local_error = Some(fl!(
+            "worktree-scripts-not-started",
+            kind = job.launch.kind.name(),
+            error = error.localize()
         ));
         cx.notify();
     }
@@ -500,7 +512,10 @@ impl HerdrWindow {
             Err(crate::Error::StaleConnection)
         };
         if let Err(error) = removed {
-            self.local_error = Some(format!("Remove worktree: {error}"));
+            self.local_error = Some(fl!(
+                "worktree-scripts-remove-failed",
+                error = error.localize()
+            ));
             cx.notify();
         }
     }
@@ -517,7 +532,7 @@ impl HerdrWindow {
             return div();
         };
         let kind = launch.kind;
-        let button = |id: &'static str, label: &'static str, primary: bool| {
+        let button = |id: &'static str, label: String, primary: bool| {
             div()
                 .id(id)
                 .debug_selector(move || id.into())
@@ -548,11 +563,17 @@ impl HerdrWindow {
                 }))
         };
         let (title, skip) = match kind {
-            ScriptKind::Setup => ("Run this worktree's setup script?", "Don't run"),
-            ScriptKind::Run => ("Run this worktree's run script?", "Don't run"),
+            ScriptKind::Setup => (
+                fl!("worktree-scripts-ask-setup"),
+                fl!("worktree-scripts-skip"),
+            ),
+            ScriptKind::Run => (
+                fl!("worktree-scripts-ask-run"),
+                fl!("worktree-scripts-skip"),
+            ),
             ScriptKind::Archive => (
-                "Run the archive script before removing?",
-                "Remove without running",
+                fl!("worktree-scripts-ask-archive"),
+                fl!("worktree-scripts-skip-archive"),
             ),
         };
         let others: Vec<_> = ScriptKind::ALL
@@ -565,33 +586,35 @@ impl HerdrWindow {
         // typing, and a stray Enter must not grant trust. Only a click does.
         div()
             .debug_selector(|| "worktree-script-trust".into())
-            .child(div().p(px(8.)).font_weight(FontWeight::SEMIBOLD).child(title))
-            .child(div().p(px(8.)).child(format!(
-                "{} asks to run this from {}, in a new \u{201c}{}\u{201d} tab of its checkout:",
-                launch.repo,
-                config::PATH,
-                kind.name()
+            .child(
+                div()
+                    .p(px(8.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(title),
+            )
+            .child(div().p(px(8.)).child(fl!(
+                "worktree-scripts-asks",
+                repo = launch.repo.as_str(),
+                path = config::PATH,
+                tab = kind.name()
             )))
             .when_some(config.scripts.get(kind), |page, script| {
                 page.child(div().px(px(8.)).child(script_block(kind, script)))
             })
             .when(!others.is_empty(), |page| {
-                page.child(
-                    div()
-                        .p(px(8.))
-                        .child("Trusting the file also trusts its other scripts:"),
-                )
-                .children(others.into_iter().map(|(other, script)| {
-                    div()
-                        .px(px(8.))
-                        .pb(px(8.))
-                        .child(div().text_color(rgb(theme.muted)).child(other.name()))
-                        .child(script_block(other, script))
-                }))
+                page.child(div().p(px(8.)).child(fl!("worktree-scripts-others")))
+                    .children(others.into_iter().map(|(other, script)| {
+                        div()
+                            .px(px(8.))
+                            .pb(px(8.))
+                            .child(div().text_color(rgb(theme.muted)).child(other.name()))
+                            .child(script_block(other, script))
+                    }))
             })
-            .child(div().p(px(8.)).text_color(rgb(theme.muted)).child(format!(
-                "Scripts run with sh on {host}, the daemon's host. Trust is remembered for {} there until the file changes.",
-                launch.repo
+            .child(div().p(px(8.)).text_color(rgb(theme.muted)).child(fl!(
+                "worktree-scripts-trust-note",
+                host = host.as_str(),
+                repo = launch.repo.as_str()
             )))
             .child(
                 div()
@@ -599,18 +622,25 @@ impl HerdrWindow {
                     .flex_wrap()
                     .gap(px(8.))
                     .p(px(8.))
-                    .child(button("worktree-script-trust-run", "Trust and run", true).on_click(
-                        cx.listener(|this, _, window, cx| {
+                    .child(
+                        button(
+                            "worktree-script-trust-run",
+                            fl!("worktree-scripts-trust-run"),
+                            true,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
                             cx.stop_propagation();
                             this.trust_worktree_script(window, cx);
-                        }),
-                    ))
-                    .child(button("worktree-script-skip", skip, false).on_click(cx.listener(
-                        |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.skip_worktree_script(window, cx);
-                        },
-                    ))),
+                        })),
+                    )
+                    .child(
+                        button("worktree-script-skip", skip, false).on_click(cx.listener(
+                            |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.skip_worktree_script(window, cx);
+                            },
+                        )),
+                    ),
             )
     }
 }

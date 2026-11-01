@@ -4,7 +4,7 @@
 //! does not replay every old failure.
 
 use super::model;
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use gpui::Context;
 use herdr_automation::report::{ScriptState, Status};
 use std::collections::HashSet;
@@ -51,10 +51,16 @@ impl Seen {
             if !failures.insert(run.id) || !self.initialized || self.failures.contains(&run.id) {
                 continue;
             }
-            let why = run.detail.as_deref().unwrap_or("the run did not finish");
             notices.push(Notice {
-                title: format!("{} failed on {host}", run.name),
-                body: why.to_owned(),
+                title: fl!(
+                    "automations-notify-failed",
+                    name = run.name.as_str(),
+                    host = host
+                ),
+                body: run
+                    .detail
+                    .clone()
+                    .unwrap_or_else(|| fl!("automations-notify-unfinished")),
             });
         }
         if self.initialized {
@@ -62,8 +68,12 @@ impl Seen {
                 let key = (script.path.clone(), script.hash.clone());
                 if approvals.contains(&key) && !self.approvals.contains(&key) {
                     notices.push(Notice {
-                        title: format!("{} waits for approval on {host}", script.name),
-                        body: "Review its plan in Automations before it runs.".to_owned(),
+                        title: fl!(
+                            "automations-notify-approval",
+                            name = script.name.as_str(),
+                            host = host
+                        ),
+                        body: fl!("automations-notify-approval-body"),
                     });
                 }
             }

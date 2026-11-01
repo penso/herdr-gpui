@@ -14,6 +14,7 @@
 //! On a remote host the minted inference key comes back with the response
 //! body, as it does to CodexBar, and is dropped by the parser.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -35,16 +36,7 @@ pub(crate) struct Muse;
 
 static META: Meta = Meta::new("muse", "Muse Code")
     .dashboard("https://dev.meta.ai")
-    .settings(&[Setting::new(
-        "token",
-        &[],
-        "A Muse CLI device-code access token (it starts with dca:), used when this host \
-         has no `muse login`. It is providers.meta.access_token in \
-         ~/.config/muse/auth.json on a machine where you ran `muse login`. On a Mac \
-         where `muse login` kept it in the keychain instead, list muse in \
-         show_providers and press Allow in its usage panel rather than setting \
-         this. Dashboard LLM_ keys and LLM| inference keys are not accepted.",
-    )]);
+    .settings(&[Setting::new("token", &[], "usage-muse-setting-token")]);
 
 impl Service for Muse {
     fn meta(&self) -> &'static Meta {
@@ -91,23 +83,23 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .map(|email| email.trim().to_owned())
         .filter(|email| !email.is_empty());
     let account = Account {
-        email,
-        plan: plan.or_else(|| Some("Muse login".into())),
+        email: email.map(Text::service),
+        plan: Some(plan.map_or_else(|| Text::message("usage-muse-login"), Text::service)),
     };
     let status = if key.require_payment == Some(true) {
-        Some("Payment method required; finish billing at https://dev.meta.ai")
+        Some(Text::message("usage-muse-payment-required"))
     } else if key.is_subs_active != Some(true) {
-        Some("No active subscription on this login")
+        Some(Text::message("usage-muse-no-subscription"))
     } else if key.subs_usage.is_none() {
-        Some("Quota not included in this login response")
+        Some(Text::message("usage-muse-no-quota"))
     } else {
         None
     };
     if let Some(status) = status {
         return Ok(
             Report::new(Provider(&Muse), account, Vec::new()).with_sections([Section::Facts {
-                title: "Subscription".into(),
-                facts: vec![("Status".into(), status.into())],
+                title: Text::message("usage-muse-subscription"),
+                facts: vec![(Text::message("usage-muse-status"), status)],
             }]),
         );
     }
@@ -121,7 +113,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         let kind = if length == SESSION {
             Kind::Session
         } else {
-            Kind::Named(format!("{} hours", minutes / 60.))
+            Kind::Named(Text::message("usage-muse-hours").arg("hours", minutes / 60.))
         };
         windows.push(Window::new(
             kind,
@@ -193,9 +185,12 @@ mod tests {
     #[test]
     fn reads_both_windows_and_identity() {
         let report = parse(ACCOUNT).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("ada@example.com"));
         assert_eq!(
-            report.account.plan.as_deref(),
+            report.account.email.as_ref().map(Text::as_str),
+            Some("ada@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
             Some("Muse Code Power Usage")
         );
         assert_eq!(report.windows.len(), 2);
@@ -219,11 +214,34 @@ mod tests {
             let report = parse(body).unwrap();
             assert!(report.windows.is_empty());
             assert_eq!(
-                report.account.plan.as_deref(),
+                report.account.plan.as_ref().map(Text::as_str),
                 Some("Muse Code Power Usage")
             );
-            assert_eq!(report.sections.len(), 1);
+            assert_eq!(
+                report.sections,
+                vec![Section::Facts {
+                    title: Text::message("usage-muse-subscription"),
+                    facts: vec![(
+                        Text::message("usage-muse-status"),
+                        Text::message("usage-muse-no-quota")
+                    )],
+                }]
+            );
         }
+    }
+
+    #[test]
+    fn another_rolling_window_is_named_by_its_hours() {
+        let body = ACCOUNT.replace(
+            "\"window_duration_mins\":300",
+            "\"window_duration_mins\":120",
+        );
+        let report = parse(&body).unwrap();
+        // Named windows sort after the weekly one.
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-muse-hours").arg("hours", 2.))
+        );
     }
 
     #[test]
@@ -234,6 +252,17 @@ mod tests {
         ] {
             assert!(parse(body).unwrap().windows.is_empty());
         }
+        let unpaid = parse(r#"{"require_payment":true,"is_subs_active":false}"#).unwrap();
+        assert_eq!(unpaid.account.plan, Some(Text::message("usage-muse-login")));
+        let Section::Facts { facts, .. } = &unpaid.sections[0] else {
+            panic!("facts expected");
+        };
+        assert_eq!(facts[0].1, Text::message("usage-muse-payment-required"));
+        let inactive = parse(r#"{"is_subs_active":false}"#).unwrap();
+        let Section::Facts { facts, .. } = &inactive.sections[0] else {
+            panic!("facts expected");
+        };
+        assert_eq!(facts[0].1, Text::message("usage-muse-no-subscription"));
     }
 
     #[test]

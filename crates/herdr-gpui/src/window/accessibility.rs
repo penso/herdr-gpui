@@ -1,8 +1,10 @@
 //! The focused terminal's accessibility insertion action. Its transcript stays
 //! a terminal, not a locally editable document: setting AXValue inserts text at
 //! the daemon's cursor, never replaces the displayed output or selection.
+// i18n: migrated
 
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::terminal::{InputTarget, Transcript};
 use gpui::{accesskit::ActionData, prelude::*, *};
 use herdr_client::protocol::{ClientPaneInputEvent, MAX_FRAME_SIZE};
@@ -26,7 +28,7 @@ impl HerdrWindow {
         terminal
             .track_focus(&self.focus)
             .role(Role::Terminal)
-            .aria_label("Terminal")
+            .aria_label(fl!("window-input-terminal"))
             // AccessKit maps Terminal to AXTextArea on macOS. SetValue makes
             // AXValue settable without changing the transcript's reading role.
             .when_some(
@@ -102,9 +104,9 @@ impl HerdrWindow {
         // Bound the extra allocation before entering the semantic input queue;
         // the client also checks the size of the complete encoded message.
         if text.len() > MAX_FRAME_SIZE {
-            self.local_error = Some(format!(
-                "Accessibility input not sent: {}",
-                herdr_client::protocol::Error::FrameLimit
+            self.local_error = Some(fl!(
+                "window-input-accessibility-failed",
+                error = herdr_client::protocol::Error::FrameLimit.localize()
             ));
             cx.notify();
             return;

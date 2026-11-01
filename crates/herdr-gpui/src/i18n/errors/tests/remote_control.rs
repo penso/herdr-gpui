@@ -72,10 +72,10 @@ fn every_control_variant_has_a_message() {
     ]);
 }
 
-/// Framing errors keep the chat protocol's English until it has a mapping.
+/// Framing errors are the chat protocol's own, through its mapping.
 #[test]
-fn frame_errors_show_as_they_are() {
-    assert_verbatim(&[
+fn frame_errors_use_the_chat_protocols_messages() {
+    assert_localized(&[
         control::Error::Frame(herdr_chat_protocol::Error::EmptyFrame),
         control::Error::Frame(herdr_chat_protocol::Error::Io(io())),
     ]);
