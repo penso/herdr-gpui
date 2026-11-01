@@ -126,7 +126,9 @@ fn replies(answers: Vec<Value>) -> (impl FnMut(Call) -> Result<Vec<u8>>, Asked) 
             Call::Post(url, body) => format!("POST {url} {body}"),
         };
         log.borrow_mut().push(line);
-        Ok(serde_json::to_vec(&answers.next().unwrap()).unwrap())
+        // Past the scripted answers, every list is empty and no one signed in.
+        let answer = answers.next().unwrap_or_else(|| json!({ "value": [] }));
+        Ok(serde_json::to_vec(&answer).unwrap())
     };
     (fetch, asked)
 }
@@ -209,7 +211,9 @@ fn a_project_with_no_open_work_items_asks_for_no_batch() {
     let listing = azure::list(&source(), None, &mut fetch).unwrap();
     assert!(listing.complete);
     assert!(listing.items.is_empty());
-    assert_eq!(asked.borrow().len(), 2);
+    assert_eq!(listing.viewer, None);
+    // Work items, active pull requests, completed, abandoned, and the reader.
+    assert_eq!(asked.borrow().len(), 5);
 }
 
 #[test]
@@ -338,6 +342,58 @@ fn a_full_page_with_nothing_new_ends_the_listing_incomplete() {
     assert!(!listing.complete);
     assert_eq!(listing.items.len(), 100);
     let asked = asked.borrow();
-    assert_eq!(asked.len(), 3);
+    assert_eq!(asked.len(), 6);
     assert!(asked[2].contains("%24skip=100"), "{}", asked[2]);
+}
+
+#[test]
+fn recent_completed_and_abandoned_pull_requests_follow_the_active_ones() {
+    let (mut fetch, asked) = replies(vec![
+        json!({ "workItems": [] }),
+        json!({ "value": [pull_request(1, json!({})), pull_request(2, json!({}))] }),
+        // Pull request 2 completed while the active ones were read.
+        json!({ "value": [
+            pull_request(2, json!({ "status": "completed" })),
+            pull_request(3, json!({ "status": "completed" })),
+        ] }),
+        json!({ "value": [pull_request(4, json!({ "status": "abandoned" }))] }),
+        json!({ "authenticatedUser": { "providerDisplayName": "Dev One" } }),
+    ]);
+    let listing = azure::list(&source(), None, &mut fetch).unwrap();
+    let states: Vec<_> = listing
+        .items
+        .iter()
+        .map(|item| (item.identifier.as_str(), item.state.as_str()))
+        .collect();
+    assert_eq!(
+        states,
+        [
+            ("!1", "open"),
+            ("!2", "merged"),
+            ("!3", "merged"),
+            ("!4", "closed")
+        ]
+    );
+    assert_eq!(listing.viewer.as_deref(), Some("Dev One"));
+    // The reader's name is the one pull request authors carry.
+    assert_eq!(listing.items[0].author.as_deref(), Some("Dev One"));
+    let asked = asked.borrow();
+    assert!(
+        asked[2].contains("searchCriteria.status=completed") && asked[2].contains("%24top=100")
+    );
+    assert!(asked[3].contains("searchCriteria.status=abandoned") && asked[3].contains("%24top=25"));
+    assert!(asked[4].ends_with("https://dev.azure.com/contoso/_apis/connectionData"));
+}
+
+#[test]
+fn a_custom_display_name_names_the_reader_first() {
+    let (mut fetch, _) = replies(vec![
+        json!({ "workItems": [] }),
+        json!({ "value": [] }),
+        json!({ "value": [] }),
+        json!({ "value": [] }),
+        json!({ "authenticatedUser": { "providerDisplayName": "dev@example.test", "customDisplayName": "Dev One" } }),
+    ]);
+    let listing = azure::list(&source(), None, &mut fetch).unwrap();
+    assert_eq!(listing.viewer.as_deref(), Some("Dev One"));
 }

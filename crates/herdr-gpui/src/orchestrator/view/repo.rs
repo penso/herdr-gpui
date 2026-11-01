@@ -77,13 +77,19 @@ impl Repo {
     }
 
     /// The login GitHub is read as for this repository: the account that
-    /// reads its owner, or the host's own before the remote is known.
+    /// reads its owner, or the host's own before the remote is known. For
+    /// Azure DevOps, the reader's display name, which its authors carry.
     pub(super) fn reading_login(&self) -> Option<&str> {
         let remote = self
             .snapshot
             .repo
             .as_ref()
             .and_then(|info| info.remote.as_ref());
+        if remote
+            .is_some_and(|remote| remote.source.provider == crate::orchestrator::Provider::Azure)
+        {
+            return self.snapshot.viewer.as_deref();
+        }
         if remote
             .is_some_and(|remote| remote.source.provider != crate::orchestrator::Provider::Github)
         {

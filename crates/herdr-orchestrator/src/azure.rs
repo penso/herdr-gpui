@@ -31,6 +31,11 @@ const API_VERSION: &str = "7.1";
 const PAGE: usize = 100;
 /// The most active pull requests one sync reads.
 pub const MAX_OPEN: usize = 2_000;
+/// How many of the latest completed pull requests a sync keeps beside the
+/// active ones, so the list can show what merged recently.
+pub const RECENT_COMPLETED: usize = 100;
+/// How many of the latest abandoned pull requests a sync keeps.
+pub const RECENT_ABANDONED: usize = 25;
 /// Work item ids one batch read may name.
 const BATCH: usize = 200;
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -156,12 +161,33 @@ impl<'a> Repository<'a> {
 
     /// The repository's active pull requests, `skip` of them passed.
     pub fn pull_requests_url(&self, skip: usize) -> Result<url::Url, Error> {
+        self.pull_requests_in("active", PAGE, skip)
+    }
+
+    /// The repository's latest `top` pull requests that ended as `status`,
+    /// `completed` or `abandoned`, newest first.
+    pub fn settled_url(&self, status: &str, top: usize) -> Result<url::Url, Error> {
+        self.pull_requests_in(status, top, 0)
+    }
+
+    fn pull_requests_in(&self, status: &str, top: usize, skip: usize) -> Result<url::Url, Error> {
         let mut url = self.url(&["_apis", "git", "repositories", self.name, "pullrequests"])?;
         url.query_pairs_mut()
-            .append_pair("searchCriteria.status", "active")
-            .append_pair("$top", &PAGE.to_string())
+            .append_pair("searchCriteria.status", status)
+            .append_pair("$top", &top.to_string())
             .append_pair("$skip", &skip.to_string())
             .append_pair("api-version", API_VERSION);
+        Ok(url)
+    }
+
+    /// Who the token reads as, for the organization.
+    pub fn connection_url(&self) -> Result<url::Url, Error> {
+        let invalid = || Error::Address(self.organization.to_owned());
+        let mut url = url::Url::parse(&format!("https://{HOST}")).map_err(|_| invalid())?;
+        url.path_segments_mut()
+            .map_err(|()| invalid())?
+            .push(self.organization)
+            .extend(["_apis", "connectionData"]);
         Ok(url)
     }
 
@@ -192,6 +218,24 @@ pub struct Listing {
     pub items: Vec<Item>,
     pub checkpoint: Checkpoint,
     pub complete: bool,
+    /// The name Azure DevOps shows for the token's owner, as pull request
+    /// authors are named, so the lists can keep the reader's own; `None`
+    /// when Azure DevOps did not say.
+    pub viewer: Option<String>,
+}
+
+/// The reply of `GET {organization}/_apis/connectionData`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Connection {
+    authenticated_user: Option<Viewer>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Viewer {
+    provider_display_name: Option<String>,
+    custom_display_name: Option<String>,
 }
 
 /// A request Azure DevOps answers with JSON.
@@ -214,6 +258,14 @@ pub fn list(
     let (pull_requests, listed) = pull_requests(source, &repository, fetch)?;
     items.extend(pull_requests);
     complete &= listed;
+    let settled = settled(source, &repository, fetch)?;
+    let later: HashSet<String> = settled
+        .iter()
+        .map(|item| item.key.native_id.clone())
+        .collect();
+    items.retain(|item| !later.contains(&item.key.native_id));
+    items.extend(settled);
+    let viewer = viewer(&repository, fetch)?;
     let previous = previous.cloned().unwrap_or_default();
     Ok(Listing {
         items,
@@ -225,7 +277,47 @@ pub fn list(
             pr_cursor: previous.pr_cursor,
         },
         complete,
+        viewer,
     })
+}
+
+/// The latest completed and abandoned pull requests, which the lists show
+/// when they are asked for more than open ones. A pull request settled
+/// while the active ones were read is listed once, as the later read has it.
+fn settled(
+    source: &SourceKey,
+    repository: &Repository<'_>,
+    fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
+) -> super::Result<Vec<Item>> {
+    let web = repository.repository_web()?;
+    let mut items = Vec::new();
+    for (status, top) in [
+        ("completed", RECENT_COMPLETED),
+        ("abandoned", RECENT_ABANDONED),
+    ] {
+        let page: pull_request::Page =
+            parse(&fetch(Call::Get(repository.settled_url(status, top)?))?)?;
+        items.extend(
+            page.value
+                .into_iter()
+                .map(|node| node.into_item(source, &web)),
+        );
+    }
+    Ok(items)
+}
+
+/// The token owner's display name. A reply in another shape names no one
+/// rather than failing the listing.
+fn viewer(
+    repository: &Repository<'_>,
+    fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
+) -> super::Result<Option<String>> {
+    let bytes = fetch(Call::Get(repository.connection_url()?))?;
+    Ok(serde_json::from_slice::<Connection>(&bytes)
+        .ok()
+        .and_then(|connection| connection.authenticated_user)
+        .and_then(|viewer| viewer.custom_display_name.or(viewer.provider_display_name))
+        .filter(|name| !name.is_empty()))
 }
 
 /// Every active pull request, a page at a time, and whether all were read.

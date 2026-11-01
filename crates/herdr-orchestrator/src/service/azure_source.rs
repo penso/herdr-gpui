@@ -20,6 +20,9 @@ impl Worker {
             return Ok(SyncState::Unsupported);
         };
         let count = listing.items.len();
+        if listing.viewer.is_some() {
+            self.snapshot.viewer.clone_from(&listing.viewer);
+        }
         if !listing.complete || !writable {
             self.uncached.insert(key.clone(), listing.items);
             return Ok(if listing.complete {

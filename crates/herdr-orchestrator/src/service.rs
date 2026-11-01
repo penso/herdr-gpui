@@ -187,6 +187,9 @@ pub struct Snapshot {
     /// Each open pull request's review and checks, by repository and number,
     /// as the last sync of its source read them. Never stored.
     pub pr_status: Arc<HashMap<(String, u64), super::PrStatus>>,
+    /// The name a forge other than GitHub shows for the reader, as it names
+    /// authors, once a sync has read it: Azure DevOps's display name.
+    pub viewer: Option<String>,
 }
 
 pub struct Service {
