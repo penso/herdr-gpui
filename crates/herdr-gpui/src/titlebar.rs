@@ -37,7 +37,10 @@ const NAVIGATION_MIN_WIDTH: f32 = 320.;
 
 impl HerdrWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let shown = matches!(self.menu.page, Some(Page::GitHub | Page::GitLab));
+        let shown = matches!(
+            self.menu.page,
+            Some(Page::GitHub | Page::GitLab | Page::AzureDevOps)
+        );
         if !shown && !self.open_menu(window, cx) {
             return;
         }
@@ -48,6 +51,14 @@ impl HerdrWindow {
             && !self.github_needs_attention()
         {
             self.open_gitlab_page(window, cx);
+            return;
+        }
+        // Azure DevOps waiting for a token opens its page the same way.
+        if self.orchestrator_needs_sign_in(crate::orchestrator::Provider::Azure, cx)
+            && self.pr_profile().is_some()
+            && !self.github_needs_attention()
+        {
+            self.open_azure_page(window, cx);
             return;
         }
         self.menu.page = Some(Page::GitHub);
@@ -316,7 +327,9 @@ impl HerdrWindow {
         let image = self
             .pr_profile()
             .and_then(|profile| self.menu.github_avatars.get(&profile.avatar_url));
-        let attention = self.github_needs_attention() || self.orchestrator_gitlab_needs_sign_in(cx);
+        let attention = self.github_needs_attention()
+            || self.orchestrator_gitlab_needs_sign_in(cx)
+            || self.orchestrator_needs_sign_in(crate::orchestrator::Provider::Azure, cx);
         div()
             .row()
             .flex_none()

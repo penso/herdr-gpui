@@ -100,6 +100,24 @@ impl HerdrWindow {
                     }
                 })),
             )
+            .child(
+                tab(
+                    "accounts-tab-azure",
+                    "Azure DevOps", // i18n: data
+                    crate::menu::azure::render::azure_mark(if page == Page::AzureDevOps {
+                        theme.foreground
+                    } else {
+                        theme.muted
+                    }),
+                    page == Page::AzureDevOps,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    if this.menu.page != Some(Page::AzureDevOps) {
+                        this.open_azure_page(window, cx);
+                    }
+                })),
+            )
             .child(div().flex_1())
             .child(
                 div()
@@ -125,7 +143,8 @@ impl HerdrWindow {
             )
     }
 
-    fn gitlab_button(
+    /// A page button, also the Azure DevOps page's.
+    pub(in crate::menu) fn gitlab_button(
         &self,
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,

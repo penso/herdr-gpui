@@ -156,5 +156,51 @@ fn the_gitlab_sign_in_opens_the_account_menus_gitlab_page(cx: &mut TestAppContex
         })
     };
     assert!(sign_in(Provider::Gitlab) == Some(crate::menu::Page::GitLab));
+    assert!(sign_in(Provider::Azure) == Some(crate::menu::Page::AzureDevOps));
     assert!(sign_in(Provider::Github) == Some(crate::menu::Page::GitHub));
+}
+
+#[gpui::test]
+fn an_azure_source_waiting_for_a_token_offers_to_connect_azure_devops(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let request = request(dir.path());
+    let look = look();
+    let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::with_repo(request, look, cx));
+    cx.simulate_resize(gpui::size(gpui::px(1100.), gpui::px(600.)));
+    let asked = Rc::new(RefCell::new(Vec::new()));
+    let seen = asked.clone();
+    cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, event: &Event, _| {
+            if let Event::SignIn(provider) = event {
+                seen.borrow_mut().push(*provider);
+            }
+        })
+        .detach();
+        view.update(cx, |view, cx| {
+            view.repo_mut().snapshot.sources = vec![SourceStatus {
+                key: SourceKey {
+                    provider: Provider::Azure,
+                    host: "dev.azure.com".into(),
+                    repository: "Contoso/Fabrikam/web".into(),
+                },
+                state: SyncState::SignIn,
+            }];
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    let banner = cx.debug_bounds("orchestrator-banner-sign-in").unwrap();
+    cx.simulate_click(banner.center(), Modifiers::none());
+    cx.run_until_parked();
+    assert_eq!(*asked.borrow(), [Provider::Azure]);
+    let (organizations, waiting): (Vec<String>, bool) = cx.update(|_, cx| {
+        let view = view.read(cx);
+        (
+            view.azure_organizations().collect(),
+            view.needs_sign_in(Provider::Azure),
+        )
+    });
+    // Tokens are saved by the organization's lowercase name.
+    assert_eq!(organizations, ["contoso"]);
+    assert!(waiting);
 }

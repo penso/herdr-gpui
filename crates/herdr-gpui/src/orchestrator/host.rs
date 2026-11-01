@@ -264,9 +264,40 @@ impl HerdrWindow {
     /// One of this window's views has a GitLab source waiting for a token,
     /// which the title bar's account button marks.
     pub(crate) fn orchestrator_gitlab_needs_sign_in(&self, cx: &App) -> bool {
+        self.orchestrator_needs_sign_in(super::Provider::Gitlab, cx)
+    }
+
+    /// One of this window's views has a `provider` source waiting for a
+    /// token, which the title bar's account button marks.
+    pub(crate) fn orchestrator_needs_sign_in(&self, provider: super::Provider, cx: &App) -> bool {
         self.orchestrators
             .values()
-            .any(|orchestrator| orchestrator.view.read(cx).gitlab_needs_sign_in())
+            .any(|orchestrator| orchestrator.view.read(cx).needs_sign_in(provider))
+    }
+
+    /// The Azure DevOps organizations this window's views read, in the
+    /// order their sources list them, for the account menu.
+    pub(crate) fn orchestrator_azure_organizations(&self, cx: &App) -> Vec<String> {
+        let mut organizations: Vec<String> = Vec::new();
+        for orchestrator in self.orchestrators.values() {
+            for organization in orchestrator.view.read(cx).azure_organizations() {
+                if !organizations.contains(&organization) {
+                    organizations.push(organization);
+                }
+            }
+        }
+        organizations
+    }
+
+    /// [`Self::orchestrator_azure_organizations`] over every main window,
+    /// with the same caveats as [`Self::all_orchestrator_gitlab_hosts`].
+    pub(crate) fn all_orchestrator_azure_organizations(cx: &App) -> Vec<String> {
+        cx.windows()
+            .into_iter()
+            .filter_map(|handle| handle.downcast::<HerdrWindow>())
+            .filter_map(|handle| handle.read(cx).ok())
+            .flat_map(|window| window.orchestrator_azure_organizations(cx))
+            .collect()
     }
 
     /// A saved sign-in changed, such as a GitLab token pasted in the account
@@ -513,10 +544,10 @@ impl HerdrWindow {
             },
             Event::SignIn(provider) => {
                 if self.open_menu(window, cx) {
-                    if provider == super::Provider::Gitlab {
-                        self.open_gitlab_page(window, cx);
-                    } else {
-                        self.menu.page = Some(crate::menu::Page::GitHub);
+                    match provider {
+                        super::Provider::Gitlab => self.open_gitlab_page(window, cx),
+                        super::Provider::Azure => self.open_azure_page(window, cx),
+                        _ => self.menu.page = Some(crate::menu::Page::GitHub),
                     }
                 }
                 cx.notify();

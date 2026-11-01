@@ -25,6 +25,8 @@ pub(crate) enum Page {
     AppUpdate,
     /// Approving an automation script, or enabling automations on a host.
     Automation,
+    /// The account menu's Azure DevOps tokens, beside GitHub's and GitLab's.
+    AzureDevOps,
     /// Reviewing, then following, a move of the pane menu's pane to another
     /// device.
     CarryPane,

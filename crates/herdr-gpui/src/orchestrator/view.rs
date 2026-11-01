@@ -577,11 +577,29 @@ impl OrchestratorView {
 
     /// A GitLab source waits for a token that works.
     pub(crate) fn gitlab_needs_sign_in(&self) -> bool {
+        self.needs_sign_in(Provider::Gitlab)
+    }
+
+    /// A `provider` source waits for a token that works.
+    pub(crate) fn needs_sign_in(&self, provider: Provider) -> bool {
         self.repos
             .iter()
             .flat_map(|repo| &repo.snapshot.sources)
             .any(|status| {
-                status.key.provider == Provider::Gitlab && matches!(status.state, SyncState::SignIn)
+                status.key.provider == provider && matches!(status.state, SyncState::SignIn)
+            })
+    }
+
+    /// The Azure DevOps organizations this view's repositories are read
+    /// from, lowercase, as tokens are saved for them.
+    pub(crate) fn azure_organizations(&self) -> impl Iterator<Item = String> + '_ {
+        self.repos
+            .iter()
+            .flat_map(|repo| &repo.snapshot.sources)
+            .filter(|status| status.key.provider == Provider::Azure)
+            .filter_map(|status| {
+                herdr_orchestrator::azure::Repository::organization(&status.key)
+                    .map(str::to_ascii_lowercase)
             })
     }
 
