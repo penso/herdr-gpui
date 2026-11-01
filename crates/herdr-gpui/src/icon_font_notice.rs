@@ -1,7 +1,8 @@
 //! Explains missing-glyph boxes in a prompt. Fonts are never bundled, so a
 //! machine without a Nerd Font draws every Private Use Area icon as a box;
 //! this names the fix once a pane actually shows one.
-use crate::{config_diagnostic::ConfigDiagnostic, terminal_painter::CellSeparator};
+// i18n: migrated
+use crate::{config_diagnostic::ConfigDiagnostic, i18n::fl, terminal_painter::CellSeparator};
 use herdr_client::protocol::{FrameData, PaneSurfaceFrame};
 use std::sync::Arc;
 
@@ -9,19 +10,21 @@ use std::sync::Arc;
 mod tests;
 
 /// Names the fix without running it: installing fonts is the user's call.
-const TEXT: &str = if cfg!(target_os = "macos") {
-    "Prompt icons need a Nerd Font, and none is installed.\n\
-     Install one with Homebrew, then restart Herdr UI:"
-} else {
-    "Prompt icons need a Nerd Font, and none is installed.\n\
-     Install Symbols Nerd Font Mono from nerdfonts.com,\n\
-     then restart Herdr UI."
-};
+/// One line per message, so each reads as a whole line of the card.
+fn text() -> String {
+    let fix = if cfg!(target_os = "macos") {
+        fl!("config-diagnostic-icon-font-homebrew")
+    } else {
+        fl!("config-diagnostic-icon-font-download")
+    };
+    format!("{}\n{fix}", fl!("config-diagnostic-icon-font"))
+}
 
 /// The command that installs one, where a single command does. The card
-/// draws it apart from [`TEXT`] and copies it on a click: card text cannot be
+/// draws it apart from [`text`] and copies it on a click: card text cannot be
 /// selected, and a command retyped from a notice is a command mistyped.
 pub(crate) const COMMAND: Option<&str> = if cfg!(target_os = "macos") {
+    // i18n: data
     Some("brew install --cask font-symbols-only-nerd-font")
 } else {
     None
@@ -68,7 +71,8 @@ impl IconFontNotice {
                 self.shown_icon = shows_icon(&surface.frame);
             }
         }
-        self.card.sync((missing && self.shown_icon).then_some(TEXT));
+        self.card
+            .sync_own((missing && self.shown_icon).then(text).as_deref());
         before != self.visible().is_some()
     }
 

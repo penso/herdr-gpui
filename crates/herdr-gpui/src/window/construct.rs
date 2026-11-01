@@ -82,7 +82,7 @@ impl HerdrWindow {
         let configured_terminal_size = config.terminal.size;
         let status_bar_visible = config.status_bar.show;
         let mut gui_config_diagnostic = crate::config_diagnostic::ConfigDiagnostic::default();
-        gui_config_diagnostic.sync(config.diagnostic().as_deref());
+        gui_config_diagnostic.sync_own(config.diagnostic().as_deref());
         let catalog = endpoint::Catalog::new(&target);
         let menu = menu::MenuState::new(cx);
         // Starts the thread that reads and saves the marks file.

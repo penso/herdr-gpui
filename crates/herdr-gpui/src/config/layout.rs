@@ -216,6 +216,8 @@ impl<'de> Deserialize<'de> for Layout {
             type Value = Layout;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                // Part of TOML's parser text, which errors show as written.
+                // i18n: data
                 formatter.write_str("a layout name or a [layout] table")
             }
 
