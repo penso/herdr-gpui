@@ -7,7 +7,7 @@ use super::{
     model::{Balance, Pace, Report, Section, Severity, Window as Limit},
     text,
 };
-use crate::config::Theme;
+use crate::{config::Theme, direction::Logical};
 use gpui::{prelude::*, *};
 use herdr_usage::Text;
 use std::time::SystemTime;
@@ -136,7 +136,9 @@ impl Ui {
                     .gap(px(8.))
                     .text_size(self.small())
                     .child(div().text_color(self.muted()).child(text::words(label)))
-                    .child(div().child(text::words(value)))
+                    // A long value, or one longer in another language,
+                    // wraps under itself rather than leaving the card.
+                    .child(div().min_w_0().text_end().child(text::words(value)))
             }))
             .into_any_element()
     }
