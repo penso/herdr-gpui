@@ -167,9 +167,8 @@ impl HerdrWindow {
                         .child(fl!("workspace-dialog-new-workspace-note")),
                 )
                 .children(self.menu.dispatch.as_ref().map(|picker| {
-                    // The picker's own captions, in English until dispatch's
-                    // text is messages.
-                    let caption = |caption: &'static str, field: AnyElement| {
+                    // The picker's own captions, laid out like the form's.
+                    let caption = |caption: String, field: AnyElement| {
                         div()
                             .flex()
                             .items_center()

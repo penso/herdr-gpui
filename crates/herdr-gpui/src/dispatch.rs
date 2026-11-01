@@ -4,6 +4,7 @@
 //! clone costs, nudged towards where this repository went before. Ranking is
 //! pure; the window gathers the candidates from its endpoints, and the work
 //! on another host runs through Teleport's scripts.
+// i18n: migrated
 
 mod error;
 mod history;
@@ -54,7 +55,7 @@ pub(crate) enum Target {
 /// The words for a new machine from `sandbox`, such as "a new container".
 pub(crate) fn sandbox_words(sandbox: Sandbox) -> String {
     #[cfg(feature = "cloud")]
-    return format!("a new {}", crate::cloud::noun(sandbox));
+    return crate::i18n::fl!("dispatch-new-machine", noun = crate::cloud::noun(sandbox));
     #[cfg(not(feature = "cloud"))]
     match sandbox {}
 }

@@ -5,6 +5,7 @@
 
 use crate::{
     HerdrWindow,
+    i18n::{Localize, fl},
     teleport::NewCheckout,
     window::Flash,
     worktree_scripts::{Checkout, Launch, ScriptKind},
@@ -17,7 +18,6 @@ use std::time::{Duration, Instant};
 const WAIT: Duration = Duration::from_secs(120);
 /// Setups kept waiting at once.
 const MAX_WAITING: usize = 8;
-const GAVE_UP: &str = "A new worktree's setup script did not start: its host was not shown";
 
 /// A setup script waiting for the window to reach its checkout.
 pub(crate) struct Setup {
@@ -53,7 +53,7 @@ impl HerdrWindow {
         self.dispatch_setups.push_back(setup);
         if self.dispatch_setups.len() > MAX_WAITING {
             self.dispatch_setups.pop_front();
-            self.show_flash(Flash::warning(GAVE_UP), cx);
+            self.show_flash(Flash::warning(fl!("dispatch-setup-gave-up")), cx);
         }
     }
 
@@ -68,7 +68,7 @@ impl HerdrWindow {
         self.dispatch_setups.retain(|setup| now < setup.until);
         if self.dispatch_setups.len() < before {
             tracing::warn!("a dispatched worktree's host was never shown for its setup");
-            self.show_flash(Flash::warning(GAVE_UP), cx);
+            self.show_flash(Flash::warning(fl!("dispatch-setup-gave-up")), cx);
         }
         if self.script_slot_busy() || !self.live.status.is_connected() {
             return;
@@ -107,7 +107,7 @@ impl HerdrWindow {
             requested: false,
         };
         if let Err(error) = self.start_worktree_script(launch, cx) {
-            self.local_error = Some(format!("The setup script did not start: {error}"));
+            self.local_error = Some(fl!("dispatch-setup-not-started", error = error.localize()));
             cx.notify();
         }
     }

@@ -83,10 +83,16 @@ fn send(fan_out: &FanOut, event: Event) {
 fn launch_needs_the_agent_list_a_prompt_and_a_pick() {
     let mut fan_out = idle();
     fan_out.stage = Stage::Compose(None);
-    assert_eq!(fan_out.not_ready("go"), Some("Waiting for the agent list"));
+    assert_eq!(
+        fan_out.not_ready("go").as_deref(),
+        Some("Waiting for the agent list")
+    );
     fan_out.stage = Stage::Compose(Some(Ok(vec![AgentKind::Claude])));
-    assert_eq!(fan_out.not_ready("  "), Some("Write a prompt"));
-    assert_eq!(fan_out.not_ready("go"), Some("Pick at least one agent"));
+    assert_eq!(fan_out.not_ready("  ").as_deref(), Some("Write a prompt"));
+    assert_eq!(
+        fan_out.not_ready("go").as_deref(),
+        Some("Pick at least one agent")
+    );
     assert!(fan_out.toggle(AgentKind::Claude, true));
     assert_eq!(fan_out.not_ready("go"), None);
     fan_out.stage = Stage::Compose(Some(Err("no".into())));
@@ -247,7 +253,8 @@ fn a_failed_removal_returns_to_the_confirmation_without_removed_lanes() {
             .error
             .as_deref()
             .unwrap()
-            .starts_with("1 worktree(s) could not be removed")
+            .replace(['\u{2068}', '\u{2069}'], "")
+            .starts_with("1 worktree could not be removed")
     );
 }
 

@@ -63,7 +63,7 @@ pub(super) fn pane(work: &Work, action: &Action) -> String {
 }
 
 /// The step a move is on, or that it is starting.
-pub(super) fn step(step: Option<Step>) -> String {
+pub(crate) fn step(step: Option<Step>) -> String {
     let Some(step) = step else {
         return fl!("teleport-step-starting");
     };

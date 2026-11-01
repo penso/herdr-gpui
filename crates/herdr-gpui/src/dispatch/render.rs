@@ -3,7 +3,7 @@
 //! drawn from the picker's prepared candidates.
 
 use super::{Candidate, Picker, Repository, Slot};
-use crate::{HerdrWindow, config::corners, toggles::radio};
+use crate::{HerdrWindow, config::corners, i18n::fl, toggles::radio};
 use gpui::{prelude::*, *};
 
 /// Share of CPU at which a meter turns to a warning, and then to an alarm,
@@ -18,33 +18,26 @@ fn cpu(candidate: &Candidate) -> Option<f32> {
 
 fn free_cores(candidate: &Candidate) -> Option<String> {
     let spare = candidate.load?.spare_cores()?.round() as u32;
-    Some(match spare {
-        1 => "1 core free".to_owned(),
-        n => format!("{n} cores free"),
-    })
+    Some(fl!("dispatch-cores-free", count = spare))
 }
 
 fn agents(candidate: &Candidate) -> String {
-    match candidate.working {
-        0 => "no agents working".to_owned(),
-        1 => "1 agent working".to_owned(),
-        n => format!("{n} agents working"),
-    }
+    fl!("dispatch-agents-working", count = candidate.working)
 }
 
 /// The quiet word a host carries: why it ranks where it does, or what
 /// choosing it costs.
-fn tag(candidate: &Candidate, first: bool) -> Option<&'static str> {
+fn tag(candidate: &Candidate, first: bool) -> Option<String> {
     if !candidate.online {
-        Some("offline")
+        Some(fl!("dispatch-tag-offline"))
     } else if first && !candidate.current {
-        Some("Best fit")
+        Some(fl!("dispatch-tag-best"))
     } else if candidate.current {
-        Some("current")
+        Some(fl!("dispatch-tag-current"))
     } else if candidate.repository == Repository::Missing {
-        Some("will clone")
+        Some(fl!("dispatch-tag-clone"))
     } else if candidate.picks >= 2 {
-        Some("usual pick")
+        Some(fl!("dispatch-tag-usual"))
     } else {
         None
     }
@@ -162,7 +155,7 @@ impl HerdrWindow {
                 div()
                     .truncate()
                     .text_color(muted)
-                    .child(free_cores(candidate).unwrap_or_else(|| "measuring...".to_owned())),
+                    .child(free_cores(candidate).unwrap_or_else(|| fl!("dispatch-measuring"))),
             )
             .child(div().truncate().text_color(muted).child(agents(candidate)))
             .child(
@@ -228,7 +221,7 @@ impl HerdrWindow {
                             .flex_1()
                             .min_w_0()
                             .truncate()
-                            .child(format!("New {noun}")),
+                            .child(fl!("dispatch-new-sandbox", noun = noun)),
                     ),
             )
             .child(div().truncate().text_color(muted).child(provider))
@@ -236,13 +229,13 @@ impl HerdrWindow {
                 div()
                     .truncate()
                     .text_color(muted)
-                    .child("Its own files and limits"),
+                    .child(fl!("dispatch-sandbox-own")),
             )
             .child(
                 div()
                     .truncate()
                     .text_color(muted)
-                    .child("Made when you create"),
+                    .child(fl!("dispatch-sandbox-made")),
             )
     }
 
@@ -263,7 +256,11 @@ impl HerdrWindow {
                 .load
                 .and_then(|load| load.spare_cores())
                 .map_or_else(|| "?".to_owned(), |spare| format!("{spare:.0}"));
-            format!("{free} free · {} working", candidate.working)
+            fl!(
+                "dispatch-row-detail",
+                free = free,
+                working = candidate.working
+            )
         });
         let selector = format!("dispatch-row-{id}");
         div()
@@ -342,7 +339,7 @@ impl HerdrWindow {
     pub(crate) fn render_host_picker(
         &self,
         picker: &Picker,
-        caption: impl Fn(&'static str, AnyElement) -> Div,
+        caption: impl Fn(String, AnyElement) -> Div,
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = &self.theme;
@@ -410,10 +407,7 @@ impl HerdrWindow {
                     .min_w_0()
                     .truncate()
                     .text_color(rgb(theme.muted))
-                    .child(match rest {
-                        1 => "1 more host".to_owned(),
-                        n => format!("{n} more hosts"),
-                    }),
+                    .child(fl!("dispatch-more-hosts", count = rest)),
             })
             .children(elsewhere.map(|chosen| self.dispatch_meter(cpu(chosen), METER_WIDTH)))
             .child(
@@ -427,7 +421,7 @@ impl HerdrWindow {
                     .flex_none()
                     .text_color(rgb(theme.muted)),
             );
-        picker_view = picker_view.child(caption("Other", field.into_any_element()));
+        picker_view = picker_view.child(caption(fl!("dispatch-other"), field.into_any_element()));
         if open {
             picker_view = picker_view.child(self.dispatch_list(
                 picker.rest(),
@@ -487,7 +481,7 @@ impl HerdrWindow {
                         div()
                             .flex_none()
                             .text_color(rgb(theme.muted))
-                            .child("clone")
+                            .child(fl!("dispatch-clone"))
                     }),
             )
             .child(

@@ -17,7 +17,11 @@ fn wanted_agents_wait_for_the_lookup_and_name_what_is_missing() {
     assert_eq!(fan_out.picks.count(AgentKind::Claude), 2);
     assert_eq!(fan_out.picks.total(), 2);
     assert_eq!(
-        fan_out.error.as_deref(),
+        fan_out
+            .error
+            .as_deref()
+            .map(|error| error.replace(['\u{2068}', '\u{2069}'], ""))
+            .as_deref(),
         Some("Not installed on This Mac: kimi")
     );
     assert!(fan_out.composing(), "picking never launches");

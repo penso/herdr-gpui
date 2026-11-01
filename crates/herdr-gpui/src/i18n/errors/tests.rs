@@ -23,6 +23,7 @@ mod devices;
 mod dispatch;
 mod editor;
 mod enroll;
+mod fan_out;
 mod file_drop;
 mod github;
 mod host_build;
