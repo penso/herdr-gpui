@@ -109,6 +109,7 @@ impl Localize for Error {
                 fl!("error-link-on-another-host", host = host.as_str())
             }
             Self::ListeningPorts(error) => error.localize(),
+            Self::LocalPorts(error) => error.localize(),
             Self::LocalAddresses(source) => {
                 fl!("error-local-addresses", error = source.to_string())
             }

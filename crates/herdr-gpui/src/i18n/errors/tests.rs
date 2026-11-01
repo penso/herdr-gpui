@@ -30,6 +30,7 @@ mod keymap;
 #[cfg(windows)]
 mod launch_at_login;
 mod listening_ports;
+mod local_ports;
 mod mods;
 mod nearby;
 mod notification_mutes;
