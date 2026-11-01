@@ -12,7 +12,7 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_client::{
-    HostKeys, HostProbe, Method, NewHostKey, SshFailure,
+    HostKeys, HostProbe, Method, SshFailure,
     protocol::{ClientKeyCode, ClientKeyKind, ClientPaneInputEvent},
 };
 pub(super) use offer::Offer;
@@ -59,10 +59,11 @@ pub(super) enum Step {
     Saved,
     /// Already saved; keep the recovery advice readable until dismissed.
     SavedWarning(&'static str),
-    /// SSH refused an unknown host key; fetching it for the user to approve.
+    /// SSH refused the host key; fetching it for the user to approve.
     FetchingKey(setup::Request),
-    /// The user compares the host key's fingerprint before trusting it.
-    TrustKey(setup::Request, NewHostKey),
+    /// The user compares the host key's fingerprint before trusting it, or
+    /// before it replaces the key trusted before.
+    TrustKey(setup::Request, super::host_key::Key),
     /// Setup needs prompts, so the user decides whether to run it locally.
     Confirm(setup::Request, Offer),
     /// Checking the catalog on disk again before opening the setup workspace
@@ -293,7 +294,7 @@ impl HerdrWindow {
                 Some(fl!("add-device-fetching-key", target = request.target()))
             }
             Step::TrustKey(request, key) => {
-                body = body.child(self.render_host_key(request.target(), key));
+                body = body.child(self.render_offered_key(request.target(), key));
                 None
             }
             Step::Confirm(request, offer) => Some(offer.question(
@@ -350,12 +351,22 @@ impl HerdrWindow {
                 .children(self.local_network_settings_button("device-setup-settings", cx))
                 .child(cancel),
             // Enter does not trust a key: only this button does.
-            Step::TrustKey(..) => footer.child(cancel).child(
+            Step::TrustKey(_, key) => footer.child(cancel).child(
                 button(
                     "device-setup-trust",
-                    fl!("add-device-trust-key").into(),
+                    if key.replaces() {
+                        fl!("trust-host-replace")
+                    } else {
+                        fl!("add-device-trust-key")
+                    }
+                    .into(),
                     true,
                 )
+                .when(key.replaces(), |button| {
+                    button
+                        .bg(crate::menu::danger(theme))
+                        .text_color(rgb(theme.surface))
+                })
                 .on_click(cx.listener(|this, _, _, cx| this.trust_host_key(cx))),
             ),
             step => {

@@ -81,6 +81,7 @@ settings-section-notifications = Notifications
 settings-section-integrations = Integrations
 settings-section-plugins = Plugins
 settings-section-cloud-devices = Cloud devices
+settings-section-machine-sync = Machine sync
 settings-section-remote-control = Remote control
 settings-section-configuration = Configuration
 settings-lead-theme = Hover a theme to try it in the app; click to keep it.
@@ -92,6 +93,7 @@ settings-lead-code = Review code and diffs beside your terminals through a Visua
 settings-lead-integrations = Agents Herdr can launch and track.
 settings-lead-plugins = Show what your plugins report in the sidebar.
 settings-lead-cloud-devices = Create machines from your cloud accounts and use them as devices.
+settings-lead-machine-sync = Every computer in your list of SSH devices can reach all the others, from whichever one you use.
 settings-lead-remote-control = Use your chats from a phone, over HTTPS on your network or through Tailscale.
 settings-lead-configuration = Files behind these settings. Saved edits reload automatically.
 

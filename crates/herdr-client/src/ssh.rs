@@ -24,11 +24,15 @@ use std::{
 mod error;
 mod failure;
 mod host_key;
+pub mod identity;
 pub(crate) mod mux;
 mod unverified;
 pub use error::Error;
 pub use failure::SshFailure;
-pub use host_key::{HostKeyFingerprint, HostKeyScan, NewHostKey, scan_host_key, trust_host_key};
+pub use host_key::{
+    ChangedHostKey, HostKeyFingerprint, HostKeyScan, NewHostKey, replace_host_key,
+    scan_changed_host_key, scan_host_key, trust_host_key,
+};
 pub use unverified::{HostKeys, MAX_UNVERIFIED_HOSTS, set_host_keys, set_unverified_hosts};
 mod powershell;
 
@@ -470,7 +474,10 @@ fn command_with(target: &str, remote_command: &str, keys: HostKeys) -> Command {
 /// `ssh` with the bridge's connection policy and nothing to connect yet.
 fn noninteractive(keys: HostKeys) -> Command {
     let mut command = crate::environment::command("ssh");
-    command.args(keys.options()).args(POLICY);
+    command
+        .args(keys.options())
+        .args(POLICY)
+        .args(identity::options());
     command
 }
 

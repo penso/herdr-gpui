@@ -5,6 +5,7 @@ mod fonts;
 mod general;
 mod indicators;
 mod language;
+pub(in crate::settings_window) mod machine_sync;
 pub(in crate::settings_window) mod notifications;
 pub(in crate::settings_window) mod remote_control;
 mod sidebar;

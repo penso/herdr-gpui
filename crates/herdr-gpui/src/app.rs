@@ -487,6 +487,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             if mode == LaunchMode::Normal {
                 let ssh = cx.global::<InitialAppearance>().config.ssh.clone();
                 crate::config::ssh_hosts::install(&ssh, cx);
+                crate::machine_sync::MachineSync::install(cx);
             }
             let language = cx.global::<InitialAppearance>().config.language.clone();
             crate::i18n::install(&language, cx);

@@ -4,6 +4,7 @@
 error-client-ssh-cancelled = SSH connection cancelled
 error-client-ssh-closed = SSH bridge closed; check host trust, authentication, and remote Herdr installation
 error-client-ssh-invalid-target = invalid SSH target (options, controls, and passwords are forbidden)
+error-client-ssh-key-not-replaceable = the host key is set system-wide or by a certificate authority or revocation entry; change it in a terminal
 error-client-ssh-known-hosts-unavailable = SSH has no user known hosts file to save the host key to
 error-client-ssh-output-limit = SSH startup output exceeds limit
 # $error is why, one of the error-client-ssh-failure messages.

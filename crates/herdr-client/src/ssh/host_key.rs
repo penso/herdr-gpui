@@ -88,14 +88,7 @@ pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
     // Stderr is read only to classify a failure, as for the probe.
     let (status, _, stderr) =
         super::run_with_stderr(&mut command, Duration::from_secs(20), || false)?;
-    let mut entries = String::new();
-    std::fs::File::open(&recorded)?
-        .take(ENTRIES_LIMIT + 1)
-        .read_to_string(&mut entries)
-        .map_err(|_| crate::Error::RemoteOutput)?;
-    if entries.len() as u64 > ENTRIES_LIMIT {
-        return Err(Error::OutputLimit.into());
-    }
+    let entries = read_entries(&recorded)?;
     if !entries.trim().is_empty() {
         // `accept-new` treats a host with a known key of another type as
         // changed in current OpenSSH; older releases may record the new type.
@@ -129,6 +122,19 @@ pub fn scan_host_key(target: &str) -> Result<HostKeyScan> {
         },
         _ => HostKeyScan::Trusted,
     })
+}
+
+/// What `ssh` recorded into `file`, bounded by [`ENTRIES_LIMIT`].
+fn read_entries(file: &Path) -> Result<String> {
+    let mut entries = String::new();
+    std::fs::File::open(file)?
+        .take(ENTRIES_LIMIT + 1)
+        .read_to_string(&mut entries)
+        .map_err(|_| crate::Error::RemoteOutput)?;
+    if entries.len() as u64 > ENTRIES_LIMIT {
+        return Err(Error::OutputLimit.into());
+    }
+    Ok(entries)
 }
 
 /// Options that come before [`super::POLICY`], so they win over it: record a
@@ -414,7 +420,14 @@ pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
         );
         return Err(Error::Refused(SshFailure::HostKey).into());
     }
-    let path = key.known_hosts.as_path();
+    append_entries(&key.known_hosts, &key.entries)?;
+    tracing::info!(category = "host_key", "trusted a new host key");
+    Ok(())
+}
+
+/// Appends `entries` to the known hosts file at `path`, creating it and its
+/// directory privately when missing.
+fn append_entries(path: &Path, entries: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         let mut builder = DirBuilder::new();
         builder.recursive(true);
@@ -440,17 +453,19 @@ pub fn trust_host_key(key: &NewHostKey) -> Result<()> {
         && file.seek(SeekFrom::End(-1)).is_ok()
         && file.read_exact(&mut last).is_ok()
         && last[0] != b'\n';
-    let mut text = String::with_capacity(key.entries.len() + 1);
+    let mut text = String::with_capacity(entries.len() + 1);
     if unterminated {
         text.push('\n');
     }
-    text.push_str(&key.entries);
+    text.push_str(entries);
     file.write_all(text.as_bytes()).map_err(write)?;
     file.sync_all()
         .map_err(|error| crate::Error::storage(StorageOperation::Sync, path, error))?;
-    tracing::info!(category = "host_key", "trusted a new host key");
     Ok(())
 }
+
+mod changed;
+pub use changed::{ChangedHostKey, replace_host_key, scan_changed_host_key};
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)] // Test fixtures only.

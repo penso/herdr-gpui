@@ -276,3 +276,15 @@ fn wildcards_match_like_ssh_globs() {
     assert!(!ssh_config::wildcard("*.conf", "a.conf.bak"));
     assert!(!ssh_config::wildcard("h?st", "hst"));
 }
+
+#[test]
+fn tailscale_names_this_machine_only_while_connected() {
+    assert_eq!(
+        tailscale::parse_own(STATUS.as_bytes()).as_deref(),
+        Some("studio.tail1.ts.net")
+    );
+    let stopped = STATUS.replace(r#""Running""#, r#""Stopped""#);
+    assert_eq!(tailscale::parse_own(stopped.as_bytes()), None);
+    assert_eq!(tailscale::parse_own(br#"{"Self": {"DNSName": ""}}"#), None);
+    assert_eq!(tailscale::parse_own(b"not json"), None);
+}

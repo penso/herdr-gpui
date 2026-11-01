@@ -510,6 +510,7 @@ pub(super) fn master_args(target: &str, lane: Lane, socket: &Path) -> Vec<String
         args.push("-o".to_owned());
         args.push(option.to_owned());
     }
+    args.extend(crate::ssh::identity::options());
     args.extend(["--".to_owned(), target.to_owned()]);
     args
 }
@@ -526,6 +527,7 @@ pub(super) fn channel_command(target: &str, remote_command: &str, socket: &Path)
         .arg("-o")
         .arg(control_path(socket))
         .args(crate::ssh::POLICY)
+        .args(crate::ssh::identity::options())
         .args(["-o", "ClearAllForwardings=yes", "--", target])
         .arg(remote_command);
     command

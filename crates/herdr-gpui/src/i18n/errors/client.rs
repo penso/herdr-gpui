@@ -3,6 +3,7 @@
 //! their mappings beside this file.
 
 mod clipboard;
+mod machine_sync;
 mod sessions;
 mod ssh;
 mod terminal_attach;
@@ -106,6 +107,7 @@ impl Localize for Error {
             Self::Io(error) => fl!("error-client-io", error = error.to_string()),
             Self::Json(error) => fl!("error-client-json", error = error.to_string()),
             Self::LegacyDaemon => fl!("error-client-legacy-daemon"),
+            Self::MachineSync(error) => error.localize(),
             Self::MissingBootId => fl!("error-client-missing-boot-id"),
             Self::MissingHealthCheck { server_version } => fl!(
                 "error-client-missing-health-check",

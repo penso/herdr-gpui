@@ -359,6 +359,9 @@ impl HerdrWindow {
             "enter" if self.menu.page == Some(Page::OpenCheckout) => {
                 self.confirm_open_checkout(window, cx);
             }
+            "enter" if self.menu.page == Some(Page::HostKey) => {
+                self.trust_reviewed_host_key(false, window, cx);
+            }
             "enter" if self.menu.page == Some(Page::VersionMismatch) => {
                 self.act_on_version_mismatch(window, cx);
             }

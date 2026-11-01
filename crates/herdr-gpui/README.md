@@ -66,7 +66,17 @@ picture stays up, dimmed, under a card with the reason and a Reconnect now butto
 until the new connection presents its own frame. Keys typed meanwhile are not sent,
 and a flash says so. Only a surface activation that fails on a live connection
 falls back to Local. The card names why SSH refused a host: an untrusted host key,
-failed authentication, an unreachable host, or no Herdr installed. The
+failed authentication, an unreachable host, or no Herdr installed. For an
+untrusted host key it also offers Review host key, which fetches the key the
+host offers without authenticating and shows its fingerprints with Trust and
+Don't Trust. Trust appends the key to your first user known hosts file and
+reconnects. A key that differs from the one trusted before, as after a host
+is reinstalled, is shown beside that one under a warning, with Replace Key:
+it removes the old entries with `ssh-keygen -R` (which keeps a `.old` copy)
+and adds the new key. Enter never replaces a key, and a key trusted
+system-wide or by a `@cert-authority` or `@revoked` line is left to a
+terminal. Add Device offers the same Trust, or Replace Key for a changed
+key, when SSH refuses the key of the host being added. The
 first two and the last need the user, so those hosts wait the full 30 seconds
 between retries rather than backing off from half a second. After the machine
 sleeps (the wall clock runs ahead of the monotonic one, which stops while macOS
@@ -1954,6 +1964,62 @@ you remove them or the remote OS cleans its temporary directory: unlike image
 bridge files, they are not owned or deleted by Herdr on disconnect. Network loss
 can prevent cleanup, and kernel-blocked local filesystem operations cannot be
 forcibly interrupted. A copy stalls out after 30 seconds without progress.
+
+## Machine Sync
+
+Settings > Machine sync keeps the saved SSH devices of all your computers in
+step. Your laptop may know your NAS and GPU box, but Herdr UI on the GPU box
+shows only that box until it learns the others. Turn sync on once on the
+laptop and each computer in the list can reach every other one, from whichever
+one you use.
+
+Before anything changes, Settings asks for this computer's **Address** (the
+`user@host` the others reach it by: a Tailscale or local network name works
+best, and it needs SSH turned on, which is Remote Login on macOS) and its
+**Name**. It then lists the machines it will change and what it does on each:
+
+- Creates an SSH key of their own, `~/.ssh/herdr_ed25519`, if they lack one.
+- Adds every other machine's herdr key to `~/.ssh/authorized_keys`, each line
+  ending in `herdr-sync:<name>` so you can find and remove it.
+- Saves the machines each one lacks as devices in Herdr's own catalog
+  (`~/.local/state/herdr/client/endpoints.json`), with the same IDs and names.
+- Saves a sync state beside that catalog (`machine-sync.json`) on each machine
+  that had none, so Herdr UI there keeps the list in step too.
+
+Nothing a machine already has is changed or removed: catalogs only grow, a
+key already authorized under any comment is not added again, and a machine's
+own sync state is never replaced. A catalog that changed between the read and
+the write is left alone until the next sync. Devices another machine saved
+(a desktop added on the NAS, say) are saved here too.
+
+After you confirm, sync runs without asking: 20 seconds after launch, every
+hour, whenever a device is added here (by the Add Device dialog, a terminal
+setup, or `herdr machine add`), and from **Sync now**. Each device has a
+checkbox: untick one to leave it out, so it gets no keys or devices and is not
+given to the others. A device turned off in Herdr is left out too.
+
+Herdr UI's own SSH connections offer the herdr key after OpenSSH's default
+keys; your SSH config is never edited, so a plain `ssh` in a terminal does not
+use it. Each machine still approves a new machine's host key the first time
+it connects, as for any device: the device's reconnecting card offers Review
+host key to see the fingerprints and trust it.
+
+Turning sync off removes only this computer's sync state. The other machines
+keep what earlier syncs gave them. To undo the keys, delete the `herdr-sync`
+lines from `~/.ssh/authorized_keys` on each machine.
+
+Limits: the machines must run a POSIX shell with OpenSSH (`ssh-keygen`,
+`cksum`), so Windows OpenSSH hosts are not synced. On a Windows computer
+running Herdr UI, keys go to `~/.ssh/authorized_keys`, which Windows OpenSSH
+Server ignores for administrators, so the others may not reach it. Removing a device on one computer does not remove it
+elsewhere, and a sync can bring it back from a machine that still lists it;
+untick it instead. A machine saved under two different addresses on two
+computers can be listed twice, and changing this computer's address later
+does not update the machines that already list it. Addresses are copied as
+saved, so one that works only through this computer's `~/.ssh/config` (an
+alias such as `gpu` with its own `HostName`, `User`, or `Port`) does not
+connect from the others: save a name every machine resolves, such as a
+Tailscale or `.local` name, or add the same alias to their SSH configs.
 
 ## Worktree Scripts
 
@@ -4684,8 +4750,8 @@ The `ssh` child's standard streams are two private pipes rather than a socket
 pair, driven with the same overlapped read and write deadlines as the daemon's
 named pipe. **Add Device** lists **SSH host** first, then **WSL**. It checks the
 host, asks before trusting an unknown host key (appended to the first user
-known hosts file `ssh -G` names, normally `%USERPROFILE%\.ssh\known_hosts`),
-and saves a host that already runs a compatible Herdr through `herdr machine
+known hosts file `ssh -G` names, normally `%USERPROFILE%\.ssh\known_hosts`)
+or replacing a changed one, and saves a host that already runs a compatible Herdr through `herdr machine
 add`. Sessions on the host can be listed, created, and deleted.
 
 Where this differs from macOS and Linux:

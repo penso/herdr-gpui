@@ -10,6 +10,7 @@ mod backdrop;
 mod caffeine;
 mod chat;
 mod client;
+mod client_machine_sync;
 mod clipboard;
 #[cfg(feature = "cloud")]
 mod cloud_batch;

@@ -10,6 +10,7 @@ mod catalog;
 pub(super) mod coder;
 pub(crate) use add_device::enter;
 mod discover;
+pub(crate) use discover::own_tailscale_name;
 mod error;
 mod host_key;
 mod host_key_choice;
@@ -20,12 +21,14 @@ pub(super) mod rail;
 mod saved_warning;
 mod scope;
 mod setup;
+mod trust_host;
 mod wsl;
 
 pub(super) use add_device::Setup;
 pub(crate) use error::Error;
 pub(crate) use host_menu::HostMenu;
 pub(crate) use scope::DeviceScope;
+pub(crate) use trust_host::Review as HostKeyReview;
 pub(super) use wsl::WslSetup;
 
 use super::{Page, colors};

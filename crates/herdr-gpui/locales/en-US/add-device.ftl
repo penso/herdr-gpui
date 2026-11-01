@@ -47,7 +47,6 @@ add-device-local-network-waiting = macOS refused Herdr's connection to { $target
 
 # Approving an SSH host's key. $known_hosts is the file the key is saved to,
 # and $host_file the key's own file on the host.
-add-device-key-changed = The host key of { $target } differs from the one you trusted before. Someone could be intercepting the connection; check it in a terminal.
 add-device-key-fetch-failed = Fetch the host key of { $target }: { $error }
 add-device-key-unknown = { $target } is not a known host yet. Trust it only if this fingerprint matches the host's own key:
 add-device-key-check = On the host, ssh-keygen -lf { $host_file } prints it. Trusting adds the key to { $known_hosts }.

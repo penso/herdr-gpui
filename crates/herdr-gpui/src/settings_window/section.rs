@@ -20,6 +20,7 @@ pub(super) enum Section {
     Plugins,
     #[cfg(feature = "cloud")]
     CloudDevices,
+    MachineSync,
     RemoteControl,
     Configuration,
 }
@@ -83,6 +84,7 @@ impl Section {
         Self::Plugins,
         #[cfg(feature = "cloud")]
         Self::CloudDevices,
+        Self::MachineSync,
         Self::RemoteControl,
         Self::Configuration,
     ];
@@ -107,6 +109,7 @@ impl Section {
             Self::Plugins => "settings-section-plugins",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "settings-section-cloud-devices",
+            Self::MachineSync => "settings-section-machine-sync",
             Self::RemoteControl => "settings-section-remote-control",
             Self::Configuration => "settings-section-configuration",
         }
@@ -124,6 +127,7 @@ impl Section {
             Self::Plugins => "settings-lead-plugins",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "settings-lead-cloud-devices",
+            Self::MachineSync => "settings-lead-machine-sync",
             Self::RemoteControl => "settings-lead-remote-control",
             Self::Configuration => "settings-lead-configuration",
             Self::General | Self::Tabs | Self::Notifications => return None,
@@ -143,7 +147,7 @@ impl Section {
             Self::Integrations | Self::Plugins => Some(Group::Connect),
             #[cfg(feature = "cloud")]
             Self::CloudDevices => Some(Group::Connect),
-            Self::RemoteControl => Some(Group::Connect),
+            Self::MachineSync | Self::RemoteControl => Some(Group::Connect),
             Self::Configuration => Some(Group::Advanced),
         }
     }
@@ -163,6 +167,7 @@ impl Section {
             Self::Plugins => "icons/plug.svg",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "icons/globe.svg",
+            Self::MachineSync => "icons/devices.svg",
             Self::RemoteControl => "icons/phone.svg",
             Self::Configuration => "icons/file.svg",
         }

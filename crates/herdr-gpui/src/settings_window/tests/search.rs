@@ -57,6 +57,7 @@ fn every_catalog_id_is_unique_and_belongs_to_its_section() {
             Section::Plugins => "plugins-",
             #[cfg(feature = "cloud")]
             Section::CloudDevices => "cloud-",
+            Section::MachineSync => "machine-sync",
             Section::RemoteControl => "remote-",
             Section::Configuration => "config-",
         };

@@ -17,6 +17,7 @@ mod language_reload;
 mod launch_at_login;
 mod layout_drafts;
 mod load_save;
+mod machine_sync;
 mod navigation_groups;
 mod navigation_resize;
 mod navigation_scroll;

@@ -1,3 +1,4 @@
+use super::super::host_key::Fetched;
 use super::*;
 use herdr_client::{HostKeyScan, SshFailure};
 
@@ -34,12 +35,17 @@ fn an_unknown_host_key_is_fetched_for_approval(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
-fn a_changed_host_key_is_never_offered_for_approval(cx: &mut gpui::TestAppContext) {
+fn a_key_that_cannot_be_replaced_offers_the_terminal(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             fetching(view, cx);
-            view.host_key_fetched(Ok(HostKeyScan::Refused(SshFailure::HostKey)), cx);
+            view.host_key_fetched(
+                Err(herdr_client::Error::Ssh(
+                    herdr_client::ssh::Error::KeyNotReplaceable,
+                )),
+                cx,
+            );
             assert!(matches!(step(view), Step::Confirm(_, Offer::Terminal)));
             assert!(
                 view.menu
@@ -50,7 +56,7 @@ fn a_changed_host_key_is_never_offered_for_approval(cx: &mut gpui::TestAppContex
                     .as_deref()
                     .unwrap()
                     .replace(['\u{2068}', '\u{2069}'], "")
-                    .starts_with("The host key of dev@box differs from the one you trusted before")
+                    .starts_with("Fetch the host key of dev@box: the host key is set system-wide")
             );
         });
     });
@@ -62,7 +68,10 @@ fn a_failed_key_fetch_offers_the_terminal_with_its_reason(cx: &mut gpui::TestApp
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             fetching(view, cx);
-            view.host_key_fetched(Ok(HostKeyScan::Refused(SshFailure::Unreachable)), cx);
+            view.host_key_fetched(
+                Ok(Fetched::Scan(HostKeyScan::Refused(SshFailure::Unreachable))),
+                cx,
+            );
             assert!(matches!(step(view), Step::Confirm(_, Offer::Terminal)));
             let error = |view: &HerdrWindow| {
                 view.menu
@@ -98,7 +107,7 @@ fn a_key_fetch_for_a_closed_or_changed_dialog_is_ignored(cx: &mut gpui::TestAppC
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             open_form(view, Step::Form, cx);
-            view.host_key_fetched(Ok(HostKeyScan::Refused(SshFailure::HostKey)), cx);
+            view.host_key_fetched(Ok(Fetched::Scan(HostKeyScan::Trusted)), cx);
             assert!(matches!(step(view), Step::Form));
             assert!(view.menu.device_setup.as_ref().unwrap().error.is_none());
         });

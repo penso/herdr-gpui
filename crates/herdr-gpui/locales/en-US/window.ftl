@@ -5,6 +5,8 @@
 # The card over a dropped connection; $host is the device's name.
 window-reconnecting = Reconnecting to { $host }
 window-reconnect-now = Reconnect now
+# Shown when SSH refused the device's host key, to see it and trust it.
+window-review-host-key = Review host key
 # The same card while the device is being removed on purpose.
 window-removing = Removing { $host }
 window-device-being-removed = It is being removed.

@@ -12,6 +12,12 @@ pub enum Error {
     Closed,
     #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
     InvalidTarget,
+    /// The host's key is trusted system-wide, or pinned by a certificate
+    /// authority or revocation line, which replacing user entries cannot change.
+    #[error(
+        "the host key is set system-wide or by a certificate authority or revocation entry; change it in a terminal"
+    )]
+    KeyNotReplaceable,
     /// `ssh -G` named no user known hosts file a host key could be saved to.
     #[error("SSH has no user known hosts file to save the host key to")]
     KnownHostsUnavailable,
@@ -32,6 +38,7 @@ impl Error {
     pub(crate) fn kind(&self) -> io::ErrorKind {
         match self {
             Self::InvalidTarget => io::ErrorKind::InvalidInput,
+            Self::KeyNotReplaceable => io::ErrorKind::PermissionDenied,
             Self::Unsupported => io::ErrorKind::Unsupported,
             Self::Cancelled => io::ErrorKind::Interrupted,
             Self::Closed => io::ErrorKind::UnexpectedEof,
