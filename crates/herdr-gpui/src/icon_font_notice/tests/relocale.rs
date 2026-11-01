@@ -16,8 +16,7 @@ fn the_card_follows_a_language_switch_and_stays_dismissed() {
     assert_ne!(accented, english);
     assert!(!notice.observe(true, None));
 
-    let lines = accented.unwrap();
-    assert!(notice.dismiss(&lines));
+    assert!(accented.is_some_and(|lines| notice.dismiss(&lines)));
     crate::i18n::show(&Locale::FALLBACK);
     notice.observe(true, None);
     assert!(notice.visible().is_none());
