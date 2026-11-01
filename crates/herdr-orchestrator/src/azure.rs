@@ -133,6 +133,17 @@ impl<'a> Repository<'a> {
         Ok(url)
     }
 
+    /// The project as a source of its own: work items belong to the project,
+    /// not to one repository, so every repository of a project lists each
+    /// work item under one key, and the lists show it once.
+    pub fn project_source(&self) -> SourceKey {
+        SourceKey {
+            provider: Provider::Azure,
+            host: HOST.to_owned(),
+            repository: format!("{}/{}", self.organization, self.project),
+        }
+    }
+
     /// The project's web address, which work item links hang from.
     pub fn web(&self) -> Result<String, Error> {
         Ok(self.url(&[])?.as_str().trim_end_matches('/').to_owned())
@@ -199,7 +210,7 @@ pub fn list(
 ) -> super::Result<Listing> {
     let started = Utc::now();
     let repository = Repository::of(source)?;
-    let (mut items, mut complete) = work_items(source, &repository, fetch)?;
+    let (mut items, mut complete) = work_items(&repository, fetch)?;
     let (pull_requests, listed) = pull_requests(source, &repository, fetch)?;
     items.extend(pull_requests);
     complete &= listed;
@@ -219,7 +230,9 @@ pub fn list(
 
 /// Every active pull request, a page at a time, and whether all were read.
 /// Pages are numbered, so one closed while they are read may shift another
-/// out of view for this sync; the next sync lists it again.
+/// out of view for this sync; the next sync lists it again. The offset moves
+/// by what each page held, and a full page that adds nothing new ends the
+/// listing as incomplete rather than asking for that page again.
 fn pull_requests(
     source: &SourceKey,
     repository: &Repository<'_>,
@@ -228,11 +241,13 @@ fn pull_requests(
     let web = repository.repository_web()?;
     let mut items = Vec::new();
     let mut seen = HashSet::new();
+    let mut skip = 0;
     loop {
-        let page: pull_request::Page = parse(&fetch(Call::Get(
-            repository.pull_requests_url(items.len())?,
-        ))?)?;
+        let page: pull_request::Page =
+            parse(&fetch(Call::Get(repository.pull_requests_url(skip)?))?)?;
         let more = page.value.len() >= PAGE;
+        skip += page.value.len();
+        let before = items.len();
         items.extend(
             page.value
                 .into_iter()
@@ -242,7 +257,7 @@ fn pull_requests(
         if !more {
             return Ok((items, true));
         }
-        if items.len() >= MAX_OPEN {
+        if items.len() >= MAX_OPEN || items.len() == before {
             return Ok((items, false));
         }
     }
@@ -251,7 +266,6 @@ fn pull_requests(
 /// The project's open work items, most recently changed first, and whether
 /// the query named all of them.
 fn work_items(
-    source: &SourceKey,
     repository: &Repository<'_>,
     fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
 ) -> super::Result<(Vec<Item>, bool)> {
@@ -260,6 +274,7 @@ fn work_items(
     let complete = reply.work_items.len() < work_item::MAX_OPEN;
     let ids: Vec<u64> = reply.work_items.iter().map(|item| item.id).collect();
     let web = repository.web()?;
+    let project = repository.project_source();
     let mut items = Vec::with_capacity(ids.len());
     for chunk in ids.chunks(BATCH) {
         let batch: work_item::Batch = parse(&fetch(Call::Get(repository.work_items_url(chunk)?))?)?;
@@ -271,7 +286,7 @@ fn work_items(
                 .position(|id| *id == node.id())
                 .unwrap_or(usize::MAX)
         });
-        items.extend(nodes.into_iter().map(|node| node.into_item(source, &web)));
+        items.extend(nodes.into_iter().map(|node| node.into_item(&project, &web)));
     }
     Ok((items, complete))
 }

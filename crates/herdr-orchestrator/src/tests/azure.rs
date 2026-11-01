@@ -153,6 +153,9 @@ fn a_listing_reads_work_items_then_pull_requests() {
 
     let issue = &listing.items[1];
     assert_eq!(issue.key.native_id, "4");
+    // Work items belong to the project, pull requests to the repository.
+    assert_eq!(issue.key.source.repository, "contoso/Fabrikam Fiber");
+    assert_eq!(listing.items[2].key.source, source());
     assert_eq!(issue.state, "open");
     assert_eq!(issue.labels, ["Active", "Bug", "ui", "urgent"]);
     assert_eq!(issue.author.as_deref(), Some("Dev Two"));
@@ -305,4 +308,36 @@ fn azure_keys_round_trip_and_stand_in_as_pull_requests() {
     assert_eq!(parsed, key);
     assert!(key.canonical().starts_with("azure:dev.azure.com:"));
     assert_eq!(Item::stand_in(key).identifier, "!12");
+}
+
+#[test]
+fn two_repositories_of_one_project_key_a_work_item_alike() {
+    let other = SourceKey {
+        repository: "contoso/Fabrikam Fiber/api".into(),
+        ..source()
+    };
+    let read = |key: &SourceKey| {
+        let (mut fetch, _) = replies(vec![
+            json!({ "workItems": [{ "id": 4 }] }),
+            json!({ "value": [work_item(4, "Active")] }),
+            json!({ "value": [] }),
+        ]);
+        azure::list(key, None, &mut fetch).unwrap().items[0]
+            .key
+            .canonical()
+    };
+    assert_eq!(read(&source()), read(&other));
+}
+
+#[test]
+fn a_full_page_with_nothing_new_ends_the_listing_incomplete() {
+    let page =
+        json!({ "value": (1..=100).map(|id| pull_request(id, json!({}))).collect::<Vec<_>>() });
+    let (mut fetch, asked) = replies(vec![json!({ "workItems": [] }), page.clone(), page]);
+    let listing = azure::list(&source(), None, &mut fetch).unwrap();
+    assert!(!listing.complete);
+    assert_eq!(listing.items.len(), 100);
+    let asked = asked.borrow();
+    assert_eq!(asked.len(), 3);
+    assert!(asked[2].contains("%24skip=100"), "{}", asked[2]);
 }
