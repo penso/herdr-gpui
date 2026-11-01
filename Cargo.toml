@@ -23,7 +23,7 @@ unwrap_used = "deny"
 [workspace.dependencies]
 # The terminal emulator behind herdr-core terminals, which arrive as raw bytes;
 # Zed's fork, the revision Arbor runs.
-alacritty_terminal   = "0.25.1"
+alacritty_terminal   = "0.26.0"
 url = "2"
 # ACP wire types for herdr-acp; its own transport, so no async runtime.
 acp                  = { default-features = false, package = "agent-client-protocol-schema", version = "1.12" }
