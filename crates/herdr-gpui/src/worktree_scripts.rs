@@ -24,7 +24,7 @@ pub(crate) use launch::SCRIPT_ENV;
 pub(crate) use launch::{Checkout, command_line, created_tab, main_checkout};
 pub(crate) use trust::{Grant, Trust};
 
-use crate::{HerdrWindow, NavigationTarget, menu::Page, state::DialogResponse, window::Flash};
+use crate::{HerdrWindow, NavigationTarget, menu::Page, state::Answer, window::Flash};
 use gpui::{prelude::*, *};
 use herdr_client::{Method, protocol::ClientPaneInputEvent};
 use std::sync::{
@@ -360,7 +360,7 @@ impl HerdrWindow {
             }
             Some(Step::Reading) | None => return,
         };
-        let Some(result) = self.take_script_response(&request) else {
+        let Some(result) = self.take_answer(Answer::Script, &request) else {
             return;
         };
         let response = match result {
@@ -395,32 +395,6 @@ impl HerdrWindow {
         }
         self.worktree_script = None;
         self.navigate_endpoint(&endpoint, NavigationTarget::Tab(&tab), cx);
-    }
-
-    /// The answer to `request` in the connection's one script slot, once it
-    /// has arrived. Taken, so it is not cloned into every later update; a
-    /// newer request's slot is left alone.
-    pub(crate) fn take_script_response(&mut self, request: &str) -> Option<DialogResponse> {
-        let Some((id, Some(result))) = &self.live.script_response else {
-            return None;
-        };
-        if id != request {
-            return None;
-        }
-        let result = result.clone();
-        self.live.script_response = None;
-        if let Ok(mut inbox) = self.endpoints[self.selected_endpoint]
-            .connection
-            .inbox
-            .try_lock()
-            && inbox
-                .script_response
-                .as_ref()
-                .is_some_and(|(id, _)| id == request)
-        {
-            inbox.script_response = None;
-        }
-        Some(result)
     }
 
     /// Type the fixed line that runs a script into the pane its tab made.
