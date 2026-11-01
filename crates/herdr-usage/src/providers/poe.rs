@@ -33,7 +33,7 @@ static META: Meta = Meta::new("poe", "Poe")
     .settings(&[Setting::new(
         "api_key",
         &["POE_API_KEY"],
-        "A Poe API key, created or copied at https://poe.com/api/keys.",
+        "usage-poe-setting-api-key",
     )]);
 
 impl Service for Poe {

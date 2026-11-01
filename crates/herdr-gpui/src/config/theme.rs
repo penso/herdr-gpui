@@ -11,7 +11,7 @@ use std::{
     sync::LazyLock,
 };
 
-const FOLLOW_HERDR: &str = "Follow Herdr";
+const FOLLOW_HERDR: &str = "Follow Herdr"; // i18n: data
 
 /// A `theme` value: one theme, or Ghostty's `light:NAME,dark:NAME`, which
 /// follows the system appearance. Either side may itself be a built-in, file,
@@ -91,6 +91,7 @@ fn theme_directories() -> Result<Vec<PathBuf>> {
         directories.push(PathBuf::from(resources).join("themes"));
     }
     directories.push(PathBuf::from(
+        // i18n: data
         "/Applications/Ghostty.app/Contents/Resources/ghostty/themes",
     ));
     if let Some(data) = env::var_os("XDG_DATA_HOME").filter(|value| !value.is_empty()) {
@@ -384,11 +385,11 @@ macro_rules! bundled_themes {
 
         impl Theme {
             pub const BUILTIN_NAMES: &'static [&'static str] = &[
-                "Default",
-                "Nord",
-                "Dracula",
-                "Catppuccin Mocha",
-                "Catppuccin Latte",
+                "Default", // i18n: data
+                "Nord", // i18n: data
+                "Dracula", // i18n: data
+                "Catppuccin Mocha", // i18n: data
+                "Catppuccin Latte", // i18n: data
                 $($name),*
             ];
         }
@@ -396,34 +397,34 @@ macro_rules! bundled_themes {
 }
 
 bundled_themes![
-    "Atom One Dark",
-    "Atom One Light",
-    "Ayu Mirage",
-    "Catppuccin Frappe",
-    "Catppuccin Macchiato",
-    "Everforest Dark Med",
-    "GitHub Dark Default",
-    "GitHub Light Default",
-    "Gruvbox Dark",
-    "Gruvbox Light",
-    "Gruvbox Material Dark",
-    "Kanagawa Wave",
-    "Material",
-    "Monokai Classic",
-    "Monokai Pro",
-    "Monokai Pro Light",
-    "Night Owl",
-    "Nightfox",
-    "One Half Dark",
-    "One Half Light",
-    "Rose Pine",
-    "Rose Pine Dawn",
-    "Rose Pine Moon",
-    "Snazzy",
-    "TokyoNight",
-    "TokyoNight Moon",
-    "TokyoNight Storm",
-    "Tomorrow Night",
+    "Atom One Dark",         // i18n: data
+    "Atom One Light",        // i18n: data
+    "Ayu Mirage",            // i18n: data
+    "Catppuccin Frappe",     // i18n: data
+    "Catppuccin Macchiato",  // i18n: data
+    "Everforest Dark Med",   // i18n: data
+    "GitHub Dark Default",   // i18n: data
+    "GitHub Light Default",  // i18n: data
+    "Gruvbox Dark",          // i18n: data
+    "Gruvbox Light",         // i18n: data
+    "Gruvbox Material Dark", // i18n: data
+    "Kanagawa Wave",         // i18n: data
+    "Material",              // i18n: data
+    "Monokai Classic",       // i18n: data
+    "Monokai Pro",           // i18n: data
+    "Monokai Pro Light",     // i18n: data
+    "Night Owl",             // i18n: data
+    "Nightfox",              // i18n: data
+    "One Half Dark",         // i18n: data
+    "One Half Light",        // i18n: data
+    "Rose Pine",             // i18n: data
+    "Rose Pine Dawn",        // i18n: data
+    "Rose Pine Moon",        // i18n: data
+    "Snazzy",                // i18n: data
+    "TokyoNight",            // i18n: data
+    "TokyoNight Moon",       // i18n: data
+    "TokyoNight Storm",      // i18n: data
+    "Tomorrow Night",        // i18n: data
 ];
 
 /// Bundled themes parsed once; the picker and menus resolve built-ins often.
@@ -549,7 +550,8 @@ impl Theme {
     pub(crate) fn builtin(name: &str) -> Option<Self> {
         // Small hand-authored palettes, then the bundled Ghostty files.
         let (background, foreground, ansi) = match name {
-            "Default" => return Some(Self::default()),
+            "Default" => return Some(Self::default()), // i18n: data
+            // i18n: data
             "Nord" => (
                 0x2e3440,
                 0xd8dee9,
@@ -558,6 +560,7 @@ impl Theme {
                     0x4c566a, 0xbf616a, 0xa3be8c, 0xebcb8b, 0x81a1c1, 0xb48ead, 0x8fbcbb, 0xeceff4,
                 ],
             ),
+            // i18n: data
             "Dracula" => (
                 0x282a36,
                 0xf8f8f2,
@@ -566,6 +569,7 @@ impl Theme {
                     0x6272a4, 0xff6e6e, 0x69ff94, 0xffffa5, 0xd6acff, 0xff92df, 0xa4ffff, 0xffffff,
                 ],
             ),
+            // i18n: data
             "Catppuccin Mocha" => (
                 0x1e1e2e,
                 0xcdd6f4,
@@ -574,6 +578,7 @@ impl Theme {
                     0x585b70, 0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa, 0xf5c2e7, 0x94e2d5, 0xa6adc8,
                 ],
             ),
+            // i18n: data
             "Catppuccin Latte" => (
                 0xeff1f5,
                 0x4c4f69,

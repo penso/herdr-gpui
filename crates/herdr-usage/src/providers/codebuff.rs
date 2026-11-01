@@ -29,15 +29,12 @@ static META: Meta = Meta::new("codebuff", "Codebuff")
         Setting::new(
             "api_key",
             &["CODEBUFF_API_KEY"],
-            "A Codebuff API key from https://www.codebuff.com. It reads the credit balance \
-             only; without it, the session from `codebuff login` is used, which also reads \
-             the plan and weekly limit.",
+            "usage-codebuff-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["CODEBUFF_API_URL"],
-            "An https URL that replaces https://www.codebuff.com, e.g. for a staging server. \
-             Other schemes are ignored so the token never travels unencrypted.",
+            "usage-codebuff-setting-base-url",
         ),
     ]);
 

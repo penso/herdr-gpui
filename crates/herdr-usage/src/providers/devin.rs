@@ -31,17 +31,12 @@ static META: Meta = Meta::new("devin", "Devin")
         Setting::new(
             "token",
             &["DEVIN_BEARER_TOKEN"],
-            "Sign in to https://app.devin.ai, open your organization's Usage & Limits \
-             page, then in Developer Tools > Network select the successful \
-             billing/quota/usage request and copy its Authorization request header \
-             without the leading \"Bearer \". The value is a browser session token and \
-             expires with that session.",
+            "usage-devin-setting-token",
         ),
         Setting::new(
             "organization",
             &["DEVIN_ORGANIZATION", "DEVIN_ORG"],
-            "The x-cog-org-id request header of the same request (an org-… or org_… \
-             id). An organization slug or its app.devin.ai URL also works.",
+            "usage-devin-setting-organization",
         ),
     ]);
 

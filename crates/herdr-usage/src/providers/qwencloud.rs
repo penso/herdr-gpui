@@ -48,20 +48,9 @@ static META: Meta = Meta::new("qwencloud", "Qwen Cloud")
         Setting::new(
             "cookie",
             &["QWEN_CLOUD_COOKIE"],
-            "Your Qwen Cloud console session. Sign in at \
-             https://home.qwencloud.com/billing/subscription/token-plan-individual, open \
-             Developer Tools > Application > Cookies > https://home.qwencloud.com, and copy \
-             the login ticket (login_qwencloud_ticket or login_aliyunid_ticket) together with \
-             login_aliyunid_csrf and cna. Paste them as \"name=value; name2=value2\", or copy \
-             the whole Cookie header of the data/api.json request from the Network tab.",
+            "usage-qwencloud-setting-cookie",
         ),
-        Setting::new(
-            "sec_token",
-            &[],
-            "Optional. The console's sec_token, when it cannot be read from \
-             /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
-             the data/api.json request on the Token Plan page.",
-        ),
+        Setting::new("sec_token", &[], "usage-qwencloud-setting-sec-token"),
     ]);
 
 impl Service for Qwencloud {

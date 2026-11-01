@@ -26,14 +26,7 @@ pub(crate) struct Abacus;
 
 static META: Meta = Meta::new("abacus", "Abacus AI")
     .dashboard("https://apps.abacus.ai/chatllm/admin/compute-points-usage")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Sign in to https://apps.abacus.ai, open Developer Tools > Application > Cookies \
-         for https://apps.abacus.ai, and copy its session cookies (names containing \
-         \"session\", \"auth\", or \"sid\"). Paste them as \"name=value; name2=value2\"; \
-         the whole Cookie header of any apps.abacus.ai request also works.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-abacus-setting-cookie")]);
 
 impl Service for Abacus {
     fn meta(&self) -> &'static Meta {

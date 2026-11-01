@@ -3,7 +3,7 @@
 //! machine or the one a chip picks.
 
 use super::{Look, Machine, Opened, format, model};
-use crate::{HerdrWindow, config::corners};
+use crate::{HerdrWindow, config::corners, i18n::fl};
 use chrono::TimeZone;
 use gpui::{prelude::*, *};
 use herdr_automation::report::{RECENT_RUNS, RunState, ScriptState, Status};
@@ -21,15 +21,15 @@ pub(crate) enum Group {
 }
 
 impl Group {
-    pub(crate) fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> String {
         match self {
-            Self::NeedsYou => "Needs you",
-            Self::Now => "Now",
-            Self::Next => "Next",
-            Self::Today => "Today",
-            Self::Yesterday => "Yesterday",
-            Self::ThisWeek => "This week",
-            Self::Older => "Older",
+            Self::NeedsYou => fl!("automations-group-needs-you"),
+            Self::Now => fl!("automations-group-now"),
+            Self::Next => fl!("automations-group-next"),
+            Self::Today => fl!("automations-group-today"),
+            Self::Yesterday => fl!("automations-group-yesterday"),
+            Self::ThisWeek => fl!("automations-group-this-week"),
+            Self::Older => fl!("automations-group-older"),
         }
     }
 }
@@ -88,14 +88,17 @@ where
         };
         for script in &status.scripts {
             if script.state == ScriptState::AwaitingApproval {
-                let why = script.reason.as_deref().unwrap_or("New or changed");
+                let text = match script.reason.as_deref() {
+                    Some(why) => fl!("automations-review-reason", why = why),
+                    None => fl!("automations-review-new"),
+                };
                 entries.push(entry(
                     Group::NeedsYou,
                     i64::MAX,
                     String::new(),
                     Look::Waiting,
                     &script.name,
-                    format!("{why} · review and approve"),
+                    text,
                     script_page(&script.path),
                     true,
                 ));
@@ -105,14 +108,13 @@ where
                 .as_ref()
                 .filter(|run| model::failed(run.state))
             {
-                let why = run.detail.as_deref().unwrap_or("the run did not finish");
                 entries.push(entry(
                     Group::NeedsYou,
                     run.started_at,
                     format::when_in(run.started_at, now, zone),
                     Look::Failed,
                     &script.name,
-                    format!("Failed: {why}"),
+                    model::failure(run),
                     run_page(&script.path, run.id),
                     false,
                 ));
@@ -127,7 +129,10 @@ where
                     }),
                     Look::Running,
                     &script.name,
-                    run.map_or_else(|| "Running".to_owned(), |run| model::progress(run, now)),
+                    run.map_or_else(
+                        || fl!("automations-running"),
+                        |run| model::progress(run, now),
+                    ),
                     run_page(&script.path, id),
                     false,
                 ));
@@ -227,7 +232,7 @@ impl HerdrWindow {
             };
         chips = chips.child(chip(
             "automations-filter-all".into(),
-            "All hosts".into(),
+            fl!("automations-all-hosts"),
             filter.is_none(),
             None,
             cx,
@@ -259,7 +264,7 @@ impl HerdrWindow {
         chips = chips.child(div().flex_1()).child(
             div()
                 .text_color(rgb(theme.muted))
-                .child(format!("{kept} recent runs")),
+                .child(fl!("automations-recent-count", count = kept)),
         );
         let mut body = div().p_5().flex().flex_col().gap_4().child(chips);
         if entries.is_empty() {
@@ -267,7 +272,7 @@ impl HerdrWindow {
                 div()
                     .debug_selector(|| "automations-timeline-empty".into())
                     .text_color(rgb(theme.muted))
-                    .child("Nothing has run, and nothing is scheduled."),
+                    .child(fl!("automations-timeline-empty")),
             );
         }
         let mut group = None;
@@ -279,12 +284,12 @@ impl HerdrWindow {
                     rows = div().flex().flex_col();
                 }
                 group = Some(entry.group);
-                let title = entry.group.title();
+                let key = entry.group;
                 rows = rows.child(
                     div()
                         .pb_1()
-                        .debug_selector(move || format!("automations-group-{title}"))
-                        .child(self.automation_title(title)),
+                        .debug_selector(move || format!("automations-group-{key:?}"))
+                        .child(self.automation_title(key.title())),
                 );
             }
             rows = rows.child(self.automation_timeline_row(index, entry, cx));
@@ -296,9 +301,7 @@ impl HerdrWindow {
                 .justify_center()
                 .text_size(small)
                 .text_color(rgb(theme.muted))
-                .child(format!(
-                    "Each host keeps its last {RECENT_RUNS} runs; older ones are in `herdr-automate runs` on the host."
-                )),
+                .child(fl!("automations-older-runs", count = RECENT_RUNS)),
         )
     }
 
@@ -348,7 +351,7 @@ impl HerdrWindow {
                 self.automation_button(
                     format!("automations-review-{index}"),
                     "icons/check.svg",
-                    "Review",
+                    fl!("automations-review"),
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
                     cx.stop_propagation();

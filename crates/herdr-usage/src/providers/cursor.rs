@@ -45,15 +45,7 @@ pub(crate) struct Cursor;
 static META: Meta = Meta::new("cursor", "Cursor")
     .dashboard("https://cursor.com/dashboard?tab=usage")
     .status_page("https://status.cursor.com")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Your cursor.com session. Sign in at https://cursor.com/dashboard, open Developer \
-         Tools > Application > Cookies > https://cursor.com, and copy the \
-         WorkosCursorSessionToken cookie (or __Secure-next-auth.session-token on older \
-         accounts). Paste it as \"WorkosCursorSessionToken=value\". Not needed when Cursor \
-         is listed in show_providers and you are signed in with Chrome or Safari.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-cursor-setting-cookie")]);
 
 impl Service for Cursor {
     fn meta(&self) -> &'static Meta {

@@ -23,14 +23,12 @@ static META: Meta = Meta::new("sub2api", "sub2api").settings(&[
     Setting::new(
         "api_key",
         &["SUB2API_API_KEY"],
-        "A sub2api group API key (sk-…), created in your sub2api deployment's dashboard \
-             under API keys. Usage is scoped to that key's group.",
+        "usage-sub2api-setting-api-key",
     ),
     Setting::new(
         "base_url",
         &["SUB2API_BASE_URL"],
-        "Your sub2api deployment, e.g. https://sub2api.example.com. HTTPS is required, \
-             except plain HTTP on a loopback address such as http://127.0.0.1:8080.",
+        "usage-sub2api-setting-base-url",
     ),
 ]);
 

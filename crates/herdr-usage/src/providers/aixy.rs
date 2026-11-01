@@ -24,19 +24,11 @@ pub(crate) struct Aixy;
 static META: Meta = Meta::new("aixy", "Aixy")
     .dashboard("https://dash.aixy-gateway.com")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["AIXY_API_KEY"],
-            "The project-scoped Aixy API key your workload uses, from \
-             https://dash.aixy-gateway.com under the project's API keys. Usage is that \
-             key's own traffic from every machine.",
-        ),
+        Setting::new("api_key", &["AIXY_API_KEY"], "usage-aixy-setting-api-key"),
         Setting::new(
             "base_url",
             &["AIXY_BASE_URL"],
-            "Optional gateway URL for a self-hosted or dedicated Aixy, with or without /v1. \
-             Defaults to https://api.aixy-gateway.com. It must be HTTPS unless it is on \
-             localhost, a private network, or a .local host.",
+            "usage-aixy-setting-base-url",
         ),
     ]);
 

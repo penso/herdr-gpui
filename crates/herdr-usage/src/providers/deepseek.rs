@@ -31,16 +31,12 @@ static META: Meta = Meta::new("deepseek", "DeepSeek")
         Setting::new(
             "api_key",
             &["DEEPSEEK_API_KEY", "DEEPSEEK_KEY"],
-            "A DeepSeek API key from https://platform.deepseek.com/api_keys. It reads \
-             the remaining credit balance.",
+            "usage-deepseek-setting-api-key",
         ),
         Setting::new(
             "platform_token",
             &["DEEPSEEK_PLATFORM_TOKEN", "DEEPSEEK_USER_TOKEN"],
-            "Used when no API key is set. Sign in to https://platform.deepseek.com, open \
-             Developer Tools > Application > Local Storage > https://platform.deepseek.com, \
-             and copy the value of the userToken entry (either the whole JSON value or \
-             just its \"value\" field).",
+            "usage-deepseek-setting-platform-token",
         ),
     ]);
 

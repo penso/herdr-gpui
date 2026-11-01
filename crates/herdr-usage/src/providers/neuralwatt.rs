@@ -29,13 +29,12 @@ static META: Meta = Meta::new("neuralwatt", "Neuralwatt")
         Setting::new(
             "api_key",
             &["NEURALWATT_API_KEY"],
-            "A Neuralwatt API key, created or copied at \
-             https://portal.neuralwatt.com/dashboard.",
+            "usage-neuralwatt-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["NEURALWATT_API_URL"],
-            "Optional HTTPS API URL for a proxy. Defaults to https://api.neuralwatt.com.",
+            "usage-neuralwatt-setting-base-url",
         ),
     ]);
 

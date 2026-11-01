@@ -30,6 +30,7 @@ mod host_build;
 mod keymap;
 #[cfg(windows)]
 mod launch_at_login;
+mod link;
 mod listening_ports;
 mod mods;
 mod nearby;

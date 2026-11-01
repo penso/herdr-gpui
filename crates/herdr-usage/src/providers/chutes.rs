@@ -39,13 +39,12 @@ static META: Meta = Meta::new("chutes", "Chutes")
         Setting::new(
             "api_key",
             &["CHUTES_API_KEY"],
-            "A Chutes API key (cpk_…), created as described at \
-             https://chutes.ai/docs/getting-started/authentication.",
+            "usage-chutes-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["CHUTES_API_URL"],
-            "Optional HTTPS management API URL. Defaults to https://api.chutes.ai.",
+            "usage-chutes-setting-base-url",
         ),
     ]);
 

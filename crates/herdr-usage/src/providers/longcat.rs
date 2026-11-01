@@ -35,11 +35,7 @@ static META: Meta = Meta::new("longcat", "LongCat")
     .settings(&[Setting::new(
         "cookie",
         &["LONGCAT_MANUAL_COOKIE"],
-        "The LongCat console session. Sign in at https://longcat.chat/platform/usage, open \
-         Developer Tools > Application > Cookies > https://longcat.chat, and copy every \
-         cookie of the site (the console does not document which one holds the session). \
-         Paste them as \"name=value; name2=value2\", or copy the Cookie request header of \
-         a request to longcat.chat from the Network tab.",
+        "usage-longcat-setting-cookie",
     )]);
 
 impl Service for Longcat {

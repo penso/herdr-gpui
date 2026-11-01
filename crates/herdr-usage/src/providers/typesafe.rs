@@ -35,14 +35,7 @@ pub(crate) struct Typesafe;
 
 static META: Meta = Meta::new("typesafe", "TypeSafe")
     .dashboard(BILLING)
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Sign in at https://console.typesafe.ai/settings/billing, open Developer Tools > \
-         Application > Cookies > https://console.typesafe.ai, and copy every cookie there \
-         as one \"name=value; name2=value2\" header. An inference API key does not work \
-         here.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-typesafe-setting-cookie")]);
 
 impl Service for Typesafe {
     fn meta(&self) -> &'static Meta {
