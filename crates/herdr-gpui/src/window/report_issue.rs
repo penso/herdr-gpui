@@ -1,5 +1,7 @@
 //! The status bar's "Report issue" link: a GitHub bug report prefilled with
-//! the versions, platform, install method, and current error.
+//! the versions, platform, install method, and current error. The report
+//! is GitHub's template, in English: its fields leave the window as data.
+// i18n: migrated
 
 use super::HerdrWindow;
 use crate::{APP_VERSION, RELEASE_BUILD};
@@ -39,6 +41,7 @@ impl HerdrWindow {
         let daemon_version = self.live.daemon_version().or_else(|| {
             self.live
                 .missing_installation
+                // i18n: data
                 .then_some("none (not installed)")
         });
         let logs = self
@@ -90,7 +93,9 @@ pub(super) fn client_version(release: bool, commit: Option<&str>) -> String {
 fn report_issue_os() -> String {
     let os = sysinfo::System::long_os_version().unwrap_or_else(|| match std::env::consts::OS {
         "macos" => "macOS".to_owned(),
+        // i18n: data
         "linux" => "Linux".to_owned(),
+        // i18n: data
         "windows" => "Windows".to_owned(),
         other => other.to_owned(),
     });
@@ -140,7 +145,9 @@ impl Hardware<'_> {
             return parts.join(", ");
         }
         match (self.os, self.arch) {
+            // i18n: data
             ("macos", "arm64" | "aarch64") => "Apple Silicon".to_owned(),
+            // i18n: data
             ("macos", "x86_64") => "Intel".to_owned(),
             (_, arch) => arch.to_owned(),
         }
@@ -149,6 +156,7 @@ impl Hardware<'_> {
 
 pub(super) fn clean_cpu_brand(brand: &str) -> String {
     let trimmed = brand.trim();
+    // i18n: data
     if let Some(stripped) = trimmed.strip_prefix("Apple ") {
         return stripped.to_owned();
     }
@@ -158,6 +166,7 @@ pub(super) fn clean_cpu_brand(brand: &str) -> String {
         .replace("(tm)", "");
     let without_freq = if let Some((base, _)) = cleaned.split_once(" CPU @") {
         base
+    // i18n: data
     } else if let Some((base, _)) = cleaned.split_once(" 12-Core") {
         base
     } else {
@@ -250,6 +259,7 @@ pub(super) fn install_method(exe: &Path, release: bool) -> Option<&'static str> 
         .ancestors()
         .any(|p| p.extension().is_some_and(|ext| ext == "app"))
     {
+        // i18n: data
         return Some("Locally built app bundle");
     }
     let in_target =
@@ -262,6 +272,7 @@ pub(super) fn install_method(exe: &Path, release: bool) -> Option<&'static str> 
                         .file_name()
                         .is_some_and(|name| name == "debug" || name == "release")
             });
+    // i18n: data
     in_target.then_some("cargo run / just run")
 }
 

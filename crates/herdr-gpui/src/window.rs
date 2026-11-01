@@ -548,6 +548,7 @@ impl HerdrWindow {
                     return;
                 }
                 Ok(false) => {}
+                // i18n: data
                 Err(error) => eprintln!("App update restart failed: {error}"),
             }
             cx.notify();

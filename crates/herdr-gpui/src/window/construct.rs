@@ -1,5 +1,6 @@
 //! Building a window: its effects run in a fixed order before the fields,
 //! which stay sorted so parallel additions land on different lines.
+// i18n: migrated
 
 use super::{HerdrWindow, SurfaceSignal, function_keys, prefix};
 #[cfg(feature = "integration-test")]
@@ -182,6 +183,7 @@ impl HerdrWindow {
             editor_panes: Vec::new(),
             endpoints: vec![endpoint::Endpoint::new(
                 endpoint::LOCAL.into(),
+                // i18n: data
                 "Local".into(),
                 target,
                 true,
