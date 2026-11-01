@@ -6,6 +6,7 @@
 use crate::{
     HerdrWindow,
     i18n::{Localize, fl},
+    state::DialogResponse,
     state_file,
     teleport::{AgentKind, Host},
 };
@@ -288,9 +289,9 @@ impl Launch {
         self.endpoint == endpoint && boot == Some(self.boot.as_str())
     }
 
-    /// Whether `request` is the creation this landing waits on.
-    pub(crate) fn answers(&self, request: &str) -> bool {
-        self.request == request
+    /// The creation request this landing waits on.
+    pub(crate) fn request(&self) -> &str {
+        &self.request
     }
 }
 
@@ -338,11 +339,40 @@ impl HerdrWindow {
         Some(picker)
     }
 
-    /// Land the checkout the open dialog's request created.
+    /// Land the checkout the open dialog's request created. Its answer
+    /// also sits in the landing's own slot, which is released.
     pub(crate) fn land_created(&mut self, response: &serde_json::Value, cx: &mut Context<Self>) {
-        if let Some(launch) = self.landing_launch.take() {
-            self.land(launch, response, cx);
+        let Some(launch) = self.landing_launch.take() else {
+            return;
+        };
+        let _ = self.take_landing_response(launch.request());
+        self.land(launch, response, cx);
+    }
+
+    /// The answer to `request` in the connection's landing slot, once it has
+    /// arrived. Taken, so it is not cloned into every later update; a newer
+    /// request's slot is left alone.
+    pub(crate) fn take_landing_response(&mut self, request: &str) -> Option<DialogResponse> {
+        let Some((id, Some(result))) = &self.live.landing_response else {
+            return None;
+        };
+        if id != request {
+            return None;
         }
+        let result = result.clone();
+        self.live.landing_response = None;
+        if let Ok(mut inbox) = self.endpoints[self.selected_endpoint]
+            .connection
+            .inbox
+            .try_lock()
+            && inbox
+                .landing_response
+                .as_ref()
+                .is_some_and(|(id, _)| id == request)
+        {
+            inbox.landing_response = None;
+        }
+        Some(result)
     }
 
     /// Remember `launch`'s choice and start its agent in the created root

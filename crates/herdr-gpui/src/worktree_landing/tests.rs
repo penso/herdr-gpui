@@ -137,15 +137,14 @@ fn only_a_created_root_pane_is_landed_in() {
 }
 
 #[test]
-fn a_launch_answers_only_its_request_on_its_connection_and_boot() {
+fn a_launch_waits_on_its_request_on_its_connection_and_boot() {
     let launch = Launch::new(
         "create",
         (3, 7),
         "boot-a",
         &picker(Landing::Agent(AgentKind::Claude)),
     );
-    assert!(launch.answers("create"));
-    assert!(!launch.answers("list"));
+    assert_eq!(launch.request(), "create");
     assert!(launch.current((3, 7), Some("boot-a")));
     assert!(!launch.current((3, 8), Some("boot-a")));
     assert!(!launch.current((4, 7), Some("boot-a")));

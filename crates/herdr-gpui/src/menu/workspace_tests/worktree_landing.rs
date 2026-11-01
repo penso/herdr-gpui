@@ -85,20 +85,22 @@ fn closing_the_dialog_during_creation_still_lands(cx: &mut gpui::TestAppContext)
             );
             view.arm_landing("create", false);
             view.menu.creation = Some("create".into());
+            view.live.landing_response = Some(("create".into(), None));
             view.dismiss_menu(window, cx);
             assert!(view.menu.creation.is_none());
             assert!(view.landing_launch.is_some());
 
-            // Another request's answer is not this landing's.
+            // A newer dialog's request takes the dialog's slot, not the landing's.
             let created = serde_json::json!({"result":{"type":"worktree_created",
                 "workspace":{"workspace_id":"w6"},"root_pane":{"pane_id":"p9"}}});
-            view.live.dialog_response = Some(("other".into(), Some(Ok(created.clone()))));
+            view.live.dialog_response = Some(("list".into(), None));
             view.update_workspace_dialog(window, cx);
             assert!(view.landing_launch.is_some());
 
-            view.live.dialog_response = Some(("create".into(), Some(Ok(created))));
+            view.live.landing_response = Some(("create".into(), Some(Ok(created))));
             view.update_workspace_dialog(window, cx);
             assert!(view.landing_launch.is_none());
+            assert!(view.live.landing_response.is_none());
         });
         assert_eq!(Remembered::landing(cx), Landing::Terminal);
     });
@@ -123,7 +125,7 @@ fn a_stale_landing_is_dropped(cx: &mut gpui::TestAppContext) {
             view.endpoints[0].generation += 1;
             let created = serde_json::json!({"result":{"type":"worktree_created",
                 "workspace":{"workspace_id":"w6"},"root_pane":{"pane_id":"p9"}}});
-            view.live.dialog_response = Some(("create".into(), Some(Ok(created))));
+            view.live.landing_response = Some(("create".into(), Some(Ok(created))));
             view.update_workspace_dialog(window, cx);
             assert!(view.landing_launch.is_none());
         });

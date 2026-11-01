@@ -375,6 +375,29 @@ impl ConnectionBridge {
         Ok(id)
     }
 
+    /// [`Self::request_dialog`] for a `worktree.create` whose chosen landing
+    /// also waits on the answer, registered in both slots under one lock so
+    /// even an immediate answer reaches the landing.
+    pub(crate) fn request_creation(
+        &self,
+        boot_id: &str,
+        method: Method,
+        params: serde_json::Value,
+    ) -> crate::Result<String> {
+        let mut state = self
+            .inbox
+            .try_lock()
+            .map_err(|_| crate::Error::ConnectionBusy)?;
+        let id = self
+            .handle
+            .as_ref()
+            .ok_or(crate::Error::NotConnected)?
+            .request(boot_id, method, params)?;
+        state.dialog_response = Some((id.clone(), None));
+        state.landing_response = Some((id.clone(), None));
+        Ok(id)
+    }
+
     /// Queues the request a worktree script waits on, correlated in its own
     /// slot so a dialog opened meanwhile cannot take its answer.
     pub(crate) fn request_script(

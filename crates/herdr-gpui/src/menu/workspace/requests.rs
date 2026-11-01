@@ -167,6 +167,27 @@ impl HerdrWindow {
         self.apply_creation_response(result, window, cx);
     }
 
+    /// Send the dialog's `worktree.create` or `worktree.open`, correlated so
+    /// its answer reaches the dialog and, for a created checkout with a
+    /// landing to start, that landing too, even once the dialog has closed.
+    pub(in crate::menu) fn request_checkout(
+        &mut self,
+        boot: &str,
+        method: herdr_client::Method,
+        params: serde_json::Value,
+        opens: bool,
+    ) -> crate::Result<String> {
+        let connection = &self.endpoints[self.selected_endpoint].connection;
+        let lands = !opens && self.menu.landing.is_some();
+        let id = if lands {
+            connection.request_creation(boot, method, params)?
+        } else {
+            connection.request_dialog(boot, method, params)?
+        };
+        self.arm_landing(&id, opens);
+        Ok(id)
+    }
+
     /// Keep the open dialog's landing for creation request `request`. An
     /// opened checkout keeps whatever it runs, so it has none.
     pub(in crate::menu) fn arm_landing(&mut self, request: &str, opens: bool) {
@@ -209,14 +230,11 @@ impl HerdrWindow {
             self.landing_launch = None;
             return;
         }
-        let Some((id, Some(result))) = &self.live.dialog_response else {
+        let request = launch.request().to_owned();
+        let Some(answer) = self.take_landing_response(&request) else {
             return;
         };
-        if !launch.answers(id) {
-            return;
-        }
-        let answer = result.as_ref().ok().cloned();
-        if let (Some(launch), Some(response)) = (self.landing_launch.take(), answer) {
+        if let (Some(launch), Ok(response)) = (self.landing_launch.take(), answer) {
             self.land(launch, &response, cx);
         }
     }
@@ -238,7 +256,9 @@ impl HerdrWindow {
                 source.pending = None;
             }
             // Nothing was created, so the next submission arms its own landing.
-            this.landing_launch = None;
+            if let Some(launch) = this.landing_launch.take() {
+                let _ = this.take_landing_response(launch.request());
+            }
             this.menu.error = Some(error);
             cx.notify();
         };
@@ -501,10 +521,9 @@ impl HerdrWindow {
                 }
                 // Correlated, so the daemon's failure reaches the dialog and the
                 // created checkout can be focused once it exists.
-                let id = self.endpoints[self.selected_endpoint]
-                    .connection
-                    .request_dialog(&target.boot_id, method, params)?;
-                self.arm_landing(&id, action == WorkspaceAction::OpenWorktree);
+                let boot = target.boot_id.clone();
+                let opens = action == WorkspaceAction::OpenWorktree;
+                let id = self.request_checkout(&boot, method, params, opens)?;
                 self.menu.creation = Some(id);
                 self.menu.error = None;
                 if let Some(source) = &mut self.menu.worktree {

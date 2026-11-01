@@ -746,13 +746,11 @@ impl HerdrWindow {
                 .as_ref()
                 .ok_or(crate::Error::NoSnapshot)?;
             let (method, params) = pick_request(target, snapshot, pending)?;
-            self.endpoints[self.selected_endpoint]
-                .connection
-                .request_dialog(&target.boot_id, method, params)
+            let boot = target.boot_id.clone();
+            self.request_checkout(&boot, method, params, pending.opens())
         })();
         match result {
             Ok(id) => {
-                self.arm_landing(&id, pending.opens());
                 self.menu.creation = Some(id);
                 self.menu.error = None;
                 self.local_error = None;
