@@ -3,7 +3,11 @@
 //! its service reports, and links to the service's own pages.
 
 use super::{Access, KeychainGrants, Reading, model::Provider, service::Service, text, ui::Ui};
-use crate::{i18n::fl, menu::Page, window::HerdrWindow};
+use crate::{
+    i18n::{self, fl},
+    menu::Page,
+    window::HerdrWindow,
+};
 use gpui::{prelude::*, *};
 use std::time::{Instant, SystemTime};
 
@@ -383,7 +387,11 @@ fn setup(service: &dyn Service, ui: &Ui) -> AnyElement {
                 .gap(px(2.))
                 .text_size(ui.small())
                 .child(key)
-                .child(div().text_color(ui.muted()).child(setting.help))
+                .child(
+                    div()
+                        .text_color(ui.muted())
+                        .child(i18n::message(setting.message, &[])),
+                )
         }))
         .into_any_element()
 }

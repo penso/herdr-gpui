@@ -1,7 +1,7 @@
 //! The notes beside the diff: the composer for the line being noted or the
 //! note being edited, the notes, and Send, Copy, or Clear sent.
 use super::{PANEL_SHARE, Review};
-use crate::{HerdrWindow, browser::TabId, review::notes::Note};
+use crate::{HerdrWindow, browser::TabId, i18n::fl, review::notes::Note};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -72,9 +72,9 @@ impl HerdrWindow {
                         button(
                             "review-add",
                             if editing.is_some() {
-                                "Save note"
+                                fl!("review-save-note")
                             } else {
-                                "Add note"
+                                fl!("review-add-note")
                             }
                             .into(),
                             true,
@@ -115,7 +115,7 @@ impl HerdrWindow {
                         .flex_col()
                         .child(div().text_color(rgb(theme.muted)).truncate().child(
                             if note.sent.is_some() {
-                                format!("{} \u{b7} sent", note.place())
+                                fl!("review-note-sent", place = note.place())
                             } else {
                                 note.place()
                             },
@@ -189,7 +189,7 @@ impl HerdrWindow {
                             div()
                                 .p_2()
                                 .text_color(rgb(theme.muted))
-                                .child("Click a line or a file name to note what should change."),
+                                .child(fl!("review-notes-empty")),
                         )
                     }),
             )
@@ -214,9 +214,10 @@ impl HerdrWindow {
                                     .child(queued.label()),
                             )
                             .child(
-                                button("review-withdraw", "Withdraw".into(), true).on_click(
-                                    cx.listener(move |this, _, _, cx| this.withdraw_review(id, cx)),
-                                ),
+                                button("review-withdraw", fl!("review-withdraw").into(), true)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.withdraw_review(id, cx)
+                                    })),
                             )
                         })
                         .when(has_agent && queued.is_none(), |row| {
@@ -225,17 +226,19 @@ impl HerdrWindow {
                             ))
                         })
                         .when(has_notes, |row| {
-                            row.child(button("review-copy", "Copy".into(), !has_agent).on_click(
-                                cx.listener(move |this, _, _, cx| this.copy_review(id, cx)),
-                            ))
+                            row.child(
+                                button("review-copy", fl!("review-copy").into(), !has_agent)
+                                    .on_click(
+                                        cx.listener(move |this, _, _, cx| this.copy_review(id, cx)),
+                                    ),
+                            )
                         })
                         .when(any_sent, |row| {
                             row.child(
-                                button("review-clear-sent", "Clear sent".into(), false).on_click(
-                                    cx.listener(move |this, _, _, cx| {
+                                button("review-clear-sent", fl!("review-clear-sent").into(), false)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
                                         this.clear_sent_review_notes(id, cx)
-                                    }),
-                                ),
+                                    })),
                             )
                         }),
                 )

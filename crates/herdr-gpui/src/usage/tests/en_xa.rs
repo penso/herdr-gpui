@@ -135,8 +135,8 @@ fn readings() -> Vec<Reading> {
 }
 
 /// What the services report and the user named: services, accounts, the
-/// host, the named window, the balance's label, and each setting's key and
-/// help, which `herdr-usage` writes.
+/// host, the named window, the balance's label, and each setting's key,
+/// which `herdr-usage` writes.
 fn data(readings: &[Reading], host: &str) -> Vec<String> {
     let mut data: Vec<String> = vec![
         host.into(),
@@ -155,7 +155,6 @@ fn data(readings: &[Reading], host: &str) -> Vec<String> {
         data.push(meta.name.into());
         data.push(reading.provider.name().into());
         for setting in meta.settings {
-            data.push(setting.help.into());
             data.push(format!("[usage.providers.{}] {}", meta.id, setting.name));
         }
     }

@@ -22,16 +22,8 @@ pub(crate) struct V0;
 static META: Meta = Meta::new("v0", "v0")
     .dashboard("https://v0.app/settings/billing")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["V0_API_KEY"],
-            "A v0 Platform API key from https://v0.app/settings/keys.",
-        ),
-        Setting::new(
-            "scope",
-            &["V0_SCOPE"],
-            "Optional project ID or slug to read that scope's billing and rate limit.",
-        ),
+        Setting::new("api_key", &["V0_API_KEY"], "usage-v0-setting-api-key"),
+        Setting::new("scope", &["V0_SCOPE"], "usage-v0-setting-scope"),
     ]);
 
 impl Service for V0 {

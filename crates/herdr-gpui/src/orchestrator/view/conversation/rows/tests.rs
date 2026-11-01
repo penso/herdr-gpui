@@ -239,3 +239,31 @@ fn changes_replace_everything_between_past_the_edit_limit() {
         .collect();
     assert_eq!(changes(&old, &new), [(0..old.len(), 0..new.len())]);
 }
+
+#[test]
+fn bodies_are_parsed_again_in_a_new_language() {
+    use herdr_i18n::{Locale, Pseudo};
+    let comments = read(&[comment(
+        "alice",
+        CommentKind::Conversation,
+        "01",
+        "See <img src=\"https://x/y.png\">",
+    )]);
+    let body = |rows: &Rows| {
+        pieces(rows).into_iter().find_map(|piece| match piece {
+            Piece::Body { lines, line } => Some(lines[*line].text.clone()),
+            _ => None,
+        })
+    };
+    let mut rows = Rows::default();
+    crate::i18n::show(&Locale::FALLBACK);
+    rows.update(Some(&comments), Chrome::default());
+    assert_eq!(body(&rows).as_deref(), Some("See [image]"));
+    crate::i18n::show(&Pseudo::Accented.locale());
+    rows.update(Some(&comments), Chrome::default());
+    let accented = body(&rows);
+    let image = fl!("orchestrator-markdown-image");
+    crate::i18n::show(&Locale::FALLBACK);
+    assert!(herdr_i18n::pseudo::is_marked(&image), "{image}");
+    assert_eq!(accented, Some(format!("See {image}")));
+}

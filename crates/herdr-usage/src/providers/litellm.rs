@@ -26,15 +26,12 @@ static META: Meta = Meta::new("litellm", "LiteLLM").settings(&[
     Setting::new(
         "api_key",
         &["LITELLM_API_KEY"],
-        "A LiteLLM virtual key (sk-…) issued by your LiteLLM proxy, e.g. from its admin \
-             UI under Virtual Keys. A master key is not needed.",
+        "usage-litellm-setting-api-key",
     ),
     Setting::new(
         "base_url",
         &["LITELLM_BASE_URL"],
-        "The LiteLLM proxy's URL, with or without /v1, e.g. \
-             https://litellm.example.com. It must be HTTPS unless it is on localhost, a \
-             private network, or a .local host.",
+        "usage-litellm-setting-base-url",
     ),
 ]);
 

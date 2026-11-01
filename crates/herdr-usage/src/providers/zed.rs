@@ -41,14 +41,7 @@ pub(crate) struct Zed;
 static META: Meta = Meta::new("zed", "Zed")
     .dashboard("https://zed.dev/account")
     .status_page("https://status.zed.dev")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "The zed.dev browser session, for token spend. Sign in at https://zed.dev in your \
-         browser (signing in inside the editor is not enough), open Developer Tools → \
-         Application → Cookies → https://zed.dev, copy the zed.session cookie, and paste it \
-         as \"zed.session=value\".",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-zed-setting-cookie")]);
 
 impl Service for Zed {
     fn meta(&self) -> &'static Meta {

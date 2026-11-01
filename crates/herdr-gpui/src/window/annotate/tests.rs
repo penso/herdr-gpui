@@ -8,6 +8,7 @@ use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
 use std::sync::Arc;
 
 mod delayed_origin;
+mod en_xa;
 mod host_batches;
 mod multi_agent_fallbacks;
 mod offer_safety;

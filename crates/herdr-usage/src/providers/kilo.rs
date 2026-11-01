@@ -32,9 +32,7 @@ static META: Meta = Meta::new("kilo", "Kilo")
     .settings(&[Setting::new(
         "api_key",
         &["KILO_API_KEY"],
-        "A Kilo API key from https://app.kilo.ai (Profile → API keys). Without one, the \
-         Kilo CLI's sign-in in ~/.local/share/kilo/auth.json is used; run `kilo auth \
-         login` to create it.",
+        "usage-kilo-setting-api-key",
     )]);
 
 impl Service for Kilo {

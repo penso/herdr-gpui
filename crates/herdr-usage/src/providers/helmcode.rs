@@ -47,22 +47,8 @@ pub(crate) struct Helmcode;
 static META: Meta = Meta::new("helmcode", "Helmcode")
     .dashboard("https://cloud.helmcode.com/dashboard")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "The dashboard session. Sign in to https://cloud.helmcode.com/dashboard (or \
-             https://cloud.nan.builders/dashboard for NaN Builders), open Developer Tools > \
-             Network, reload, and copy the Cookie request header of a request to \
-             cloud-api.helmcode.com (or cloud-api.nan.builders). Developer Tools > \
-             Application > Cookies lists the same cookies. Paste it as \
-             \"name=value; name2=value2\".",
-        ),
-        Setting::new(
-            "tenant",
-            &[],
-            "Which dashboard a pasted cookie belongs to: \"helmcode\" (default) or \
-             \"nanBuilders\".",
-        ),
+        Setting::new("cookie", &[], "usage-helmcode-setting-cookie"),
+        Setting::new("tenant", &[], "usage-helmcode-setting-tenant"),
     ]);
 
 impl Service for Helmcode {

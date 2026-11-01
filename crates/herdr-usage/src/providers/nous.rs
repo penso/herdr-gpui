@@ -38,15 +38,12 @@ static META: Meta = Meta::new("nous", "Nous Portal")
         Setting::new(
             "token",
             &["NOUS_PORTAL_ACCESS_TOKEN"],
-            "A Nous Portal OAuth access token, used instead of Hermes Agent's login in \
-             ~/.hermes/auth.json (sign in with `hermes auth add nous`). It lasts about an \
-             hour; portal API keys are not accepted.",
+            "usage-nous-setting-token",
         ),
         Setting::new(
             "base_url",
             &["NOUS_PORTAL_BASE_URL", "HERMES_PORTAL_BASE_URL"],
-            "An HTTPS portal origin such as https://portal.nousresearch.com, for a preview \
-             deployment. Plain HTTP is refused.",
+            "usage-nous-setting-base-url",
         ),
     ]);
 

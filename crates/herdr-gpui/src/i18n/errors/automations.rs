@@ -13,6 +13,7 @@ impl Localize for Error {
                 host = host.as_str()
             ),
             Self::Build(error) => error.localize(),
+            Self::Failed => fl!("error-automations-failed"),
             Self::Json(_) => fl!("error-automations-json"),
             Self::Missing => fl!("error-automations-missing"),
             Self::NoBuild { platform } => {
@@ -37,6 +38,7 @@ impl Localize for Error {
             }
             Self::UnknownVersion => fl!("error-automations-unknown-version"),
             Self::UnsupportedHost => fl!("error-automations-unsupported-host"),
+            Self::Version(output) => fl!("error-automations-version", output = output.as_str()),
             // keep-sorted end
         }
     }

@@ -24,8 +24,7 @@ static META: Meta = Meta::new("zenmux", "ZenMux")
     .settings(&[Setting::new(
         "api_key",
         &["ZENMUX_MANAGEMENT_API_KEY"],
-        "A Management API key created at https://zenmux.ai/platform/management. \
-         Normal inference API keys are rejected by the usage endpoints.",
+        "usage-zenmux-setting-api-key",
     )]);
 
 impl Service for Zenmux {

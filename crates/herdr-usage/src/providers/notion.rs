@@ -42,21 +42,8 @@ static META: Meta = Meta::new("notion", "Notion AI")
     .dashboard("https://app.notion.com")
     .status_page("https://status.notion.so")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "Your Notion session cookie. Sign in at https://app.notion.com, open Developer \
-             Tools > Application > Cookies for https://app.notion.com (or notion.so), copy \
-             the token_v2 cookie and paste it as \"token_v2=value\" (add \
-             \"; notion_user_id=value\" for accounts signed in to several users).",
-        ),
-        Setting::new(
-            "workspace_id",
-            &[],
-            "The workspace (space) ID to read, dashed or not, for accounts in several \
-             workspaces. Defaults to the first Business or Enterprise workspace. It is the \
-             x-notion-space-id header of requests in Developer Tools > Network.",
-        ),
+        Setting::new("cookie", &[], "usage-notion-setting-cookie"),
+        Setting::new("workspace_id", &[], "usage-notion-setting-workspace-id"),
     ]);
 
 impl Service for Notion {

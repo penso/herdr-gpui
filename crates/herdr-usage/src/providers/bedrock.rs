@@ -34,26 +34,16 @@ static META: Meta = Meta::new("bedrock", "AWS Bedrock")
     .dashboard("https://console.aws.amazon.com/bedrock")
     .status_page("https://health.aws.amazon.com/health/status")
     .settings(&[
-        Setting::new(
-            "profile",
-            &[],
-            "The AWS CLI profile to read Cost Explorer with, from ~/.aws/config on the \
-             selected host (run `aws sso login --profile <name>` first for SSO). Use \
-             \"default\" for the default credentials. The identity needs \
-             ce:GetCostAndUsage. AWS bills every Cost Explorer request, so this provider \
-             runs only once profile or budget is set here.",
-        ),
+        Setting::new("profile", &[], "usage-bedrock-setting-profile"),
         Setting::new(
             "budget",
             &["CODEXBAR_BEDROCK_BUDGET"],
-            "Optional monthly Bedrock budget in US dollars, e.g. 250, shown as a monthly \
-             limit. It does not cap AWS charges.",
+            "usage-bedrock-setting-budget",
         ),
         Setting::new(
             "aws_cli",
             &["AWS_CLI_PATH"],
-            "Optional path to the AWS CLI v2 on the selected host when `aws` is not on \
-             its PATH, e.g. /opt/homebrew/bin/aws.",
+            "usage-bedrock-setting-aws-cli",
         ),
     ]);
 

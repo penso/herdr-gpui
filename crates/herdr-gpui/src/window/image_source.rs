@@ -1,4 +1,5 @@
 //! Disk-free source recognition; opaque image bytes are prepared off the UI thread.
+// i18n: migrated
 
 use crate::{Error, Result};
 use gpui::{Image, ImageFormat};
@@ -34,6 +35,7 @@ pub(crate) struct PreparedImage {
 
 impl std::fmt::Debug for PreparedImage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // i18n: data
         f.debug_struct("PreparedImage")
             .field("extension", &self.extension)
             .field("byte_count", &self.bytes.len())
@@ -84,6 +86,7 @@ pub(super) fn temporary_drag_image(paths: &[PathBuf]) -> Option<Source> {
             && directory
                 .parent()
                 .and_then(Path::file_name)
+                // i18n: data
                 .is_some_and(|name| name == "TemporaryItems")
     });
     if !temporary {

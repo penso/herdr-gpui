@@ -24,14 +24,12 @@ static META: Meta = Meta::new("llmproxy", "LLM Proxy").settings(&[
     Setting::new(
         "api_key",
         &["LLM_PROXY_API_KEY"],
-        "The API key your LLM-API-Key-Proxy accepts (its PROXY_API_KEY), sent as a \
-             bearer token to base_url.",
+        "usage-llmproxy-setting-api-key",
     ),
     Setting::new(
         "base_url",
         &["LLM_PROXY_BASE_URL"],
-        "The proxy's URL, with or without /v1, e.g. https://proxy.example.com. It must \
-             be HTTPS unless it is on localhost, a private network, or a .local host.",
+        "usage-llmproxy-setting-base-url",
     ),
 ]);
 

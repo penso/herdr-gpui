@@ -28,11 +28,7 @@ static META: Meta = Meta::new("sakana", "Sakana AI")
     .settings(&[Setting::new(
         "cookie",
         &["SAKANA_COOKIE"],
-        "Sign in to https://console.sakana.ai, open Developer Tools > Application > \
-         Cookies for https://console.sakana.ai, and copy every cookie there (the \
-         sign-in session cookies are required). Paste them as \"name=value; \
-         name2=value2\"; the Cookie header of a request to console.sakana.ai/billing \
-         in the Network tab also works.",
+        "usage-sakana-setting-cookie",
     )]);
 
 impl Service for Sakana {

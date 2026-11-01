@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// i18n: data
 pub(crate) const NAME: &str = "Omarchy";
 
 /// Where Omarchy keeps the applied theme under the home directory: current

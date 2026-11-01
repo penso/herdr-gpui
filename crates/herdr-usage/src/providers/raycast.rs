@@ -26,13 +26,7 @@ pub(crate) struct Raycast;
 
 static META: Meta = Meta::new("raycast", "Raycast")
     .dashboard("https://www.raycast.com/settings")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Sign in at https://www.raycast.com/settings, open Developer Tools > Application > \
-         Cookies > https://www.raycast.com, and copy __raycast_session (and csrf_token when \
-         present) as one \"__raycast_session=value; csrf_token=value\" header.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-raycast-setting-cookie")]);
 
 impl Service for Raycast {
     fn meta(&self) -> &'static Meta {

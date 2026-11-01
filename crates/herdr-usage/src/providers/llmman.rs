@@ -36,18 +36,11 @@ const MODELS: usize = 24;
 pub(crate) struct Llmman;
 
 static META: Meta = Meta::new("llmman", "llmman").settings(&[
-    Setting::new(
-        "base_url",
-        &[],
-        "The llmman serve address, when not http://127.0.0.1:17434. A host without a \
-             scheme uses HTTP on port 17434, e.g. localhost:18000. Plain HTTP is allowed \
-             only for loopback, private-network, and .local hosts; others need HTTPS. \
-             Without it, LLMMAN_HOST on the probed host is used when set.",
-    ),
+    Setting::new("base_url", &[], "usage-llmman-setting-base-url"),
     Setting::new(
         "api_key",
         &["LLMMAN_API_KEY"],
-        "Only when the daemon was started with LLMMAN_API_KEYS: one of those keys.",
+        "usage-llmman-setting-api-key",
     ),
 ]);
 

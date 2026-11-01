@@ -35,18 +35,8 @@ static META: Meta = Meta::new("groq", "Groq")
     .dashboard("https://console.groq.com/dashboard/usage")
     .status_page("https://status.groq.com")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["GROQ_API_KEY"],
-            "A GroqCloud Enterprise API key from https://console.groq.com/keys. Only \
-             Enterprise organizations can read Prometheus metrics.",
-        ),
-        Setting::new(
-            "base_url",
-            &["GROQ_API_URL"],
-            "Optional HTTPS API base URL for a private gateway. Defaults to \
-             https://api.groq.com/v1.",
-        ),
+        Setting::new("api_key", &["GROQ_API_KEY"], "usage-groq-setting-api-key"),
+        Setting::new("base_url", &["GROQ_API_URL"], "usage-groq-setting-base-url"),
     ]);
 
 impl Service for Groq {
