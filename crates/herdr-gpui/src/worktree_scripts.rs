@@ -8,12 +8,17 @@
 //! [`launch`]), never in the background, and only once the user has reviewed
 //! and trusted that exact file for that repository on that host.
 //!
+//! Before a setup reads its checkout's file, the ignored files the main
+//! checkout's `.worktreeinclude` names are copied in (see [`include`]), so a
+//! personal, ignored `.herdr/worktree.toml` reaches every new worktree.
+//!
 //! One script starts at a time. Its job is fenced by the selection epoch and
 //! connection generation it began under, like a menu action, so a reply from
 //! a replaced connection never opens a tab or types into one.
 
 mod config;
 mod error;
+mod include;
 mod launch;
 mod trust;
 
@@ -197,7 +202,7 @@ impl HerdrWindow {
         let Some(job) = &self.worktree_script else {
             return;
         };
-        let Some(checkout) = job.launch.checkout.as_ref().map(|c| c.path.clone()) else {
+        let Some(checkout) = job.launch.checkout.clone() else {
             return;
         };
         let target = self.endpoints[self.selected_endpoint]
@@ -206,9 +211,14 @@ impl HerdrWindow {
             .clone();
         let token = job.cancel.clone();
         let cancel = job.cancel.clone();
-        let read = cx
-            .background_executor()
-            .spawn(async move { config::read(&target, &checkout, &cancel) });
+        // The copy comes first, so a `.herdr/worktree.toml` it brings is read.
+        let setup = job.launch.kind == ScriptKind::Setup;
+        let read = cx.background_executor().spawn(async move {
+            if setup {
+                include::copy(&target, &checkout)?;
+            }
+            config::read(&target, &checkout.path, &cancel)
+        });
         cx.spawn(async move |this, cx| {
             let result = read.await;
             this.update(cx, |this, cx| {
