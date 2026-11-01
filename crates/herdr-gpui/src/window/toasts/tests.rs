@@ -10,6 +10,7 @@ mod described;
 mod leaving;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod local_peer_warning;
+mod mirrored;
 
 #[gpui::test]
 fn targeted_previews_use_only_current_snapshot_ids(cx: &mut TestAppContext) {

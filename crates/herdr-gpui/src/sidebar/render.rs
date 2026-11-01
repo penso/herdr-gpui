@@ -25,6 +25,7 @@ use gpui::{prelude::*, *};
 
 mod agent_rows;
 mod device_tree;
+mod edges;
 mod header;
 mod nested_agents;
 
@@ -802,63 +803,30 @@ impl HerdrWindow {
                     ),
             )
             .when(agents_panel, |sidebar| {
-                sidebar
-                    .child(
-                        div()
-                            .id("sidebar-split-resize")
-                            .debug_selector(|| "sidebar-split-resize".into())
-                            .h(px(6.))
-                            .flex_none()
-                            .cursor(CursorStyle::ResizeUpDown)
-                            .border_t_1()
-                            .border_color(rgb(theme.active))
-                            .hover(|s| s.bg(rgba(crate::panel_resize::RESIZE_HOVER)))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                                    cx.stop_propagation();
-                                    this.sidebar_split_modified = true;
-                                    if event.click_count == 2 {
-                                        this.sidebar_drag = None;
-                                        this.sidebar_split = None;
-                                        this.save_chrome();
-                                    } else {
-                                        this.sidebar_drag = Some(SidebarDrag::Split);
-                                    }
-                                    cx.notify();
-                                }),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .debug_selector(|| "agents-section".into())
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .map(|mut section| {
-                                section.style().flex_grow = Some(1. - split);
-                                section
-                            })
-                            .min_h_0()
-                            .overflow_hidden()
-                            // A plugin view on any listed host filters the
-                            // rows, so the header stays to say so.
-                            .when(self.config.show_agents_header || filtered, |section| {
-                                section.child(
-                                    header(
-                                        "agents",
-                                        &fl!("sidebar-header-agents"),
-                                        font,
-                                        theme,
-                                        look,
-                                    )
+                sidebar.child(self.sidebar_split_edge(theme, cx)).child(
+                    div()
+                        .debug_selector(|| "agents-section".into())
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .map(|mut section| {
+                            section.style().flex_grow = Some(1. - split);
+                            section
+                        })
+                        .min_h_0()
+                        .overflow_hidden()
+                        // A plugin view on any listed host filters the
+                        // rows, so the header stays to say so.
+                        .when(self.config.show_agents_header || filtered, |section| {
+                            section.child(
+                                header("agents", &fl!("sidebar-header-agents"), font, theme, look)
                                     .justify_between()
                                     .child(agents_sort(self, cx)),
-                                )
-                            })
-                            .child(agents)
-                            .children(self.core_sidebar_rows(cx)),
-                    )
+                            )
+                        })
+                        .child(agents)
+                        .children(self.core_sidebar_rows(cx)),
+                )
             })
             .children(self.render_mod_sidebar_sections(cx))
             .map(|sidebar| {
@@ -868,36 +836,7 @@ impl HerdrWindow {
                     sidebar.child(self.render_sessions_anchor())
                 }
             })
-            .child(
-                div()
-                    .id("sidebar-resize")
-                    .debug_selector(|| "sidebar-resize".into())
-                    .absolute()
-                    .inset_e(px(0.))
-                    .top_0()
-                    .h_full()
-                    .w(px(6.))
-                    .cursor(CursorStyle::ResizeLeftRight)
-                    .hover(|s| s.bg(rgba(crate::panel_resize::RESIZE_HOVER)))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.sidebar_modified = true;
-                            if event.click_count == 2 {
-                                this.sidebar_drag = None;
-                                this.sidebar_width = None;
-                                this.save_sidebar_width();
-                            } else {
-                                this.sidebar_drag = Some(SidebarDrag::Width {
-                                    start: f32::from(event.position.x),
-                                    width,
-                                });
-                            }
-                            cx.notify();
-                        }),
-                    ),
-            )
+            .child(self.sidebar_width_edge(width, cx))
             .child(
                 canvas(
                     |_, _, _| (),

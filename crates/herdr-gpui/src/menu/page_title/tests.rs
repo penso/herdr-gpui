@@ -76,7 +76,6 @@ fn every_page_title_is_a_message_under_en_xa() {
             Page::RenamePane,
             Page::RenameTab,
             Page::RevokeDevice,
-            Page::Sessions,
             Page::Tab,
             Page::Teleport,
             Page::Themes,

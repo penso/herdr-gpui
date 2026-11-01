@@ -1,15 +1,9 @@
-# The sessions popup: this machine's Herdr sessions and each saved device's,
-# and adding or deleting one. Device and session names are shown as they are.
+# The sessions a device unfolds in the device picker: this machine's Herdr
+# sessions or a saved device's, and adding or deleting one. Device and session names are shown as they are.
 
 # Whether a session's daemon runs.
 sessions-menu-running = running
 sessions-menu-stopped = stopped
-# Section headings, in capitals. $device is the device's name, in capitals.
-sessions-menu-current-device = { $device } · CURRENT DEVICE
-sessions-menu-local = LOCAL SESSIONS
-sessions-menu-remote-devices = REMOTE DEVICES
-sessions-menu-other-devices = OTHER DEVICES
-sessions-menu-no-devices = No saved devices. Add one from the device picker.
 sessions-menu-no-device-sessions = No sessions on this device.
 sessions-menu-disabled = Disabled
 sessions-menu-checking = Checking…

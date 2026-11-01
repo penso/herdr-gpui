@@ -3,7 +3,11 @@
 //! the line: the rest of it lies over the groups, inside their frames, and
 //! over the pages they show on macOS.
 
-use crate::{HerdrWindow, browser::Shown};
+use crate::{
+    HerdrWindow,
+    browser::Shown,
+    panel_resize::{GRIP_THICKNESS, GripHold},
+};
 use gpui::{prelude::*, *};
 
 /// How wide a divider's line draws.
@@ -69,14 +73,42 @@ impl Reach {
 
     /// The parts of the grips that lie over the `index`th group, for its
     /// frame, which must be `relative()`.
-    pub(super) fn grips(self, index: usize) -> impl Iterator<Item = Stateful<Div>> {
+    pub(super) fn grips(
+        self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Vec<Stateful<Div>> {
         let left = index
             .checked_sub(1)
             .filter(|_| self.left > 0.)
-            .map(|divider| grip(divider, "right", self.left).left_0());
-        let right = (self.right > 0.).then(|| grip(index, "left", self.right).right_0());
-        left.into_iter().chain(right)
+            .map(|divider| {
+                hold(divider, window, cx).listen(
+                    Piece::Right as u8,
+                    grip(divider, "right", self.left).left_0(),
+                )
+            });
+        let right = (self.right > 0.).then(|| {
+            hold(index, window, cx)
+                .listen(Piece::Left as u8, grip(index, "left", self.right).right_0())
+        });
+        left.into_iter().chain(right).collect()
     }
+}
+
+/// The pieces a divider is drawn in, which share one pill on its line.
+enum Piece {
+    /// The grip's part over the group on the line's left.
+    Left,
+    Line,
+    /// The grip's part over the group on the line's right.
+    Right,
+}
+
+/// The pointer's hold on the `divider`th divider, which its line and both
+/// parts of its grip share, though they are drawn in different groups.
+fn hold(divider: usize, window: &mut Window, cx: &mut App) -> GripHold {
+    GripHold::keyed(("group-divider", divider), window, cx)
 }
 
 /// The part of the `divider`th divider's grip on one `side` of its line.
@@ -104,6 +136,7 @@ impl HerdrWindow {
     pub(in crate::window) fn render_groups(
         &mut self,
         groups: Vec<AnyElement>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         // Real groups keep their layout index for the dividers between them;
@@ -145,16 +178,36 @@ impl HerdrWindow {
             // A divider sits between two real groups; a folding one draws its
             // own edge.
             if let (Some(index), Some((Some(_), _))) = (index, children.peek()) {
-                row = row.child(
-                    div()
-                        .id(("group-divider", index))
-                        .debug_selector(move || format!("group-divider-{index}"))
-                        .flex_none()
-                        .w(px(LINE))
-                        .bg(rgb(self.theme.active))
-                        .cursor(CursorStyle::ResizeLeftRight)
-                        .on_drag(DividerDrag(index), |_, _, _, cx| cx.new(|_| EmptyView)),
-                );
+                let hold = hold(index, window, cx);
+                let pill = hold.pill(Axis::Horizontal, false, window, cx);
+                let line = div()
+                    .id(("group-divider", index))
+                    .debug_selector(move || format!("group-divider-{index}"))
+                    .relative()
+                    .flex_none()
+                    .w(px(LINE))
+                    .bg(rgb(self.theme.active))
+                    .cursor(CursorStyle::ResizeLeftRight)
+                    .on_drag(DividerDrag(index), |_, _, _, cx| cx.new(|_| EmptyView));
+                row = row.child(hold.listen(Piece::Line as u8, line).when_some(
+                    pill,
+                    |line, pill| {
+                        // Wider than the line, the pill overhangs both
+                        // groups; deferred, the group on the right does
+                        // not paint over its half.
+                        line.child(deferred(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .h_full()
+                                .left(px((LINE - GRIP_THICKNESS) / 2.))
+                                .w(px(GRIP_THICKNESS))
+                                .flex()
+                                .items_center()
+                                .child(pill),
+                        ))
+                    },
+                ));
             }
         }
         row.into_any_element()

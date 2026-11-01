@@ -8,7 +8,7 @@ use super::endpoint_error;
 use super::{Page, WorkspaceMenuAction, WorkspaceTarget, git, github};
 use crate::dialog_input::DialogInput;
 use crate::i18n::fl;
-use gpui::{App, Entity, FocusHandle, Pixels, Point, ScrollHandle, Subscription};
+use gpui::{App, Bounds, Entity, FocusHandle, Pixels, Point, ScrollHandle, Subscription};
 use herdr_client::protocol::ClientShellSnapshot;
 
 /// What an open menu covers, as its last frame laid it out. Windows pages
@@ -23,14 +23,14 @@ pub(crate) enum Cover {
     /// A dialog dims the whole window.
     All,
     /// A popover or menu covers only its own panel.
-    Panel(gpui::Bounds<Pixels>),
+    Panel(Bounds<Pixels>),
 }
 
 #[cfg(any(windows, test))]
 impl Cover {
     /// Whether a page drawn at `page` would hide this menu. Before the menu
     /// is laid out nothing is, so pages keep showing for that one frame.
-    pub(crate) fn covers(self, page: Option<gpui::Bounds<Pixels>>) -> bool {
+    pub(crate) fn covers(self, page: Option<Bounds<Pixels>>) -> bool {
         match self {
             Self::Unknown => false,
             Self::All => true,
@@ -71,6 +71,23 @@ pub(crate) struct MenuState {
     /// The saved distribution the removal confirmation names.
     pub(super) wsl_remove: Option<String>,
     pub(super) session_edit: Option<super::sessions::Edit>,
+    /// The device whose sessions the picker shows under it, by endpoint id so
+    /// a catalog change cannot unfold another one.
+    pub(crate) unfolded_device: Option<String>,
+    /// How tall the unfolded sessions were last frame, which their unfolding
+    /// grows towards.
+    pub(super) unfolded_height: std::rc::Rc<std::cell::Cell<Pixels>>,
+    /// Where each line in the unfolded block last painted, so the keys can
+    /// scroll to one session inside it rather than to the block.
+    pub(super) unfolded_rows: std::rc::Rc<std::cell::RefCell<Vec<Bounds<Pixels>>>>,
+    /// When a device last unfolded, so the list follows its sessions into
+    /// view while they open.
+    pub(super) unfolded_since: Option<std::time::Instant>,
+    /// How open the unfolded sessions already were when they began to open,
+    /// as when they reverse a fold that had not finished.
+    pub(super) unfold_from: f32,
+    /// The sessions still closing under the device that folded them.
+    pub(super) folding: Option<super::devices::picker::Folding>,
     /// The folder the open-checkout question is about.
     pub(super) open_checkout: Option<std::path::PathBuf>,
     /// The address the open-link question is about.
@@ -93,8 +110,9 @@ pub(crate) struct MenuState {
     /// A phone's request for another machine, waiting for the user.
     pub(crate) remote_host_ask: Option<crate::remote::links::ask::HostAsk>,
     pub(super) devices_scroll: ScrollHandle,
-    /// The sessions list scrolls its own way; the two popups never share one.
-    pub(crate) sessions_scroll: ScrollHandle,
+    /// The picker line to scroll into view once the list has been laid out:
+    /// on the frame it first appears, GPUI drops a scroll request unapplied.
+    pub(super) devices_reveal: std::cell::Cell<Option<usize>>,
     pub(crate) usage_scroll: ScrollHandle,
     // Selection epoch and connection generation fence captured modal actions.
     pub(super) endpoint_target: (u64, u64),
@@ -341,6 +359,12 @@ impl MenuState {
             wsl_setup: None,
             wsl_remove: None,
             session_edit: None,
+            unfolded_device: None,
+            unfolded_height: Default::default(),
+            unfolded_rows: Default::default(),
+            unfolded_since: None,
+            unfold_from: 0.,
+            folding: None,
             open_checkout: None,
             open_link: None,
             #[cfg(feature = "cloud")]
@@ -353,7 +377,7 @@ impl MenuState {
             remote_revoke: None,
             remote_host_ask: None,
             devices_scroll: ScrollHandle::new(),
-            sessions_scroll: ScrollHandle::new(),
+            devices_reveal: std::cell::Cell::new(None),
             usage_scroll: ScrollHandle::new(),
             endpoint_target: (0, 0),
             anchor: Point::default(),
@@ -422,6 +446,8 @@ impl MenuState {
         self.wsl_setup = None;
         self.wsl_remove = None;
         self.session_edit = None;
+        self.unfolded_device = None;
+        self.folding = None;
         self.open_checkout = None;
         self.open_link = None;
         #[cfg(feature = "cloud")]
@@ -437,7 +463,7 @@ impl MenuState {
         self.remote_revoke = None;
         self.remote_host_ask = None;
         self.devices_scroll.set_offset(Point::default());
-        self.sessions_scroll.set_offset(Point::default());
+        self.devices_reveal.set(None);
         self.usage_scroll.set_offset(Point::default());
         self.opening_right_click = false;
         self.tab = None;

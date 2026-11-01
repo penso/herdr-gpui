@@ -3,7 +3,11 @@
 //! so every client of that daemon stops showing it.
 // i18n: migrated
 use super::{HerdrWindow, render::Notice};
-use crate::{i18n::fl, notifications::safe_text, state::AnnouncementDismissal};
+use crate::{
+    i18n::{Localize, fl},
+    notifications::safe_text,
+    state::AnnouncementDismissal,
+};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 
@@ -121,7 +125,7 @@ impl HerdrWindow {
         let Ok(mut inbox) = endpoint.connection.inbox.try_lock() else {
             self.local_error = Some(fl!(
                 "window-dismiss-announcement-failed",
-                error = crate::Error::ConnectionBusy.to_string()
+                error = crate::Error::ConnectionBusy.localize()
             ));
             cx.notify();
             return;
@@ -156,7 +160,7 @@ impl HerdrWindow {
                     drop(inbox);
                     self.local_error = Some(fl!(
                         "window-dismiss-announcement-failed",
-                        error = error.to_string()
+                        error = error.localize()
                     ));
                     cx.notify();
                     return;

@@ -46,7 +46,7 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn management_target(&self, row: &Row) -> Option<Target> {
+    pub(in crate::menu) fn management_target(&self, row: &Row) -> Option<Target> {
         match row {
             Row::Local(_) if self.local_management_available() => Some(Target::Local),
             Row::Device { id, .. } => self
@@ -153,7 +153,7 @@ impl HerdrWindow {
         cx.notify();
     }
 
-    pub(super) fn confirm_session_delete(
+    pub(in crate::menu) fn confirm_session_delete(
         &mut self,
         row: Row,
         painted_target: Option<Target>,
@@ -261,9 +261,7 @@ impl HerdrWindow {
                 // Retire old inboxes before stopping the daemon, so this window
                 // cannot reconnect to and recreate the name being deleted.
                 if self.retarget_session_for_deletion(&connection) {
-                    self.reconnect(cx);
-                    self.menu.page = Some(Page::Sessions);
-                    self.menu.selected = Some(0);
+                    self.keep_picker_open(|this| this.reconnect(cx));
                 }
                 let background = cx.background_executor().spawn(async move {
                     match target {
@@ -307,6 +305,17 @@ impl HerdrWindow {
         }
     }
 
+    /// Runs `reset`, which closes the menu, and opens the picker again as it
+    /// was: the device stays unfolded, so a deletion's progress and any error,
+    /// drawn only under it, stay in view.
+    pub(super) fn keep_picker_open(&mut self, reset: impl FnOnce(&mut Self)) {
+        let unfolded = self.menu.unfolded_device.take();
+        reset(self);
+        self.menu.page = Some(Page::Devices);
+        self.menu.unfolded_device = unfolded;
+        self.menu.selected = Some(0);
+    }
+
     pub(super) fn session_edit_key(
         &mut self,
         event: &KeyDownEvent,
@@ -324,7 +333,7 @@ impl HerdrWindow {
         }
     }
 
-    pub(super) fn render_session_edit(&self, cx: &mut Context<Self>) -> Div {
+    pub(in crate::menu) fn render_session_edit(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let mut view = div()
             .debug_selector(|| "session-modal".into())

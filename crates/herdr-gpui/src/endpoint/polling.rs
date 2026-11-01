@@ -306,7 +306,8 @@ impl HerdrWindow {
     /// page starts one; results are cached between opens.
     pub(crate) fn poll_sessions(&mut self, cx: &mut Context<Self>) {
         let development = self.local_development();
-        let open = self.menu.page == Some(crate::menu::Page::Sessions);
+        let open = self.menu.page == Some(crate::menu::Page::Devices)
+            && self.menu.unfolded_device.is_some();
         let now = Instant::now();
         let targets = self.probe_targets();
         self.sessions.devices.forget_replaced(&targets);
@@ -318,10 +319,16 @@ impl HerdrWindow {
             }
             return;
         }
-        let mut changed = self.sessions.poll(development, open, now);
-        if self.sessions.devices.poll(&targets, open, now) {
-            changed = true;
-        }
+        // New answers add or take away rows under the unfolded device; the
+        // keys stay on the row they were on, not on its old place.
+        // Only the unfolded device shows its sessions, so only it is asked.
+        let unfolded = self.menu.unfolded_device.clone().filter(|_| open);
+        let local = unfolded.as_deref() == Some(self.endpoints[0].id.as_str());
+        let changed = self.keep_picker_selection(|this| {
+            let scanned = this.sessions.poll(development, local, now);
+            let wanted = unfolded.as_deref().filter(|_| !local);
+            this.sessions.devices.poll(&targets, wanted, now) || scanned
+        });
         if changed {
             cx.notify();
         }

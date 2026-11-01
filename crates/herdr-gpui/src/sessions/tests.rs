@@ -149,7 +149,7 @@ fn mutation_refresh_rejects_an_older_remote_answer() {
         DeviceScan::Sessions(vec![]),
     )])
     .unwrap();
-    devices.poll_with(&targets, false, now(), |_| unreachable!("closed"));
+    devices.poll_with(&targets, false, None, now(), |_| unreachable!("closed"));
     assert!(devices.answers.is_empty());
     assert!(stale(&devices.asked, &targets[0].0, &targets[0].1, now()));
 }
@@ -243,7 +243,7 @@ fn settle(devices: &mut Devices, targets: &[(String, RemoteHost)]) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while devices.pending.is_some() {
         assert!(Instant::now() < deadline, "the device pass never reported");
-        devices.poll_with(targets, false, Instant::now(), |_| {
+        devices.poll_with(targets, false, None, Instant::now(), |_| {
             unreachable!("a closed popup starts no pass")
         });
         std::thread::sleep(Duration::from_millis(5));
@@ -268,7 +268,7 @@ fn recorder() -> (
 fn a_closed_popup_never_probes_a_device_but_still_applies_a_finished_pass() {
     let targets = [device("build")];
     let mut devices = Devices::default();
-    assert!(!devices.poll_with(&targets, false, now(), |_| {
+    assert!(!devices.poll_with(&targets, false, None, now(), |_| {
         unreachable!("a closed popup must not probe")
     }));
     let (tx, rx) = mpsc::sync_channel(1);
@@ -285,12 +285,40 @@ fn a_closed_popup_never_probes_a_device_but_still_applies_a_finished_pass() {
         }]),
     )])
     .unwrap();
-    assert!(devices.poll_with(&targets, false, now(), |_| { unreachable!("still closed") }));
+    assert!(devices.poll_with(&targets, false, None, now(), |_| {
+        unreachable!("still closed")
+    }));
     assert!(devices.pending.is_none());
     assert!(matches!(
         devices.answers["ssh:build"],
         DeviceScan::Sessions(ref sessions) if sessions.len() == 1
     ));
+}
+
+#[test]
+fn only_the_unfolded_device_is_asked_and_the_others_keep_their_answers() {
+    let targets = [device("build"), device("prod")];
+    let mut devices = Devices::default();
+    devices.answers.insert(
+        "ssh:prod".to_owned(),
+        DeviceScan::Sessions(vec![RemoteSession {
+            name: "agents".into(),
+            running: true,
+        }]),
+    );
+    devices.asked.insert(
+        "ssh:prod".to_owned(),
+        (ssh("prod.invalid"), now() - DEVICE_REFRESH * 2),
+    );
+    let (seen, probe) = recorder();
+    // Both are due, but only `build` is unfolded.
+    assert!(devices.poll_with(&targets, true, Some("ssh:build"), now(), probe));
+    settle(&mut devices, &targets);
+    assert_eq!(*seen.lock().unwrap(), [ssh("build.invalid")]);
+    assert!(
+        devices.answers.contains_key("ssh:prod"),
+        "a folded device keeps its answer"
+    );
 }
 
 #[test]
@@ -303,7 +331,7 @@ fn a_pass_asks_every_due_device_and_leaves_the_others_alone() {
         .asked
         .insert("ssh:prod".to_owned(), (ssh("prod.invalid"), asked_at));
     let (seen, probe) = recorder();
-    assert!(devices.poll_with(&targets, true, asked_at, probe));
+    assert!(devices.poll_with(&targets, true, None, asked_at, probe));
     settle(&mut devices, &targets);
     assert_eq!(
         *seen.lock().unwrap(),
@@ -313,12 +341,12 @@ fn a_pass_asks_every_due_device_and_leaves_the_others_alone() {
     assert_eq!(devices.answers.len(), 1);
     // Inside the interval nothing is asked again, and past it both are.
     assert!(
-        !devices.poll_with(&targets, true, asked_at + DEVICE_REFRESH / 2, |_| {
+        !devices.poll_with(&targets, true, None, asked_at + DEVICE_REFRESH / 2, |_| {
             unreachable!("both answers are still fresh")
         })
     );
     let (seen, probe) = recorder();
-    assert!(devices.poll_with(&targets, true, asked_at + DEVICE_REFRESH, probe));
+    assert!(devices.poll_with(&targets, true, None, asked_at + DEVICE_REFRESH, probe));
     settle(&mut devices, &targets);
     let mut both = seen.lock().unwrap().clone();
     both.sort();
@@ -330,7 +358,7 @@ fn a_failed_probe_waits_out_the_interval_like_an_answer() {
     let targets = [device("build")];
     let mut devices = Devices::default();
     let asked_at = now();
-    assert!(devices.poll_with(&targets, true, asked_at, |_| {
+    assert!(devices.poll_with(&targets, true, None, asked_at, |_| {
         Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
     }));
     settle(&mut devices, &targets);
@@ -340,12 +368,12 @@ fn a_failed_probe_waits_out_the_interval_like_an_answer() {
     ));
     // A host that cannot answer must not be redialled on every refresh.
     assert!(
-        !devices.poll_with(&targets, true, asked_at + DEVICE_REFRESH / 2, |_| {
+        !devices.poll_with(&targets, true, None, asked_at + DEVICE_REFRESH / 2, |_| {
             unreachable!("the failure is still fresh")
         })
     );
     assert!(
-        devices.poll_with(&targets, true, asked_at + DEVICE_REFRESH, |_| {
+        devices.poll_with(&targets, true, None, asked_at + DEVICE_REFRESH, |_| {
             Err(herdr_client::Error::Ssh(herdr_client::ssh::Error::Timeout))
         })
     );
@@ -376,7 +404,7 @@ fn a_worker_that_dies_fails_only_the_devices_it_was_asking() {
     let (tx, rx) = mpsc::sync_channel::<Vec<(String, RemoteHost, DeviceScan)>>(1);
     devices.pending = Some(rx);
     drop(tx);
-    assert!(devices.poll_with(&targets, false, now(), |_| {
+    assert!(devices.poll_with(&targets, false, None, now(), |_| {
         unreachable!("a pass is outstanding")
     }));
     assert!(devices.pending.is_none());
@@ -408,7 +436,13 @@ fn a_device_whose_host_changed_is_asked_again_at_once() {
     // The same endpoint id now points at another host, inside the interval.
     let targets = [("ssh:build".to_owned(), ssh("new.invalid"))];
     let (seen, probe) = recorder();
-    assert!(devices.poll_with(&targets, true, asked_at + Duration::from_secs(1), probe));
+    assert!(devices.poll_with(
+        &targets,
+        true,
+        None,
+        asked_at + Duration::from_secs(1),
+        probe
+    ));
     settle(&mut devices, &targets);
     assert_eq!(
         *seen.lock().unwrap(),
@@ -441,7 +475,7 @@ fn an_answer_from_a_host_the_device_no_longer_points_at_is_dropped() {
     .unwrap();
     // The device moved to another host while that probe was in flight.
     let targets = [("ssh:build".to_owned(), ssh("new.invalid"))];
-    assert!(devices.poll_with(&targets, false, asked_at, |_| {
+    assert!(devices.poll_with(&targets, false, None, asked_at, |_| {
         unreachable!("the pass is already outstanding")
     }));
     assert!(

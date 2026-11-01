@@ -186,7 +186,7 @@ impl HerdrWindow {
         if self.menu.page == Some(Page::Application) {
             return self.render_application_menu(window, cx);
         }
-        if self.menu.page == Some(Page::Sessions) && self.menu.session_edit.is_some() {
+        if self.menu.page == Some(Page::Devices) && self.menu.session_edit.is_some() {
             let theme = &self.theme;
             let font = &self.config.ui;
             let picker = self
@@ -195,7 +195,7 @@ impl HerdrWindow {
                         .id("session-picker-underlay")
                         .debug_selector(|| "session-picker-underlay".into()),
                     window.viewport_size(),
-                    Page::Sessions,
+                    Page::Devices,
                     px(0.),
                 )
                 .overflow_y_scroll()
@@ -208,7 +208,7 @@ impl HerdrWindow {
                 .text_font(font)
                 .text_size(px(font.size))
                 .line_height(px(font.line_height()))
-                .child(self.render_session_list(cx));
+                .child(self.render_devices(cx));
             // The picker remains visible in its original position beneath the
             // modal's dimmed, input-occluding layer. Only that top layer owns focus.
             return div()
@@ -236,7 +236,7 @@ impl HerdrWindow {
         lift: Pixels,
     ) -> Stateful<Div> {
         let (room, above) = self.footer_room(viewport);
-        let list = matches!(page, Page::Devices | Page::Sessions);
+        let list = page == Page::Devices;
         let width = if list {
             super::devices::MENU_WIDTH
         } else {
@@ -249,7 +249,6 @@ impl HerdrWindow {
         };
         let start = match page {
             Page::Devices => anchor,
-            Page::Sessions => anchor.min((viewport.width - px(width + MENU_MARGIN)).max(px(0.))),
             _ => px(56.),
         };
         let panel = panel
@@ -291,9 +290,8 @@ impl HerdrWindow {
         let Some(page) = self.menu.page else {
             return false;
         };
-        let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
-        let footer_anchored =
-            matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
+        let session_modal = page == Page::Devices && self.menu.session_edit.is_some();
+        let footer_anchored = matches!(page, Page::Menu | Page::Devices) && !session_modal;
         !footer_anchored
             && !matches!(page, Page::Usage(_) | Page::Application)
             && !page.pointer_anchored()
@@ -311,13 +309,12 @@ impl HerdrWindow {
         let font = &self.config.ui;
         let theme = &self.theme;
         let viewport = window.viewport_size();
-        let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
+        let session_modal = page == Page::Devices && self.menu.session_edit.is_some();
         // Add Device's sources share one wide dialog; a narrow window keeps
         // the rail to icons so the form still has room.
         let add_device = rail::Source::of(page).is_some();
         let compact_rail = viewport.width - px(32.) < px(rail::COMPACT_BELOW * (font.size / 12.));
-        let footer_anchored =
-            matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
+        let footer_anchored = matches!(page, Page::Menu | Page::Devices) && !session_modal;
         // A GitHub tab of the new worktree dialog is a picker, not a form.
         let listing =
             self.worktree_listing() || page == Page::Dialog(WorkspaceAction::OpenWorktree);
@@ -332,7 +329,7 @@ impl HerdrWindow {
         let now = crate::motion::now();
         let shown = leaving.unwrap_or_else(|| self.menu.appear.panel(now));
         let lift = super::appear::Appear::offset(dims, shown);
-        let rises = page == Page::Devices;
+        let rises = page == Page::Devices && !session_modal;
         // The worktree popover widens for captions a language makes longer.
         let popover = (page == Page::Workspace)
             .then(|| self.workspace_popover_width(window, (viewport.width - px(24.)).max(px(0.))));
@@ -535,7 +532,7 @@ impl HerdrWindow {
                     // the panel around them stays put; a second scroller there
                     // still had its padding to move through. A session create or
                     // delete form has no inner scroller and keeps the panel's.
-                    let lists = matches!(page, Page::Devices | Page::Sessions) && !session_modal;
+                    let lists = page == Page::Devices && !session_modal;
                     panel
                         .when(!settled && !lists, |panel| panel.overflow_y_scroll())
                         .when(lists, |panel| panel.overflow_hidden())
@@ -679,9 +676,10 @@ impl HerdrWindow {
                 );
             }
         } else if page == Page::Devices {
-            panel = panel.child(self.render_devices(cx));
-        } else if page == Page::Sessions {
-            panel = panel.child(self.render_sessions(cx));
+            panel = match self.menu.session_edit {
+                Some(_) => panel.child(self.render_session_edit(cx)),
+                None => panel.child(self.render_devices(cx)),
+            };
         } else if let Page::Usage(provider) = page {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {

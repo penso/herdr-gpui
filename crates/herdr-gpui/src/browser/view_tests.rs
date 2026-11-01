@@ -41,6 +41,9 @@ mod embedded;
 #[cfg(any(target_os = "macos", windows))]
 mod favicon;
 
+/// The pill on a divider between groups, under real pointer events.
+mod divider_grip;
+
 /// Editor groups. Blank browser tabs need no native page, so none is
 /// created, and a split alone needs no page at all.
 mod groups;

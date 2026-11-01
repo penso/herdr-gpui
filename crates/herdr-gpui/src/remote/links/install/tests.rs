@@ -172,15 +172,23 @@ fn the_host_scripts_run_against_a_home() {
             .unwrap();
         output.stdout
     };
-    let error = host
-        .stream(
-            &build_script("dev-test"),
-            tarball.as_slice(),
-            Vec::new(),
-            limits,
-            &cancelled,
-        )
-        .unwrap_err();
+    // Not through the host: its prelude puts `/opt/homebrew/bin` and
+    // `/usr/local/bin` first, where a developer's Rust usually is, so the
+    // build would start for real. Only the script decides there is no Rust.
+    let without_rust = format!(
+        "HOME={}\nexport HOME\nPATH=/usr/bin:/bin\nexport PATH\n{}",
+        shell_quote(&home.to_string_lossy()),
+        build_script("dev-test")
+    );
+    let error = herdr_client::run_script(
+        herdr_client::ScriptHost::Local,
+        &without_rust,
+        tarball.as_slice(),
+        Vec::new(),
+        limits,
+        &cancelled,
+    )
+    .unwrap_err();
     assert!(matches!(
         error,
         herdr_client::Error::ScriptExit { status, .. } if status.code() == Some(NO_RUST_EXIT)

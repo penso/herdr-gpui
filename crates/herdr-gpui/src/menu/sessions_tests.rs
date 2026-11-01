@@ -1,5 +1,6 @@
-//! The sessions popup: the footer control that opens it, the state every row
-//! carries, and where choosing a row takes this window.
+//! The sessions a device unfolds in the device picker: the shortcut that
+//! opens them, the state every row carries, and where choosing a row takes
+//! this window.
 
 #![allow(clippy::unwrap_used)]
 
@@ -17,6 +18,7 @@ mod en_xa;
 #[cfg(not(windows))]
 mod form_scroll;
 mod row_height;
+mod scroll;
 
 /// A session as discovery reports it. The socket comes from the same path rules
 /// the window resolves, so no test hard-codes a home directory.
@@ -64,6 +66,29 @@ fn click(cx: &mut VisualTestContext, selector: &'static str) {
     cx.simulate_click(point, Modifiers::default());
 }
 
+/// Opens the picker as the Sessions shortcut does, unfolded to the device the
+/// window is on. The session chip that unfolds a device is covered beside the
+/// picker.
+fn open_sessions(view: &Entity<crate::HerdrWindow>, cx: &mut VisualTestContext) {
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.command(crate::controls::Command::Sessions, window, cx);
+        });
+    });
+}
+
+/// Unfolds device `index` in the open picker, as its session chip does.
+fn unfold(view: &Entity<crate::HerdrWindow>, cx: &mut VisualTestContext, index: usize) {
+    view.update(cx, |view, cx| {
+        view.unfold_device(index);
+        cx.notify();
+    });
+}
+
+fn unfolded(view: &Entity<crate::HerdrWindow>, cx: &mut VisualTestContext) -> Option<String> {
+    view.read_with(cx, |view, _| view.menu.unfolded_device.clone())
+}
+
 /// A window attached to `current`, holding `entries`, with its list open.
 fn open_list(
     cx: &mut TestAppContext,
@@ -79,69 +104,40 @@ fn open_list(
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.run_until_parked();
     draw(cx);
-    click(cx, "device-sessions");
+    open_sessions(&view, cx);
     draw(cx);
     (view, cx)
 }
 
 #[gpui::test]
-fn the_footer_icon_opens_the_list_between_the_picker_and_the_settings(cx: &mut TestAppContext) {
+fn the_footer_leaves_sessions_to_the_picker(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.run_until_parked();
     draw(cx);
-    let footer = bounds(cx, "device-footer");
     let picker = bounds(cx, "device-picker");
-    let control = bounds(cx, "device-sessions");
     let settings = bounds(cx, "device-settings");
+    assert!(cx.debug_bounds("device-sessions").is_none());
     assert!(
-        picker.right() < control.left(),
-        "the picker keeps the left side"
-    );
-    assert!(
-        control.right() <= settings.left(),
+        picker.right() <= settings.left(),
         "settings stays the rightmost control"
     );
-    assert!(control.left() >= footer.left() && control.right() <= footer.right());
-    assert_eq!(control.size, size(px(28.), px(28.)));
 
-    // A narrow sidebar still fits all three controls.
+    // A narrow sidebar still fits both controls.
     cx.update(|window, cx| {
         view.update(cx, |view, _| view.sidebar_width = Some(140.));
         full_draw(window, cx).clear(cx);
     });
     let footer = bounds(cx, "device-footer");
-    for selector in ["device-picker", "device-sessions", "device-settings"] {
+    for selector in ["device-picker", "device-settings"] {
         let control = bounds(cx, selector);
         assert!(control.left() >= footer.left(), "{selector}");
         assert!(control.right() <= footer.right(), "{selector}");
     }
-
-    // The icon opens the session list, anchored above the control that asked.
-    cx.update(|window, cx| {
-        view.update(cx, |view, _| view.sidebar_width = None);
-        full_draw(window, cx).clear(cx);
-    });
-    click(cx, "device-sessions");
-    draw(cx);
-    let panel = bounds(cx, "menu-panel");
-    let footer = bounds(cx, "device-footer");
-    assert!(panel.bottom() <= footer.top(), "the list opens above it");
-    assert_eq!(panel.size.width, px(280.));
-    assert!(
-        panel.right() <= px(800.),
-        "the list stays inside the window"
-    );
-    cx.update(|_, cx| {
-        let view = view.read(cx);
-        assert_eq!(view.menu.page, Some(Page::Sessions));
-        assert_eq!(view.menu.selected, Some(0));
-    });
-    assert!(cx.debug_bounds("sessions-list").is_some());
 }
 
 #[gpui::test]
-fn the_configured_shortcut_opens_the_list_where_the_button_sits(cx: &mut TestAppContext) {
+fn the_configured_shortcut_opens_the_list_where_the_picker_sits(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(|window, cx| {
         crate::bind_keys(cx);
         fixture_window(window, cx)
@@ -154,13 +150,10 @@ fn the_configured_shortcut_opens_the_list_where_the_button_sits(cx: &mut TestApp
     draw(cx);
     cx.simulate_keystrokes(crate::controls::platform_default("cmd-shift-s"));
     draw(cx);
-    cx.update(|_, cx| {
-        let view = view.read(cx);
-        assert_eq!(view.menu.page, Some(Page::Sessions));
-        assert_eq!(view.menu.selected, Some(0));
-    });
-    // The shortcut anchors where the footer button painted, not at the corner a
-    // window that had never drawn it would leave the cell at.
+    cx.update(|_, cx| assert_eq!(view.read(cx).menu.page, Some(Page::Devices)));
+    assert_eq!(unfolded(&view, cx).as_deref(), Some(LOCAL));
+    // The shortcut anchors where the footer's picker painted, not at the corner
+    // a window that had never drawn it would leave the cell at.
     let panel = bounds(cx, "menu-panel");
     let footer = bounds(cx, "device-footer");
     assert!(
@@ -168,7 +161,7 @@ fn the_configured_shortcut_opens_the_list_where_the_button_sits(cx: &mut TestApp
         "the list opens above the footer it belongs to"
     );
     assert_eq!(panel.size.width, px(280.));
-    assert!(cx.debug_bounds("sessions-list").is_some());
+    assert!(cx.debug_bounds("sessions-row-0").is_some());
 }
 
 /// One device's sessions as its own host reported them.
@@ -191,7 +184,7 @@ fn on_the_first_device(
     answer: Option<crate::sessions::DeviceScan>,
 ) -> (Entity<crate::HerdrWindow>, &mut VisualTestContext) {
     let (view, cx) = device_window(cx, answer);
-    click(cx, "device-sessions");
+    open_sessions(&view, cx);
     draw(cx);
     (view, cx)
 }
@@ -222,33 +215,33 @@ fn device_window(
         view.selected_endpoint = 1;
         view
     });
-    cx.simulate_resize(size(px(800.), px(600.)));
+    // Tall enough that every unfolded row is on screen to click.
+    cx.simulate_resize(size(px(800.), px(900.)));
     cx.run_until_parked();
     draw(cx);
     (view, cx)
 }
 
 #[gpui::test]
-fn the_device_this_window_is_on_leads_with_all_of_its_sessions(cx: &mut TestAppContext) {
-    let (_view, cx) =
+fn the_shortcut_unfolds_all_of_the_device_this_window_is_on(cx: &mut TestAppContext) {
+    let (view, cx) =
         on_the_first_device(cx, Some(reported(&[("default", true), ("agents", false)])));
-    let current = bounds(cx, "sessions-current-device");
-    let local = bounds(cx, "sessions-local-header");
-    let others = bounds(cx, "sessions-others-header");
-    assert!(current.top() < local.top(), "the device it is on leads");
-    assert!(local.top() < others.top(), "the devices left over follow");
-    // Every session that host reported, above this machine's own.
+    assert_eq!(unfolded(&view, cx).as_deref(), Some("ssh:build"));
+    // Every session that host reported, under its row and above the next
+    // device's.
+    let build = bounds(cx, "device-row-2");
+    let prod = bounds(cx, "device-row-3");
     let first = bounds(cx, "sessions-row-0");
     let second = bounds(cx, "sessions-row-1");
-    assert!(current.top() < first.top() && second.top() < local.top());
+    assert!(build.bottom() <= first.top() && second.bottom() <= prod.top());
     // The session this window is on is marked, and the host's other one is not.
     assert!(cx.debug_bounds("sessions-current-0").is_some());
     assert!(cx.debug_bounds("sessions-dot-1").is_some());
     assert!(cx.debug_bounds("sessions-current-1").is_none());
-    // Five session rows and one Add row per section.
-    assert!(cx.debug_bounds("sessions-row-7").is_some());
-    assert!(cx.debug_bounds("sessions-row-8").is_none());
-    assert!(cx.debug_bounds("sessions-device-note-ssh:prod").is_some());
+    // Its Add row, and nothing of the devices left folded.
+    assert!(cx.debug_bounds("sessions-row-2").is_some());
+    assert!(cx.debug_bounds("sessions-row-3").is_none());
+    assert!(cx.debug_bounds("sessions-device-note-ssh:prod").is_none());
 }
 
 #[gpui::test]
@@ -301,7 +294,7 @@ fn a_device_whose_list_could_not_be_read_still_offers_its_saved_session(cx: &mut
 
 #[gpui::test]
 fn a_disabled_device_says_so_instead_of_waiting_for_an_answer(cx: &mut TestAppContext) {
-    let (_view, cx) = cx.add_window_view(|window, cx| {
+    let (view, cx) = cx.add_window_view(|window, cx| {
         let mut view = fixture_window(window, cx);
         view.endpoints.push(crate::endpoint::Endpoint::new(
             "ssh:off".into(),
@@ -317,7 +310,8 @@ fn a_disabled_device_says_so_instead_of_waiting_for_an_answer(cx: &mut TestAppCo
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.run_until_parked();
     draw(cx);
-    click(cx, "device-sessions");
+    open_sessions(&view, cx);
+    unfold(&view, cx, 1);
     draw(cx);
     // Its saved session is still offered, and the row says why nothing more came.
     assert!(cx.debug_bounds("sessions-row-0").is_some());
@@ -343,14 +337,15 @@ fn clicking_a_disabled_device_does_not_filter_the_list_to_it(cx: &mut TestAppCon
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.run_until_parked();
     draw(cx);
-    click(cx, "device-sessions");
+    open_sessions(&view, cx);
+    unfold(&view, cx, 1);
     draw(cx);
     // The row is there, and choosing it does nothing: the picker refuses the same
     // click, and filtering the sidebar to a device it cannot dial empties it.
     click(cx, "sessions-row-0");
     cx.update(|_, cx| {
         let view = view.read(cx);
-        assert_eq!(view.menu.page, Some(Page::Sessions), "the menu stays open");
+        assert_eq!(view.menu.page, Some(Page::Devices), "the menu stays open");
         assert_eq!(view.selected_endpoint, 0, "nothing was attached");
         assert_ne!(
             view.device_filter,
@@ -388,17 +383,17 @@ fn a_disabled_device_is_never_asked_for_its_sessions(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_window_on_this_machine_leads_with_its_own_sessions(cx: &mut TestAppContext) {
-    let (_view, cx) = open_list(
+fn a_window_on_this_machine_unfolds_its_own_sessions(cx: &mut TestAppContext) {
+    let (view, cx) = open_list(
         cx,
         vec![session("default", SessionState::Running)],
         development("default"),
     );
-    let local = bounds(cx, "sessions-local-header");
-    let devices = bounds(cx, "sessions-others-header");
-    assert!(local.top() < devices.top());
-    // Nothing marks a device as current while the window is on this machine.
-    assert!(cx.debug_bounds("sessions-current-device").is_none());
+    assert_eq!(unfolded(&view, cx).as_deref(), Some(LOCAL));
+    let local = bounds(cx, "device-row-1");
+    let add_device = bounds(cx, "device-row-2");
+    let row = bounds(cx, "sessions-row-0");
+    assert!(local.bottom() <= row.top() && row.bottom() <= add_device.top());
     assert!(cx.debug_bounds("sessions-current-0").is_some());
 }
 
@@ -449,10 +444,8 @@ fn local_rows_paint_a_dot_and_mark_the_current_session(cx: &mut TestAppContext) 
         bounds(cx, "sessions-add-icon-2").center().x,
         bounds(cx, "sessions-delete-icon-0").center().x
     );
-    // A stopped session says what selecting it does, and the fixture has no
-    // saved devices to list.
+    // A stopped session says what selecting it does.
     assert!(cx.debug_bounds("sessions-stopped").is_some());
-    assert!(cx.debug_bounds("sessions-no-devices").is_some());
 }
 
 #[gpui::test]
@@ -530,12 +523,16 @@ fn choosing_a_local_session_leaves_a_remote_endpoint(cx: &mut TestAppContext) {
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.run_until_parked();
     draw(cx);
-    click(cx, "device-sessions");
+    open_sessions(&view, cx);
     draw(cx);
-    // The device's session and Add row precede the two local sessions and Add.
-    assert!(cx.debug_bounds("sessions-row-4").is_some());
-    assert!(cx.debug_bounds("sessions-row-5").is_none());
-    click(cx, "sessions-row-3");
+    // The shortcut unfolds the device; this machine's two sessions and Add
+    // replace its rows once Local is unfolded instead.
+    assert_eq!(unfolded(&view, cx).as_deref(), Some("ssh:fixture"));
+    unfold(&view, cx, 0);
+    draw(cx);
+    assert!(cx.debug_bounds("sessions-row-2").is_some());
+    assert!(cx.debug_bounds("sessions-row-3").is_none());
+    click(cx, "sessions-row-1");
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert_eq!(view.menu.page, None, "choosing closes the list");
@@ -592,13 +589,16 @@ fn deleted_row_selection_does_not_transfer_to_add_session(cx: &mut TestAppContex
         ],
         development("default"),
     );
+    // The keys start on `default`, the session this window is on.
+    let current = cx.update(|_, cx| view.read(cx).menu.selected);
     cx.simulate_keystrokes("down");
+    let old = current.map(|ordinal| ordinal + 1);
     cx.update(|_, cx| {
         view.update(cx, |view, _| {
-            assert_eq!(view.menu.selected, Some(1));
+            assert_eq!(view.menu.selected, old);
             // A failed deletion has no departing row and keeps the selection.
             view.finish_session_departure();
-            assert_eq!(view.menu.selected, Some(1));
+            assert_eq!(view.menu.selected, old);
             view.sessions.departure = Some(crate::sessions::Departure::new(
                 development("old"),
                 std::time::Instant::now(),
@@ -608,30 +608,31 @@ fn deleted_row_selection_does_not_transfer_to_add_session(cx: &mut TestAppContex
         })
     });
     draw(cx);
-    // Add now occupies ordinal 1, but neither its highlight nor its action may
-    // inherit the deleted session's keyboard selection.
+    // Add now occupies the deleted row's ordinal, but neither its highlight
+    // nor its action may inherit the deleted session's keyboard selection.
     cx.simulate_keystrokes("enter");
     cx.update(|_, cx| {
         let view = view.read(cx);
-        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert_eq!(view.menu.page, Some(Page::Devices));
         assert!(view.menu.session_edit.is_none());
         assert_eq!(view.menu.selected, None);
     });
+    // From nothing, down starts at the top and up wraps to the bottom.
     cx.simulate_keystrokes("down");
     cx.update(|_, cx| assert_eq!(view.read(cx).menu.selected, Some(0)));
     cx.simulate_keystrokes("up");
-    cx.update(|_, cx| assert_eq!(view.read(cx).menu.selected, Some(1)));
+    let last = cx.update(|_, cx| view.read(cx).menu.selected);
+    assert!(last > Some(0));
     cx.update(|_, cx| {
         view.update(cx, |view, _| {
-            view.menu.page = Some(Page::Devices);
+            view.menu.page = Some(Page::Menu);
             view.sessions.departure = Some(crate::sessions::Departure::new(
                 development("old"),
                 std::time::Instant::now(),
             ));
             view.finish_session_departure();
             assert_eq!(
-                view.menu.selected,
-                Some(1),
+                view.menu.selected, last,
                 "completion must not change another menu's selection"
             );
         })
@@ -652,7 +653,7 @@ fn clicking_delete_never_selects_or_starts_the_session(cx: &mut TestAppContext) 
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert_eq!(view.endpoints[0].connection.target, development("default"));
-        assert_eq!(view.menu.page, Some(Page::Sessions));
+        assert_eq!(view.menu.page, Some(Page::Devices));
         assert!(
             view.sessions.mutation_error.is_some(),
             "development management is refused"
@@ -724,13 +725,15 @@ fn choosing_a_remote_row_selects_that_device(cx: &mut TestAppContext) {
     cx.simulate_resize(size(px(800.), px(600.)));
     cx.run_until_parked();
     draw(cx);
-    click(cx, "device-sessions");
+    // Unfolded straight to the saved device, so this machine's rows never
+    // painted under the same selectors.
+    open_sessions(&view, cx);
+    unfold(&view, cx, 1);
     draw(cx);
-    // The local session and Add row precede the saved device.
-    assert!(cx.debug_bounds("sessions-row-2").is_some());
-    assert!(cx.debug_bounds("sessions-dot-2").is_some());
-    assert!(cx.debug_bounds("sessions-current-2").is_none());
-    click(cx, "sessions-row-2");
+    assert!(cx.debug_bounds("sessions-row-0").is_some());
+    assert!(cx.debug_bounds("sessions-dot-0").is_some());
+    assert!(cx.debug_bounds("sessions-current-0").is_none());
+    click(cx, "sessions-row-0");
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert_eq!(view.selected_endpoint, 1, "the device became current");
@@ -768,4 +771,35 @@ fn a_device_offers_add_session_only_while_it_is_online(cx: &mut TestAppContext) 
             Some(super::sessions::Edit::Create { .. })
         ));
     });
+}
+
+#[gpui::test]
+fn the_shortcut_scrolls_the_unfolded_sessions_into_view(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        let mut view = fixture_window(window, cx);
+        for index in 0..8 {
+            view.endpoints.push(remote(
+                &format!("ssh:host-{index}"),
+                &format!("Host {index}"),
+                &format!("host-{index}.invalid"),
+                "default",
+            ));
+        }
+        // The window is on the last device, far below the list's first rows.
+        view.selected_endpoint = 8;
+        view
+    });
+    cx.simulate_resize(size(px(800.), px(600.)));
+    cx.run_until_parked();
+    draw(cx);
+    open_sessions(&view, cx);
+    // The list's first frame lays it out; the next scrolls to the sessions.
+    draw(cx);
+    draw(cx);
+    let panel = bounds(cx, "menu-panel");
+    let row = bounds(cx, "sessions-row-0");
+    assert!(
+        row.top() >= panel.top() && row.bottom() <= panel.bottom(),
+        "{row:?} is outside {panel:?}"
+    );
 }

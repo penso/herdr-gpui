@@ -258,6 +258,19 @@ fn a_synchronized_update_that_never_ends_is_shown_in_time() {
     );
 }
 
+/// Reads until an update equal to `wanted` arrives, within `WAIT`. A read
+/// may wake before the bytes it waits for, so the update the last bytes
+/// sent cause can come a read later than the one that follows them.
+fn until(terminal: &mut crate::CoreTerminal, wanted: &SurfaceUpdate) -> Vec<SurfaceUpdate> {
+    let start = std::time::Instant::now();
+    let mut seen = Vec::new();
+    while !seen.contains(wanted) {
+        assert!(start.elapsed() < WAIT, "never told {wanted:?}: {seen:?}");
+        seen.extend(terminal.next(WAIT).unwrap());
+    }
+    seen
+}
+
 /// The full frame among `updates`, if any.
 fn full_frame(updates: &[SurfaceUpdate]) -> Option<&herdr_backend::FrameData> {
     updates.iter().find_map(|update| match update {
@@ -286,53 +299,18 @@ fn wheel(kind: herdr_backend::ClientMouseKind, lines: u16) -> ClientPaneInputEve
     }
 }
 
-/// Updates read until one in them satisfies `done`, within [`WAIT`]. Each
-/// `next` reads one chunk, and the core may split or join what the mock
-/// sends, so a test waits for the update it expects rather than counting
-/// reads.
-fn updates_until(
-    terminal: &mut crate::CoreTerminal,
-    done: impl Fn(&SurfaceUpdate) -> bool,
-) -> Vec<SurfaceUpdate> {
-    let deadline = std::time::Instant::now() + WAIT;
-    let mut all = Vec::new();
-    while !all.iter().any(&done) {
-        let left = deadline.saturating_duration_since(std::time::Instant::now());
-        assert!(!left.is_zero(), "no expected update in {all:?}");
-        all.extend(terminal.next(left).unwrap());
-    }
-    all
-}
-
-/// Whether an update draws `text`, whole screen or changed rows.
-fn shows(text: &str) -> impl Fn(&SurfaceUpdate) -> bool + '_ {
-    move |update| match update {
-        SurfaceUpdate::Frame(frame) => row_text(frame, 0).contains(text),
-        SurfaceUpdate::Rows { rows, .. } => rows.iter().any(|row| {
-            row.cells
-                .iter()
-                .map(|cell| cell.symbol.as_str())
-                .collect::<String>()
-                .contains(text)
-        }),
-        _ => false,
-    }
-}
-
 #[test]
 fn the_view_is_told_when_the_program_starts_reading_the_mouse() {
     let (backend, mut mock) = backend();
     let mut terminal = attached(&backend, &mut mock, Role::Active);
     mock.send(5, Kind::Data, b"hi");
-    let first = updates_until(&mut terminal, shows("hi"));
+    let first = terminal.next(WAIT).unwrap();
     assert!(first.contains(&SurfaceUpdate::MouseReporting(false)));
     mock.send(5, Kind::Data, b"\x1b[?1000h");
-    updates_until(&mut terminal, |update| {
-        *update == SurfaceUpdate::MouseReporting(true)
-    });
+    until(&mut terminal, &SurfaceUpdate::MouseReporting(true));
     // Told once, not on every update.
     mock.send(5, Kind::Data, b"more");
-    let later = updates_until(&mut terminal, shows("more"));
+    let later = terminal.next(WAIT).unwrap();
     assert!(
         !later
             .iter()
@@ -402,11 +380,13 @@ fn the_view_is_told_which_key_events_the_program_asks_for() {
     assert!(first.contains(&SurfaceUpdate::KeyReporting(KeyReporting::default())));
     // kitty: push event types (2) and all keys as escapes (8).
     mock.send(5, Kind::Data, b"\x1b[>10u");
-    let updates = terminal.next(WAIT).unwrap();
-    assert!(updates.contains(&SurfaceUpdate::KeyReporting(KeyReporting {
-        every_key: true,
-        releases: true,
-    })));
+    until(
+        &mut terminal,
+        &SurfaceUpdate::KeyReporting(KeyReporting {
+            every_key: true,
+            releases: true,
+        }),
+    );
     // Its releases encode as kitty release events.
     let release = ClientPaneInputEvent::Key {
         code: herdr_backend::ClientKeyCode::Char('a'),
