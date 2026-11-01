@@ -246,8 +246,8 @@ impl LocalPorts {
     /// Starts or drops the worker as `shown` (or a recent request) wants,
     /// and takes its answers. Whether anything shown changed.
     pub(crate) fn poll(&mut self, shown: bool, now: Instant) -> bool {
-        let wanted = SUPPORTED
-            && (shown || self.acting || self.demand.is_some_and(|until| now < until));
+        let wanted =
+            SUPPORTED && (shown || self.acting || self.demand.is_some_and(|until| now < until));
         if !wanted {
             self.demand = None;
             self.start_failed = false;

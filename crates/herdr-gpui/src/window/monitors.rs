@@ -69,8 +69,7 @@ impl HerdrWindow {
     /// This computer's ports are listed while the Ports section is shown,
     /// or a command line request asked for them recently.
     pub(super) fn update_local_ports(&mut self) -> bool {
-        let shown =
-            self.activity_section() == Some(crate::sidebar::ActivityPanel::Ports);
+        let shown = self.activity_section() == Some(crate::sidebar::ActivityPanel::Ports);
         self.local_ports.poll(shown, std::time::Instant::now())
     }
 

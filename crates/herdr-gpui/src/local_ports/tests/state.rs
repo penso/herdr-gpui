@@ -58,8 +58,14 @@ fn a_signal_is_sent_once_and_its_outcome_reported() {
         ports.signal(PortAction::Pause, vec![victim]),
         Err(crate::Error::LocalPorts(Error::Busy))
     ));
-    let other = Identity { pid: 4343, started: 11 };
-    let third = Identity { pid: 4444, started: 12 };
+    let other = Identity {
+        pid: 4343,
+        started: 11,
+    };
+    let third = Identity {
+        pid: 4444,
+        started: 12,
+    };
     updates
         .send(Update::Signalled(
             PortAction::Stop,
@@ -144,6 +150,12 @@ fn directories_are_shown_from_the_home_folder() {
     assert_eq!(home_relative(Path::new("/home/dev/app"), home), "~/app");
     assert_eq!(home_relative(Path::new("/home/dev"), home), "~");
     assert_eq!(home_relative(Path::new("/srv/app"), home), "/srv/app");
-    assert_eq!(home_relative(Path::new("/home/developer"), home), "/home/developer");
-    assert_eq!(home_relative(Path::new("/home/dev/app"), None), "/home/dev/app");
+    assert_eq!(
+        home_relative(Path::new("/home/developer"), home),
+        "/home/developer"
+    );
+    assert_eq!(
+        home_relative(Path::new("/home/dev/app"), None),
+        "/home/dev/app"
+    );
 }

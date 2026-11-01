@@ -161,7 +161,11 @@ pub(super) fn local_ports(ports: &LocalPorts) -> String {
         text.push_str("Nothing on this computer listens on a TCP port\n");
     }
     for port in &ports.listening {
-        let _ = write!(text, "{:<24} {} (pid {})", port.bind, port.process, port.pid);
+        let _ = write!(
+            text,
+            "{:<24} {} (pid {})",
+            port.bind, port.process, port.pid
+        );
         if port.paused {
             text.push_str(" paused");
         }

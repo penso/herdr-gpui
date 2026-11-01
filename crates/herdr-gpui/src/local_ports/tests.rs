@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod en_xa;
 #[cfg(unix)]
 mod process;
 #[cfg(unix)]

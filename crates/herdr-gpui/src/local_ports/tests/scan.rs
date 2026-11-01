@@ -60,7 +60,10 @@ fn one_process_on_ipv4_and_ipv6_is_one_row_at_its_wider_bind() {
 #[test]
 fn malformed_and_untrusted_lines_are_dropped() {
     let text = "lsof\nn*:1\npnot-a-pid\ncx\nn*:2\np0\nn*:3\np4242\nc\u{1b}[31mnode\u{7}\nn*:0\nn*:70000\nnhost:3000\nn*:3001\n\nq\n";
-    assert_eq!(parse(text).unwrap(), vec![socket(4242, 3001, Bind::Any, "[31mnode")]);
+    assert_eq!(
+        parse(text).unwrap(),
+        vec![socket(4242, 3001, Bind::Any, "[31mnode")]
+    );
     let ss = "ss\nLISTEN 0 1 127.0.0.1:3000 0.0.0.0:* users:((\"node\",pid=x,fd=1))\nLISTEN\nESTAB 0 0 127.0.0.1:3000 127.0.0.1:5000 users:((\"node\",pid=4242,fd=9))\n";
     assert_eq!(parse(ss).unwrap(), Vec::new());
 }

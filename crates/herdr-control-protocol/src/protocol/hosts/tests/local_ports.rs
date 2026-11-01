@@ -17,10 +17,7 @@ fn local_port_requests_have_a_stable_wire_form() {
     assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request);
     let listing = serde_json::to_string(&HostOp::LocalPorts).unwrap();
     assert_eq!(listing, r#"{"op":"local_ports"}"#);
-    assert_eq!(
-        HostOp::LocalPorts.wait_seconds(),
-        LOCAL_PORTS_WAIT_SECONDS
-    );
+    assert_eq!(HostOp::LocalPorts.wait_seconds(), LOCAL_PORTS_WAIT_SECONDS);
     assert!(LOCAL_PORTS_WAIT_SECONDS <= MAX_WAIT_SECONDS);
     assert_eq!(
         HostOp::SignalPort {
@@ -72,7 +69,10 @@ fn a_local_ports_reply_leaves_out_what_is_unknown() {
         note: None,
     }));
     let text = serde_json::to_string(&reply).unwrap();
-    assert!(text.starts_with(r#"{"kind":"local_ports","listening":["#), "{text}");
+    assert!(
+        text.starts_with(r#"{"kind":"local_ports","listening":["#),
+        "{text}"
+    );
     assert!(text.contains(r#""paused":true"#));
     assert!(!text.contains(r#""paused":false"#));
     assert!(!text.contains("note"));

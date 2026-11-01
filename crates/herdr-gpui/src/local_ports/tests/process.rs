@@ -66,7 +66,10 @@ fn identity(system: &mut System, child: &Child) -> Identity {
     }
 }
 
+/// A fresh table, as the worker reads one: macOS `sysinfo` keeps the state
+/// it first saw for a process it already knows.
 fn status(system: &mut System, child: &Child) -> Option<ProcessStatus> {
+    *system = System::new();
     let pid = Pid::from_u32(child.id());
     system.refresh_processes_specifics(
         ProcessesToUpdate::Some(&[pid]),
@@ -121,7 +124,18 @@ fn pausing_resuming_and_stopping_a_real_process() {
 #[test]
 fn a_process_ignoring_sigterm_is_killed_after_its_grace() {
     let mut system = System::new();
-    let mut child = spawn("trap '' TERM; while :; do sleep 1; done");
+    let mut child = std::process::Command::new("/bin/sh")
+        .args(["-c", "trap '' TERM; echo ready; while :; do sleep 1; done"])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // SIGTERM sent before the shell ignores it would end it.
+    let mut ready = String::new();
+    std::io::BufRead::read_line(
+        &mut std::io::BufReader::new(child.stdout.take().unwrap()),
+        &mut ready,
+    )
+    .unwrap();
     let victim = identity(&mut system, &child);
     assert_eq!(
         act(
@@ -144,7 +158,13 @@ fn a_stale_start_time_is_never_signalled() {
     let mut victim = identity(&mut system, &child);
     victim.started -= 1;
     assert_eq!(
-        act(&mut system, PortAction::Stop, victim, user(), Duration::ZERO),
+        act(
+            &mut system,
+            PortAction::Stop,
+            victim,
+            user(),
+            Duration::ZERO
+        ),
         Outcome::Exited
     );
     assert!(status(&mut system, &child).is_some());

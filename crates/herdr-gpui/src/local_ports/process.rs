@@ -13,7 +13,9 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use sysinfo::{Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, Signal, System, UpdateKind};
+use sysinfo::{
+    Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, Signal, System, UpdateKind,
+};
 
 /// A process name is display text; longer ones are cut.
 const NAME_LIMIT: usize = 64;
@@ -47,7 +49,11 @@ pub(crate) fn check(found: Option<Found>, victim: Identity, user: u32) -> Result
     Ok(())
 }
 
+/// Reads `pids` afresh. A new table every time: macOS `sysinfo` keeps the
+/// state it first saw for a process it already knows, so a pause or an exit
+/// since would go unseen.
 fn refresh(system: &mut System, pids: &[Pid]) {
+    *system = System::new();
     system.refresh_processes_specifics(
         ProcessesToUpdate::Some(pids),
         true,
@@ -62,7 +68,10 @@ fn found(system: &System, pid: u32) -> Option<Found> {
     Some(Found {
         started: process.start_time(),
         user: process.user_id().map(|uid| **uid),
-        zombie: matches!(process.status(), ProcessStatus::Zombie | ProcessStatus::Dead),
+        zombie: matches!(
+            process.status(),
+            ProcessStatus::Zombie | ProcessStatus::Dead
+        ),
     })
 }
 
@@ -81,10 +90,7 @@ pub(super) fn describe(system: &mut System, sockets: Vec<Socket>, user: u32) -> 
         .into_iter()
         .filter_map(|socket| {
             let process = system.process(Pid::from_u32(socket.pid))?;
-            if process
-                .user_id()
-                .is_some_and(|uid| **uid != user)
-            {
+            if process.user_id().is_some_and(|uid| **uid != user) {
                 return None;
             }
             // `lsof` cuts names at nine characters; the OS's own is longer.

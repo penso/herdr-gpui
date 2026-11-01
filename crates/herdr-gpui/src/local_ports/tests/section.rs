@@ -13,11 +13,7 @@ use gpui::{AppContext as _, Entity, Modifiers, VisualTestContext, px, size};
 fn fixture(
     cx: &mut gpui::TestAppContext,
     listing: Vec<Listener>,
-) -> (
-    Entity<HerdrWindow>,
-    &mut VisualTestContext,
-    Channels,
-) {
+) -> (Entity<HerdrWindow>, &mut VisualTestContext, Channels) {
     let (ports, updates, commands) = LocalPorts::fake();
     let (fixture, cx) = cx.add_window_view(|window, cx| {
         let view = cx.new(|cx| {
@@ -39,7 +35,14 @@ fn fixture(
         window.refresh();
         full_draw(window, cx).clear(cx);
     });
-    (view, cx, Channels { commands, _updates: updates })
+    (
+        view,
+        cx,
+        Channels {
+            commands,
+            _updates: updates,
+        },
+    )
 }
 
 /// The fake worker's ends: its commands, and the answers it never sends,

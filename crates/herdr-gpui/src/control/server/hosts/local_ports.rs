@@ -63,9 +63,10 @@ fn list(view: &HerdrWindow) -> Option<Response> {
             info(listener, workspace, now, home.as_deref())
         })
         .collect();
-    let note = view.local_ports.error().map(|error| {
-        format!("The latest scan failed, so this listing may be old: {error}")
-    });
+    let note = view
+        .local_ports
+        .error()
+        .map(|error| format!("The latest scan failed, so this listing may be old: {error}"));
     Some(Response::Host {
         reply: Reply::LocalPorts(Box::new(LocalPorts { listening, note })),
     })
@@ -161,7 +162,12 @@ fn wait(
     );
 }
 
-pub(super) fn all(caller: &Caller, incoming: socket::Incoming, watches: &mut Watches, cx: &mut App) {
+pub(super) fn all(
+    caller: &Caller,
+    incoming: socket::Incoming,
+    watches: &mut Watches,
+    cx: &mut App,
+) {
     wait(caller, incoming, watches, cx, |view, _, _| list(view));
 }
 

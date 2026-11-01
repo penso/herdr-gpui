@@ -6,8 +6,7 @@
 
 use super::{Listener, Pending, Report, SUPPORTED, home_relative};
 use crate::{
-    HerdrWindow, config::corners, direction::Logical, i18n::fl, listening_ports::Link,
-    usage::Host,
+    HerdrWindow, config::corners, direction::Logical, i18n::fl, listening_ports::Link, usage::Host,
 };
 use gpui::{prelude::*, *};
 use herdr_control_protocol::protocol::hosts::PortAction;
@@ -93,7 +92,12 @@ impl HerdrWindow {
 
     /// Opens a listener's page: in a browser tab of the workspace that
     /// started it, else in the system's browser.
-    fn open_listener_page(&mut self, listener: &Listener, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_listener_page(
+        &mut self,
+        listener: &Listener,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(url) = listener.url() else {
             return;
         };
@@ -133,7 +137,10 @@ impl HerdrWindow {
         };
         let listing = self.local_ports.listing();
         if !SUPPORTED {
-            body = body.child(note(fl!("local-ports-unsupported").into(), "local-ports-unsupported"));
+            body = body.child(note(
+                fl!("local-ports-unsupported").into(),
+                "local-ports-unsupported",
+            ));
         } else if let Some(error) = self.local_ports.error() {
             body = body.child(
                 div()
@@ -147,7 +154,10 @@ impl HerdrWindow {
         }
         match listing {
             None if SUPPORTED && self.local_ports.error().is_none() => {
-                body = body.child(note(fl!("local-ports-reading").into(), "local-ports-reading"));
+                body = body.child(note(
+                    fl!("local-ports-reading").into(),
+                    "local-ports-reading",
+                ));
             }
             Some([]) => {
                 body = body.child(note(fl!("local-ports-empty").into(), "local-ports-empty"));
@@ -156,7 +166,8 @@ impl HerdrWindow {
                 let now = SystemTime::now();
                 let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
                 for (index, listener) in listeners.iter().enumerate() {
-                    body = body.child(self.local_port_row(index, listener, now, home.as_deref(), cx));
+                    body =
+                        body.child(self.local_port_row(index, listener, now, home.as_deref(), cx));
                 }
             }
             None => {}
@@ -212,17 +223,20 @@ impl HerdrWindow {
             .child(div().flex_1())
             .when(SUPPORTED, |header| {
                 header.child(
-                    self.local_ports_button("local-ports-refresh".into(), fl!("local-ports-refresh").into())
-                        .child(
-                            svg()
-                                .path("icons/refresh.svg")
-                                .size(px(12.))
-                                .text_color(rgb(theme.subtext())),
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.local_ports.refresh();
-                            cx.notify();
-                        })),
+                    self.local_ports_button(
+                        "local-ports-refresh".into(),
+                        fl!("local-ports-refresh").into(),
+                    )
+                    .child(
+                        svg()
+                            .path("icons/refresh.svg")
+                            .size(px(12.))
+                            .text_color(rgb(theme.subtext())),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.local_ports.refresh();
+                        cx.notify();
+                    })),
                 )
             })
     }
@@ -286,15 +300,17 @@ impl HerdrWindow {
         if listener.url().is_some() {
             let opened = listener.clone();
             actions = actions.child(action("open", fl!("local-ports-open").into()).on_click(
-                cx.listener(move |this, _, window, cx| this.open_listener_page(&opened, window, cx)),
+                cx.listener(move |this, _, window, cx| {
+                    this.open_listener_page(&opened, window, cx)
+                }),
             ));
         }
         if !acting {
             let chosen = listener.clone();
             actions = actions.child(if listener.paused {
-                action("resume", fl!("local-ports-resume").into()).on_click(cx.listener(
-                    move |this, _, _, cx| this.resume_local_port(&chosen, cx),
-                ))
+                action("resume", fl!("local-ports-resume").into()).on_click(
+                    cx.listener(move |this, _, _, cx| this.resume_local_port(&chosen, cx)),
+                )
             } else {
                 action("pause", fl!("local-ports-pause").into()).on_click(cx.listener(
                     move |this, _, window, cx| {
@@ -376,7 +392,10 @@ impl HerdrWindow {
                                     .child(fl!("local-ports-pid", pid = listener.identity.pid)),
                             )
                             .when(listener.paused, |line| {
-                                line.child(pill(fl!("local-ports-paused").into(), theme.ink(theme.palette[3])))
+                                line.child(pill(
+                                    fl!("local-ports-paused").into(),
+                                    theme.ink(theme.palette[3]),
+                                ))
                             })
                             .children(owner.map(|owned| {
                                 pill(
@@ -395,18 +414,17 @@ impl HerdrWindow {
                             .text_size(small)
                             .text_color(rgb(theme.muted))
                             .children(directory.map(|(project, path)| {
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .child(fl!(
-                                        "local-ports-directory",
-                                        project = project.as_str(),
-                                        path = path.as_str()
-                                    ))
+                                div().min_w_0().truncate().child(fl!(
+                                    "local-ports-directory",
+                                    project = project.as_str(),
+                                    path = path.as_str()
+                                ))
                             }))
-                            .children(listener.uptime(now).map(|uptime| {
-                                div().flex_none().child(uptime_text(uptime))
-                            })),
+                            .children(
+                                listener
+                                    .uptime(now)
+                                    .map(|uptime| div().flex_none().child(uptime_text(uptime))),
+                            ),
                     ),
             )
             .child(actions)

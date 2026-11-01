@@ -13,6 +13,7 @@ pub(super) const MAX_SOCKETS: usize = 1024;
 /// Prints `ss`, `lsof`, or `none`, then that tool's own listing. `lsof`
 /// exits 1 when nothing listens, so the script ends with `true` for the
 /// answer to count; the tools' own errors are dropped.
+// i18n: data
 pub(super) const SCRIPT: &str = r#"PATH="$PATH:/usr/sbin:/sbin"
 if command -v ss >/dev/null 2>&1; then
     printf 'ss\n'
@@ -83,7 +84,9 @@ fn ss<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<Socket> {
             let Some((name, after)) = rest.split_once("\",pid=") else {
                 break;
             };
-            let digits = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
+            let digits = after
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(after.len());
             if sockets.len() == MAX_SOCKETS {
                 return sockets;
             }

@@ -66,17 +66,21 @@ impl HerdrWindow {
                 fl!("local-ports-confirm-stop"),
             ),
         };
-        let rows = pending.listeners.iter().enumerate().map(|(index, listener)| {
-            div()
-                .debug_selector(move || format!("port-signal-row-{index}"))
-                .truncate()
-                .child(fl!(
-                    "local-ports-confirm-row",
-                    process = listener.process.as_str(),
-                    pid = listener.identity.pid,
-                    address = listener.address()
-                ))
-        });
+        let rows = pending
+            .listeners
+            .iter()
+            .enumerate()
+            .map(|(index, listener)| {
+                div()
+                    .debug_selector(move || format!("port-signal-row-{index}"))
+                    .truncate()
+                    .child(fl!(
+                        "local-ports-confirm-row",
+                        process = listener.process.as_str(),
+                        pid = listener.identity.pid,
+                        address = listener.address()
+                    ))
+            });
         div()
             .debug_selector(|| "port-signal".into())
             .flex()
