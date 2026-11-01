@@ -4,7 +4,7 @@
 //! find, and CodexBar reads no cookies for it either. The free account's
 //! daily allowance and grace period are not shown, as in CodexBar.
 
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -104,26 +104,42 @@ pub(crate) fn parse(billing: &str, rate_limits: &str, scope: Option<&str>) -> Re
     }
     let windows = [
         allowance.window(Kind::Monthly, Some(MONTH)),
-        rate.window(Kind::Named("Rate limit".into()), None),
+        rate.window(Kind::Named(Text::message("usage-v0-rate-limit")), None),
     ]
     .into_iter()
     .flatten()
     .collect();
-    let mut facts = vec![("Billing remaining".to_owned(), allowance.describe())];
+    let mut facts = vec![(
+        Text::message("usage-v0-billing-remaining"),
+        allowance.describe(),
+    )];
     if let Some(on_demand) = on_demand {
-        facts.push(("On-demand balance".into(), count(on_demand)));
+        facts.push((
+            Text::message("usage-v0-on-demand-balance"),
+            Text::service(count(on_demand)),
+        ));
     }
-    facts.push(("Rate-limit remaining".into(), rate.describe()));
+    facts.push((
+        Text::message("usage-v0-rate-limit-remaining"),
+        rate.describe(),
+    ));
+    // v0's own billing type, such as token or legacy.
     if let Some(kind) = billing.billing_type {
-        facts.push(("Billing type".into(), kind.trim().to_owned()));
+        facts.push((
+            Text::message("usage-v0-billing-type"),
+            Text::service(kind.trim()),
+        ));
     }
     if let Some(scope) = scope {
-        facts.push(("Scope".into(), scope.chars().take(120).collect()));
+        facts.push((
+            Text::message("usage-v0-scope"),
+            Text::service(scope.chars().take(120).collect::<String>()),
+        ));
     }
     Ok(
         Report::new(Provider(&V0), Account::default(), windows).with_sections([Section::Facts {
-            title: "v0 API".into(),
-            facts: pairs(facts),
+            title: Text::message("usage-v0-api"),
+            facts,
         }]),
     )
 }
@@ -152,10 +168,12 @@ impl Quota {
         ))
     }
 
-    fn describe(&self) -> String {
+    fn describe(&self) -> Text {
         match self.remaining {
-            Some(remaining) => format!("{} of {}", count(remaining), count(self.limit)),
-            None => format!("Unavailable (limit {})", count(self.limit)),
+            Some(remaining) => Text::message("usage-v0-remaining-of")
+                .arg("remaining", count(remaining))
+                .arg("limit", count(self.limit)),
+            None => Text::message("usage-v0-unavailable").arg("limit", count(self.limit)),
         }
     }
 }
@@ -223,17 +241,40 @@ mod tests {
         assert!((billing.used - 25.).abs() < 0.01);
         assert!(billing.resets_at.is_some());
         let rate = &report.windows[1];
-        assert_eq!(rate.kind, Kind::Named("Rate limit".into()));
+        assert_eq!(rate.kind, Kind::Named(Text::message("usage-v0-rate-limit")));
         assert!((rate.used - 20.).abs() < 0.01);
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
         assert_eq!(
-            facts[0],
-            ("Billing remaining".into(), "750 of 1,000".into())
+            facts,
+            &[
+                (
+                    Text::message("usage-v0-billing-remaining"),
+                    Text::message("usage-v0-remaining-of")
+                        .arg("remaining", "750")
+                        .arg("limit", "1,000")
+                ),
+                (
+                    Text::message("usage-v0-on-demand-balance"),
+                    Text::service("120")
+                ),
+                (
+                    Text::message("usage-v0-rate-limit-remaining"),
+                    Text::message("usage-v0-remaining-of")
+                        .arg("remaining", "80")
+                        .arg("limit", "100")
+                ),
+                (
+                    Text::message("usage-v0-billing-type"),
+                    Text::service("token")
+                ),
+                (
+                    Text::message("usage-v0-scope"),
+                    Text::service("project-demo")
+                ),
+            ]
         );
-        assert_eq!(facts[1], ("On-demand balance".into(), "120".into()));
-        assert_eq!(facts.last().unwrap().1, "project-demo");
     }
 
     #[test]
@@ -248,7 +289,10 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "Unavailable (limit 1,000)");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-v0-unavailable").arg("limit", "1,000")
+        );
     }
 
     #[test]

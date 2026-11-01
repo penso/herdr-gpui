@@ -151,7 +151,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         (slot(&["weeklyTokenLimit"]), Some(Kind::Weekly)),
         (
             slot(&["search", "hourly"]),
-            Some(Kind::Named("Search hourly".into())),
+            Some(Kind::Named(Text::message("usage-synthetic-search-hourly"))),
         ),
     ];
     let quotas: Vec<(Quota, Option<Kind>)> = if slots.iter().any(|(slot, _)| slot.is_some()) {
@@ -189,7 +189,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .find_map(|(quota, _)| quota.credits)
         .map(|(used, limit)| {
             Balance::new(
-                "Weekly credits left",
+                Text::message("usage-synthetic-weekly-credits-left"),
                 (limit - used).max(0.),
                 Unit::Currency("USD".into()),
             )
@@ -206,7 +206,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Provider(&Synthetic),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         windows,
     )
@@ -231,12 +231,15 @@ impl Quota {
             Some(24) => Kind::Daily,
             Some(168) => Kind::Weekly,
             Some(720 | 744) => Kind::Monthly,
-            _ => Kind::Named(Text::from(
-                self.label.unwrap_or_else(|| format!("Quota {}", index + 1)),
+            _ => Kind::Named(self.label.map_or_else(
+                || Text::message("usage-synthetic-quota").arg("number", index + 1),
+                Text::service,
             )),
         });
         let length = self.length.or_else(|| match &kind {
-            Kind::Named(name) if name == "Search hourly" => Some(Duration::from_secs(3600)),
+            Kind::Named(name) if *name == Text::message("usage-synthetic-search-hourly") => {
+                Some(Duration::from_secs(3600))
+            }
             _ => None,
         });
         Window::new(kind, self.used, self.resets_at, length)
@@ -480,7 +483,7 @@ mod tests {
             [
                 Kind::Session,
                 Kind::Weekly,
-                Kind::Named("Search hourly".into())
+                Kind::Named(Text::message("usage-synthetic-search-hourly"))
             ]
         );
         assert_eq!(report.windows[0].percent(), 20);
@@ -508,7 +511,7 @@ mod tests {
         assert_eq!(report.windows[0].kind, Kind::Daily);
         assert_eq!(report.windows[0].percent(), 25);
         assert_eq!(report.windows[0].resets_at, Some(at(1_776_400_000.)));
-        assert_eq!(report.windows[1].kind, Kind::Named("Burst".into()));
+        assert_eq!(report.windows[1].kind, Kind::Named(Text::service("Burst")));
         assert_eq!(report.windows[1].percent(), 50);
     }
 

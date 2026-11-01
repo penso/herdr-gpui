@@ -82,7 +82,7 @@ pub(crate) fn parse(billing: &str, payg: Option<&str>) -> Result<Report> {
         Provider(&Sakana),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         windows,
     )
@@ -188,7 +188,11 @@ fn pay_as_you_go(html: &str) -> Option<(Vec<Balance>, Vec<Section>)> {
         .flatten()
         .next()?;
     let usd = || Unit::Currency("USD".into());
-    let mut balances = vec![Balance::new("Credit balance", balance, usd())];
+    let mut balances = vec![Balance::new(
+        Text::message("usage-sakana-credit-balance"),
+        balance,
+        usd(),
+    )];
     let usage = nodes
         .iter()
         .position(|node| matches!(node, Node::Text(text) if text == "Usage"))
@@ -211,11 +215,18 @@ fn pay_as_you_go(html: &str) -> Option<(Vec<Balance>, Vec<Section>)> {
         });
     let mut sections = Vec::new();
     if let Some(spent) = usage {
-        balances.push(Balance::new("Pay-as-you-go usage", spent, usd()));
+        balances.push(Balance::new(
+            Text::message("usage-sakana-pay-as-you-go-usage"),
+            spent,
+            usd(),
+        ));
         if let Some(range) = range {
             sections.push(Section::Facts {
-                title: "Pay as you go".into(),
-                facts: vec![("Usage period".into(), Text::from(range))],
+                title: Text::message("usage-sakana-pay-as-you-go"),
+                facts: vec![(
+                    Text::message("usage-sakana-usage-period"),
+                    Text::service(range),
+                )],
             });
         }
     }
@@ -364,15 +375,22 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Credit balance", 12.34, usd.clone()),
-                Balance::new("Pay-as-you-go usage", 5.67, usd),
+                Balance::new(
+                    Text::message("usage-sakana-credit-balance"),
+                    12.34,
+                    usd.clone()
+                ),
+                Balance::new(Text::message("usage-sakana-pay-as-you-go-usage"), 5.67, usd),
             ]
         );
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Pay as you go".into(),
-                facts: vec![("Usage period".into(), "Jun 02, 2026 - Jul 01, 2026".into())],
+                title: Text::message("usage-sakana-pay-as-you-go"),
+                facts: vec![(
+                    Text::message("usage-sakana-usage-period"),
+                    Text::service("Jun 02, 2026 - Jul 01, 2026")
+                )],
             }]
         );
     }

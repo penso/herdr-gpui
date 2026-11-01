@@ -10,7 +10,7 @@
 //! which the site's own session library also accepts.
 
 use crate::model::Count;
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -131,19 +131,29 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     } else {
         Some(Window::new(Kind::Monthly, 100., renewal, Some(MONTH)))
     };
-    let pool = |label: &str, used: f64, total: f64| {
+    let pool = |label: Text, used: f64, total: f64| {
         (total > 0.).then(|| {
             Balance::new(label, (total - used).max(0.), Unit::Count(Count::Credits)).out_of(total)
         })
     };
     let balances = [
-        pool("Bonus credits", promo_used, promo),
-        pool("Purchased credits", purchased_used, purchased),
+        pool(
+            Text::message("usage-perplexity-bonus-credits"),
+            promo_used,
+            promo,
+        ),
+        pool(
+            Text::message("usage-perplexity-purchased-credits"),
+            purchased_used,
+            purchased,
+        ),
     ];
     let whole = |value: f64| group(value.round() as i64);
     let mut facts = vec![(
-        "Credits".to_owned(),
-        format!("{} of {}", whole(recurring_used), whole(recurring)),
+        Text::message("usage-perplexity-credits"),
+        Text::message("usage-perplexity-used-of")
+            .arg("used", whole(recurring_used))
+            .arg("total", whole(recurring)),
     )];
     let expiry = credits
         .credit_grants
@@ -153,27 +163,28 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         .min();
     if let Some(expiry) = expiry {
         facts.push((
-            "Bonus expires".to_owned(),
-            chrono::DateTime::<chrono::Utc>::from(expiry)
-                .format("%b %-d, %Y")
-                .to_string(),
+            Text::message("usage-perplexity-bonus-expires"),
+            Text::service(
+                chrono::DateTime::<chrono::Utc>::from(expiry)
+                    .format("%b %-d, %Y")
+                    .to_string(),
+            ),
         ));
     }
-    let plan = (recurring > 0.)
-        .then_some(if recurring < 5000. { "Pro" } else { "Max" })
-        .map(str::to_owned);
+    // Perplexity's own plan names.
+    let plan = (recurring > 0.).then_some(if recurring < 5000. { "Pro" } else { "Max" });
     Ok(Report::new(
         Provider(&Perplexity),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         window.into_iter().collect(),
     )
     .with_balances(balances.into_iter().flatten())
     .with_sections([Section::Facts {
-        title: "Credits".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-perplexity-credits"),
+        facts,
     }]))
 }
 
@@ -213,7 +224,6 @@ impl Grant {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
     use std::time::Duration;
 
     const NOW: u64 = 1_780_000_000;
@@ -253,14 +263,22 @@ mod tests {
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(RENEWAL))
         );
         assert_eq!(report.balances.len(), 1);
-        assert_eq!(report.balances[0].label, "Bonus credits");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-perplexity-bonus-credits")
+        );
         assert_eq!(report.balances[0].amount, 20_000.);
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
         assert_eq!(
             facts[0],
-            pair(("Credits".to_owned(), "2,750 of 10,000".to_owned()))
+            (
+                Text::message("usage-perplexity-credits"),
+                Text::message("usage-perplexity-used-of")
+                    .arg("used", "2,750")
+                    .arg("total", "10,000")
+            )
         );
     }
 

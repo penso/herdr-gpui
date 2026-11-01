@@ -95,14 +95,20 @@ pub(crate) fn parse(body: &str, china: bool) -> Result<Report> {
         _ => 100.,
     };
     let resets_at = usage.next_reset_at.as_ref().and_then(Timestamp::time);
-    let window = Window::new(Kind::Named("Credits".into()), percent, resets_at, None);
+    let window = Window::new(
+        Kind::Named(Text::message("usage-qoder-credits")),
+        percent,
+        resets_at,
+        None,
+    );
     let account = Account {
         email: None,
-        plan: china.then(|| "qoder.com.cn".to_owned()).map(Text::from),
+        // The China site's domain, a name rather than words.
+        plan: china.then(|| Text::service("qoder.com.cn")),
     };
     Ok(
         Report::new(Provider(&Qoder), account, vec![window]).with_balances([Balance::new(
-            "Credits left",
+            Text::message("usage-qoder-credits-left"),
             remaining,
             Unit::Count(Count::Credits),
         )

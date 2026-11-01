@@ -6,3 +6,9 @@
 
 usage-qoder-setting-cookie = Your Qoder browser session. Sign in at https://qoder.com/account/usage (or https://qoder.com.cn/account/usage), open Developer Tools > Application > Cookies for qoder.com (or qoder.com.cn), and copy every cookie of the site as one header: "name=value; name2=value2".
 usage-qoder-setting-site = Which Qoder site the account belongs to: "global" for qoder.com (the default) or "china" for qoder.com.cn.
+
+## The report: the plan's credits, with any shared pool added. The China
+## site's domain (qoder.com.cn) stays as written.
+
+usage-qoder-credits = Credits
+usage-qoder-credits-left = Credits left

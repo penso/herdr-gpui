@@ -19,7 +19,7 @@
 //! Not ported: the Linux editor sign-in lives in the Secret Service, which
 //! the probe cannot read.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -186,13 +186,13 @@ fn predictions(
     usage: &EditPredictions,
     null_is_unlimited: bool,
     period: Option<(SystemTime, Duration)>,
-) -> Result<(Option<Window>, (String, String))> {
+) -> Result<(Option<Window>, (Text, Text))> {
     Ok(match predictions_limit(&usage.limit, null_is_unlimited)? {
         Predictions::Unlimited => (
             None,
             (
-                "Edit predictions".into(),
-                format!("{} used · Unlimited", usage.used),
+                Text::message("usage-zed-edit-predictions"),
+                Text::message("usage-zed-used-unlimited").arg("used", usage.used.to_string()),
             ),
         ),
         Predictions::Limited(limit) => (
@@ -205,8 +205,10 @@ fn predictions(
                 )
             }),
             (
-                "Edit predictions".into(),
-                format!("{} of {limit}", usage.used.min(limit)),
+                Text::message("usage-zed-edit-predictions"),
+                Text::message("usage-zed-used-of")
+                    .arg("used", usage.used.min(limit).to_string())
+                    .arg("limit", limit.to_string()),
             ),
         ),
     })
@@ -222,19 +224,22 @@ pub(crate) fn parse_editor(body: &str) -> Result<Report> {
     let (window, prediction) = predictions(&me.plan.usage.edit_predictions, false, period)?;
     let mut facts = vec![prediction];
     if me.plan.has_overdue_invoices {
-        facts.push(("Billing".into(), "Overdue invoices".into()));
+        facts.push((
+            Text::message("usage-zed-billing"),
+            Text::message("usage-zed-overdue-invoices"),
+        ));
     }
     let account = Account {
         email: Some(me.user.github_login.trim().to_owned())
             .filter(|login| !login.is_empty())
-            .map(Text::from),
-        plan: plan_name(&me.plan.plan_v3).map(Text::from),
+            .map(Text::service),
+        plan: plan_name(&me.plan.plan_v3).map(Text::service),
     };
     Ok(
         Report::new(Provider(&Zed), account, window.into_iter().collect()).with_sections([
             Section::Facts {
-                title: "Plan".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-zed-plan"),
+                facts,
             },
         ]),
     )
@@ -246,23 +251,33 @@ pub(crate) fn parse_billing(body: &str) -> Result<Report> {
     let spend = &billing.current_usage.token_spend;
     let spent = spend.spend_in_cents / 100.;
     let cap = spend.limit_in_cents.map(|cents| cents / 100.);
-    let balance = Balance::new("Token spend", spent, Unit::Currency("USD".into()));
+    let balance = Balance::new(
+        Text::message("usage-zed-token-spend"),
+        spent,
+        Unit::Currency("USD".into()),
+    );
     let mut facts = vec![
         prediction,
-        ("Spent".into(), usd(spent)),
+        (Text::message("usage-zed-spent"), Text::service(usd(spent))),
         (
-            "Spend limit".into(),
-            cap.map_or_else(|| "Not reported".into(), usd),
+            Text::message("usage-zed-spend-limit"),
+            cap.map_or_else(
+                || Text::message("usage-zed-not-reported"),
+                |cap| Text::service(usd(cap)),
+            ),
         ),
     ];
     if let Some(cap) = cap {
-        facts.push(("Remaining budget".into(), usd(cap - spent)));
+        facts.push((
+            Text::message("usage-zed-remaining-budget"),
+            Text::service(usd(cap - spent)),
+        ));
     }
     Ok(Report::new(
         Provider(&Zed),
         Account {
             email: None,
-            plan: plan_name(&billing.plan).map(Text::from),
+            plan: plan_name(&billing.plan).map(Text::service),
         },
         window.into_iter().collect(),
     )
@@ -271,8 +286,8 @@ pub(crate) fn parse_billing(body: &str) -> Result<Report> {
         None => balance,
     }])
     .with_sections([Section::Facts {
-        title: "Current billing period".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-zed-current-billing-period"),
+        facts,
     }]))
 }
 
@@ -335,7 +350,6 @@ struct TokenSpend {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
 
     /// CodexBar's editor fixture.
     fn editor_fixture(limit: &str) -> String {
@@ -382,11 +396,19 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            pair(("Edit predictions".to_owned(), "30 of 120".to_owned()))
+            (
+                Text::message("usage-zed-edit-predictions"),
+                Text::message("usage-zed-used-of")
+                    .arg("used", "30")
+                    .arg("limit", "120")
+            )
         );
         assert_eq!(
             facts[1],
-            pair(("Billing".to_owned(), "Overdue invoices".to_owned()))
+            (
+                Text::message("usage-zed-billing"),
+                Text::message("usage-zed-overdue-invoices")
+            )
         );
     }
 
@@ -397,7 +419,10 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "30 used · Unlimited");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-zed-used-unlimited").arg("used", "30")
+        );
     }
 
     #[test]
@@ -418,10 +443,26 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&(
-            Text::from("Remaining budget".to_owned()),
-            Text::from("$7.50".to_owned())
-        )));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-zed-edit-predictions"),
+                    Text::message("usage-zed-used-of")
+                        .arg("used", "12")
+                        .arg("limit", "100")
+                ),
+                (Text::message("usage-zed-spent"), Text::service("$2.50")),
+                (
+                    Text::message("usage-zed-spend-limit"),
+                    Text::service("$10.00")
+                ),
+                (
+                    Text::message("usage-zed-remaining-budget"),
+                    Text::service("$7.50")
+                ),
+            ]
+        );
     }
 
     #[test]

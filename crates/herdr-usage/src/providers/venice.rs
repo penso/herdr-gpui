@@ -10,7 +10,7 @@
 //! pasted as a whole `cookie` header.
 
 use crate::model::Count;
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -80,11 +80,16 @@ pub(crate) fn parse_balance(body: &str) -> Result<Report> {
         .map(|currency| currency.trim().to_uppercase())
         .filter(|currency| !currency.is_empty());
     let allocation = answer.diem_epoch_allocation.filter(|total| *total > 0.);
+    // Each balance is named by its currency, as Venice names them.
     let usd = balances
         .usd
-        .map(|usd| Balance::new("USD", usd, Unit::Currency("USD".into())));
+        .map(|usd| Balance::new(Text::service("USD"), usd, Unit::Currency("USD".into())));
     let diem = balances.diem.map(|diem| {
-        let balance = Balance::new("DIEM", diem, Unit::Count(Count::Named("DIEM".into())));
+        let balance = Balance::new(
+            Text::service("DIEM"),
+            diem,
+            Unit::Count(Count::Named("DIEM".into())),
+        );
         match allocation {
             Some(total) => balance.out_of(total),
             None => balance,
@@ -100,7 +105,7 @@ pub(crate) fn parse_balance(body: &str) -> Result<Report> {
     // reported, so the window carries no length or reset time.
     let windows = match (can_consume, currency.as_deref(), balances.diem, allocation) {
         (true, Some(currency), Some(diem), Some(total)) if currency != "USD" => vec![Window::new(
-            Kind::Named("DIEM allocation".into()),
+            Kind::Named(Text::message("usage-venice-diem-allocation")),
             (total - diem) / total * 100.,
             None,
             None,
@@ -108,10 +113,10 @@ pub(crate) fn parse_balance(body: &str) -> Result<Report> {
         _ => Vec::new(),
     };
     let status = (!can_consume).then(|| Section::Facts {
-        title: "Status".into(),
+        title: Text::message("usage-venice-status"),
         facts: vec![(
-            "API calls".into(),
-            "Balance unavailable for API calls".into(),
+            Text::message("usage-venice-api-calls"),
+            Text::message("usage-venice-unavailable-for-api-calls"),
         )],
     });
     Ok(Report::new(Provider(&Venice), Account::default(), windows)
@@ -174,19 +179,38 @@ pub(crate) fn parse_session(body: &str, now: SystemTime) -> Result<Report> {
         .available_credits
         .or(claims.bundled_credits)
         .filter(|credits| *credits >= 0.)
-        .map(|amount| Balance::new("Subscription credits", amount, credits()));
+        .map(|amount| {
+            Balance::new(
+                Text::message("usage-venice-subscription-credits"),
+                amount,
+                credits(),
+            )
+        });
     let total = claims
         .venice_credits
         .filter(|credits| *credits >= 0.)
-        .map(|amount| Balance::new("Total credits", amount, credits()));
+        .map(|amount| {
+            Balance::new(
+                Text::message("usage-venice-total-credits"),
+                amount,
+                credits(),
+            )
+        });
     // Monthly refill is not a spending cap: banked credits can outlast it,
     // so spend is shown against it without a quota window.
-    let spent = Balance::new("Used this cycle", used, credits()).out_of(refill);
+    let spent = Balance::new(
+        Text::message("usage-venice-used-this-cycle"),
+        used,
+        credits(),
+    )
+    .out_of(refill);
     let mut facts = Vec::new();
     if let Some(cap) = usage.tier_cap.filter(|cap| *cap >= 0.) {
         facts.push((
-            "Bank cap".to_owned(),
-            format!("{} credits", group(cap.round() as i64)),
+            Text::message("usage-venice-bank-cap"),
+            Text::message("usage-venice-credit-count")
+                .arg("credits", cap.round())
+                .arg("count", group(cap.round() as i64)),
         ));
     }
     if let Some(refill_at) = usage
@@ -196,17 +220,18 @@ pub(crate) fn parse_session(body: &str, now: SystemTime) -> Result<Report> {
         .and_then(|seconds| chrono::DateTime::from_timestamp(seconds as i64, 0))
     {
         facts.push((
-            "Next refill".into(),
-            refill_at.format("%b %-d, %Y").to_string(),
+            Text::message("usage-venice-next-refill"),
+            Text::service(refill_at.format("%b %-d, %Y").to_string()),
         ));
     }
     let section = (!facts.is_empty()).then(|| Section::Facts {
-        title: "Credits".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-venice-credits"),
+        facts,
     });
+    // Venice's own user type, such as pro.
     let account = Account {
         email: None,
-        plan: user_type.map(Text::from),
+        plan: user_type.map(Text::service),
     };
     Ok(Report::new(Provider(&Venice), account, Vec::new())
         .with_balances(available.into_iter().chain(total).chain([spent]))
@@ -295,7 +320,6 @@ struct CreditsUsage {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
 
     fn encode(bytes: &[u8]) -> String {
         const TABLE: &[u8; 64] =
@@ -336,7 +360,14 @@ mod tests {
         assert!((report.windows[0].used - 9.5).abs() < 1e-4);
         assert_eq!(
             report.balances,
-            vec![Balance::new("DIEM", 90.5, Unit::Count(Count::Named("DIEM".into()))).out_of(100.)]
+            vec![
+                Balance::new(
+                    Text::service("DIEM"),
+                    90.5,
+                    Unit::Count(Count::Named("DIEM".into()))
+                )
+                .out_of(100.)
+            ]
         );
     }
 
@@ -360,7 +391,16 @@ mod tests {
                 "balances": {"diem": null, "usd": 100.0}, "diemEpochAllocation": null}"#,
         )
         .unwrap();
-        assert_eq!(report.sections.len(), 1);
+        assert_eq!(
+            report.sections,
+            vec![Section::Facts {
+                title: Text::message("usage-venice-status"),
+                facts: vec![(
+                    Text::message("usage-venice-api-calls"),
+                    Text::message("usage-venice-unavailable-for-api-calls")
+                )],
+            }]
+        );
         assert!(matches!(
             parse_balance(r#"{"balances": {}}"#),
             Err(Error::Json(_))
@@ -380,9 +420,18 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Subscription credits", 750.5, credits.clone()),
-                Balance::new("Total credits", 1500., credits.clone()),
-                Balance::new("Used this cycle", 250., credits).out_of(1000.),
+                Balance::new(
+                    Text::message("usage-venice-subscription-credits"),
+                    750.5,
+                    credits.clone()
+                ),
+                Balance::new(
+                    Text::message("usage-venice-total-credits"),
+                    1500.,
+                    credits.clone()
+                ),
+                Balance::new(Text::message("usage-venice-used-this-cycle"), 250., credits)
+                    .out_of(1000.),
             ]
         );
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
@@ -390,9 +439,20 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            pair(("Bank cap".to_owned(), "3,000 credits".to_owned()))
+            (
+                Text::message("usage-venice-bank-cap"),
+                Text::message("usage-venice-credit-count")
+                    .arg("credits", 3000.)
+                    .arg("count", "3,000")
+            )
         );
-        assert_eq!(facts[1].0, "Next refill");
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-venice-next-refill"),
+                Text::service("Sep 27, 2026")
+            )
+        );
     }
 
     #[test]

@@ -11,7 +11,7 @@
 //! the parent-domain cookies, since the probe takes one cookie header.
 
 use crate::model::Count;
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -132,27 +132,45 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         )]
     };
     let balance = if unlimited {
-        Balance::new("Credits used", used, Unit::Count(Count::Credits))
+        Balance::new(
+            Text::message("usage-zoommate-credits-used"),
+            used,
+            Unit::Count(Count::Credits),
+        )
     } else {
         let left = status.remaining_credit.unwrap_or(cap - used).max(0.);
-        Balance::new("Credits left", left, Unit::Count(Count::Credits)).out_of(cap)
+        Balance::new(
+            Text::message("usage-zoommate-credits-left"),
+            left,
+            Unit::Count(Count::Credits),
+        )
+        .out_of(cap)
     };
-    let mut facts: Vec<(String, String)> = Vec::new();
+    let mut facts = Vec::new();
     if unlimited {
-        facts.push(("Budget".into(), "Unlimited".into()));
+        facts.push((
+            Text::message("usage-zoommate-budget"),
+            Text::message("usage-zoommate-unlimited"),
+        ));
     }
     if let Some(overage) = status.overage_credit.filter(|overage| *overage > 0.) {
-        facts.push(("Overage".into(), format!("{overage:.2} credits")));
+        facts.push((
+            Text::message("usage-zoommate-overage"),
+            Text::message("usage-zoommate-overage-credits").arg("credits", format!("{overage:.2}")),
+        ));
     }
     if status.is_quota_available == Some(false) {
-        facts.push(("Quota".into(), "Exhausted".into()));
+        facts.push((
+            Text::message("usage-zoommate-quota"),
+            Text::message("usage-zoommate-exhausted"),
+        ));
     }
     Ok(
         Report::new(Provider(&Zoommate), Account::default(), windows)
             .with_balances([balance])
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Credits".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-zoommate-credits"),
+                facts,
             })),
     )
 }
@@ -215,7 +233,20 @@ mod tests {
         let body = STATUS_BODY.replace("\"is_unlimited\": false", "\"is_unlimited\": true");
         let report = parse(&body).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Credits used");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-zoommate-credits-used")
+        );
+        let Section::Facts { facts, .. } = &report.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-zoommate-budget"),
+                Text::message("usage-zoommate-unlimited")
+            )
+        );
         assert_eq!(report.balances[0].amount, 678.);
     }
 

@@ -5,3 +5,13 @@
 ## service's own menu paths stay as written.
 
 usage-replicate-setting-cookie = Sign in at https://replicate.com/account/billing, open Developer Tools > Application > Cookies > https://replicate.com, and copy sessionid (and csrftoken when present) as one "sessionid=value; csrftoken=value" header. An API token does not work here.
+
+## The report: this month's spend, the credit balance, and the account the
+## token belongs to. The user or organization name stays as Replicate
+## sends it.
+
+usage-replicate-spent-this-month = Spent this month
+usage-replicate-credit-balance = Credit balance
+usage-replicate-account = Account
+usage-replicate-organization = Organization
+usage-replicate-user = User

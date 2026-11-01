@@ -7,7 +7,7 @@
 //! is read, as in CodexBar. TypeSafe reports no quota or reset, so there
 //! are only balances.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -239,6 +239,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .cycle_label
         .map(|label| label.trim().to_owned())
         .filter(|label| !label.is_empty());
+    // Typesafe's plan names, from its plan IDs.
     let plan = billing
         .plan
         .map(|plan| plan.trim().to_owned())
@@ -255,11 +256,11 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             }
         });
     let usd = || Unit::Currency("USD".into());
-    let spent_label = match &cycle {
-        Some(cycle) => format!("Spent ({cycle})"),
-        None => "Spent".into(),
+    let spent_label = match cycle {
+        Some(cycle) => Text::message("usage-typesafe-spent-cycle").arg("cycle", cycle),
+        None => Text::message("usage-typesafe-spent"),
     };
-    let active: Vec<(String, String)> = billing
+    let active: Vec<(Text, Text)> = billing
         .credits
         .unwrap_or_default()
         .into_iter()
@@ -271,12 +272,11 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             let expires = Timestamp::Text(credit.expires_at?).time()?;
             let expires = chrono::DateTime::<chrono::Utc>::from(expires).format("%b %-d");
             Some((
-                "Credit".to_owned(),
-                format!(
-                    "{} of {}, expires {expires}",
-                    trimmed(remaining),
-                    trimmed(amount)
-                ),
+                Text::message("usage-typesafe-credit"),
+                Text::message("usage-typesafe-credit-left")
+                    .arg("remaining", trimmed(remaining))
+                    .arg("amount", trimmed(amount))
+                    .arg("expires", expires.to_string()),
             ))
         })
         .collect();
@@ -284,24 +284,24 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         let shown = MAX_CREDIT_ROWS - 1;
         let mut credits = active[..shown].to_vec();
         credits.push((
-            "Additional credits".to_owned(),
-            (active.len() - shown).to_string(),
+            Text::message("usage-typesafe-additional-credits"),
+            Text::service((active.len() - shown).to_string()),
         ));
         credits
     } else {
         active
     };
     let sections = (!credits.is_empty()).then(|| Section::Facts {
-        title: "Credits".into(),
-        facts: pairs(credits),
+        title: Text::message("usage-typesafe-credits"),
+        facts: credits,
     });
     let account = Account {
         email: None,
-        plan: plan.map(Text::from),
+        plan: plan.map(Text::service),
     };
     Ok(Report::new(Provider(&Typesafe), account, Vec::new())
         .with_balances([
-            Balance::new("Balance", balance, usd()),
+            Balance::new(Text::message("usage-typesafe-balance"), balance, usd()),
             Balance::new(spent_label, spent, usd()),
         ])
         .with_sections(sections))
@@ -337,16 +337,30 @@ mod tests {
     fn billing_maps_balance_spend_plan_and_active_credits() {
         let report = parse(BODY).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Balance");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-typesafe-balance")
+        );
         assert_eq!(report.balances[0].amount, 4.98);
-        assert_eq!(report.balances[1].label, "Spent (September 2026)");
+        assert_eq!(
+            report.balances[1].label,
+            Text::message("usage-typesafe-spent-cycle").arg("cycle", "September 2026")
+        );
         assert_eq!(report.balances[1].amount, 0.01);
         assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Free"));
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts.len(), 1);
-        assert_eq!(facts[0].1, "4.98 of 5, expires Oct 19");
+        assert_eq!(
+            facts,
+            &[(
+                Text::message("usage-typesafe-credit"),
+                Text::message("usage-typesafe-credit-left")
+                    .arg("remaining", "4.98")
+                    .arg("amount", "5")
+                    .arg("expires", "Oct 19")
+            )]
+        );
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! read, as CodexBar does not read it either.
 
 use crate::model::Count;
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -129,7 +129,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let remaining: i64 = grants.iter().map(|grant| grant.remaining()).sum();
     let bonus = (granted > 0 || remaining > 0).then(|| {
         let balance = Balance::new(
-            "Add-on credits",
+            Text::message("usage-warp-add-on-credits"),
             remaining.max(0) as f64,
             Unit::Count(Count::Credits),
         );
@@ -145,11 +145,13 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .filter_map(|grant| Some((grant.expires()?, grant.remaining())))
         .min_by_key(|(at, _)| *at);
     let mut facts = vec![(
-        "Monthly credits".to_owned(),
+        Text::message("usage-warp-monthly-credits"),
         if unlimited {
-            "Unlimited".to_owned()
+            Text::message("usage-warp-unlimited")
         } else {
-            format!("{} of {}", group(used), group(limit))
+            Text::message("usage-warp-used-of")
+                .arg("used", group(used))
+                .arg("limit", group(limit))
         },
     )];
     if let Some((at, _)) = expiring {
@@ -160,22 +162,25 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .sum();
         let date = chrono::DateTime::<chrono::Utc>::from(at).format("%b %-d, %Y");
         facts.push((
-            "Next add-on expiry".to_owned(),
-            format!("{} credits on {date}", group(soonest)),
+            Text::message("usage-warp-next-add-on-expiry"),
+            Text::message("usage-warp-credits-on")
+                .arg("credits", soonest)
+                .arg("count", group(soonest))
+                .arg("date", date.to_string()),
         ));
     }
     Ok(Report::new(
         Provider(&Warp),
         Account {
             email: None,
-            plan: unlimited.then(|| "Unlimited".to_owned()).map(Text::from),
+            plan: unlimited.then(|| Text::message("usage-warp-unlimited")),
         },
         vec![monthly],
     )
     .with_balances(bonus)
     .with_sections([Section::Facts {
-        title: "Credits".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-warp-credits"),
+        facts,
     }]))
 }
 
@@ -270,7 +275,6 @@ impl Grant {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
 
     /// CodexBar's fetcher fixture.
     const LIMITS: &str = r#"{
@@ -315,14 +319,22 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            pair(("Monthly credits".to_owned(), "5 of 1,500".to_owned()))
+            (
+                Text::message("usage-warp-monthly-credits"),
+                Text::message("usage-warp-used-of")
+                    .arg("used", "5")
+                    .arg("limit", "1,500")
+            )
         );
         assert_eq!(
             facts[1],
-            pair((
-                "Next add-on expiry".to_owned(),
-                "10 credits on Mar 1, 2026".to_owned()
-            ))
+            (
+                Text::message("usage-warp-next-add-on-expiry"),
+                Text::message("usage-warp-credits-on")
+                    .arg("credits", 10)
+                    .arg("count", "10")
+                    .arg("date", "Mar 1, 2026")
+            )
         );
     }
 
@@ -334,8 +346,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Unlimited")
+            report.account.plan,
+            Some(Text::message("usage-warp-unlimited"))
         );
         assert_eq!(report.windows[0].percent(), 0);
         assert!(report.balances.is_empty());

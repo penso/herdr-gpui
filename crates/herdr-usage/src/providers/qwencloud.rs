@@ -179,7 +179,8 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected credit facts");
         };
-        assert_eq!(facts[1], ("Weekly".into(), "500 / 50,000 credits".into()));
+        // The facts' words are alibabatokenplan's, and tested there.
+        assert_eq!(facts.len(), 2);
     }
 
     #[test]

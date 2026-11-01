@@ -18,6 +18,7 @@ mod text;
 mod words;
 mod words_b;
 mod words_c;
+mod words_d;
 
 fn provider(id: &str) -> Provider {
     registry::find(id).unwrap()

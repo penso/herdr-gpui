@@ -96,7 +96,7 @@ pub(crate) fn parse(body: &str, plan: Option<String>) -> Result<Report> {
     }
     let account = Account {
         email: None,
-        plan: plan.map(Text::from),
+        plan: plan.map(Text::service),
     };
     if limits.is_credit_plan() {
         let windows = limits
@@ -109,7 +109,7 @@ pub(crate) fn parse(body: &str, plan: Option<String>) -> Result<Report> {
                     .as_ref()
                     .and_then(Timestamp::time);
                 Some(Window::new(
-                    Kind::Named("Credit".into()),
+                    Kind::Named(Text::message("usage-stepfun-credit")),
                     (1. - left) * 100.,
                     resets_at,
                     resets_at.map(|_| MONTH),
@@ -288,7 +288,10 @@ mod tests {
         }"#;
         let report = parse(body, None).unwrap();
         assert_eq!(report.windows.len(), 1);
-        assert_eq!(report.windows[0].kind, Kind::Named("Credit".into()));
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::message("usage-stepfun-credit"))
+        );
         assert_eq!(report.windows[0].percent(), 50);
         assert_eq!(report.windows[0].length, Some(MONTH));
     }

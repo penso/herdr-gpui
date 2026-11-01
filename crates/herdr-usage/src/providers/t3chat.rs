@@ -9,7 +9,7 @@
 //! Vercel security challenge that a bare Cookie header can trigger; here
 //! only the Cookie header is sent.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -112,7 +112,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     );
     let (start, end) = (period("currentPeriodStart")?, period("currentPeriodEnd")?);
     let overage = Window::new(
-        Kind::Named("Overage".into()),
+        Kind::Named(Text::message("usage-t3chat-overage")),
         number("usageMonthPercentage")?
             .or(number("usagePeriodPercentage")?)
             .unwrap_or(0.),
@@ -134,22 +134,26 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Some(subscription) => text(subscription, "status")?,
         None => None,
     };
-    let facts: Vec<(String, String)> = [("Usage band", band), ("Subscription", status)]
-        .into_iter()
-        .filter_map(|(label, value)| Some((label.to_owned(), value?)))
-        .collect();
+    // The band and status are T3 Chat's own words, such as standard or active.
+    let facts: Vec<(Text, Text)> = [
+        (Text::message("usage-t3chat-usage-band"), band),
+        (Text::message("usage-t3chat-subscription"), status),
+    ]
+    .into_iter()
+    .filter_map(|(label, value)| Some((label, Text::service(value?))))
+    .collect();
 
     Ok(Report::new(
         Provider(&T3chat),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         vec![base, overage],
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Plan".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-t3chat-plan"),
+        facts,
     })))
 }
 
@@ -226,7 +230,10 @@ mod tests {
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000))
         );
         let overage = &report.windows[1];
-        assert_eq!(overage.kind, Kind::Named("Overage".into()));
+        assert_eq!(
+            overage.kind,
+            Kind::Named(Text::message("usage-t3chat-overage"))
+        );
         assert_eq!(overage.percent(), 12);
         assert_eq!(
             overage.resets_at,
@@ -236,10 +243,16 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Plan".into(),
+                title: Text::message("usage-t3chat-plan"),
                 facts: vec![
-                    ("Usage band".into(), "standard".into()),
-                    ("Subscription".into(), "active".into()),
+                    (
+                        Text::message("usage-t3chat-usage-band"),
+                        Text::service("standard")
+                    ),
+                    (
+                        Text::message("usage-t3chat-subscription"),
+                        Text::service("active")
+                    ),
                 ],
             }]
         );

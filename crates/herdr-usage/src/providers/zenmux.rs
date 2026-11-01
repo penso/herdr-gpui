@@ -4,7 +4,7 @@
 //! keys are refused by these endpoints. ZenMux has no local sign-in to find,
 //! and CodexBar reads no cookies for it either.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -56,20 +56,33 @@ pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report>
         .into_data()
         .ok_or_else(invalid)?;
     let quotas = [
-        (Kind::Session, detail.quota_5_hour, SESSION),
-        (Kind::Weekly, detail.quota_7_day, WEEK),
+        (
+            Kind::Session,
+            Text::message("usage-zenmux-session"),
+            detail.quota_5_hour,
+            SESSION,
+        ),
+        (
+            Kind::Weekly,
+            Text::message("usage-zenmux-weekly"),
+            detail.quota_7_day,
+            WEEK,
+        ),
     ];
     let mut flows = Vec::new();
     let mut windows = Vec::new();
-    for (kind, quota, length) in quotas {
+    for (kind, title, quota, length) in quotas {
         let Some(quota) = quota else { continue };
         let Some(percentage) = quota.usage_percentage else {
             continue;
         };
         if let (Some(used), Some(max)) = (quota.used_flows, quota.max_flows) {
             flows.push((
-                kind.title().to_owned(),
-                format!("{} / {} flows", plain(used), plain(max)),
+                title,
+                Text::message("usage-zenmux-flows")
+                    .arg("used", plain(used))
+                    .arg("max", plain(max))
+                    .arg("flows", max),
             ));
         }
         windows.push(Window::new(
@@ -84,17 +97,22 @@ pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report>
         .as_ref()
         .and_then(|plan| plan.tier.as_deref())
         .map(capitalize)
-        .filter(|tier| !tier.is_empty())
-        .map(|tier| format!("{tier} plan"));
+        .filter(|tier| !tier.is_empty());
     let status = detail
         .account_status
         .as_deref()
         .map(str::trim)
         .filter(|status| !status.is_empty() && !status.eq_ignore_ascii_case("healthy"))
         .map(capitalize);
+    // The tier and status are ZenMux's own words, capitalized.
     let plan = match (tier, status) {
-        (Some(tier), Some(status)) => Some(format!("{tier} · {status}")),
-        (tier, status) => tier.or(status),
+        (Some(tier), Some(status)) => Some(
+            Text::message("usage-zenmux-tier-plan-status")
+                .arg("tier", tier)
+                .arg("status", status),
+        ),
+        (Some(tier), None) => Some(Text::message("usage-zenmux-tier-plan").arg("tier", tier)),
+        (None, status) => status.map(Text::service),
     };
     if let Some(expires) = detail
         .plan
@@ -103,10 +121,12 @@ pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report>
         .and_then(Timestamp::time)
     {
         flows.push((
-            "Plan expires".into(),
-            chrono::DateTime::<chrono::Utc>::from(expires)
-                .format("%Y-%m-%d")
-                .to_string(),
+            Text::message("usage-zenmux-plan-expires"),
+            Text::service(
+                chrono::DateTime::<chrono::Utc>::from(expires)
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            ),
         ));
     }
     let balances = balance
@@ -120,20 +140,21 @@ pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report>
         })
         .and_then(|balance| balance.total_credits)
         .filter(|credits| credits.is_finite())
-        .map(|credits| Balance::new("PAYG balance", credits, Unit::Currency("USD".into())));
-    Ok(Report::new(
-        Provider(&Zenmux),
-        Account {
-            email: None,
-            plan: plan.map(Text::from),
-        },
-        windows,
+        .map(|credits| {
+            Balance::new(
+                Text::message("usage-zenmux-payg-balance"),
+                credits,
+                Unit::Currency("USD".into()),
+            )
+        });
+    Ok(
+        Report::new(Provider(&Zenmux), Account { email: None, plan }, windows)
+            .with_balances(balances)
+            .with_sections((!flows.is_empty()).then(|| Section::Facts {
+                title: Text::message("usage-zenmux-quota"),
+                facts: flows,
+            })),
     )
-    .with_balances(balances)
-    .with_sections((!flows.is_empty()).then(|| Section::Facts {
-        title: "Quota".into(),
-        facts: pairs(flows),
-    })))
 }
 
 fn capitalize(value: &str) -> String {
@@ -224,8 +245,8 @@ mod tests {
     fn parses_quotas_plan_and_balance() {
         let report = parse(SUBSCRIPTION, Some(BALANCE)).unwrap();
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Ultra plan")
+            report.account.plan,
+            Some(Text::message("usage-zenmux-tier-plan").arg("tier", "Ultra"))
         );
         assert_eq!(report.windows.len(), 2);
         assert_eq!(report.windows[0].kind, Kind::Session);
@@ -239,9 +260,29 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "57.20 / 800 flows");
-        assert_eq!(facts[1].1, "416.11 / 6182 flows");
-        assert_eq!(facts[2], ("Plan expires".into(), "2026-04-12".into()));
+        let flows = |used: &str, max: &str, flows: f64| {
+            Text::message("usage-zenmux-flows")
+                .arg("used", used)
+                .arg("max", max)
+                .arg("flows", flows)
+        };
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-zenmux-session"),
+                    flows("57.20", "800", 800.)
+                ),
+                (
+                    Text::message("usage-zenmux-weekly"),
+                    flows("416.11", "6182", 6182.)
+                ),
+                (
+                    Text::message("usage-zenmux-plan-expires"),
+                    Text::service("2026-04-12")
+                ),
+            ]
+        );
     }
 
     #[test]
@@ -250,8 +291,12 @@ mod tests {
         let balance = r#"{"success":true,"data":{"currency":"usd","total_credits":-12.34}}"#;
         let report = parse(&body, Some(balance)).unwrap();
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Ultra plan · Overdue")
+            report.account.plan,
+            Some(
+                Text::message("usage-zenmux-tier-plan-status")
+                    .arg("tier", "Ultra")
+                    .arg("status", "Overdue")
+            )
         );
         assert!((report.balances[0].amount + 12.34).abs() < 1e-9);
     }

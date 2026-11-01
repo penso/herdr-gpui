@@ -7,7 +7,7 @@
 //! per-model breakdown are not fetched, as CodexBar does not either.
 
 use crate::model::Count;
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -67,6 +67,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Some(at) => Some(at.time().ok_or_else(invalid)?),
         None => None,
     };
+    // Raycast's own plan names, or its tier as it sends it.
     let plan = credits
         .funding_subscription
         .and_then(|funding| funding.tier)
@@ -80,7 +81,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         });
     let account = Account {
         email: None,
-        plan: plan.map(Text::from),
+        plan: plan.map(Text::service),
     };
     let credits_unit = || Unit::Count(Count::Credits);
     // Rolled-over credits can leave more than the grant; the reported total
@@ -93,28 +94,45 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
                 account,
                 vec![Window::new(Kind::Monthly, used, renewal, Some(MONTH))],
             )
-            .with_balances([Balance::new("Credits left", remaining, credits_unit()).out_of(total)])
+            .with_balances([Balance::new(
+                Text::message("usage-raycast-credits-left"),
+                remaining,
+                credits_unit(),
+            )
+            .out_of(total)])
         }
         _ => {
-            let mut facts: Vec<(String, String)> = Vec::new();
+            let mut facts = Vec::new();
             if let Some(remaining) = remaining {
-                facts.push(("Left".into(), trimmed(remaining)));
+                facts.push((
+                    Text::message("usage-raycast-left"),
+                    Text::service(trimmed(remaining)),
+                ));
             }
             if let Some(total) = total {
-                facts.push(("Total".into(), trimmed(total)));
+                facts.push((
+                    Text::message("usage-raycast-total"),
+                    Text::service(trimmed(total)),
+                ));
             }
             if let Some(renewal) = renewal {
                 let at = chrono::DateTime::<chrono::Utc>::from(renewal);
-                facts.push(("Renews".into(), at.format("%b %-d").to_string()));
+                facts.push((
+                    Text::message("usage-raycast-renews"),
+                    Text::service(at.format("%b %-d").to_string()),
+                ));
             }
             Report::new(Provider(&Raycast), account, Vec::new())
-                .with_balances(
-                    remaining
-                        .map(|remaining| Balance::new("Credits left", remaining, credits_unit())),
-                )
+                .with_balances(remaining.map(|remaining| {
+                    Balance::new(
+                        Text::message("usage-raycast-credits-left"),
+                        remaining,
+                        credits_unit(),
+                    )
+                }))
                 .with_sections([Section::Facts {
-                    title: "Credits".into(),
-                    facts: pairs(facts),
+                    title: Text::message("usage-raycast-credits"),
+                    facts,
                 }])
         }
     };
@@ -178,8 +196,14 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Left".into(), "12.5".into()));
-        assert_eq!(facts[1], ("Total".into(), "0".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-raycast-left"), Text::service("12.5"))
+        );
+        assert_eq!(
+            facts[1],
+            (Text::message("usage-raycast-total"), Text::service("0"))
+        );
     }
 
     #[test]

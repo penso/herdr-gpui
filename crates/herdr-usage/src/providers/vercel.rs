@@ -12,6 +12,7 @@ use crate::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
+        text::Text,
         values::{decimal, invalid},
     },
 };
@@ -60,8 +61,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let usd = || Unit::Currency("USD".into());
     Ok(
         Report::new(Provider(&Vercel), Account::default(), Vec::new()).with_balances([
-            Balance::new("Available balance", balance, usd()),
-            Balance::new("Lifetime spend", spent, usd()),
+            Balance::new(
+                Text::message("usage-vercel-available-balance"),
+                balance,
+                usd(),
+            ),
+            Balance::new(Text::message("usage-vercel-lifetime-spend"), spent, usd()),
         ]),
     )
 }
@@ -91,8 +96,8 @@ mod tests {
         assert_eq!(
             texts,
             [
-                ("Available balance", "$95.50".to_owned()),
-                ("Lifetime spend", "$4.50".to_owned()),
+                ("usage-vercel-available-balance", "$95.50".to_owned()),
+                ("usage-vercel-lifetime-spend", "$4.50".to_owned()),
             ]
         );
         assert!(

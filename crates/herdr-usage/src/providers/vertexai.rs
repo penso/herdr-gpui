@@ -17,7 +17,7 @@
 //! a command that prints the token, or which would need request signing.
 //! Token costs from Claude Code's logs are not read either.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -195,24 +195,35 @@ fn series(probe: &mut Probe, token: &Secret, project: &str, filter: &str) -> Res
 
 pub(crate) fn report(email: Option<String>, project: Option<String>, peak: Option<f64>) -> Report {
     let windows = peak
-        .map(|peak| Window::new(Kind::Named("Peak quota".into()), peak, None, None))
+        .map(|peak| {
+            Window::new(
+                Kind::Named(Text::message("usage-vertexai-peak-quota")),
+                peak,
+                None,
+                None,
+            )
+        })
         .into_iter()
         .collect();
     let facts = vec![(
-        "Project".to_owned(),
-        project.unwrap_or_else(|| "Not set: run `gcloud config set project PROJECT_ID`".into()),
+        Text::message("usage-vertexai-project"),
+        project.map_or_else(
+            || Text::message("usage-vertexai-project-not-set"),
+            Text::service,
+        ),
     )];
     Report::new(
         Provider(&Vertexai),
         Account {
-            email: email.map(Text::from),
-            plan: Some("gcloud".into()),
+            email: email.map(Text::service),
+            // The tool the credentials come from, a name.
+            plan: Some(Text::service("gcloud")),
         },
         windows,
     )
     .with_sections([Section::Facts {
-        title: "Google Cloud".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-vertexai-google-cloud"),
+        facts,
     }])
 }
 
@@ -378,13 +389,19 @@ mod tests {
             report.account.email.as_ref().map(Text::as_str),
             Some("dev@example.com")
         );
-        assert_eq!(report.windows[0].kind, Kind::Named("Peak quota".into()));
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::message("usage-vertexai-peak-quota"))
+        );
         assert_eq!(report.windows[0].percent(), 50);
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Google Cloud".into(),
-                facts: vec![("Project".into(), "my-project".into())],
+                title: Text::message("usage-vertexai-google-cloud"),
+                facts: vec![(
+                    Text::message("usage-vertexai-project"),
+                    Text::service("my-project")
+                )],
             }]
         );
     }
@@ -393,7 +410,12 @@ mod tests {
     fn no_matching_limit_means_no_window() {
         let usage: Page = json(USAGE).unwrap();
         assert_eq!(peak(&usage.time_series, &[]), None);
-        assert!(report(None, None, None).windows.is_empty());
+        let unset = report(None, None, None);
+        assert!(unset.windows.is_empty());
+        let Section::Facts { facts, .. } = &unset.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(facts[0].1, Text::message("usage-vertexai-project-not-set"));
     }
 
     #[test]

@@ -105,21 +105,24 @@ pub(crate) fn parse(balance: &str, usage: Option<&str>, today: NaiveDate) -> Res
         .ok_or_else(invalid)?;
     // Adding zero turns an empty ledger's -0 into 0.
     let balance = Balance::new(
-        "Prepaid balance",
+        Text::message("usage-xai-prepaid-balance"),
         -cents / 100. + 0.,
         Unit::Currency("USD".into()),
     );
     let spend = usage.and_then(|body| spend(body, today)).map(|spend| {
         let label = if spend.partial {
-            "Last 30 days (partial)"
+            Text::message("usage-xai-last-30-days-partial")
         } else {
-            "Last 30 days"
+            Text::message("usage-xai-last-30-days")
         };
         Section::Facts {
-            title: "Spend".into(),
+            title: Text::message("usage-xai-spend"),
             facts: vec![
-                ("Today".into(), Text::from(usd(spend.today))),
-                (label.into(), Text::from(usd(spend.total))),
+                (
+                    Text::message("usage-xai-today"),
+                    Text::service(usd(spend.today)),
+                ),
+                (label, Text::service(usd(spend.total))),
             ],
         }
     });
@@ -127,7 +130,7 @@ pub(crate) fn parse(balance: &str, usage: Option<&str>, today: NaiveDate) -> Res
         Provider(&Xai),
         Account {
             email: None,
-            plan: Some("Management API".into()),
+            plan: Some(Text::message("usage-xai-management-api")),
         },
         Vec::new(),
     )
@@ -250,8 +253,17 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Today".into(), "$0.25".into()));
-        assert_eq!(facts[1], ("Last 30 days".into(), "$2.01".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-xai-today"), Text::service("$0.25"))
+        );
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-xai-last-30-days"),
+                Text::service("$2.01")
+            )
+        );
     }
 
     #[test]

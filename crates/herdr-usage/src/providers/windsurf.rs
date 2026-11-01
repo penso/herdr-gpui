@@ -163,14 +163,14 @@ pub(crate) fn parse_cache(body: &str) -> Result<Report> {
             [
                 (
                     daily.is_none(),
-                    "Messages",
+                    Text::message("usage-windsurf-messages"),
                     usage.messages,
                     usage.used_messages,
                     usage.remaining_messages,
                 ),
                 (
                     weekly.is_none(),
-                    "Flow actions",
+                    Text::message("usage-windsurf-flow-actions"),
                     usage.flow_actions,
                     usage.used_flow_actions,
                     usage.remaining_flow_actions,
@@ -194,7 +194,7 @@ pub(crate) fn parse_cache(body: &str) -> Result<Report> {
 /// `used / total` of a counter, the used count inferred from the remainder
 /// when the cache only has that.
 fn counter(
-    name: &str,
+    name: Text,
     total: Option<f64>,
     used: Option<f64>,
     remaining: Option<f64>,
@@ -202,7 +202,7 @@ fn counter(
     let total = total.filter(|total| *total > 0.)?;
     let used = used.or_else(|| remaining.map(|remaining| (total - remaining).max(0.)))?;
     Some(Window::new(
-        Kind::Named(Text::from(name.to_owned())),
+        Kind::Named(name),
         used.clamp(0., total) / total * 100.,
         None,
         None,
@@ -230,10 +230,10 @@ fn report(
         .map(|plan| plan.trim().to_owned())
         .filter(|plan| !plan.is_empty());
     let ends = plan_end.map(|end| Section::Facts {
-        title: "Plan".into(),
+        title: Text::message("usage-windsurf-plan"),
         facts: vec![(
-            "Renews".into(),
-            Text::from(
+            Text::message("usage-windsurf-renews"),
+            Text::service(
                 chrono::DateTime::<chrono::Utc>::from(end)
                     .format("%b %-d, %Y")
                     .to_string(),
@@ -244,7 +244,7 @@ fn report(
         Provider(&Windsurf),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         windows,
     )
@@ -307,7 +307,6 @@ struct QuotaUsage {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
 
     fn at(seconds: u64) -> Option<SystemTime> {
         Some(SystemTime::UNIX_EPOCH + Duration::from_secs(seconds))
@@ -345,7 +344,10 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            pair(("Renews".to_owned(), "Mar 20, 2026".to_owned()))
+            (
+                Text::message("usage-windsurf-renews"),
+                Text::service("Mar 20, 2026")
+            )
         );
     }
 
@@ -356,9 +358,15 @@ mod tests {
                 "flowActions":150000,"usedFlowActions":0}}"#,
         )
         .unwrap();
-        assert_eq!(report.windows[0].kind, Kind::Named("Flow actions".into()));
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::message("usage-windsurf-flow-actions"))
+        );
         assert_eq!(report.windows[0].percent(), 0);
-        assert_eq!(report.windows[1].kind, Kind::Named("Messages".into()));
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-windsurf-messages"))
+        );
         assert_eq!(report.windows[1].percent(), 71);
         assert!(report.sections.is_empty());
     }
