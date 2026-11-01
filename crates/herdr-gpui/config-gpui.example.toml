@@ -325,11 +325,13 @@ project_roots = []
 # shift-enter), or "text:" and the text to type, at most 1024 bytes; an empty
 # string removes a default. A keystroke here leaves its default or daemon
 # command, but naming it in [keybindings] too is an error.
-# Shift-Enter sends Alt-Enter (Esc CR) by default everywhere, so a prompt that
-# never enabled the kitty keyboard protocol reads a newline instead of the bare
-# CR Herdr would send it; "shift-enter" = "" sends Shift-Enter unchanged.
-# On macOS these are also defaults:
+# Shift-Enter is sent unchanged, distinct from Alt-Enter for kitty programs
+# such as Pi. For legacy prompts needing Alt-Enter (Esc CR) for a newline,
+# opt in below. It affects every pane, including kitty programs; the GUI is
+# not told each pane's keyboard protocol. "shift-enter" = "" keeps it unchanged.
 # [pane_keys]
+# "shift-enter" = "alt-enter" # Optional legacy newline mapping, not a default.
+# On macOS these are defaults:
 # "cmd-left" = "ctrl-a"
 # "cmd-right" = "ctrl-e"
 # "cmd-backspace" = "ctrl-u"

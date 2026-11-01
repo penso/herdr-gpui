@@ -2,6 +2,18 @@ use super::*;
 
 #[test]
 fn sustained_inbound_progress_survives_a_backpressured_outgoing_image() {
+    // Serialize before starting the worker's image deadline: preparing the mock
+    // peer's frames is not inbound progress and can be slow in a debug build.
+    let frames = [11, 22].map(|value| {
+        let bytes = encode_message(
+            &ServerMessage::Graphics {
+                bytes: vec![value; 24 * 1024 * 1024],
+            },
+            MAX_GRAPHICS_FRAME_SIZE,
+        )
+        .unwrap();
+        (value, bytes)
+    });
     let (client, mut server, worker) = ready();
     let upload = reserve(&client);
     let cancel = upload.cancellation_handle();
@@ -10,19 +22,14 @@ fn sustained_inbound_progress_survives_a_backpressured_outgoing_image() {
         .unwrap();
     let mut prefix = [0; 4];
     server.read_exact(&mut prefix).unwrap();
-    // Never drain the image. The worker must deliver repeated large inbound
-    // frames while enforcing its unchanged partial-frame deadline. A stopwatch
-    // here would also time serialization and payload validation outside that
-    // deadline, making debug builds fail under CPU contention after delivery.
-    for value in [11, 22] {
-        send(
-            &mut server,
-            ServerMessage::Graphics {
-                bytes: vec![value; 24 * 1024 * 1024],
-            },
-        );
-        // Wait as long as the deadline under test, not the generic 3 s event
-        // wait: a 24 MiB debug-build frame can take longer on a loaded runner.
+    // Never drain the image. Repeated large inbound frames must still finish
+    // within the unchanged partial-frame deadline while outbound writes stall.
+    for (value, bytes) in frames {
+        server.write_all(&bytes).unwrap();
+        // The worker enforces the partial-frame deadline. A second wall-clock
+        // assertion here would also time decoding, scheduling, and validation
+        // on the test thread, none of which measures a stalled inbound frame.
+        // Keep the event wait bounded even if the worker stops making progress.
         let event = client.events.recv_timeout(TIMEOUT).unwrap();
         assert!(
             matches!(event, ClientEvent::Message(ServerMessage::Graphics { bytes })
