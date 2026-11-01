@@ -1,10 +1,9 @@
 //! Drawing the Ports section from the latest listing: a header with the
-//! count and Refresh, then one row per listening port with its process, its
-//! working directory, how long it has run, the Herdr workspace that started
-//! it when one did, and Open, Pause or Resume, and Stop.
+//! count, the sort, and Refresh, then the user's servers and, apart, the
+//! system's listeners, one row each (`row`).
 // i18n: migrated
 
-use super::{Listener, Pending, Report, SUPPORTED, home_relative};
+use super::{Listener, Report, SUPPORTED, Sort, order};
 use crate::i18n::Localize;
 use crate::{
     HerdrWindow, config::corners, direction::Logical, i18n::fl, listening_ports::Link, usage::Host,
@@ -23,7 +22,7 @@ pub(crate) struct Owned {
 }
 
 /// `up 5m`, `up 2h 3m`, `up 4d 1h`: the two largest units.
-fn uptime_text(uptime: Duration) -> SharedString {
+pub(super) fn uptime_text(uptime: Duration) -> SharedString {
     let seconds = uptime.as_secs();
     let (days, hours, minutes) = (seconds / 86_400, seconds / 3600 % 24, seconds / 60 % 60);
     match (days, hours) {
@@ -93,7 +92,7 @@ impl HerdrWindow {
 
     /// Opens a listener's page: in a browser tab of the workspace that
     /// started it, else in the system's browser.
-    fn open_listener_page(
+    pub(super) fn open_listener_page(
         &mut self,
         listener: &Listener,
         window: &mut Window,
@@ -116,7 +115,7 @@ impl HerdrWindow {
         }
     }
 
-    fn resume_local_port(&mut self, listener: &Listener, cx: &mut Context<Self>) {
+    pub(super) fn resume_local_port(&mut self, listener: &Listener, cx: &mut Context<Self>) {
         if let Err(error) = self
             .local_ports
             .signal(PortAction::Resume, vec![listener.identity])
@@ -166,7 +165,23 @@ impl HerdrWindow {
             Some(listeners) => {
                 let now = SystemTime::now();
                 let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-                for (index, listener) in listeners.iter().enumerate() {
+                let mut system_shown = false;
+                for (index, listener) in order(listeners, self.local_ports.sort)
+                    .into_iter()
+                    .enumerate()
+                {
+                    if listener.system && !system_shown {
+                        system_shown = true;
+                        body = body.child(
+                            div()
+                                .debug_selector(|| "local-ports-system".into())
+                                .pt_3()
+                                .text_size(px(font.size - 1.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgb(theme.muted))
+                                .child(fl!("local-ports-system")),
+                        );
+                    }
                     body =
                         body.child(self.local_port_row(index, listener, now, home.as_deref(), cx));
                 }
@@ -206,6 +221,7 @@ impl HerdrWindow {
             .px_5()
             .py_3()
             .row()
+            .flex_wrap()
             .items_center()
             .gap_3()
             .border_b_1()
@@ -222,6 +238,7 @@ impl HerdrWindow {
                     .child(fl!("local-ports-count", count = count))
             }))
             .child(div().flex_1())
+            .child(self.local_ports_sort(cx))
             .when(SUPPORTED, |header| {
                 header.child(
                     self.local_ports_button(
@@ -242,7 +259,59 @@ impl HerdrWindow {
             })
     }
 
-    fn local_ports_button(&self, id: SharedString, label: SharedString) -> Stateful<Div> {
+    /// Port, CPU, and Memory: how the rows are ordered.
+    fn local_ports_sort(&self, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        let small = px(self.config.ui.size - 1.);
+        let mut toggles = div()
+            .flex_none()
+            .row()
+            .items_center()
+            .p(px(2.))
+            .gap(px(2.))
+            .rounded(px(corners::CONTROL))
+            .bg(rgb(theme.surface));
+        for sort in Sort::ALL {
+            let (key, label) = match sort {
+                Sort::Port => ("port", fl!("local-ports-sort-port")),
+                Sort::Cpu => ("cpu", fl!("local-ports-sort-cpu")),
+                Sort::Memory => ("memory", fl!("local-ports-sort-memory")),
+            };
+            let on = self.local_ports.sort == sort;
+            let selector = format!("local-ports-sort-{key}");
+            toggles = toggles.child(
+                div()
+                    .id(SharedString::from(selector.clone()))
+                    .debug_selector(move || selector.clone())
+                    .px(px(8.))
+                    .h(px(20.))
+                    .row()
+                    .items_center()
+                    .rounded(px(corners::SMALL))
+                    .text_size(small)
+                    .whitespace_nowrap()
+                    .cursor_pointer()
+                    .when(on, |toggle| {
+                        toggle
+                            .bg(rgb(theme.background))
+                            .font_weight(FontWeight::SEMIBOLD)
+                    })
+                    .when(!on, |toggle| toggle.text_color(rgb(theme.subtext())))
+                    .child(label)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.local_ports.sort = sort;
+                        cx.notify();
+                    })),
+            );
+        }
+        toggles
+    }
+
+    pub(super) fn local_ports_button(
+        &self,
+        id: SharedString,
+        label: SharedString,
+    ) -> Stateful<Div> {
         let theme = &self.theme;
         let selector = id.to_string();
         div()
@@ -262,172 +331,5 @@ impl HerdrWindow {
             .text_size(px(self.config.ui.size - 1.))
             .whitespace_nowrap()
             .child(label)
-    }
-
-    fn local_port_row(
-        &self,
-        index: usize,
-        listener: &Listener,
-        now: SystemTime,
-        home: Option<&std::path::Path>,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        let theme = &self.theme;
-        let small = px(self.config.ui.size - 1.);
-        let acting = self.local_ports.acting();
-        let owner = self.local_port_owner(listener.number);
-        let directory = listener.directory.as_deref().map(|path| {
-            let project = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| home_relative(path, home));
-            (project, home_relative(path, home))
-        });
-        let pill = |text: SharedString, color: u32| {
-            div()
-                .flex_none()
-                .px(px(6.))
-                .rounded(px(corners::SMALL))
-                .bg(rgb(theme.active))
-                .text_size(small)
-                .text_color(rgb(color))
-                .whitespace_nowrap()
-                .child(text)
-        };
-        let action = |id: &str, label: SharedString| {
-            self.local_ports_button(format!("local-port-{index}-{id}").into(), label)
-        };
-        let mut actions = div().flex_none().row().items_center().gap_1();
-        if listener.url().is_some() {
-            let opened = listener.clone();
-            actions = actions.child(action("open", fl!("local-ports-open").into()).on_click(
-                cx.listener(move |this, _, window, cx| {
-                    this.open_listener_page(&opened, window, cx)
-                }),
-            ));
-        }
-        if !acting {
-            let chosen = listener.clone();
-            actions = actions.child(if listener.paused {
-                action("resume", fl!("local-ports-resume").into()).on_click(
-                    cx.listener(move |this, _, _, cx| this.resume_local_port(&chosen, cx)),
-                )
-            } else {
-                action("pause", fl!("local-ports-pause").into()).on_click(cx.listener(
-                    move |this, _, window, cx| {
-                        this.ask_to_signal_ports(
-                            Pending {
-                                action: PortAction::Pause,
-                                listeners: vec![chosen.clone()],
-                            },
-                            window,
-                            cx,
-                        );
-                    },
-                ))
-            });
-            let chosen = listener.clone();
-            actions = actions.child(
-                action("stop", fl!("local-ports-stop").into())
-                    .text_color(crate::menu::danger(theme))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.ask_to_signal_ports(
-                            Pending {
-                                action: PortAction::Stop,
-                                listeners: vec![chosen.clone()],
-                            },
-                            window,
-                            cx,
-                        );
-                    })),
-            );
-        }
-        let selector = format!("local-port-{index}");
-        div()
-            .id(("local-port", index))
-            .debug_selector(move || selector.clone())
-            .px_3()
-            .py_2()
-            .row()
-            .items_center()
-            .gap_3()
-            .rounded(px(corners::PANEL))
-            .bg(rgb(theme.surface))
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(120.))
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(format!(":{}", listener.number)),
-                    )
-                    .child(
-                        div()
-                            .text_size(small)
-                            .text_color(rgb(theme.muted))
-                            .truncate()
-                            .child(listener.address()),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .row()
-                            .items_center()
-                            .gap_2()
-                            .min_w_0()
-                            .child(div().min_w_0().truncate().child(listener.process.clone()))
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_size(small)
-                                    .text_color(rgb(theme.muted))
-                                    .child(fl!("local-ports-pid", pid = listener.identity.pid)),
-                            )
-                            .when(listener.paused, |line| {
-                                line.child(pill(
-                                    fl!("local-ports-paused").into(),
-                                    theme.ink(theme.palette[3]),
-                                ))
-                            })
-                            .children(owner.map(|owned| {
-                                pill(
-                                    fl!("local-ports-workspace", workspace = owned.label.as_str())
-                                        .into(),
-                                    theme.subtext(),
-                                )
-                            })),
-                    )
-                    .child(
-                        div()
-                            .row()
-                            .items_center()
-                            .gap_2()
-                            .min_w_0()
-                            .text_size(small)
-                            .text_color(rgb(theme.muted))
-                            .children(directory.map(|(project, path)| {
-                                div().min_w_0().truncate().child(fl!(
-                                    "local-ports-directory",
-                                    project = project.as_str(),
-                                    path = path.as_str()
-                                ))
-                            }))
-                            .children(
-                                listener
-                                    .uptime(now)
-                                    .map(|uptime| div().flex_none().child(uptime_text(uptime))),
-                            ),
-                    ),
-            )
-            .child(actions)
     }
 }

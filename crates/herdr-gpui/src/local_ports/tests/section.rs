@@ -145,3 +145,55 @@ fn resuming_needs_no_question(cx: &mut gpui::TestAppContext) {
         )
     );
 }
+
+#[gpui::test]
+fn the_systems_listeners_follow_the_users_and_sorting_reorders(cx: &mut gpui::TestAppContext) {
+    let system = Listener {
+        name: "ControlCenter".into(),
+        process: "ControlCenter".into(),
+        system: true,
+        ..listener(5000, 100, 1)
+    };
+    let busy = Listener {
+        cpu: Some(40.),
+        memory: 300 << 20,
+        ..listener(8080, 4343, 20)
+    };
+    let (view, cx, _channels) = fixture(cx, vec![system, listener(3000, 4242, 10), busy]);
+    let heading = cx.debug_bounds("local-ports-system").unwrap();
+    assert!(cx.debug_bounds("local-port-1").unwrap().bottom() <= heading.top());
+    assert!(heading.bottom() <= cx.debug_bounds("local-port-2").unwrap().top());
+    let first = |cx: &mut VisualTestContext| {
+        view.read_with(cx, |v, _| {
+            order(v.local_ports.listing().unwrap(), v.local_ports.sort)[0].number
+        })
+    };
+    assert_eq!(first(cx), 3000);
+    let cpu = cx.debug_bounds("local-ports-sort-cpu").unwrap().center();
+    cx.simulate_click(cpu, Modifiers::default());
+    redraw(cx);
+    assert_eq!(view.read_with(cx, |v, _| v.local_ports.sort), Sort::Cpu);
+    assert_eq!(first(cx), 8080);
+    assert!(cx.debug_bounds("local-port-0-usage").is_some());
+}
+
+#[gpui::test]
+fn rows_wrap_inside_a_narrow_window(cx: &mut gpui::TestAppContext) {
+    let (_, cx, _channels) = fixture(cx, vec![listener(3000, 4242, 10)]);
+    cx.simulate_resize(size(px(480.), px(700.)));
+    redraw(cx);
+    let section = cx.debug_bounds("local-ports-section").unwrap();
+    for selector in [
+        "local-ports-header",
+        "local-port-0",
+        "local-port-0-usage",
+        "local-port-0-open",
+        "local-port-0-stop",
+    ] {
+        let bounds = cx.debug_bounds(selector).unwrap();
+        assert!(
+            bounds.left() >= section.left() && bounds.right() <= section.right(),
+            "{selector} {bounds:?} overflows {section:?}"
+        );
+    }
+}

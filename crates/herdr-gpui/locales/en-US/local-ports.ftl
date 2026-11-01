@@ -8,6 +8,13 @@ local-ports-count = { $count ->
    *[other] { $count } ports
 }
 local-ports-refresh = Refresh
+# How the rows are ordered: by port number, busiest first, or largest first.
+local-ports-sort-port = Port
+local-ports-sort-cpu = CPU
+local-ports-sort-memory = Memory
+# The heading over listeners the operating system and its services run,
+# set apart from the user's own servers.
+local-ports-system = System
 local-ports-unsupported = Listing and signalling this computer's ports needs macOS or Linux.
 local-ports-reading = Reading this computer's ports…
 local-ports-empty = Nothing on this computer is listening for connections.

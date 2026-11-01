@@ -51,6 +51,7 @@ fn run(
     // this app's terminals need. Elsewhere a no-op.
     sysinfo::set_open_files_limit(0);
     let mut system = System::new();
+    let mut sampler = process::Sampler::default();
     let user = process::user();
     let mut due = Instant::now();
     loop {
@@ -74,7 +75,7 @@ fn run(
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
         let started = Instant::now();
-        let result = scan(&mut system, user, cancelled);
+        let result = scan(&mut system, &mut sampler, user, cancelled);
         due = Instant::now() + if result.is_ok() { INTERVAL } else { RETRY };
         if updates.send(Update::Listing(started, result)).is_err() {
             return;
@@ -82,7 +83,12 @@ fn run(
     }
 }
 
-fn scan(system: &mut System, user: u32, cancelled: &AtomicBool) -> Result<Vec<Listener>> {
+fn scan(
+    system: &mut System,
+    sampler: &mut process::Sampler,
+    user: u32,
+    cancelled: &AtomicBool,
+) -> Result<Vec<Listener>> {
     let mut output = Vec::new();
     run_script(
         ScriptHost::Local,
@@ -94,5 +100,5 @@ fn scan(system: &mut System, user: u32, cancelled: &AtomicBool) -> Result<Vec<Li
     )
     .map_err(Error::Scan)?;
     let sockets = scan::parse(&String::from_utf8_lossy(&output)).ok_or(Error::Tool)?;
-    Ok(process::describe(system, sockets, user))
+    Ok(process::describe(system, sampler, sockets, user))
 }

@@ -157,13 +157,32 @@ impl PortAction {
 }
 
 /// One listening socket of this computer, as `ports all` lists it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LocalPortInfo {
     pub port: u16,
     /// `*:3000`, `localhost:3000`, or the one address it listens on.
     pub bind: String,
     pub process: String,
     pub pid: u32,
+    /// What to call it: its app, the script it runs (`vite`, `next dev`),
+    /// or the process's name.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// Its whole command line.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub command: String,
+    /// The repository (or else the folder) it runs in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    /// Percent of one core; absent until measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_percent: Option<f32>,
+    /// Resident memory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_bytes: Option<u64>,
+    /// One of the listeners every computer of its kind runs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub system: bool,
     /// The process's working directory, from the home folder (`~/app`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
@@ -181,7 +200,7 @@ pub struct LocalPortInfo {
 }
 
 /// Every port this computer's user listens on. Boxed in [`Reply`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LocalPorts {
     pub listening: Vec<LocalPortInfo>,
     /// Why the listing may be empty or stale, such as a failed scan.

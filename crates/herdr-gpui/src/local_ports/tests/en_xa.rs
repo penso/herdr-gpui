@@ -34,8 +34,13 @@ fn the_ports_section_and_its_question_show_only_messages_under_en_xa() {
         draw(cx);
         let data = [
             "node".to_owned(),
+            "vite".to_owned(),
+            "node /home/dev/app/node_modules/.bin/vite".to_owned(),
             "localhost:3000".to_owned(),
             "localhost:8080".to_owned(),
+            // Truncating a line measures its first character alone.
+            "v".to_owned(),
+            "n".to_owned(),
         ];
         assert_translated("Ports", &recorder.take(), &data);
 

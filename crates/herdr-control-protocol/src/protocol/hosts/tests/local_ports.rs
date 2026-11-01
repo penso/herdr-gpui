@@ -53,6 +53,12 @@ fn a_local_ports_reply_leaves_out_what_is_unknown() {
                 bind: "localhost:3000".into(),
                 process: "node".into(),
                 pid: 4242,
+                name: "vite".into(),
+                command: "node /home/dev/app/node_modules/.bin/vite".into(),
+                project: Some("app".into()),
+                cpu_percent: Some(2.5),
+                memory_bytes: Some(80 << 20),
+                system: false,
                 directory: Some("~/app".into()),
                 uptime_seconds: Some(90),
                 paused: true,
@@ -64,6 +70,12 @@ fn a_local_ports_reply_leaves_out_what_is_unknown() {
                 bind: "*:8080".into(),
                 process: "python3".into(),
                 pid: 4343,
+                name: String::new(),
+                command: String::new(),
+                project: None,
+                cpu_percent: None,
+                memory_bytes: None,
+                system: true,
                 directory: None,
                 uptime_seconds: None,
                 paused: false,
@@ -80,6 +92,8 @@ fn a_local_ports_reply_leaves_out_what_is_unknown() {
     );
     assert!(text.contains(r#""paused":true"#));
     assert!(!text.contains(r#""paused":false"#));
+    assert!(text.contains(r#""name":"vite""#) && text.contains(r#""system":true"#));
+    assert!(!text.contains(r#""name":"""#) && !text.contains(r#""system":false"#));
     assert!(!text.contains("note"));
     assert_eq!(serde_json::from_str::<Reply>(&text).unwrap(), reply);
 }

@@ -11,7 +11,10 @@
 
 mod error;
 #[cfg(unix)]
+mod naming;
+#[cfg(unix)]
 mod process;
+mod row;
 #[cfg(unix)]
 mod scan;
 mod section;
@@ -52,17 +55,64 @@ const ROW_LIMIT: usize = 512;
 /// One port a process of this user listens on.
 // Only the Unix worker makes these; Windows lists none.
 #[cfg_attr(not(unix), allow(dead_code))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Listener {
     pub identity: Identity,
     pub number: u16,
     pub bind: Bind,
     /// The process's name, bounded display text.
     pub process: String,
+    /// What to call it: its app, the script it runs, or `process`.
+    pub name: String,
+    /// Its whole command line, bounded display text.
+    pub command: String,
     /// Its working directory, when the OS says.
     pub directory: Option<PathBuf>,
+    /// The repository (or else the folder) of `directory`.
+    pub project: Option<String>,
+    /// Percent of one core since the previous scan; `None` until the
+    /// process has been seen twice.
+    pub cpu: Option<f32>,
+    /// Resident memory, in bytes.
+    pub memory: u64,
+    /// One of the listeners every computer of its kind runs.
+    pub system: bool,
     /// Stopped by SIGSTOP or a debugger.
     pub paused: bool,
+}
+
+/// How the section orders its rows. The user's own servers always come
+/// before the system's.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Sort {
+    #[default]
+    Port,
+    /// Busiest first.
+    Cpu,
+    /// Largest first.
+    Memory,
+}
+
+impl Sort {
+    pub(crate) const ALL: [Self; 3] = [Self::Port, Self::Cpu, Self::Memory];
+}
+
+/// `listeners` in the order `sort` shows them: the user's servers, then
+/// the system's, each by `sort`, ties by port and pid.
+pub(crate) fn order(listeners: &[Listener], sort: Sort) -> Vec<&Listener> {
+    let mut ordered: Vec<&Listener> = listeners.iter().collect();
+    ordered.sort_by(|a, b| {
+        let by = match sort {
+            Sort::Port => std::cmp::Ordering::Equal,
+            Sort::Cpu => b.cpu.unwrap_or(-1.).total_cmp(&a.cpu.unwrap_or(-1.)),
+            Sort::Memory => b.memory.cmp(&a.memory),
+        };
+        a.system
+            .cmp(&b.system)
+            .then(by)
+            .then((a.number, a.identity.pid).cmp(&(b.number, b.identity.pid)))
+    });
+    ordered
 }
 
 impl Listener {
@@ -120,7 +170,7 @@ pub(crate) enum Outcome {
 }
 
 /// A signal the user is asked to confirm, and the rows it goes to.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Pending {
     pub action: PortAction,
     pub listeners: Vec<Listener>,
@@ -229,6 +279,8 @@ pub(crate) struct LocalPorts {
     report: Option<Report>,
     /// Until when a command line request keeps the scan running.
     demand: Option<Instant>,
+    /// How the section orders its rows.
+    pub(crate) sort: Sort,
 }
 
 /// Why the port list failed: in the app's language for the section, and in

@@ -27,6 +27,12 @@ pub(super) fn info(
         bind: listener.address(),
         process: listener.process.clone(),
         pid: listener.identity.pid,
+        name: listener.name.clone(),
+        command: listener.command.clone(),
+        project: listener.project.clone(),
+        cpu_percent: listener.cpu,
+        memory_bytes: Some(listener.memory).filter(|memory| *memory > 0),
+        system: listener.system,
         directory: listener
             .directory
             .as_deref()
