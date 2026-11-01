@@ -43,8 +43,6 @@ use std::{
 
 /// Whether this platform can list and signal its ports at all.
 pub(crate) const SUPPORTED: bool = cfg!(unix);
-/// Ports open and close at human pace, as the workspace chips are scanned.
-const INTERVAL: Duration = Duration::from_secs(5);
 /// How long a command line request keeps the ports scanned with the section
 /// closed, so a script asking again finds a fresh listing.
 pub(crate) const DEMAND: Duration = Duration::from_secs(60);

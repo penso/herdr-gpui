@@ -26,7 +26,10 @@ use herdr_client::ConnectTarget;
 pub(crate) use render::{chips, close_button};
 #[cfg(test)]
 pub(crate) use scan::Owner;
-pub(crate) use scan::{Bind, Link, Origin, Port, Ports, listener, parse};
+// The Ports section's Unix scan reads its addresses the same way.
+#[cfg(unix)]
+pub(crate) use scan::listener;
+pub(crate) use scan::{Bind, Link, Origin, Port, Ports, parse};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},

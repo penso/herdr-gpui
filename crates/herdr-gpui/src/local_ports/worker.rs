@@ -2,7 +2,7 @@
 //! so neither a slow `lsof` nor a process taking its time to stop ever
 //! blocks the window.
 
-use super::{Command, Error, INTERVAL, Listener, Update, Worker, process, scan};
+use super::{Command, Error, Listener, Update, Worker, process, scan};
 use crate::Result;
 use herdr_client::{ScriptHost, ScriptLimits, run_script};
 use std::{
@@ -12,6 +12,8 @@ use std::{
 };
 use sysinfo::System;
 
+/// Ports open and close at human pace, as the workspace chips are scanned.
+const INTERVAL: Duration = Duration::from_secs(5);
 /// A failed scan is tried again after this long.
 const RETRY: Duration = Duration::from_secs(30);
 /// After a signal the next listing comes sooner, to show what it did.
