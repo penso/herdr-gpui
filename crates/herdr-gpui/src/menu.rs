@@ -21,6 +21,7 @@ mod open_checkout;
 mod open_link;
 mod page;
 mod page_title;
+mod port_signal;
 mod pr;
 mod pr_actions;
 mod sessions;

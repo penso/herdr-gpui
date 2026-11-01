@@ -184,6 +184,8 @@ pub enum Error {
         "macOS has not allowed Herdr on your local network. Turn on Herdr in System Settings › Privacy & Security › Local Network, then search again"
     )]
     LocalNetworkDenied,
+    #[error(transparent)]
+    LocalPorts(#[from] crate::local_ports::Error),
     #[error("Worktree notes stay in this app and are never sent to the daemon")]
     LocalWorktreeNote,
     #[error("Could not read the log {}: {source}", path.display())]

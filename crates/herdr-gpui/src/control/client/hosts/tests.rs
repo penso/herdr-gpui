@@ -3,6 +3,7 @@ use super::text;
 
 mod automation;
 mod gpu;
+mod local_ports;
 mod security;
 use crate::control::protocol::{
     app::HostInfo,

@@ -2,8 +2,11 @@
 //! `automation approve`: what the
 //! window gathers about its hosts, read from the state it already keeps.
 //! Nothing here starts a lookup, a scan, or a sample of its own; a request
-//! answers from the latest one, and says why when there is none.
+//! answers from the latest one, and says why when there is none. The one
+//! exception is `ports all`, which keeps the Ports section's scan of this
+//! computer running for a minute (see `local_ports`).
 mod automation;
+mod local_ports;
 mod ports;
 mod pr;
 mod security;
@@ -53,6 +56,10 @@ pub(super) fn serve(
             ports::unforward(view, caller, port, cx)
         }),
         HostOp::OpenPort { port } => return ports::open(call.caller, port, incoming, watches, cx),
+        HostOp::LocalPorts => return local_ports::all(caller, incoming, watches, cx),
+        HostOp::SignalPort { port, action } => {
+            return local_ports::act(caller, port, action, incoming, watches, cx);
+        }
         HostOp::Usage => in_window(caller, cx, |view, _, _| usage(view, SystemTime::now())),
         HostOp::System => in_window(caller, cx, |view, _, _| system(view)),
         HostOp::Security => in_window(caller, cx, |view, _, _| security::alerts(view)),

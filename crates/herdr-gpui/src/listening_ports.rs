@@ -25,8 +25,8 @@ use crate::{
 use herdr_client::ConnectTarget;
 pub(crate) use render::{chips, close_button};
 #[cfg(test)]
-pub(crate) use scan::{Bind, Owner};
-pub(crate) use scan::{Link, Origin, Port, Ports, parse};
+pub(crate) use scan::Owner;
+pub(crate) use scan::{Bind, Link, Origin, Port, Ports, listener, parse};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -281,6 +281,16 @@ impl ListeningPorts {
                     ports,
                     origin: &reading.origin,
                 })
+        })
+    }
+
+    /// The workspace of `daemon` whose pane started the server listening on
+    /// `number`, as the latest scan of its host found it.
+    pub fn workspace_of(&self, daemon: &Daemon, number: u16) -> Option<&str> {
+        let reading = &self.monitors.get(&daemon.host)?.reading;
+        reading.ports.iter().find_map(|(owner, ports)| {
+            (daemon.owns(&owner.socket) && ports.iter().any(|port| port.number == number))
+                .then_some(owner.workspace.as_str())
         })
     }
 

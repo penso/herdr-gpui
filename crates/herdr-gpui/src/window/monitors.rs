@@ -1,6 +1,6 @@
 //! The background monitors the window polls as it ticks: plan usage, system
-//! load, listening ports, agent checkpoints, and port forwards, each on the
-//! hosts it watches.
+//! load, listening ports, this computer's ports, agent checkpoints, and port
+//! forwards, each on the hosts it watches.
 
 use super::{Flash, HerdrWindow};
 use gpui::Context;
@@ -64,6 +64,14 @@ impl HerdrWindow {
         let ports = &self.listening_ports;
         let closed = self.tunnels.retain(|key| ports.tunnels_to(key));
         changed || closed
+    }
+
+    /// This computer's ports are listed while the Ports section is shown,
+    /// or a command line request asked for them recently.
+    pub(super) fn update_local_ports(&mut self) -> bool {
+        let shown =
+            self.activity_section() == Some(crate::sidebar::ActivityPanel::Ports);
+        self.local_ports.poll(shown, std::time::Instant::now())
     }
 
     /// The machines background monitors watch: this one always, a remote

@@ -75,6 +75,9 @@ pub(crate) enum Page {
     Pane,
     /// The processes under the pane menu's pane.
     PaneProcesses,
+    /// Confirming processes listening on this computer's ports should be
+    /// stopped or paused.
+    PortSignal,
     PrComment,
     /// Choosing a merge method, and confirming it.
     PrMerge,
