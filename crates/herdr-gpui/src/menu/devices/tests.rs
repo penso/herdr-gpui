@@ -27,6 +27,7 @@ mod selection;
 mod setup_activation;
 #[cfg(unix)]
 mod setup_workspace;
+mod trust_host;
 mod version_warning;
 
 #[test]

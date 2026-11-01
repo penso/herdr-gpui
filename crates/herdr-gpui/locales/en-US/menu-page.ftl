@@ -33,6 +33,7 @@ menu-page-github-account = GitHub account
 menu-page-gitlab-tokens = GitLab tokens
 menu-page-tab-actions = Tab actions
 menu-page-device = Device
+menu-page-host-key = Host key
 menu-page-install = Install
 menu-page-keyboard-shortcuts = Keyboard shortcuts
 menu-page-end-processes = End processes

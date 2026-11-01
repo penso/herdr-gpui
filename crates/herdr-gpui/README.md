@@ -66,7 +66,17 @@ picture stays up, dimmed, under a card with the reason and a Reconnect now butto
 until the new connection presents its own frame. Keys typed meanwhile are not sent,
 and a flash says so. Only a surface activation that fails on a live connection
 falls back to Local. The card names why SSH refused a host: an untrusted host key,
-failed authentication, an unreachable host, or no Herdr installed. The
+failed authentication, an unreachable host, or no Herdr installed. For an
+untrusted host key it also offers Review host key, which fetches the key the
+host offers without authenticating and shows its fingerprints with Trust and
+Don't Trust. Trust appends the key to your first user known hosts file and
+reconnects. A key that differs from the one trusted before, as after a host
+is reinstalled, is shown beside that one under a warning, with Replace Key:
+it removes the old entries with `ssh-keygen -R` (which keeps a `.old` copy)
+and adds the new key. Enter never replaces a key, and a key trusted
+system-wide or by a `@cert-authority` or `@revoked` line is left to a
+terminal. Add Device offers the same Trust, or Replace Key for a changed
+key, when SSH refuses the key of the host being added. The
 first two and the last need the user, so those hosts wait the full 30 seconds
 between retries rather than backing off from half a second. After the machine
 sleeps (the wall clock runs ahead of the monotonic one, which stops while macOS
@@ -1991,7 +2001,8 @@ given to the others. A device turned off in Herdr is left out too.
 Herdr UI's own SSH connections offer the herdr key after OpenSSH's default
 keys; your SSH config is never edited, so a plain `ssh` in a terminal does not
 use it. Each machine still approves a new machine's host key the first time
-it connects, as for any device.
+it connects, as for any device: the device's reconnecting card offers Review
+host key to see the fingerprints and trust it.
 
 Turning sync off removes only this computer's sync state. The other machines
 keep what earlier syncs gave them. To undo the keys, delete the `herdr-sync`
@@ -4722,8 +4733,8 @@ The `ssh` child's standard streams are two private pipes rather than a socket
 pair, driven with the same overlapped read and write deadlines as the daemon's
 named pipe. **Add Device** lists **SSH host** first, then **WSL**. It checks the
 host, asks before trusting an unknown host key (appended to the first user
-known hosts file `ssh -G` names, normally `%USERPROFILE%\.ssh\known_hosts`),
-and saves a host that already runs a compatible Herdr through `herdr machine
+known hosts file `ssh -G` names, normally `%USERPROFILE%\.ssh\known_hosts`)
+or replacing a changed one, and saves a host that already runs a compatible Herdr through `herdr machine
 add`. Sessions on the host can be listed, created, and deleted.
 
 Where this differs from macOS and Linux:

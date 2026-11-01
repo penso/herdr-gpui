@@ -583,6 +583,7 @@ impl HerdrWindow {
                     Page::Install
                         | Page::AgentSkill
                         | Page::VersionMismatch
+                        | Page::HostKey
                         | Page::OpenCheckout
                         | Page::OpenLink
                 ) || self.cloud_batch_open()
@@ -764,6 +765,10 @@ impl HerdrWindow {
             panel = panel.child(self.render_agent_skill_offer(cx));
         } else if page == Page::VersionMismatch {
             panel = panel.child(self.render_version_mismatch(cx));
+        } else if page == Page::HostKey
+            && let Some(body) = self.render_trust_host(cx)
+        {
+            panel = panel.child(body);
         } else if page == Page::WorktreeScript {
             panel = panel.child(self.render_worktree_script(cx));
         } else if page == Page::OpenLink {

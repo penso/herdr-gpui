@@ -66,6 +66,7 @@ impl Page {
             Self::GitLab => fl!("menu-page-gitlab-tokens"),
             Self::Group => fl!("menu-page-tab-actions"),
             Self::Host => fl!("menu-page-device"),
+            Self::HostKey => fl!("menu-page-host-key"),
             Self::Install => fl!("menu-page-install"),
             Self::Keybinds => fl!("menu-page-keyboard-shortcuts"),
             Self::KillProcesses => fl!("menu-page-end-processes"),

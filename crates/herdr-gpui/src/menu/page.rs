@@ -58,6 +58,8 @@ pub(crate) enum Page {
     Group,
     /// A saved SSH device's context menu, from its sidebar host header.
     Host,
+    /// Trusting the unknown host key SSH refused for a saved device.
+    HostKey,
     Install,
     Keybinds,
     /// Confirming the processes chosen there should end.

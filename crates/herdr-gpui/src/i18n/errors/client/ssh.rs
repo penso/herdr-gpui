@@ -12,6 +12,7 @@ impl Localize for Error {
             Self::Cancelled => fl!("error-client-ssh-cancelled"),
             Self::Closed => fl!("error-client-ssh-closed"),
             Self::InvalidTarget => fl!("error-client-ssh-invalid-target"),
+            Self::KeyNotReplaceable => fl!("error-client-ssh-key-not-replaceable"),
             Self::KnownHostsUnavailable => fl!("error-client-ssh-known-hosts-unavailable"),
             Self::OutputLimit => fl!("error-client-ssh-output-limit"),
             Self::Refused(failure) => {

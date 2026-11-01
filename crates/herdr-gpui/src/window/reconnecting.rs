@@ -67,24 +67,45 @@ impl HerdrWindow {
             }))
             .when(!removing, |card| {
                 card.child(
-                    div().flex().child(
-                        div()
-                            .id("reconnect-now")
-                            .debug_selector(|| "reconnect-now".into())
-                            .px(px(10.))
-                            .py(px(4.))
-                            .rounded(px(crate::config::corners::CONTROL))
-                            .border_1()
-                            .border_color(rgb(theme.active))
-                            .cursor_pointer()
-                            .hover(|s| s.bg(rgb(theme.active)))
-                            .child(fl!("window-reconnect-now"))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.reconnect(cx);
-                                cx.notify();
-                            })),
-                    ),
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(8.))
+                        .when(self.untrusted_host().is_some(), |row| {
+                            row.child(
+                                div()
+                                    .id("review-host-key")
+                                    .debug_selector(|| "review-host-key".into())
+                                    .px(px(10.))
+                                    .py(px(4.))
+                                    .rounded(px(crate::config::corners::CONTROL))
+                                    .bg(rgb(theme.active))
+                                    .cursor_pointer()
+                                    .child(fl!("window-review-host-key"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        cx.stop_propagation();
+                                        this.review_host_key(window, cx);
+                                    })),
+                            )
+                        })
+                        .child(
+                            div()
+                                .id("reconnect-now")
+                                .debug_selector(|| "reconnect-now".into())
+                                .px(px(10.))
+                                .py(px(4.))
+                                .rounded(px(crate::config::corners::CONTROL))
+                                .border_1()
+                                .border_color(rgb(theme.active))
+                                .cursor_pointer()
+                                .hover(|s| s.bg(rgb(theme.active)))
+                                .child(fl!("window-reconnect-now"))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.reconnect(cx);
+                                    cx.notify();
+                                })),
+                        ),
                 )
             });
         Some(
