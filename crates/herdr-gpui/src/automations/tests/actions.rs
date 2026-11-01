@@ -1,4 +1,3 @@
-use super::*;
 use crate::automations::{Error, actions::failure};
 use herdr_i18n::{Locale, Pseudo};
 
