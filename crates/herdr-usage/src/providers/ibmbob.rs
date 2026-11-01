@@ -7,6 +7,8 @@
 //! be under `bob.ibm.com` before the key is sent there. Bob has no local
 //! sign-in that CodexBar reads.
 
+use crate::model::Count;
+use crate::text::{Text, pair};
 use crate::{
     Result,
     {
@@ -206,7 +208,11 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
         .map(|limit| Window::new(Kind::Monthly, used / limit * 100., resets_at, Some(MONTH)))
         .into_iter()
         .collect();
-    let mut balance = Balance::new("Bobcoins used", used, Unit::Count("Bobcoins".into()));
+    let mut balance = Balance::new(
+        "Bobcoins used",
+        used,
+        Unit::Count(Count::Named("Bobcoins".into())),
+    );
     if let Some(limit) = limit {
         balance = balance.out_of(limit);
     }
@@ -230,12 +236,15 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
             };
             (label, value)
         })
+        .map(pair)
         .collect();
     Ok(Report::new(
         Provider(&Ibmbob),
         Account {
             email: None,
-            plan: (!plans.is_empty()).then(|| plans.join(", ")),
+            plan: (!plans.is_empty())
+                .then(|| plans.join(", "))
+                .map(Text::from),
         },
         windows,
     )
@@ -328,7 +337,10 @@ mod tests {
             targets.next().unwrap().usage(r#"{"usage":25}"#).unwrap(),
         ];
         let report = report(&teams).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Enterprise, Pro+"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Enterprise, Pro+")
+        );
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].kind, Kind::Monthly);
         assert!((report.windows[0].used - 17.5).abs() < 0.001);

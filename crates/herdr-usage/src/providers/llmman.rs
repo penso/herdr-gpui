@@ -15,6 +15,7 @@
 //! `LLMMAN_HOST` is read on the probed host, which is this app's environment
 //! when the host is this machine, as in CodexBar.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -237,19 +238,19 @@ pub(crate) fn parse(body: &str, keyed: bool, version: Option<String>) -> Result<
     let plan = if keyed { "API key" } else { "Local daemon" };
     let mut sections = vec![Section::Facts {
         title: "Daemon".into(),
-        facts: summary,
+        facts: pairs(summary),
     }];
     if !models.is_empty() {
         sections.push(Section::Facts {
             title: "Loaded models".into(),
-            facts: models,
+            facts: pairs(models),
         });
     }
     Ok(Report::new(
         Provider(&Llmman),
         Account {
             email: None,
-            plan: Some(plan.to_owned()),
+            plan: Some(Text::from(plan.to_owned())),
         },
         windows,
     )

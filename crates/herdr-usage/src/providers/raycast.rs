@@ -6,6 +6,8 @@
 //! lives in the Raycast app's private storage. Top-up packages and the
 //! per-model breakdown are not fetched, as CodexBar does not either.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -76,8 +78,11 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             "max" => "Max".to_owned(),
             _ => tier,
         });
-    let account = Account { email: None, plan };
-    let credits_unit = || Unit::Count("credits".into());
+    let account = Account {
+        email: None,
+        plan: plan.map(Text::from),
+    };
+    let credits_unit = || Unit::Count(Count::Credits);
     // Rolled-over credits can leave more than the grant; the reported total
     // stays the denominator, so that reads as nothing used.
     let report = match (remaining, total) {
@@ -91,7 +96,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .with_balances([Balance::new("Credits left", remaining, credits_unit()).out_of(total)])
         }
         _ => {
-            let mut facts = Vec::new();
+            let mut facts: Vec<(String, String)> = Vec::new();
             if let Some(remaining) = remaining {
                 facts.push(("Left".into(), trimmed(remaining)));
             }
@@ -109,7 +114,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
                 )
                 .with_sections([Section::Facts {
                     title: "Credits".into(),
-                    facts,
+                    facts: pairs(facts),
                 }])
         }
     };
@@ -145,7 +150,7 @@ mod tests {
           "funding_subscription": {"tier": "pro", "status": "active"}
         }"#;
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows.len(), 1);
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
@@ -162,7 +167,7 @@ mod tests {
             "funding_subscription": {"tier": "pro_plus"}}"#;
         let report = parse(body).unwrap();
         assert_eq!(report.windows[0].used, 0.);
-        assert_eq!(report.account.plan.as_deref(), Some("Pro+"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro+"));
     }
 
     #[test]

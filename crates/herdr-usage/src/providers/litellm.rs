@@ -5,6 +5,7 @@
 //! `/user/spend/report` when the deployment hides the info routes. Everything
 //! CodexBar reads is ported; no master key is used.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -234,10 +235,10 @@ fn report(
     }
     let key_facts = (!facts.is_empty()).then(|| Section::Facts {
         title: "Key".into(),
-        facts,
+        facts: pairs(facts),
     });
     let account = Account {
-        email,
+        email: email.map(Text::from),
         plan: Some("API key".into()),
     };
     Report::new(Provider(&Litellm), account, windows)
@@ -264,7 +265,7 @@ pub(crate) fn parse_spend(body: &str, scope: &str, start: &str, end: &str) -> Re
     );
     let period = Section::Facts {
         title: "Spend report".into(),
-        facts: vec![("Period".into(), format!("{start} – {end} UTC"))],
+        facts: vec![("Period".into(), format!("{start} – {end} UTC").into())],
     };
     Ok(
         Report::new(Provider(&Litellm), Account::default(), Vec::new())
@@ -285,7 +286,7 @@ impl Spend {
     fn window(&self) -> Option<Window> {
         (self.limit > 0.).then(|| {
             Window::new(
-                Kind::Named(format!("{} budget", self.scope)),
+                Kind::Named(format!("{} budget", self.scope).into()),
                 self.used / self.limit * 100.,
                 self.resets_at.as_ref().and_then(Timestamp::time),
                 self.length,
@@ -426,7 +427,7 @@ mod tests {
         .unwrap();
         let report = parse_user(USER, &key).unwrap();
         assert_eq!(
-            report.account.email.as_deref(),
+            report.account.email.as_ref().map(Text::as_str),
             Some("litellm-user@example.com")
         );
         assert_eq!(report.windows.len(), 2);

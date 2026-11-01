@@ -5,6 +5,8 @@
 //! the balance. CodexBar's daily bar chart is summarized as per-period facts
 //! and a per-model split. Poe has no OAuth or cookie sign-in to port.
 
+use crate::model::Count;
+use crate::text::{pairs, share};
 use crate::{
     Result,
     {
@@ -270,17 +272,18 @@ fn report(balance: Option<f64>, entries: &[Entry], now: SystemTime) -> Report {
                     .iter()
                     .take(5)
                     .map(|(model, spent)| ((*model).to_owned(), (spent / total * 100.) as f32))
+                    .map(share)
                     .collect(),
             });
         }
     }
     let facts = (!facts.is_empty()).then(|| Section::Facts {
         title: "Points".into(),
-        facts,
+        facts: pairs(facts),
     });
     Report::new(Provider(&Poe), Account::default(), Vec::new())
         .with_balances(
-            balance.map(|balance| Balance::new("Points", balance, Unit::Count("points".into()))),
+            balance.map(|balance| Balance::new("Points", balance, Unit::Count(Count::Points))),
         )
         .with_sections(facts.into_iter().chain(sections))
 }

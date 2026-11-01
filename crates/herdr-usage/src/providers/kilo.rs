@@ -9,6 +9,8 @@
 //! pass state has no `subscription` object: only the plan name is read from
 //! such answers.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -125,14 +127,19 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     if windows.is_empty() && balances.is_none() && plan.is_none() {
         return Err(invalid());
     }
-    Ok(
-        Report::new(Provider(&Kilo), Account { email: None, plan }, windows)
-            .with_balances(balances)
-            .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Plan".into(),
-                facts,
-            })),
+    Ok(Report::new(
+        Provider(&Kilo),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(balances)
+    .with_sections((!facts.is_empty()).then(|| Section::Facts {
+        title: "Plan".into(),
+        facts: pairs(facts),
+    })))
 }
 
 /// The batch answer is an array, an object keyed by index, or, for one
@@ -259,7 +266,7 @@ fn credits(payload: Option<&Value>) -> Option<Credits> {
             used,
             total,
             remaining,
-            Unit::Count("credits".into()),
+            Unit::Count(Count::Credits),
         ));
     }
 
@@ -483,7 +490,10 @@ mod tests {
     #[test]
     fn reads_credit_blocks_and_the_pass() {
         let report = parse(PASS).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Starter"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Starter")
+        );
         assert_eq!(
             report.balances,
             vec![Balance::new("Credits left", 19., Unit::Currency("USD".into())).out_of(19.)]
@@ -513,10 +523,13 @@ mod tests {
           {"result":{"data":{"json":{"enabled":true,"paymentMethod":"visa"}}}}
         ]"#;
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kilo Pass Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kilo Pass Pro")
+        );
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits left", 75., Unit::Count("credits".into())).out_of(100.)]
+            vec![Balance::new("Credits left", 75., Unit::Count(Count::Credits)).out_of(100.)]
         );
         assert!(report.windows.is_empty());
         let Section::Facts { facts, .. } = &report.sections[0] else {
@@ -533,7 +546,10 @@ mod tests {
           {"result":{"data":{"enabled":true,"amountCents":5000,"paymentMethod":null}}}
         ]"#;
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kilo Pass"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kilo Pass")
+        );
         assert_eq!(report.windows[0].percent(), 5);
         assert_eq!(
             report.balances,

@@ -8,6 +8,7 @@
 //! omits the grant. CodexBar also accepts a bare session token; here the
 //! cookie is pasted as `name=value`.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -166,7 +167,7 @@ pub(crate) fn parse(credits: &str, subscription: Option<&str>) -> Result<Report>
     };
     let account = Account {
         email: None,
-        plan: plan_name,
+        plan: plan_name.map(Text::from),
     };
     Ok(Report::new(Provider(&Commandcode), account, windows).with_balances(balances))
 }
@@ -229,7 +230,7 @@ mod tests {
     #[test]
     fn rolling_windows_and_plan_sized_month() {
         let report = parse(CREDITS, Some(SUBSCRIPTION)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Go"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Go"));
         let kinds: Vec<_> = report.windows.iter().map(|window| &window.kind).collect();
         assert_eq!(kinds, [&Kind::Session, &Kind::Weekly, &Kind::Monthly]);
         assert!((report.windows[0].used - 25.).abs() < 1e-4);

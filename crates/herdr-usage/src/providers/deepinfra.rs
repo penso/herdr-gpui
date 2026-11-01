@@ -3,6 +3,7 @@
 //! DeepInfra's documented billing endpoints. DeepInfra is API-only, so there
 //! is no agent sign-in to find; everything CodexBar reads is ported.
 
+use crate::text::pairs;
 use crate::{
     Error, Result,
     {
@@ -98,7 +99,7 @@ pub(crate) fn parse(checklist: &str, usage: &str) -> Result<Report> {
     }
     let sections = (!facts.is_empty()).then(|| Section::Facts {
         title: "Account".into(),
-        facts,
+        facts: pairs(facts),
     });
     Ok(
         Report::new(Provider(&Deepinfra), Account::default(), Vec::new())
@@ -130,6 +131,7 @@ struct Month {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     const USAGE: &str = r#"{"initial_month": "2026-01", "months": [
         {"period": "2026-08", "total_cost": 1234},
@@ -165,11 +167,11 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Spent this month".to_owned(), "$4.50".to_owned())
+            pair(("Spent this month".to_owned(), "$4.50".to_owned()))
         );
         assert_eq!(
             facts[1],
-            ("Suspended".to_owned(), "unpaid invoice".to_owned())
+            pair(("Suspended".to_owned(), "unpaid invoice".to_owned()))
         );
     }
 

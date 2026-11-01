@@ -7,6 +7,7 @@
 //! normalized name against CodexBar's candidate lists. Everything CodexBar
 //! reads is ported.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -593,7 +594,9 @@ fn report(parsed: Parsed) -> Report {
         (quota, window)
     });
     let mut rest = parsed.fallback.iter().map(|quota| {
-        let kind = Kind::Named(quota.label.clone().unwrap_or_else(|| "Quota".into()));
+        let kind = Kind::Named(Text::from(
+            quota.label.clone().unwrap_or_else(|| "Quota".into()),
+        ));
         (quota, quota.window(kind, None, None))
     });
     let shown: Vec<(&Quota, Window)> = match (rolling, monthly) {
@@ -613,12 +616,15 @@ fn report(parsed: Parsed) -> Report {
     });
     Report::new(
         Provider(&Chutes),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         shown.into_iter().map(|(_, window)| window).collect(),
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
         title: "Quota".into(),
-        facts,
+        facts: pairs(facts),
     }))
 }
 
@@ -642,7 +648,7 @@ mod tests {
             }"#,
         ));
         let report = report(parsed);
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         let monthly = report
             .windows
             .iter()
@@ -691,7 +697,7 @@ mod tests {
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].used, 10.);
         assert_eq!(
-            report.account.plan.as_deref(),
+            report.account.plan.as_ref().map(Text::as_str),
             Some("No active subscription")
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
@@ -723,6 +729,9 @@ mod tests {
     fn empty_payload_reports_no_usage_data() {
         let report = report(parse(&value("{}")));
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("No usage data"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("No usage data")
+        );
     }
 }

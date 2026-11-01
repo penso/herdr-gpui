@@ -8,6 +8,7 @@
 //! `Bearer ` prefix (as `DEVIN_AUTHORIZATION` holds it) is not accepted,
 //! since the probe cannot strip a prefix from a secret.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -187,7 +188,10 @@ pub(crate) fn parse(body: &str, organization: &str) -> Result<Report> {
         .filter(|amount| amount.is_finite() && *amount >= 0.);
     Ok(Report::new(
         Provider(&Devin),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         daily.into_iter().chain(weekly).collect(),
     )
     .with_balances(
@@ -197,7 +201,7 @@ pub(crate) fn parse(body: &str, organization: &str) -> Result<Report> {
     )
     .with_sections([Section::Facts {
         title: "Organization".into(),
-        facts: vec![("Name".into(), organization.to_owned())],
+        facts: vec![("Name".into(), Text::from(organization.to_owned()))],
     }]))
 }
 
@@ -270,7 +274,10 @@ mod tests {
             report.windows[1].resets_at,
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_781_424_000))
         );
-        assert_eq!(report.account.plan.as_deref(), Some("Team Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Team Pro")
+        );
         assert_eq!(report.balances[0].amount, 12.5);
     }
 

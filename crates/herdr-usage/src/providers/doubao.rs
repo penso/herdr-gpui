@@ -7,6 +7,7 @@
 //! Ark API-key probe, which reads `x-ratelimit-*` response headers that the
 //! probe does not return. Neither declares a setting here for that reason.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -86,7 +87,7 @@ pub(crate) fn parse(stdout: &str) -> Result<Report> {
             };
             let kind = match plan {
                 None => kind,
-                Some(plan) => Kind::Named(format!("{plan} {title}")),
+                Some(plan) => Kind::Named(format!("{plan} {title}").into()),
             };
             windows.push(Window::new(
                 kind,
@@ -101,7 +102,7 @@ pub(crate) fn parse(stdout: &str) -> Result<Report> {
     }
     let account = Account {
         email: None,
-        plan: method,
+        plan: method.map(Text::from),
     };
     Ok(Report::new(Provider(&Doubao), account, windows))
 }
@@ -177,7 +178,7 @@ mod tests {
     #[test]
     fn coding_plan_is_standard_and_agent_plan_is_named() {
         let report = parse(OUTPUT).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("sso"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("sso"));
         let find = |kind: Kind| {
             report
                 .windows

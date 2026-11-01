@@ -7,6 +7,7 @@
 //! needs Azure Resource Manager credentials, which CodexBar does not read
 //! either. There is no local sign-in to detect.
 
+use crate::text::pairs;
 use crate::{
     Error, Result,
     {
@@ -185,12 +186,12 @@ pub(crate) fn parse(body: &str, target: &Target) -> Result<Report> {
     facts.push(("API version".into(), target.version.clone()));
     let account = Account {
         email: None,
-        plan: Some(format!("Deployment: {}", target.deployment)),
+        plan: Some(format!("Deployment: {}", target.deployment).into()),
     };
     Ok(
         Report::new(Provider(&Azureopenai), account, Vec::new()).with_sections([Section::Facts {
             title: "Deployment reachable".into(),
-            facts,
+            facts: pairs(facts),
         }]),
     )
 }
@@ -204,6 +205,7 @@ struct Completion {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::Text;
 
     #[test]
     fn dated_version_uses_deployment_path() {
@@ -247,7 +249,7 @@ mod tests {
         .unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(
-            report.account.plan.as_deref(),
+            report.account.plan.as_ref().map(Text::as_str),
             Some("Deployment: chat-prod")
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {

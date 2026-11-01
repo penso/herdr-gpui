@@ -9,6 +9,7 @@
 //! deriving the Oasis-Webid from the token's JWT claims, which would mean
 //! decoding the secret here. The web id is therefore its own setting.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -93,7 +94,10 @@ pub(crate) fn parse(body: &str, plan: Option<String>) -> Result<Report> {
     if limits.status != Some(1) {
         return Err(Error::Rejected);
     }
-    let account = Account { email: None, plan };
+    let account = Account {
+        email: None,
+        plan: plan.map(Text::from),
+    };
     if limits.is_credit_plan() {
         let windows = limits
             .plan_credit_rate_limit
@@ -260,7 +264,7 @@ mod tests {
         assert!(report.windows[0].resets_at.is_some());
         assert_eq!(report.windows[1].kind, Kind::Weekly);
         assert_eq!(report.windows[1].percent(), 40);
-        assert_eq!(report.account.plan.as_deref(), Some("Plus"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Plus"));
     }
 
     #[test]

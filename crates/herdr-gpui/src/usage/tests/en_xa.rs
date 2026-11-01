@@ -14,8 +14,9 @@ use crate::{
 };
 use gpui::{VisualTestContext, point, px, size};
 use herdr_usage::{
+    Text,
     details::{ClaudeAccount, ClaudeAccountStatus, OpenaiDaily},
-    model::{Balance, Unit},
+    model::{Balance, Count, Section, Unit},
 };
 use std::time::{Duration, SystemTime};
 
@@ -41,8 +42,9 @@ fn fresh(seen: &mut Vec<String>, drawn: Vec<String>) -> Vec<String> {
 const HOUR: Duration = Duration::from_secs(3600);
 
 /// A report with every kind of line the panel draws: a session window on
-/// pace, a weekly one ahead of it, a window the service names, and a
-/// balance with a total.
+/// pace, a weekly one ahead of it, a window the service names, a balance
+/// with a total, one a provider names counted in credits, and facts and
+/// shares a provider names (Wayfinder's), with the route names it reports.
 fn full(provider: Provider) -> Report {
     let now = SystemTime::now();
     let mut report = Report::new(
@@ -65,7 +67,34 @@ fn full(provider: Provider) -> Report {
     report
         .balances
         .push(Balance::new("Credits", 12.3, Unit::Currency("USD".into())).out_of(50.));
-    report
+    // A balance a provider names, counted in credits.
+    report.balances.push(Balance::new(
+        Text::message("usage-wayfinder-saved"),
+        1_250.,
+        Unit::Count(Count::Credits),
+    ));
+    report.with_sections([
+        Section::Facts {
+            title: Text::message("usage-report-usage"),
+            facts: vec![
+                (
+                    Text::message("usage-wayfinder-gateway"),
+                    Text::message("usage-wayfinder-gateway-state")
+                        .arg("status", "ok")
+                        .arg("models", 2)
+                        .arg("mode", "offline"),
+                ),
+                (
+                    Text::message("usage-wayfinder-decision"),
+                    Text::message("usage-wayfinder-milliseconds").arg("time", "0.2"),
+                ),
+            ],
+        },
+        Section::Shares {
+            title: Text::message("usage-wayfinder-requests-by-route"),
+            shares: vec![(Text::service("local"), 71.), (Text::service("cloud"), 29.)],
+        },
+    ])
 }
 
 /// A provider that reads a setting, so its panel shows how to set it up
@@ -149,6 +178,8 @@ fn data(readings: &[Reading], host: &str) -> Vec<String> {
         "three@example.com".into(),
         "Oct 28".into(),
         "Oct 29".into(),
+        "local".into(),
+        "cloud".into(),
     ];
     for reading in readings {
         let meta = reading.provider.service().meta();

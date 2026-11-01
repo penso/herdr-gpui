@@ -9,6 +9,7 @@
 //! encode a secret nor read inside a JWT, and the bare cookie value cannot be
 //! cut out of a Cookie header.
 
+use crate::text::pairs;
 use crate::{
     Error, Result,
     {
@@ -126,7 +127,7 @@ fn report([requests, tokens_in, tokens_out, cache]: [f64; 4]) -> Report {
     }
     Report::new(Provider(&Groq), metrics_account(), Vec::new()).with_sections([Section::Facts {
         title: "Last 5 minutes".into(),
-        facts,
+        facts: pairs(facts),
     }])
 }
 

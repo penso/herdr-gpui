@@ -6,6 +6,8 @@
 //! CLI owns its credentials; nothing else is read. Self-hosted logins are not
 //! supported by the upstream command.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -88,7 +90,7 @@ pub(crate) fn parse(text: &str) -> Option<Report> {
     }
     let account = Account {
         email: None,
-        plan: fields.get("plan").cloned(),
+        plan: fields.get("plan").cloned().map(Text::from),
     };
     Some(
         Report::new(Provider(&Coderabbit), account, Vec::new())
@@ -96,12 +98,12 @@ pub(crate) fn parse(text: &str) -> Option<Report> {
                 Balance::new(
                     "Your reviews this period",
                     reviews as f64,
-                    Unit::Count("reviews".into()),
+                    Unit::Count(Count::Reviews),
                 )
             }))
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
                 title: "Billing period".into(),
-                facts,
+                facts: pairs(facts),
             })),
     )
 }
@@ -156,17 +158,17 @@ mod tests {
         let report = parse(USAGE).unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(report.balances[0].amount, 25.);
-        assert_eq!(report.balances[0].unit, Unit::Count("reviews".into()));
+        assert_eq!(report.balances[0].unit, Unit::Count(Count::Reviews));
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
         assert_eq!(
             facts,
             &[
-                ("Organization".to_owned(), "Example Org".to_owned()),
-                ("User".to_owned(), "example-user".to_owned()),
-                ("Usage billing".to_owned(), "inactive".to_owned()),
-                ("Period resets".to_owned(), "2026-09-30".to_owned()),
+                ("Organization".into(), "Example Org".into()),
+                ("User".into(), "example-user".into()),
+                ("Usage billing".into(), "inactive".into()),
+                ("Period resets".into(), "2026-09-30".into()),
             ]
         );
     }

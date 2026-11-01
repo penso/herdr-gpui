@@ -11,6 +11,7 @@
 //! workos.com cookies, since the probe reads neither browser storage nor
 //! writes the session store that keeps rotated refresh tokens.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -261,12 +262,13 @@ impl Me {
 
     fn account(&self, plan: Option<String>) -> Account {
         Account {
-            email: self
+            email: (self
                 .user_profile
                 .as_ref()
                 .and_then(|profile| profile.email.clone())
-                .filter(|email| !email.trim().is_empty()),
-            plan,
+                .filter(|email| !email.trim().is_empty()))
+            .map(Text::from),
+            plan: plan.map(Text::from),
         }
     }
 
@@ -279,7 +281,7 @@ impl Me {
             .filter(|name| !name.trim().is_empty())?;
         Some(Section::Facts {
             title: "Organization".into(),
-            facts: vec![("Name".into(), name)],
+            facts: vec![("Name".into(), Text::from(name))],
         })
     }
 }
@@ -489,9 +491,12 @@ mod tests {
         assert_eq!(report.windows[0].resets_at, Some(at(1_800_003_600)));
         assert_eq!(report.windows[0].length, Some(SESSION));
         assert_eq!(report.balances[0].amount, 2.5);
-        assert_eq!(report.account.email.as_deref(), Some("dev@acme.test"));
         assert_eq!(
-            report.account.plan.as_deref(),
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@acme.test")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
             Some("Factory Team - Team - Fallback: credits")
         );
     }
@@ -533,7 +538,10 @@ mod tests {
         assert_eq!(report.windows[1].percent(), 10);
         assert_eq!(report.windows[1].resets_at, Some(at(1_700_003_600)));
         assert_eq!(report.windows[1].length, Some(Duration::from_secs(3600)));
-        assert_eq!(report.account.plan.as_deref(), Some("Factory Team - Team"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Factory Team - Team")
+        );
         assert_eq!(
             report.sections,
             vec![Section::Facts {

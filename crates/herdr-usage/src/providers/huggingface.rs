@@ -11,6 +11,7 @@
 //! twelve-hour identity cache is not ported: `whoami-v2` is asked each
 //! refresh, and its failure only leaves the account out.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -169,7 +170,7 @@ pub(crate) fn parse(
     }
     let mut sections = vec![Section::Facts {
         title: "Inference Providers".into(),
-        facts,
+        facts: pairs(facts),
     }];
     let mut windows = Vec::new();
     if let Some(quota) = gpu.and_then(|body| json::<GpuQuota>(body).ok()) {
@@ -187,8 +188,8 @@ pub(crate) fn parse(
             sections.push(Section::Facts {
                 title: "ZeroGPU".into(),
                 facts: vec![
-                    ("GPU time used".into(), minutes(consumed)),
-                    ("GPU time remaining".into(), minutes(left)),
+                    ("GPU time used".into(), Text::from(minutes(consumed))),
+                    ("GPU time remaining".into(), Text::from(minutes(left))),
                 ],
             });
         }
@@ -210,17 +211,19 @@ pub(crate) fn parse(
         {
             sections.push(Section::Facts {
                 title: "Account".into(),
-                facts: vec![("User".into(), name.to_owned())],
+                facts: vec![("User".into(), Text::from(name.to_owned()))],
             });
         }
         Account {
-            email: profile
+            email: (profile
                 .email
                 .map(|email| email.trim().to_owned())
-                .filter(|email| !email.is_empty()),
-            plan: profile
+                .filter(|email| !email.is_empty()))
+            .map(Text::from),
+            plan: (profile
                 .is_pro
-                .map(|pro| if pro { "PRO" } else { "Free" }.to_owned()),
+                .map(|pro| if pro { "PRO" } else { "Free" }.to_owned()))
+            .map(Text::from),
         }
     });
     Ok(Report::new(Provider(&Huggingface), account, windows)
@@ -419,8 +422,11 @@ mod tests {
         assert_eq!(report.windows[0].kind, Kind::Named("ZeroGPU".into()));
         assert!((report.windows[0].used - 40.).abs() < 0.01);
         assert!(report.windows[0].resets_at.is_some());
-        assert_eq!(report.account.plan.as_deref(), Some("PRO"));
-        assert_eq!(report.account.email.as_deref(), Some("a@example.com"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("PRO"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("a@example.com")
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };

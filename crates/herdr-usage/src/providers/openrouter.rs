@@ -10,6 +10,7 @@
 //! completed day's activity separately to fill a history chart; only the
 //! 30-day totals are shown here.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -166,7 +167,10 @@ pub(crate) fn parse(
         .and_then(|free| free.then(|| "Free tier".to_owned()));
     Ok(Report::new(
         Provider(&Openrouter),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         windows,
     )
     .with_balances(balance)
@@ -195,10 +199,13 @@ fn activity_facts(rows: &[Activity]) -> Section {
     Section::Facts {
         title: "Last 30 days".into(),
         facts: vec![
-            ("Spend".into(), usd(spend)),
-            ("Requests".into(), group(requests.round() as i64)),
-            ("Tokens".into(), group(tokens.round() as i64)),
-            ("Models".into(), models.len().to_string()),
+            ("Spend".into(), Text::from(usd(spend))),
+            (
+                "Requests".into(),
+                Text::from(group(requests.round() as i64)),
+            ),
+            ("Tokens".into(), Text::from(group(tokens.round() as i64))),
+            ("Models".into(), Text::from(models.len().to_string())),
         ],
     }
 }
@@ -270,7 +277,7 @@ impl KeyData {
     }
 
     fn facts(&self) -> Section {
-        let mut facts = Vec::new();
+        let mut facts: Vec<(String, String)> = Vec::new();
         match self.limit() {
             Some(limit) => {
                 facts.push(("Spending cap".into(), usd(limit)));
@@ -297,7 +304,7 @@ impl KeyData {
         }
         Section::Facts {
             title: "API key".into(),
-            facts,
+            facts: pairs(facts),
         }
     }
 }
@@ -355,13 +362,16 @@ mod tests {
         .unwrap();
         assert!(report.windows.is_empty());
         assert!(report.balances.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Free tier"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Free tier")
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
         assert_eq!(
             facts[0],
-            ("Spending cap".to_owned(), "No limit configured".to_owned())
+            ("Spending cap".into(), "No limit configured".into())
         );
     }
 
@@ -382,10 +392,10 @@ mod tests {
         assert_eq!(
             facts,
             &vec![
-                ("Spend".to_owned(), "$1.50".to_owned()),
-                ("Requests".to_owned(), "5".to_owned()),
-                ("Tokens".to_owned(), "1,650".to_owned()),
-                ("Models".to_owned(), "2".to_owned()),
+                ("Spend".into(), "$1.50".into()),
+                ("Requests".into(), "5".into()),
+                ("Tokens".into(), "1,650".into()),
+                ("Models".into(), "2".into()),
             ]
         );
     }

@@ -10,6 +10,8 @@
 //! 30-day `credits/history` dashboard; and CodexBar's per-host narrowing of
 //! the parent-domain cookies, since the probe takes one cookie header.
 
+use crate::model::Count;
+use crate::text::pairs;
 use crate::{
     Error, Result,
     {
@@ -130,12 +132,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         )]
     };
     let balance = if unlimited {
-        Balance::new("Credits used", used, Unit::Count("credits".into()))
+        Balance::new("Credits used", used, Unit::Count(Count::Credits))
     } else {
         let left = status.remaining_credit.unwrap_or(cap - used).max(0.);
-        Balance::new("Credits left", left, Unit::Count("credits".into())).out_of(cap)
+        Balance::new("Credits left", left, Unit::Count(Count::Credits)).out_of(cap)
     };
-    let mut facts = Vec::new();
+    let mut facts: Vec<(String, String)> = Vec::new();
     if unlimited {
         facts.push(("Budget".into(), "Unlimited".into()));
     }
@@ -150,7 +152,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .with_balances([balance])
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
                 title: "Credits".into(),
-                facts,
+                facts: pairs(facts),
             })),
     )
 }

@@ -8,6 +8,7 @@
 //! discovered slug back to its config; this port rediscovers it each time
 //! instead, since it never writes the config.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -171,7 +172,7 @@ pub(crate) fn parse(body: &str, slug: &str) -> Result<Report> {
     }
     let account = Section::Facts {
         title: "Account".into(),
-        facts: vec![("Slug".into(), slug.to_owned())],
+        facts: vec![("Slug".into(), Text::from(slug.to_owned()))],
     };
     let report = Report::new(Provider(&Fireworks), Account::default(), Vec::new());
     Ok(match currency {

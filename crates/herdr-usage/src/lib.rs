@@ -16,6 +16,7 @@ mod providers;
 pub mod registry;
 pub mod service;
 pub mod settings;
+pub mod text;
 pub mod values;
 
 #[cfg(all(test, unix))]
@@ -28,6 +29,7 @@ pub use error::{Error, Result};
 pub use model::{Host, Provider};
 pub use probe::Shell;
 pub use settings::UsageConfig;
+pub use text::{Arg, Text};
 
 /// Detail a provider attaches to its report, for the app to draw. Found with
 /// [`Report::detail`] by type.

@@ -12,6 +12,7 @@
 //! Everything CodexBar reads is ported; the page is read by plain text
 //! search where CodexBar uses regular expressions.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -138,7 +139,7 @@ pub(crate) fn parse_tags(body: &str) -> Result<Report> {
     )
     .with_sections([Section::Facts {
         title: "Ollama Cloud".into(),
-        facts: vec![("Models".into(), tags.models.len().to_string())],
+        facts: vec![("Models".into(), Text::from(tags.models.len().to_string()))],
     }]))
 }
 
@@ -180,8 +181,8 @@ pub(crate) fn parse(html: &str) -> Result<Report> {
     .map(|((used, resets_at), kind, length)| Window::new(kind, used, resets_at, Some(length)))
     .collect();
     let account = Account {
-        email: email(html),
-        plan: plan(html).map(|plan| title_case(&plan)),
+        email: email(html).map(Text::from),
+        plan: plan(html).map(|plan| title_case(&plan)).map(Text::from),
     };
     Ok(Report::new(Provider(&Ollama), account, windows))
 }
@@ -385,6 +386,7 @@ fn signed_out(html: &str) -> bool {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     fn at(rfc3339: &str) -> Option<SystemTime> {
         Timestamp::Text(rfc3339.into()).time()
@@ -449,8 +451,11 @@ mod tests {
     fn reads_monthly_included_credits() {
         let report = parse(MONTHLY_PAGE).unwrap();
         assert_eq!(report.provider.id(), "ollama");
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
-        assert_eq!(report.account.email.as_deref(), Some("user@example.com"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("user@example.com")
+        );
         assert_eq!(report.windows.len(), 1);
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
@@ -461,7 +466,7 @@ mod tests {
     #[test]
     fn reads_legacy_session_and_weekly_windows() {
         let report = parse(LEGACY_PAGE).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Free"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Free"));
         let session = &report.windows[0];
         assert_eq!(session.kind, Kind::Session);
         assert!((session.used - 0.1).abs() < 1e-4);
@@ -504,10 +509,13 @@ mod tests {
         let report =
             parse_tags(r#"{"models":[{"name":"gpt-oss:120b"},{"name":"qwen3"}]}"#).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("API key"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("API key")
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Models".to_owned(), "2".to_owned()));
+        assert_eq!(facts[0], pair(("Models".to_owned(), "2".to_owned())));
     }
 }

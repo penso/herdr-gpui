@@ -1,6 +1,7 @@
 //! Codex plan usage, read with the Codex CLI's ChatGPT sign-in, falling back
 //! to OpenCode's OpenAI OAuth sign-in. API keys do not provide plan usage.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -81,7 +82,10 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .rate_limit_reset_credits
         .map(|credits| Section::Facts {
             title: "Limit reset credits".into(),
-            facts: vec![("Available".into(), credits.available_count.to_string())],
+            facts: vec![(
+                "Available".into(),
+                Text::from(credits.available_count.to_string()),
+            )],
         });
     let credits = usage.credits.map(|credits| Section::Facts {
         title: "Credits".into(),
@@ -90,16 +94,20 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             if credits.unlimited.unwrap_or(false) {
                 "Unlimited".into()
             } else {
-                credits.balance.unwrap_or_else(|| "0".into())
+                Text::from(credits.balance.unwrap_or_else(|| "0".into()))
             },
         )],
     });
     let account = Account {
-        email: usage.email.filter(|email| !email.trim().is_empty()),
-        plan: usage
+        email: usage
+            .email
+            .filter(|email| !email.trim().is_empty())
+            .map(Text::from),
+        plan: (usage
             .plan_type
             .map(|plan| title_case(&plan))
-            .filter(|plan| !plan.is_empty()),
+            .filter(|plan| !plan.is_empty()))
+        .map(Text::from),
     };
     Ok(Report::new(Provider(&Codex), account, windows)
         .with_sections(review.into_iter().chain(resets).chain(credits)))

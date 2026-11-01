@@ -5,6 +5,7 @@
 //! this API. This is the platform's prepaid billing, separate from the Grok
 //! consumer subscription; there is no local sign-in to find.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -117,8 +118,8 @@ pub(crate) fn parse(balance: &str, usage: Option<&str>, today: NaiveDate) -> Res
         Section::Facts {
             title: "Spend".into(),
             facts: vec![
-                ("Today".into(), usd(spend.today)),
-                (label.into(), usd(spend.total)),
+                ("Today".into(), Text::from(usd(spend.today))),
+                (label.into(), Text::from(usd(spend.total))),
             ],
         }
     });

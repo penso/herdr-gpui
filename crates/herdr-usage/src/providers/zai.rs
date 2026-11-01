@@ -13,6 +13,7 @@
 //! a file back whole, so the file must hold only the key; and the hourly
 //! token chart, which the panel has no chart for.
 
+use crate::text::{Text, pair, pairs};
 use crate::{
     Error, Result,
     {
@@ -321,7 +322,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
             0,
             Section::Facts {
                 title: "Quota details".into(),
-                facts,
+                facts: pairs(facts),
             },
         );
     }
@@ -336,7 +337,15 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     .flatten()
     .map(|plan| plan.trim().to_owned())
     .find(|plan| !plan.is_empty());
-    Ok(Report::new(Provider(&Zai), Account { email: None, plan }, windows).with_sections(sections))
+    Ok(Report::new(
+        Provider(&Zai),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
+    )
+    .with_sections(sections))
 }
 
 /// Credit plans cost double on weekdays 06:00–10:00 UTC; no endpoint says so.
@@ -402,6 +411,7 @@ pub(crate) fn parse_tokens(body: &str) -> Option<Section> {
             .into_iter()
             .take(20)
             .map(|(name, tokens)| (name, compact(tokens)))
+            .map(pair)
             .collect(),
     })
 }
@@ -518,7 +528,7 @@ impl Limit {
             (None, Some(length)) if length == SESSION => Kind::Session,
             (None, Some(length)) if length == WEEK => Kind::Weekly,
             (None, Some(length)) if length == DAY => Kind::Daily,
-            (None, Some(length)) => Kind::Named(format!("{}-hour", length.as_secs() / 3600)),
+            (None, Some(length)) => Kind::Named(format!("{}-hour", length.as_secs() / 3600).into()),
             (None, None) => Kind::Named("Quota".into()),
         };
         Window::new(kind, self.used(), reset, length)
@@ -603,7 +613,7 @@ mod tests {
     #[test]
     fn coding_plan_limits_become_session_weekly_and_mcp() {
         let report = parse(QUOTA, at(1_785_812_400)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows.len(), 2);
         let session = &report.windows[0];
         assert_eq!(session.kind, Kind::Session);

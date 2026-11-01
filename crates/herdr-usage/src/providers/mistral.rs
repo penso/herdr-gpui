@@ -9,6 +9,7 @@
 //! allowance still shows when the subscription page reports it. Daily usage
 //! buckets for CodexBar's cost chart are left out.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -174,17 +175,17 @@ pub(crate) fn parse(
     if !allowances.is_empty() {
         sections.push(Section::Facts {
             title: "Allowances".into(),
-            facts: allowances,
+            facts: pairs(allowances),
         });
     }
     let tokens = |value: f64| group(value.round() as i64);
     sections.push(Section::Facts {
         title: "Tokens this month".into(),
         facts: vec![
-            ("Input".into(), tokens(totals.input)),
-            ("Output".into(), tokens(totals.output)),
-            ("Cached".into(), tokens(totals.cached)),
-            ("Models".into(), totals.models.to_string()),
+            ("Input".into(), Text::from(tokens(totals.input))),
+            ("Output".into(), Text::from(tokens(totals.output))),
+            ("Cached".into(), Text::from(tokens(totals.cached))),
+            ("Models".into(), Text::from(totals.models.to_string())),
         ],
     });
     if totals.cost > 0. {
@@ -199,7 +200,7 @@ pub(crate) fn parse(
         if !shares.is_empty() {
             sections.push(Section::Shares {
                 title: "Spend by model".into(),
-                shares,
+                shares: crate::text::shares(shares),
             });
         }
     }
@@ -451,6 +452,7 @@ struct Credits {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     const NOVEMBER: &str = r#"{"completion":{"models":{"mistral-large-latest::mistral-large-2411":{"input":[{"usage_type":"usage","event_type":"api_tokens","billing_metric":"mistral-large-2411","billing_display_name":"mistral-large-latest","billing_group":"input","timestamp":"2025-11-14","value":11121,"value_paid":11121}],"output":[{"usage_type":"usage","event_type":"api_tokens","billing_metric":"mistral-large-2411","billing_display_name":"mistral-large-latest","billing_group":"output","timestamp":"2025-11-14","value":1115,"value_paid":1115}]},"mistral-small-latest::mistral-small-2506":{"input":[{"usage_type":"usage","event_type":"api_tokens","billing_metric":"mistral-small-2506","billing_display_name":"mistral-small-latest","billing_group":"input","timestamp":"2025-11-14","value":20,"value_paid":20},{"usage_type":"usage","event_type":"api_tokens","billing_metric":"mistral-small-2506","billing_display_name":"mistral-small-latest","billing_group":"input","timestamp":"2025-11-24","value":100,"value_paid":100}],"output":[{"usage_type":"usage","event_type":"api_tokens","billing_metric":"mistral-small-2506","billing_display_name":"mistral-small-latest","billing_group":"output","timestamp":"2025-11-14","value":500,"value_paid":500},{"usage_type":"usage","event_type":"api_tokens","billing_metric":"mistral-small-2506","billing_display_name":"mistral-small-latest","billing_group":"output","timestamp":"2025-11-24","value":2482,"value_paid":2482}]}}},"ocr":{"models":{}},"connectors":{"models":{}},"libraries_api":{"pages":{"models":{}},"tokens":{"models":{}}},"fine_tuning":{"training":{},"storage":{}},"audio":{"models":{}},"vibe_usage":0.0,"date":"2025-11-01T00:00:00Z","previous_month":"2025-10","next_month":"2025-12","start_date":"2025-11-01T00:00:00Z","end_date":"2025-11-30T23:59:59.999Z","currency":"EUR","currency_symbol":"€","prices":[{"event_type":"api_tokens","billing_metric":"mistral-large-2411","billing_group":"input","price":"0.0000017000"},{"event_type":"api_tokens","billing_metric":"mistral-large-2411","billing_group":"output","price":"0.0000051000"},{"event_type":"api_tokens","billing_metric":"mistral-small-2506","billing_group":"input","price":"8.50E-8"},{"event_type":"api_tokens","billing_metric":"mistral-small-2506","billing_group":"output","price":"2.550E-7"}]}"#;
 
@@ -474,10 +476,10 @@ mod tests {
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected token facts");
         };
-        assert_eq!(facts[0], ("Input".to_owned(), "11,241".to_owned()));
-        assert_eq!(facts[1], ("Output".to_owned(), "4,097".to_owned()));
-        assert_eq!(facts[2], ("Cached".to_owned(), "0".to_owned()));
-        assert_eq!(facts[3], ("Models".to_owned(), "2".to_owned()));
+        assert_eq!(facts[0], pair(("Input".to_owned(), "11,241".to_owned())));
+        assert_eq!(facts[1], pair(("Output".to_owned(), "4,097".to_owned())));
+        assert_eq!(facts[2], pair(("Cached".to_owned(), "0".to_owned())));
+        assert_eq!(facts[3], pair(("Models".to_owned(), "2".to_owned())));
         let Some(Section::Shares { shares, .. }) = report.sections.get(1) else {
             panic!("expected model shares");
         };

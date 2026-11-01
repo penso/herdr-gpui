@@ -10,6 +10,8 @@
 //! and its pseudo-terminal fallback for Kiro CLI releases that print nothing
 //! through pipes; the `/context` window breakdown is left out too.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -116,7 +118,7 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
                 Balance::new(
                     "Credits left",
                     (total - used).max(0.),
-                    Unit::Count("credits".into()),
+                    Unit::Count(Count::Credits),
                 )
                 .out_of(total),
             );
@@ -156,15 +158,15 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
     Ok(Report::new(
         Provider(&Kiro),
         Account {
-            email,
-            plan: Some(display_plan(&plan.name)),
+            email: email.map(Text::from),
+            plan: Some(Text::from(display_plan(&plan.name))),
         },
         windows,
     )
     .with_balances(balances)
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
         title: "Overages".into(),
-        facts,
+        facts: pairs(facts),
     })))
 }
 
@@ -397,15 +399,21 @@ mod tests {
                       Credits (12.50 of 50 covered in plan)\n\
                       ████████████████████ 25%\n";
         let report = parse(output, Some("person@example.com".into()), now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kiro Free"));
-        assert_eq!(report.account.email.as_deref(), Some("person@example.com"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kiro Free")
+        );
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("person@example.com")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert_eq!(window.percent(), 25);
         assert!(window.resets_at.is_some());
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits left", 37.5, Unit::Count("credits".into())).out_of(50.)]
+            vec![Balance::new("Credits left", 37.5, Unit::Count(Count::Credits)).out_of(50.)]
         );
     }
 
@@ -422,7 +430,10 @@ mod tests {
             "https://app.kiro.dev/account/usage\n",
         );
         let report = parse(output, None, now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kiro Free"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kiro Free")
+        );
         assert_eq!(report.windows[0].percent(), 0);
         let bonus = &report.windows[1];
         assert_eq!(bonus.kind, Kind::Named("Bonus credits".into()));
@@ -450,7 +461,10 @@ mod tests {
     #[test]
     fn keeps_a_plan_only_summary() {
         let report = parse("Plan: KIRO PRO MAX | 1 usage breakdowns\n", None, now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kiro Pro Max"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kiro Pro Max")
+        );
         assert!(report.windows.is_empty());
         assert!(report.balances.is_empty());
     }
@@ -463,7 +477,10 @@ mod tests {
                       Credits used: 12.5\n\
                       Est. cost: $0.50 USD\n";
         let report = parse(output, None, now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Q Developer Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Q Developer Pro")
+        );
         assert_eq!(report.windows[0].percent(), 40);
         assert_eq!(
             report.sections,

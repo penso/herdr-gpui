@@ -8,6 +8,7 @@
 //! a pasted cURL command in place of the header; here only the header is
 //! accepted.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -244,14 +245,14 @@ fn build(
     Report::new(
         Provider(&Longcat),
         Account {
-            email: name,
+            email: name.map(Text::from),
             plan: None,
         },
         windows,
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
         title: "Quota".into(),
-        facts,
+        facts: pairs(facts),
     }))
 }
 
@@ -274,7 +275,10 @@ mod tests {
         );
         let fuel = data(r#"{"code":0,"data":{"totalQuota":0,"list":[]}}"#);
         let report = build(Some(&account), None, Some(&usage), Some(&fuel));
-        assert_eq!(report.account.email.as_deref(), Some("LongCat User"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("LongCat User")
+        );
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].used, 24.);
     }

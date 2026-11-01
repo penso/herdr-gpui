@@ -6,6 +6,8 @@
 //! balance only; the CLI session also reads the plan and the weekly limit.
 //! Everything CodexBar reads is ported.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -131,7 +133,7 @@ pub(crate) fn parse(
         _ => {}
     }
     let balances =
-        remaining.map(|left| Balance::new("Remaining", left, Unit::Count("credits".into())));
+        remaining.map(|left| Balance::new("Remaining", left, Unit::Count(Count::Credits)));
     let auto_top_up = ["autoTopupEnabled", "auto_topup_enabled"]
         .iter()
         .find_map(|key| usage.get(*key).and_then(Value::as_bool));
@@ -188,11 +190,11 @@ pub(crate) fn parse(
     }
     let section = (!facts.is_empty()).then(|| Section::Facts {
         title: "Account".into(),
-        facts,
+        facts: pairs(facts),
     });
     let account = Account {
-        email,
-        plan: plan.map(|plan| title_case(&plan)),
+        email: email.map(Text::from),
+        plan: plan.map(|plan| title_case(&plan)).map(Text::from),
     };
     Ok(Report::new(Provider(&Codebuff), account, windows)
         .with_balances(balances)
@@ -226,6 +228,7 @@ fn time(value: Option<&Value>) -> Option<std::time::SystemTime> {
 mod tests {
     use super::*;
     use crate::Error;
+    use crate::text::pair;
 
     #[test]
     fn api_key_reads_credits_only() {
@@ -240,11 +243,7 @@ mod tests {
         assert!((report.windows[0].used - 25.).abs() < 1e-4);
         assert_eq!(
             report.balances,
-            vec![Balance::new(
-                "Remaining",
-                75.,
-                Unit::Count("credits".into())
-            )]
+            vec![Balance::new("Remaining", 75., Unit::Count(Count::Credits))]
         );
         assert_eq!(report.account, Account::default());
     }
@@ -260,8 +259,11 @@ mod tests {
             "email": "dev@example.com"
         }"#;
         let report = parse(usage, Some(subscription), Some("cli@example.com".into())).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
         let credits = report
             .windows
             .iter()
@@ -280,8 +282,11 @@ mod tests {
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected account facts");
         };
-        assert_eq!(facts[0], ("Subscription".to_owned(), "Active".to_owned()));
-        assert_eq!(facts[1], ("Auto top-up".to_owned(), "On".to_owned()));
+        assert_eq!(
+            facts[0],
+            pair(("Subscription".to_owned(), "Active".to_owned()))
+        );
+        assert_eq!(facts[1], pair(("Auto top-up".to_owned(), "On".to_owned())));
     }
 
     #[test]

@@ -5,6 +5,8 @@
 //! workspaces with the earliest expiry. The Warp app's own sign-in is not
 //! read, as CodexBar does not read it either.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -129,7 +131,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         let balance = Balance::new(
             "Add-on credits",
             remaining.max(0) as f64,
-            Unit::Count("credits".into()),
+            Unit::Count(Count::Credits),
         );
         if granted > 0 {
             balance.out_of(granted as f64)
@@ -166,14 +168,14 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Provider(&Warp),
         Account {
             email: None,
-            plan: unlimited.then(|| "Unlimited".to_owned()),
+            plan: unlimited.then(|| "Unlimited".to_owned()).map(Text::from),
         },
         vec![monthly],
     )
     .with_balances(bonus)
     .with_sections([Section::Facts {
         title: "Credits".into(),
-        facts,
+        facts: pairs(facts),
     }]))
 }
 
@@ -268,6 +270,7 @@ impl Grant {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     /// CodexBar's fetcher fixture.
     const LIMITS: &str = r#"{
@@ -312,14 +315,14 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Monthly credits".to_owned(), "5 of 1,500".to_owned())
+            pair(("Monthly credits".to_owned(), "5 of 1,500".to_owned()))
         );
         assert_eq!(
             facts[1],
-            (
+            pair((
                 "Next add-on expiry".to_owned(),
                 "10 credits on Mar 1, 2026".to_owned()
-            )
+            ))
         );
     }
 
@@ -330,7 +333,10 @@ mod tests {
               {"isUnlimited":true,"requestLimit":0,"requestsUsedSinceLastRefresh":0}}}}}"#,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Unlimited"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Unlimited")
+        );
         assert_eq!(report.windows[0].percent(), 0);
         assert!(report.balances.is_empty());
     }

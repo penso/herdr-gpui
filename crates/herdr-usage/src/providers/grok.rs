@@ -11,6 +11,7 @@
 //! paths, so only the Grok CLI's published client id and the legacy
 //! sign-in scope are recognized.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -63,10 +64,11 @@ impl Service for Grok {
                     continue;
                 }
                 let account = Account {
-                    email: probe.text(&auth, &[scope, "email"]),
-                    plan: probe
+                    email: probe.text(&auth, &[scope, "email"]).map(Text::from),
+                    plan: (probe
                         .text(&auth, &[scope, "auth_mode"])
-                        .and_then(|mode| login_plan(&mode)),
+                        .and_then(|mode| login_plan(&mode)))
+                    .map(Text::from),
                 };
                 return Some(fetch(probe, &token, account));
             }
@@ -137,7 +139,7 @@ pub(crate) fn parse(
         .or(credits.subscription_tier.as_deref())
         .and_then(plan_name)
     {
-        account.plan = Some(plan);
+        account.plan = Some(Text::from(plan));
     }
     let time = |text: &Option<String>| text.clone().and_then(|text| Timestamp::Text(text).time());
     let period_end = config
@@ -185,7 +187,7 @@ pub(crate) fn parse(
         (None, None) => return Err(invalid()),
     };
     let unknown = windows.is_empty().then(|| {
-        let mut facts = vec![("Usage".into(), "Not reported".into())];
+        let mut facts: Vec<(String, String)> = vec![("Usage".into(), "Not reported".into())];
         if let Some(end) = end {
             let end = chrono::DateTime::<chrono::Utc>::from(end);
             facts.push((
@@ -195,7 +197,7 @@ pub(crate) fn parse(
         }
         Section::Facts {
             title: "Included credits".into(),
-            facts,
+            facts: pairs(facts),
         }
     });
     Ok(Report::new(Provider(&Grok), account, windows)

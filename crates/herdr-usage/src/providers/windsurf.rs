@@ -15,6 +15,7 @@
 //! instead, which Connect servers accept alongside protobuf. A cache stored
 //! as a UTF-16 blob, which CodexBar also decodes, is not read.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -201,7 +202,7 @@ fn counter(
     let total = total.filter(|total| *total > 0.)?;
     let used = used.or_else(|| remaining.map(|remaining| (total - remaining).max(0.)))?;
     Some(Window::new(
-        Kind::Named(name.to_owned()),
+        Kind::Named(Text::from(name.to_owned())),
         used.clamp(0., total) / total * 100.,
         None,
         None,
@@ -232,12 +233,22 @@ fn report(
         title: "Plan".into(),
         facts: vec![(
             "Renews".into(),
-            chrono::DateTime::<chrono::Utc>::from(end)
-                .format("%b %-d, %Y")
-                .to_string(),
+            Text::from(
+                chrono::DateTime::<chrono::Utc>::from(end)
+                    .format("%b %-d, %Y")
+                    .to_string(),
+            ),
         )],
     });
-    Report::new(Provider(&Windsurf), Account { email: None, plan }, windows).with_sections(ends)
+    Report::new(
+        Provider(&Windsurf),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
+    )
+    .with_sections(ends)
 }
 
 #[derive(Deserialize)]
@@ -296,6 +307,7 @@ struct QuotaUsage {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     fn at(seconds: u64) -> Option<SystemTime> {
         Some(SystemTime::UNIX_EPOCH + Duration::from_secs(seconds))
@@ -320,7 +332,7 @@ mod tests {
     fn reads_cached_quota() {
         let report = parse_cache(CACHE).unwrap();
         assert_eq!(report.provider.id(), "windsurf");
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows.len(), 2);
         assert_eq!(report.windows[0].kind, Kind::Daily);
         assert_eq!(report.windows[0].percent(), 91);
@@ -331,7 +343,10 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Renews".to_owned(), "Mar 20, 2026".to_owned()));
+        assert_eq!(
+            facts[0],
+            pair(("Renews".to_owned(), "Mar 20, 2026".to_owned()))
+        );
     }
 
     #[test]
@@ -357,7 +372,7 @@ mod tests {
                 "dailyQuotaResetAtUnix":"1774080000","weeklyQuotaResetAtUnix":"1774166400"}}"#,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows[0].percent(), 25);
         assert_eq!(report.windows[0].resets_at, at(1_774_080_000));
         assert_eq!(report.windows[1].percent(), 60);

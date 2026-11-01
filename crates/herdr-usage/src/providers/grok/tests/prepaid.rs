@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::Text;
 
 #[test]
 fn unified_billing_shows_wallet_and_period_without_inventing_usage() {
@@ -17,7 +18,10 @@ fn unified_billing_shows_wallet_and_period_without_inventing_usage() {
     )
     .unwrap();
     assert!(report.windows.is_empty());
-    assert_eq!(report.account.plan.as_deref(), Some("SuperGrok"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("SuperGrok")
+    );
     assert_eq!(
         report.balances,
         vec![Balance::new(

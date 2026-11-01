@@ -4,6 +4,7 @@
 //! find, and CodexBar reads no cookies for it either. The free account's
 //! daily allowance and grace period are not shown, as in CodexBar.
 
+use crate::text::pairs;
 use crate::{
     Result,
     {
@@ -122,7 +123,7 @@ pub(crate) fn parse(billing: &str, rate_limits: &str, scope: Option<&str>) -> Re
     Ok(
         Report::new(Provider(&V0), Account::default(), windows).with_sections([Section::Facts {
             title: "v0 API".into(),
-            facts,
+            facts: pairs(facts),
         }]),
     )
 }

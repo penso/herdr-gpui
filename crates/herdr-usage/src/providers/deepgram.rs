@@ -5,6 +5,7 @@
 //! does. Deepgram reports usage, not a balance or a limit, so the panel
 //! shows facts only. Everything CodexBar reads is ported.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -135,13 +136,13 @@ fn report(projects: &[Project], totals: &Totals) -> Report {
         Provider(&Deepgram),
         Account {
             email: None,
-            plan: Some(plan),
+            plan: Some(Text::from(plan)),
         },
         Vec::new(),
     )
     .with_sections([Section::Facts {
         title: "Usage summary".into(),
-        facts,
+        facts: pairs(facts),
     }])
 }
 
@@ -253,7 +254,10 @@ mod tests {
             .add(parse_breakdown(r#"{"start":"2026-05-20","results":[{"requests":5}]}"#).unwrap());
         let report = report(&projects, &totals);
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("2 projects"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("2 projects")
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
@@ -274,7 +278,10 @@ mod tests {
     fn names_a_single_project() {
         let projects = parse_projects(PROJECTS).unwrap();
         let report = report(&projects[..1], &parse_breakdown(BREAKDOWN).unwrap());
-        assert_eq!(report.account.plan.as_deref(), Some("Project: Voice bot"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Project: Voice bot")
+        );
     }
 
     #[test]

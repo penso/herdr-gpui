@@ -4,6 +4,7 @@
 //! `base_url`. No admin credential is used. Everything CodexBar reads is
 //! ported; the per-budget list and model rows are shown as facts.
 
+use crate::text::{Text, pair, pairs};
 use crate::{
     Error, Result,
     {
@@ -180,7 +181,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
                 let timing = Timing::new(reset, text(last.as_ref()), now);
                 match max.filter(|_| known) {
                     Some(max) => rate_limits.push(Section::Limit(Window::new(
-                        Kind::Named(title),
+                        Kind::Named(Text::from(title)),
                         used.unwrap_or(0.) / max * 100.,
                         timing.resets_at,
                         timing.length,
@@ -224,7 +225,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     if !unknown_limits.is_empty() {
         sections.push(Section::Facts {
             title: "Rate limits".into(),
-            facts: unknown_limits,
+            facts: pairs(unknown_limits),
         });
     }
     if inactive {
@@ -242,12 +243,21 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     if budgets.len() > 1 || budgets.iter().any(|budget| budget.scope.is_some()) {
         sections.push(Section::Facts {
             title: "Budgets".into(),
-            facts: budgets.iter().take(24).map(Budget::fact).collect(),
+            facts: budgets
+                .iter()
+                .take(24)
+                .map(Budget::fact)
+                .map(pair)
+                .collect(),
         });
     }
     let account = Account {
-        email: text(root.virtual_key_name.as_ref()).map(str::to_owned),
-        plan: first.and_then(|budget| budget.source.clone()),
+        email: text(root.virtual_key_name.as_ref())
+            .map(str::to_owned)
+            .map(Text::from),
+        plan: first
+            .and_then(|budget| budget.source.clone())
+            .map(Text::from),
     };
     Ok(Report::new(Provider(&Bifrost), account, windows)
         .with_balances(balance)
@@ -281,13 +291,13 @@ impl Budget<'_> {
             (Some("Daily"), None, None) => Kind::Daily,
             (Some("Weekly"), None, None) => Kind::Weekly,
             (Some("Monthly"), None, None) => Kind::Monthly,
-            (label, _, _) => Kind::Named(
+            (label, _, _) => Kind::Named(Text::from(
                 [Some(self.title()), label.map(str::to_owned)]
                     .into_iter()
                     .flatten()
                     .collect::<Vec<_>>()
                     .join(" · "),
-            ),
+            )),
         };
         let length = self.timing.length.or_else(|| kind.length());
         Window::new(
@@ -448,7 +458,7 @@ fn models(rows: &[ModelUsage]) -> Option<Section> {
     }
     Some(Section::Facts {
         title: "Models".into(),
-        facts,
+        facts: pairs(facts),
     })
 }
 

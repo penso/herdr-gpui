@@ -17,6 +17,7 @@
 //! a command that prints the token, or which would need request signing.
 //! Token costs from Claude Code's logs are not read either.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -204,14 +205,14 @@ pub(crate) fn report(email: Option<String>, project: Option<String>, peak: Optio
     Report::new(
         Provider(&Vertexai),
         Account {
-            email,
+            email: email.map(Text::from),
             plan: Some("gcloud".into()),
         },
         windows,
     )
     .with_sections([Section::Facts {
         title: "Google Cloud".into(),
-        facts,
+        facts: pairs(facts),
     }])
 }
 
@@ -373,7 +374,10 @@ mod tests {
             Some("my-project".into()),
             Some(peak),
         );
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
         assert_eq!(report.windows[0].kind, Kind::Named("Peak quota".into()));
         assert_eq!(report.windows[0].percent(), 50);
         assert_eq!(

@@ -5,6 +5,7 @@
 //! CodexBar reads is ported: character credits with their reset, voice and
 //! professional voice slots, and the plan tier and status.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -131,7 +132,10 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     };
     Ok(Report::new(
         Provider(&Elevenlabs),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         vec![credits],
     )
     .with_sections(
@@ -139,7 +143,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .iter()
             .map(|(title, used, limit)| {
                 Section::Limit(Window::new(
-                    Kind::Named((*title).to_owned()),
+                    Kind::Named(Text::from((*title).to_owned())),
                     percent(*used, *limit),
                     None,
                     None,
@@ -147,7 +151,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             })
             .chain([Section::Facts {
                 title: "Usage".into(),
-                facts,
+                facts: pairs(facts),
             }])
             .collect::<Vec<_>>(),
     ))
@@ -171,6 +175,7 @@ struct Subscription {
 mod tests {
     use super::*;
     use crate::Error;
+    use crate::text::pair;
     use std::time::{Duration, SystemTime};
 
     /// Shaped like the documented subscription response.
@@ -192,7 +197,10 @@ mod tests {
     fn reads_credits_slots_and_plan() {
         let report = parse(SUBSCRIPTION).unwrap();
         assert_eq!(report.provider.id(), "elevenlabs");
-        assert_eq!(report.account.plan.as_deref(), Some("Creator Annual"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Creator Annual")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert_eq!(window.percent(), 25);
@@ -214,7 +222,7 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Credits".to_owned(), "25,000 of 100,000".to_owned())
+            pair(("Credits".to_owned(), "25,000 of 100,000".to_owned()))
         );
     }
 
@@ -223,7 +231,10 @@ mod tests {
         let report =
             parse(r#"{"tier":"free","character_count":0,"character_limit":0,"status":"past_due"}"#)
                 .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Free · past_due"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Free · past_due")
+        );
         assert_eq!(report.windows[0].percent(), 0);
         assert_eq!(report.sections.len(), 1);
     }

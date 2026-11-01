@@ -14,6 +14,7 @@
 //! accounts CodexBar signs in itself (an interactive login with the app's
 //! OAuth client); and the local SQLite conversation history.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -250,7 +251,7 @@ impl Bucket {
             Cadence::Other => (format!("{group} {}", name.unwrap_or(id)), None),
         };
         Some(Window::new(
-            Kind::Named(kind),
+            Kind::Named(Text::from(kind)),
             100. - fraction.clamp(0., 1.) * 100.,
             self.reset_time.as_ref().and_then(Timestamp::time),
             length,

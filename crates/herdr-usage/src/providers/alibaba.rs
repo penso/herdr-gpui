@@ -20,6 +20,7 @@ use super::oneconsole::{
     CHROME_AGENT, DOMAINS, check, cornerstone, date, expand, find_object, find_value, first,
     form_body, gateway_request, sec_token, string,
 };
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -355,7 +356,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
                 Provider(&Alibaba),
                 Account {
                     email: None,
-                    plan: Some(plan),
+                    plan: Some(Text::from(plan)),
                 },
                 Vec::new(),
             )
@@ -366,14 +367,18 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
             None => Err(invalid()),
         };
     }
-    Ok(
-        Report::new(Provider(&Alibaba), Account { email: None, plan }, windows).with_sections([
-            Section::Facts {
-                title: "Requests used".into(),
-                facts,
-            },
-        ]),
+    Ok(Report::new(
+        Provider(&Alibaba),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_sections([Section::Facts {
+        title: "Requests used".into(),
+        facts: pairs(facts),
+    }]))
 }
 
 fn quota_of(info: &Map<String, Value>) -> Option<&Map<String, Value>> {
@@ -507,7 +512,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            report.account.plan.as_deref(),
+            report.account.plan.as_ref().map(Text::as_str),
             Some("Alibaba Coding Plan Pro")
         );
         assert_eq!(report.windows.len(), 3);
@@ -546,7 +551,7 @@ mod tests {
         )
         .unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Lite"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Lite"));
         assert!(parse(r#"{"data":{}}"#, at(1_700_000_000)).is_err());
     }
 

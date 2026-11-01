@@ -10,6 +10,7 @@
 //! CodexBar's opt-in fallback does. There is no local sign-in: the Codex CLI's
 //! ChatGPT sign-in is the separate Codex provider.
 
+use crate::text::{Text, pairs, share};
 use crate::{
     Error, Result,
     {
@@ -280,18 +281,18 @@ impl Tally {
         let mut sections = vec![Section::Facts {
             title: "Spend".into(),
             facts: vec![
-                ("Today".into(), usd(spend(today))),
-                ("Last 7 days".into(), usd(spend(since(7)))),
+                ("Today".into(), Text::from(usd(spend(today)))),
+                ("Last 7 days".into(), Text::from(usd(spend(since(7))))),
             ],
         }];
         if requests > 0 || input + output > 0 {
             sections.push(Section::Facts {
                 title: "Completions".into(),
                 facts: vec![
-                    ("Requests".into(), count(requests)),
-                    ("Input tokens".into(), count(input)),
-                    ("Cached input tokens".into(), count(cached)),
-                    ("Output tokens".into(), count(output)),
+                    ("Requests".into(), Text::from(count(requests))),
+                    ("Input tokens".into(), Text::from(count(input))),
+                    ("Cached input tokens".into(), Text::from(count(cached))),
+                    ("Output tokens".into(), Text::from(count(output))),
                 ],
             });
         }
@@ -312,7 +313,7 @@ impl Tally {
         let account = Account {
             email: None,
             plan: Some(match project {
-                Some(project) => format!("Admin API: {project}"),
+                Some(project) => format!("Admin API: {project}").into(),
                 None => "Admin API".into(),
             }),
         };
@@ -341,6 +342,7 @@ fn shares<'a>(title: &str, parts: impl Iterator<Item = (&'a str, f64)>) -> Optio
             .into_iter()
             .take(TOP)
             .map(|(label, value)| (label.to_owned(), (value / whole * 100.) as f32))
+            .map(share)
             .collect(),
     })
 }
@@ -397,7 +399,7 @@ pub(crate) fn parse_grants(body: &str, now: i64) -> Result<Report> {
         .with_balances([balance])
         .with_sections([Section::Facts {
             title: "Credit grants".into(),
-            facts,
+            facts: pairs(facts),
         }]))
 }
 
@@ -534,7 +536,10 @@ mod tests {
         assert!(report.windows.is_empty());
         assert_eq!(report.balances[0].label, "Spend, last 30 days");
         assert!((report.balances[0].amount - 5.0).abs() < 1e-9);
-        assert_eq!(report.account.plan.as_deref(), Some("Admin API"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Admin API")
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected spend facts");
         };
@@ -562,7 +567,10 @@ mod tests {
         let report = tally.report(NOW, 1, Some("proj_abc"));
         assert_eq!(report.balances[0].label, "Spend today");
         assert!((report.balances[0].amount - 3.0).abs() < 1e-9);
-        assert_eq!(report.account.plan.as_deref(), Some("Admin API: proj_abc"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Admin API: proj_abc")
+        );
     }
 
     #[test]

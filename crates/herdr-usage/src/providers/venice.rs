@@ -9,6 +9,8 @@
 //! import here only takes the unsplit cookie, and a chunked one must be
 //! pasted as a whole `cookie` header.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -82,7 +84,7 @@ pub(crate) fn parse_balance(body: &str) -> Result<Report> {
         .usd
         .map(|usd| Balance::new("USD", usd, Unit::Currency("USD".into())));
     let diem = balances.diem.map(|diem| {
-        let balance = Balance::new("DIEM", diem, Unit::Count("DIEM".into()));
+        let balance = Balance::new("DIEM", diem, Unit::Count(Count::Named("DIEM".into())));
         match allocation {
             Some(total) => balance.out_of(total),
             None => balance,
@@ -167,7 +169,7 @@ pub(crate) fn parse_session(body: &str, now: SystemTime) -> Result<Report> {
         .monthly_refill_credits
         .filter(|refill| *refill > 0.)
         .ok_or(Error::Json(Category::Data))?;
-    let credits = || Unit::Count("credits".into());
+    let credits = || Unit::Count(Count::Credits);
     let available = usage
         .available_credits
         .or(claims.bundled_credits)
@@ -200,11 +202,11 @@ pub(crate) fn parse_session(body: &str, now: SystemTime) -> Result<Report> {
     }
     let section = (!facts.is_empty()).then(|| Section::Facts {
         title: "Credits".into(),
-        facts,
+        facts: pairs(facts),
     });
     let account = Account {
         email: None,
-        plan: user_type,
+        plan: user_type.map(Text::from),
     };
     Ok(Report::new(Provider(&Venice), account, Vec::new())
         .with_balances(available.into_iter().chain(total).chain([spent]))
@@ -293,6 +295,7 @@ struct CreditsUsage {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     fn encode(bytes: &[u8]) -> String {
         const TABLE: &[u8; 64] =
@@ -333,7 +336,7 @@ mod tests {
         assert!((report.windows[0].used - 9.5).abs() < 1e-4);
         assert_eq!(
             report.balances,
-            vec![Balance::new("DIEM", 90.5, Unit::Count("DIEM".into())).out_of(100.)]
+            vec![Balance::new("DIEM", 90.5, Unit::Count(Count::Named("DIEM".into()))).out_of(100.)]
         );
     }
 
@@ -372,8 +375,8 @@ mod tests {
                 "availableCredits": 750.5, "tierCap": 3000, "nextRefillAt": 1790500000000}}"#,
         );
         let report = parse_session(&body, at(1_789_000_000)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("pro"));
-        let credits = Unit::Count("credits".into());
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("pro"));
+        let credits = Unit::Count(Count::Credits);
         assert_eq!(
             report.balances,
             vec![
@@ -387,7 +390,7 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Bank cap".to_owned(), "3,000 credits".to_owned())
+            pair(("Bank cap".to_owned(), "3,000 credits".to_owned()))
         );
         assert_eq!(facts[1].0, "Next refill");
     }

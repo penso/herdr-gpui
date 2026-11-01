@@ -21,6 +21,7 @@
 //! storage (where kimi.ai keeps `access_token`), retrying the next browser
 //! session when one is rejected, and multiple labeled web accounts.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -287,14 +288,14 @@ impl Usage {
             Provider(&Kimi),
             Account {
                 email: None,
-                plan: self.plan,
+                plan: self.plan.map(Text::from),
             },
             windows,
         )
         .with_sections(distinct.map(Section::Limit).into_iter().chain(
             (!facts.is_empty()).then(|| Section::Facts {
                 title: "Requests".into(),
-                facts,
+                facts: pairs(facts),
             }),
         ))
     }
@@ -691,7 +692,10 @@ mod tests {
     #[test]
     fn reads_request_counts() {
         let report = parse_code(COUNTS).unwrap().report();
-        assert_eq!(report.account.plan.as_deref(), Some("Moderato"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Moderato")
+        );
         let session = &report.windows[0];
         assert_eq!(session.kind, Kind::Session);
         assert!((session.used - 69.5).abs() < 1e-4);
@@ -773,7 +777,10 @@ mod tests {
             r#"{"subscription":{"active":true,"status":"SUBSCRIPTION_STATUS_ACTIVE","goods":{"title":"Allegretto"}}}"#,
         );
         let report = usage.report();
-        assert_eq!(report.account.plan.as_deref(), Some("Allegretto"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Allegretto")
+        );
         assert_eq!(report.windows.len(), 3);
         assert_eq!(report.windows[2].kind, Kind::Named("Total usage".into()));
         assert_eq!(report.windows[2].percent(), 42);

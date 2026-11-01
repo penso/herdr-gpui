@@ -14,6 +14,7 @@
 //! On a remote host the minted inference key comes back with the response
 //! body, as it does to CodexBar, and is dropped by the parser.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -82,8 +83,8 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .map(|email| email.trim().to_owned())
         .filter(|email| !email.is_empty());
     let account = Account {
-        email,
-        plan: plan.or_else(|| Some("Muse login".into())),
+        email: email.map(Text::from),
+        plan: plan.or_else(|| Some("Muse login".into())).map(Text::from),
     };
     let status = if key.require_payment == Some(true) {
         Some("Payment method required; finish billing at https://dev.meta.ai")
@@ -112,7 +113,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         let kind = if length == SESSION {
             Kind::Session
         } else {
-            Kind::Named(format!("{} hours", minutes / 60.))
+            Kind::Named(format!("{} hours", minutes / 60.).into())
         };
         windows.push(Window::new(
             kind,
@@ -184,9 +185,12 @@ mod tests {
     #[test]
     fn reads_both_windows_and_identity() {
         let report = parse(ACCOUNT).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("ada@example.com"));
         assert_eq!(
-            report.account.plan.as_deref(),
+            report.account.email.as_ref().map(Text::as_str),
+            Some("ada@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
             Some("Muse Code Power Usage")
         );
         assert_eq!(report.windows.len(), 2);
@@ -210,7 +214,7 @@ mod tests {
             let report = parse(body).unwrap();
             assert!(report.windows.is_empty());
             assert_eq!(
-                report.account.plan.as_deref(),
+                report.account.plan.as_ref().map(Text::as_str),
                 Some("Muse Code Power Usage")
             );
             assert_eq!(report.sections.len(), 1);

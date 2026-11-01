@@ -8,6 +8,7 @@
 //! percentage is invented. The wallet balance, which CodexBar leaves out, is
 //! shown as a balance when present; it never feeds the daily window.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -117,14 +118,19 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         .and_then(number)
         .map(|balance| Balance::new("Wallet", balance, Unit::Currency("USD".into())));
 
-    Ok(
-        Report::new(Provider(&Xkiro), Account { email, plan }, windows)
-            .with_balances(wallet)
-            .with_sections([Section::Facts {
-                title: "Free tokens".into(),
-                facts,
-            }]),
+    Ok(Report::new(
+        Provider(&Xkiro),
+        Account {
+            email: email.map(Text::from),
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(wallet)
+    .with_sections([Section::Facts {
+        title: "Free tokens".into(),
+        facts: pairs(facts),
+    }]))
 }
 
 /// A counter is a non-negative whole number or absent; anything else means
@@ -201,7 +207,7 @@ mod tests {
     fn facts(report: &Report) -> Vec<String> {
         match report.sections.as_slice() {
             [Section::Facts { facts, .. }] => {
-                facts.iter().map(|(_, value)| value.clone()).collect()
+                facts.iter().map(|(_, value)| value.to_string()).collect()
             }
             sections => panic!("unexpected sections {sections:?}"),
         }
@@ -216,8 +222,14 @@ mod tests {
         assert!((window.used - 2.4807).abs() < 0.0001);
         assert_eq!(window.resets_at, Some(at(1_790_294_400)));
         assert_eq!(window.length, Some(DAY));
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
-        assert_eq!(report.account.plan.as_deref(), Some("Pay as you go"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Pay as you go")
+        );
         assert_eq!(
             facts(&report),
             ["124,035", "5,000,000", "4,875,965", "00:00 UTC"]
@@ -252,7 +264,7 @@ mod tests {
             );
             let report = parse(&body, at(1_790_251_200)).unwrap();
             assert_eq!(report.windows[0].used, 100.);
-            assert_eq!(report.account.plan.as_deref(), Some("pro"));
+            assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("pro"));
             assert!(report.balances.is_empty());
         }
     }

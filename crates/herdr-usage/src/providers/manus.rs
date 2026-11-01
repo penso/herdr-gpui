@@ -7,6 +7,8 @@
 //! Unlike CodexBar, a rejected browser session is not retried with the next
 //! one: an explicitly set token is simply tried first.
 
+use crate::model::Count;
+use crate::text::pairs;
 use crate::{
     Result,
     {
@@ -122,14 +124,10 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         ));
     }
     Ok(Report::new(Provider(&Manus), Account::default(), windows)
-        .with_balances([Balance::new(
-            "Balance",
-            total,
-            Unit::Count("credits".into()),
-        )])
+        .with_balances([Balance::new("Balance", total, Unit::Count(Count::Credits))])
         .with_sections([Section::Facts {
             title: "Credits".into(),
-            facts,
+            facts: pairs(facts),
         }]))
 }
 
@@ -230,7 +228,7 @@ mod tests {
         assert_eq!(daily.percent(), 67);
         assert!(daily.resets_at.is_some());
         assert_eq!(report.balances[0].amount, 4300.);
-        assert_eq!(report.balances[0].unit, Unit::Count("credits".into()));
+        assert_eq!(report.balances[0].unit, Unit::Count(Count::Credits));
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("facts");
         };

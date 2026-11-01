@@ -3,6 +3,7 @@
 //! here or on the probed host) at `https://api.aixy-gateway.com` or the
 //! configured `base_url`. Everything CodexBar reads is ported.
 
+use crate::text::{Text, pair};
 use crate::{
     Error, Result,
     {
@@ -128,7 +129,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         if windows.len() < 2 {
             let kind = match entry.interval.kind() {
                 Some(kind) if windows.iter().all(|window| window.kind != kind) => kind,
-                _ => Kind::Named(entry.short_title()),
+                _ => Kind::Named(Text::from(entry.short_title())),
             };
             windows.push(Window { kind, ..window });
         } else {
@@ -141,23 +142,25 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         facts: vec![
             (
                 "Key".into(),
-                text(key.name.as_ref()).unwrap_or(key_id).to_owned(),
+                Text::from(text(key.name.as_ref()).unwrap_or(key_id).to_owned()),
             ),
             (
                 "Project".into(),
-                text(key.project_name.as_ref())
-                    .or(key.project_id.as_deref())
-                    .unwrap_or("Unknown")
-                    .to_owned(),
+                Text::from(
+                    text(key.project_name.as_ref())
+                        .or(key.project_id.as_deref())
+                        .unwrap_or("Unknown")
+                        .to_owned(),
+                ),
             ),
-            ("Observed".into(), observed.to_owned()),
+            ("Observed".into(), Text::from(observed.to_owned())),
         ],
     }];
     sections.extend(limits);
     if !parsed.is_empty() {
         sections.push(Section::Facts {
             title: "Applicable budgets".into(),
-            facts: parsed.iter().map(Entry::fact).collect(),
+            facts: parsed.iter().map(Entry::fact).map(pair).collect(),
         });
     }
     let mut balances = Vec::new();
@@ -192,11 +195,11 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             sections.push(Section::Facts {
                 title: "Last 7 days · this key".into(),
                 facts: vec![
-                    ("Requests".into(), group(requests as i64)),
-                    ("Tokens".into(), group(tokens as i64)),
+                    ("Requests".into(), Text::from(group(requests as i64))),
+                    ("Tokens".into(), Text::from(group(tokens as i64))),
                     (
                         "Attributed spend".into(),
-                        spend.map_or_else(|| "Unavailable".into(), usd),
+                        Text::from(spend.map_or_else(|| "Unavailable".into(), usd)),
                     ),
                     (
                         "Cost coverage".into(),
@@ -205,7 +208,8 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
                             group(attributed as i64),
                             group(requests as i64),
                             group(partial as i64)
-                        ),
+                        )
+                        .into(),
                     ),
                 ],
             });
@@ -389,7 +393,7 @@ impl Entry {
             .zip(self.resets_at)
             .and_then(|(start, end)| end.duration_since(start).ok());
         Some(Window::new(
-            Kind::Named(self.title()),
+            Kind::Named(Text::from(self.title())),
             self.used_percent()?,
             self.resets_at,
             length,

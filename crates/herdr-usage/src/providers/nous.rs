@@ -11,6 +11,7 @@
 //! which would need the token revealed; `expires_at` stored by Hermes is
 //! still honored.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -245,7 +246,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     }
     balances.extend(purchased.map(|amount| Balance::new("Top-up credits", amount, usd())));
     balances.extend(total.map(|amount| Balance::new("Total usable", amount, usd())));
-    let mut facts = Vec::new();
+    let mut facts: Vec<(String, String)> = Vec::new();
     if let Some(organization) = account
         .organisation
         .and_then(|organization| organization.name)
@@ -276,14 +277,19 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .and_then(|user| user.email)
         .map(|email| email.trim().to_owned())
         .filter(|email| !email.is_empty());
-    Ok(
-        Report::new(Provider(&Nous), Account { email, plan }, windows)
-            .with_balances(balances)
-            .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Subscription".into(),
-                facts,
-            })),
+    Ok(Report::new(
+        Provider(&Nous),
+        Account {
+            email: email.map(Text::from),
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(balances)
+    .with_sections((!facts.is_empty()).then(|| Section::Facts {
+        title: "Subscription".into(),
+        facts: pairs(facts),
+    })))
 }
 
 fn truthy(value: &serde_json::Value) -> bool {
@@ -360,8 +366,14 @@ mod tests {
     #[test]
     fn keeps_subscription_and_purchased_credits_apart() {
         let report = parse(ACCOUNT).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
-        assert_eq!(report.account.plan.as_deref(), Some("Ultra"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Ultra")
+        );
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].kind, Kind::Monthly);
         assert_eq!(report.windows[0].used, 75.);

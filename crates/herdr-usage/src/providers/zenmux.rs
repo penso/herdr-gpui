@@ -4,6 +4,7 @@
 //! keys are refused by these endpoints. ZenMux has no local sign-in to find,
 //! and CodexBar reads no cookies for it either.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -120,14 +121,19 @@ pub(crate) fn parse(subscription: &str, balance: Option<&str>) -> Result<Report>
         .and_then(|balance| balance.total_credits)
         .filter(|credits| credits.is_finite())
         .map(|credits| Balance::new("PAYG balance", credits, Unit::Currency("USD".into())));
-    Ok(
-        Report::new(Provider(&Zenmux), Account { email: None, plan }, windows)
-            .with_balances(balances)
-            .with_sections((!flows.is_empty()).then(|| Section::Facts {
-                title: "Quota".into(),
-                facts: flows,
-            })),
+    Ok(Report::new(
+        Provider(&Zenmux),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(balances)
+    .with_sections((!flows.is_empty()).then(|| Section::Facts {
+        title: "Quota".into(),
+        facts: pairs(flows),
+    })))
 }
 
 fn capitalize(value: &str) -> String {
@@ -217,7 +223,10 @@ mod tests {
     #[test]
     fn parses_quotas_plan_and_balance() {
         let report = parse(SUBSCRIPTION, Some(BALANCE)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Ultra plan"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Ultra plan")
+        );
         assert_eq!(report.windows.len(), 2);
         assert_eq!(report.windows[0].kind, Kind::Session);
         assert!((report.windows[0].used - 7.15).abs() < 0.001);
@@ -240,7 +249,10 @@ mod tests {
         let body = SUBSCRIPTION.replace("\"healthy\"", "\"OVERDUE\"");
         let balance = r#"{"success":true,"data":{"currency":"usd","total_credits":-12.34}}"#;
         let report = parse(&body, Some(balance)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Ultra plan · Overdue"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Ultra plan · Overdue")
+        );
         assert!((report.balances[0].amount + 12.34).abs() < 1e-9);
     }
 

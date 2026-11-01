@@ -148,11 +148,15 @@ impl HerdrWindow {
                         .items_end()
                         .text_color(rgb(theme.muted))
                         .children(
-                            account
-                                .email
-                                .map(|email| div().max_w_full().truncate().child(email)),
+                            account.email.map(|email| {
+                                div().max_w_full().truncate().child(text::words(&email))
+                            }),
                         )
-                        .children(account.plan.map(|plan| div().text_size(small).child(plan))),
+                        .children(
+                            account
+                                .plan
+                                .map(|plan| div().text_size(small).child(text::words(&plan))),
+                        ),
                 ),
         );
         // A sign-in waiting on Keychain access is explained below instead.

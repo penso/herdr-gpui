@@ -9,6 +9,7 @@
 //! Not ported: CodexBar reads the CLI's standard error when standard output
 //! is empty; the probe discards standard error, so such a report is missed.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -204,18 +205,18 @@ pub(crate) fn parse_report(text: &str, now: SystemTime) -> Result<Report> {
     let sections = [
         (!facts.is_empty()).then(|| Section::Facts {
             title: "Monthly allowances".into(),
-            facts,
+            facts: pairs(facts),
         }),
         organization.map(|organization| Section::Facts {
             title: "Account".into(),
-            facts: vec![("Organization".into(), organization)],
+            facts: vec![("Organization".into(), Text::from(organization))],
         }),
     ];
     Ok(Report::new(
         Provider(&Amp),
         Account {
-            email,
-            plan: Some(plan),
+            email: email.map(Text::from),
+            plan: Some(Text::from(plan)),
         },
         windows,
     )
@@ -599,8 +600,14 @@ mod tests {
         );
         let body = serde_json::json!({"ok": true, "result": {"displayText": text}}).to_string();
         let report = parse_api(&body, now).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("user@example.com"));
-        assert_eq!(report.account.plan.as_deref(), Some("Megawatt"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("user@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Megawatt")
+        );
         let agent = &report.windows[0];
         assert_eq!(agent.kind, Kind::Monthly);
         assert!((agent.used - 7.15).abs() < 1e-3);
@@ -637,7 +644,10 @@ mod tests {
                     Individual credits: $25.64 remaining (set up automatic top-up to avoid running out)\n\
                     Workspace meow: $10.22 remaining (set up automatic top-up to avoid running out)\n";
         let report = parse_report(text, now).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Amp Free"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Amp Free")
+        );
         let free = &report.windows[0];
         assert_eq!(free.kind, Kind::Named("Amp Free".into()));
         assert!((free.used - 52.9).abs() < 1e-3);
@@ -664,7 +674,10 @@ mod tests {
                     **Amp Megawatt Subscription:** 68% other usage and 97% orb usage remaining - resets upon renewal in 5 days\n\
                     **Individual credits:** $3.23 remaining (set up auto-reload to avoid running out)\n";
         let report = parse_report(text, now).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Megawatt"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Megawatt")
+        );
         let free = &report.windows[0];
         assert_eq!(free.kind, Kind::Daily);
         assert_eq!(free.percent(), 100);
@@ -691,7 +704,7 @@ mod tests {
                     Individual credits: $12 remaining\n";
         let report = parse_report(text, SystemTime::now()).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Amp"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Amp"));
         assert_eq!(report.balances[0].amount, 12.);
     }
 

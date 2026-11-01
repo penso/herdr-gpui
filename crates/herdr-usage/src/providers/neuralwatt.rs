@@ -5,6 +5,7 @@
 //! credits (which never reset) are a balance, and a per-key spending
 //! allowance is an extra limit. Everything CodexBar reads is ported.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -129,10 +130,13 @@ fn parse(body: &str) -> Result<Report> {
     };
     let allowance = allowance_used.map(|used| {
         Section::Limit(Window::new(
-            Kind::Named(format!(
-                "Key {}",
-                words(allowance.period.as_deref().unwrap_or("allowance"))
-            )),
+            Kind::Named(
+                format!(
+                    "Key {}",
+                    words(allowance.period.as_deref().unwrap_or("allowance"))
+                )
+                .into(),
+            ),
             used,
             None,
             None,
@@ -161,7 +165,10 @@ fn parse(body: &str) -> Result<Report> {
         .or_else(|| balance.accounting_method.map(|method| words(&method)));
     Ok(Report::new(
         Provider(&Neuralwatt),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         windows,
     )
     .with_balances(
@@ -172,7 +179,7 @@ fn parse(body: &str) -> Result<Report> {
             .into_iter()
             .chain((!facts.is_empty()).then(|| Section::Facts {
                 title: "Usage".into(),
-                facts,
+                facts: pairs(facts),
             })),
     ))
 }
@@ -262,7 +269,10 @@ mod tests {
             }"#,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Standard plan"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Standard plan")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert!((window.used - 69.5115).abs() < 0.01);
@@ -293,7 +303,10 @@ mod tests {
         )
         .unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Token"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Token")
+        );
         assert_eq!(report.balances[0].text(), "$51.00");
     }
 

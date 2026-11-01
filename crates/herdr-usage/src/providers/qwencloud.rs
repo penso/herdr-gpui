@@ -143,6 +143,7 @@ pub(crate) fn parse(
 mod tests {
     use super::*;
     use crate::model::{Kind, Section};
+    use crate::text::Text;
     use std::time::{Duration, SystemTime};
 
     fn at(seconds: u64) -> SystemTime {
@@ -165,7 +166,10 @@ mod tests {
             ),
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Standard"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Standard")
+        );
         assert_eq!(report.windows.len(), 2);
         assert_eq!(report.windows[0].kind, Kind::Session);
         assert!((report.windows[0].used - 3.).abs() < 1e-4);
@@ -186,7 +190,10 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Token Plan"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Token Plan")
+        );
         assert_eq!(report.windows[0].kind, Kind::Monthly);
         assert!((report.windows[0].used - 40.).abs() < 1e-4);
         assert!(report.sections.is_empty());

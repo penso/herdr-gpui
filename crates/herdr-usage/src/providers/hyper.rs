@@ -4,6 +4,7 @@
 //! back to an API key from the config or `HYPER_API_KEY`, as CodexBar's Auto
 //! mode does. The service reports only a balance: no plan, limit, or reset.
 
+use crate::model::Count;
 use crate::{
     Error, Result,
     {
@@ -102,7 +103,7 @@ pub(crate) fn parse(body: &str, source: Source) -> Result<Report> {
         Report::new(Provider(&Hyper), account, Vec::new()).with_balances([Balance::new(
             "Hypercredits",
             balance,
-            Unit::Count("HC".into()),
+            Unit::Count(Count::Named("HC".into())),
         )]),
     )
 }
@@ -116,6 +117,7 @@ struct Credits {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::Text;
 
     #[test]
     fn balance_is_hypercredits() {
@@ -123,9 +125,15 @@ mod tests {
         assert!(report.windows.is_empty());
         assert_eq!(report.balances.len(), 1);
         assert_eq!(report.balances[0].amount, 42.5);
-        assert_eq!(report.balances[0].unit, Unit::Count("HC".into()));
+        assert_eq!(
+            report.balances[0].unit,
+            Unit::Count(Count::Named("HC".into()))
+        );
         assert_eq!(report.balances[0].amount_text(), "42.50 HC");
-        assert_eq!(report.account.plan.as_deref(), Some("API key"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("API key")
+        );
     }
 
     #[test]

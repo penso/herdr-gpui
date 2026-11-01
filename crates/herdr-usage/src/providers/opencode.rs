@@ -462,7 +462,7 @@ pub(crate) fn parse_billing(text: &str) -> Option<Report> {
             .with_balances(balances)
             .with_sections([Section::Facts {
                 title: "This month".into(),
-                facts: vec![("Spent".into(), format!("${spent:.2}"))],
+                facts: vec![("Spent".into(), format!("${spent:.2}").into())],
             }]),
     )
 }

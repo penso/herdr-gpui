@@ -15,6 +15,7 @@
 //! usage-events cost history; and sending every cursor.com cookie when none
 //! has a known session name.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -158,7 +159,7 @@ pub(crate) fn parse(
     if let Some((used, limit)) = quota {
         sections.push(Section::Facts {
             title: "Usage".into(),
-            facts: vec![("Request quota".into(), format!("{used} / {limit}"))],
+            facts: vec![("Request quota".into(), format!("{used} / {limit}").into())],
         });
     } else if let Some(grok) = sand
         .and_then(|body| json::<Sand>(body).ok())
@@ -183,7 +184,8 @@ pub(crate) fn parse(
                     "${:.2} of ${:.2}",
                     cents(used).unwrap_or(0.),
                     cents(limit).unwrap_or(0.)
-                ),
+                )
+                .into(),
             )],
         });
     }
@@ -210,25 +212,28 @@ pub(crate) fn parse(
         None => None,
     };
     if limit.is_some() && (used > 0. || label == "Team on-demand") {
-        let mut facts = vec![("Spent this cycle".into(), format!("${used:.2}"))];
+        let mut facts: Vec<(String, String)> =
+            vec![("Spent this cycle".into(), format!("${used:.2}"))];
         if label == "Team on-demand" && personal_used > 0. {
             facts.push(("Your share".into(), format!("${personal_used:.2}")));
         }
         sections.push(Section::Facts {
             title: label.into(),
-            facts,
+            facts: pairs(facts),
         });
     }
 
     let account = Account {
-        email: me
+        email: (me
             .and_then(|me| me.email)
-            .filter(|email| !email.trim().is_empty()),
-        plan: summary
+            .filter(|email| !email.trim().is_empty()))
+        .map(Text::from),
+        plan: (summary
             .membership_type
             .as_deref()
             .filter(|kind| !kind.trim().is_empty())
-            .map(membership),
+            .map(membership))
+        .map(Text::from),
     };
     Ok(Report::new(Provider(&Cursor), account, windows)
         .with_balances(balance)
@@ -403,8 +408,14 @@ mod tests {
     #[test]
     fn parses_usage_summary() {
         let report = parse(SUMMARY, Some(user()), None, None, at(1_736_000_000)).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
-        assert_eq!(report.account.plan.as_deref(), Some("Cursor Pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Cursor Pro")
+        );
         let monthly = &report.windows[0];
         assert_eq!(monthly.kind, Kind::Monthly);
         assert_eq!(monthly.used, 30.);

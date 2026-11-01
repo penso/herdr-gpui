@@ -1,21 +1,53 @@
 //! `herdr-usage`'s typed values in the shown language: limit kinds, times
-//! left, pace, and balances. That crate's own English (`Kind::title`,
-//! `Pace::describe`, `countdown`) stays for logs and tests; what a service
-//! names itself, such as a model's window, is shown as it reports it.
+//! left, pace, balances, and the words a report names. That crate's own
+//! English (`Kind::title`, `Pace::describe`, `countdown`) stays for logs and
+//! tests; what a service names itself, such as a model's window, is shown as
+//! it reports it.
 
-use super::model::{Balance, Kind, Pace, Window as Limit};
-use crate::i18n::fl;
+use super::model::{Balance, Count, Kind, Pace, Unit, Window as Limit, group};
+use crate::i18n::{self, FluentValue, fl};
+use herdr_usage::{Arg, Text};
 use std::time::{Duration, SystemTime};
+
+/// Words a report names in the shown language: a message `herdr-usage`
+/// names by ID, with its arguments, or the service's own words.
+pub(crate) fn words(text: &Text) -> String {
+    write(text, i18n::message)
+}
+
+/// The same words in English, for command line output.
+pub(crate) fn english(text: &Text) -> String {
+    write(text, i18n::english)
+}
+
+fn write(text: &Text, message: fn(&str, &[(&str, FluentValue<'_>)]) -> String) -> String {
+    match text {
+        Text::Service(text) => text.clone(),
+        Text::Message { id, args } => {
+            let args: Vec<_> = args
+                .iter()
+                .map(|(name, arg)| {
+                    let value = match arg {
+                        Arg::Number(number) => FluentValue::from(*number),
+                        Arg::Text(text) => FluentValue::from(write(text, message)),
+                    };
+                    (*name, value)
+                })
+                .collect();
+            message(id, &args)
+        }
+    }
+}
 
 /// The selector value usage.ftl's messages pick a kind by; a named window
 /// takes `$name` instead.
-fn kind(kind: &Kind) -> (&'static str, &str) {
+fn kind(kind: &Kind) -> (&'static str, String) {
     match kind {
-        Kind::Session => ("session", ""),
-        Kind::Daily => ("daily", ""),
-        Kind::Weekly => ("weekly", ""),
-        Kind::Monthly => ("monthly", ""),
-        Kind::Named(name) => ("named", name),
+        Kind::Session => ("session", String::new()),
+        Kind::Daily => ("daily", String::new()),
+        Kind::Weekly => ("weekly", String::new()),
+        Kind::Monthly => ("monthly", String::new()),
+        Kind::Named(name) => ("named", words(name)),
     }
 }
 
@@ -102,7 +134,7 @@ pub(super) fn bar_label(limit: &Limit, now: SystemTime) -> String {
     let percent = limit.percent();
     match (&limit.kind, limit.resets_in(now)) {
         (Kind::Named(name), _) => {
-            fl!("usage-bar-named", percent = percent, name = name.as_str())
+            fl!("usage-bar-named", percent = percent, name = words(name))
         }
         (_, Some(left)) => fl!(
             "usage-bar-resets",
@@ -114,23 +146,38 @@ pub(super) fn bar_label(limit: &Limit, now: SystemTime) -> String {
 }
 
 /// `$12.30`, or `$12.30 of $50.00` when the balance has a total. Amounts
-/// and units are the service's.
+/// and currencies are the service's.
 pub(super) fn balance(balance: &Balance) -> String {
-    let amount = balance.amount_text();
+    let amount = amount(balance.amount, &balance.unit);
     match balance.total {
-        Some(total) => {
-            let total = Balance {
-                label: String::new(),
-                amount: total,
-                unit: balance.unit.clone(),
-                total: None,
-            };
-            fl!(
-                "usage-balance-of",
-                amount = amount,
-                total = total.amount_text()
-            )
-        }
+        Some(total) => fl!(
+            "usage-balance-of",
+            amount = amount,
+            total = self::amount(total, &balance.unit)
+        ),
         None => amount,
+    }
+}
+
+/// `$12.30`, `12.30 EUR`, or `1,250 credits`: a currency as the crate
+/// writes it, and a count with its unit, in the plural its number takes.
+fn amount(amount: f64, unit: &Unit) -> String {
+    let count = match unit {
+        Unit::Currency(_) => {
+            return Balance::new(Text::service(""), amount, unit.clone()).amount_text();
+        }
+        Unit::Count(count) => count,
+    };
+    let whole = amount.round();
+    let number = if (amount - whole).abs() < 0.005 {
+        group(whole as i64)
+    } else {
+        format!("{amount:.2}")
+    };
+    match count {
+        Count::Credits => fl!("usage-amount-credits", amount = number, count = amount),
+        Count::Points => fl!("usage-amount-points", amount = number, count = amount),
+        Count::Reviews => fl!("usage-amount-reviews", amount = number, count = amount),
+        Count::Named(unit) => fl!("usage-amount-named", amount = number, unit = unit.as_str()),
     }
 }

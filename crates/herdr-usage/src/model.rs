@@ -2,7 +2,7 @@
 //! which account, which limit windows, how much of each is used, when each
 //! resets, and whatever else the agent's service reports.
 
-use super::service::Service;
+use super::{service::Service, text::Text};
 use herdr_client::ConnectTarget;
 use std::{
     any::Any,
@@ -105,24 +105,27 @@ impl std::fmt::Debug for Provider {
 }
 
 /// Which limit a window measures. A named window is one the service names
-/// itself, such as a weekly limit scoped to one model.
+/// itself, such as a weekly limit scoped to one model, or one a provider
+/// names with a message.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Kind {
     Session,
     Daily,
     Weekly,
     Monthly,
-    Named(String),
+    Named(Text),
 }
 
 impl Kind {
-    pub fn title(&self) -> &str {
+    /// In English, or a named window's ID, for logs and tests; the app
+    /// writes the shown title.
+    pub fn title(&self) -> String {
         match self {
-            Self::Session => "Session",
-            Self::Daily => "Daily",
-            Self::Weekly => "Weekly",
-            Self::Monthly => "Monthly",
-            Self::Named(name) => name,
+            Self::Session => "Session".into(),
+            Self::Daily => "Daily".into(),
+            Self::Weekly => "Weekly".into(),
+            Self::Monthly => "Monthly".into(),
+            Self::Named(name) => name.to_string(),
         }
     }
 
@@ -195,7 +198,7 @@ impl Window {
     /// a model window is named instead, as the service does.
     pub fn label(&self, now: SystemTime) -> String {
         let suffix = match (&self.kind, self.resets_in(now)) {
-            (Kind::Named(name), _) => name.clone(),
+            (Kind::Named(name), _) => name.to_string(),
             (_, Some(left)) => countdown(left),
             (Kind::Session, None) => "5h".into(),
             (Kind::Daily, None) => "day".into(),
@@ -271,8 +274,8 @@ impl From<f32> for Severity {
 /// Who is signed in, as far as the sign-in and the service say.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Account {
-    pub email: Option<String>,
-    pub plan: Option<String>,
+    pub email: Option<Text>,
+    pub plan: Option<Text>,
 }
 
 /// Anything else a service reports, in shapes the panel knows how to draw, so
@@ -283,20 +286,20 @@ pub enum Section {
     Limit(Window),
     /// Label and value pairs under a heading.
     Facts {
-        title: String,
-        facts: Vec<(String, String)>,
+        title: Text,
+        facts: Vec<(Text, Text)>,
     },
     /// Shares of one whole, such as which surfaces spent a weekly limit.
     Shares {
-        title: String,
-        shares: Vec<(String, f32)>,
+        title: Text,
+        shares: Vec<(Text, f32)>,
     },
 }
 
 /// Money or credits left, or spent, in the unit the service counts in.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Balance {
-    pub label: String,
+    pub label: Text,
     pub amount: f64,
     pub unit: Unit,
     /// What the amount is out of, when the service says, e.g. a monthly budget.
@@ -307,12 +310,35 @@ pub struct Balance {
 pub enum Unit {
     /// An ISO 4217 code such as `USD`.
     Currency(String),
-    /// A count of the service's own units, named as it names them.
-    Count(String),
+    /// A count of the service's own units.
+    Count(Count),
+}
+
+/// What a count counts. The app writes the units it knows with a plural; a
+/// unit only one service uses keeps the name it gives it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Count {
+    Credits,
+    Points,
+    Reviews,
+    /// The service's own unit, such as `DIEM`.
+    Named(String),
+}
+
+impl Count {
+    /// In English, for logs, tests, and values a provider writes itself.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Credits => "credits",
+            Self::Points => "points",
+            Self::Reviews => "reviews",
+            Self::Named(name) => name,
+        }
+    }
 }
 
 impl Balance {
-    pub fn new(label: impl Into<String>, amount: f64, unit: Unit) -> Self {
+    pub fn new(label: impl Into<Text>, amount: f64, unit: Unit) -> Self {
         Self {
             label: label.into(),
             amount,
@@ -326,7 +352,8 @@ impl Balance {
         self
     }
 
-    /// `$12.30`, `12.30 EUR`, or `1,250 credits`.
+    /// `$12.30`, `12.30 EUR`, or `1,250 credits`, in English for logs,
+    /// tests, and values a provider writes itself.
     pub fn amount_text(&self) -> String {
         amount_text(self.amount, &self.unit)
     }
@@ -354,7 +381,7 @@ fn amount_text(amount: f64, unit: &Unit) -> String {
             } else {
                 format!("{amount:.2}")
             };
-            format!("{text} {name}")
+            format!("{text} {}", name.name())
         }
     }
 }

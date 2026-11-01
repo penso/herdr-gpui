@@ -14,6 +14,7 @@
 //! a non-Gmail address; and the consumer-tier migration guidance, which here
 //! is the usual rejected sign-in.
 
+use crate::text::{Text, pair};
 use crate::{
     Error, Result,
     {
@@ -321,15 +322,20 @@ pub(crate) fn parse(body: &str, email: Option<String>, plan: Option<String>) -> 
     let facts = models
         .iter()
         .map(|(id, fraction, _)| (id.clone(), format!("{}% left", (fraction * 100.).round())))
+        .map(pair)
         .collect();
-    Ok(
-        Report::new(Provider(&Gemini), Account { email, plan }, windows).with_sections([
-            Section::Facts {
-                title: "Models".into(),
-                facts,
-            },
-        ]),
+    Ok(Report::new(
+        Provider(&Gemini),
+        Account {
+            email: email.map(Text::from),
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_sections([Section::Facts {
+        title: "Models".into(),
+        facts,
+    }]))
 }
 
 #[derive(Deserialize)]
@@ -420,7 +426,10 @@ mod tests {
             report.windows[0].resets_at,
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_735_689_600))
         );
-        assert_eq!(report.account.email.as_deref(), Some("me@gmail.com"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("me@gmail.com")
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("facts");
         };

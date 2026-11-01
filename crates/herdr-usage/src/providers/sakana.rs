@@ -7,6 +7,7 @@
 //! Everything CodexBar reads is ported. CodexBar imports no browser cookies
 //! for Sakana; the automatic import here is an addition.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -77,11 +78,16 @@ pub(crate) fn parse(billing: &str, payg: Option<&str>) -> Result<Report> {
     }
     let plan = plan(&nodes);
     let (balances, sections) = payg.and_then(pay_as_you_go).unwrap_or_default();
-    Ok(
-        Report::new(Provider(&Sakana), Account { email: None, plan }, windows)
-            .with_balances(balances)
-            .with_sections(sections),
+    Ok(Report::new(
+        Provider(&Sakana),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(balances)
+    .with_sections(sections))
 }
 
 /// A window's body runs from its label to the next window label or card.
@@ -209,7 +215,7 @@ fn pay_as_you_go(html: &str) -> Option<(Vec<Balance>, Vec<Section>)> {
         if let Some(range) = range {
             sections.push(Section::Facts {
                 title: "Pay as you go".into(),
-                facts: vec![("Usage period".into(), range)],
+                facts: vec![("Usage period".into(), Text::from(range))],
             });
         }
     }
@@ -327,7 +333,10 @@ mod tests {
     #[test]
     fn billing_page_maps_windows_and_plan() {
         let report = parse(BILLING, None).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Standard $20/mo"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Standard $20/mo")
+        );
         assert_eq!(
             report.windows,
             vec![

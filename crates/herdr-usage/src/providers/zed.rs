@@ -19,6 +19,7 @@
 //! Not ported: the Linux editor sign-in lives in the Secret Service, which
 //! the probe cannot read.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -224,14 +225,16 @@ pub(crate) fn parse_editor(body: &str) -> Result<Report> {
         facts.push(("Billing".into(), "Overdue invoices".into()));
     }
     let account = Account {
-        email: Some(me.user.github_login.trim().to_owned()).filter(|login| !login.is_empty()),
-        plan: plan_name(&me.plan.plan_v3),
+        email: Some(me.user.github_login.trim().to_owned())
+            .filter(|login| !login.is_empty())
+            .map(Text::from),
+        plan: plan_name(&me.plan.plan_v3).map(Text::from),
     };
     Ok(
         Report::new(Provider(&Zed), account, window.into_iter().collect()).with_sections([
             Section::Facts {
                 title: "Plan".into(),
-                facts,
+                facts: pairs(facts),
             },
         ]),
     )
@@ -259,7 +262,7 @@ pub(crate) fn parse_billing(body: &str) -> Result<Report> {
         Provider(&Zed),
         Account {
             email: None,
-            plan: plan_name(&billing.plan),
+            plan: plan_name(&billing.plan).map(Text::from),
         },
         window.into_iter().collect(),
     )
@@ -269,7 +272,7 @@ pub(crate) fn parse_billing(body: &str) -> Result<Report> {
     }])
     .with_sections([Section::Facts {
         title: "Current billing period".into(),
-        facts,
+        facts: pairs(facts),
     }]))
 }
 
@@ -332,6 +335,7 @@ struct TokenSpend {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     /// CodexBar's editor fixture.
     fn editor_fixture(limit: &str) -> String {
@@ -361,8 +365,14 @@ mod tests {
     fn reads_the_editor_plan_and_billing_period() {
         let report = parse_editor(&editor_fixture("{\"limited\": 120}")).unwrap();
         assert_eq!(report.provider.id(), "zed");
-        assert_eq!(report.account.email.as_deref(), Some("octocat"));
-        assert_eq!(report.account.plan.as_deref(), Some("Zed Pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("octocat")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Zed Pro")
+        );
         let window = &report.windows[0];
         assert_eq!(window.percent(), 25);
         assert_eq!(window.length, Some(Duration::from_secs(31 * 86_400)));
@@ -372,11 +382,11 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Edit predictions".to_owned(), "30 of 120".to_owned())
+            pair(("Edit predictions".to_owned(), "30 of 120".to_owned()))
         );
         assert_eq!(
             facts[1],
-            ("Billing".to_owned(), "Overdue invoices".to_owned())
+            pair(("Billing".to_owned(), "Overdue invoices".to_owned()))
         );
     }
 
@@ -398,14 +408,20 @@ mod tests {
     #[test]
     fn reads_browser_billing() {
         let report = parse_billing(BILLING_BODY).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Zed Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Zed Pro")
+        );
         assert_eq!(report.windows[0].percent(), 12);
         let balance = &report.balances[0];
         assert_eq!(balance.text(), "$2.50 of $10.00");
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&("Remaining budget".to_owned(), "$7.50".to_owned())));
+        assert!(facts.contains(&(
+            Text::from("Remaining budget".to_owned()),
+            Text::from("$7.50".to_owned())
+        )));
     }
 
     #[test]

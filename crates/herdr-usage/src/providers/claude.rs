@@ -6,6 +6,7 @@
 
 pub(crate) mod cswap;
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -56,7 +57,7 @@ impl Service for Claude {
             None => Ok(Report::new(
                 Provider(&Claude),
                 Account {
-                    email: Some(active.as_ref()?.email.clone()),
+                    email: Some(Text::from(active.as_ref()?.email.clone())),
                     plan: None,
                 },
                 active.filter(|active| !active.windows.is_empty())?.windows,
@@ -156,13 +157,13 @@ pub(crate) fn parse(body: &str, sign_in: SignIn) -> Result<Report> {
             let kind = match limit.kind.as_str() {
                 "session" => Kind::Session,
                 "weekly_all" => Kind::Weekly,
-                "weekly_scoped" => Kind::Named(
+                "weekly_scoped" => Kind::Named(Text::from(
                     limit
                         .scope?
                         .model?
                         .display_name
                         .filter(|name| !name.trim().is_empty())?,
-                ),
+                )),
                 _ => return None,
             };
             let length = if kind == Kind::Session { SESSION } else { WEEK };
@@ -192,8 +193,8 @@ pub(crate) fn parse(body: &str, sign_in: SignIn) -> Result<Report> {
         .collect();
     }
     let account = Account {
-        email: sign_in.email,
-        plan: plan(sign_in.plan.as_deref(), sign_in.tier.as_deref()),
+        email: sign_in.email.map(Text::from),
+        plan: plan(sign_in.plan.as_deref(), sign_in.tier.as_deref()).map(Text::from),
     };
     let shares: Vec<_> = usage
         .seven_day_breakdown
@@ -210,8 +211,8 @@ pub(crate) fn parse(body: &str, sign_in: SignIn) -> Result<Report> {
             vec![(
                 "This month".into(),
                 match (used, limit) {
-                    (Some(used), Some(limit)) => format!("{used} of {limit}"),
-                    (Some(used), None) => used,
+                    (Some(used), Some(limit)) => format!("{used} of {limit}").into(),
+                    (Some(used), None) => Text::from(used),
                     _ => "On".into(),
                 },
             )]
@@ -224,7 +225,7 @@ pub(crate) fn parse(body: &str, sign_in: SignIn) -> Result<Report> {
             (!shares.is_empty())
                 .then(|| Section::Shares {
                     title: "This week by surface".into(),
-                    shares,
+                    shares: crate::text::shares(shares),
                 })
                 .into_iter()
                 .chain(spend),

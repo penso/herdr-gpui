@@ -7,6 +7,7 @@
 //! default, or China mainland (`api.moonshot.cn`, CNY) with `region =
 //! "china"`. Kimi Code subscriptions are a separate provider (`kimi`).
 
+use crate::text::pairs;
 use crate::{
     Result,
     {
@@ -109,7 +110,7 @@ pub(crate) fn parse(body: &str, region: Region) -> Result<Report> {
             .with_balances([Balance::new("Available", data.available_balance, unit())])
             .with_sections([Section::Facts {
                 title: "Balance".into(),
-                facts,
+                facts: pairs(facts),
             }]),
     )
 }

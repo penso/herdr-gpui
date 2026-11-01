@@ -9,6 +9,7 @@
 //! Vercel security challenge that a bare Cookie header can trigger; here
 //! only the Cookie header is sent.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -140,12 +141,15 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
 
     Ok(Report::new(
         Provider(&T3chat),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         vec![base, overage],
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
         title: "Plan".into(),
-        facts,
+        facts: pairs(facts),
     })))
 }
 
@@ -208,7 +212,10 @@ mod tests {
     #[test]
     fn reads_base_and_overage_windows() {
         let report = parse(FIXTURE).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro Monthly"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Pro Monthly")
+        );
         assert_eq!(report.windows.len(), 2);
         let base = &report.windows[0];
         assert_eq!(base.kind, Kind::Session);
@@ -246,7 +253,7 @@ mod tests {
             r#""usagePeriodPercentage":40,"usageWindowNextResetAt":1790000000}"#
         );
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Free"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Free"));
         assert_eq!(report.windows[0].percent(), 0);
         assert!(report.windows[0].resets_at.is_some());
         assert_eq!(report.windows[1].percent(), 40);

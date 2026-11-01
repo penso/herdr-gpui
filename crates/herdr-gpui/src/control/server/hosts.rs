@@ -219,8 +219,20 @@ pub(super) fn usage_info(reading: &crate::usage::Reading, now: SystemTime) -> Us
     let report = reading.report.as_ref();
     UsageInfo {
         provider: reading.provider.name().to_owned(),
-        account: report.and_then(|report| report.account.email.clone()),
-        plan: report.and_then(|report| report.account.plan.clone()),
+        account: report.and_then(|report| {
+            report
+                .account
+                .email
+                .as_ref()
+                .map(crate::usage::text::english)
+        }),
+        plan: report.and_then(|report| {
+            report
+                .account
+                .plan
+                .as_ref()
+                .map(crate::usage::text::english)
+        }),
         windows: report
             .map(|report| {
                 report

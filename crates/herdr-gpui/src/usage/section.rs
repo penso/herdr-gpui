@@ -174,7 +174,7 @@ impl HerdrWindow {
                             div()
                                 .text_size(small)
                                 .text_color(rgb(theme.muted))
-                                .child(plan)
+                                .child(text::words(&plan))
                         })),
                 );
             if let Some(error) = reading.error.clone() {

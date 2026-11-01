@@ -5,6 +5,7 @@
 //! cost. CodexBar's per-provider cost chart is shown as shares. Everything
 //! CodexBar reads is ported.
 
+use crate::text::{pair, pairs, share};
 use crate::{
     Result,
     {
@@ -152,7 +153,7 @@ fn parse(body: &str) -> Result<Report> {
     });
     let routed = Section::Facts {
         title: "Routed providers".into(),
-        facts: routed.collect(),
+        facts: routed.map(pair).collect(),
     };
     let shares = (total > 0).then(|| Section::Shares {
         title: "Provider cost".into(),
@@ -165,10 +166,11 @@ fn parse(body: &str) -> Result<Report> {
                     (provider.actual_cost_micros.max(0) as f64 / total as f64 * 100.) as f32,
                 )
             })
+            .map(share)
             .collect(),
     });
     let account = Account {
-        email: Some(format!("{} routed providers", providers.len())),
+        email: Some(format!("{} routed providers", providers.len()).into()),
         plan: Some(
             if budget.configured {
                 "Managed monthly budget"
@@ -183,7 +185,7 @@ fn parse(body: &str) -> Result<Report> {
         .with_sections(
             [Section::Facts {
                 title: "Usage".into(),
-                facts,
+                facts: pairs(facts),
             }]
             .into_iter()
             .chain((!providers.is_empty()).then_some(routed))
@@ -284,6 +286,7 @@ struct Routed {
 mod tests {
     use super::*;
     use crate::service::Timestamp;
+    use crate::text::Text;
 
     const BUDGETED: &str = r#"{
       "policyId": "openclaw-smoke",
@@ -325,10 +328,13 @@ mod tests {
     fn reads_a_monthly_budget() {
         let report = parse(BUDGETED).unwrap();
         assert_eq!(
-            report.account.plan.as_deref(),
+            report.account.plan.as_ref().map(Text::as_str),
             Some("Managed monthly budget")
         );
-        assert_eq!(report.account.email.as_deref(), Some("2 routed providers"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("2 routed providers")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert!((window.used - 0.024).abs() < 1e-4);
@@ -353,7 +359,10 @@ mod tests {
     fn unmetered_policies_show_spend_only() {
         let report = parse(UNMETERED).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Unmetered"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Unmetered")
+        );
         assert_eq!(report.balances[0].text(), "$1.25");
         let Section::Facts { facts, .. } = &report.sections[1] else {
             panic!("expected routed providers");

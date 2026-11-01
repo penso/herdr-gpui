@@ -9,6 +9,8 @@
 //! into numbered chunks into one value; here chunks are sent as they are,
 //! which the site's own session library also accepts.
 
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -131,7 +133,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     };
     let pool = |label: &str, used: f64, total: f64| {
         (total > 0.).then(|| {
-            Balance::new(label, (total - used).max(0.), Unit::Count("credits".into())).out_of(total)
+            Balance::new(label, (total - used).max(0.), Unit::Count(Count::Credits)).out_of(total)
         })
     };
     let balances = [
@@ -162,13 +164,16 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         .map(str::to_owned);
     Ok(Report::new(
         Provider(&Perplexity),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         window.into_iter().collect(),
     )
     .with_balances(balances.into_iter().flatten())
     .with_sections([Section::Facts {
         title: "Credits".into(),
-        facts,
+        facts: pairs(facts),
     }]))
 }
 
@@ -208,6 +213,7 @@ impl Grant {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
     use std::time::Duration;
 
     const NOW: u64 = 1_780_000_000;
@@ -238,7 +244,7 @@ mod tests {
     fn reads_recurring_and_bonus_credits() {
         let report = parse(&full(), now()).unwrap();
         assert_eq!(report.provider.id(), "perplexity");
-        assert_eq!(report.account.plan.as_deref(), Some("Max"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Max"));
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert!((window.used - 27.5).abs() < 1e-4);
@@ -254,7 +260,7 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Credits".to_owned(), "2,750 of 10,000".to_owned())
+            pair(("Credits".to_owned(), "2,750 of 10,000".to_owned()))
         );
     }
 

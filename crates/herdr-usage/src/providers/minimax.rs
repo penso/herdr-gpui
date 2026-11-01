@@ -12,6 +12,8 @@
 //! browser storage, and the page scrape and billing history add little to the
 //! quota windows.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -225,13 +227,16 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     .into_iter()
     .flatten()
     .find(|value| value.is_finite());
-    Ok(
-        Report::new(Provider(&Minimax), Account { email: None, plan }, windows)
-            .with_balances(
-                points.map(|points| Balance::new("Points", points, Unit::Count("points".into()))),
-            )
-            .with_sections(others.into_iter().map(Section::Limit)),
+    Ok(Report::new(
+        Provider(&Minimax),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(points.map(|points| Balance::new("Points", points, Unit::Count(Count::Points))))
+    .with_sections(others.into_iter().map(Section::Limit)))
 }
 
 /// `general` and `MiniMax-M*` are text generation; the rest are named by
@@ -314,10 +319,12 @@ impl Lane {
             _ if text && weekly => Kind::Weekly,
             Some(length) if text && near(length, SESSION) => Kind::Session,
             Some(length) if near(length, Duration::from_secs(86_400)) => {
-                Kind::Named(format!("{service} daily"))
+                Kind::Named(format!("{service} daily").into())
             }
-            Some(length) => Kind::Named(format!("{service} {}h", length.as_secs().div_ceil(3600))),
-            None => Kind::Named(service.to_owned()),
+            Some(length) => {
+                Kind::Named(format!("{service} {}h", length.as_secs().div_ceil(3600)).into())
+            }
+            None => Kind::Named(Text::from(service.to_owned())),
         };
         let length = if weekly {
             length.or(Some(WEEK))
@@ -438,7 +445,7 @@ mod tests {
                 "weekly_start_time": {week_start}, "weekly_end_time": {week_end}}}]}}"#
         );
         let report = parse(&body, at(1_700_000_000)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Max"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Max"));
         assert_eq!(report.windows.len(), 2);
         let session = &report.windows[0];
         assert_eq!(session.kind, Kind::Session);

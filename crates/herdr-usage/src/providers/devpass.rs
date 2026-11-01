@@ -4,6 +4,7 @@
 //! Publishable keys cannot read plan state. As in CodexBar, there is no local
 //! sign-in or dashboard cookie to find.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -46,13 +47,13 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let data = json::<Envelope>(body)?.data.ok_or_else(invalid)?;
     let key_used = money(&data.usage)?;
     let key_limit = data.limit.as_deref().map(money).transpose()?;
-    let mut key_facts = vec![("All-time key usage".into(), usd(key_used))];
+    let mut key_facts: Vec<(String, String)> = vec![("All-time key usage".into(), usd(key_used))];
     if let Some(limit) = key_limit {
         key_facts.push(("Key spending limit".into(), usd(limit)));
     }
     let key_section = Section::Facts {
         title: "API key (all time)".into(),
-        facts: key_facts,
+        facts: pairs(key_facts),
     };
     let plan = match data.dev_plan.as_str() {
         "none" => {
@@ -107,12 +108,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         facts: vec![
             (
                 "Cycle used".into(),
-                format!("{} / {}", usd(used), usd(limit)),
+                format!("{} / {}", usd(used), usd(limit)).into(),
             ),
-            ("Cycle remaining".into(), usd(remaining)),
+            ("Cycle remaining".into(), Text::from(usd(remaining))),
             (
                 "Premium weekly".into(),
-                format!("{} / {}", usd(weekly_used), usd(weekly_limit)),
+                format!("{} / {}", usd(weekly_used), usd(weekly_limit)).into(),
             ),
         ],
     };
@@ -176,7 +177,10 @@ mod tests {
     #[test]
     fn plan_credits_and_premium_week_become_windows() {
         let report = parse(PRO).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("DevPass Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("DevPass Pro")
+        );
         assert_eq!(report.windows.len(), 2);
         // Windows are ordered by kind: weekly before monthly.
         let monthly = &report.windows[1];
@@ -199,7 +203,10 @@ mod tests {
             "devPlanCreditsUsed":null}}"#;
         let report = parse(body).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Pay as you go"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Pay as you go")
+        );
         assert_eq!(report.balances[0].amount, 3.5);
         assert_eq!(report.balances[0].total, Some(10.));
     }

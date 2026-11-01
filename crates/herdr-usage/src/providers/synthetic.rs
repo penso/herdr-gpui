@@ -4,6 +4,7 @@
 //! reads is ported: the five-hour, weekly-token, and hourly-search lanes, the
 //! weekly credit budget, and the generic quota shapes CodexBar falls back to.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -201,10 +202,15 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .collect();
     let plan = first_string(&root, PLAN_KEYS)
         .or_else(|| data.and_then(|data| first_string(data, PLAN_KEYS)));
-    Ok(
-        Report::new(Provider(&Synthetic), Account { email: None, plan }, windows)
-            .with_balances(balance),
+    Ok(Report::new(
+        Provider(&Synthetic),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(balance))
 }
 
 struct Quota {
@@ -225,7 +231,9 @@ impl Quota {
             Some(24) => Kind::Daily,
             Some(168) => Kind::Weekly,
             Some(720 | 744) => Kind::Monthly,
-            _ => Kind::Named(self.label.unwrap_or_else(|| format!("Quota {}", index + 1))),
+            _ => Kind::Named(Text::from(
+                self.label.unwrap_or_else(|| format!("Quota {}", index + 1)),
+            )),
         });
         let length = self.length.or_else(|| match &kind {
             Kind::Named(name) if name == "Search hourly" => Some(Duration::from_secs(3600)),
@@ -462,7 +470,10 @@ mod tests {
     fn reads_the_named_lanes_and_weekly_credits() {
         let report = parse(QUOTAS).unwrap();
         assert_eq!(report.provider.id(), "synthetic");
-        assert_eq!(report.account.plan.as_deref(), Some("Starter"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Starter")
+        );
         let kinds: Vec<_> = report.windows.iter().map(|w| w.kind.clone()).collect();
         assert_eq!(
             kinds,
@@ -493,7 +504,7 @@ mod tests {
             ]}}"#,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows[0].kind, Kind::Daily);
         assert_eq!(report.windows[0].percent(), 25);
         assert_eq!(report.windows[0].resets_at, Some(at(1_776_400_000.)));

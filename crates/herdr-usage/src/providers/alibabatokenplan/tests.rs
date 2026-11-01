@@ -1,5 +1,6 @@
 use super::*;
 use crate::probe::Part;
+use crate::text::Text;
 
 fn at(seconds: u64) -> SystemTime {
     SystemTime::UNIX_EPOCH + Duration::from_secs(seconds)
@@ -12,7 +13,10 @@ fn parses_team_summary() {
                 "TotalSurplusValue": 875, "NearestExpireDate": 1701000000000}, "Code": "200"}"#,
     )
     .unwrap();
-    assert_eq!(report.account.plan.as_deref(), Some("TOKEN PLAN"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("TOKEN PLAN")
+    );
     assert_eq!(report.windows[0].kind, Kind::Monthly);
     assert_eq!(report.windows[0].used, 12.5);
     assert_eq!(report.windows[0].resets_at, Some(at(1_701_000_000)));
@@ -58,7 +62,10 @@ fn parses_personal_usage_with_tier_limits() {
     )
     .unwrap()
     .report(Provider(&Alibabatokenplan));
-    assert_eq!(report.account.plan.as_deref(), Some("Standard"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("Standard")
+    );
     assert_eq!(report.windows[0].kind, Kind::Session);
     assert!((report.windows[0].used - 3.).abs() < 1e-4);
     assert_eq!(report.windows[0].resets_at, Some(at(1_700_003_600)));
@@ -77,7 +84,10 @@ fn cli_requires_numeric_ratios() {
                 "per1MonthPercentage":0.2,"per1MonthResetTime":1702000000000}"#,
     )
     .unwrap();
-    assert_eq!(report.account.plan.as_deref(), Some("Token Plan"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("Token Plan")
+    );
     assert_eq!(report.windows.len(), 2);
     assert_eq!(report.windows[1].kind, Kind::Monthly);
     assert!(parse_cli(r#"{"per5HourPercentage":"0.5"}"#).is_none());

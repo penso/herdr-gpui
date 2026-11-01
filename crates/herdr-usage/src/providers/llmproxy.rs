@@ -3,6 +3,7 @@
 //! `LLM_PROXY_API_KEY`, here or on the probed host) at the configured
 //! `base_url`. Everything CodexBar reads is ported.
 
+use crate::text::{Text, pair};
 use crate::{
     Error, Result,
     {
@@ -123,13 +124,13 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         .collect();
     let account = Account {
         email: None,
-        plan: Some(format!("{active}/{credentials} active keys")),
+        plan: Some(format!("{active}/{credentials} active keys").into()),
     };
     let totals = Section::Facts {
         title: "Totals".into(),
         facts: vec![
-            ("Requests".into(), count(requests)),
-            ("Tokens".into(), count(tokens)),
+            ("Requests".into(), Text::from(count(requests))),
+            ("Tokens".into(), Text::from(count(tokens))),
         ],
     };
     let top = (!providers.is_empty()).then(|| Section::Facts {
@@ -148,6 +149,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
                 }
                 (name.clone(), text)
             })
+            .map(pair)
             .collect(),
     });
     Ok(Report::new(Provider(&Llmproxy), account, windows)
@@ -265,7 +267,10 @@ mod tests {
             report.windows[0].resets_at,
             Timestamp::Text("2026-05-18T12:00:00Z".into()).time()
         );
-        assert_eq!(report.account.plan.as_deref(), Some("3/4 active keys"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("3/4 active keys")
+        );
         assert_eq!(report.balances[0].amount, 15.5);
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected totals");

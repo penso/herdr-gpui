@@ -10,6 +10,7 @@
 //! and its optional budget bars, scraped from github.com's web billing page
 //! with browser cookies and a page nonce.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -173,21 +174,25 @@ pub(crate) fn parse(body: &str, login: Option<String>) -> Result<Report> {
         .copilot_plan
         .map(|plan| title_case(&plan.replace('_', " ")))
         .filter(|plan| !plan.is_empty());
-    let mut facts = Vec::new();
+    let mut facts: Vec<(String, String)> = Vec::new();
     if let Some(used) = credits {
         facts.push(("Credits used".into(), group(used.round() as i64)));
     }
     if unlimited && windows.is_empty() {
         facts.push(("Quota".into(), "Unlimited".into()));
     }
-    Ok(
-        Report::new(Provider(&Copilot), Account { email: login, plan }, windows).with_sections(
-            (!facts.is_empty()).then(|| Section::Facts {
-                title: "Credits".into(),
-                facts,
-            }),
-        ),
+    Ok(Report::new(
+        Provider(&Copilot),
+        Account {
+            email: login.map(Text::from),
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_sections((!facts.is_empty()).then(|| Section::Facts {
+        title: "Credits".into(),
+        facts: pairs(facts),
+    })))
 }
 
 /// `2025-02-01` or a full timestamp, taken as UTC.
@@ -287,8 +292,14 @@ mod tests {
           }
         }"#;
         let report = parse(body, Some("octocat".into())).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("octocat"));
-        assert_eq!(report.account.plan.as_deref(), Some("Individual pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("octocat")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Individual pro")
+        );
         assert_eq!(report.windows.len(), 2);
         let premium = report
             .windows

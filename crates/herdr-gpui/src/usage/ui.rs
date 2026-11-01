@@ -9,6 +9,7 @@ use super::{
 };
 use crate::config::Theme;
 use gpui::{prelude::*, *};
+use herdr_usage::Text;
 use std::time::SystemTime;
 
 pub(crate) struct Ui {
@@ -98,7 +99,11 @@ impl Ui {
                     .flex()
                     .justify_between()
                     .gap(px(8.))
-                    .child(div().text_color(self.muted()).child(balance.label.clone()))
+                    .child(
+                        div()
+                            .text_color(self.muted())
+                            .child(text::words(&balance.label)),
+                    )
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
@@ -121,24 +126,24 @@ impl Ui {
             .into_any_element()
     }
 
-    pub fn facts(&self, title: &str, facts: &[(String, String)]) -> AnyElement {
+    pub fn facts(&self, title: &Text, facts: &[(Text, Text)]) -> AnyElement {
         self.block()
-            .child(self.heading(title.to_owned()))
+            .child(self.heading(text::words(title)))
             .children(facts.iter().map(|(label, value)| {
                 div()
                     .flex()
                     .justify_between()
                     .gap(px(8.))
                     .text_size(self.small())
-                    .child(div().text_color(self.muted()).child(label.clone()))
-                    .child(div().child(value.clone()))
+                    .child(div().text_color(self.muted()).child(text::words(label)))
+                    .child(div().child(text::words(value)))
             }))
             .into_any_element()
     }
 
-    pub fn shares(&self, title: &str, shares: &[(String, f32)]) -> AnyElement {
+    pub fn shares(&self, title: &Text, shares: &[(Text, f32)]) -> AnyElement {
         self.block()
-            .child(self.heading(title.to_owned()))
+            .child(self.heading(text::words(title)))
             .children(shares.iter().map(|(label, share)| {
                 div()
                     .flex()
@@ -151,7 +156,7 @@ impl Ui {
                             .flex_none()
                             .truncate()
                             .text_color(self.muted())
-                            .child(label.clone()),
+                            .child(text::words(label)),
                     )
                     .child(div().flex_1().child(self.bar(*share, 0., None)))
                     .child(

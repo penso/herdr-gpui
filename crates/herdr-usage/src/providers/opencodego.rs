@@ -15,6 +15,7 @@ use super::opencode::{
     BASE, COOKIES, DOMAINS, USER_AGENT, call, json_windows, meter, usage, value_number,
     windows as meter_windows, workspace_id,
 };
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -201,7 +202,9 @@ fn report(windows: Vec<Window>, balance: Option<f64>) -> Report {
         Provider(&Opencodego),
         Account {
             email: None,
-            plan: (!windows.is_empty()).then(|| "Go".to_owned()),
+            plan: (!windows.is_empty())
+                .then(|| "Go".to_owned())
+                .map(Text::from),
         },
         windows,
     )

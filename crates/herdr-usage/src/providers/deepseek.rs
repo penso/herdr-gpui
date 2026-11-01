@@ -8,6 +8,7 @@
 //! and the Platform's per-key daily cost and token history, private
 //! dashboard endpoints whose calendar bucketing adds little to a balance.
 
+use crate::text::pairs;
 use crate::{
     Error, Result,
     {
@@ -187,7 +188,7 @@ fn report(wallet: Option<Wallet>, available: bool) -> Report {
         .with_balances([Balance::new("Balance", wallet.total, unit)])
         .with_sections([Section::Facts {
             title: "Credits".into(),
-            facts,
+            facts: pairs(facts),
         }])
 }
 
@@ -248,6 +249,7 @@ struct PlatformWallet {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
 
     #[test]
     fn api_balance_prefers_funded_usd() {
@@ -267,8 +269,8 @@ mod tests {
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected credit facts");
         };
-        assert_eq!(facts[0], ("Paid".to_owned(), "$40.00".to_owned()));
-        assert_eq!(facts[1], ("Granted".to_owned(), "$10.00".to_owned()));
+        assert_eq!(facts[0], pair(("Paid".to_owned(), "$40.00".to_owned())));
+        assert_eq!(facts[1], pair(("Granted".to_owned(), "$10.00".to_owned())));
         assert_eq!(facts.len(), 2);
     }
 

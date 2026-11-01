@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::Text;
 
 /// CodexBar's fixture: 8 GB + 2 GB loaded of 40 GB model memory.
 const NODE: &str = r#"{"memory":40000000000,
@@ -25,7 +26,10 @@ fn loaded_weights_fill_the_memory_window_largest_first() {
     assert_eq!(report.windows[0].kind, Kind::Named("Memory".into()));
     assert_eq!(report.windows[0].percent(), 25);
     assert_eq!(report.windows[0].resets_at, None);
-    assert_eq!(report.account.plan.as_deref(), Some("API key"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("API key")
+    );
     assert_eq!(
         facts(&report, 0),
         (
@@ -54,7 +58,10 @@ fn loaded_weights_fill_the_memory_window_largest_first() {
 fn an_idle_open_daemon_still_reports() {
     let report = parse(r#"{"memory":0,"loaded":{},"stored":{}}"#, false, None).unwrap();
     assert!(report.windows.is_empty());
-    assert_eq!(report.account.plan.as_deref(), Some("Local daemon"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("Local daemon")
+    );
     assert_eq!(report.sections.len(), 1);
     assert_eq!(
         facts(&report, 0).1,

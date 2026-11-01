@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::Text;
 
 const QUOTA: &str = r#"{"virtual_key_name":"fixture-team","budgets":[
       {"id":"year","max_limit":1000,"current_usage":100,"reset_duration":"1Y"},
@@ -23,8 +24,14 @@ fn now() -> SystemTime {
 #[test]
 fn parses_budgets_limits_and_models() {
     let report = parse(QUOTA, now()).unwrap();
-    assert_eq!(report.account.email.as_deref(), Some("fixture-team"));
-    assert_eq!(report.account.plan.as_deref(), Some("Engineering"));
+    assert_eq!(
+        report.account.email.as_ref().map(Text::as_str),
+        Some("fixture-team")
+    );
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("Engineering")
+    );
     assert_eq!(report.windows.len(), 2);
     let month = report
         .windows
@@ -60,11 +67,11 @@ fn parses_budgets_limits_and_models() {
     };
     assert_eq!(
         facts("Rate limits").unwrap(),
-        [("Team pool Requests".to_owned(), "Unavailable".to_owned())]
+        [("Team pool Requests".into(), "Unavailable".into())]
     );
     assert_eq!(
         facts("Models").unwrap(),
-        [("gpt-4o".to_owned(), "$5.00 · 1.2M tokens".to_owned())]
+        [("gpt-4o".into(), "$5.00 · 1.2M tokens".into())]
     );
     assert_eq!(facts("Budgets").unwrap().len(), 2);
 }

@@ -7,6 +7,8 @@
 //! `~/.config/{JetBrains,Google}` and `~/.local/share/JetBrains` elsewhere),
 //! taking the most recently written quota file, or set with `ide_path`.
 
+use crate::model::Count;
+use crate::text::pairs;
 use crate::{
     Result,
     {
@@ -170,12 +172,12 @@ pub(crate) fn parse(xml: &str, ide: Option<Ide>) -> Result<Report> {
     Ok(
         Report::new(Provider(&Jetbrains), Account::default(), vec![window])
             .with_balances([
-                Balance::new("Credits left", available, Unit::Count("credits".into()))
+                Balance::new("Credits left", available, Unit::Count(Count::Credits))
                     .out_of(maximum),
             ])
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
                 title: "AI Assistant".into(),
-                facts,
+                facts: pairs(facts),
             })),
     )
 }
@@ -369,7 +371,7 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Credits left", 992_521.7, Unit::Count("credits".into()))
+                Balance::new("Credits left", 992_521.7, Unit::Count(Count::Credits))
                     .out_of(1_000_000.)
             ]
         );

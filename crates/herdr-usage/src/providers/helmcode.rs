@@ -7,6 +7,7 @@
 //! CodexBar's per-tenant keychain cache of imported sessions is not ported:
 //! cookies are read again on each refresh.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -158,7 +159,7 @@ fn parse(quota: &str, premium: bool, credits: Option<&str>, tenant: &str) -> Res
                 .or(Some(MONTH)),
         };
         windows.push(Window::new(
-            Kind::Named(model.model.clone()),
+            Kind::Named(Text::from(model.model.clone())),
             share(model) * 100.,
             resets_at,
             length,
@@ -177,14 +178,14 @@ fn parse(quota: &str, premium: bool, credits: Option<&str>, tenant: &str) -> Res
         Provider(&Helmcode),
         Account {
             email: None,
-            plan: Some(tenant.to_owned()),
+            plan: Some(Text::from(tenant.to_owned())),
         },
         windows,
     )
     .with_balances(credits.and_then(prepaid))
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
         title: "Model quotas".into(),
-        facts,
+        facts: pairs(facts),
     })))
 }
 
@@ -259,7 +260,10 @@ mod tests {
     #[test]
     fn reads_model_quotas_by_utilization() {
         let report = parse(QUOTA, false, None, "Helmcode Cloud").unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Helmcode Cloud"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Helmcode Cloud")
+        );
         // Unlimited models have no percentage; rolling tiers need premium.
         assert_eq!(report.windows.len(), 2);
         let fast = report

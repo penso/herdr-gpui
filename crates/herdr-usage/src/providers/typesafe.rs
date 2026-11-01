@@ -7,6 +7,7 @@
 //! is read, as in CodexBar. TypeSafe reports no quota or reset, so there
 //! are only balances.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -292,9 +293,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     };
     let sections = (!credits.is_empty()).then(|| Section::Facts {
         title: "Credits".into(),
-        facts: credits,
+        facts: pairs(credits),
     });
-    let account = Account { email: None, plan };
+    let account = Account {
+        email: None,
+        plan: plan.map(Text::from),
+    };
     Ok(Report::new(Provider(&Typesafe), account, Vec::new())
         .with_balances([
             Balance::new("Balance", balance, usd()),
@@ -337,7 +341,7 @@ mod tests {
         assert_eq!(report.balances[0].amount, 4.98);
         assert_eq!(report.balances[1].label, "Spent (September 2026)");
         assert_eq!(report.balances[1].amount, 0.01);
-        assert_eq!(report.account.plan.as_deref(), Some("Free"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Free"));
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
@@ -356,7 +360,10 @@ mod tests {
     fn plan_ids_read_as_names() {
         let body = BODY.replace("free_plan", "pro_monthly-PLAN");
         let report = parse(&body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro Monthly Plan"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Pro Monthly Plan")
+        );
     }
 
     #[test]

@@ -6,6 +6,7 @@
 //! are not ported: one key is read, so configure the group to watch.
 //! Daily totals use UTC days, where CodexBar passes the Mac's time zone.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -147,7 +148,10 @@ fn parse(body: &str) -> Result<Report> {
                 "5h" => (Kind::Session, Kind::Session.length()),
                 "1d" => (Kind::Daily, Kind::Daily.length()),
                 "7d" => (Kind::Weekly, Kind::Weekly.length()),
-                _ => (Kind::Named(format!("{} limit", rate.window.trim())), None),
+                _ => (
+                    Kind::Named(format!("{} limit", rate.window.trim()).into()),
+                    None,
+                ),
             };
             Window::new(
                 kind,
@@ -192,22 +196,27 @@ fn parse(body: &str) -> Result<Report> {
         ));
     }
     let plan = usage.plan_name.filter(|plan| !plan.trim().is_empty());
-    Ok(
-        Report::new(Provider(&Sub2api), Account { email: None, plan }, windows)
-            .with_balances(
-                usage
-                    .balance
-                    .map(|balance| Balance::new("Balance", balance, currency(&unit))),
-            )
-            .with_sections(
-                rate_sections
-                    .into_iter()
-                    .chain((!facts.is_empty()).then(|| Section::Facts {
-                        title: "Usage summary".into(),
-                        facts,
-                    })),
-            ),
+    Ok(Report::new(
+        Provider(&Sub2api),
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
+        windows,
     )
+    .with_balances(
+        usage
+            .balance
+            .map(|balance| Balance::new("Balance", balance, currency(&unit))),
+    )
+    .with_sections(
+        rate_sections
+            .into_iter()
+            .chain((!facts.is_empty()).then(|| Section::Facts {
+                title: "Usage summary".into(),
+                facts: pairs(facts),
+            })),
+    ))
 }
 
 fn currency(unit: &str) -> Unit {
@@ -215,7 +224,7 @@ fn currency(unit: &str) -> Unit {
     if code.len() == 3 && code.chars().all(|c| c.is_ascii_uppercase()) {
         Unit::Currency(code)
     } else {
-        Unit::Count(unit.trim().to_owned())
+        Unit::Count(crate::model::Count::Named(unit.trim().to_owned()))
     }
 }
 
@@ -282,7 +291,7 @@ struct Total {
 mod tests {
     use super::*;
 
-    fn facts(report: &Report) -> &[(String, String)] {
+    fn facts(report: &Report) -> &[(Text, Text)] {
         report
             .sections
             .iter()
@@ -371,7 +380,10 @@ mod tests {
                 (Kind::Monthly, 30.)
             ]
         );
-        assert_eq!(report.account.plan.as_deref(), Some("Claude Team"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Claude Team")
+        );
         assert!(facts(&report).contains(&("Expires".into(), "2026-08-15".into())));
     }
 

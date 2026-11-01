@@ -12,6 +12,7 @@
 //! SigV4) from pasted access keys, the CloudWatch Claude token and request
 //! totals, and the daily cost history.
 
+use crate::text::pair;
 use crate::{
     Error, Result,
     {
@@ -152,6 +153,7 @@ pub(crate) fn parse(body: &str, budget: Option<f64>, today: NaiveDate) -> Result
         facts: services
             .into_iter()
             .map(|(service, amount)| (service, format!("${amount:.2}")))
+            .map(pair)
             .collect(),
     });
     Ok(Report::new(Provider(&Bedrock), Account::default(), windows)

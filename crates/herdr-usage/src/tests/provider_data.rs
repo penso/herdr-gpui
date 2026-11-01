@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::Text;
 use crate::{
     model::{SESSION, Section},
     probe::{Response, json_field},
@@ -109,7 +110,7 @@ const CODEX: &str = r#"{"email":"me@example.com","plan_type":"pro","rate_limit":
 fn codex_windows_are_known_by_length_not_slot() {
     let report = codex::parse(CODEX).unwrap();
     assert_eq!(report.provider, provider("codex"));
-    assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+    assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
     assert_eq!(report.windows.len(), 1);
     assert_eq!(report.windows[0].kind, Kind::Weekly);
     assert_eq!(report.windows[0].resets_at, Some(at(1_790_786_634)));

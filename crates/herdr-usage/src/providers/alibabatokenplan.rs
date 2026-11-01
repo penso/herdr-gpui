@@ -18,6 +18,8 @@ use super::oneconsole::{
     DOMAINS, check, cornerstone, date, encode, expand, find_object, find_value, first, form_body,
     gateway_request, sec_token, string,
 };
+use crate::model::Count;
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -492,7 +494,7 @@ pub(super) fn report_with(provider: Provider, team: Team) -> Report {
         .map(|used| Window::new(Kind::Monthly, used, team.resets_at, Some(MONTH)))
         .into_iter()
         .collect();
-    let credits = || Unit::Count("credits".into());
+    let credits = || Unit::Count(Count::Credits);
     let balance = match (
         team.total.filter(|total| *total > 0.),
         team.remaining,
@@ -509,7 +511,10 @@ pub(super) fn report_with(provider: Provider, team: Team) -> Report {
     };
     let account = Account {
         email: None,
-        plan: team.plan.filter(|plan| !plan.trim().is_empty()),
+        plan: team
+            .plan
+            .filter(|plan| !plan.trim().is_empty())
+            .map(Text::from),
     };
     let mut report = Report::new(provider, account, windows).with_balances(balance);
     if percent.is_none() && report.balances.is_empty() {
@@ -552,7 +557,7 @@ impl Personal {
             provider,
             Account {
                 email: None,
-                plan: self.plan,
+                plan: self.plan.map(Text::from),
             },
             self.windows,
         );
@@ -561,7 +566,7 @@ impl Personal {
         } else {
             report.with_sections([Section::Facts {
                 title: "Credits used".into(),
-                facts,
+                facts: pairs(facts),
             }])
         }
     }

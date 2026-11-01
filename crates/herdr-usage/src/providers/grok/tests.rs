@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use super::*;
+use crate::text::Text;
 
 fn at(text: &str) -> SystemTime {
     Timestamp::Text(text.into()).time().unwrap()
@@ -23,7 +24,7 @@ fn parses_weekly_credits() {
     }"#;
     let account = Account {
         email: Some("user@example.com".into()),
-        plan: login_plan("oidc"),
+        plan: login_plan("oidc").map(Text::from),
     };
     let report = parse(
         body,
@@ -40,8 +41,14 @@ fn parses_weekly_credits() {
         report.windows[0].resets_at,
         Some(at("2026-08-13T00:00:00Z"))
     );
-    assert_eq!(report.account.plan.as_deref(), Some("SuperGrok Heavy"));
-    assert_eq!(report.account.email.as_deref(), Some("user@example.com"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("SuperGrok Heavy")
+    );
+    assert_eq!(
+        report.account.email.as_ref().map(Text::as_str),
+        Some("user@example.com")
+    );
 }
 
 #[test]

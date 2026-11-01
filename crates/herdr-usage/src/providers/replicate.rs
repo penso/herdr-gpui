@@ -7,6 +7,7 @@
 //! CodexBar's cookie cache and retrying of several browser sessions are not
 //! ported: the first matching session is used.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -189,7 +190,7 @@ pub(crate) fn parse(
                 "User"
             }
             .into(),
-            owner.username.clone(),
+            Text::from(owner.username.clone()),
         )],
     };
     Ok(

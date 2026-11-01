@@ -5,6 +5,7 @@
 //! are not supported there either, and there is no OAuth refresh, so an
 //! expired token has to be replaced by hand.
 
+use crate::text::pairs;
 use crate::{
     Result,
     {
@@ -100,7 +101,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Report::new(Provider(&Gitkraken), Account::default(), windows).with_sections([
             Section::Facts {
                 title: "Weekly usage".into(),
-                facts,
+                facts: pairs(facts),
             },
         ]),
     )

@@ -8,6 +8,7 @@
 //! separate wrapper script writes to `~/.codexbar/mimo-local-usage.json`.
 //! That file belongs to CodexBar's own tooling, not to MiMo.
 
+use crate::text::{Text, pairs};
 use crate::{
     Error, Result,
     {
@@ -131,13 +132,16 @@ pub(crate) fn parse(balance: &str, detail: Option<&str>, usage: Option<&str>) ->
         .filter(|code| !code.is_empty());
     Ok(Report::new(
         Provider(&Mimo),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::from),
+        },
         window.into_iter().collect(),
     )
     .with_balances([Balance::new("Balance", amount, Unit::Currency(currency))])
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
         title: "Account".into(),
-        facts,
+        facts: pairs(facts),
     })))
 }
 
@@ -201,6 +205,7 @@ struct UsageItem {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::text::pair;
     use std::time::{Duration, SystemTime};
 
     /// CodexBar's combined-snapshot fixtures.
@@ -213,7 +218,10 @@ mod tests {
     fn merges_balance_and_token_plan() {
         let report = parse(BALANCE, Some(DETAIL), Some(USAGE)).unwrap();
         assert_eq!(report.provider.id(), "mimo");
-        assert_eq!(report.account.plan.as_deref(), Some("Standard"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Standard")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert!((window.used - 5.05).abs() < 1e-4);
@@ -226,14 +234,14 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Paid".to_owned(), "$20.00".to_owned()));
-        assert_eq!(facts[1], ("Granted".to_owned(), "$5.51".to_owned()));
+        assert_eq!(facts[0], pair(("Paid".to_owned(), "$20.00".to_owned())));
+        assert_eq!(facts[1], pair(("Granted".to_owned(), "$5.51".to_owned())));
         assert_eq!(
             facts[2],
-            (
+            pair((
                 "Token plan".to_owned(),
                 "10,100,158 of 200,000,000 credits".to_owned()
-            )
+            ))
         );
     }
 

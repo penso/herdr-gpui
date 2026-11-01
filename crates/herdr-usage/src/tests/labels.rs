@@ -65,7 +65,12 @@ fn balances_read_in_their_own_unit() {
         "4.50 EUR"
     );
     assert_eq!(
-        Balance::new("Points", 1_250_000., Unit::Count("points".into())).text(),
+        Balance::new(
+            "Points",
+            1_250_000.,
+            Unit::Count(crate::model::Count::Points)
+        )
+        .text(),
         "1,250,000 points"
     );
     assert_eq!(group(-1234), "-1,234");

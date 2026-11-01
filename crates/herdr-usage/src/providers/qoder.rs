@@ -5,6 +5,8 @@
 //! Not ported from CodexBar: parsing a pasted cURL or HTTP request capture to
 //! pick the site. The `site` setting chooses qoder.com.cn instead.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -96,13 +98,13 @@ pub(crate) fn parse(body: &str, china: bool) -> Result<Report> {
     let window = Window::new(Kind::Named("Credits".into()), percent, resets_at, None);
     let account = Account {
         email: None,
-        plan: china.then(|| "qoder.com.cn".to_owned()),
+        plan: china.then(|| "qoder.com.cn".to_owned()).map(Text::from),
     };
     Ok(
         Report::new(Provider(&Qoder), account, vec![window]).with_balances([Balance::new(
             "Credits left",
             remaining,
-            Unit::Count("credits".into()),
+            Unit::Count(Count::Credits),
         )
         .out_of(total)]),
     )
@@ -213,7 +215,10 @@ mod tests {
         assert_eq!(report.windows[0].percent(), 68);
         assert_eq!(report.balances[0].amount, 800.);
         assert_eq!(report.balances[0].total, Some(2500.));
-        assert_eq!(report.account.plan.as_deref(), Some("qoder.com.cn"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("qoder.com.cn")
+        );
     }
 
     #[test]

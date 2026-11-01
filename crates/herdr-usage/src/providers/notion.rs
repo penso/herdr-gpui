@@ -10,6 +10,7 @@
 //! and CodexBar's persisted session cache. Allowances only exist on Business
 //! and Enterprise workspaces; others show that instead of windows.
 
+use crate::text::{Text, pairs};
 use crate::{
     Result,
     {
@@ -252,7 +253,7 @@ pub(crate) fn parse(
             Some(resets_at.and_then(calendar_month).unwrap_or(MONTH)),
         ));
     }
-    let mut facts = Vec::new();
+    let mut facts: Vec<(String, String)> = Vec::new();
     if let Some(name) = workspace
         .name
         .as_deref()
@@ -274,18 +275,19 @@ pub(crate) fn parse(
         facts.push(("Enforcement".into(), title_case(enforcement)));
     }
     let account = Account {
-        email,
-        plan: workspace
+        email: email.map(Text::from),
+        plan: (workspace
             .tier
             .as_deref()
             .map(title_case)
-            .filter(|tier| !tier.is_empty()),
+            .filter(|tier| !tier.is_empty()))
+        .map(Text::from),
     };
     Ok(
         Report::new(Provider(&Notion), account, windows).with_sections((!facts.is_empty()).then(
             || Section::Facts {
                 title: "Notion AI".into(),
-                facts,
+                facts: pairs(facts),
             },
         )),
     )
@@ -412,7 +414,10 @@ mod tests {
         let workspace = account.workspace(None).unwrap().clone();
         let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_787_000_000);
         let report = parse(STATUS, account.email.clone(), &workspace, now).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Business"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Business")
+        );
         assert_eq!(report.windows.len(), 2);
         let rolling = &report.windows[0];
         assert_eq!(rolling.kind, Kind::Session);
