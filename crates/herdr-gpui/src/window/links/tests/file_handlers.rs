@@ -124,7 +124,10 @@ fn file_hyperlinks_go_to_plugin_handlers_before_opening_here(cx: &mut gpui::Test
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| {
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
             Some("Link handler failed: review failed")
         );
     });

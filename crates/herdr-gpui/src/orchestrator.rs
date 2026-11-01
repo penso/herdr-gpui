@@ -2,6 +2,7 @@
 //! sections, an item's pages, and the window's handle on each repository's
 //! worker. `herdr-orchestrator` owns the records, the database, the readers,
 //! and the worker; `docs/orchestrator.md` has the details.
+// i18n: migrated
 
 mod host;
 mod section;

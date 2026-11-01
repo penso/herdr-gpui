@@ -12,7 +12,7 @@ fn known_release_survives_progress_and_errors() {
             received: 10,
             total: 100,
         },
-        State::Error("Authorization cancelled".into()),
+        State::Error(Error::PackageAuthorization.into()),
     ] {
         publish(&updater.mailbox, updater.generation, state, None);
         updater.poll();

@@ -2,7 +2,7 @@
 //! one compact row each, the open one marked.
 
 use super::{HostState, Opened, Read, model};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{prelude::*, *};
 
 /// The list's width beside a page.
@@ -41,10 +41,10 @@ impl HerdrWindow {
                     path: script.path.clone(),
                 };
                 let hover = theme.active;
-                let detail = format!(
-                    "{} · {} tokens today",
-                    model::schedule(script),
-                    model::tokens_today(script)
+                let detail = fl!(
+                    "automations-row-detail",
+                    schedule = model::schedule(script),
+                    tokens = model::tokens_today(script)
                 );
                 list = list.child(
                     div()
@@ -106,13 +106,17 @@ impl HerdrWindow {
     fn automation_list_host(&self, host: &HostState) -> Div {
         let theme = &self.theme;
         let state = match &host.read {
-            Read::Missing => Some(("Not installed", theme.muted)),
-            Read::Failed { .. } => Some(("Unreachable", theme.ink(theme.palette[3]))),
-            Read::Ready(status) if !status.daemon.running => {
-                Some(("Daemon down", theme.ink(theme.palette[3])))
-            }
+            Read::Missing => Some((fl!("automations-host-missing"), theme.muted)),
+            Read::Failed { .. } => Some((
+                fl!("automations-host-unreachable"),
+                theme.ink(theme.palette[3]),
+            )),
+            Read::Ready(status) if !status.daemon.running => Some((
+                fl!("automations-host-daemon-down"),
+                theme.ink(theme.palette[3]),
+            )),
             Read::Ready(_) if self.automation_update(host).is_some() => {
-                Some(("Update", theme.ink(theme.palette[3])))
+                Some((fl!("automations-host-update"), theme.ink(theme.palette[3])))
             }
             Read::Ready(_) | Read::Unread => None,
         };

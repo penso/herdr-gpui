@@ -122,7 +122,7 @@ fn a_weight_the_family_lacks_is_reported() -> anyhow::Result<()> {
         })
     );
     assert_eq!(
-        config.diagnostic().as_deref(),
+        plain(config.diagnostic()).as_deref(),
         Some("\"Menlo\" has no medium (500) face; using its nearest weight")
     );
 
@@ -130,7 +130,7 @@ fn a_weight_the_family_lacks_is_reported() -> anyhow::Result<()> {
     let mut config = Config::parse("[terminal]\nfamily = 'Menlo'\nweight = 450")?;
     config.check_font_weight(|_, _| false);
     assert_eq!(
-        config.diagnostic().as_deref(),
+        plain(config.diagnostic()).as_deref(),
         Some("\"Menlo\" has no 450 face; using its nearest weight")
     );
     Ok(())
@@ -155,7 +155,7 @@ fn installed_weights_regular_text_and_missing_families_are_not_reported() -> any
     config.check_font_weight(|_, _| panic!("a missing family was checked"));
     assert_eq!(config.missing_weight, None);
     assert_eq!(
-        config.diagnostic().as_deref(),
+        plain(config.diagnostic()).as_deref(),
         Some("Configured fonts not installed: \"Nope Mono\"")
     );
     Ok(())
