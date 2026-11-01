@@ -31,6 +31,19 @@ pub struct PullRequestNode {
     last_merge_target_commit: Option<Commit>,
     #[serde(default)]
     labels: Vec<Label>,
+    /// Named in an organization-wide listing, which mixes repositories.
+    repository: Option<RepositoryRef>,
+}
+
+#[derive(Deserialize)]
+struct RepositoryRef {
+    name: String,
+    project: Option<ProjectRef>,
+}
+
+#[derive(Deserialize)]
+struct ProjectRef {
+    name: String,
 }
 
 #[derive(Deserialize)]
@@ -55,6 +68,27 @@ fn branch(name: String) -> String {
 impl PullRequestNode {
     pub fn id(&self) -> u64 {
         self.pull_request_id
+    }
+
+    /// The repository of `organization` it belongs to, as a source, when the
+    /// listing names it: an organization-wide listing mixes repositories,
+    /// and each pull request is keyed by its own so it is the row a listing
+    /// of that repository shows.
+    pub fn source_in(&self, organization: &str) -> Option<SourceKey> {
+        let repository = self.repository.as_ref()?;
+        let project = repository.project.as_ref()?;
+        [
+            organization,
+            project.name.as_str(),
+            repository.name.as_str(),
+        ]
+        .iter()
+        .all(|part| !part.is_empty() && !part.contains('/'))
+        .then(|| SourceKey {
+            provider: crate::Provider::Azure,
+            host: super::HOST.to_owned(),
+            repository: format!("{organization}/{}/{}", project.name, repository.name),
+        })
     }
 
     /// The state word the list filters and colors by.

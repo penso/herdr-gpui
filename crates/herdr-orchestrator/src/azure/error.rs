@@ -22,12 +22,18 @@ pub enum Error {
         #[source]
         source: Box<ureq::Error>,
     },
+    #[error("Open a checkout of {repository} as a workspace to act on its pull requests")]
+    NoCheckout { repository: String },
     #[error("Azure DevOps has no repository {repository}, or the token cannot see it")]
     NotFound { repository: String },
     #[error("Azure DevOps rate limit reached; it is read again later")]
     RateLimit,
     #[error("Azure DevOps's answer could not be read: {0}")]
     Read(#[source] std::io::Error),
+    #[error(
+        "Azure DevOps did not say who the token belongs to, so its pull requests cannot be found"
+    )]
+    Reader,
     #[error(
         "Sign in to read {repository}: run `az login`, or set AZURE_DEVOPS_EXT_PAT in your shell"
     )]

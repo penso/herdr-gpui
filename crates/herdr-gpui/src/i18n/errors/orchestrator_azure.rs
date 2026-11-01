@@ -23,12 +23,17 @@ impl Localize for Error {
                 origin = origin.as_str(),
                 error = source.to_string()
             ),
+            Self::NoCheckout { repository } => fl!(
+                "error-orchestrator-azure-no-checkout",
+                repository = repository.as_str()
+            ),
             Self::NotFound { repository } => fl!(
                 "error-orchestrator-azure-not-found",
                 repository = repository.as_str()
             ),
             Self::RateLimit => fl!("error-orchestrator-azure-rate-limit"),
             Self::Read(error) => fl!("error-orchestrator-azure-read", error = error.to_string()),
+            Self::Reader => fl!("error-orchestrator-azure-reader"),
             Self::SignIn { repository } => fl!(
                 "error-orchestrator-azure-sign-in",
                 repository = repository.as_str()

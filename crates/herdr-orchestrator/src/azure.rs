@@ -13,6 +13,7 @@
 //! anonymous request with a sign-in page.
 
 mod error;
+pub mod organization;
 pub mod pull_request;
 pub mod token;
 pub mod work_item;
@@ -182,13 +183,7 @@ impl<'a> Repository<'a> {
 
     /// Who the token reads as, for the organization.
     pub fn connection_url(&self) -> Result<url::Url, Error> {
-        let invalid = || Error::Address(self.organization.to_owned());
-        let mut url = url::Url::parse(&format!("https://{HOST}")).map_err(|_| invalid())?;
-        url.path_segments_mut()
-            .map_err(|()| invalid())?
-            .push(self.organization)
-            .extend(["_apis", "connectionData"]);
-        Ok(url)
+        organization::url(self.organization, &["_apis", "connectionData"])
     }
 
     /// The project's WIQL endpoint, capped at [`work_item::MAX_OPEN`].
@@ -234,8 +229,17 @@ struct Connection {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Viewer {
+    id: Option<String>,
     provider_display_name: Option<String>,
     custom_display_name: Option<String>,
+}
+
+/// Who the token reads as: the id pull requests name their creator by, and
+/// the name they show for them.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Reader {
+    pub id: Option<String>,
+    pub name: Option<String>,
 }
 
 /// A request Azure DevOps answers with JSON.
@@ -252,12 +256,24 @@ pub fn list(
     previous: Option<&Checkpoint>,
     fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
 ) -> super::Result<Listing> {
+    let repository = Repository::of(source)?;
+    let (work_items, complete) = work_items(&repository, fetch)?;
+    let mut listing = list_pull_requests(source, previous, fetch)?;
+    listing.items.splice(0..0, work_items);
+    listing.complete &= complete;
+    Ok(listing)
+}
+
+/// Lists `source`'s active pull requests and its latest settled ones, with
+/// no work items: a repository browsed without a checkout shows only these.
+pub fn list_pull_requests(
+    source: &SourceKey,
+    previous: Option<&Checkpoint>,
+    fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
+) -> super::Result<Listing> {
     let started = Utc::now();
     let repository = Repository::of(source)?;
-    let (mut items, mut complete) = work_items(&repository, fetch)?;
-    let (pull_requests, listed) = pull_requests(source, &repository, fetch)?;
-    items.extend(pull_requests);
-    complete &= listed;
+    let (mut items, complete) = pull_requests(source, &repository, fetch)?;
     let settled = settled(source, &repository, fetch)?;
     let later: HashSet<String> = settled
         .iter()
@@ -265,7 +281,7 @@ pub fn list(
         .collect();
     items.retain(|item| !later.contains(&item.key.native_id));
     items.extend(settled);
-    let viewer = viewer(&repository, fetch)?;
+    let viewer = reader(repository.organization, fetch)?.name;
     let previous = previous.cloned().unwrap_or_default();
     Ok(Listing {
         items,
@@ -306,18 +322,27 @@ fn settled(
     Ok(items)
 }
 
-/// The token owner's display name. A reply in another shape names no one
-/// rather than failing the listing.
-fn viewer(
-    repository: &Repository<'_>,
+/// Who the token reads as in `organization`. A reply in another shape names
+/// no one rather than failing the listing.
+pub fn reader(
+    organization: &str,
     fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
-) -> super::Result<Option<String>> {
-    let bytes = fetch(Call::Get(repository.connection_url()?))?;
-    Ok(serde_json::from_slice::<Connection>(&bytes)
+) -> super::Result<Reader> {
+    let url = organization::url(organization, &["_apis", "connectionData"])?;
+    let bytes = fetch(Call::Get(url))?;
+    let Some(viewer) = serde_json::from_slice::<Connection>(&bytes)
         .ok()
         .and_then(|connection| connection.authenticated_user)
-        .and_then(|viewer| viewer.custom_display_name.or(viewer.provider_display_name))
-        .filter(|name| !name.is_empty()))
+    else {
+        return Ok(Reader::default());
+    };
+    Ok(Reader {
+        id: viewer.id.filter(|id| !id.is_empty()),
+        name: viewer
+            .custom_display_name
+            .or(viewer.provider_display_name)
+            .filter(|name| !name.is_empty()),
+    })
 }
 
 /// Every active pull request, a page at a time, and whether all were read.
@@ -396,24 +421,43 @@ pub fn sync(
     cancelled: &impl Fn() -> bool,
     cooldown: &mut Option<Duration>,
 ) -> super::Result<Listing> {
+    over_https(
+        &source.repository,
+        token,
+        cancelled,
+        cooldown,
+        |mut fetch| list(source, previous, &mut fetch),
+    )
+}
+
+/// Runs `read` with a fetch that sends each call with `token` over HTTPS;
+/// `subject`, a repository or organization, names what a refusal was for.
+/// Blocks on the network, which `cancelled` stops between requests.
+pub fn over_https<T>(
+    subject: &str,
+    token: Option<&token::Token>,
+    cancelled: &impl Fn() -> bool,
+    cooldown: &mut Option<Duration>,
+    read: impl FnOnce(&mut dyn FnMut(Call) -> super::Result<Vec<u8>>) -> super::Result<T>,
+) -> super::Result<T> {
     let Some(token) = token else {
         return Err(Error::SignIn {
-            repository: source.repository.clone(),
+            repository: subject.to_owned(),
         }
         .into());
     };
     let agent = agent(TIMEOUT);
-    list(source, previous, &mut |call| {
+    read(&mut |call| {
         if cancelled() {
             return Err(super::Error::Cancelled);
         }
-        Ok(send(&agent, source, token, call, cooldown)?)
+        Ok(send(&agent, subject, token, call, cooldown)?)
     })
 }
 
 fn send(
     agent: &ureq::Agent,
-    source: &SourceKey,
+    subject: &str,
     token: &token::Token,
     call: Call,
     cooldown: &mut Option<Duration>,
@@ -448,7 +492,7 @@ fn send(
             status,
             "Azure DevOps refused a listing"
         );
-        return Err(status_error(status, &source.repository));
+        return Err(status_error(status, subject));
     }
     body(&mut reply, LIMIT)
 }

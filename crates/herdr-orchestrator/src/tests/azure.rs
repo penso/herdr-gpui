@@ -75,7 +75,7 @@ fn addresses_escape_each_segment_once() {
     );
 }
 
-fn pull_request(id: u64, extra: Value) -> Value {
+pub(super) fn pull_request(id: u64, extra: Value) -> Value {
     let mut node = json!({
         "pullRequestId": id,
         "title": format!("Change {id}"),
@@ -113,10 +113,10 @@ fn work_item(id: u64, state: &str) -> Value {
 }
 
 /// What a fake fetch has been asked, one line per call.
-type Asked = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
+pub(super) type Asked = std::rc::Rc<std::cell::RefCell<Vec<String>>>;
 
 /// Answers each call from `replies` in order, recording what was asked.
-fn replies(answers: Vec<Value>) -> (impl FnMut(Call) -> Result<Vec<u8>>, Asked) {
+pub(super) fn replies(answers: Vec<Value>) -> (impl FnMut(Call) -> Result<Vec<u8>>, Asked) {
     let asked = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let log = asked.clone();
     let mut answers = answers.into_iter();

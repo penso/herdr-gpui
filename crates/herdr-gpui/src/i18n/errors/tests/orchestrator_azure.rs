@@ -15,11 +15,15 @@ fn every_azure_variant_has_a_message() {
             origin: "https://dev.azure.com".into(),
             source: Box::new(ureq::Error::HostNotFound),
         },
+        azure::Error::NoCheckout {
+            repository: repository(),
+        },
         azure::Error::NotFound {
             repository: repository(),
         },
         azure::Error::RateLimit,
         azure::Error::Read(std::io::Error::other("pipe closed")),
+        azure::Error::Reader,
         azure::Error::SignIn {
             repository: repository(),
         },

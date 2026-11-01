@@ -32,8 +32,10 @@ use std::{
 
 mod azure_source;
 mod gitlab_source;
+pub mod remote;
 mod sources;
 
+pub use remote::{RemoteRequest, RemoteScope};
 pub use sources::sources;
 
 /// How often other applications' writes (agent-launcher's runs) are looked for.
@@ -190,6 +192,9 @@ pub struct Snapshot {
     /// The name a forge other than GitHub shows for the reader, as it names
     /// authors, once a sync has read it: Azure DevOps's display name.
     pub viewer: Option<String>,
+    /// An Azure DevOps organization's projects and repositories, which a
+    /// remote worker of its reader's pull requests reads to browse.
+    pub catalog: Option<Arc<azure::organization::Catalog>>,
 }
 
 pub struct Service {
