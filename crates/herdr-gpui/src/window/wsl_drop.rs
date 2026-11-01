@@ -16,8 +16,8 @@ mod error;
 
 pub(crate) use error::Error;
 
-use crate::i18n::{Localize, fl};
 use super::{HerdrWindow, file_drop::quote_paths, pending_input::Delivery};
+use crate::i18n::{Localize, fl};
 use crate::{Result, connection::ConnectionBridge, terminal::InputTarget};
 use gpui::Context;
 use herdr_client::protocol::ClientPaneInputEvent;

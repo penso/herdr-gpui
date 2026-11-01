@@ -474,8 +474,8 @@ mod linux {
         #[test]
         fn timeout_covers_open_and_closed_stdout_and_continuous_output() {
             for script in [
-                "exec sleep 30", // i18n: data
-                "exec 1>&-; exec sleep 30", // i18n: data
+                "exec sleep 30",              // i18n: data
+                "exec 1>&-; exec sleep 30",   // i18n: data
                 "while :; do printf x; done", // i18n: data
             ] {
                 let start = Instant::now();

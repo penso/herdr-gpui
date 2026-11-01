@@ -13,8 +13,8 @@
 //! the click. Daemons without these methods keep the row-local detector.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::{HerdrWindow, file_links::FileLink};
+use crate::i18n::{Localize, fl};
 use crate::terminal::PaneLink;
 use crate::{
     browser::WebUrl,

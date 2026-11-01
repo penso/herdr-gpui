@@ -3,8 +3,8 @@
 //! endpoint API method, and nothing is sent while a menu page holds input.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     connection::ConnectionBridge,
     terminal::{

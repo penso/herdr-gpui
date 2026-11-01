@@ -30,10 +30,8 @@ fn processing_errors() -> Vec<Error> {
         .into(),
         crate::window::clipboard::Error::Changed.into(),
         crate::window::clipboard::Error::Timeout.into(),
-        crate::window::clipboard::Error::Process(io::Error::other(
-            "secret clipboard diagnostic",
-        ))
-        .into(),
+        crate::window::clipboard::Error::Process(io::Error::other("secret clipboard diagnostic"))
+            .into(),
     ]
 }
 
@@ -125,9 +123,7 @@ fn all_processing_errors_show_redacted_local_feedback(cx: &mut gpui::TestAppCont
 }
 
 #[gpui::test]
-fn shared_transfer_notice_uses_selected_endpoint_and_sanitizes_text(
-    cx: &mut gpui::TestAppContext,
-) {
+fn shared_transfer_notice_uses_selected_endpoint_and_sanitizes_text(cx: &mut gpui::TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     view.update(cx, |view, cx| {
         view.endpoints.push(crate::endpoint::Endpoint::new(

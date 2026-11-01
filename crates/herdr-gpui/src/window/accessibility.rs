@@ -3,8 +3,8 @@
 //! the daemon's cursor, never replaces the displayed output or selection.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::terminal::{InputTarget, Transcript};
 use gpui::{accesskit::ActionData, prelude::*, *};
 use herdr_client::protocol::{ClientPaneInputEvent, MAX_FRAME_SIZE};

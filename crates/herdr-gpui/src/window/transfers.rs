@@ -2,8 +2,8 @@
 //! responsive. Only completed copies can paste paths, into their captured target.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::{HerdrWindow, pending_input::Delivery};
+use crate::i18n::{Localize, fl};
 use crate::{connection::ConnectionBridge, fonts::StyledFont, terminal::InputTarget};
 use gpui::{prelude::*, *};
 use herdr_client::{ConnectTarget, protocol::ClientPaneInputEvent};
@@ -252,38 +252,70 @@ impl HerdrWindow {
         // result so successful but unclaimed files are still cleaned up.
         cx.spawn(async move |this, cx| {
             let result = work.await;
-            let accepted = this.update(cx, |this, cx| {
-                let Some(transfer) = &this.file_transfer else { return false; };
-                if !Arc::ptr_eq(&transfer.cancelled, &task_cancel) {
-                    return false;
-                }
-                let current = this.file_transfer_current(transfer);
-                let cancelled = transfer.cancelled.load(Ordering::Acquire) || !current;
-                let error = match &result {
-                    Ok(paths) if !cancelled && this.menu.page.is_none() && this.input_ready() => {
-                        let text = super::file_drop::quote_paths(&paths.iter().map(PathBuf::from).collect::<Vec<_>>());
-                        text.and_then(|text| {
-                            let handle = this.endpoints[this.selected_endpoint].connection.handle.as_ref().ok_or(crate::Error::NotConnected)?;
-                            ConnectionBridge::send_input(handle, &transfer.boot, &transfer.target, ClientPaneInputEvent::Paste(text))?;
-                            Ok(())
-                        }).err().map(|error: crate::Error| error.localize())
+            let accepted = this
+                .update(cx, |this, cx| {
+                    let Some(transfer) = &this.file_transfer else {
+                        return false;
+                    };
+                    if !Arc::ptr_eq(&transfer.cancelled, &task_cancel) {
+                        return false;
                     }
-                    Ok(_) => Some(herdr_client::Error::UploadCancelled.localize()),
-                    Err(error) => {
-                        // i18n: data
-                        crate::storage_warning::warn_storage_failure("File transfer", error);
-                        Some(error.localize())
+                    let current = this.file_transfer_current(transfer);
+                    let cancelled = transfer.cancelled.load(Ordering::Acquire) || !current;
+                    let error = match &result {
+                        Ok(paths)
+                            if !cancelled && this.menu.page.is_none() && this.input_ready() =>
+                        {
+                            let text = super::file_drop::quote_paths(
+                                &paths.iter().map(PathBuf::from).collect::<Vec<_>>(),
+                            );
+                            text.and_then(|text| {
+                                let handle = this.endpoints[this.selected_endpoint]
+                                    .connection
+                                    .handle
+                                    .as_ref()
+                                    .ok_or(crate::Error::NotConnected)?;
+                                ConnectionBridge::send_input(
+                                    handle,
+                                    &transfer.boot,
+                                    &transfer.target,
+                                    ClientPaneInputEvent::Paste(text),
+                                )?;
+                                Ok(())
+                            })
+                            .err()
+                            .map(|error: crate::Error| error.localize())
+                        }
+                        Ok(_) => Some(herdr_client::Error::UploadCancelled.localize()),
+                        Err(error) => {
+                            // i18n: data
+                            crate::storage_warning::warn_storage_failure("File transfer", error);
+                            Some(error.localize())
+                        }
+                    };
+                    let accepted = error.is_none();
+                    if current && !matches!(&result, Err(herdr_client::Error::UploadCleanup { .. }))
+                    {
+                        match error {
+                            None => this.local_transfer_notice(
+                                &fl!("window-input-copy-complete"),
+                                fl!("window-input-copy-complete-body"),
+                                cx,
+                            ),
+                            Some(error) => this.local_transfer_notice(
+                                &if cancelled {
+                                    fl!("window-input-copy-cancelled")
+                                } else {
+                                    fl!("window-input-copy-failed")
+                                },
+                                error,
+                                cx,
+                            ),
+                        }
                     }
-                };
-                let accepted = error.is_none();
-                if current && !matches!(&result, Err(herdr_client::Error::UploadCleanup { .. })) {
-                    match error {
-                        None => this.local_transfer_notice(&fl!("window-input-copy-complete"), fl!("window-input-copy-complete-body"), cx),
-                        Some(error) => this.local_transfer_notice(&if cancelled { fl!("window-input-copy-cancelled") } else { fl!("window-input-copy-failed") }, error, cx),
-                    }
-                }
-                accepted
-            }).unwrap_or(false);
+                    accepted
+                })
+                .unwrap_or(false);
             let cleanup_failed = match result {
                 Ok(paths) if !accepted => executor
                     .spawn(async move { cleanup(&cleanup_host, &paths) })
@@ -294,16 +326,25 @@ impl HerdrWindow {
             };
             if cleanup_failed {
                 let _ = this.update(cx, |this, cx| {
-                    this.local_transfer_notice(&fl!("window-input-cleanup-failed"), fl!("window-input-cleanup-failed-body", device = endpoint_label), cx);
+                    this.local_transfer_notice(
+                        &fl!("window-input-cleanup-failed"),
+                        fl!("window-input-cleanup-failed-body", device = endpoint_label),
+                        cx,
+                    );
                 });
             }
             let _ = this.update(cx, |this, cx| {
-                if this.file_transfer.as_ref().is_some_and(|transfer| Arc::ptr_eq(&transfer.cancelled, &task_cancel)) {
+                if this
+                    .file_transfer
+                    .as_ref()
+                    .is_some_and(|transfer| Arc::ptr_eq(&transfer.cancelled, &task_cancel))
+                {
                     this.file_transfer = None;
                     cx.notify();
                 }
             });
-        }).detach();
+        })
+        .detach();
         self.file_transfer = Some(FileTransfer {
             endpoint: endpoint_id,
             host,

@@ -8,11 +8,15 @@ fn the_copy_card_draws_only_messages() {
     under_en_xa("file copy en-XA leak", |cx, recorder| {
         let (fixture, cx) = cx.add_window_view(fixture);
         let view = fixture.read_with(cx, |fixture, _| fixture.view.clone().unwrap());
-        let mut peer = Peer::new();
+        let peer = Peer::new();
         let transfer = view.update(cx, |view, cx| {
             peer.prepare(view, cx);
             let transfer = pending(view, InputTarget::Pane("w1:p1".into()));
-            let shared = (transfer.sent.clone(), transfer.total.clone(), transfer.cancelled.clone());
+            let shared = (
+                transfer.sent.clone(),
+                transfer.total.clone(),
+                transfer.cancelled.clone(),
+            );
             view.file_transfer = Some(transfer);
             shared
         });

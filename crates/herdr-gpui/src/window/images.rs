@@ -3,12 +3,12 @@
 //! reads/encoding.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::{
     HerdrWindow,
     image_source::{self, PreparedImage, Source},
     pending_input::Delivery,
 };
+use crate::i18n::{Localize, fl};
 use crate::{Error, terminal::InputTarget};
 use gpui::{ClipboardEntry, ClipboardItem, Context, Task};
 use herdr_client::{
@@ -37,7 +37,11 @@ impl PreparationKind {
 
     /// Why this preparation was not sent, for the status line.
     fn not_sent(self, error: String) -> String {
-        fl!("window-input-prepared-failed", kind = self.selector(), error = error)
+        fl!(
+            "window-input-prepared-failed",
+            kind = self.selector(),
+            error = error
+        )
     }
 }
 

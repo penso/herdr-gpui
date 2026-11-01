@@ -7,11 +7,11 @@ mod error;
 
 pub(crate) use error::Error;
 
-use crate::i18n::{Localize, fl};
 use super::{
     HerdrWindow,
     pending_input::{Delivery, DropAt},
 };
+use crate::i18n::{Localize, fl};
 use crate::{
     Result,
     connection::ConnectionBridge,

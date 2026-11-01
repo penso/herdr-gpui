@@ -4,8 +4,8 @@
 //! or when it is held with Herdr's `ui.right_click_passthrough_modifier`.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     connection::ConnectionBridge,
     navigation::NavigationTarget,
@@ -136,7 +136,10 @@ impl HerdrWindow {
                     .mouse_event(ClientMouseKind::Up(button), Modifiers::default()),
             )
         {
-            self.local_error = Some(fl!("window-input-mouse-release-failed", error = error.localize()));
+            self.local_error = Some(fl!(
+                "window-input-mouse-release-failed",
+                error = error.localize()
+            ));
             cx.notify();
         }
     }
@@ -678,7 +681,8 @@ impl HerdrWindow {
             }
             Err(error) => {
                 drop(state);
-                self.local_error = Some(fl!("window-input-scroll-failed", error = error.localize()));
+                self.local_error =
+                    Some(fl!("window-input-scroll-failed", error = error.localize()));
                 cx.notify();
             }
         }
@@ -921,7 +925,10 @@ impl HerdrWindow {
             Err(error) => {
                 drop(state);
                 self.split_drag = None;
-                self.local_error = Some(fl!("window-input-pane-resize-failed", error = error.localize()));
+                self.local_error = Some(fl!(
+                    "window-input-pane-resize-failed",
+                    error = error.localize()
+                ));
                 cx.notify();
             }
         }
