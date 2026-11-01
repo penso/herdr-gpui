@@ -8,16 +8,35 @@
 //! `https://dev.azure.com/…/_git/…`, `git@ssh.dev.azure.com:v3/…`, or the
 //! older `https://organization.visualstudio.com/…/_git/…`.
 //!
-//! The credential comes from `AZURE_DEVOPS_EXT_PAT`, else from the Azure CLI's
-//! sign-in (`token`). Without one, nothing is read: Azure DevOps answers an
-//! anonymous request with a sign-in page.
+//! The credential comes from `AZURE_DEVOPS_EXT_PAT`, else from the token
+//! pasted for the organization in the account menu (`saved`), else from the
+//! Azure CLI's sign-in (`token`). Without one, nothing is read: Azure DevOps
+//! answers an anonymous request with a sign-in page.
 
+pub mod account;
 mod error;
 pub mod pull_request;
+pub mod saved;
 pub mod token;
 pub mod work_item;
 
 pub use error::Error;
+
+/// The `[azure_devops]` table.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Config {
+    /// Saves pasted tokens in the private `0600` `azure-devops-credentials`
+    /// file when no desktop keyring is running. Same meaning as `[github]`'s.
+    pub allow_plaintext_credentials: bool,
+}
+
+impl Config {
+    /// Where pasted tokens are saved.
+    pub fn store(&self) -> herdr_credentials::Store {
+        herdr_credentials::Store::for_policy(self.allow_plaintext_credentials)
+    }
+}
 
 use super::{Checkpoint, Item, Provider, SourceKey};
 use chrono::Utc;
@@ -104,6 +123,16 @@ pub struct Repository<'a> {
 }
 
 impl<'a> Repository<'a> {
+    /// The organization `source` belongs to, which its token is saved for;
+    /// a project's own source names it as well.
+    pub fn organization(source: &SourceKey) -> Option<&str> {
+        source
+            .repository
+            .split('/')
+            .next()
+            .filter(|organization| !organization.is_empty())
+    }
+
     pub fn of(source: &'a SourceKey) -> Result<Self, Error> {
         let mut parts = source.repository.splitn(3, '/');
         match (parts.next(), parts.next(), parts.next()) {

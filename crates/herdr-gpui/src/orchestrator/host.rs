@@ -153,11 +153,11 @@ impl HerdrWindow {
     /// of one repository are one: they share its database.
     pub(crate) fn repo_specs(&self) -> Vec<RepoSpec> {
         let mut specs: Vec<RepoSpec> = Vec::new();
-        // A headless window never reads the user's saved GitLab tokens.
-        let gitlab_store = if self.reads_credentials() {
-            self.config.gitlab.store()
+        // A headless window never reads the user's saved tokens.
+        let (azure_store, gitlab_store) = if self.reads_credentials() {
+            (self.config.azure_devops.store(), self.config.gitlab.store())
         } else {
-            herdr_credentials::Store::default()
+            Default::default()
         };
         for (index, endpoint) in self.endpoints.iter().enumerate() {
             let target = &endpoint.connection.target;
@@ -198,6 +198,7 @@ impl HerdrWindow {
                         workspace_id: workspace.workspace_id.clone(),
                         token: token.clone(),
                         data_root: None,
+                        azure_store,
                         gitlab_store,
                         timing: Timing::default(),
                     },

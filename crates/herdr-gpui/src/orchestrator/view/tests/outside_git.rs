@@ -15,6 +15,7 @@ fn request(dir: &std::path::Path, name: &str) -> Request {
         workspace_id: name.into(),
         token: None,
         data_root: Some(dir.join("data")),
+        azure_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     }

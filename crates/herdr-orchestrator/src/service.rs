@@ -98,6 +98,8 @@ pub struct Request {
     /// The accounts GitHub is read with; each source uses the one that
     /// reads its repository's owner.
     pub token: Option<Tokens>,
+    /// Where Azure DevOps tokens pasted in the account menu are saved.
+    pub azure_store: herdr_credentials::Store,
     /// Where GitLab tokens pasted in the account menu are saved.
     pub gitlab_store: herdr_credentials::Store,
     /// The folder holding the databases, and agent-launcher's to carry
@@ -150,7 +152,8 @@ pub enum SyncState {
     Capped {
         count: usize,
     },
-    /// GitHub needs a signed-in account, or GitLab a token that works.
+    /// GitHub needs a signed-in account, or GitLab or Azure DevOps a token
+    /// that works.
     SignIn,
     /// A provider or host this build cannot read yet, such as GitHub Enterprise.
     Unsupported,
@@ -317,9 +320,10 @@ struct Worker {
     /// and a refusal look again, so a new `glab auth login` or a renewed
     /// connected account is picked up without reopening the view.
     gitlab_token: Option<(String, Option<gitlab::account::Found>)>,
-    /// The Azure DevOps token, once looked up; Refresh and a refusal look
-    /// again, so a new `az login` is picked up without reopening the view.
-    azure_token: Option<Option<azure::token::Token>>,
+    /// The Azure DevOps token, once looked up, and the organization it is
+    /// for; Refresh and a refusal look again, so a new `az login` or a token
+    /// saved in the account menu is picked up without reopening the view.
+    azure_token: Option<(String, Option<azure::token::Found>)>,
     cooldown: Option<Duration>,
 }
 
@@ -754,6 +758,7 @@ impl Worker {
                     self.retry.push((key.clone(), Instant::now() + wait));
                     match &error {
                         // Waits as a failure does, but offers the sign-in.
+                        Error::Azure(source) if source.needs_sign_in() => SyncState::SignIn,
                         Error::Gitlab(source) if source.needs_sign_in() => SyncState::SignIn,
                         _ => SyncState::Failed(Arc::new(error)),
                     }
