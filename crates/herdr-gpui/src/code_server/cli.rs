@@ -22,7 +22,7 @@ const SERVER: &str = "code-tunnel.exe";
 
 /// Where VS Code keeps its command when it was never put on `PATH`.
 #[cfg(target_os = "macos")]
-const BUNDLED: &[&str] = &["/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"];
+const BUNDLED: &[&str] = &["/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"]; // i18n: data
 #[cfg(not(target_os = "macos"))]
 const BUNDLED: &[&str] = &[];
 

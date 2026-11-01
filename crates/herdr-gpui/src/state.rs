@@ -1,4 +1,6 @@
-use crate::i18n::fl;
+//! A connection's live state, as the window reads it.
+// i18n: migrated
+use crate::i18n::{Localize, fl};
 use herdr_client::{
     ClientEvent, Method, SurfaceImages,
     protocol::{ClientShellSnapshot, PaneSurfaceFrame, ServerMessage},
@@ -41,14 +43,15 @@ impl ConnectionStatus {
 }
 
 impl std::fmt::Display for ConnectionStatus {
+    // The log's words; the status bar shows `label`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Connecting => "Connecting...",
-            Self::StartingDaemon => "Starting Herdr server...",
-            Self::AwaitingSnapshot => "Connected; waiting for snapshot",
-            Self::Connected => "Connected",
-            Self::Disconnected => "Disconnected",
-            Self::Detached => "Detached (daemon still running)",
+            Self::Connecting => "Connecting...",                // i18n: data
+            Self::StartingDaemon => "Starting Herdr server...", // i18n: data
+            Self::AwaitingSnapshot => "Connected; waiting for snapshot", // i18n: data
+            Self::Connected => "Connected",                     // i18n: data
+            Self::Disconnected => "Disconnected",               // i18n: data
+            Self::Detached => "Detached (daemon still running)", // i18n: data
         })
     }
 }
@@ -643,7 +646,7 @@ impl LiveState {
                     .as_deref()
                     .is_some_and(|id| self.has_operation_result(id))
                 {
-                    self.error = Some(reason.to_string());
+                    self.error = Some(reason.localize());
                 }
                 let reason = Arc::new(crate::Error::Client(reason));
                 for (id, result) in [
@@ -713,14 +716,14 @@ impl LiveState {
                         .flatten();
                     activation.failed = activation.revision.is_none();
                     if activation.failed {
-                        self.error = Some("Invalid surface activation acknowledgement".into());
+                        self.error = Some(fl!("state-activation-invalid"));
                     }
                 }
                 if let Some(error) = response.get("error")
                     && !error.is_null()
                     && !self.has_operation_result(&request_id)
                 {
-                    self.error = Some(crate::daemon::Error::Response(error.clone()).to_string());
+                    self.error = Some(crate::daemon::Error::Response(error.clone()).localize());
                 }
                 if self.dismissal_request(&request_id)
                     && response.get("error").is_some_and(|error| !error.is_null())

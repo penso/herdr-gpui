@@ -8,6 +8,7 @@
 //! percentage is invented. The wallet balance, which CodexBar leaves out, is
 //! shown as a balance when present; it never feeds the daily window.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -32,8 +33,7 @@ static META: Meta = Meta::new("xkiro", "xKiro")
     .settings(&[Setting::new(
         "api_key",
         &["XKIRO_API_KEY"],
-        "An xKiro API key from your account at https://xkiro.com. It is sent only to \
-         api.xkiro.com; reading usage spends no tokens.",
+        "usage-xkiro-setting-api-key",
     )]);
 
 impl Service for Xkiro {
@@ -82,22 +82,30 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         _ => Vec::new(),
     };
 
-    let tokens = |value: u64| group(i64::try_from(value).unwrap_or(i64::MAX));
+    let tokens = |value: u64| Text::service(group(i64::try_from(value).unwrap_or(i64::MAX)));
     let mut facts = Vec::new();
     if let Some(used) = used {
-        facts.push(("Tokens used today".to_owned(), tokens(used)));
+        facts.push((Text::message("usage-xkiro-tokens-used-today"), tokens(used)));
     }
     match limit {
-        Some(limit) => facts.push(("Daily allowance".to_owned(), tokens(limit))),
-        None if uncapped => {
-            facts.push(("Daily allowance".to_owned(), "No cap reported".to_owned()))
-        }
+        Some(limit) => facts.push((Text::message("usage-xkiro-daily-allowance"), tokens(limit))),
+        None if uncapped => facts.push((
+            Text::message("usage-xkiro-daily-allowance"),
+            Text::message("usage-xkiro-no-cap-reported"),
+        )),
         None => {}
     }
     if let Some(remaining) = remaining {
-        facts.push(("Tokens remaining".to_owned(), tokens(remaining)));
+        facts.push((
+            Text::message("usage-xkiro-tokens-remaining"),
+            tokens(remaining),
+        ));
     }
-    facts.push(("Daily reset".to_owned(), "00:00 UTC".to_owned()));
+    // A time of day, which reads the same in every language.
+    facts.push((
+        Text::message("usage-xkiro-daily-reset"),
+        Text::service("00:00 UTC"),
+    ));
 
     let text = |value: Option<&Value>| {
         value
@@ -107,8 +115,8 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
             .map(str::to_owned)
     };
     let plan = match &usage.plan {
-        Some(Value::Null) => Some("Pay as you go".to_owned()),
-        plan => text(plan.as_ref()),
+        Some(Value::Null) => Some(Text::message("usage-xkiro-pay-as-you-go")),
+        plan => text(plan.as_ref()).map(Text::service),
     };
     let email = text(usage.user.as_ref().and_then(|user| user.get("email")));
     let wallet = usage
@@ -116,16 +124,27 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         .as_ref()
         .and_then(|wallet| wallet.get("balance_usd"))
         .and_then(number)
-        .map(|balance| Balance::new("Wallet", balance, Unit::Currency("USD".into())));
+        .map(|balance| {
+            Balance::new(
+                Text::message("usage-xkiro-wallet"),
+                balance,
+                Unit::Currency("USD".into()),
+            )
+        });
 
-    Ok(
-        Report::new(Provider(&Xkiro), Account { email, plan }, windows)
-            .with_balances(wallet)
-            .with_sections([Section::Facts {
-                title: "Free tokens".into(),
-                facts,
-            }]),
+    Ok(Report::new(
+        Provider(&Xkiro),
+        Account {
+            email: email.map(Text::service),
+            plan,
+        },
+        windows,
     )
+    .with_balances(wallet)
+    .with_sections([Section::Facts {
+        title: Text::message("usage-xkiro-free-tokens"),
+        facts,
+    }]))
 }
 
 /// A counter is a non-negative whole number or absent; anything else means
@@ -202,7 +221,7 @@ mod tests {
     fn facts(report: &Report) -> Vec<String> {
         match report.sections.as_slice() {
             [Section::Facts { facts, .. }] => {
-                facts.iter().map(|(_, value)| value.clone()).collect()
+                facts.iter().map(|(_, value)| value.to_string()).collect()
             }
             sections => panic!("unexpected sections {sections:?}"),
         }
@@ -217,8 +236,14 @@ mod tests {
         assert!((window.used - 2.4807).abs() < 0.0001);
         assert_eq!(window.resets_at, Some(at(1_790_294_400)));
         assert_eq!(window.length, Some(DAY));
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
-        assert_eq!(report.account.plan.as_deref(), Some("Pay as you go"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-xkiro-pay-as-you-go"))
+        );
         assert_eq!(
             facts(&report),
             ["124,035", "5,000,000", "4,875,965", "00:00 UTC"]
@@ -232,7 +257,7 @@ mod tests {
         for (fields, expected) in [
             (
                 r#""used_today":0,"limit_per_day":null,"remaining":null"#,
-                vec!["0", "No cap reported", "00:00 UTC"],
+                vec!["0", "usage-xkiro-no-cap-reported", "00:00 UTC"],
             ),
             (r#""remaining":12"#, vec!["12", "00:00 UTC"]),
             (r#""limit_per_day":500000"#, vec!["500,000", "00:00 UTC"]),
@@ -253,7 +278,7 @@ mod tests {
             );
             let report = parse(&body, at(1_790_251_200)).unwrap();
             assert_eq!(report.windows[0].used, 100.);
-            assert_eq!(report.account.plan.as_deref(), Some("pro"));
+            assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("pro"));
             assert!(report.balances.is_empty());
         }
     }

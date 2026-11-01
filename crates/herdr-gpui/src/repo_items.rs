@@ -2,6 +2,7 @@
 //! issues, its branches without a checkout, the branch each one seeds, and the
 //! note a created checkout carries about it. Read-only GitHub and Git work runs
 //! off the UI thread; no local cache between openings.
+// i18n: migrated
 
 mod branches;
 mod context;

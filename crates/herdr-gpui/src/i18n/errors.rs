@@ -13,6 +13,7 @@ mod automations;
 mod backdrop;
 mod caffeine;
 mod chat;
+mod chat_protocol;
 mod client;
 mod clipboard;
 #[cfg(feature = "cloud")]
@@ -26,12 +27,14 @@ mod daemon;
 mod devices;
 mod dispatch;
 mod editor;
+mod fan_out;
 mod file_drop;
 mod github;
 mod host_build;
 mod keymap;
 #[cfg(windows)]
 mod launch_at_login;
+mod link;
 mod listening_ports;
 mod mods;
 mod nearby;
@@ -49,6 +52,7 @@ mod remote;
 mod remote_control;
 mod review;
 mod root;
+mod security;
 #[cfg(unix)]
 mod setup_relay;
 mod sound;
@@ -86,4 +90,22 @@ impl<T: Localize + ?Sized> Localize for Arc<T> {
     fn localize(&self) -> String {
         (**self).localize()
     }
+}
+
+/// `error`'s message followed by each cause's, for a line that names what
+/// went wrong on a host as well as what failed. A cause from the app is
+/// localized; any other (the system's, a parser's) keeps its own words.
+pub(crate) fn with_causes(error: &crate::Error) -> String {
+    let mut text = error.localize();
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        text.push(' ');
+        // A boxed cause is the box itself, as `#[source]` hands it over.
+        let ours = cause
+            .downcast_ref::<crate::Error>()
+            .or_else(|| cause.downcast_ref::<Box<crate::Error>>().map(AsRef::as_ref));
+        text.push_str(&ours.map_or_else(|| cause.to_string(), Localize::localize));
+        source = cause.source();
+    }
+    text
 }

@@ -1,7 +1,10 @@
 //! `herdr-usage`'s typed values read as its own English did, now through
 //! usage.ftl.
 use super::super::text;
-use herdr_usage::model::{Balance, Kind, Pace, Unit, Window};
+use herdr_usage::{
+    Text,
+    model::{Balance, Kind, Pace, Unit, Window},
+};
 use std::time::{Duration, SystemTime};
 
 /// Drops Fluent's isolation marks around placeables.
@@ -44,7 +47,7 @@ fn limits_name_their_kind_or_the_service_name() {
     let weekly = Window::new(Kind::Weekly, 11., None, None);
     assert_eq!(plain(text::left_heading(&weekly)), "Weekly 89% left");
     assert_eq!(plain(text::bar_label(&weekly, now)), weekly.label(now));
-    let named = Window::new(Kind::Named("Opus".into()), 3., None, None);
+    let named = Window::new(Kind::Named(Text::service("Opus")), 3., None, None);
     assert_eq!(plain(text::title(&named.kind)), "Opus");
     assert_eq!(plain(text::bar_label(&named, now)), named.label(now));
     let session = Window::new(
@@ -58,7 +61,7 @@ fn limits_name_their_kind_or_the_service_name() {
 
 #[test]
 fn balances_read_their_total() {
-    let dollars = Balance::new("Credits", 12.3, Unit::Currency("USD".into()));
+    let dollars = Balance::new(Text::service("Credits"), 12.3, Unit::Currency("USD".into()));
     assert_eq!(plain(text::balance(&dollars)), dollars.text());
     let budget = dollars.out_of(50.);
     assert_eq!(plain(text::balance(&budget)), budget.text());

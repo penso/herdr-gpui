@@ -6,7 +6,7 @@
 //! service change runs on the background executor.
 
 use super::service::{self, Outcome};
-use crate::config::RemoteConfig;
+use crate::{config::RemoteConfig, i18n::Localize};
 use gpui::{App, BackgroundExecutor, Global, Task};
 use herdr_remote_control::control::pull_requests::PullRequests;
 use herdr_remote_control::control::{self, Device, DeviceId, Request, Response, Status};
@@ -187,7 +187,7 @@ impl Supervisor {
             .detach();
         crate::config::watch::follow(
             cx,
-            "status icons",
+            "status icons", // i18n: data
             |config| config.status_icons.as_str(),
             Self::apply_indicators,
         )
@@ -402,8 +402,8 @@ impl Supervisor {
         }
         let health = match status {
             Ok(Response::Status(status)) => Health::Running(status),
-            Ok(_) => Health::NotRunning(super::Error::Unexpected.to_string()),
-            Err(error) => Health::NotRunning(error.to_string()),
+            Ok(_) => Health::NotRunning(super::Error::Unexpected.localize()),
+            Err(error) => Health::NotRunning(error.localize()),
         };
         let devices = match devices {
             Some(Ok(Response::Devices { devices })) => Some(devices),

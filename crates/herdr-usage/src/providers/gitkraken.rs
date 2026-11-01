@@ -5,6 +5,7 @@
 //! are not supported there either, and there is no OAuth refresh, so an
 //! expired token has to be replaced by hand.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -26,16 +27,12 @@ static META: Meta = Meta::new("gitkraken", "GitKraken AI")
         Setting::new(
             "token",
             &["GITKRAKEN_API_TOKEN"],
-            "A GitKraken account session access token. Sign in at \
-             https://gitkraken.dev/account#ai-usage, open Developer Tools > Network, \
-             select the successful ai-tasks/usage request, and copy only the value after \
-             \"Bearer \" in its Authorization header. Replace it when it expires.",
+            "usage-gitkraken-setting-token",
         ),
         Setting::new(
             "org_id",
             &["GITKRAKEN_ORG_ID"],
-            "Optional organization ID: the gk-org-id header of the same request, to read \
-             that organization's shared pool.",
+            "usage-gitkraken-setting-org-id",
         ),
     ]);
 
@@ -77,23 +74,32 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let pool = data
         .organization
         .and_then(|organization| Quota::new(organization.used, organization.limit));
-    let mut facts = vec![("Personal".to_owned(), personal.describe())];
+    let mut facts = vec![(
+        Text::message("usage-gitkraken-personal"),
+        personal.describe(),
+    )];
     let mut windows = Vec::new();
     if let Some(used) = personal.percent() {
         windows.push(Window::new(Kind::Weekly, used, Some(resets_at), Some(WEEK)));
     }
     if let Some(pool) = &pool {
-        facts.push(("Shared pool".into(), pool.describe()));
+        facts.push((
+            Text::message("usage-gitkraken-shared-pool"),
+            pool.describe(),
+        ));
         if let Some(shared) = data
             .shared_used
             .filter(|shared| shared.is_finite() && *shared >= 0. && *shared <= pool.used)
         {
-            facts.push(("Your shared usage".into(), credits(shared)));
-            facts.push(("Rest of organization".into(), credits(pool.used - shared)));
+            facts.push((Text::message("usage-gitkraken-your-share"), credits(shared)));
+            facts.push((
+                Text::message("usage-gitkraken-rest"),
+                credits(pool.used - shared),
+            ));
         }
         if let Some(used) = pool.percent() {
             windows.push(Window::new(
-                Kind::Named("Shared pool".into()),
+                Kind::Named(Text::message("usage-gitkraken-shared-pool")),
                 used,
                 Some(resets_at),
                 Some(WEEK),
@@ -103,15 +109,17 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     Ok(
         Report::new(Provider(&Gitkraken), Account::default(), windows).with_sections([
             Section::Facts {
-                title: "Weekly usage".into(),
+                title: Text::message("usage-gitkraken-weekly-usage"),
                 facts,
             },
         ]),
     )
 }
 
-fn credits(value: f64) -> String {
-    format!("{} credits", count(value))
+fn credits(value: f64) -> Text {
+    Text::message("usage-gitkraken-credits")
+        .arg("amount", count(value))
+        .arg("count", value)
 }
 
 /// A limit of zero is no allowance and -1 unlimited; neither has a percent.
@@ -132,14 +140,21 @@ impl Quota {
         (self.limit > 0.).then(|| self.used / self.limit * 100.)
     }
 
-    fn describe(&self) -> String {
+    fn describe(&self) -> Text {
         let used = count(self.used);
         if self.limit > 0. {
-            format!("{used} / {} credits used", count(self.limit))
+            Text::message("usage-gitkraken-used-of")
+                .arg("used", used)
+                .arg("limit", count(self.limit))
+                .arg("count", self.limit)
         } else if self.limit == -1. {
-            format!("{used} credits used · Unlimited")
+            Text::message("usage-gitkraken-used-unlimited")
+                .arg("used", used)
+                .arg("count", self.used)
         } else {
-            format!("{used} credits used · No allowance")
+            Text::message("usage-gitkraken-used-no-allowance")
+                .arg("used", used)
+                .arg("count", self.used)
         }
     }
 }
@@ -181,7 +196,10 @@ mod tests {
         assert!((report.windows[0].used - 30.).abs() < 0.01);
         assert_eq!(report.windows[0].length, Some(WEEK));
         assert!(report.windows[0].resets_at.is_some());
-        assert_eq!(report.windows[1].kind, Kind::Named("Shared pool".into()));
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-gitkraken-shared-pool"))
+        );
         assert!((report.windows[1].used - 30.).abs() < 0.01);
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
@@ -190,14 +208,25 @@ mod tests {
         assert_eq!(
             labels,
             [
-                "Personal",
-                "Shared pool",
-                "Your shared usage",
-                "Rest of organization"
+                "usage-gitkraken-personal",
+                "usage-gitkraken-shared-pool",
+                "usage-gitkraken-your-share",
+                "usage-gitkraken-rest"
             ]
         );
-        assert_eq!(facts[0].1, "120 / 400 credits used");
-        assert_eq!(facts[3].1, "600 credits");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-gitkraken-used-of")
+                .arg("used", "120")
+                .arg("limit", "400")
+                .arg("count", 400)
+        );
+        assert_eq!(
+            facts[3].1,
+            Text::message("usage-gitkraken-credits")
+                .arg("amount", "600")
+                .arg("count", 600)
+        );
     }
 
     #[test]
@@ -208,7 +237,12 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "55.50 credits used · Unlimited");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-gitkraken-used-unlimited")
+                .arg("used", "55.50")
+                .arg("count", 55.5)
+        );
     }
 
     #[test]

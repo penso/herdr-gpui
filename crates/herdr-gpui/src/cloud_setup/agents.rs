@@ -46,22 +46,26 @@ macro_rules! agents {
 }
 
 agents! {
-    Claude => "claude", "Claude Code",
+    Claude => "claude", "Claude Code", // i18n: data
+        // i18n: data
         "echo '==> Installing Claude Code'\n\
          if ! command -v claude >/dev/null 2>&1; then \
          installer=$(curl -fsSL https://claude.ai/install.sh); \
          printf '%s\\n' \"$installer\" | bash; fi";
-    Codex => "codex", "Codex",
+    Codex => "codex", "Codex", // i18n: data
+        // i18n: data
         "echo '==> Installing Codex'\n\
          if command -v codex >/dev/null 2>&1; then :; \
          elif command -v npm >/dev/null 2>&1; then npm install -g @openai/codex; \
          else echo 'Skipping Codex: it needs npm (Node.js)' >&2; fi";
-    Gemini => "gemini", "Gemini CLI",
+    Gemini => "gemini", "Gemini CLI", // i18n: data
+        // i18n: data
         "echo '==> Installing Gemini CLI'\n\
          if command -v gemini >/dev/null 2>&1; then :; \
          elif command -v npm >/dev/null 2>&1; then npm install -g @google/gemini-cli; \
          else echo 'Skipping Gemini CLI: it needs npm (Node.js)' >&2; fi";
-    OpenCode => "opencode", "OpenCode",
+    OpenCode => "opencode", "OpenCode", // i18n: data
+        // i18n: data
         "echo '==> Installing OpenCode'\n\
          if ! command -v opencode >/dev/null 2>&1; then \
          installer=$(curl -fsSL https://opencode.ai/install); \

@@ -370,7 +370,10 @@ fn connected_image_paste_busy_guard_releases_after_completion(cx: &mut gpui::Tes
             assert!(view.paste_terminal_clipboard(clipboard_image(&[byte]), false, cx));
             assert!(view.paste_terminal_clipboard(clipboard_image(&[99]), false, cx));
             assert_eq!(
-                view.local_error.as_deref(),
+                view.local_error
+                    .as_deref()
+                    .map(crate::i18n::leak_tests::unmarked)
+                    .as_deref(),
                 Some(
                     format!(
                         "Image not sent: {}",

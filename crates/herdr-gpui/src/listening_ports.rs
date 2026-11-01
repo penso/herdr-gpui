@@ -6,6 +6,7 @@
 //! for a remote one, and a distribution's own through `wsl.exe` for WSL. The UI thread only starts and stops workers and takes
 //! their answers on later ticks, so a slow `lsof` or an unreachable host never
 //! blocks rendering or delays another host.
+// i18n: migrated
 
 mod error;
 mod render;
@@ -232,16 +233,10 @@ impl Reading {
             }
             Err(error) => {
                 // The display boundary: the cause says what went wrong.
-                let mut text = error.to_string();
-                let mut source = std::error::Error::source(&error);
-                while let Some(cause) = source {
-                    text.push(' ');
-                    text.push_str(&cause.to_string());
-                    source = cause.source();
-                }
+                let text = crate::i18n::errors::with_causes(&error);
                 // Nothing shown changes; the reason is logged once, not every retry.
                 if self.error.as_deref() != Some(text.as_str()) {
-                    tracing::warn!(category = "listening-ports", error = %text, "could not scan listening ports");
+                    tracing::warn!(category = "listening-ports", error = ?error, "could not scan listening ports");
                     self.error = Some(text);
                 }
                 false

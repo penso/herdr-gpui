@@ -131,7 +131,7 @@ fn read_remote(
 ) -> crate::Result<Option<Vec<u8>>> {
     let path = format!("{}/{PATH}", checkout.trim_end_matches('/'));
     let body = format!(
-        "p={}\nif [ -f \"$p\" ]; then printf 'present\\n'; cat -- \"$p\"; fi\n",
+        "p={}\nif [ -f \"$p\" ]; then printf 'present\\n'; cat -- \"$p\"; fi\n", // i18n: data
         shell_quote(&path)
     );
     let mut output = Vec::new();

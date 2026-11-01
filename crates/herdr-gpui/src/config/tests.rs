@@ -21,6 +21,7 @@ mod default_fonts;
 mod device_footer;
 mod device_icons;
 mod device_theme;
+mod diagnostic_text;
 mod discovery;
 mod edit;
 mod favorite_themes;
@@ -65,6 +66,12 @@ mod update_channel;
 mod usage_inline;
 mod worktrees;
 mod zen;
+
+/// The diagnostic as English reads it, without the isolation marks Fluent
+/// puts around each placeable.
+fn plain(diagnostic: Option<String>) -> Option<String> {
+    diagnostic.map(|text| text.replace(['\u{2068}', '\u{2069}'], ""))
+}
 
 struct TempDirectory(PathBuf);
 

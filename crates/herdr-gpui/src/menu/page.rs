@@ -1,5 +1,6 @@
 //! What a menu popup is currently showing, and the workspace actions a row
 //! can trigger. Closed sets, so a page is never a string tag.
+// i18n: migrated
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Page {

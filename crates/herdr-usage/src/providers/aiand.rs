@@ -11,6 +11,7 @@ use crate::{
         model::{Account, Balance, Provider, Report, Unit},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
+        text::Text,
     },
 };
 use serde::Deserialize;
@@ -28,8 +29,7 @@ static META: Meta = Meta::new("aiand", "ai&")
     .settings(&[Setting::new(
         "api_key",
         &["AIAND_API_KEY"],
-        "An ai& API key (starts with sk-), created at https://console.aiand.com under \
-         Settings > API Keys > Create. Keys are shown only once.",
+        "usage-aiand-setting-api-key",
     )]);
 
 impl Service for Aiand {
@@ -105,9 +105,9 @@ impl Tally {
     pub(crate) fn report(self) -> Report {
         let balance = self.currency.map(|currency| {
             let label = if self.complete {
-                "Spend, last 30 days"
+                Text::message("usage-aiand-spend")
             } else {
-                "Spend, last 30 days (partial)"
+                Text::message("usage-aiand-spend-partial")
             };
             Balance::new(
                 label,
@@ -209,7 +209,7 @@ mod tests {
         assert!(report.windows.is_empty());
         assert_eq!(report.balances.len(), 1);
         let balance = &report.balances[0];
-        assert_eq!(balance.label, "Spend, last 30 days");
+        assert_eq!(balance.label, Text::message("usage-aiand-spend"));
         assert_eq!(balance.unit, Unit::Currency("USD".into()));
         assert!((balance.amount - 1.3625).abs() < 1e-9);
     }
@@ -220,7 +220,7 @@ mod tests {
         tally.add(FIRST).unwrap();
         assert_eq!(
             tally.report().balances[0].label,
-            "Spend, last 30 days (partial)"
+            Text::message("usage-aiand-spend-partial")
         );
     }
 

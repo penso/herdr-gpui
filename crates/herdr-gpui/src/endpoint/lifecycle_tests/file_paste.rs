@@ -141,7 +141,10 @@ fn unpastable_file_paths_report_like_a_drop_and_paste_nothing(cx: &mut gpui::Tes
         wait_image_finished(&view, cx);
         view.update(cx, |view, cx| {
             assert_eq!(
-                view.local_error.as_deref(),
+                view.local_error
+                    .as_deref()
+                    .map(crate::i18n::leak_tests::unmarked)
+                    .as_deref(),
                 Some(
                     format!(
                         "Files not pasted: {}",
@@ -205,7 +208,10 @@ fn a_remote_pane_that_turns_unready_never_gets_local_paths(cx: &mut gpui::TestAp
         wait_image_finished(&view, cx);
         view.update(cx, |view, cx| {
             assert_eq!(
-                view.local_error.as_deref(),
+                view.local_error
+                    .as_deref()
+                    .map(crate::i18n::leak_tests::unmarked)
+                    .as_deref(),
                 Some(format!("Files not pasted: {}", crate::Error::ConnectionNotReady).as_str()),
                 "{} files",
                 copied.len()

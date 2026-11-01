@@ -48,20 +48,9 @@ static META: Meta = Meta::new("qwencloud", "Qwen Cloud")
         Setting::new(
             "cookie",
             &["QWEN_CLOUD_COOKIE"],
-            "Your Qwen Cloud console session. Sign in at \
-             https://home.qwencloud.com/billing/subscription/token-plan-individual, open \
-             Developer Tools > Application > Cookies > https://home.qwencloud.com, and copy \
-             the login ticket (login_qwencloud_ticket or login_aliyunid_ticket) together with \
-             login_aliyunid_csrf and cna. Paste them as \"name=value; name2=value2\", or copy \
-             the whole Cookie header of the data/api.json request from the Network tab.",
+            "usage-qwencloud-setting-cookie",
         ),
-        Setting::new(
-            "sec_token",
-            &[],
-            "Optional. The console's sec_token, when it cannot be read from \
-             /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
-             the data/api.json request on the Token Plan page.",
-        ),
+        Setting::new("sec_token", &[], "usage-qwencloud-setting-sec-token"),
     ]);
 
 impl Service for Qwencloud {
@@ -154,6 +143,7 @@ pub(crate) fn parse(
 mod tests {
     use super::*;
     use crate::model::{Kind, Section};
+    use crate::text::Text;
     use std::time::{Duration, SystemTime};
 
     fn at(seconds: u64) -> SystemTime {
@@ -176,7 +166,10 @@ mod tests {
             ),
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Standard"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Standard")
+        );
         assert_eq!(report.windows.len(), 2);
         assert_eq!(report.windows[0].kind, Kind::Session);
         assert!((report.windows[0].used - 3.).abs() < 1e-4);
@@ -186,7 +179,8 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected credit facts");
         };
-        assert_eq!(facts[1], ("Weekly".into(), "500 / 50,000 credits".into()));
+        // The facts' words are alibabatokenplan's, and tested there.
+        assert_eq!(facts.len(), 2);
     }
 
     #[test]
@@ -197,7 +191,10 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Token Plan"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Token Plan")
+        );
         assert_eq!(report.windows[0].kind, Kind::Monthly);
         assert!((report.windows[0].used - 40.).abs() < 1e-4);
         assert!(report.sections.is_empty());

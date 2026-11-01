@@ -1,5 +1,6 @@
 //! Muting the notifications of the workspace or tab a menu targets, on the
 //! selected endpoint. The mutes live in [`crate::notification_mutes`].
+// i18n: migrated
 
 use crate::{
     HerdrWindow,

@@ -7,6 +7,7 @@
 //! a visible, focused tab (see `launch`), never in the background. A device
 //! that finishes setting up queues its script app-wide (see `pending`), since
 //! the window that connects to it may not be the one that created it.
+// i18n: migrated
 
 mod agents;
 #[cfg(feature = "cloud")]
@@ -51,7 +52,7 @@ pub(crate) fn compose(
         .map(|agent| agent.script())
         .collect();
     if !parts.is_empty() {
-        parts.push("echo '==> Agents installed; open a new tab to pick up PATH changes'");
+        parts.push("echo '==> Agents installed; open a new tab to pick up PATH changes'"); // i18n: data
     }
     parts.extend(custom.map(str::trim).filter(|custom| !custom.is_empty()));
     if parts.is_empty() {

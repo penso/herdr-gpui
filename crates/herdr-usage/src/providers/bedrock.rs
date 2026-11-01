@@ -12,6 +12,7 @@
 //! SigV4) from pasted access keys, the CloudWatch Claude token and request
 //! totals, and the daily cost history.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -34,26 +35,16 @@ static META: Meta = Meta::new("bedrock", "AWS Bedrock")
     .dashboard("https://console.aws.amazon.com/bedrock")
     .status_page("https://health.aws.amazon.com/health/status")
     .settings(&[
-        Setting::new(
-            "profile",
-            &[],
-            "The AWS CLI profile to read Cost Explorer with, from ~/.aws/config on the \
-             selected host (run `aws sso login --profile <name>` first for SSO). Use \
-             \"default\" for the default credentials. The identity needs \
-             ce:GetCostAndUsage. AWS bills every Cost Explorer request, so this provider \
-             runs only once profile or budget is set here.",
-        ),
+        Setting::new("profile", &[], "usage-bedrock-setting-profile"),
         Setting::new(
             "budget",
             &["CODEXBAR_BEDROCK_BUDGET"],
-            "Optional monthly Bedrock budget in US dollars, e.g. 250, shown as a monthly \
-             limit. It does not cap AWS charges.",
+            "usage-bedrock-setting-budget",
         ),
         Setting::new(
             "aws_cli",
             &["AWS_CLI_PATH"],
-            "Optional path to the AWS CLI v2 on the selected host when `aws` is not on \
-             its PATH, e.g. /opt/homebrew/bin/aws.",
+            "usage-bedrock-setting-aws-cli",
         ),
     ]);
 
@@ -152,16 +143,25 @@ pub(crate) fn parse(body: &str, budget: Option<f64>, today: NaiveDate) -> Result
         .map(|budget| Window::new(Kind::Monthly, spend / budget * 100., resets_at, Some(MONTH)))
         .into_iter()
         .collect();
-    let mut balance = Balance::new("Month to date", spend, Unit::Currency("USD".into()));
+    let mut balance = Balance::new(
+        Text::message("usage-bedrock-month-to-date"),
+        spend,
+        Unit::Currency("USD".into()),
+    );
     if let Some(budget) = budget {
         balance = balance.out_of(budget);
     }
     services.sort_by(|a, b| b.1.total_cmp(&a.1));
     let breakdown = (!services.is_empty()).then(|| Section::Facts {
-        title: "Spend by service".into(),
+        title: Text::message("usage-bedrock-spend-by-service"),
         facts: services
             .into_iter()
-            .map(|(service, amount)| (service, format!("${amount:.2}")))
+            .map(|(service, amount)| {
+                (
+                    Text::service(service),
+                    Text::service(format!("${amount:.2}")),
+                )
+            })
             .collect(),
     });
     Ok(Report::new(Provider(&Bedrock), Account::default(), windows)
@@ -272,7 +272,10 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Claude Opus (Bedrock Edition)".into(), "$30.00".into())
+            (
+                Text::service("Claude Opus (Bedrock Edition)"),
+                Text::service("$30.00")
+            )
         );
         assert_eq!(facts.len(), 2);
     }

@@ -178,7 +178,7 @@ pub(crate) fn parse_enrolled(output: &[u8]) -> Result<Enrolled, Error> {
     let enrolled: Enrolled = serde_json::from_slice(output).map_err(Error::Answer)?;
     if !enrolled.valid() {
         return Err(Error::Answer(serde::de::Error::custom(
-            "an answer out of bounds",
+            "an answer out of bounds", // i18n: data
         )));
     }
     Ok(enrolled)

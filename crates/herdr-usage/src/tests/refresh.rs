@@ -41,24 +41,18 @@ fn a_failed_refresh_keeps_the_last_numbers_and_says_why() {
     );
     usage.apply(Message::Done(local.clone(), Ok(())), now);
     let entry = usage.current().unwrap();
-    assert_eq!(
-        entry.readings,
-        [
-            Reading {
-                provider: codex,
-                report: None,
-                error: Some(Error::Rejected.to_string()),
-                access: None,
-            },
-            Reading {
-                provider: claude,
-                report: Some(report(claude, 20.)),
-                error: Some(Error::RateLimited.to_string()),
-                access: None,
-            },
-        ],
-        "registry order, whatever order answers came in"
-    );
+    // Registry order, whatever order answers came in.
+    let [rejected, limited] = &entry.readings[..] else {
+        panic!("{:?}", entry.readings);
+    };
+    assert_eq!(rejected.provider, codex);
+    assert_eq!(rejected.report, None);
+    assert!(matches!(rejected.error.as_deref(), Some(Error::Rejected)));
+    assert_eq!(rejected.access, None);
+    assert_eq!(limited.provider, claude);
+    assert_eq!(limited.report, Some(report(claude, 20.)));
+    assert!(matches!(limited.error.as_deref(), Some(Error::RateLimited)));
+    assert_eq!(limited.access, None);
     assert_eq!(entry.due, Some(now + super::super::RATE_LIMITED));
 
     begin(&mut usage, &local, now);

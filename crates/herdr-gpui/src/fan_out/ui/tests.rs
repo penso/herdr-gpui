@@ -108,7 +108,10 @@ fn a_restored_lane_is_scripted_only_once_its_daemon_shows_its_workspace(
     cx.update(|_, cx| {
         let view = view.read(cx);
         let fan_out = view.fan_out.as_ref().unwrap();
-        assert_eq!(fan_out.error.as_deref(), Some(super::LANE_NOT_FOUND));
+        assert_eq!(
+            fan_out.error.as_deref(),
+            Some(crate::i18n::fl!("fan-out-lane-not-found").as_str())
+        );
         assert_eq!(fan_out.interrupted(), 1, "nothing was sent");
     });
     cx.update(|_, cx| {
@@ -126,3 +129,5 @@ fn a_restored_lane_is_scripted_only_once_its_daemon_shows_its_workspace(
         })
     });
 }
+
+mod en_xa;

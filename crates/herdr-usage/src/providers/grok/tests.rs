@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use super::*;
+use crate::text::Text;
 
 fn at(text: &str) -> SystemTime {
     Timestamp::Text(text.into()).time().unwrap()
@@ -22,8 +23,8 @@ fn parses_weekly_credits() {
       }
     }"#;
     let account = Account {
-        email: Some("user@example.com".into()),
-        plan: login_plan("oidc"),
+        email: Some(Text::service("user@example.com")),
+        plan: login_plan("oidc").map(Text::service),
     };
     let report = parse(
         body,
@@ -40,8 +41,14 @@ fn parses_weekly_credits() {
         report.windows[0].resets_at,
         Some(at("2026-08-13T00:00:00Z"))
     );
-    assert_eq!(report.account.plan.as_deref(), Some("SuperGrok Heavy"));
-    assert_eq!(report.account.email.as_deref(), Some("user@example.com"));
+    assert_eq!(
+        report.account.plan.as_ref().map(Text::as_str),
+        Some("SuperGrok Heavy")
+    );
+    assert_eq!(
+        report.account.email.as_ref().map(Text::as_str),
+        Some("user@example.com")
+    );
 }
 
 #[test]
@@ -70,7 +77,10 @@ fn future_start_leaves_length_unknown() {
         "currentPeriod":{"start":"2026-08-14T00:00:00Z","end":"2026-08-21T00:00:00Z"}}}"#;
     let report = parse(body, None, Account::default(), at("2026-08-12T00:00:00Z")).unwrap();
     assert_eq!(report.windows[0].length, None);
-    assert_eq!(report.windows[0].kind, Kind::Named("Credits".into()));
+    assert_eq!(
+        report.windows[0].kind,
+        Kind::Named(Text::message("usage-grok-credits"))
+    );
 }
 
 #[test]

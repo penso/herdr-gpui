@@ -1,4 +1,6 @@
+// i18n: migrated
 use super::*;
+use crate::i18n::fl;
 use crate::{config::corners, fonts::StyledFont};
 
 /// Prefer just below the selection, flip above it at the bottom edge, and
@@ -125,7 +127,12 @@ impl HerdrWindow {
                         .size(px(16.))
                         .text_color(rgb(theme.subtext())),
                 )
-                .child(div().min_w_0().truncate().child("Annotate")),
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .child(fl!("window-annotate-offer")),
+                ),
         };
         Some(
             div()
@@ -146,13 +153,13 @@ impl HerdrWindow {
         let theme = &self.theme;
         let queued = self.terminal_notes.queued.len();
         let hint = if queued > 0 {
-            format!("{queued} queued · Enter to send")
+            fl!("window-annotate-hint-queued", count = queued)
         } else if composer.target.is_none() {
-            "Copies to clipboard".into()
+            fl!("window-annotate-hint-copies")
         } else {
-            "Enter to send".into()
+            fl!("window-annotate-hint-send")
         };
-        let button = |id: &'static str, label: &'static str, primary: bool| {
+        let button = |id: &'static str, label: String, primary: bool| {
             div()
                 .id(id)
                 .debug_selector(move || id.into())
@@ -214,7 +221,7 @@ impl HerdrWindow {
                                     .min_w_0()
                                     .truncate()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Note to agent"),
+                                    .child(fl!("window-annotate-title")),
                             )
                             .child(
                                 div()
@@ -266,16 +273,18 @@ impl HerdrWindow {
                                     .text_color(rgb(theme.subtext()))
                                     .child(hint),
                             )
-                            .child(button("terminal-note-queue", "Queue", false).on_click(
-                                cx.listener(|this, _, window, cx| {
-                                    this.add_terminal_note(false, window, cx)
-                                }),
-                            ))
-                            .child(button("terminal-note-send", "Send", true).on_click(
-                                cx.listener(|this, _, window, cx| {
-                                    this.add_terminal_note(true, window, cx)
-                                }),
-                            )),
+                            .child(
+                                button("terminal-note-queue", fl!("window-annotate-queue"), false)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.add_terminal_note(false, window, cx)
+                                    })),
+                            )
+                            .child(
+                                button("terminal-note-send", fl!("window-annotate-send"), true)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.add_terminal_note(true, window, cx)
+                                    })),
+                            ),
                     ),
             )
     }

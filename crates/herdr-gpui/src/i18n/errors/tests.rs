@@ -9,6 +9,7 @@ mod automations;
 mod backdrop;
 mod caffeine;
 mod chat;
+mod chat_protocol;
 mod client;
 mod clipboard;
 #[cfg(feature = "cloud")]
@@ -23,12 +24,14 @@ mod devices;
 mod dispatch;
 mod editor;
 mod enroll;
+mod fan_out;
 mod file_drop;
 mod github;
 mod host_build;
 mod keymap;
 #[cfg(windows)]
 mod launch_at_login;
+mod link;
 mod listening_ports;
 mod mods;
 mod nearby;
@@ -46,6 +49,7 @@ mod remote;
 mod remote_control;
 mod review;
 mod root;
+mod security;
 #[cfg(unix)]
 mod setup_relay;
 mod sound;

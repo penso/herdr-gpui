@@ -1,11 +1,15 @@
 //! The `en-XA` leak test for plan usage: the status bar's segments, the
 //! panel a segment opens (with a report and claude-swap's other accounts,
-//! OpenAI's daily spend, waiting on the Keychain, and asking to be set up),
-//! and the activity bar's Usage section.
+//! OpenAI's daily spend under a failed refresh, waiting on the Keychain,
+//! and asking to be set up, with the provider's error), and the activity
+//! bar's Usage section.
 use super::*;
 use crate::{
     config::status_bar::Detail,
-    i18n::leak_tests::{assert_translated, uncut, under_en_xa},
+    i18n::{
+        Localize,
+        leak_tests::{assert_translated, uncut, under_en_xa},
+    },
     sidebar::{
         ActivityPanel,
         layout_tests::{fixture_window, full_draw},
@@ -14,10 +18,14 @@ use crate::{
 };
 use gpui::{VisualTestContext, point, px, size};
 use herdr_usage::{
+    Text,
     details::{ClaudeAccount, ClaudeAccountStatus, OpenaiDaily},
-    model::{Balance, Unit},
+    model::{Balance, Count, Section, Unit},
 };
-use std::time::{Duration, SystemTime};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 /// Draws the whole window again: a view's own notify does not redraw a
 /// headless root.
@@ -38,18 +46,31 @@ fn fresh(seen: &mut Vec<String>, drawn: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+/// `drawn` without data cut short to fit, such as a long provider name in a
+/// narrow tab, whose whole GPUI may never shape.
+fn uncut_data(drawn: Vec<String>, data: &[String]) -> Vec<String> {
+    drawn
+        .into_iter()
+        .filter(|line| {
+            line.strip_suffix('…')
+                .is_none_or(|stem| !data.iter().any(|data| data.starts_with(stem)))
+        })
+        .collect()
+}
+
 const HOUR: Duration = Duration::from_secs(3600);
 
 /// A report with every kind of line the panel draws: a session window on
-/// pace, a weekly one ahead of it, a window the service names, and a
-/// balance with a total.
+/// pace, a weekly one ahead of it, a window the service names, a balance
+/// with a total, one a provider names counted in credits, and facts and
+/// shares a provider names (Wayfinder's), with the route names it reports.
 fn full(provider: Provider) -> Report {
     let now = SystemTime::now();
     let mut report = Report::new(
         provider,
         Account {
-            email: Some("someone@example.com".into()),
-            plan: Some("Pro".into()),
+            email: Some(Text::service("someone@example.com")),
+            plan: Some(Text::service("Pro")),
         },
         vec![
             Window::new(Kind::Session, 40., Some(now + 3 * HOUR), Some(5 * HOUR)),
@@ -59,20 +80,53 @@ fn full(provider: Provider) -> Report {
                 Some(now + 24 * 3 * HOUR),
                 Some(24 * 7 * HOUR),
             ),
-            Window::new(Kind::Named("Opus".into()), 10., None, None),
+            Window::new(Kind::Named(Text::service("Opus")), 10., None, None),
         ],
     );
-    report
-        .balances
-        .push(Balance::new("Credits", 12.3, Unit::Currency("USD".into())).out_of(50.));
-    report
+    report.balances.push(
+        Balance::new(Text::service("Credits"), 12.3, Unit::Currency("USD".into())).out_of(50.),
+    );
+    // A balance a provider names, counted in credits.
+    report.balances.push(Balance::new(
+        Text::message("usage-wayfinder-saved"),
+        1_250.,
+        Unit::Count(Count::Credits),
+    ));
+    report.with_sections([
+        Section::Facts {
+            title: Text::message("usage-report-usage"),
+            facts: vec![
+                (
+                    Text::message("usage-wayfinder-gateway"),
+                    Text::message("usage-wayfinder-gateway-state")
+                        .arg("status", "ok")
+                        .arg("models", 2)
+                        .arg("mode", "offline"),
+                ),
+                (
+                    Text::message("usage-wayfinder-decision"),
+                    Text::message("usage-wayfinder-milliseconds").arg("time", "0.2"),
+                ),
+            ],
+        },
+        Section::Shares {
+            title: Text::message("usage-wayfinder-requests-by-route"),
+            shares: vec![(Text::service("local"), 71.), (Text::service("cloud"), 29.)],
+        },
+    ])
 }
 
+/// The providers that read with a report or an access prompt.
+const REPORTING: [&str; 4] = ["claude", "openai", "codex", "copilot"];
+
 /// A provider that reads a setting, so its panel shows how to set it up
-/// while it has no report.
+/// while it has no report. None of the others: the panel opens the first
+/// reading of a provider, which would then be another one's.
 fn configurable() -> Provider {
     registry::all()
-        .find(|provider| !provider.service().meta().settings.is_empty())
+        .find(|provider| {
+            !provider.service().meta().settings.is_empty() && !REPORTING.contains(&provider.id())
+        })
         .unwrap()
 }
 
@@ -95,8 +149,7 @@ fn others() -> Vec<ClaudeAccount> {
 }
 
 fn readings() -> Vec<Reading> {
-    let claude = provider("claude");
-    let openai = provider("openai");
+    let [claude, openai, codex, copilot] = REPORTING.map(provider);
     let daily = OpenaiDaily {
         days: vec![("Oct 28".into(), 1.5), ("Oct 29".into(), 3.25)],
     };
@@ -110,17 +163,18 @@ fn readings() -> Vec<Reading> {
         Reading {
             provider: openai,
             report: Some(full(openai).with_detail(daily)),
-            error: None,
+            // A failed refresh over an older report.
+            error: Some(Arc::new(herdr_usage::Error::Status(503))),
             access: None,
         },
         Reading {
-            provider: provider("codex"),
+            provider: codex,
             report: None,
             error: None,
             access: Some(Access::Needed),
         },
         Reading {
-            provider: provider("copilot"),
+            provider: copilot,
             report: None,
             error: None,
             access: Some(Access::Denied),
@@ -128,15 +182,15 @@ fn readings() -> Vec<Reading> {
         Reading {
             provider: configurable(),
             report: None,
-            error: None,
+            error: Some(Arc::new(herdr_usage::Error::NotSignedIn)),
             access: None,
         },
     ]
 }
 
 /// What the services report and the user named: services, accounts, the
-/// host, the named window, the balance's label, and each setting's key and
-/// help, which `herdr-usage` writes.
+/// host, the named window, the balance's label, and each setting's key,
+/// which `herdr-usage` writes.
 fn data(readings: &[Reading], host: &str) -> Vec<String> {
     let mut data: Vec<String> = vec![
         host.into(),
@@ -149,13 +203,14 @@ fn data(readings: &[Reading], host: &str) -> Vec<String> {
         "three@example.com".into(),
         "Oct 28".into(),
         "Oct 29".into(),
+        "local".into(),
+        "cloud".into(),
     ];
     for reading in readings {
         let meta = reading.provider.service().meta();
         data.push(meta.name.into());
         data.push(reading.provider.name().into());
         for setting in meta.settings {
-            data.push(setting.help.into());
             data.push(format!("[usage.providers.{}] {}", meta.id, setting.name));
         }
     }
@@ -209,9 +264,21 @@ fn usage_shows_only_messages_and_what_services_report() {
                 })
             });
             draw(cx);
+            let drawn = recorder.take();
+            if provider == configurable() {
+                // Its own reading: no sign-in, and how to set one up.
+                let missing = herdr_usage::Error::NotSignedIn.localize();
+                assert!(
+                    drawn.iter().any(|text| text.contains(&missing)),
+                    "{drawn:?}"
+                );
+                let meta = provider.service().meta();
+                let key = format!("[usage.providers.{}] {}", meta.id, meta.settings[0].name);
+                assert!(drawn.iter().any(|text| text.contains(&key)), "{drawn:?}");
+            }
             assert_translated(
                 &format!("usage panel for {}", provider.id()),
-                &fresh(&mut seen, recorder.take()),
+                &uncut_data(fresh(&mut seen, drawn), &data),
                 &data,
             );
         }

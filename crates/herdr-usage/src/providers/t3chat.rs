@@ -9,6 +9,7 @@
 //! Vercel security challenge that a bare Cookie header can trigger; here
 //! only the Cookie header is sent.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -30,14 +31,7 @@ pub(crate) struct T3chat;
 
 static META: Meta = Meta::new("t3chat", "T3 Chat")
     .dashboard("https://t3.chat/settings/customization")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Your t3.chat browser session. Sign in at https://t3.chat, open Developer Tools → \
-         Application → Cookies → https://t3.chat, and copy every cookie there (the session \
-         cookies change names between releases), pasted as one header: \
-         \"name=value; name2=value2\". It is sent only to t3.chat.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-t3chat-setting-cookie")]);
 
 impl Service for T3chat {
     fn meta(&self) -> &'static Meta {
@@ -118,7 +112,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     );
     let (start, end) = (period("currentPeriodStart")?, period("currentPeriodEnd")?);
     let overage = Window::new(
-        Kind::Named("Overage".into()),
+        Kind::Named(Text::message("usage-t3chat-overage")),
         number("usageMonthPercentage")?
             .or(number("usagePeriodPercentage")?)
             .unwrap_or(0.),
@@ -140,18 +134,25 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Some(subscription) => text(subscription, "status")?,
         None => None,
     };
-    let facts: Vec<(String, String)> = [("Usage band", band), ("Subscription", status)]
-        .into_iter()
-        .filter_map(|(label, value)| Some((label.to_owned(), value?)))
-        .collect();
+    // The band and status are T3 Chat's own words, such as standard or active.
+    let facts: Vec<(Text, Text)> = [
+        (Text::message("usage-t3chat-usage-band"), band),
+        (Text::message("usage-t3chat-subscription"), status),
+    ]
+    .into_iter()
+    .filter_map(|(label, value)| Some((label, Text::service(value?))))
+    .collect();
 
     Ok(Report::new(
         Provider(&T3chat),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
         vec![base, overage],
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Plan".into(),
+        title: Text::message("usage-t3chat-plan"),
         facts,
     })))
 }
@@ -215,7 +216,10 @@ mod tests {
     #[test]
     fn reads_base_and_overage_windows() {
         let report = parse(FIXTURE).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro Monthly"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Pro Monthly")
+        );
         assert_eq!(report.windows.len(), 2);
         let base = &report.windows[0];
         assert_eq!(base.kind, Kind::Session);
@@ -226,7 +230,10 @@ mod tests {
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000))
         );
         let overage = &report.windows[1];
-        assert_eq!(overage.kind, Kind::Named("Overage".into()));
+        assert_eq!(
+            overage.kind,
+            Kind::Named(Text::message("usage-t3chat-overage"))
+        );
         assert_eq!(overage.percent(), 12);
         assert_eq!(
             overage.resets_at,
@@ -236,10 +243,16 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Plan".into(),
+                title: Text::message("usage-t3chat-plan"),
                 facts: vec![
-                    ("Usage band".into(), "standard".into()),
-                    ("Subscription".into(), "active".into()),
+                    (
+                        Text::message("usage-t3chat-usage-band"),
+                        Text::service("standard")
+                    ),
+                    (
+                        Text::message("usage-t3chat-subscription"),
+                        Text::service("active")
+                    ),
                 ],
             }]
         );
@@ -253,7 +266,7 @@ mod tests {
             r#""usagePeriodPercentage":40,"usageWindowNextResetAt":1790000000}"#
         );
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Free"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Free"));
         assert_eq!(report.windows[0].percent(), 0);
         assert!(report.windows[0].resets_at.is_some());
         assert_eq!(report.windows[1].percent(), 40);

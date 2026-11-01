@@ -18,6 +18,7 @@ use super::{
 };
 use crate::{
     dispatch::{Candidate, Picker},
+    i18n::{Localize, fl},
     teleport::{AgentKind, FreshOrigin, Host, HostRepositories, Place},
 };
 use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
@@ -87,24 +88,22 @@ pub(super) enum LaneState {
 }
 
 impl LaneState {
-    pub(super) fn label(&self) -> &str {
+    pub(super) fn label(&self) -> String {
         match self {
-            Self::Waiting => "Waiting",
-            Self::SettingUp => "Setting up the host",
-            Self::CreatingWorktree => "Creating worktree",
-            Self::StartingAgent => "Starting agent",
-            Self::Prompting => "Sending prompt",
-            Self::Running => "Prompted",
-            Self::Failed(error) => error,
+            Self::Waiting => fl!("fan-out-lane-waiting"),
+            Self::SettingUp => fl!("fan-out-lane-setting-up"),
+            Self::CreatingWorktree => fl!("fan-out-lane-creating-worktree"),
+            Self::StartingAgent => fl!("fan-out-lane-starting-agent"),
+            Self::Prompting => fl!("fan-out-lane-prompting"),
+            Self::Running => fl!("fan-out-lane-prompted"),
+            Self::Failed(error) => error.clone(),
             Self::Interrupted(step) => match step {
-                Checkpoint::Planned => "Never started",
-                Checkpoint::CreatingWorktree => {
-                    "Interrupted creating its worktree; the branch may exist"
-                }
-                Checkpoint::Created => "Interrupted before its agent started",
-                Checkpoint::StartingAgent => "Interrupted starting its agent; it may be running",
+                Checkpoint::Planned => fl!("fan-out-lane-never-started"),
+                Checkpoint::CreatingWorktree => fl!("fan-out-lane-interrupted-creating"),
+                Checkpoint::Created => fl!("fan-out-lane-interrupted-created"),
+                Checkpoint::StartingAgent => fl!("fan-out-lane-interrupted-starting"),
                 Checkpoint::Prompting | Checkpoint::Prompted => {
-                    "Interrupted sending the prompt; it may not have arrived"
+                    fl!("fan-out-lane-interrupted-prompting")
                 }
             },
         }
@@ -392,10 +391,10 @@ impl FanOut {
         }
         if !missing.is_empty() {
             let names: Vec<_> = missing.iter().map(|(kind, _)| kind.name()).collect();
-            self.error = Some(format!(
-                "Not installed on {}: {}",
-                self.origin.endpoint_label,
-                names.join(", ")
+            self.error = Some(fl!(
+                "fan-out-not-installed",
+                host = self.origin.endpoint_label.as_str(),
+                agents = names.join(", ")
             ));
         }
     }
@@ -415,16 +414,16 @@ impl FanOut {
     }
 
     /// Why the launch cannot start yet, if it cannot.
-    pub(super) fn not_ready(&self, prompt: &str) -> Option<&'static str> {
+    pub(super) fn not_ready(&self, prompt: &str) -> Option<String> {
         match &self.stage {
             Stage::Compose(Some(Ok(_))) => {}
-            _ => return Some("Waiting for the agent list"),
+            _ => return Some(fl!("fan-out-not-ready-agents")),
         }
         if prompt.trim().is_empty() {
-            return Some("Write a prompt");
+            return Some(fl!("fan-out-not-ready-prompt"));
         }
         if self.picks.total() == 0 {
-            return Some("Pick at least one agent");
+            return Some(fl!("fan-out-not-ready-pick"));
         }
         None
     }
@@ -447,7 +446,7 @@ impl FanOut {
                 continue;
             }
             let Some(found) = destination(&endpoint) else {
-                self.error = Some(format!("{endpoint} cannot be reached by script"));
+                self.error = Some(fl!("fan-out-unscriptable", host = endpoint));
                 return false;
             };
             hosts.push(Some(found));
@@ -472,7 +471,7 @@ impl FanOut {
             .begin(Record::new(seed, &self.origin, &self.prompt, &lanes))
             .unwrap_or_else(|error| {
                 tracing::warn!(%error, "fan-out not journaled");
-                self.error = Some(error.to_string());
+                self.error = Some(error.localize());
                 None
             });
         let request = Request {
@@ -595,7 +594,7 @@ impl FanOut {
                     if let Stage::Compose(installed) = &mut self.stage {
                         *installed = Some(result.map_err(|error| {
                             tracing::warn!(%error, "fan-out agent lookup");
-                            error.to_string()
+                            error.localize()
                         }));
                     }
                     self.pick_wanted();
@@ -617,14 +616,14 @@ impl FanOut {
                         Progress::Running => LaneState::Running,
                         Progress::Failed(error) => {
                             tracing::warn!(%error, branch = %lane.lane.branch, "fan-out lane");
-                            LaneState::Failed(error.to_string())
+                            LaneState::Failed(error.localize())
                         }
                     };
                 }
                 Event::Launched => {
                     for lane in &mut self.lanes {
                         if !lane.state.settled() {
-                            lane.state = LaneState::Failed("Stopped".to_owned());
+                            lane.state = LaneState::Failed(fl!("fan-out-lane-stopped"));
                         }
                     }
                     // Lanes that all failed before creating anything leave
@@ -651,7 +650,7 @@ impl FanOut {
                             Err(Error::Cancelled) => {}
                             Err(error) => {
                                 tracing::warn!(%error, "fan-out change read");
-                                let text = error.to_string();
+                                let text = error.localize();
                                 for index in lanes {
                                     if let Some(lane) = self.lanes.get_mut(index) {
                                         lane.unread = Some(text.clone());
@@ -672,7 +671,7 @@ impl FanOut {
                             Ok(()) => removed.push(index),
                             Err(error) => {
                                 tracing::warn!(%error, "fan-out removal");
-                                failures.push(error.to_string());
+                                failures.push(error.localize());
                             }
                         }
                     }
@@ -694,10 +693,10 @@ impl FanOut {
                         index += 1;
                         keep
                     });
-                    self.error = Some(format!(
-                        "{} worktree(s) could not be removed: {}",
-                        failures.len(),
-                        failures[0]
+                    self.error = Some(fl!(
+                        "fan-out-not-removed",
+                        count = failures.len(),
+                        error = failures[0].clone()
                     ));
                     self.stage = Stage::Confirm(kept);
                     self.next_refresh = None;
@@ -708,29 +707,29 @@ impl FanOut {
     }
 }
 
-fn status_text(status: AgentStatus) -> &'static str {
+fn status_text(status: AgentStatus) -> String {
     match status {
-        AgentStatus::Idle => "Idle",
-        AgentStatus::Working => "Working",
-        AgentStatus::Blocked => "Needs input",
-        AgentStatus::Done => "Done",
-        AgentStatus::Unknown => "Unknown",
+        AgentStatus::Idle => fl!("fan-out-agent-idle"),
+        AgentStatus::Working => fl!("fan-out-agent-working"),
+        AgentStatus::Blocked => fl!("fan-out-agent-blocked"),
+        AgentStatus::Done => fl!("fan-out-agent-done"),
+        AgentStatus::Unknown => fl!("fan-out-agent-unknown"),
     }
 }
 
 /// What a compared lane's agent is doing, from the daemon's own snapshot.
-pub(super) fn agent_status(
-    snapshot: Option<&ClientShellSnapshot>,
-    workspace_id: &str,
-) -> &'static str {
+pub(super) fn agent_status(snapshot: Option<&ClientShellSnapshot>, workspace_id: &str) -> String {
     let Some(snapshot) = snapshot else {
-        return "Host offline";
+        return fl!("fan-out-agent-offline");
     };
     snapshot
         .workspaces
         .iter()
         .find(|workspace| workspace.workspace_id == workspace_id)
-        .map_or("Closed", |workspace| status_text(workspace.agent_status))
+        .map_or_else(
+            || fl!("fan-out-agent-closed"),
+            |workspace| status_text(workspace.agent_status),
+        )
 }
 
 /// Branch names are seeded from the clock, as new worktree names are.

@@ -5,6 +5,7 @@
 //! `/user/spend/report` when the deployment hides the info routes. Everything
 //! CodexBar reads is ported; no master key is used.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -26,15 +27,12 @@ static META: Meta = Meta::new("litellm", "LiteLLM").settings(&[
     Setting::new(
         "api_key",
         &["LITELLM_API_KEY"],
-        "A LiteLLM virtual key (sk-…) issued by your LiteLLM proxy, e.g. from its admin \
-             UI under Virtual Keys. A master key is not needed.",
+        "usage-litellm-setting-api-key",
     ),
     Setting::new(
         "base_url",
         &["LITELLM_BASE_URL"],
-        "The LiteLLM proxy's URL, with or without /v1, e.g. \
-             https://litellm.example.com. It must be HTTPS unless it is on localhost, a \
-             private network, or a .local host.",
+        "usage-litellm-setting-base-url",
     ),
 ]);
 
@@ -75,9 +73,12 @@ fn fetch(probe: &mut Probe, key: &Secret) -> Result<Report> {
         let query = format!("?start_date={start}&end_date={end}");
         let response = probe.http(get("key/spend/report", &query))?;
         let (scope, body) = if matches!(response.status, 401 | 403 | 404) {
-            ("User", probe.body(get("user/spend/report", &query))?)
+            (
+                Reporter::User,
+                probe.body(get("user/spend/report", &query))?,
+            )
         } else {
-            ("Key", response.ok()?)
+            (Reporter::Key, response.ok()?)
         };
         return parse_spend(&body, scope, &start, &end);
     }
@@ -153,7 +154,7 @@ pub(crate) fn parse_user(body: &str, key: &KeyInfo) -> Result<Report> {
     let email = nonempty(user.user_email.clone())
         .or_else(|| nonempty(user.user_alias.clone()))
         .or_else(|| nonempty(preferred));
-    let personal = user.budget.budget("Personal");
+    let personal = user.budget.budget(Scope::Personal);
     if root.teams.iter().any(|team| team.team_id.is_none()) {
         return Err(invalid());
     }
@@ -162,7 +163,7 @@ pub(crate) fn parse_user(body: &str, key: &KeyInfo) -> Result<Report> {
             .iter()
             .find(|team| team.team_id.as_deref() == Some(id))
     });
-    let team_budget = team.map(|team| team.budget.budget(&team_title(team.team_alias.as_deref())));
+    let team_budget = team.map(|team| team.budget.budget(Scope::team(team.team_alias.as_deref())));
     Ok(report(
         email,
         team.and_then(|team| nonempty(team.team_alias.clone())),
@@ -179,7 +180,7 @@ pub(crate) fn parse_team(body: &str, key: &KeyInfo) -> Result<Report> {
     if id.is_some_and(|id| Some(id.as_str()) != key.team_id.as_deref()) {
         return Err(invalid());
     }
-    let budget = team.budget.budget(&team_title(team.team_alias.as_deref()));
+    let budget = team.budget.budget(Scope::team(team.team_alias.as_deref()));
     Ok(report(
         None,
         nonempty(team.team_alias),
@@ -189,11 +190,49 @@ pub(crate) fn parse_team(body: &str, key: &KeyInfo) -> Result<Report> {
     ))
 }
 
-fn team_title(alias: Option<&str>) -> String {
-    match alias.map(str::trim).filter(|alias| !alias.is_empty()) {
-        Some(alias) => format!("Team {alias}"),
-        None => "Team".into(),
+/// Whose budget a figure is: the key's user, or its team, by alias when it
+/// has one.
+enum Scope {
+    Personal,
+    Team(Option<String>),
+}
+
+impl Scope {
+    fn team(alias: Option<&str>) -> Self {
+        Self::Team(
+            alias
+                .map(str::trim)
+                .filter(|alias| !alias.is_empty())
+                .map(str::to_owned),
+        )
     }
+
+    fn budget(&self) -> Text {
+        match self {
+            Self::Personal => Text::message("usage-litellm-personal-budget"),
+            Self::Team(None) => Text::message("usage-litellm-team-budget"),
+            Self::Team(Some(alias)) => {
+                Text::message("usage-litellm-team-named-budget").arg("team", alias.as_str())
+            }
+        }
+    }
+
+    fn spend(&self) -> Text {
+        match self {
+            Self::Personal => Text::message("usage-litellm-personal-spend"),
+            Self::Team(None) => Text::message("usage-litellm-team-spend"),
+            Self::Team(Some(alias)) => {
+                Text::message("usage-litellm-team-named-spend").arg("team", alias.as_str())
+            }
+        }
+    }
+}
+
+/// Whose self-scoped spend report answered: the key's, or its user's.
+#[derive(Clone, Copy)]
+pub(crate) enum Reporter {
+    Key,
+    User,
 }
 
 fn report(
@@ -213,12 +252,12 @@ fn report(
         .or(team_budget.as_ref())
         .filter(|spend| spend.used > 0. || spend.limit > 0.)
         .map(|spend| {
-            let label = if spend.limit > 0. { "budget" } else { "spend" };
-            let balance = Balance::new(
-                format!("{} {label}", spend.scope),
-                spend.used,
-                Unit::Currency("USD".into()),
-            );
+            let label = if spend.limit > 0. {
+                spend.scope.budget()
+            } else {
+                spend.scope.spend()
+            };
+            let balance = Balance::new(label, spend.used, Unit::Currency("USD".into()));
             if spend.limit > 0. {
                 balance.out_of(spend.limit)
             } else {
@@ -227,21 +266,21 @@ fn report(
         });
     let mut facts = Vec::new();
     if let Some(team) = &team {
-        facts.push(("Team".to_owned(), team.clone()));
+        facts.push((Text::message("usage-litellm-team"), Text::service(team)));
     }
     if let Some(expires) = &key.expires {
         facts.push((
-            "Key expires".to_owned(),
-            expires.chars().take(10).collect::<String>(),
+            Text::message("usage-litellm-key-expires"),
+            Text::service(expires.chars().take(10).collect::<String>()),
         ));
     }
     let key_facts = (!facts.is_empty()).then(|| Section::Facts {
-        title: "Key".into(),
+        title: Text::message("usage-litellm-key"),
         facts,
     });
     let account = Account {
-        email,
-        plan: Some("API key".into()),
+        email: email.map(Text::service),
+        plan: Some(Text::message("usage-litellm-api-key")),
     };
     Report::new(Provider(&Litellm), account, windows)
         .with_balances(balance)
@@ -249,7 +288,7 @@ fn report(
 }
 
 /// Sums a spend report's rows once each: model subtotals are not added again.
-pub(crate) fn parse_spend(body: &str, scope: &str, start: &str, end: &str) -> Result<Report> {
+pub(crate) fn parse_spend(body: &str, scope: Reporter, start: &str, end: &str) -> Result<Report> {
     let rows: Vec<SpendRow> = json(body)?;
     if rows.is_empty() {
         return Err(invalid());
@@ -260,14 +299,19 @@ pub(crate) fn parse_spend(body: &str, scope: &str, start: &str, end: &str) -> Re
             .map(|cost| total + cost)
             .ok_or_else(invalid)
     })?;
-    let balance = Balance::new(
-        format!("{scope} spend only"),
-        used,
-        Unit::Currency("USD".into()),
-    );
+    let label = match scope {
+        Reporter::Key => Text::message("usage-litellm-key-spend-only"),
+        Reporter::User => Text::message("usage-litellm-user-spend-only"),
+    };
+    let balance = Balance::new(label, used, Unit::Currency("USD".into()));
     let period = Section::Facts {
-        title: "Spend report".into(),
-        facts: vec![("Period".into(), format!("{start} – {end} UTC"))],
+        title: Text::message("usage-litellm-spend-report"),
+        facts: vec![(
+            Text::message("usage-litellm-period"),
+            Text::message("usage-litellm-period-range")
+                .arg("start", start)
+                .arg("end", end),
+        )],
     };
     Ok(
         Report::new(Provider(&Litellm), Account::default(), Vec::new())
@@ -277,7 +321,7 @@ pub(crate) fn parse_spend(body: &str, scope: &str, start: &str, end: &str) -> Re
 }
 
 struct Spend {
-    scope: String,
+    scope: Scope,
     used: f64,
     limit: f64,
     resets_at: Option<Timestamp>,
@@ -288,7 +332,7 @@ impl Spend {
     fn window(&self) -> Option<Window> {
         (self.limit > 0.).then(|| {
             Window::new(
-                Kind::Named(format!("{} budget", self.scope)),
+                Kind::Named(self.scope.budget()),
                 self.used / self.limit * 100.,
                 self.resets_at.as_ref().and_then(Timestamp::time),
                 self.length,
@@ -368,9 +412,9 @@ struct Budget {
 }
 
 impl Budget {
-    fn budget(&self, scope: &str) -> Spend {
+    fn budget(&self, scope: Scope) -> Spend {
         Spend {
-            scope: scope.to_owned(),
+            scope,
             used: self.spend.filter(|spend| spend.is_finite()).unwrap_or(0.),
             limit: self
                 .max_budget
@@ -429,25 +473,46 @@ mod tests {
         .unwrap();
         let report = parse_user(USER, &key).unwrap();
         assert_eq!(
-            report.account.email.as_deref(),
+            report.account.email.as_ref().map(Text::as_str),
             Some("litellm-user@example.com")
         );
         assert_eq!(report.windows.len(), 2);
         let personal = &report.windows[0];
-        assert_eq!(personal.kind, Kind::Named("Personal budget".into()));
+        assert_eq!(
+            personal.kind,
+            Kind::Named(Text::message("usage-litellm-personal-budget"))
+        );
         assert_eq!(personal.percent(), 71);
         let team = &report.windows[1];
-        assert_eq!(team.kind, Kind::Named("Team ai budget".into()));
+        assert_eq!(
+            team.kind,
+            Kind::Named(Text::message("usage-litellm-team-named-budget").arg("team", "ai"))
+        );
         assert_eq!(team.percent(), 22);
         assert_eq!(team.length, Some(WEEK));
         assert!(team.resets_at.is_some());
-        assert_eq!(report.balances[0].label, "Personal budget");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-litellm-personal-budget")
+        );
         assert_eq!(report.balances[0].total, Some(300.));
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected key facts");
         };
-        assert_eq!(facts[0], ("Team".into(), "ai".into()));
-        assert_eq!(facts[1], ("Key expires".into(), "2026-09-11".into()));
+        assert_eq!(
+            facts,
+            &[
+                (Text::message("usage-litellm-team"), Text::service("ai")),
+                (
+                    Text::message("usage-litellm-key-expires"),
+                    Text::service("2026-09-11")
+                ),
+            ]
+        );
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-litellm-api-key"))
+        );
     }
 
     #[test]
@@ -459,7 +524,10 @@ mod tests {
         let report = parse_team(body, &key).unwrap();
         assert_eq!(report.windows[0].percent(), 25);
         assert_eq!(report.windows[0].length, Some(MONTH));
-        assert_eq!(report.balances[0].label, "Team ai budget");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-litellm-team-named-budget").arg("team", "ai")
+        );
     }
 
     #[test]
@@ -477,7 +545,10 @@ mod tests {
         let body = r#"{"user_info":{"user_id":"user-123","max_budget":null,"spend":12.5}}"#;
         let report = parse_user(body, &key).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Personal spend");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-litellm-personal-spend")
+        );
         assert_eq!(report.balances[0].amount, 12.5);
     }
 
@@ -488,10 +559,25 @@ mod tests {
              "models":[{"model":"gpt-4o","total_cost":1.25}]},
             {"group_by_day":"2026-09-02","total_cost":0.75}
         ]"#;
-        let report = parse_spend(body, "Key", "2026-09-01", "2026-09-02").unwrap();
+        let report = parse_spend(body, Reporter::Key, "2026-09-01", "2026-09-02").unwrap();
         assert_eq!(report.balances[0].amount, 2.);
-        assert_eq!(report.balances[0].label, "Key spend only");
-        assert!(parse_spend("[]", "Key", "a", "b").is_err());
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-litellm-key-spend-only")
+        );
+        assert_eq!(
+            report.sections,
+            vec![Section::Facts {
+                title: Text::message("usage-litellm-spend-report"),
+                facts: vec![(
+                    Text::message("usage-litellm-period"),
+                    Text::message("usage-litellm-period-range")
+                        .arg("start", "2026-09-01")
+                        .arg("end", "2026-09-02")
+                )],
+            }]
+        );
+        assert!(parse_spend("[]", Reporter::Key, "a", "b").is_err());
     }
 
     #[test]

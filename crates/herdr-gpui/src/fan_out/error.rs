@@ -14,12 +14,12 @@ pub(crate) enum Step {
 impl Step {
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Detect => "finding installed agents",
-            Self::CreateWorktree => "creating the worktree",
-            Self::StartAgent => "starting the agent",
-            Self::Prompt => "sending the prompt",
-            Self::Compare => "reading the changes",
-            Self::Remove => "removing the worktree",
+            Self::Detect => "finding installed agents", // i18n: data
+            Self::CreateWorktree => "creating the worktree", // i18n: data
+            Self::StartAgent => "starting the agent",   // i18n: data
+            Self::Prompt => "sending the prompt",       // i18n: data
+            Self::Compare => "reading the changes",     // i18n: data
+            Self::Remove => "removing the worktree",    // i18n: data
         }
     }
 }
