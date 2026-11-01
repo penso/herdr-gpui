@@ -62,9 +62,7 @@ impl Localize for control::Error {
             Self::Daemon { message, .. } => {
                 fl!("error-remote-control-daemon", message = message.as_str())
             }
-            // The chat protocol's framing errors have no mapping of their
-            // own yet, so their English `Display` shows.
-            Self::Frame(error) => error.to_string(),
+            Self::Frame(error) => error.localize(),
             Self::NoAnswer => fl!("error-remote-control-no-answer"),
             // keep-sorted end
         }

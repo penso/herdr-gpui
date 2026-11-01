@@ -26,8 +26,10 @@ mod unsupported;
 use unsupported::brew;
 #[cfg(not(any(unix, windows)))]
 use unsupported::install;
+/// The Windows installer's checks; only its [`windows::Error`] is public,
+/// so the app can name each failure in the shown language.
 #[cfg(windows)]
-mod windows;
+pub mod windows;
 #[cfg(windows)]
 use windows as install;
 

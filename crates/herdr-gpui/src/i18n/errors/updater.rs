@@ -186,10 +186,32 @@ impl Localize for Error {
             Self::RelaunchFailed(status) => {
                 fl!("error-updater-relaunch-failed", status = status.to_string())
             }
-            // The Windows installer's enum is private to the updater, so its
-            // English `Display` shows until the crate exports it.
             #[cfg(windows)]
-            Self::Windows(error) => error.to_string(),
+            Self::Windows(error) => error.localize(),
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Localize for herdr_updater::windows::Error {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::InstallerPath => fl!("error-updater-windows-installer-path"),
+            Self::Launch(_) => fl!("error-updater-windows-launch"),
+            Self::LocalAppData => fl!("error-updater-windows-local-app-data"),
+            Self::Location => fl!("error-updater-windows-location"),
+            Self::MissingPublisher => fl!("error-updater-windows-missing-publisher"),
+            Self::MissingSigner => fl!("error-updater-windows-missing-signer"),
+            // The subject as the signature names it, quoted as `Display` does.
+            Self::Signer { found } => {
+                fl!("error-updater-windows-signer", found = format!("{found:?}"))
+            }
+            Self::Untrusted(code) => fl!(
+                "error-updater-windows-untrusted",
+                code = format!("0x{code:08x}")
+            ),
+            // keep-sorted end
         }
     }
 }

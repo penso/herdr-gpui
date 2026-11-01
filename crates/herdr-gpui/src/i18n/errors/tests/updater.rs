@@ -197,3 +197,21 @@ fn every_variant_with_fields_has_a_message() {
         Error::CommitBarrier(std::sync::mpsc::RecvTimeoutError::Timeout),
     ]);
 }
+
+#[cfg(windows)]
+#[test]
+fn every_windows_installer_variant_has_a_message() {
+    use herdr_updater::windows::Error;
+    assert_localized(&[
+        Error::InstallerPath,
+        Error::Launch(io()),
+        Error::LocalAppData,
+        Error::Location,
+        Error::MissingPublisher,
+        Error::MissingSigner,
+        Error::Signer {
+            found: "CN=Someone Else".into(),
+        },
+        Error::Untrusted(-2_146_762_496),
+    ]);
+}

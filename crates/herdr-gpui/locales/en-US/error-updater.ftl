@@ -143,3 +143,15 @@ error-updater-commit-barrier = Update commit barrier timed out or disconnected
 error-updater-not-committed = Update was not committed
 error-updater-installation-changed = Installation changed during update
 error-updater-missing-installer-metadata = This release has no signed Windows installer metadata. Download it from GitHub, or check for a newer release
+
+# Windows only: why the update installer could not be checked or started.
+error-updater-windows-location = In-app updates replace the copy installed in %LOCALAPPDATA%\Programs\Herdr UI, and this one runs from elsewhere. Download the new release from GitHub instead
+error-updater-windows-local-app-data = %LOCALAPPDATA% is not set, so the installed copy cannot be found
+error-updater-windows-missing-publisher = This build names no Windows publisher to check update installers against. Download the new release from GitHub instead
+error-updater-windows-installer-path = The update installer's path cannot be passed to Windows
+# $code is Windows' error code in hexadecimal, such as 0x800b0100.
+error-updater-windows-untrusted = Windows does not trust the update installer's signature ({ $code })
+error-updater-windows-missing-signer = Windows verified the update installer but named no signer
+# $found is the name on the installer's signature, in quotes.
+error-updater-windows-signer = The update installer is signed by { $found }, not by Herdr UI's publisher
+error-updater-windows-launch = Could not start the update installer
