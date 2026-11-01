@@ -16,6 +16,7 @@ pub(super) fn fetch_script(path: &str, item: &Item) -> crate::Result<String> {
     // OpenSSH defaults when neither the environment nor Git config names one.
     // The remote command has no TTY; disable graphical SSH prompts as well.
     Ok(format!(
+        // i18n: data
         r#"set -eu
 export GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never SSH_ASKPASS_REQUIRE=never
 directory={}
@@ -46,10 +47,9 @@ pub(super) fn run(
     let (ok, _) = crate::pull_request::run(&mut command, deadline, cancelled)?;
     if !ok {
         return Err(herdr_vcs::Error::from(crate::git::Error::Failed {
-            operation: "prepare the remote pull request or issue checkout",
-            details:
-                "The SSH command failed. Check the host's repository access and Git credentials."
-                    .into(),
+            operation: "prepare the remote pull request or issue checkout", // i18n: data
+            // Stands where Git's output would: the host's own output is not read.
+            details: crate::i18n::fl!("repo-items-remote-failed"),
         })
         .into());
     }

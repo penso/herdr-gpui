@@ -11,6 +11,7 @@ pub(super) const TIMEOUT: Duration = Duration::from_secs(20);
 /// disabled for these children, so it gets its own, longer budget.
 pub(super) const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
 
+// i18n: data
 const QUERY: &str = r#"query($owner: String!, $repo: String!, $count: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequests(first: $count, states: OPEN, orderBy: {field: UPDATED_AT, direction: DESC}) {
@@ -97,7 +98,7 @@ pub(super) fn fetch_branch(
         return Ok(());
     }
     Err(herdr_vcs::Error::from(crate::git::Error::Failed {
-        operation: "fetch the pull request branch",
+        operation: "fetch the pull request branch", // i18n: data
         details: crate::pull_request::clean(output.trim()),
     })
     .into())

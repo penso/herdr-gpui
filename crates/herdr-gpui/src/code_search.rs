@@ -5,6 +5,7 @@
 //! once on a known checkout. Choosing a row opens it in the terminal editor
 //! beside the focused pane (see `editor`), or with the secondary modifier in
 //! a code viewer tab.
+// i18n: migrated
 
 mod rank;
 mod render;
@@ -15,6 +16,7 @@ use crate::{
     HerdrWindow,
     code_index::{self, Index},
     editor::EditorTarget,
+    i18n::{Localize, fl},
     menu::Page,
     search_input::{Changed, SearchInput},
 };
@@ -134,7 +136,7 @@ impl HerdrWindow {
             this.rank_code_search(cx);
         });
         search.update(cx, |input, cx| {
-            input.set_placeholder(placeholder(mode), cx);
+            input.set_placeholder_with(move || placeholder(mode), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
         });
@@ -161,7 +163,7 @@ impl HerdrWindow {
         };
         match cwd.filter(|_| !self.selected_is_remote()) {
             Some(cwd) => self.locate_checkout(&code, cwd, cx),
-            None => code.status = Status::Failed(code_index::Error::Root.to_string()),
+            None => code.status = Status::Failed(code_index::Error::Root.localize()),
         }
         self.menu.code_search = Some(code);
         cx.notify();
@@ -256,7 +258,7 @@ impl HerdrWindow {
         if let Some(code) = &mut self.menu.code_search
             && code.latest.is_none()
         {
-            code.status = Status::Failed(error.to_string());
+            code.status = Status::Failed(error.localize());
         }
         cx.notify();
     }
@@ -333,7 +335,7 @@ impl HerdrWindow {
         code.hits.clear();
         let search = code.search.clone();
         search.update(cx, |input, cx| {
-            input.set_placeholder(placeholder(mode), cx);
+            input.set_placeholder_with(move || placeholder(mode), cx);
             window.focus(&input.focus, cx);
         });
         self.rank_code_search(cx);
@@ -412,10 +414,10 @@ impl HerdrWindow {
     }
 }
 
-fn placeholder(mode: Mode) -> &'static str {
+fn placeholder(mode: Mode) -> String {
     match mode {
-        Mode::Symbols => "Go to a function, type, or module...",
-        Mode::Files => "Go to a file, or file:line...",
+        Mode::Symbols => fl!("code-search-placeholder-symbols"),
+        Mode::Files => fl!("code-search-placeholder-files"),
     }
 }
 
