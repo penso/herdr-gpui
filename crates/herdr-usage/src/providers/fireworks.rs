@@ -171,22 +171,25 @@ pub(crate) fn parse(body: &str, slug: &str) -> Result<Report> {
         }
     }
     let account = Section::Facts {
-        title: "Account".into(),
-        facts: vec![("Slug".into(), Text::from(slug.to_owned()))],
+        title: Text::message("usage-fireworks-account"),
+        facts: vec![(Text::message("usage-fireworks-slug"), Text::service(slug))],
     };
     let report = Report::new(Provider(&Fireworks), Account::default(), Vec::new());
     Ok(match currency {
         Some(code) => report
             .with_balances([Balance::new(
-                "Spend, last 30 days",
+                Text::message("usage-fireworks-spend"),
                 total,
                 Unit::Currency(code),
             )])
             .with_sections([account]),
         None => report.with_sections([
             Section::Facts {
-                title: "Spend, last 30 days".into(),
-                facts: vec![("Rated spend".into(), "None".into())],
+                title: Text::message("usage-fireworks-spend"),
+                facts: vec![(
+                    Text::message("usage-fireworks-rated-spend"),
+                    Text::message("usage-fireworks-none"),
+                )],
             },
             account,
         ]),
@@ -270,8 +273,8 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Account".into(),
-                facts: vec![("Slug".into(), "acme".into())],
+                title: Text::message("usage-fireworks-account"),
+                facts: vec![(Text::message("usage-fireworks-slug"), Text::service("acme"))],
             }]
         );
     }

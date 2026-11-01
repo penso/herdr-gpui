@@ -3,7 +3,7 @@
 //! DeepInfra's documented billing endpoints. DeepInfra is API-only, so there
 //! is no agent sign-in to find; everything CodexBar reads is ported.
 
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -74,32 +74,43 @@ pub(crate) fn parse(checklist: &str, usage: &str) -> Result<Report> {
     };
     let usd = || Unit::Currency("USD".into());
     let mut balances = vec![if balance > 0. {
-        Balance::new("Owed", balance, usd())
+        Balance::new(Text::message("usage-deepinfra-owed"), balance, usd())
     } else {
-        Balance::new("Available", 0. - balance, usd())
+        Balance::new(
+            Text::message("usage-deepinfra-available"),
+            0. - balance,
+            usd(),
+        )
     }];
     balances.push(match checklist.limit.filter(|limit| *limit > 0.) {
-        Some(limit) => Balance::new("Billing cycle spend", recent, usd()).out_of(limit),
-        None => Balance::new("Spent this month", month_cost, usd()),
+        Some(limit) => {
+            Balance::new(Text::message("usage-deepinfra-cycle-spend"), recent, usd()).out_of(limit)
+        }
+        None => Balance::new(
+            Text::message("usage-deepinfra-month-spend"),
+            month_cost,
+            usd(),
+        ),
     });
     let mut facts = Vec::new();
     if checklist.limit.is_some_and(|limit| limit > 0.) {
         facts.push((
-            "Spent this month".to_owned(),
-            Balance::new("", month_cost, usd()).amount_text(),
+            Text::message("usage-deepinfra-month-spend"),
+            Text::service(Balance::new(Text::service(""), month_cost, usd()).amount_text()),
         ));
     }
     if checklist.suspended.unwrap_or(false) {
+        // DeepInfra's own reason, when it gives one.
         let reason = checklist
             .suspend_reason
             .map(|reason| reason.trim().to_owned())
             .filter(|reason| !reason.is_empty())
-            .unwrap_or_else(|| "Suspended".into());
-        facts.push(("Suspended".into(), reason));
+            .map_or_else(|| Text::message("usage-deepinfra-suspended"), Text::service);
+        facts.push((Text::message("usage-deepinfra-suspended"), reason));
     }
     let sections = (!facts.is_empty()).then(|| Section::Facts {
-        title: "Account".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-deepinfra-account"),
+        facts,
     });
     Ok(
         Report::new(Provider(&Deepinfra), Account::default(), Vec::new())
@@ -131,7 +142,6 @@ struct Month {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
 
     const USAGE: &str = r#"{"initial_month": "2026-01", "months": [
         {"period": "2026-08", "total_cost": 1234},
@@ -144,9 +154,15 @@ mod tests {
             r#"{"stripe_balance": -20.5, "recent": 0.5, "limit": null, "suspended": false}"#;
         let report = parse(checklist, USAGE).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Available");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-deepinfra-available")
+        );
         assert!((report.balances[0].amount - 20.).abs() < 1e-9);
-        assert_eq!(report.balances[1].label, "Spent this month");
+        assert_eq!(
+            report.balances[1].label,
+            Text::message("usage-deepinfra-month-spend")
+        );
         assert!((report.balances[1].amount - 4.5).abs() < 1e-9);
         assert!(report.sections.is_empty());
     }
@@ -156,22 +172,36 @@ mod tests {
         let checklist = r#"{"stripe_balance": 3, "recent": 12, "limit": 50,
             "suspended": true, "suspend_reason": " unpaid invoice "}"#;
         let report = parse(checklist, USAGE).unwrap();
-        assert_eq!(report.balances[0].label, "Owed");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-deepinfra-owed")
+        );
         assert!((report.balances[0].amount - 15.).abs() < 1e-9);
         assert_eq!(
             report.balances[1],
-            Balance::new("Billing cycle spend", 12., Unit::Currency("USD".into())).out_of(50.)
+            Balance::new(
+                Text::message("usage-deepinfra-cycle-spend"),
+                12.,
+                Unit::Currency("USD".into())
+            )
+            .out_of(50.)
         );
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected account facts");
         };
         assert_eq!(
             facts[0],
-            pair(("Spent this month".to_owned(), "$4.50".to_owned()))
+            (
+                Text::message("usage-deepinfra-month-spend"),
+                Text::service("$4.50")
+            )
         );
         assert_eq!(
             facts[1],
-            pair(("Suspended".to_owned(), "unpaid invoice".to_owned()))
+            (
+                Text::message("usage-deepinfra-suspended"),
+                Text::service("unpaid invoice")
+            )
         );
     }
 

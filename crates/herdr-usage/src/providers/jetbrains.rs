@@ -8,7 +8,7 @@
 //! taking the most recently written quota file, or set with `ide_path`.
 
 use crate::model::Count;
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -149,10 +149,14 @@ pub(crate) fn parse(xml: &str, ide: Option<Ide>) -> Result<Report> {
 
     let mut facts = Vec::new();
     if let Some(ide) = &ide {
-        facts.push(("IDE".to_owned(), format!("{} {}", ide.name, ide.version)));
+        facts.push((
+            Text::message("usage-jetbrains-ide"),
+            Text::service(format!("{} {}", ide.name, ide.version)),
+        ));
     }
+    // The IDE's own word for the quota, such as Available.
     if let Some(kind) = quota.kind.filter(|kind| !kind.trim().is_empty()) {
-        facts.push(("Quota".to_owned(), kind));
+        facts.push((Text::message("usage-jetbrains-quota"), Text::service(kind)));
     }
     let amount = refill.as_ref().and_then(|refill| {
         refill
@@ -160,24 +164,30 @@ pub(crate) fn parse(xml: &str, ide: Option<Ide>) -> Result<Report> {
             .or(refill.tariff.as_ref().and_then(|tariff| tariff.amount))
     });
     if let Some(amount) = amount {
-        let every = period.map_or_else(String::new, |period| {
-            format!(" every {} days", (period.as_secs() / 86_400).max(1))
-        });
-        facts.push((
-            "Refill".to_owned(),
-            format!("{} credits{every}", group(amount.round() as i64)),
-        ));
+        let credits = group(amount.round() as i64);
+        let refill = match period {
+            Some(period) => Text::message("usage-jetbrains-refill-every")
+                .arg("amount", credits)
+                .arg("count", amount.round())
+                .arg("days", (period.as_secs() / 86_400).max(1)),
+            None => Text::message("usage-jetbrains-refill-amount")
+                .arg("amount", credits)
+                .arg("count", amount.round()),
+        };
+        facts.push((Text::message("usage-jetbrains-refill"), refill));
     }
 
     Ok(
         Report::new(Provider(&Jetbrains), Account::default(), vec![window])
-            .with_balances([
-                Balance::new("Credits left", available, Unit::Count(Count::Credits))
-                    .out_of(maximum),
-            ])
+            .with_balances([Balance::new(
+                Text::message("usage-jetbrains-credits-left"),
+                available,
+                Unit::Count(Count::Credits),
+            )
+            .out_of(maximum)])
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "AI Assistant".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-jetbrains-ai-assistant"),
+                facts,
             })),
     )
 }
@@ -371,18 +381,34 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Credits left", 992_521.7, Unit::Count(Count::Credits))
-                    .out_of(1_000_000.)
+                Balance::new(
+                    Text::message("usage-jetbrains-credits-left"),
+                    992_521.7,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(1_000_000.)
             ]
         );
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "AI Assistant".into(),
+                title: Text::message("usage-jetbrains-ai-assistant"),
                 facts: vec![
-                    ("IDE".into(), "IntelliJ IDEA 2025.3".into()),
-                    ("Quota".into(), "Available".into()),
-                    ("Refill".into(), "1,000,000 credits every 30 days".into()),
+                    (
+                        Text::message("usage-jetbrains-ide"),
+                        Text::service("IntelliJ IDEA 2025.3")
+                    ),
+                    (
+                        Text::message("usage-jetbrains-quota"),
+                        Text::service("Available")
+                    ),
+                    (
+                        Text::message("usage-jetbrains-refill"),
+                        Text::message("usage-jetbrains-refill-every")
+                            .arg("amount", "1,000,000")
+                            .arg("count", 1_000_000)
+                            .arg("days", 30)
+                    ),
                 ],
             }]
         );

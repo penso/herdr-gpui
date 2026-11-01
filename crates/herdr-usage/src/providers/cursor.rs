@@ -15,7 +15,7 @@
 //! usage-events cost history; and sending every cursor.com cookie when none
 //! has a known session name.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -147,19 +147,23 @@ pub(crate) fn parse(
     let mut windows = vec![Window::new(Kind::Monthly, headline, end, cycle)];
     if quota.is_none() {
         windows.extend(
-            [("Auto + Composer", auto), ("API", api)]
-                .into_iter()
-                .filter_map(|(name, used)| {
-                    Some(Window::new(Kind::Named(name.into()), used?, end, cycle))
-                }),
+            [
+                (Text::message("usage-cursor-auto"), auto),
+                (Text::message("usage-cursor-api"), api),
+            ]
+            .into_iter()
+            .filter_map(|(name, used)| Some(Window::new(Kind::Named(name), used?, end, cycle))),
         );
     }
 
     let mut sections = Vec::new();
     if let Some((used, limit)) = quota {
         sections.push(Section::Facts {
-            title: "Usage".into(),
-            facts: vec![("Request quota".into(), format!("{used} / {limit}").into())],
+            title: Text::message("usage-report-usage"),
+            facts: vec![(
+                Text::message("usage-cursor-request-quota"),
+                Text::service(format!("{used} / {limit}")),
+            )],
         });
     } else if let Some(grok) = sand
         .and_then(|body| json::<Sand>(body).ok())
@@ -177,15 +181,12 @@ pub(crate) fn parse(
     .find(|(used, limit)| used.is_some_and(|v| v > 0.) || limit.is_some_and(|v| v > 0.));
     if let Some((used, limit)) = included {
         sections.push(Section::Facts {
-            title: "Included usage".into(),
+            title: Text::message("usage-cursor-included"),
             facts: vec![(
-                "This cycle".into(),
-                format!(
-                    "${:.2} of ${:.2}",
-                    cents(used).unwrap_or(0.),
-                    cents(limit).unwrap_or(0.)
-                )
-                .into(),
+                Text::message("usage-cursor-this-cycle"),
+                Text::message("usage-cursor-of")
+                    .arg("used", format!("${:.2}", cents(used).unwrap_or(0.)))
+                    .arg("limit", format!("${:.2}", cents(limit).unwrap_or(0.))),
             )],
         });
     }
@@ -194,32 +195,48 @@ pub(crate) fn parse(
     let team_on_demand = team.on_demand.unwrap_or_default();
     let personal_used = cents(on_demand.used).unwrap_or(0.);
     // A personal cap wins; a team with no member cap shares one budget.
-    let (used, limit, label) = match (cents(on_demand.limit), cents(team_on_demand.limit)) {
-        (Some(limit), _) if limit > 0. => (personal_used, Some(limit), "On-demand"),
+    // `team` or `personal`, the budget the messages name.
+    let (used, limit, budget) = match (cents(on_demand.limit), cents(team_on_demand.limit)) {
+        (Some(limit), _) if limit > 0. => (personal_used, Some(limit), "personal"),
         (_, Some(limit)) if limit > 0. => (
             cents(team_on_demand.used).unwrap_or(0.),
             Some(limit),
-            "Team on-demand",
+            "team",
         ),
-        _ => (personal_used, None, "On-demand"),
+        _ => (personal_used, None, "personal"),
     };
+    let team = budget == "team";
     let usd = || Unit::Currency("USD".into());
     let balance = match limit {
-        Some(limit) => {
-            Some(Balance::new(format!("{label} left"), (limit - used).max(0.), usd()).out_of(limit))
-        }
-        None if used > 0. => Some(Balance::new(format!("{label} spend"), used, usd())),
+        Some(limit) => Some(
+            Balance::new(
+                Text::message("usage-cursor-budget-left").arg("budget", budget),
+                (limit - used).max(0.),
+                usd(),
+            )
+            .out_of(limit),
+        ),
+        None if used > 0. => Some(Balance::new(
+            Text::message("usage-cursor-budget-spend").arg("budget", budget),
+            used,
+            usd(),
+        )),
         None => None,
     };
-    if limit.is_some() && (used > 0. || label == "Team on-demand") {
-        let mut facts: Vec<(String, String)> =
-            vec![("Spent this cycle".into(), format!("${used:.2}"))];
-        if label == "Team on-demand" && personal_used > 0. {
-            facts.push(("Your share".into(), format!("${personal_used:.2}")));
+    if limit.is_some() && (used > 0. || team) {
+        let mut facts = vec![(
+            Text::message("usage-cursor-spent"),
+            Text::service(format!("${used:.2}")),
+        )];
+        if team && personal_used > 0. {
+            facts.push((
+                Text::message("usage-cursor-your-share"),
+                Text::service(format!("${personal_used:.2}")),
+            ));
         }
         sections.push(Section::Facts {
-            title: label.into(),
-            facts: pairs(facts),
+            title: Text::message("usage-cursor-budget").arg("budget", budget),
+            facts,
         });
     }
 
@@ -227,13 +244,13 @@ pub(crate) fn parse(
         email: (me
             .and_then(|me| me.email)
             .filter(|email| !email.trim().is_empty()))
-        .map(Text::from),
+        .map(Text::service),
         plan: (summary
             .membership_type
             .as_deref()
             .filter(|kind| !kind.trim().is_empty())
             .map(membership))
-        .map(Text::from),
+        .map(Text::service),
     };
     Ok(Report::new(Provider(&Cursor), account, windows)
         .with_balances(balance)
@@ -367,7 +384,7 @@ impl Sand {
             .and_then(|(start, end)| end.duration_since(start).ok())
             .filter(|length| !length.is_zero());
         Some(Window::new(
-            Kind::Named("Grok Bot".into()),
+            Kind::Named(Text::service("Grok Bot")),
             used,
             resets_at,
             length,
@@ -421,20 +438,31 @@ mod tests {
         assert_eq!(monthly.used, 30.);
         assert_eq!(monthly.resets_at, Some(at(1_738_368_000)));
         assert_eq!(monthly.length, Some(Duration::from_secs(31 * 86_400)));
-        assert_eq!(report.windows[1].kind, Kind::Named("API".into()));
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-cursor-api"))
+        );
         assert_eq!(report.windows[1].used, 40.);
         assert_eq!(
             report.windows[2].kind,
-            Kind::Named("Auto + Composer".into())
+            Kind::Named(Text::message("usage-cursor-auto"))
         );
         assert_eq!(report.windows[2].used, 20.);
         let balance = &report.balances[0];
-        assert_eq!(balance.label, "On-demand left");
+        assert_eq!(
+            balance.label,
+            Text::message("usage-cursor-budget-left").arg("budget", "personal")
+        );
         assert_eq!(balance.amount, 95.);
         assert_eq!(balance.total, Some(100.));
         assert!(report.sections.contains(&Section::Facts {
-            title: "Included usage".into(),
-            facts: vec![("This cycle".into(), "$15.00 of $50.00".into())],
+            title: Text::message("usage-cursor-included"),
+            facts: vec![(
+                Text::message("usage-cursor-this-cycle"),
+                Text::message("usage-cursor-of")
+                    .arg("used", "$15.00")
+                    .arg("limit", "$50.00")
+            )],
         }));
     }
 
@@ -451,8 +479,11 @@ mod tests {
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].used, 25.);
         assert!(report.sections.contains(&Section::Facts {
-            title: "Usage".into(),
-            facts: vec![("Request quota".into(), "125 / 500".into())],
+            title: Text::message("usage-report-usage"),
+            facts: vec![(
+                Text::message("usage-cursor-request-quota"),
+                Text::service("125 / 500")
+            )],
         }));
     }
 
@@ -477,19 +508,25 @@ mod tests {
         let report = parse(summary, None, None, Some(sand), at(1_736_500_000)).unwrap();
         assert_eq!(report.windows[0].used, 25.);
         assert_eq!(report.windows[0].length, Some(MONTH));
-        assert_eq!(report.balances[0].label, "Team on-demand left");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-cursor-budget-left").arg("budget", "team")
+        );
         assert_eq!(report.balances[0].amount, 480.);
         let Some(Section::Limit(grok)) = report.sections.first() else {
             panic!("expected Grok Bot limit");
         };
-        assert_eq!(grok.kind, Kind::Named("Grok Bot".into()));
+        assert_eq!(grok.kind, Kind::Named(Text::service("Grok Bot")));
         assert_eq!(grok.used, 42.5);
         assert_eq!(grok.length, Some(Duration::from_secs(7 * 86_400)));
         assert!(report.sections.contains(&Section::Facts {
-            title: "Team on-demand".into(),
+            title: Text::message("usage-cursor-budget").arg("budget", "team"),
             facts: vec![
-                ("Spent this cycle".into(), "$20.00".into()),
-                ("Your share".into(), "$3.00".into()),
+                (Text::message("usage-cursor-spent"), Text::service("$20.00")),
+                (
+                    Text::message("usage-cursor-your-share"),
+                    Text::service("$3.00")
+                ),
             ],
         }));
     }

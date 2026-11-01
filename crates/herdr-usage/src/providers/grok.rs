@@ -11,7 +11,7 @@
 //! paths, so only the Grok CLI's published client id and the legacy
 //! sign-in scope are recognized.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -64,11 +64,11 @@ impl Service for Grok {
                     continue;
                 }
                 let account = Account {
-                    email: probe.text(&auth, &[scope, "email"]).map(Text::from),
+                    email: probe.text(&auth, &[scope, "email"]).map(Text::service),
                     plan: (probe
                         .text(&auth, &[scope, "auth_mode"])
                         .and_then(|mode| login_plan(&mode)))
-                    .map(Text::from),
+                    .map(Text::service),
                 };
                 return Some(fetch(probe, &token, account));
             }
@@ -139,7 +139,7 @@ pub(crate) fn parse(
         .or(credits.subscription_tier.as_deref())
         .and_then(plan_name)
     {
-        account.plan = Some(Text::from(plan));
+        account.plan = Some(Text::service(plan));
     }
     let time = |text: &Option<String>| text.clone().and_then(|text| Timestamp::Text(text).time());
     let period_end = config
@@ -174,7 +174,7 @@ pub(crate) fn parse(
         });
     let balance = config.prepaid_balance.map(|cents| {
         Balance::new(
-            "Prepaid balance",
+            Text::message("usage-grok-prepaid-balance"),
             cents as f64 / 100.,
             Unit::Currency("USD".into()),
         )
@@ -187,17 +187,20 @@ pub(crate) fn parse(
         (None, None) => return Err(invalid()),
     };
     let unknown = windows.is_empty().then(|| {
-        let mut facts: Vec<(String, String)> = vec![("Usage".into(), "Not reported".into())];
+        let mut facts = vec![(
+            Text::message("usage-report-usage"),
+            Text::message("usage-grok-not-reported"),
+        )];
         if let Some(end) = end {
             let end = chrono::DateTime::<chrono::Utc>::from(end);
             facts.push((
-                "Period ends".into(),
-                end.format("%b %-d, %Y %H:%M UTC").to_string(),
+                Text::message("usage-grok-period-ends"),
+                Text::service(end.format("%b %-d, %Y %H:%M UTC").to_string()),
             ));
         }
         Section::Facts {
-            title: "Included credits".into(),
-            facts: pairs(facts),
+            title: Text::message("usage-grok-included-credits"),
+            facts,
         }
     });
     Ok(Report::new(Provider(&Grok), account, windows)
@@ -217,7 +220,7 @@ fn kind(length: Option<Duration>) -> Kind {
         {
             Kind::Monthly
         }
-        _ => Kind::Named("Credits".into()),
+        _ => Kind::Named(Text::message("usage-grok-credits")),
     }
 }
 

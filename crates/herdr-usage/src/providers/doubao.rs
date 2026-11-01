@@ -69,11 +69,13 @@ pub(crate) fn parse(stdout: &str) -> Result<Report> {
     }
     let mut windows = Vec::new();
     for item in answer.items {
+        // The plan `usage-doubao-window` names; the personal Coding Plan's
+        // windows are the standard ones.
         let plan = match item.product.to_ascii_lowercase().as_str() {
             "coding-plan" => None,
-            "agent-plan" => Some("Agent"),
-            "coding-plan-team" => Some("Team"),
-            "agent-plan-team" => Some("Agent team"),
+            "agent-plan" => Some("agent"),
+            "coding-plan-team" => Some("team"),
+            "agent-plan-team" => Some("agent-team"),
             _ => continue,
         };
         if item.subscribed == Some(false) {
@@ -82,12 +84,16 @@ pub(crate) fn parse(stdout: &str) -> Result<Report> {
         // A product that failed to load reports no periods; it must not
         // hide the others, but with nothing else it is an error below.
         for period in item.periods.unwrap_or_default() {
-            let Some((kind, title, length)) = period_kind(&period.label) else {
+            let Some((kind, name, length)) = period_kind(&period.label) else {
                 continue;
             };
             let kind = match plan {
                 None => kind,
-                Some(plan) => Kind::Named(format!("{plan} {title}").into()),
+                Some(plan) => Kind::Named(
+                    Text::message("usage-doubao-window")
+                        .arg("plan", plan)
+                        .arg("period", name),
+                ),
             };
             windows.push(Window::new(
                 kind,
@@ -102,14 +108,15 @@ pub(crate) fn parse(stdout: &str) -> Result<Report> {
     }
     let account = Account {
         email: None,
-        plan: method.map(Text::from),
+        plan: method.map(Text::service),
     };
     Ok(Report::new(Provider(&Doubao), account, windows))
 }
 
+/// The window's kind, the period `usage-doubao-window` names, and its length.
 fn period_kind(label: &str) -> Option<(Kind, &'static str, Duration)> {
     Some(match label.trim().to_ascii_lowercase().as_str() {
-        "session" | "5-hour" | "five_hour" | "5h" => (Kind::Session, "5-hour", SESSION),
+        "session" | "5-hour" | "five_hour" | "5h" => (Kind::Session, "session", SESSION),
         "weekly" | "week" => (Kind::Weekly, "weekly", WEEK),
         "monthly" | "month" => (Kind::Monthly, "monthly", MONTH),
         _ => return None,
@@ -193,10 +200,17 @@ mod tests {
         assert!(session.resets_at.is_some());
         assert!((find(Kind::Weekly).used - 2.71).abs() < 1e-4);
         assert!((find(Kind::Monthly).used - 1.36).abs() < 1e-4);
-        let agent = find(Kind::Named("Agent weekly".into()));
+        let named = |period: &str| {
+            Kind::Named(
+                Text::message("usage-doubao-window")
+                    .arg("plan", "agent")
+                    .arg("period", period),
+            )
+        };
+        let agent = find(named("weekly"));
         assert!((agent.used - 28.7).abs() < 1e-4);
         assert_eq!(agent.length, Some(WEEK));
-        assert_eq!(find(Kind::Named("Agent 5-hour".into())).used, 0.);
+        assert_eq!(find(named("session")).used, 0.);
         assert_eq!(report.windows.len(), 6);
     }
 

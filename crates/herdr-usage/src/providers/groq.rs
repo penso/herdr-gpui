@@ -9,7 +9,7 @@
 //! encode a secret nor read inside a JWT, and the bare cookie value cannot be
 //! cut out of a Cookie header.
 
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -113,30 +113,30 @@ fn report([requests, tokens_in, tokens_out, cache]: [f64; 4]) -> Report {
         } else {
             2
         };
-        format!("{value:.digits$}")
+        Text::service(format!("{value:.digits$}"))
     };
     let mut facts = vec![
-        ("Requests / min".to_owned(), per_minute(requests)),
+        (Text::message("usage-groq-requests"), per_minute(requests)),
         (
-            "Tokens / min".to_owned(),
+            Text::message("usage-groq-tokens"),
             per_minute(tokens_in + tokens_out),
         ),
     ];
     if cache > 0. {
-        facts.push(("Cache hits / min".to_owned(), per_minute(cache)));
+        facts.push((Text::message("usage-groq-cache-hits"), per_minute(cache)));
     }
     Report::new(Provider(&Groq), metrics_account(), Vec::new()).with_sections([Section::Facts {
-        title: "Last 5 minutes".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-groq-last-5-minutes"),
+        facts,
     }])
 }
 
 fn enterprise_only() -> Report {
     Report::new(Provider(&Groq), metrics_account(), Vec::new()).with_sections([Section::Facts {
-        title: "Metrics".into(),
+        title: Text::message("usage-groq-metrics"),
         facts: vec![(
-            "Unavailable".into(),
-            "Prometheus metrics need a GroqCloud Enterprise key".into(),
+            Text::message("usage-groq-unavailable"),
+            Text::message("usage-groq-enterprise-only"),
         )],
     }])
 }
@@ -144,7 +144,7 @@ fn enterprise_only() -> Report {
 fn metrics_account() -> Account {
     Account {
         email: None,
-        plan: Some("Prometheus metrics".into()),
+        plan: Some(Text::message("usage-groq-prometheus")),
     }
 }
 
@@ -208,8 +208,14 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Requests / min".into(), "120".into()));
-        assert_eq!(facts[1], ("Tokens / min".into(), "9000".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-groq-requests"), Text::service("120"))
+        );
+        assert_eq!(
+            facts[1],
+            (Text::message("usage-groq-tokens"), Text::service("9000"))
+        );
         assert_eq!(facts.len(), 2);
     }
 

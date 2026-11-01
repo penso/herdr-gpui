@@ -8,7 +8,7 @@
 //! sign-in that CodexBar reads.
 
 use crate::model::Count;
-use crate::text::{Text, pair};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -209,7 +209,7 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
         .into_iter()
         .collect();
     let mut balance = Balance::new(
-        "Bobcoins used",
+        Text::message("usage-ibmbob-bobcoins-used"),
         used,
         Unit::Count(Count::Named("Bobcoins".into())),
     );
@@ -225,18 +225,23 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
     let facts = teams
         .iter()
         .map(|team| {
+            // The instance's and team's names, as Bob names them.
             let label = if team.team == team.instance {
-                team.team.clone()
+                Text::service(&team.team)
             } else {
-                format!("{} · {}", team.instance, team.team)
+                Text::service(format!("{} · {}", team.instance, team.team))
             };
             let value = match team.limit {
-                Some(limit) => format!("{} / {} Bobcoins", plain(team.used), plain(limit)),
-                None => format!("{} Bobcoins used", plain(team.used)),
+                Some(limit) => Text::message("usage-ibmbob-used-of")
+                    .arg("used", plain(team.used))
+                    .arg("limit", plain(limit))
+                    .arg("count", limit),
+                None => Text::message("usage-ibmbob-used")
+                    .arg("used", plain(team.used))
+                    .arg("count", team.used),
             };
             (label, value)
         })
-        .map(pair)
         .collect();
     Ok(Report::new(
         Provider(&Ibmbob),
@@ -244,13 +249,13 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
             email: None,
             plan: (!plans.is_empty())
                 .then(|| plans.join(", "))
-                .map(Text::from),
+                .map(Text::service),
         },
         windows,
     )
     .with_balances([balance])
     .with_sections([Section::Facts {
-        title: "Bobcoin usage".into(),
+        title: Text::message("usage-ibmbob-bobcoin-usage"),
         facts,
     }]))
 }
@@ -355,7 +360,13 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Personal · Solo".into(), "10 / 40 Bobcoins".into())
+            (
+                Text::service("Personal · Solo"),
+                Text::message("usage-ibmbob-used-of")
+                    .arg("used", "10")
+                    .arg("limit", "40")
+                    .arg("count", 40)
+            )
         );
     }
 

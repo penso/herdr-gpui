@@ -159,15 +159,27 @@ fn parse_limits(me: &Me, body: &str, now: SystemTime) -> Result<Option<Report>> 
         .filter(|core| core.has_usage())
         .map(|core| {
             [
-                ("Core 5-hour", &core.five_hour, Some(SESSION)),
-                ("Core weekly", &core.weekly, Some(WEEK)),
-                ("Core monthly", &core.monthly, Kind::Monthly.length()),
+                (
+                    Text::message("usage-factory-core-session"),
+                    &core.five_hour,
+                    Some(SESSION),
+                ),
+                (
+                    Text::message("usage-factory-core-weekly"),
+                    &core.weekly,
+                    Some(WEEK),
+                ),
+                (
+                    Text::message("usage-factory-core-monthly"),
+                    &core.monthly,
+                    Kind::Monthly.length(),
+                ),
             ]
             .into_iter()
             .map(|(name, window, length)| {
                 Section::Limit(Window {
                     length,
-                    ..window.window(Kind::Named(name.into()), now)
+                    ..window.window(Kind::Named(name), now)
                 })
             })
             .collect::<Vec<_>>()
@@ -176,7 +188,7 @@ fn parse_limits(me: &Me, body: &str, now: SystemTime) -> Result<Option<Report>> 
     let cents = billing.extra_usage_balance_cents.unwrap_or(0.);
     let balance = (cents > 0. || billing.extra_usage_allowed == Some(true)).then(|| {
         Balance::new(
-            "Extra usage balance",
+            Text::message("usage-factory-extra-usage"),
             cents / 100.,
             Unit::Currency("USD".into()),
         )
@@ -199,18 +211,21 @@ fn parse_usage(me: &Me, body: &str) -> Result<Report> {
         .zip(end)
         .and_then(|(start, end)| end.duration_since(start).ok())
         .filter(|length| !length.is_zero());
-    let windows: Vec<Window> = [("Standard", usage.standard), ("Premium", usage.premium)]
-        .into_iter()
-        .filter_map(|(name, tokens)| {
-            let tokens = tokens?;
-            Some(Window::new(
-                Kind::Named(name.into()),
-                tokens.used_percent(),
-                end,
-                length,
-            ))
-        })
-        .collect();
+    let windows: Vec<Window> = [
+        (Text::message("usage-factory-standard"), usage.standard),
+        (Text::message("usage-factory-premium"), usage.premium),
+    ]
+    .into_iter()
+    .filter_map(|(name, tokens)| {
+        let tokens = tokens?;
+        Some(Window::new(
+            Kind::Named(name),
+            tokens.used_percent(),
+            end,
+            length,
+        ))
+    })
+    .collect();
     if windows.is_empty() {
         return Err(invalid());
     }
@@ -235,8 +250,9 @@ impl Me {
             .filter(|id| !id.is_empty())
     }
 
-    /// `Factory Team - Pro - Fallback: credits`, as CodexBar shows it.
-    fn plan(&self, overage: Option<&str>) -> Option<String> {
+    /// `Factory Team - Pro - Fallback: credits`, as CodexBar shows it: the
+    /// tier and plan are Factory's names, the overage preference its word.
+    fn plan(&self, overage: Option<&str>) -> Option<Text> {
         let subscription = self.organization.as_ref()?.subscription.as_ref();
         let mut parts = Vec::new();
         if let Some(tier) = subscription
@@ -254,21 +270,32 @@ impl Me {
         {
             parts.push(plan.to_owned());
         }
-        if let Some(overage) = overage.map(str::trim).filter(|overage| !overage.is_empty()) {
-            parts.push(format!("Fallback: {overage}"));
+        let plan = (!parts.is_empty()).then(|| parts.join(" - "));
+        match (
+            plan,
+            overage.map(str::trim).filter(|overage| !overage.is_empty()),
+        ) {
+            (Some(plan), Some(overage)) => Some(
+                Text::message("usage-factory-plan-fallback")
+                    .arg("plan", plan)
+                    .arg("preference", overage),
+            ),
+            (None, Some(overage)) => {
+                Some(Text::message("usage-factory-fallback").arg("preference", overage))
+            }
+            (plan, None) => plan.map(Text::service),
         }
-        (!parts.is_empty()).then(|| parts.join(" - "))
     }
 
-    fn account(&self, plan: Option<String>) -> Account {
+    fn account(&self, plan: Option<Text>) -> Account {
         Account {
             email: (self
                 .user_profile
                 .as_ref()
                 .and_then(|profile| profile.email.clone())
                 .filter(|email| !email.trim().is_empty()))
-            .map(Text::from),
-            plan: plan.map(Text::from),
+            .map(Text::service),
+            plan,
         }
     }
 
@@ -280,8 +307,8 @@ impl Me {
             .clone()
             .filter(|name| !name.trim().is_empty())?;
         Some(Section::Facts {
-            title: "Organization".into(),
-            facts: vec![("Name".into(), Text::from(name))],
+            title: Text::message("usage-factory-organization"),
+            facts: vec![(Text::message("usage-factory-name"), Text::service(name))],
         })
     }
 }
@@ -496,8 +523,12 @@ mod tests {
             Some("dev@acme.test")
         );
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Factory Team - Team - Fallback: credits")
+            report.account.plan,
+            Some(
+                Text::message("usage-factory-plan-fallback")
+                    .arg("plan", "Factory Team - Team")
+                    .arg("preference", "credits")
+            )
         );
     }
 
@@ -532,21 +563,27 @@ mod tests {
         }"#;
         let report = parse_usage(&me, body).unwrap();
         assert_eq!(report.windows.len(), 2);
-        assert_eq!(report.windows[0].kind, Kind::Named("Premium".into()));
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::message("usage-factory-premium"))
+        );
         assert_eq!(report.windows[0].percent(), 25);
-        assert_eq!(report.windows[1].kind, Kind::Named("Standard".into()));
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-factory-standard"))
+        );
         assert_eq!(report.windows[1].percent(), 10);
         assert_eq!(report.windows[1].resets_at, Some(at(1_700_003_600)));
         assert_eq!(report.windows[1].length, Some(Duration::from_secs(3600)));
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Factory Team - Team")
+            report.account.plan,
+            Some(Text::service("Factory Team - Team"))
         );
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Organization".into(),
-                facts: vec![("Name".into(), "Acme".into())],
+                title: Text::message("usage-factory-organization"),
+                facts: vec![(Text::message("usage-factory-name"), Text::service("Acme"))],
             }]
         );
     }

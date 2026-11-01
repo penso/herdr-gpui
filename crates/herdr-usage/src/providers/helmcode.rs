@@ -7,7 +7,7 @@
 //! CodexBar's per-tenant keychain cache of imported sessions is not ported:
 //! cookies are read again on each refresh.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -159,33 +159,36 @@ fn parse(quota: &str, premium: bool, credits: Option<&str>, tenant: &str) -> Res
                 .or(Some(MONTH)),
         };
         windows.push(Window::new(
-            Kind::Named(Text::from(model.model.clone())),
+            Kind::Named(Text::service(&model.model)),
             share(model) * 100.,
             resets_at,
             length,
         ));
-        let mut tokens = format!(
-            "{} / {} tokens",
-            group(model.tokens_used as i64),
-            group(model.cap as i64)
-        );
-        if let Some(credit) = model.credit_tokens.filter(|credit| *credit > 0) {
-            tokens.push_str(&format!(" · {} credit-funded", group(credit as i64)));
-        }
-        facts.push((model.model.clone(), tokens));
+        let tokens = match model.credit_tokens.filter(|credit| *credit > 0) {
+            Some(credit) => Text::message("usage-helmcode-tokens-credit")
+                .arg("used", group(model.tokens_used as i64))
+                .arg("cap", group(model.cap as i64))
+                .arg("count", model.cap)
+                .arg("credit", group(credit as i64)),
+            None => Text::message("usage-helmcode-tokens")
+                .arg("used", group(model.tokens_used as i64))
+                .arg("cap", group(model.cap as i64))
+                .arg("count", model.cap),
+        };
+        facts.push((Text::service(&model.model), tokens));
     }
     Ok(Report::new(
         Provider(&Helmcode),
         Account {
             email: None,
-            plan: Some(Text::from(tenant.to_owned())),
+            plan: Some(Text::service(tenant)),
         },
         windows,
     )
     .with_balances(credits.and_then(prepaid))
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Model quotas".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-helmcode-model-quotas"),
+        facts,
     })))
 }
 
@@ -201,7 +204,7 @@ fn prepaid(body: &str) -> Option<Balance> {
         return None;
     }
     Some(Balance::new(
-        "Prepaid balance",
+        Text::message("usage-helmcode-prepaid-balance"),
         (micros as f64 / 1e6).max(0.),
         Unit::Currency(currency),
     ))
@@ -269,7 +272,7 @@ mod tests {
         let fast = report
             .windows
             .iter()
-            .find(|window| window.kind == Kind::Named("helm-fast".into()))
+            .find(|window| window.kind == Kind::Named(Text::service("helm-fast")))
             .unwrap();
         assert_eq!(fast.used, 75.);
         // No period end: the first of the next month.
@@ -285,8 +288,12 @@ mod tests {
         assert_eq!(
             facts[1],
             (
-                "helm-coder".into(),
-                "250,000 / 1,000,000 tokens · 5,000 credit-funded".into()
+                Text::service("helm-coder"),
+                Text::message("usage-helmcode-tokens-credit")
+                    .arg("used", "250,000")
+                    .arg("cap", "1,000,000")
+                    .arg("count", 1_000_000)
+                    .arg("credit", "5,000")
             )
         );
     }
@@ -303,7 +310,7 @@ mod tests {
         let burst = report
             .windows
             .iter()
-            .find(|window| window.kind == Kind::Named("helm-burst".into()))
+            .find(|window| window.kind == Kind::Named(Text::service("helm-burst")))
             .unwrap();
         assert_eq!(burst.used, 10.);
         assert_eq!(burst.length, Some(Duration::from_secs(5 * 3600)));

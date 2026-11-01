@@ -5,6 +5,7 @@
 //! mode does. The service reports only a balance: no plan, limit, or reset.
 
 use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -91,17 +92,14 @@ pub(crate) fn parse(body: &str, source: Source) -> Result<Report> {
         .ok_or_else(invalid)?;
     let account = Account {
         email: None,
-        plan: Some(
-            match source {
-                Source::Session => "Browser session",
-                Source::Key => "API key",
-            }
-            .into(),
-        ),
+        plan: Some(match source {
+            Source::Session => Text::message("usage-hyper-browser-session"),
+            Source::Key => Text::message("usage-hyper-api-key"),
+        }),
     };
     Ok(
         Report::new(Provider(&Hyper), account, Vec::new()).with_balances([Balance::new(
-            "Hypercredits",
+            Text::message("usage-hyper-hypercredits"),
             balance,
             Unit::Count(Count::Named("HC".into())),
         )]),
@@ -117,7 +115,6 @@ struct Credits {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::Text;
 
     #[test]
     fn balance_is_hypercredits() {
@@ -131,8 +128,8 @@ mod tests {
         );
         assert_eq!(report.balances[0].amount_text(), "42.50 HC");
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("API key")
+            report.account.plan,
+            Some(Text::message("usage-hyper-api-key"))
         );
     }
 

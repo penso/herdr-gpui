@@ -21,7 +21,7 @@
 //! storage (where kimi.ai keeps `access_token`), retrying the next browser
 //! session when one is rejected, and multiple labeled web accounts.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -267,18 +267,22 @@ impl Usage {
             })
         });
         let requests = |(used, limit): (f64, f64)| {
-            format!(
-                "{} of {}",
-                group(used.round() as i64),
-                group(limit.round() as i64)
-            )
+            Text::message("usage-kimi-of")
+                .arg("used", group(used.round() as i64))
+                .arg("limit", group(limit.round() as i64))
         };
-        let facts: Vec<(String, String)> = [
-            ("Weekly requests", self.weekly_requests.map(requests)),
-            ("Rate limit requests", self.session_requests.map(requests)),
+        let facts: Vec<(Text, Text)> = [
+            (
+                Text::message("usage-kimi-weekly-requests"),
+                self.weekly_requests.map(requests),
+            ),
+            (
+                Text::message("usage-kimi-rate-limit-requests"),
+                self.session_requests.map(requests),
+            ),
         ]
         .into_iter()
-        .filter_map(|(label, value)| Some((label.to_owned(), value?)))
+        .filter_map(|(label, value)| Some((label, value?)))
         .collect();
         let windows = [self.session, self.weekly, self.monthly]
             .into_iter()
@@ -288,14 +292,14 @@ impl Usage {
             Provider(&Kimi),
             Account {
                 email: None,
-                plan: self.plan.map(Text::from),
+                plan: self.plan.map(Text::service),
             },
             windows,
         )
         .with_sections(distinct.map(Section::Limit).into_iter().chain(
             (!facts.is_empty()).then(|| Section::Facts {
-                title: "Requests".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-kimi-requests"),
+                facts,
             }),
         ))
     }
@@ -431,7 +435,7 @@ pub(crate) fn parse_stats(body: &str) -> Option<Stats> {
         }
         let ratio = limit.ratio.filter(|ratio| ratio.is_finite())?;
         Some(Window::new(
-            Kind::Named("Code 7-day".into()),
+            Kind::Named(Text::message("usage-kimi-code-weekly")),
             ratio * 100.,
             limit.reset_time.as_ref().and_then(Timestamp::time),
             Some(WEEK),
@@ -454,7 +458,7 @@ pub(crate) fn parse_plan(body: &str) -> Option<String> {
 }
 
 fn total_usage() -> Kind {
-    Kind::Named("Total usage".into())
+    Kind::Named(Text::message("usage-kimi-total-usage"))
 }
 
 /// A ratio pool, unless it is a zero placeholder next to populated counts
@@ -708,10 +712,20 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Requests".into(),
+                title: Text::message("usage-kimi-requests"),
                 facts: vec![
-                    ("Weekly requests".into(), "214 of 2,048".into()),
-                    ("Rate limit requests".into(), "139 of 200".into()),
+                    (
+                        Text::message("usage-kimi-weekly-requests"),
+                        Text::message("usage-kimi-of")
+                            .arg("used", "214")
+                            .arg("limit", "2,048")
+                    ),
+                    (
+                        Text::message("usage-kimi-rate-limit-requests"),
+                        Text::message("usage-kimi-of")
+                            .arg("used", "139")
+                            .arg("limit", "200")
+                    ),
                 ],
             }]
         );
@@ -737,7 +751,10 @@ mod tests {
         assert_eq!(session.used, 0.);
         assert_eq!(session.resets_at, Some(at("2026-09-16T20:15:44Z")));
         let monthly = &report.windows[1];
-        assert_eq!(monthly.kind, Kind::Named("Total usage".into()));
+        assert_eq!(
+            monthly.kind,
+            Kind::Named(Text::message("usage-kimi-total-usage"))
+        );
         assert!((monthly.used - 0.56).abs() < 1e-4);
         assert_eq!(monthly.length, Some(MONTH));
     }
@@ -782,12 +799,15 @@ mod tests {
             Some("Allegretto")
         );
         assert_eq!(report.windows.len(), 3);
-        assert_eq!(report.windows[2].kind, Kind::Named("Total usage".into()));
+        assert_eq!(
+            report.windows[2].kind,
+            Kind::Named(Text::message("usage-kimi-total-usage"))
+        );
         assert_eq!(report.windows[2].percent(), 42);
         // The Code 7-day ratio differs from the weekly counts, so it shows.
         assert!(matches!(
             &report.sections[0],
-            Section::Limit(window) if window.kind == Kind::Named("Code 7-day".into()) && window.percent() == 50
+            Section::Limit(window) if window.kind == Kind::Named(Text::message("usage-kimi-code-weekly")) && window.percent() == 50
         ));
     }
 

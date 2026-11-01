@@ -10,7 +10,7 @@
 //! and its optional budget bars, scraped from github.com's web billing page
 //! with browser cookies and a page nonce.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -142,17 +142,13 @@ pub(crate) fn parse(body: &str, login: Option<String>) -> Result<Report> {
         .as_ref()
         .and_then(Snapshot::used)
         .or_else(|| fallback(monthly.chat, limited.chat));
-    let windows: Vec<Window> = [("Premium", premium), ("Chat", chat)]
-        .into_iter()
-        .filter_map(|(name, used)| {
-            Some(Window::new(
-                Kind::Named(name.into()),
-                used?,
-                resets,
-                Some(MONTH),
-            ))
-        })
-        .collect();
+    let windows: Vec<Window> = [
+        (Text::message("usage-copilot-premium"), premium),
+        (Text::message("usage-copilot-chat"), chat),
+    ]
+    .into_iter()
+    .filter_map(|(name, used)| Some(Window::new(Kind::Named(name), used?, resets, Some(MONTH))))
+    .collect();
     let credits = snapshots
         .premium_interactions
         .as_ref()
@@ -174,24 +170,30 @@ pub(crate) fn parse(body: &str, login: Option<String>) -> Result<Report> {
         .copilot_plan
         .map(|plan| title_case(&plan.replace('_', " ")))
         .filter(|plan| !plan.is_empty());
-    let mut facts: Vec<(String, String)> = Vec::new();
+    let mut facts = Vec::new();
     if let Some(used) = credits {
-        facts.push(("Credits used".into(), group(used.round() as i64)));
+        facts.push((
+            Text::message("usage-copilot-credits-used"),
+            Text::service(group(used.round() as i64)),
+        ));
     }
     if unlimited && windows.is_empty() {
-        facts.push(("Quota".into(), "Unlimited".into()));
+        facts.push((
+            Text::message("usage-copilot-quota"),
+            Text::message("usage-copilot-unlimited"),
+        ));
     }
     Ok(Report::new(
         Provider(&Copilot),
         Account {
-            email: login.map(Text::from),
-            plan: plan.map(Text::from),
+            email: login.map(Text::service),
+            plan: plan.map(Text::service),
         },
         windows,
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Credits".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-copilot-credits"),
+        facts,
     })))
 }
 
@@ -304,7 +306,7 @@ mod tests {
         let premium = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Premium".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-premium")))
             .unwrap();
         assert_eq!(premium.percent(), 10);
         assert_eq!(premium.length, Some(MONTH));
@@ -315,7 +317,7 @@ mod tests {
         let chat = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Chat".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-chat")))
             .unwrap();
         assert_eq!(chat.percent(), 50);
         assert!(report.sections.is_empty());
@@ -337,10 +339,16 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Credits".into(),
+                title: Text::message("usage-copilot-credits"),
                 facts: vec![
-                    ("Credits used".into(), "31".into()),
-                    ("Quota".into(), "Unlimited".into()),
+                    (
+                        Text::message("usage-copilot-credits-used"),
+                        Text::service("31")
+                    ),
+                    (
+                        Text::message("usage-copilot-quota"),
+                        Text::message("usage-copilot-unlimited")
+                    ),
                 ],
             }]
         );
@@ -355,13 +363,13 @@ mod tests {
         let chat = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Chat".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-chat")))
             .unwrap();
         assert_eq!(chat.percent(), 20);
         let premium = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Premium".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-premium")))
             .unwrap();
         assert_eq!(premium.percent(), 75);
     }

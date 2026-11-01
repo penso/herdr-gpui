@@ -5,7 +5,7 @@
 //! CodexBar reads is ported: character credits with their reset, voice and
 //! professional voice slots, and the plan tier and status.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -77,12 +77,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     );
     let slots = [
         (
-            "Voice slots",
+            Text::message("usage-elevenlabs-voice-slots"),
             subscription.voice_slots_used,
             subscription.voice_limit,
         ),
         (
-            "Professional voices",
+            Text::message("usage-elevenlabs-professional-voices"),
             subscription.professional_voice_slots_used,
             subscription.professional_voice_limit,
         ),
@@ -94,18 +94,19 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     })
     .collect::<Vec<_>>();
     let mut facts = vec![(
-        "Credits".to_owned(),
-        format!(
-            "{} of {}",
-            group(subscription.character_count),
-            group(subscription.character_limit)
-        ),
+        Text::message("usage-elevenlabs-credits"),
+        Text::message("usage-elevenlabs-of")
+            .arg("used", group(subscription.character_count))
+            .arg("limit", group(subscription.character_limit)),
     )];
-    facts.extend(
-        slots
-            .iter()
-            .map(|(title, used, limit)| ((*title).to_owned(), format!("{used} of {limit}"))),
-    );
+    facts.extend(slots.iter().map(|(title, used, limit)| {
+        (
+            title.clone(),
+            Text::message("usage-elevenlabs-of")
+                .arg("used", used.to_string())
+                .arg("limit", limit.to_string()),
+        )
+    }));
     let tier = subscription
         .tier
         .as_deref()
@@ -123,6 +124,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .as_deref()
         .map(str::trim)
         .filter(|status| !status.is_empty());
+    // The tier and status are ElevenLabs' own words, such as past_due.
     let plan = match (tier, status) {
         (Some(tier), Some(status)) if !status.eq_ignore_ascii_case("active") => {
             Some(format!("{tier} · {status}"))
@@ -134,7 +136,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Provider(&Elevenlabs),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         vec![credits],
     )
@@ -143,15 +145,15 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .iter()
             .map(|(title, used, limit)| {
                 Section::Limit(Window::new(
-                    Kind::Named(Text::from((*title).to_owned())),
+                    Kind::Named(title.clone()),
                     percent(*used, *limit),
                     None,
                     None,
                 ))
             })
             .chain([Section::Facts {
-                title: "Usage".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-report-usage"),
+                facts,
             }])
             .collect::<Vec<_>>(),
     ))
@@ -175,7 +177,6 @@ struct Subscription {
 mod tests {
     use super::*;
     use crate::Error;
-    use crate::text::pair;
     use std::time::{Duration, SystemTime};
 
     /// Shaped like the documented subscription response.
@@ -211,7 +212,10 @@ mod tests {
         let Section::Limit(voices) = &report.sections[0] else {
             panic!("expected a limit");
         };
-        assert_eq!(voices.kind, Kind::Named("Voice slots".into()));
+        assert_eq!(
+            voices.kind,
+            Kind::Named(Text::message("usage-elevenlabs-voice-slots"))
+        );
         assert_eq!(voices.percent(), 10);
         let Section::Limit(professional) = &report.sections[1] else {
             panic!("expected a limit");
@@ -222,7 +226,21 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            pair(("Credits".to_owned(), "25,000 of 100,000".to_owned()))
+            (
+                Text::message("usage-elevenlabs-credits"),
+                Text::message("usage-elevenlabs-of")
+                    .arg("used", "25,000")
+                    .arg("limit", "100,000")
+            )
+        );
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-elevenlabs-voice-slots"),
+                Text::message("usage-elevenlabs-of")
+                    .arg("used", "3")
+                    .arg("limit", "30")
+            )
         );
     }
 

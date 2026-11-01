@@ -11,7 +11,7 @@
 //! twelve-hour identity cache is not ported: `whoami-v2` is asked each
 //! refresh, and its failure only leaves the account out.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -153,24 +153,34 @@ pub(crate) fn parse(
     };
     // Hugging Face's own billing page deducts the included amount.
     let billable = (gross - included).max(0.);
-    let usd = |label: &str, value: f64| Balance::new(label, value, Unit::Currency("USD".into()));
-    let mut facts = vec![("Billable usage".to_owned(), usd("", billable).amount_text())];
+    let usd = |label: Text, value: f64| Balance::new(label, value, Unit::Currency("USD".into()));
+    let amount = |value: f64| Text::service(usd(Text::service(""), value).amount_text());
+    let mut facts = vec![(
+        Text::message("usage-huggingface-billable"),
+        amount(billable),
+    )];
     if included > 0. {
-        facts.push(("Gross inference usage".into(), usd("", gross).amount_text()));
+        facts.push((Text::message("usage-huggingface-gross"), amount(gross)));
         facts.push((
-            "Included inference amount".into(),
-            usd("", included).amount_text(),
+            Text::message("usage-huggingface-included"),
+            amount(included),
         ));
     }
     if limit > 0. {
-        facts.push(("Spending limit".into(), usd("", limit).amount_text()));
+        facts.push((
+            Text::message("usage-huggingface-spending-limit"),
+            amount(limit),
+        ));
     }
     if let Some(requests) = inference.num_requests {
-        facts.push(("Requests".into(), requests.to_string()));
+        facts.push((
+            Text::message("usage-huggingface-requests"),
+            Text::service(requests.to_string()),
+        ));
     }
     let mut sections = vec![Section::Facts {
-        title: "Inference Providers".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-huggingface-inference-providers"),
+        facts,
     }];
     let mut windows = Vec::new();
     if let Some(quota) = gpu.and_then(|body| json::<GpuQuota>(body).ok()) {
@@ -180,27 +190,30 @@ pub(crate) fn parse(
         {
             let consumed = (total - left).max(0.);
             windows.push(Window::new(
-                Kind::Named("ZeroGPU".into()),
+                Kind::Named(Text::service("ZeroGPU")),
                 consumed / total * 100.,
                 quota.resets_at.as_ref().and_then(Timestamp::time),
                 None,
             ));
             sections.push(Section::Facts {
-                title: "ZeroGPU".into(),
+                title: Text::message("usage-huggingface-zerogpu"),
                 facts: vec![
-                    ("GPU time used".into(), Text::from(minutes(consumed))),
-                    ("GPU time remaining".into(), Text::from(minutes(left))),
+                    (
+                        Text::message("usage-huggingface-gpu-used"),
+                        minutes(consumed),
+                    ),
+                    (Text::message("usage-huggingface-gpu-left"), minutes(left)),
                 ],
             });
         }
     }
-    let mut spend = usd("Inference this month", billable);
+    let mut spend = usd(Text::message("usage-huggingface-month-spend"), billable);
     if limit > 0. {
         spend = spend.out_of(limit);
     }
     let mut balances = vec![spend];
     if let Some(wallet) = wallet {
-        balances.push(usd("Prepaid credits", wallet));
+        balances.push(usd(Text::message("usage-huggingface-prepaid"), wallet));
     }
     let account = profile.map_or_else(Account::default, |profile| {
         if let Some(name) = profile
@@ -210,8 +223,8 @@ pub(crate) fn parse(
             .filter(|name| !name.is_empty())
         {
             sections.push(Section::Facts {
-                title: "Account".into(),
-                facts: vec![("User".into(), Text::from(name.to_owned()))],
+                title: Text::message("usage-huggingface-account"),
+                facts: vec![(Text::message("usage-huggingface-user"), Text::service(name))],
             });
         }
         Account {
@@ -219,11 +232,15 @@ pub(crate) fn parse(
                 .email
                 .map(|email| email.trim().to_owned())
                 .filter(|email| !email.is_empty()))
-            .map(Text::from),
-            plan: (profile
-                .is_pro
-                .map(|pro| if pro { "PRO" } else { "Free" }.to_owned()))
-            .map(Text::from),
+            .map(Text::service),
+            // PRO is Hugging Face's name for the plan.
+            plan: profile.is_pro.map(|pro| {
+                if pro {
+                    Text::service("PRO")
+                } else {
+                    Text::message("usage-huggingface-free")
+                }
+            }),
         }
     });
     Ok(Report::new(Provider(&Huggingface), account, windows)
@@ -232,12 +249,13 @@ pub(crate) fn parse(
 }
 
 /// `10 min`, with a decimal under ten minutes.
-fn minutes(seconds: f64) -> String {
-    if seconds >= 600. {
-        format!("{:.0} min", seconds / 60.)
+fn minutes(seconds: f64) -> Text {
+    let minutes = if seconds >= 600. {
+        format!("{:.0}", seconds / 60.)
     } else {
-        format!("{:.1} min", seconds / 60.)
-    }
+        format!("{:.1}", seconds / 60.)
+    };
+    Text::message("usage-huggingface-minutes").arg("minutes", minutes)
 }
 
 /// The balance in the billing page's server-rendered `data-props`: the
@@ -417,9 +435,15 @@ mod tests {
         let report = parse(BILLING, Some(GPU), Some(profile), Some(12.345)).unwrap();
         assert!((report.balances[0].amount - 0.45).abs() < 1e-9);
         assert_eq!(report.balances[0].total, None);
-        assert_eq!(report.balances[1].label, "Prepaid credits");
+        assert_eq!(
+            report.balances[1].label,
+            Text::message("usage-huggingface-prepaid")
+        );
         assert_eq!(report.windows.len(), 1);
-        assert_eq!(report.windows[0].kind, Kind::Named("ZeroGPU".into()));
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(Text::service("ZeroGPU"))
+        );
         assert!((report.windows[0].used - 40.).abs() < 0.01);
         assert!(report.windows[0].resets_at.is_some());
         assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("PRO"));
@@ -434,17 +458,23 @@ mod tests {
         assert_eq!(
             labels,
             [
-                "Billable usage",
-                "Gross inference usage",
-                "Included inference amount",
-                "Requests"
+                "usage-huggingface-billable",
+                "usage-huggingface-gross",
+                "usage-huggingface-included",
+                "usage-huggingface-requests"
             ]
         );
         let Section::Facts { facts, .. } = &report.sections[1] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "10 min");
-        assert_eq!(facts[1].1, "15 min");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-huggingface-minutes").arg("minutes", "10")
+        );
+        assert_eq!(
+            facts[1].1,
+            Text::message("usage-huggingface-minutes").arg("minutes", "15")
+        );
     }
 
     #[test]

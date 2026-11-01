@@ -8,7 +8,7 @@
 //! and the Platform's per-key daily cost and token history, private
 //! dashboard endpoints whose calendar bucketing adds little to a balance.
 
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -166,29 +166,36 @@ fn report(wallet: Option<Wallet>, available: bool) -> Report {
         paid: 0.,
     });
     let unit = Unit::Currency(wallet.currency.trim().to_uppercase());
+    let amount = |amount: f64| {
+        Text::service(Balance::new(Text::service(""), amount, unit.clone()).amount_text())
+    };
     let mut facts = vec![
+        (Text::message("usage-deepseek-paid"), amount(wallet.paid)),
         (
-            "Paid".to_owned(),
-            Balance::new("Paid", wallet.paid, unit.clone()).amount_text(),
-        ),
-        (
-            "Granted".to_owned(),
-            Balance::new("Granted", wallet.granted, unit.clone()).amount_text(),
+            Text::message("usage-deepseek-granted"),
+            amount(wallet.granted),
         ),
     ];
     if wallet.total <= 0. {
         facts.push((
-            "Status".into(),
-            "Add credits at platform.deepseek.com".into(),
+            Text::message("usage-deepseek-status"),
+            Text::message("usage-deepseek-add-credits"),
         ));
     } else if !available {
-        facts.push(("Status".into(), "Balance unavailable for API calls".into()));
+        facts.push((
+            Text::message("usage-deepseek-status"),
+            Text::message("usage-deepseek-unavailable"),
+        ));
     }
     Report::new(Provider(&Deepseek), Account::default(), Vec::new())
-        .with_balances([Balance::new("Balance", wallet.total, unit)])
+        .with_balances([Balance::new(
+            Text::message("usage-deepseek-balance"),
+            wallet.total,
+            unit,
+        )])
         .with_sections([Section::Facts {
-            title: "Credits".into(),
-            facts: pairs(facts),
+            title: Text::message("usage-deepseek-credits"),
+            facts,
         }])
 }
 
@@ -249,7 +256,6 @@ struct PlatformWallet {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
 
     #[test]
     fn api_balance_prefers_funded_usd() {
@@ -264,13 +270,29 @@ mod tests {
         assert!(report.windows.is_empty());
         assert_eq!(
             report.balances,
-            vec![Balance::new("Balance", 50., Unit::Currency("USD".into()))]
+            vec![Balance::new(
+                Text::message("usage-deepseek-balance"),
+                50.,
+                Unit::Currency("USD".into())
+            )]
         );
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected credit facts");
         };
-        assert_eq!(facts[0], pair(("Paid".to_owned(), "$40.00".to_owned())));
-        assert_eq!(facts[1], pair(("Granted".to_owned(), "$10.00".to_owned())));
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-deepseek-paid"),
+                Text::service("$40.00")
+            )
+        );
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-deepseek-granted"),
+                Text::service("$10.00")
+            )
+        );
         assert_eq!(facts.len(), 2);
     }
 
@@ -289,7 +311,7 @@ mod tests {
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected credit facts");
         };
-        assert_eq!(facts[2].1, "Balance unavailable for API calls");
+        assert_eq!(facts[2].1, Text::message("usage-deepseek-unavailable"));
     }
 
     #[test]
@@ -317,8 +339,8 @@ mod tests {
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected credit facts");
         };
-        assert_eq!(facts[0].1, "$7.97");
-        assert_eq!(facts[1].1, "$0.50");
+        assert_eq!(facts[0].1, Text::service("$7.97"));
+        assert_eq!(facts[1].1, Text::service("$0.50"));
     }
 
     #[test]

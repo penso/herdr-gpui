@@ -190,18 +190,23 @@ pub(crate) fn parse(body: &str, organization: &str) -> Result<Report> {
         Provider(&Devin),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         daily.into_iter().chain(weekly).collect(),
     )
-    .with_balances(
-        overage.map(|amount| {
-            Balance::new("Extra usage balance", amount, Unit::Currency("USD".into()))
-        }),
-    )
+    .with_balances(overage.map(|amount| {
+        Balance::new(
+            Text::message("usage-devin-extra-usage"),
+            amount,
+            Unit::Currency("USD".into()),
+        )
+    }))
     .with_sections([Section::Facts {
-        title: "Organization".into(),
-        facts: vec![("Name".into(), Text::from(organization.to_owned()))],
+        title: Text::message("usage-devin-organization"),
+        facts: vec![(
+            Text::message("usage-devin-name"),
+            Text::service(organization),
+        )],
     }]))
 }
 

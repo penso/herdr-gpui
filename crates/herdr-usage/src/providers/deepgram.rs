@@ -5,7 +5,7 @@
 //! does. Deepgram reports usage, not a balance or a limit, so the panel
 //! shows facts only. Everything CodexBar reads is ported.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -102,47 +102,62 @@ fn parse_breakdown(body: &str) -> Result<Totals> {
 
 fn report(projects: &[Project], totals: &Totals) -> Report {
     let plan = match projects {
-        [] => "No projects".to_owned(),
-        [project] => format!(
-            "Project: {}",
-            project.name.as_deref().unwrap_or(&project.project_id)
+        [] => Text::message("usage-deepgram-no-projects"),
+        [project] => Text::message("usage-deepgram-project").arg(
+            "project",
+            project.name.as_deref().unwrap_or(&project.project_id),
         ),
-        projects => format!("{} projects", projects.len()),
+        projects => Text::message("usage-deepgram-projects").arg("count", projects.len()),
     };
-    let mut facts = vec![("Requests".to_owned(), whole(totals.requests))];
+    let mut facts = vec![(
+        Text::message("usage-deepgram-requests"),
+        Text::service(whole(totals.requests)),
+    )];
     if totals.hours > 0. || totals.total_hours > 0. {
         facts.push((
-            "Audio".into(),
-            format!(
-                "{} hours · {} billable",
-                decimal(totals.hours),
-                decimal(totals.total_hours)
-            ),
+            Text::message("usage-deepgram-audio"),
+            Text::message("usage-deepgram-audio-hours")
+                .arg("hours", decimal(totals.hours))
+                .arg("billable", decimal(totals.total_hours)),
         ));
     }
     if totals.agent_hours > 0. {
-        facts.push(("Agent hours".into(), decimal(totals.agent_hours)));
+        facts.push((
+            Text::message("usage-deepgram-agent-hours"),
+            Text::service(decimal(totals.agent_hours)),
+        ));
     }
     if totals.tokens_in > 0. || totals.tokens_out > 0. {
-        facts.push(("Tokens".into(), whole(totals.tokens_in + totals.tokens_out)));
+        facts.push((
+            Text::message("usage-deepgram-tokens"),
+            Text::service(whole(totals.tokens_in + totals.tokens_out)),
+        ));
     }
     if totals.tts > 0. {
-        facts.push(("TTS characters".into(), whole(totals.tts)));
+        facts.push((
+            Text::message("usage-deepgram-tts-characters"),
+            Text::service(whole(totals.tts)),
+        ));
     }
     if let (Some(start), Some(end)) = (&totals.start, &totals.end) {
-        facts.push(("Period".into(), format!("{start} to {end}")));
+        facts.push((
+            Text::message("usage-deepgram-period"),
+            Text::message("usage-deepgram-period-range")
+                .arg("start", start.as_str())
+                .arg("end", end.as_str()),
+        ));
     }
     Report::new(
         Provider(&Deepgram),
         Account {
             email: None,
-            plan: Some(Text::from(plan)),
+            plan: Some(plan),
         },
         Vec::new(),
     )
     .with_sections([Section::Facts {
-        title: "Usage summary".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-deepgram-usage-summary"),
+        facts,
     }])
 }
 
@@ -255,8 +270,8 @@ mod tests {
         let report = report(&projects, &totals);
         assert!(report.windows.is_empty());
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("2 projects")
+            report.account.plan,
+            Some(Text::message("usage-deepgram-projects").arg("count", 2))
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
@@ -265,13 +280,30 @@ mod tests {
             facts
                 .iter()
                 .find(|(name, _)| name == label)
-                .map(|(_, value)| value.as_str())
+                .map(|(_, value)| value.clone())
         };
-        assert_eq!(fact("Requests"), Some("55"));
-        assert_eq!(fact("Audio"), Some("1.8 hours · 2.5 billable"));
-        assert_eq!(fact("Tokens"), Some("1,250"));
-        assert_eq!(fact("TTS characters"), Some("1,200"));
-        assert_eq!(fact("Period"), Some("2026-05-20 to 2026-06-30"));
+        assert_eq!(fact("usage-deepgram-requests"), Some(Text::service("55")));
+        assert_eq!(
+            fact("usage-deepgram-audio"),
+            Some(
+                Text::message("usage-deepgram-audio-hours")
+                    .arg("hours", "1.8")
+                    .arg("billable", "2.5")
+            )
+        );
+        assert_eq!(fact("usage-deepgram-tokens"), Some(Text::service("1,250")));
+        assert_eq!(
+            fact("usage-deepgram-tts-characters"),
+            Some(Text::service("1,200"))
+        );
+        assert_eq!(
+            fact("usage-deepgram-period"),
+            Some(
+                Text::message("usage-deepgram-period-range")
+                    .arg("start", "2026-05-20")
+                    .arg("end", "2026-06-30")
+            )
+        );
     }
 
     #[test]
@@ -279,8 +311,8 @@ mod tests {
         let projects = parse_projects(PROJECTS).unwrap();
         let report = report(&projects[..1], &parse_breakdown(BREAKDOWN).unwrap());
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Project: Voice bot")
+            report.account.plan,
+            Some(Text::message("usage-deepgram-project").arg("project", "Voice bot"))
         );
     }
 

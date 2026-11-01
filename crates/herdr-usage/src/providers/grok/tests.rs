@@ -23,8 +23,8 @@ fn parses_weekly_credits() {
       }
     }"#;
     let account = Account {
-        email: Some("user@example.com".into()),
-        plan: login_plan("oidc").map(Text::from),
+        email: Some(Text::service("user@example.com")),
+        plan: login_plan("oidc").map(Text::service),
     };
     let report = parse(
         body,
@@ -77,7 +77,10 @@ fn future_start_leaves_length_unknown() {
         "currentPeriod":{"start":"2026-08-14T00:00:00Z","end":"2026-08-21T00:00:00Z"}}}"#;
     let report = parse(body, None, Account::default(), at("2026-08-12T00:00:00Z")).unwrap();
     assert_eq!(report.windows[0].length, None);
-    assert_eq!(report.windows[0].kind, Kind::Named("Credits".into()));
+    assert_eq!(
+        report.windows[0].kind,
+        Kind::Named(Text::message("usage-grok-credits"))
+    );
 }
 
 #[test]

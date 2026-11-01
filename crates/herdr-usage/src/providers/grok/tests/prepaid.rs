@@ -25,7 +25,7 @@ fn unified_billing_shows_wallet_and_period_without_inventing_usage() {
     assert_eq!(
         report.balances,
         vec![Balance::new(
-            "Prepaid balance",
+            Text::message("usage-grok-prepaid-balance"),
             14.46,
             Unit::Currency("USD".into())
         )]
@@ -33,10 +33,16 @@ fn unified_billing_shows_wallet_and_period_without_inventing_usage() {
     assert_eq!(
         report.sections,
         vec![Section::Facts {
-            title: "Included credits".into(),
+            title: Text::message("usage-grok-included-credits"),
             facts: vec![
-                ("Usage".into(), "Not reported".into()),
-                ("Period ends".into(), "Aug 13, 2026 00:00 UTC".into()),
+                (
+                    Text::message("usage-report-usage"),
+                    Text::message("usage-grok-not-reported")
+                ),
+                (
+                    Text::message("usage-grok-period-ends"),
+                    Text::service("Aug 13, 2026 00:00 UTC")
+                ),
             ],
         }]
     );
@@ -56,7 +62,7 @@ fn wallet_alone_is_a_valid_report_including_zero_and_string_cents() {
         assert_eq!(
             report.balances,
             vec![Balance::new(
-                "Prepaid balance",
+                Text::message("usage-grok-prepaid-balance"),
                 amount,
                 Unit::Currency("USD".into())
             )]
@@ -64,8 +70,11 @@ fn wallet_alone_is_a_valid_report_including_zero_and_string_cents() {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Included credits".into(),
-                facts: vec![("Usage".into(), "Not reported".into())],
+                title: Text::message("usage-grok-included-credits"),
+                facts: vec![(
+                    Text::message("usage-report-usage"),
+                    Text::message("usage-grok-not-reported")
+                )],
             }]
         );
     }
