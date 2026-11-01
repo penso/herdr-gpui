@@ -377,14 +377,25 @@ impl Upstream {
     }
 
     pub(in crate::sidebar) fn element(self, key: &str, glyph: f32, theme: &Theme) -> Div {
+        self.render(key, glyph, theme, true)
+    }
+
+    /// Inline counts take their natural shaped width, leaving the branch to
+    /// shrink before a fallback arrow or digit is clipped.
+    pub(in crate::sidebar) fn inline_element(self, key: &str, glyph: f32, theme: &Theme) -> Div {
+        self.render(key, glyph, theme, false)
+    }
+
+    fn render(self, key: &str, glyph: f32, theme: &Theme, fixed_width: bool) -> Div {
         let (ahead, behind) = (theme.ink(theme.palette[2]), theme.ink(theme.palette[1]));
         div()
             .debug_selector(|| format!("upstream-{key}"))
-            .w(px(self.width(glyph)))
+            .when(fixed_width, |element| {
+                element.w(px(self.width(glyph))).overflow_hidden()
+            })
             .flex_none()
             .flex()
             .gap(px(glyph))
-            .overflow_hidden()
             .children(self.parts().map(|(text, is_ahead)| {
                 div()
                     .flex_none()
