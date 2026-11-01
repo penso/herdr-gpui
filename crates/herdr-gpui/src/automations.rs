@@ -12,6 +12,7 @@
 //! Anything that changes a host (approving a script, pausing, installing the
 //! daemon) is a click in this section or a confirmation in the app's own
 //! dialog; `herdr-gpui automation approve` only opens that dialog.
+// i18n: migrated
 
 mod actions;
 mod clean;
@@ -166,6 +167,24 @@ pub(crate) enum Mode {
     #[default]
     Hosts,
     Timeline,
+}
+
+impl Mode {
+    /// Its name in the header's toggle and the page's trail.
+    pub(crate) fn title(self) -> String {
+        match self {
+            Self::Hosts => crate::i18n::fl!("automations-mode-hosts"),
+            Self::Timeline => crate::i18n::fl!("automations-mode-timeline"),
+        }
+    }
+
+    /// The toggle's ID, the same in every language.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Hosts => "hosts",
+            Self::Timeline => "timeline",
+        }
+    }
 }
 
 /// The script or run shown beside the list.

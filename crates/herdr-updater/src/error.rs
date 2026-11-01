@@ -365,6 +365,12 @@ pub enum Error {
         "This release has no signed Windows installer metadata. Download it from GitHub, or check for a newer release"
     )]
     MissingInstallerMetadata,
+    #[error("Could not start updater")]
+    Start(#[source] io::Error),
+    #[error("Update worker stopped")]
+    WorkerStopped,
+    #[error("Update worker could not acknowledge cancellation")]
+    CancelUnacknowledged,
     #[cfg(windows)]
     #[error(transparent)]
     Windows(#[from] super::windows::Error),

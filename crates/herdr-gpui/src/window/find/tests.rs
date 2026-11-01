@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 mod application_menu;
 mod close_button;
+mod en_xa;
 mod padding;
 mod tab_switch;
 
@@ -97,7 +98,9 @@ fn find(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) {
 }
 
 fn label(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> String {
+    // Without the isolation marks Fluent puts around each placeable.
     view.read_with(cx, |view, _| view.find.as_ref().unwrap().search.label())
+        .replace(['\u{2068}', '\u{2069}'], "")
 }
 
 fn matches(rows: &[(u32, u16, u16)], current: u32, global: u64, total: u64) -> Value {

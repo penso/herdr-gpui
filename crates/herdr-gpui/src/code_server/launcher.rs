@@ -24,9 +24,11 @@ use std::{
 /// VS Code's server license, which `code serve-web` asks its user to accept.
 pub(crate) const LICENSE_URL: &str = "https://aka.ms/vscode-server-license";
 pub(crate) const PRIVACY_URL: &str = "https://privacy.microsoft.com/en-US/privacystatement";
-pub(crate) const LICENSE_TERMS: &str = "VS Code's server is Microsoft software. Starting it \
-     accepts the Visual Studio Code Server License Terms and the Microsoft Privacy Statement, \
-     so the app starts it only once you accept them.";
+
+/// What starting the server accepts, shown before the user agrees.
+pub(crate) fn license_terms() -> String {
+    crate::i18n::fl!("code-server-license-terms")
+}
 
 /// How often the worker's state is read for the windows.
 const POLL: Duration = Duration::from_millis(250);

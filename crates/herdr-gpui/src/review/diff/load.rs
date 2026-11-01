@@ -2,7 +2,7 @@
 //! at a time. Everything here runs Git or reads files, so it belongs on a
 //! background thread.
 use super::{
-    Body, Diff, FileDiff, Lines, Scope, Status,
+    Body, Diff, FileDiff, Lines, Scope, Status, Unreadable,
     budget::{self, ASKED_OUTPUT, AUTO_FILE_BYTES, BATCH_OUTPUT, MAX_UNTRACKED},
     lockfile,
     parse::parse,
@@ -181,7 +181,7 @@ fn branch_base(
     let remote_head = crate::git::git(
         checkout,
         &["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
-        "read the remote's default branch",
+        "read the remote's default branch", // i18n: data
         deadline,
         &never,
     )
@@ -190,7 +190,7 @@ fn branch_base(
         let merge_base = crate::git::git(
             checkout,
             &["merge-base", "HEAD", &candidate],
-            "find where the branch started",
+            "find where the branch started", // i18n: data
             deadline,
             &never,
         );
@@ -288,11 +288,16 @@ pub(crate) fn load(
         args.extend([source.revision.as_str(), "--"]);
         list(&source.checkout, &args, operation)
     };
-    let counted = budget::parse_numstat(&listing("--numstat", "count working tree changes")?);
-    let statuses: HashMap<String, Status> =
-        budget::parse_name_status(&listing("--name-status", "list working tree changes")?)
-            .into_iter()
-            .collect();
+    let counted = budget::parse_numstat(&listing(
+        "--numstat",
+        "count working tree changes", // i18n: data
+    )?);
+    let statuses: HashMap<String, Status> = budget::parse_name_status(&listing(
+        "--name-status",
+        "list working tree changes", // i18n: data
+    )?)
+    .into_iter()
+    .collect();
     let root = Path::new(&source.checkout);
     let mut files: Vec<FileDiff> = counted
         .into_iter()
@@ -322,7 +327,7 @@ pub(crate) fn load(
     let untracked = list(
         &source.checkout,
         &["ls-files", "--others", "--exclude-standard", "-z"],
-        "list untracked files",
+        "list untracked files", // i18n: data
     )?;
     for name in untracked
         .split('\0')
@@ -366,7 +371,7 @@ fn generated(checkout: &str, files: &[FileDiff]) -> HashSet<String> {
             ":(top,glob)**/.gitattributes",
             ":(top).gitattributes",
         ],
-        "list attribute files",
+        "list attribute files", // i18n: data
     ) else {
         return found;
     };
@@ -389,6 +394,7 @@ fn generated(checkout: &str, files: &[FileDiff]) -> HashSet<String> {
     for chunk in paths.chunks(ATTRIBUTE_CHUNK) {
         let mut args = vec!["check-attr", "-z", "linguist-generated", "--"];
         args.extend(chunk.iter().copied());
+        // i18n: data
         let Ok(output) = list(checkout, &args, "read attributes") else {
             break;
         };
@@ -412,11 +418,11 @@ pub(super) fn untracked(root: &Path, name: &str, asked: bool) -> Body {
         AUTO_FILE_BYTES
     };
     let Some(bytes) = size(root, name) else {
-        return Body::Failed("Not a regular file".into());
+        return Body::Failed(Unreadable::NotFile);
     };
     if bytes > limit {
         return if asked {
-            Body::Failed("Too large to show".into())
+            Body::Failed(Unreadable::TooLarge)
         } else {
             Body::Large
         };
@@ -425,7 +431,7 @@ pub(super) fn untracked(root: &Path, name: &str, asked: bool) -> Body {
     let read = std::fs::File::open(root.join(name))
         .and_then(|file| file.take(limit).read_to_end(&mut contents));
     if read.is_err() {
-        return Body::Failed("Could not read the file".into());
+        return Body::Failed(Unreadable::File);
     }
     if contents[..contents.len().min(SNIFF)].contains(&0) {
         return Body::Binary;
@@ -481,7 +487,7 @@ fn diff_files(source: &Source, files: &[&Request], asked: bool, read: &mut Vec<(
             herdr_github::pull_request::Error::Size,
         ))) => {
             let body = if asked {
-                Body::Failed("Too large to show".into())
+                Body::Failed(Unreadable::TooLarge)
             } else {
                 Body::Large
             };
@@ -490,7 +496,7 @@ fn diff_files(source: &Source, files: &[&Request], asked: bool, read: &mut Vec<(
         Err(error) => {
             tracing::warn!(%error, "Could not read changed files");
             for file in files {
-                read.push((file.file, Body::Failed("Could not read the change".into())));
+                read.push((file.file, Body::Failed(Unreadable::Change)));
             }
         }
     }
@@ -527,7 +533,7 @@ fn diff_text(source: &Source, files: &[&Request], limit: usize) -> crate::Result
     let bytes = crate::git::git_bytes(
         &source.checkout,
         &args,
-        "read working tree changes",
+        "read working tree changes", // i18n: data
         deadline,
         &|| false,
         limit,
