@@ -38,7 +38,7 @@ fn message() -> u32 {
     static MESSAGE: OnceLock<u32> = OnceLock::new();
     // SAFETY: registers a static, NUL-terminated name; returns 0 on failure,
     // which no message carries.
-    *MESSAGE.get_or_init(|| unsafe { RegisterWindowMessageW(w!("TaskbarButtonCreated")) })
+    *MESSAGE.get_or_init(|| unsafe { RegisterWindowMessageW(w!("TaskbarButtonCreated")) }) // i18n: data
 }
 
 /// Starts watching `hwnd`, a top-level window of this thread.
