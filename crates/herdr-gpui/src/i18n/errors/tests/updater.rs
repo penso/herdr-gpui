@@ -123,6 +123,8 @@ fn every_variant_without_fields_has_a_message() {
         Error::NotCommitted,
         Error::InstallationChanged,
         Error::MissingInstallerMetadata,
+        Error::WorkerStopped,
+        Error::CancelUnacknowledged,
     ]);
 }
 
@@ -195,6 +197,18 @@ fn every_variant_with_fields_has_a_message() {
         Error::RelaunchFailed(status()),
         Error::RelaunchMissing(backup),
         Error::CommitBarrier(std::sync::mpsc::RecvTimeoutError::Timeout),
+        Error::Start(io()),
+    ]);
+}
+
+#[test]
+fn every_reason_app_updates_never_checks_has_a_message() {
+    use herdr_updater::Disabled;
+    assert_localized(&[
+        Disabled::LocalBuild,
+        Disabled::Platform,
+        Disabled::Secondary,
+        Disabled::Unsupported(Error::WorkerStopped.into()),
     ]);
 }
 

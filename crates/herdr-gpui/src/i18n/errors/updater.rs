@@ -146,6 +146,9 @@ impl Localize for Error {
             Self::NotCommitted => fl!("error-updater-not-committed"),
             Self::InstallationChanged => fl!("error-updater-installation-changed"),
             Self::MissingInstallerMetadata => fl!("error-updater-missing-installer-metadata"),
+            Self::Start(_) => fl!("error-updater-start"),
+            Self::WorkerStopped => fl!("error-updater-worker-stopped"),
+            Self::CancelUnacknowledged => fl!("error-updater-cancel-unacknowledged"),
             Self::HttpStatus(status) => {
                 fl!("error-updater-http-status", status = status.to_string())
             }
@@ -188,6 +191,20 @@ impl Localize for Error {
             }
             #[cfg(windows)]
             Self::Windows(error) => error.localize(),
+        }
+    }
+}
+
+/// Why App Updates never checks, after "In-app updates unavailable:".
+impl Localize for herdr_updater::Disabled {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::LocalBuild => fl!("error-updater-disabled-local-build"),
+            Self::Platform => fl!("error-updater-disabled-platform"),
+            Self::Secondary => fl!("error-updater-disabled-secondary"),
+            Self::Unsupported(failure) => failure.localize(),
+            // keep-sorted end
         }
     }
 }

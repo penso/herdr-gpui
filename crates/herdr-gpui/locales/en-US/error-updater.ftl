@@ -143,6 +143,15 @@ error-updater-commit-barrier = Update commit barrier timed out or disconnected
 error-updater-not-committed = Update was not committed
 error-updater-installation-changed = Installation changed during update
 error-updater-missing-installer-metadata = This release has no signed Windows installer metadata. Download it from GitHub, or check for a newer release
+error-updater-start = Could not start updater
+error-updater-worker-stopped = Update worker stopped
+error-updater-cancel-unacknowledged = Update worker could not acknowledge cancellation
+
+# Why App Updates never checks, after "In-app updates unavailable:" (update-panel-disabled).
+error-updater-disabled-local-build = In-app updates require a release build with an embedded update verification key. Local builds and test fixtures never check automatically.
+error-updater-disabled-platform = No standalone updater is available for this platform. Use your package manager or download a supported release.
+# Starts lowercase, as it follows a colon.
+error-updater-disabled-secondary = another window owns app updates in this process. Use the window that was open first.
 
 # Windows only: why the update installer could not be checked or started.
 error-updater-windows-location = In-app updates replace the copy installed in %LOCALAPPDATA%\Programs\Herdr UI, and this one runs from elsewhere. Download the new release from GitHub instead
