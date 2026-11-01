@@ -8,15 +8,18 @@ fn a_listing_from_the_worker_is_shown_and_a_failure_keeps_it() {
     assert!(!ports.poll(true, now));
     assert_eq!(ports.listing(), None);
     updates
-        .send(Update::Listing(Ok(vec![listener(3000, 4242, 10)])))
+        .send(Update::Listing(
+            Instant::now(),
+            Ok(vec![listener(3000, 4242, 10)]),
+        ))
         .unwrap();
     assert!(ports.poll(true, now));
     assert_eq!(ports.listing(), Some(&[listener(3000, 4242, 10)][..]));
     updates
-        .send(Update::Listing(Err(Error::Tool.into())))
+        .send(Update::Listing(Instant::now(), Err(Error::Tool.into())))
         .unwrap();
     assert!(ports.poll(true, now));
-    assert!(ports.error().unwrap().contains("lsof"));
+    assert!(ports.english_error().unwrap().contains("lsof"));
     assert_eq!(ports.listing().map(<[Listener]>::len), Some(1));
 }
 
@@ -158,4 +161,53 @@ fn directories_are_shown_from_the_home_folder() {
         home_relative(Path::new("/home/dev/app"), None),
         "/home/dev/app"
     );
+}
+
+#[test]
+fn a_command_never_takes_rows_cached_before_it_for_current() {
+    let (mut ports, updates, _commands) = LocalPorts::fake();
+    let before = Instant::now();
+    updates
+        .send(Update::Listing(before, Ok(vec![listener(3000, 4242, 10)])))
+        .unwrap();
+    ports.poll(true, before);
+    // The section shows the cached rows; a later command waits.
+    assert!(ports.listing().is_some());
+    let requested = before + Duration::from_millis(1);
+    assert_eq!(ports.fresh_listing(requested), None);
+    // A scan begun before the request, answering after it, is still old.
+    updates
+        .send(Update::Listing(before, Ok(vec![listener(3000, 4242, 10)])))
+        .unwrap();
+    ports.poll(true, requested);
+    assert_eq!(ports.fresh_listing(requested), None);
+    // One begun after it answers.
+    let fresh = vec![listener(8080, 4343, 20)];
+    updates
+        .send(Update::Listing(requested, Ok(fresh.clone())))
+        .unwrap();
+    ports.poll(true, requested);
+    assert_eq!(ports.fresh_listing(requested), Some(Ok(&fresh[..])));
+}
+
+#[test]
+fn a_fresh_failed_scan_refuses_rather_than_using_old_rows() {
+    let (mut ports, updates, _commands) = LocalPorts::fake();
+    ports.seed(vec![listener(3000, 4242, 10)]);
+    let requested = Instant::now();
+    updates
+        .send(Update::Listing(requested, Err(Error::Tool.into())))
+        .unwrap();
+    ports.poll(true, requested);
+    let refused = ports.fresh_listing(requested).unwrap().unwrap_err();
+    assert!(refused.contains("lsof"), "{refused}");
+}
+
+#[test]
+fn a_halted_scan_answers_a_command_at_once() {
+    let (mut ports, updates, commands) = LocalPorts::fake();
+    drop((updates, commands));
+    let requested = Instant::now();
+    ports.poll(true, requested);
+    assert!(ports.fresh_listing(requested).unwrap().is_err());
 }

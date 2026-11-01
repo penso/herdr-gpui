@@ -54,5 +54,25 @@ fn the_ports_section_and_its_question_show_only_messages_under_en_xa() {
         });
         draw(cx);
         assert_translated("Ports > Stop", &recorder.take(), &data);
+
+        // A failed scan says why in the app's language, not in English.
+        recorder.take();
+        cx.update(|window, cx| {
+            view.update(cx, |view, cx| {
+                view.dismiss_menu(window, cx);
+                view.local_ports.seed_error(Error::Tool.into());
+                cx.notify();
+            })
+        });
+        cx.update(|window, _| window.refresh());
+        draw(cx);
+        let shown = recorder.take();
+        assert!(cx.debug_bounds("local-ports-error").is_some());
+        let english = Error::Tool.to_string();
+        assert!(
+            !shown.iter().any(|line| line.contains(english.as_str())),
+            "the failure is shown in English: {shown:?}"
+        );
+        assert_translated("Ports > failed scan", &shown, &data);
     });
 }

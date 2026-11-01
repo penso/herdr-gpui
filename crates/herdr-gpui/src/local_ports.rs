@@ -26,6 +26,7 @@ pub(crate) use error::Error;
 use crate::{
     Result,
     browser::WebUrl,
+    i18n::Localize,
     listening_ports::{Bind, Link, Origin, Port},
     processes::Identity,
 };
@@ -181,7 +182,8 @@ pub(crate) enum Command {
 
 #[cfg_attr(not(unix), allow(dead_code))]
 pub(crate) enum Update {
-    Listing(Result<Vec<Listener>>),
+    /// A scan's result, and when that scan began.
+    Listing(Instant, Result<Vec<Listener>>),
     Signalled(PortAction, Vec<(Identity, Outcome)>),
 }
 
@@ -220,9 +222,10 @@ pub(crate) struct LocalPorts {
     start_failed: bool,
     /// The latest listing, kept while closed so reopening shows it at once.
     listing: Option<Vec<Listener>>,
-    /// Why the latest scan failed, as display text; the last good listing
-    /// stays shown.
-    error: Option<String>,
+    /// Why the latest scan failed; the last good listing stays shown.
+    error: Option<Failure>,
+    /// When the latest scan, good or failed, began.
+    scanned: Option<Instant>,
     /// A signal is on its way.
     acting: bool,
     report: Option<Report>,
@@ -230,7 +233,24 @@ pub(crate) struct LocalPorts {
     demand: Option<Instant>,
 }
 
-/// `error` and its causes, for display.
+/// Why the port list failed: in the app's language for the section, and in
+/// English with its causes for logs and the command line.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Failure {
+    shown: String,
+    english: String,
+}
+
+impl Failure {
+    fn of(error: &crate::Error) -> Self {
+        Self {
+            shown: error.localize(),
+            english: describe(error),
+        }
+    }
+}
+
+/// `error` and its causes, in English.
 fn describe(error: &crate::Error) -> String {
     let mut text = error.to_string();
     let mut source = std::error::Error::source(error);
@@ -262,8 +282,9 @@ impl LocalPorts {
             match start() {
                 Ok(worker) => self.worker = Some(worker),
                 Err(error) => {
-                    tracing::warn!(category = "local-ports", error = %describe(&error), "could not start the port list");
-                    self.error = Some(describe(&error));
+                    let failure = Failure::of(&error);
+                    tracing::warn!(category = "local-ports", error = %failure.english, "could not start the port list");
+                    self.error = Some(failure);
                     self.start_failed = true;
                     return true;
                 }
@@ -280,7 +301,7 @@ impl LocalPorts {
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.worker = None;
                     self.acting = false;
-                    self.error = Some(describe(&Error::Stopped.into()));
+                    self.error = Some(Failure::of(&Error::Stopped.into()));
                     self.start_failed = true;
                     changed = true;
                 }
@@ -291,17 +312,19 @@ impl LocalPorts {
 
     fn apply(&mut self, update: Update) {
         match update {
-            Update::Listing(Ok(mut listing)) => {
+            Update::Listing(started, Ok(mut listing)) => {
                 listing.truncate(ROW_LIMIT);
                 self.listing = Some(listing);
                 self.error = None;
+                self.scanned = Some(started);
             }
-            Update::Listing(Err(error)) => {
-                let text = describe(&error);
-                if self.error.as_deref() != Some(text.as_str()) {
-                    tracing::warn!(category = "local-ports", error = %text, "could not list this computer's ports");
+            Update::Listing(started, Err(error)) => {
+                let failure = Failure::of(&error);
+                if self.error.as_ref().map(|known| &known.english) != Some(&failure.english) {
+                    tracing::warn!(category = "local-ports", error = %failure.english, "could not list this computer's ports");
                 }
-                self.error = Some(text);
+                self.error = Some(failure);
+                self.scanned = Some(started);
             }
             Update::Signalled(action, outcomes) => {
                 self.acting = false;
@@ -315,9 +338,40 @@ impl LocalPorts {
         self.listing.as_deref()
     }
 
-    /// Why the latest scan failed.
+    /// Why the latest scan failed, in the app's language.
     pub(crate) fn error(&self) -> Option<&str> {
-        self.error.as_deref()
+        self.error.as_ref().map(|failure| failure.shown.as_str())
+    }
+
+    /// Why the latest scan failed, in English, for the command line.
+    pub(crate) fn english_error(&self) -> Option<&str> {
+        self.error.as_ref().map(|failure| failure.english.as_str())
+    }
+
+    /// Whether a scan that began at or after `at` has answered, so what is
+    /// shown is no older than a request made then.
+    pub(crate) fn scanned_since(&self, at: Instant) -> bool {
+        self.scanned.is_some_and(|scanned| scanned >= at)
+    }
+
+    /// What a command made at `requested` may list or act on: `None`
+    /// until a scan begun since then has answered, so rows cached while the
+    /// section was closed are never taken for current; then the listing, or
+    /// why there is none, in English. A scan that cannot run says so at once.
+    pub(crate) fn fresh_listing(&self, requested: Instant) -> Option<Result<&[Listener], String>> {
+        if !self.scanned_since(requested) {
+            let halted = self.start_failed && self.worker.is_none();
+            return halted.then(|| {
+                Err(self
+                    .english_error()
+                    .map_or_else(|| Error::Stopped.to_string(), str::to_owned))
+            });
+        }
+        match (self.english_error(), self.listing()) {
+            (Some(error), _) => Some(Err(error.to_owned())),
+            (None, Some(listing)) => Some(Ok(listing)),
+            (None, None) => None,
+        }
     }
 
     pub(crate) fn acting(&self) -> bool {
@@ -339,12 +393,13 @@ impl LocalPorts {
         self.demand = Some(self.demand.map_or(until, |known| known.max(until)));
     }
 
-    /// Lists the ports again now rather than at the next interval. A scan
-    /// already queued makes this one unnecessary.
-    pub(crate) fn refresh(&mut self) {
-        if let Some(worker) = &self.worker {
-            let _ = worker.commands.try_send(Command::Refresh);
-        }
+    /// Lists the ports again now rather than at the next interval; whether
+    /// a running worker was asked. A scan already queued makes this one
+    /// unnecessary.
+    pub(crate) fn refresh(&mut self) -> bool {
+        self.worker
+            .as_ref()
+            .is_some_and(|worker| worker.commands.try_send(Command::Refresh).is_ok())
     }
 
     /// Asks the worker to signal exactly `victims`, after checking each is
@@ -374,6 +429,12 @@ impl LocalPorts {
     #[cfg(test)]
     pub(crate) fn seed(&mut self, listing: Vec<Listener>) {
         self.listing = Some(listing);
+    }
+
+    /// Shows `error` as if the latest scan had failed with it.
+    #[cfg(test)]
+    pub(crate) fn seed_error(&mut self, error: crate::Error) {
+        self.apply(Update::Listing(Instant::now(), Err(error)));
     }
 
     /// Ports with no worker thread: the test plays the worker's part.

@@ -71,9 +71,10 @@ fn run(
             Ok(Command::Refresh) | Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
+        let started = Instant::now();
         let result = scan(&mut system, user, cancelled);
         due = Instant::now() + if result.is_ok() { INTERVAL } else { RETRY };
-        if updates.send(Update::Listing(result)).is_err() {
+        if updates.send(Update::Listing(started, result)).is_err() {
             return;
         }
     }

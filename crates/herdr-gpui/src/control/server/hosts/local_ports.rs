@@ -38,17 +38,18 @@ pub(super) fn info(
     }
 }
 
-/// The listing, once there is one; a failed first scan, as an error.
-fn listing(view: &HerdrWindow) -> Option<Result<&[Listener], Response>> {
-    match (view.local_ports.listing(), view.local_ports.error()) {
-        (Some(listing), _) => Some(Ok(listing)),
-        (None, Some(error)) => Some(Err(Response::error(ErrorCode::Failed, error))),
-        (None, None) => None,
-    }
+/// The listing a scan begun after `requested` found, once it has
+/// answered; a failed scan, as an error.
+fn listing(view: &HerdrWindow, requested: Instant) -> Option<Result<&[Listener], Response>> {
+    Some(
+        view.local_ports
+            .fresh_listing(requested)?
+            .map_err(|error| Response::error(ErrorCode::Failed, error)),
+    )
 }
 
-fn list(view: &HerdrWindow) -> Option<Response> {
-    let listeners = match listing(view)? {
+fn list(view: &HerdrWindow, requested: Instant) -> Option<Response> {
+    let listeners = match listing(view, requested)? {
         Ok(listeners) => listeners,
         Err(response) => return Some(response),
     };
@@ -63,23 +64,23 @@ fn list(view: &HerdrWindow) -> Option<Response> {
             info(listener, workspace, now, home.as_deref())
         })
         .collect();
-    let note = view
-        .local_ports
-        .error()
-        .map(|error| format!("The latest scan failed, so this listing may be old: {error}"));
     Some(Response::Host {
-        reply: Reply::LocalPorts(Box::new(LocalPorts { listening, note })),
+        reply: Reply::LocalPorts(Box::new(LocalPorts {
+            listening,
+            note: None,
+        })),
     })
 }
 
 fn signal(
     view: &mut HerdrWindow,
+    requested: Instant,
     port: u16,
     action: PortAction,
     window: &mut Window,
     cx: &mut Context<HerdrWindow>,
 ) -> Option<Response> {
-    let listeners: Vec<Listener> = match listing(view)? {
+    let listeners: Vec<Listener> = match listing(view, requested)? {
         Ok(listeners) => listeners
             .iter()
             .filter(|listener| listener.number == port)
@@ -123,16 +124,24 @@ fn signal(
     })
 }
 
-/// Answers once the window has listed this computer's ports, keeping its
-/// scan running meanwhile.
+/// Answers once a scan of this computer begun after the request has
+/// answered, keeping the scan running meanwhile and asking a running one to
+/// scan at once. Rows cached while the section was closed are never used.
 fn wait(
     caller: &Caller,
     incoming: socket::Incoming,
     watches: &mut Watches,
     cx: &mut App,
-    mut answer: impl FnMut(&mut HerdrWindow, &mut Window, &mut Context<HerdrWindow>) -> Option<Response>
+    mut answer: impl FnMut(
+        &mut HerdrWindow,
+        Instant,
+        &mut Window,
+        &mut Context<HerdrWindow>,
+    ) -> Option<Response>
     + 'static,
 ) {
+    let requested = Instant::now();
+    let mut asked = false;
     if !SUPPORTED {
         return incoming.respond(Response::error(
             ErrorCode::Unsupported,
@@ -150,7 +159,9 @@ fn wait(
             handle
                 .update(cx, |view, window, cx| {
                     view.local_ports.demand(Instant::now() + DEMAND);
-                    answer(view, window, cx)
+                    // A worker not yet started scans as soon as it starts.
+                    asked = asked || view.local_ports.refresh();
+                    answer(view, requested, window, cx)
                 })
                 .unwrap_or_else(|_| Some(Response::error(ErrorCode::NoWindow, "The window closed")))
         },
@@ -168,7 +179,9 @@ pub(super) fn all(
     watches: &mut Watches,
     cx: &mut App,
 ) {
-    wait(caller, incoming, watches, cx, |view, _, _| list(view));
+    wait(caller, incoming, watches, cx, |view, requested, _, _| {
+        list(view, requested)
+    });
 }
 
 pub(super) fn act(
@@ -182,7 +195,11 @@ pub(super) fn act(
     if port == 0 {
         return incoming.respond(Response::error(ErrorCode::InvalidRequest, "Invalid port"));
     }
-    wait(caller, incoming, watches, cx, move |view, window, cx| {
-        signal(view, port, action, window, cx)
-    });
+    wait(
+        caller,
+        incoming,
+        watches,
+        cx,
+        move |view, requested, window, cx| signal(view, requested, port, action, window, cx),
+    );
 }

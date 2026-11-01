@@ -5,7 +5,11 @@
 // i18n: migrated
 
 use super::Page;
-use crate::{HerdrWindow, i18n::fl, local_ports::Pending};
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+    local_ports::Pending,
+};
 use gpui::{prelude::*, *};
 use herdr_control_protocol::protocol::hosts::PortAction;
 
@@ -43,7 +47,7 @@ impl HerdrWindow {
             return;
         };
         if let Err(error) = self.local_ports.signal(pending.action, pending.victims()) {
-            self.local_error = Some(error.to_string());
+            self.local_error = Some(error.localize());
         }
         cx.notify();
     }

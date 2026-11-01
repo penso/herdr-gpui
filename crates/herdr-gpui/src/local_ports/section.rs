@@ -5,6 +5,7 @@
 // i18n: migrated
 
 use super::{Listener, Pending, Report, SUPPORTED, home_relative};
+use crate::i18n::Localize;
 use crate::{
     HerdrWindow, config::corners, direction::Logical, i18n::fl, listening_ports::Link, usage::Host,
 };
@@ -120,7 +121,7 @@ impl HerdrWindow {
             .local_ports
             .signal(PortAction::Resume, vec![listener.identity])
         {
-            self.local_error = Some(error.to_string());
+            self.local_error = Some(error.localize());
         }
         cx.notify();
     }
