@@ -234,3 +234,13 @@ organization stays once known, and nothing about them is saved. The State
 menu beside the Open toggle narrows the list to all, open (with drafts, as
 the toggle does), draft, merged, or closed pull requests; Azure DevOps'
 abandoned ones read as closed.
+
+Mine on Azure DevOps matches the reader by identity: each listing keeps
+the keys of the pull requests whose `createdBy.id` is connectionData's
+`authenticatedUser.id` (`Snapshot::authored`, in memory only), since two
+people can share a display name. Each active pull request's reviewer votes
+give its review verdict (`azure::pull_request::review`), shown in the
+Status column beside GitHub's and never stored.
+
+A section narrows to some projects through the projects menu in its search
+row ("All projects" while none is picked); backends keep their pills.
