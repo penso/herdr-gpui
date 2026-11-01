@@ -7,6 +7,7 @@ use crate::{
 };
 use herdr_client::ConnectTarget;
 
+mod locale;
 mod mutes;
 mod permission;
 

@@ -97,20 +97,20 @@ impl SoundConfig {
         let key = match label {
             "claude" | "claude-code" => "claude",
             "cursor" | "cursor-agent" => "cursor",
-            "devin" | "devin-cli" | "devin cli" => "devin",
+            "devin" | "devin-cli" | "devin cli" => "devin", // i18n: data
             "agy" | "antigravity" | "antigravity-cli" => "agy",
             "cline" | ".cline" => "cline",
             "opencode" | "opencode2" | "open-code" => "open_code",
             "copilot" | "github-copilot" | "ghcs" => "github_copilot",
-            "kimi" | "kimi-code" | "kimi code" => "kimi",
+            "kimi" | "kimi-code" | "kimi code" => "kimi", // i18n: data
             "kiro" | "kiro-cli" => "kiro",
             "amp" | "amp-local" => "amp",
             "grok" | "grok-build" => "grok",
             "hermes" | "hermes-agent" => "hermes",
-            "kilo" | "kilo-code" | "kilo code" => "kilo",
+            "kilo" | "kilo-code" | "kilo code" => "kilo", // i18n: data
             "qodercli" | "qoderclicn" | "qoder" | "qodercn" => "qodercli",
-            "qwen" | "qwen-code" | "qwen code" => "qwen",
-            "letta" | "letta-code" | "letta code" => "letta",
+            "qwen" | "qwen-code" | "qwen code" => "qwen", // i18n: data
+            "letta" | "letta-code" | "letta code" => "letta", // i18n: data
             "muse" | "muse-code" | "muse-cli" => "muse",
             "pi" | "codex" | "gemini" | "droid" | "maki" => label,
             _ if label
