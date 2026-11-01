@@ -10,12 +10,14 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
+base64.workspace            = true
 chrono.workspace            = true
 gix.workspace               = true
 herdr-client.workspace      = true
 herdr-credentials.workspace = true
 herdr-github.workspace      = true
 herdr-remote.workspace      = true
+percent-encoding.workspace  = true
 rusqlite.workspace          = true
 secrecy.workspace           = true
 serde.workspace             = true

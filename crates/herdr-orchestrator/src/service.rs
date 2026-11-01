@@ -6,7 +6,7 @@
 use super::{
     Access, Error, HerdrSession, Item, Provider, Result, Run, SourceKey, Store,
     actions::{Action, Site},
-    beads, database_path, github, gitlab,
+    azure, beads, database_path, github, gitlab,
     location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
@@ -18,9 +18,9 @@ use chrono::{DateTime, Utc};
 use herdr_client::ConnectTarget;
 use herdr_github::Tokens;
 use herdr_remote::teleport::{AgentKind, Host};
-use sources::{recognize, statuses};
+use sources::{recognize, replaced_by, statuses};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -30,9 +30,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod azure_source;
 mod gitlab_source;
+pub mod remote;
 mod sources;
 
+pub use remote::{RemoteRequest, RemoteScope};
 pub use sources::sources;
 
 /// How often other applications' writes (agent-launcher's runs) are looked for.
@@ -72,6 +75,8 @@ pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
             herdr_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
             _ => BACKOFF,
         },
+        Error::Azure(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Azure(_) => BACKOFF,
         Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
         Error::Gitlab(_) => BACKOFF,
         _ => return BACKOFF,
@@ -184,6 +189,15 @@ pub struct Snapshot {
     /// Each open pull request's review and checks, by repository and number,
     /// as the last sync of its source read them. Never stored.
     pub pr_status: Arc<HashMap<(String, u64), super::PrStatus>>,
+    /// The name a forge other than GitHub shows for the reader, as it names
+    /// authors, once a sync has read it: Azure DevOps's display name.
+    pub viewer: Option<String>,
+    /// The canonical keys of the Azure DevOps pull requests the reader
+    /// created, matched by identity id for Mine. Never stored.
+    pub authored: Arc<HashSet<String>>,
+    /// An Azure DevOps organization's projects and repositories, which a
+    /// remote worker of its reader's pull requests reads to browse.
+    pub catalog: Option<Arc<azure::organization::Catalog>>,
 }
 
 pub struct Service {
@@ -230,6 +244,7 @@ impl Service {
             retry: Vec::new(),
             uncached: HashMap::new(),
             resume: HashMap::new(),
+            azure_token: None,
             gitlab_token: None,
             cooldown: None,
         };
@@ -313,6 +328,9 @@ struct Worker {
     /// and a refusal look again, so a new `glab auth login` or a renewed
     /// connected account is picked up without reopening the view.
     gitlab_token: Option<(String, Option<gitlab::account::Found>)>,
+    /// The Azure DevOps token, once looked up; Refresh and a refusal look
+    /// again, so a new `az login` is picked up without reopening the view.
+    azure_token: Option<Option<azure::token::Token>>,
     cooldown: Option<Duration>,
 }
 
@@ -336,6 +354,7 @@ impl Worker {
                 Ok(Command::Refresh(token)) => {
                     self.request.token = token;
                     self.gitlab_token = None;
+                    self.azure_token = None;
                     self.retry.clear();
                     let token = self.request.token.clone();
                     self.sync(token.as_ref());
@@ -645,7 +664,8 @@ impl Worker {
         self.data_version = Some(store.data_version()?);
         let mut items = store.items()?;
         if !self.uncached.is_empty() {
-            items.retain(|item| !self.uncached.contains_key(&item.key.source));
+            let replaced = replaced_by(&self.uncached);
+            items.retain(|item| !replaced.contains(&item.key.source));
             items.extend(self.uncached.values().flatten().cloned());
         }
         self.snapshot.items = Arc::new(items);
@@ -883,6 +903,7 @@ impl Worker {
                     count,
                 })
             }
+            Provider::Azure => self.sync_azure(key, writable),
             Provider::Gitlab => {
                 let previous = store.checkpoint(key)?;
                 let listing = self.gitlab_listing(key, previous.as_ref())?;

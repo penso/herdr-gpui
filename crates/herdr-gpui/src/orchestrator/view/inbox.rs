@@ -5,7 +5,7 @@
 //! beads cost only the rows on screen.
 
 use super::{
-    Event, OrchestratorView, PaneDrag, Resize,
+    Event, Menu, OrchestratorView, PaneDrag, Resize,
     look::{BLUE, GREEN, Look, MAGENTA, RED, YELLOW},
     rows::{Sort, Tab},
 };
@@ -56,7 +56,18 @@ impl OrchestratorView {
                     .child(self.render_list(cx))
                     .children(pane),
             )
-            .when(self.sort_open, |el| el.child(self.render_sort_menu(cx)))
+            .when(self.menu == Some(Menu::Sort), |el| {
+                el.child(self.render_sort_menu(cx))
+            })
+            .when(self.menu == Some(Menu::State), |el| {
+                el.child(self.render_state_menu(cx))
+            })
+            .when(self.menu == Some(Menu::Projects), |el| {
+                el.child(self.render_projects_menu(cx))
+            })
+            .when(self.menu == Some(Menu::Repos), |el| {
+                el.child(self.render_project_filter_menu(cx))
+            })
             .into_any_element()
     }
 
@@ -434,8 +445,17 @@ impl OrchestratorView {
             .px_4()
             .py_2()
             .child(self.render_search_field(window, cx));
+        let (state, projects) = match self.tab {
+            Tab::PullRequests => (
+                Some(self.render_state_control(cx)),
+                self.render_projects_control(cx),
+            ),
+            Tab::Issues => (None, None),
+        };
+        let project_filter = self.render_project_filter_control(cx);
         let toggle = |id: &'static str, label: &'static str, on: bool, flip: fn(&mut Self)| {
             look.toggle(id, label, on)
+                .debug_selector(move || id.to_owned())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     flip(this);
                     this.refresh_rows();
@@ -489,8 +509,10 @@ impl OrchestratorView {
                         filters.open_only,
                         |this| {
                             this.filters.open_only = !this.filters.open_only;
+                            this.filters.state = None;
                         },
                     ))
+                    .children(state)
                     .when(
                         self.repos.iter().any(|repo| repo.reading_login().is_some()),
                         |row| {
@@ -506,10 +528,11 @@ impl OrchestratorView {
                         |this| {
                             this.filters.has_run = !this.filters.has_run;
                         },
-                    ));
+                    ))
+                    .children(projects);
             }
         }
-        row.child(
+        row.children(project_filter).child(
             div()
                 .id("orchestrator-sort")
                 .flex_none()
@@ -522,7 +545,7 @@ impl OrchestratorView {
                 .child(self.sort.label())
                 .child(look.icon("icons/chevron-down.svg", 10., theme.muted))
                 .on_click(cx.listener(|this, _, _, cx| {
-                    this.sort_open = !this.sort_open;
+                    this.toggle_menu(Menu::Sort);
                     cx.notify();
                 })),
         )
@@ -587,7 +610,7 @@ impl OrchestratorView {
                         .child(sort.label())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.sort = sort;
-                            this.sort_open = false;
+                            this.menu = None;
                             this.refresh_rows();
                             cx.notify();
                         }))
@@ -743,6 +766,7 @@ pub(super) fn failure_text(provider: Provider, error: &impl std::fmt::Display) -
 
 pub(super) fn provider_name(provider: Provider) -> &'static str {
     match provider {
+        Provider::Azure => "Azure DevOps",
         Provider::Github => "GitHub",
         Provider::Beads => "Beads",
         Provider::Gitlab => "GitLab",
@@ -768,9 +792,12 @@ fn source_chip(look: &Look, id: (&'static str, usize), provider: Provider) -> St
         .child(provider_name(provider))
 }
 
-/// A backend's mark: GitHub's or GitLab's logo, else a short colored tag.
+/// A backend's mark: its forge's logo, else a short colored tag.
 pub(super) fn provider_mark(look: &Look, provider: Provider) -> AnyElement {
     match provider {
+        Provider::Azure => look
+            .icon("icons/azure-devops.svg", 12., look.theme.subtext())
+            .into_any_element(),
         Provider::Github => look
             .icon("icons/github.svg", 12., look.theme.subtext())
             .into_any_element(),

@@ -55,7 +55,7 @@ fn a_folder_outside_git_is_left_out_quietly(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(cx.update(|_, cx| view.read(cx).projects_named().count()), 1);
     assert!(cx.debug_bounds("orchestrator-banner").is_none());
-    assert!(cx.debug_bounds("orchestrator-pill-project-0").is_none());
+    assert!(cx.debug_bounds("orchestrator-project-filter").is_none());
 }
 
 #[gpui::test]

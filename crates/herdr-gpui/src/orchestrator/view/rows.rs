@@ -76,6 +76,30 @@ pub(crate) struct Filters {
     pub(crate) blocked: bool,
     /// Pull requests: only open and draft ones.
     pub(crate) open_only: bool,
+    /// Pull requests: only those in this one state, which the State menu
+    /// picks; it clears `open_only`, and turning Open on clears it.
+    pub(crate) state: Option<PrState>,
+}
+
+/// A pull request's state the State menu narrows to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PrState {
+    Draft,
+    Merged,
+    /// Closed without merging: Azure DevOps calls it abandoned.
+    Closed,
+}
+
+impl PrState {
+    /// Whether an item in `state`, as the readers word it, is in this one.
+    pub(crate) fn holds(self, state: &str) -> bool {
+        state
+            == match self {
+                Self::Draft => "draft",
+                Self::Merged => "merged",
+                Self::Closed => "closed",
+            }
+    }
 }
 
 /// Merged and closed pull requests are hidden until asked for, as on GitHub.
@@ -86,6 +110,7 @@ impl Default for Filters {
             has_run: false,
             blocked: false,
             open_only: true,
+            state: None,
         }
     }
 }
@@ -417,6 +442,7 @@ pub(crate) fn pull_request_rows(
         .enumerate()
         .filter(|(_, item)| item.pull_request.is_some())
         .filter(|(_, item)| !filters.open_only || matches!(item.state.as_str(), "open" | "draft"))
+        .filter(|(_, item)| filters.state.is_none_or(|state| state.holds(&item.state)))
         .filter(|(_, item)| {
             !mine || login.is_some_and(|login| item.author.as_deref() == Some(login))
         })
@@ -436,7 +462,7 @@ pub(crate) fn pull_request_rows(
 
 /// What a run's item is called when the item is not listed, such as a
 /// closed issue: `#375` for an issue or GitHub pull request, `!375` for a
-/// GitLab merge request, else its id.
+/// GitLab merge request or Azure DevOps pull request, else its id.
 pub(crate) fn key_label(key: &str) -> String {
     let native = key
         .rsplit(':')
@@ -446,7 +472,8 @@ pub(crate) fn key_label(key: &str) -> String {
         .replace("%25", "%");
     let number = native.strip_prefix("pr/").unwrap_or(&native);
     if !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()) {
-        let merge_request = native.starts_with("pr/") && key.starts_with("gitlab:");
+        let merge_request =
+            native.starts_with("pr/") && (key.starts_with("gitlab:") || key.starts_with("azure:"));
         format!("{}{number}", if merge_request { '!' } else { '#' })
     } else {
         native
@@ -484,11 +511,16 @@ impl Next {
         {
             Self::Review
         } else if mine
-            && (review == Some(Review::ChangesRequested) || checks == Some(CheckState::Failed))
+            && (matches!(
+                review,
+                Some(Review::ChangesRequested | Review::WaitingForAuthor | Review::Rejected)
+            ) || checks == Some(CheckState::Failed))
         {
             Self::Fix
-        } else if review == Some(Review::Approved)
-            && !matches!(checks, Some(CheckState::Failed | CheckState::Pending))
+        } else if matches!(
+            review,
+            Some(Review::Approved | Review::ApprovedWithSuggestions)
+        ) && !matches!(checks, Some(CheckState::Failed | CheckState::Pending))
             && item.state == "open"
         {
             Self::Merge
@@ -526,7 +558,13 @@ pub(crate) fn status_of<'a>(
     item: &Item,
     statuses: &'a HashMap<(String, u64), PrStatus>,
 ) -> Option<&'a PrStatus> {
-    let number = item.github_pull_request()?.number;
+    // GitHub's are read and stored; Azure DevOps's come from its listing,
+    // whose repositories have three parts. A GitLab path may equal a GitHub
+    // one, so it never borrows GitHub's.
+    let number = match item.key.source.provider {
+        Provider::Github | Provider::Azure => item.pull_request.as_ref()?.number,
+        Provider::Gitlab | Provider::Beads => return None,
+    };
     statuses.get(&(item.key.source.repository.clone(), number))
 }
 
