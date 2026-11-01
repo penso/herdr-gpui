@@ -109,12 +109,12 @@ impl Localize for Error {
                 fl!("error-link-on-another-host", host = host.as_str())
             }
             Self::ListeningPorts(error) => error.localize(),
-            Self::LocalPorts(error) => error.localize(),
             Self::LocalAddresses(source) => {
                 fl!("error-local-addresses", error = source.to_string())
             }
             Self::LocalGit(_) => fl!("error-local-git"),
             Self::LocalNetworkDenied => fl!("error-local-network-denied"),
+            Self::LocalPorts(error) => error.localize(),
             Self::LocalWorktreeNote => fl!("error-local-worktree-note"),
             Self::LogRead { path: file, source } => fl!(
                 "error-log-read",
