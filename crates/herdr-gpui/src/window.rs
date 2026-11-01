@@ -228,6 +228,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) key_layout: fn(u16) -> Option<prefix::KeyChars>,
     /// The key code and Shift of the key being handled, from AppKit's event.
     pub(crate) key_press: fn() -> Option<(u16, bool)>,
+    /// What a new worktree whose creation is in flight opens in, kept
+    /// apart from the dialog so closing it does not drop the launch.
+    pub(crate) landing_launch: Option<crate::worktree_landing::Launch>,
     /// When this window last forwarded user input; gates re-claiming a frame another client sized.
     pub(crate) last_input: Option<std::time::Instant>,
     /// The last pointer position over the panes, so a move event that did not move is not use.
@@ -325,8 +328,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) server_keys: Option<server_keys::ServerKeymap>,
     /// Local sessions on this machine, scanned on a worker while the popup is open.
     pub(crate) sessions: sessions::Sessions,
-    /// Where the footer's sessions button last painted. The window owns it so a
-    /// shortcut and a click anchor the list at the same place.
+    /// Where the footer's device picker last painted, so the Sessions shortcut
+    /// opens the list where the picker opens.
     pub(crate) sessions_anchor: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
     pub(crate) settings: crate::settings_panel::SettingsPanel,
     pub(super) shift_taps: double_shift::ShiftTaps,
@@ -681,6 +684,7 @@ impl HerdrWindow {
             cx.notify();
         }
         self.publish_remote_pull_requests(cx);
+        self.sync_remote_hosts(window, cx);
         self.update_merged_cleanup(window, cx);
         if self.update_git() {
             cx.notify();

@@ -3,9 +3,14 @@ use p256::ecdsa::{Signature, SigningKey, signature::Signer};
 
 mod devices;
 mod handoff;
+mod host_retries;
 mod inputs;
 mod limits;
+mod links;
+mod nearby;
+mod nearby_vectors;
 mod pairing;
+mod presence;
 mod session;
 
 const ORIGIN: &str = "https://192.168.1.20:7443";

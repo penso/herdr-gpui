@@ -8,6 +8,7 @@ pub(crate) use error::Error;
 
 use crate::{
     HerdrWindow,
+    i18n::{Localize, fl},
     window::image_source::{PreparedImage, Source},
 };
 use gpui::{AppContext as _, Context, Image, Window};
@@ -56,7 +57,7 @@ impl HerdrWindow {
                 match saved {
                     Ok(path) => this.attach_chat_files(&pane_id, vec![path], window, cx),
                     Err(error) => {
-                        pane.error = Some(format!("Image not attached: {error}"));
+                        pane.error = Some(fl!("chat-image-not-attached", error = error.localize()));
                         this.redraw_terminal(cx);
                         cx.notify();
                     }

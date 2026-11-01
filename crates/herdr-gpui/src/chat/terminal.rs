@@ -6,6 +6,7 @@ use super::{
     chats::{ChatInput, ChatPane},
     view::pane_bounds,
 };
+use crate::i18n::fl;
 use crate::{HerdrWindow, fonts::StyledFont};
 use gpui::{prelude::*, *};
 use herdr_client::protocol::{
@@ -207,9 +208,9 @@ impl HerdrWindow {
             .text_size(px(self.config.terminal.size.min(12.)))
             .when(awaiting_fit, |bar| bar.cursor_pointer())
             .child(div().min_w_0().truncate().child(match layout.state {
-                InputState::AwaitingFit => "Activate to fit agent input",
-                InputState::Blocked => "Question or approval pending · original agent input",
-                InputState::Ready => "Agent input · same session",
+                InputState::AwaitingFit => fl!("chat-input-awaiting-fit"),
+                InputState::Blocked => fl!("chat-input-blocked"),
+                InputState::Ready => fl!("chat-input-ready"),
             }))
             .on_mouse_down(
                 MouseButton::Left,
@@ -233,11 +234,11 @@ impl HerdrWindow {
                     .px(px(6.))
                     .hover(|button| button.bg(rgb(theme.active)))
                     .child(if awaiting_fit {
-                        "Fit input"
+                        fl!("chat-input-fit")
                     } else if expanded {
-                        "Compact input"
+                        fl!("chat-input-compact")
                     } else {
-                        "Expand input"
+                        fl!("chat-input-expand")
                     })
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                         cx.stop_propagation();

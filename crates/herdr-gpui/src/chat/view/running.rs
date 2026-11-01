@@ -5,9 +5,9 @@
 //! the agent goes idle, and clears once everything is done.
 
 use super::layout::Look;
-use crate::{HerdrWindow, chat::chats::ChatPane, motion};
+use crate::{HerdrWindow, chat::chats::ChatPane, i18n::fl, motion};
 use gpui::{prelude::*, *};
-use herdr_chat_protocol::{Activity, ActivityKind, ActivityState, Transcript, display};
+use herdr_chat_protocol::{Activity, ActivityKind, ActivityState, Transcript};
 
 /// Rows the table shows before it scrolls.
 const ROWS: usize = 8;
@@ -40,13 +40,11 @@ impl Running {
         if running.total() == 0 {
             return None;
         }
-        let count = |count: usize, one: &str, many: &str| {
-            (count > 0).then(|| format!("{count} {}", if count == 1 { one } else { many }))
-        };
         let summary = [
-            count(running.subagents, "sub-agent", "sub-agents"),
-            count(running.shells, "background shell", "background shells"),
-            count(running.other, "task", "tasks"),
+            (running.subagents > 0)
+                .then(|| fl!("chat-running-subagents", count = running.subagents)),
+            (running.shells > 0).then(|| fl!("chat-running-shells", count = running.shells)),
+            (running.other > 0).then(|| fl!("chat-running-tasks", count = running.other)),
         ]
         .into_iter()
         .flatten()
@@ -54,7 +52,7 @@ impl Running {
         .join(" \u{b7} ");
         let row = |activity: &Activity| RunningRow {
             detail: activity.detail.clone(),
-            elapsed: display::duration(
+            elapsed: crate::chat::text::duration(
                 activity
                     .finished_ms
                     .unwrap_or(now_ms)
@@ -82,14 +80,14 @@ impl Running {
 }
 
 /// The word for how an activity stands, and the color it is shown in.
-fn outcome(state: ActivityState, look: &Look<'_>) -> (&'static str, u32) {
+fn outcome(state: ActivityState, look: &Look<'_>) -> (String, u32) {
     let theme = look.theme;
     match state {
         // As a running call's card says it.
-        ActivityState::Running => ("Running", theme.ink(theme.palette[3])),
-        ActivityState::Finished => ("Done", theme.ink(theme.palette[2])),
-        ActivityState::Failed => ("Failed", theme.ink(theme.palette[1])),
-        ActivityState::Killed => ("Stopped", theme.muted),
+        ActivityState::Running => (fl!("chat-running-running"), theme.ink(theme.palette[3])),
+        ActivityState::Finished => (fl!("chat-running-done"), theme.ink(theme.palette[2])),
+        ActivityState::Failed => (fl!("chat-running-failed"), theme.ink(theme.palette[1])),
+        ActivityState::Killed => (fl!("chat-running-stopped"), theme.muted),
     }
 }
 
@@ -128,7 +126,7 @@ impl HerdrWindow {
         let open = chat.running.is_open();
         let pane = chat.target.pane_id.clone();
         let text = if idle {
-            format!("{} still running", running.summary)
+            fl!("chat-running-still", summary = running.summary)
         } else {
             running.summary
         };
@@ -196,7 +194,7 @@ impl HerdrWindow {
         let line = row_height(&look);
         let visible = running.rows.len().min(ROWS);
         let full = line * (visible as f32 + 1.) + 6.;
-        let header = |label: &'static str| div().text_color(rgb(theme.muted)).child(label);
+        let header = |label: String| div().text_color(rgb(theme.muted)).child(label);
         let status = px(64.);
         let rows = running.rows.iter().enumerate().map(|(index, row)| {
             let (word, color) = outcome(row.state, &look);
@@ -269,9 +267,15 @@ impl HerdrWindow {
                     .h(px(line))
                     .text_size(px(size - 1.))
                     .child(div().flex_none().w(px(size)))
-                    .child(div().flex_1().child(header("What")))
-                    .child(header("Time"))
-                    .child(div().w(status).flex().justify_end().child(header("Status"))),
+                    .child(div().flex_1().child(header(fl!("chat-running-what"))))
+                    .child(header(fl!("chat-running-time")))
+                    .child(
+                        div()
+                            .w(status)
+                            .flex()
+                            .justify_end()
+                            .child(header(fl!("chat-running-status"))),
+                    ),
             )
             .child(
                 div()

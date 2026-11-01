@@ -15,11 +15,14 @@
 //! A cancelled turn ends at once, since the user stopped it; any other ends
 //! and stays on the lock screen for [`LINGER_S`].
 
-use super::{Alert, Attributes, ContentState, Event, Live, Phase};
+use super::{
+    Alert, Attributes, ContentState, Event, Live, Phase,
+    payload::{MAX_BUTTONS, MAX_PREVIOUS},
+};
 use crate::push::{Chat, excerpt};
 use herdr_chat_protocol::{
-    Change, EntryKind, PlanEntry, PlanStatus, Status, Tool, ToolStatus, Transcript, TurnEnd,
-    TurnSummary, display,
+    Change, EntryKind, Permission, PlanEntry, PlanStatus, Status, Tool, ToolStatus, Transcript,
+    TurnEnd, TurnSummary,
 };
 
 /// How long a finished activity stays on the lock screen.
@@ -91,6 +94,7 @@ pub(crate) fn decide(
         Change::PermissionAsked { permission } if running && !before.auto_accept => {
             let mut state = state(before, Phase::Question, current_step(before));
             state.question = Some(excerpt(&permission.title));
+            asking(&mut state, permission);
             let alert = Alert {
                 body: place(chat),
                 title: format!("{} needs an answer", chat.agent),
@@ -124,12 +128,7 @@ fn turn_ended(chat: &Chat<'_>, before: &Transcript, summary: &TurnSummary, now_s
         TurnEnd::Done | TurnEnd::Cancelled | TurnEnd::Limit | TurnEnd::Other => Phase::Finished,
     };
     let mut state = state(before, phase, current_step(before));
-    let mut facts = summary.describe();
-    if let Some(cost) = &state.cost {
-        facts.push_str(" \u{b7} ");
-        facts.push_str(cost);
-    }
-    state.summary = Some(facts);
+    state.summary = Some(summary.describe());
     let dismissal_s = if summary.end == TurnEnd::Cancelled {
         now_s
     } else {
@@ -164,25 +163,66 @@ fn phase(before: &Transcript) -> Phase {
 /// The content shared by every push for a running turn.
 fn state(before: &Transcript, phase: Phase, step: String) -> ContentState {
     let (plan_done, plan_total) = plan_counts(&before.plan);
-    ContentState {
-        cost: before
-            .usage
-            .as_ref()
-            .and_then(|usage| usage.cost.as_ref())
-            .map(display::cost),
+    let mut state = ContentState {
         phase,
         plan_done,
         plan_total,
-        question: (phase == Phase::Question)
-            .then(|| before.permissions.first())
-            .flatten()
-            .map(|permission| excerpt(&permission.title)),
+        options: Vec::new(),
+        permission: None,
+        previous: previous(before, &step),
+        question: None,
         started_at: before.turn.map_or(0, |turn| turn.started_ms / 1000),
         step,
         summary: None,
         waiting: 0,
         working: 0,
+    };
+    if phase == Phase::Question
+        && let Some(permission) = before.permissions.first()
+    {
+        state.question = Some(excerpt(&permission.title));
+        asking(&mut state, permission);
     }
+    state
+}
+
+/// The answer buttons for `permission`.
+fn asking(state: &mut ContentState, permission: &Permission) {
+    state.permission = Some(permission.id.0);
+    state.options = permission
+        .options
+        .iter()
+        .take(MAX_BUTTONS)
+        .cloned()
+        .collect();
+}
+
+/// The current turn's last [`MAX_PREVIOUS`] tool steps other than `step`,
+/// oldest first: the stack the lock screen shows above it.
+fn previous(transcript: &Transcript, step: &str) -> Vec<String> {
+    let turn = transcript
+        .entries
+        .iter()
+        .rev()
+        .take_while(|entry| !matches!(entry.kind, EntryKind::User { .. }));
+    let mut steps: Vec<String> = Vec::new();
+    for entry in turn {
+        let EntryKind::Tool(tool) = &entry.kind else {
+            continue;
+        };
+        if tool.title.trim().is_empty() {
+            continue;
+        }
+        let title = excerpt(&tool.title);
+        if title != step && !steps.contains(&title) {
+            steps.push(title);
+        }
+        if steps.len() == MAX_PREVIOUS {
+            break;
+        }
+    }
+    steps.reverse();
+    steps
 }
 
 fn plan_counts(plan: &[PlanEntry]) -> (Option<u32>, Option<u32>) {

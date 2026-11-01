@@ -1,5 +1,6 @@
 //! A fresh, cancellable preflight owned by one close dialog. Unknown status
 //! requires the same explicit consent as work that has not been published.
+// i18n: migrated
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -11,6 +12,7 @@ use gpui::App;
 use herdr_client::protocol::{ClientShellSnapshot, ClientShellWorktree};
 
 use super::workspace::WorkspaceTarget;
+use crate::i18n::fl;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Checkout {
@@ -20,64 +22,15 @@ struct Checkout {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod tests;
 
-    #[test]
-    fn pending_and_risky_reports_cannot_close_without_consent() {
-        let snapshot = crate::sidebar::layout_tests::snapshot(7);
-        let target = WorkspaceTarget::new(&snapshot, &snapshot.workspaces[3]);
-        let mut check = CloseCheck::fixture(&snapshot, &target, None);
-        assert!(!check.ready("close"));
-        for report in [
-            Report {
-                dirty: true,
-                ..Report::default()
-            },
-            Report {
-                unpushed: true,
-                ..Report::default()
-            },
-            Report {
-                unknown: true,
-                ..Report::default()
-            },
-        ] {
-            check.report = Some(report);
-            for text in ["", "Close", "yes", "clos"] {
-                assert!(!check.ready(text));
-            }
-            assert!(check.ready("close"));
-        }
-        check.report = Some(Report::default());
-        assert!(check.ready(""));
-    }
+/// What the user types to close anyway, the same word in every language.
+const CONSENT: &str = "close"; // i18n: data
 
-    #[test]
-    fn changed_sibling_checkout_invalidates_group_consent() {
-        let mut snapshot = crate::sidebar::layout_tests::snapshot(7);
-        let target = WorkspaceTarget::new(&snapshot, &snapshot.workspaces[3]);
-        let check = CloseCheck::fixture(&snapshot, &target, Some(Report::default()));
-        assert!(check.current(&snapshot, &target));
-        snapshot.workspaces[4].branch = Some("replacement".into());
-        assert!(!check.current(&snapshot, &target));
-    }
-
-    #[test]
-    fn disconnected_worker_requires_consent_and_drop_cancels() {
-        let snapshot = crate::sidebar::layout_tests::snapshot(7);
-        let target = WorkspaceTarget::new(&snapshot, &snapshot.workspaces[3]);
-        let mut check = CloseCheck::fixture(&snapshot, &target, None);
-        assert!(check.poll());
-        assert!(!check.ready(""));
-        assert!(check.ready("close"));
-        let cancelled = check.cancelled.clone();
-        drop(check);
-        assert!(cancelled.load(Ordering::Relaxed));
-    }
+/// The Git line while the check runs.
+pub(super) fn checking() -> String {
+    fl!("workspace-close-checking")
 }
-
-pub(super) const CHECKING: &str = "Checking for uncommitted files and unpushed commits...";
 
 #[derive(Default)]
 pub(super) struct Report {
@@ -235,24 +188,22 @@ impl CloseCheck {
     /// close needs it, since the input shows only then.
     pub fn status(&self, confirm: bool) -> String {
         let Some(report) = &self.report else {
-            return CHECKING.to_owned();
+            return checking();
         };
         let mut warnings = Vec::new();
         if report.dirty {
-            warnings.push("Uncommitted files are present.");
+            warnings.push(fl!("workspace-close-dirty"));
         }
         if report.unpushed {
-            warnings.push("Unpushed commits are present.");
+            warnings.push(fl!("workspace-close-unpushed"));
         }
         if report.unknown {
-            warnings.push("Git status could not be verified for every checkout.");
+            warnings.push(fl!("workspace-close-unknown"));
         }
         if !report.needs_consent() {
-            warnings.push(
-                "No uncommitted files or unpushed commits found (using local remote-tracking refs).",
-            );
+            warnings.push(fl!("workspace-close-clean"));
         } else if !self.skippable(confirm) {
-            warnings.push("Type close to consent to closing anyway, or Cancel to keep working.");
+            warnings.push(fl!("workspace-close-consent", word = CONSENT));
         }
         warnings.join(" ")
     }
@@ -260,6 +211,6 @@ impl CloseCheck {
     pub fn ready(&self, text: &str) -> bool {
         self.report
             .as_ref()
-            .is_some_and(|report| !report.needs_consent() || text == "close")
+            .is_some_and(|report| !report.needs_consent() || text == CONSENT)
     }
 }

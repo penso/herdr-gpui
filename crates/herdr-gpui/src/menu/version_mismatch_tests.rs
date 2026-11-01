@@ -10,6 +10,11 @@ fn outdated(version: Option<&str>) -> VersionMismatch {
     }
 }
 
+/// A message without the isolation marks Fluent puts around each placeable.
+fn plain(text: String) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}
+
 #[test]
 fn notice_names_the_side_to_update_and_where() {
     let local = VersionNotice {
@@ -18,7 +23,7 @@ fn notice_names_the_side_to_update_and_where() {
     };
     assert_eq!(local.title(), "Herdr needs an update");
     assert_eq!(
-        local.body(),
+        plain(local.body()),
         "The Herdr server on this device (version 0.8.2) is too old for this app. Run this command in a terminal; the app reconnects once the updated server is running."
     );
 
@@ -27,7 +32,7 @@ fn notice_names_the_side_to_update_and_where() {
         mismatch: outdated(None),
     };
     assert_eq!(
-        remote.body(),
+        plain(remote.body()),
         "The Herdr server on build box did not answer this app's handshake. This app needs Herdr 0.9.0 or newer. Run this command on build box; the app reconnects once the updated server is running."
     );
 
@@ -39,7 +44,7 @@ fn notice_names_the_side_to_update_and_where() {
     };
     assert_eq!(newer.title(), "Herdr UI needs an update");
     assert_eq!(
-        newer.body(),
+        plain(newer.body()),
         "The Herdr server on build box (version 2.0.0) is newer than this app supports. Update this app to connect."
     );
 }

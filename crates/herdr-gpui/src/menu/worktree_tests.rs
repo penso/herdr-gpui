@@ -22,6 +22,7 @@ mod github_listings;
 mod github_sign_in_hint;
 mod local_listings;
 mod name_field;
+mod name_label_language;
 mod open_remove_shortcuts;
 mod remote_listings;
 

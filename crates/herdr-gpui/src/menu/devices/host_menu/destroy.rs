@@ -7,6 +7,7 @@
 //! nowhere (see `cloud::unsynced`); when it has some, the dialog names them
 //! and Delete becomes Delete anyway.
 use super::{HostMenu, Saved};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     cloud::{Deletion, unsynced::Checkout},
@@ -87,10 +88,10 @@ impl HostMenu {
 /// Delete anyway once it is known to hold work pushed nowhere.
 pub(super) fn remove_label(host: &HostMenu) -> String {
     match host.machine_noun() {
-        Some(_) if host.awaiting_check() => "Checking…".to_owned(),
-        Some(_) if matches!(host.unsynced, Unsynced::Found(_)) => "Delete anyway".to_owned(),
-        Some(noun) => format!("Delete {noun}"),
-        None => "Remove".to_owned(),
+        Some(_) if host.awaiting_check() => fl!("host-menu-delete-checking"),
+        Some(_) if matches!(host.unsynced, Unsynced::Found(_)) => fl!("host-menu-delete-anyway"),
+        Some(noun) => fl!("host-menu-delete", machine = noun),
+        None => fl!("host-menu-remove-submit"),
     }
 }
 
@@ -98,28 +99,39 @@ pub(super) fn remove_label(host: &HostMenu) -> String {
 pub(super) fn unsynced_text(unsynced: &Unsynced, noun: &str) -> Option<String> {
     match unsynced {
         Unsynced::NotChecked | Unsynced::Clean => None,
-        Unsynced::Checking { .. } => Some(format!("Checking the {noun} for work not pushed…")),
-        Unsynced::Failed => Some(format!(
-            "Could not check the {noun} for work not pushed. Anything on it is deleted with it."
-        )),
+        Unsynced::Checking { .. } => Some(fl!("host-menu-unsynced-checking", machine = noun)),
+        Unsynced::Failed => Some(fl!("host-menu-unsynced-failed", machine = noun)),
         Unsynced::Found(checkouts) => {
-            let mut text = format!("Work on this {noun} is pushed nowhere else:");
-            for checkout in checkouts.iter().take(NAMED) {
-                let mut counts = Vec::new();
-                if checkout.changed > 0 {
-                    counts.push(format!("{} changed files", checkout.changed));
-                }
-                if checkout.unpushed > 0 {
-                    counts.push(format!("{} unpushed commits", checkout.unpushed));
-                }
-                text.push_str(&format!("\n{} ({})", checkout.path, counts.join(", ")));
-            }
+            let mut lines = vec![fl!("host-menu-unsynced-found", machine = noun)];
+            lines.extend(checkouts.iter().take(NAMED).map(checkout_line));
             if checkouts.len() > NAMED {
-                text.push_str(&format!("\nand {} more", checkouts.len() - NAMED));
+                lines.push(fl!(
+                    "host-menu-unsynced-more",
+                    count = checkouts.len() - NAMED
+                ));
             }
-            text.push_str("\nPush it, or Teleport it to another device, before deleting.");
-            Some(text)
+            lines.push(fl!("host-menu-unsynced-advice"));
+            Some(lines.join("\n"))
         }
+    }
+}
+
+/// A checkout with work pushed nowhere, and what it holds.
+fn checkout_line(checkout: &Checkout) -> String {
+    let path = checkout.path.as_str();
+    match (checkout.changed, checkout.unpushed) {
+        (changed, 0) => fl!("host-menu-unsynced-changed", path = path, changed = changed),
+        (0, unpushed) => fl!(
+            "host-menu-unsynced-unpushed",
+            path = path,
+            unpushed = unpushed
+        ),
+        (changed, unpushed) => fl!(
+            "host-menu-unsynced-both",
+            path = path,
+            changed = changed,
+            unpushed = unpushed,
+        ),
     }
 }
 
@@ -130,13 +142,13 @@ pub(super) fn removal_note(host: &HostMenu) -> Option<String> {
     };
     let deletion = host.deletion()?;
     let noun = host.machine_noun()?;
-    Some(format!(
-        "Delete the {noun} {} ({}) at {}{} and remove it from this computer? Its files are \
-         not kept, and this cannot be undone.",
-        host.label,
-        host.target,
-        crate::cloud::name(*provider),
-        deletion.leftovers,
+    Some(fl!(
+        "host-menu-delete-note",
+        machine = noun,
+        device = host.label.as_str(),
+        target = host.target.as_str(),
+        provider = crate::cloud::name(*provider),
+        leftovers = deletion.leftovers,
     ))
 }
 
@@ -227,7 +239,7 @@ impl HerdrWindow {
                 .debug_selector(|| "remove-device-only".into())
                 .p(px(6.))
                 .cursor_pointer()
-                .child("Remove from Herdr only")
+                .child(fl!("host-menu-remove-only"))
                 .on_click(cx.listener(|this, _, window, cx| {
                     if let Some(host) = &mut this.menu.host {
                         host.destroy = false;

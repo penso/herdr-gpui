@@ -2,6 +2,7 @@
 //! request works with a known-good API root and identifiers.
 
 use super::{Error, Result};
+use crate::cloud::Value;
 use crate::{config::DaytonaConfig, credentials::Store};
 use std::ffi::OsString;
 use url::Url;
@@ -28,7 +29,7 @@ impl Settings {
             Some(value) => Some(
                 value
                     .into_string()
-                    .map_err(|_| Error::Encoding("HERDR_DAYTONA_API_URL"))?,
+                    .map_err(|_| Error::Encoding(Value::Key("HERDR_DAYTONA_API_URL")))?,
             ),
             None => config.api_url.clone(),
         };
@@ -36,7 +37,7 @@ impl Settings {
             return Ok(None);
         };
         let identifier = |value: &Option<String>, field| match value {
-            Some(text) if !identifier(text) => Err(Error::Field(field)),
+            Some(text) if !identifier(text) => Err(Error::Field(Value::Key(field))),
             _ => Ok(value.clone()),
         };
         Ok(Some(Self {

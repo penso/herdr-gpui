@@ -8,6 +8,7 @@
 
 use super::{ChatLayout, ComposerParts, CopyPlacement, Look, Row, Side, summary_row};
 use crate::config::mix;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::EntryKind;
 use unicode_width::UnicodeWidthStr;
@@ -105,7 +106,7 @@ impl ChatLayout for IMessage {
                         .text_size(small)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(theme.muted))
-                        .child("Delivered")
+                        .child(fl!("chat-delivered"))
                 })),
         )
         .into_any_element()
@@ -169,7 +170,7 @@ impl ChatLayout for IMessage {
                 .text_size(px((look.text - 2.).max(10.)))
                 .italic()
                 .text_color(rgb(look.theme.muted))
-                .child("typing\u{2026}"),
+                .child(fl!("chat-typing")),
         )
     }
 

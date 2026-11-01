@@ -877,7 +877,7 @@ impl HerdrWindow {
             })
             .child(column)
             // Last, so the grips lie over what the group shows.
-            .children(reach.grips(slot.index))
+            .children(reach.grips(slot.index, window, cx))
             .into_any_element()
     }
 

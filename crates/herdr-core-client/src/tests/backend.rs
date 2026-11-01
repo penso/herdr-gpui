@@ -258,6 +258,19 @@ fn a_synchronized_update_that_never_ends_is_shown_in_time() {
     );
 }
 
+/// Reads until an update equal to `wanted` arrives, within `WAIT`. A read
+/// may wake before the bytes it waits for, so the update the last bytes
+/// sent cause can come a read later than the one that follows them.
+fn until(terminal: &mut crate::CoreTerminal, wanted: &SurfaceUpdate) -> Vec<SurfaceUpdate> {
+    let start = std::time::Instant::now();
+    let mut seen = Vec::new();
+    while !seen.contains(wanted) {
+        assert!(start.elapsed() < WAIT, "never told {wanted:?}: {seen:?}");
+        seen.extend(terminal.next(WAIT).unwrap());
+    }
+    seen
+}
+
 /// The full frame among `updates`, if any.
 fn full_frame(updates: &[SurfaceUpdate]) -> Option<&herdr_backend::FrameData> {
     updates.iter().find_map(|update| match update {
@@ -294,8 +307,7 @@ fn the_view_is_told_when_the_program_starts_reading_the_mouse() {
     let first = terminal.next(WAIT).unwrap();
     assert!(first.contains(&SurfaceUpdate::MouseReporting(false)));
     mock.send(5, Kind::Data, b"\x1b[?1000h");
-    let updates = terminal.next(WAIT).unwrap();
-    assert!(updates.contains(&SurfaceUpdate::MouseReporting(true)));
+    until(&mut terminal, &SurfaceUpdate::MouseReporting(true));
     // Told once, not on every update.
     mock.send(5, Kind::Data, b"more");
     let later = terminal.next(WAIT).unwrap();
@@ -368,11 +380,13 @@ fn the_view_is_told_which_key_events_the_program_asks_for() {
     assert!(first.contains(&SurfaceUpdate::KeyReporting(KeyReporting::default())));
     // kitty: push event types (2) and all keys as escapes (8).
     mock.send(5, Kind::Data, b"\x1b[>10u");
-    let updates = terminal.next(WAIT).unwrap();
-    assert!(updates.contains(&SurfaceUpdate::KeyReporting(KeyReporting {
-        every_key: true,
-        releases: true,
-    })));
+    until(
+        &mut terminal,
+        &SurfaceUpdate::KeyReporting(KeyReporting {
+            every_key: true,
+            releases: true,
+        }),
+    );
     // Its releases encode as kitty release events.
     let release = ClientPaneInputEvent::Key {
         code: herdr_backend::ClientKeyCode::Char('a'),

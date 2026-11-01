@@ -26,6 +26,7 @@ pub(super) use settings::matching;
 mod visuals;
 
 use super::chats::{ChatInput, ChatPane};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     config::{Theme, corners},
@@ -121,13 +122,13 @@ impl Hues {
     }
 }
 
-fn status_label(status: &Status) -> &'static str {
+fn status_label(status: &Status) -> String {
     match status {
-        Status::Starting => "Starting",
-        Status::Idle => "Idle",
-        Status::Working => "Working",
-        Status::Failed { .. } => "Failed",
-        Status::Exited { .. } => "Exited",
+        Status::Starting => fl!("chat-status-starting"),
+        Status::Idle => fl!("chat-status-idle"),
+        Status::Working => fl!("chat-status-working"),
+        Status::Failed { .. } => fl!("chat-status-failed"),
+        Status::Exited { .. } => fl!("chat-status-exited"),
     }
 }
 
@@ -139,14 +140,15 @@ pub(super) fn status_text(transcript: &herdr_chat_protocol::Transcript) -> Strin
         Some(turn) if transcript.status == Status::Working => {
             let elapsed = super::now_ms().saturating_sub(turn.started_ms);
             if elapsed < 1000 {
-                return label.to_owned();
+                return label;
             }
-            format!(
-                "{label} {}",
-                herdr_chat_protocol::display::duration(elapsed)
+            fl!(
+                "chat-status-elapsed",
+                status = label,
+                elapsed = super::text::duration(elapsed)
             )
         }
-        _ => label.to_owned(),
+        _ => label,
     }
 }
 
@@ -238,7 +240,7 @@ impl HerdrWindow {
                             .size(px(12.))
                             .text_color(rgb(theme.foreground)),
                     )
-                    .child("Chat")
+                    .child(fl!("chat-show-chat"))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                         cx.stop_propagation();
@@ -548,13 +550,13 @@ impl HerdrWindow {
             div()
                 .flex_none()
                 .text_color(rgb(theme.subtext()))
-                .child(format!("{} watching", transcript.clients))
+                .child(fl!("chat-watching", count = transcript.clients))
         });
         let reconnecting = (!chat.attached()).then(|| {
             div()
                 .flex_none()
                 .text_color(rgb(hues.yellow))
-                .child("Reconnecting\u{2026}")
+                .child(fl!("chat-reconnecting"))
         });
         let layout = {
             let current = self.config.chat.layout;
@@ -623,7 +625,7 @@ impl HerdrWindow {
                             .flex_none()
                             .text_color(rgb(theme.subtext()))
                             .child(if needs_input {
-                                "Needs input".into()
+                                fl!("chat-needs-input")
                             } else {
                                 status_text(transcript)
                             }),

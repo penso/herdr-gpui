@@ -2,6 +2,7 @@
 //! session with an 80x32 terminal has run, as with the real service.
 #![allow(clippy::unwrap_used)]
 use super::*;
+use crate::cloud::Step;
 use crate::railway::{
     ssh::stand_in,
     tests::{key, tools},
@@ -69,7 +70,7 @@ fn fixture() -> Option<Fixture> {
 fn run(
     fixture: &Fixture,
     (key, name): (&Path, &str),
-    steps: &RefCell<Vec<String>>,
+    steps: &RefCell<Vec<Step>>,
     saved: &RefCell<Vec<SavedDevice>>,
 ) -> Result<SavedDevice> {
     add_device_in(
@@ -80,7 +81,7 @@ fn run(
             install: false,
         },
         &|| false,
-        &|step| steps.borrow_mut().push(step.text()),
+        &|step| steps.borrow_mut().push(step),
         || Ok(saved.borrow().clone()),
         |device| {
             saved.borrow_mut().push(device);
@@ -100,7 +101,10 @@ fn a_key_with_no_vm_gets_one_from_an_80x32_terminal_once_then_only_headless_runs
         ["refused", "terminal 32 80", "reach", "probe"],
         "a bare probe, one terminal session, a bare probe, then the installer's probe"
     );
-    assert_eq!(*steps.borrow(), ["Connecting…", "Creating…", "Connecting…"]);
+    assert_eq!(
+        *steps.borrow(),
+        [Step::Connecting, Step::Creating, Step::Connecting]
+    );
     // The device is the key's: its ID names the key, its account is the path.
     assert_eq!(device.id, fixture.id);
     assert_eq!(device.account, fixture.key.display().to_string());
@@ -114,7 +118,7 @@ fn a_key_with_no_vm_gets_one_from_an_80x32_terminal_once_then_only_headless_runs
     steps.borrow_mut().clear();
     let again = run(&fixture, (&fixture.key, "second"), &steps, &saved).unwrap();
     assert_eq!(ssh.runs()[4..], ["reach", "probe"]);
-    assert_eq!(*steps.borrow(), ["Connecting…"]);
+    assert_eq!(*steps.borrow(), [Step::Connecting]);
     assert_eq!(
         (again.label.as_str(), again.machine.as_str()),
         ("first", "first")

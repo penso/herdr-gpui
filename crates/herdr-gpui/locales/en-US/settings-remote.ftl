@@ -20,6 +20,8 @@ settings-remote-retry = Retry
 
 settings-remote-section-service = Service
 settings-remote-keep-running-note = Phones keep working and notifications keep coming. Pairing a new device still needs Herdr UI.
+settings-remote-presence = Hold phone alerts while I'm here
+settings-remote-presence-note = Paired iPhones near this computer over Bluetooth keep their alerts until you step away from it.
 settings-remote-restart = Restart the daemon
 settings-remote-restart-note = Starts it again from the binary beside Herdr UI, as after an update. Phones reconnect on their own.
 settings-remote-restart-button = Restart
@@ -55,7 +57,7 @@ settings-remote-devices-count = { $count ->
         [one] { $count } device can control your chats.
        *[other] { $count } devices can control your chats.
     }
-settings-remote-device-revoke-ask = Revoke it? Its sessions end and its notifications stop at once.
+settings-remote-device-revoke-ask = Revoke it? Its sessions end and its notifications stop at once, here and on the machines it was paired with from here.
 settings-remote-device-cancel = Cancel
 settings-remote-device-revoke = Revoke
 settings-remote-device-revoke-open = Revoke…

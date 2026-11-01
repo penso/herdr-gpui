@@ -3,8 +3,9 @@
 //! whatever application registered its scheme, so the user sees the whole
 //! address first and nothing opens unless they say so.
 
+// i18n: migrated
 use super::Page;
-use crate::{HerdrWindow, fonts::StyledFont, terminal::ExternalUrl};
+use crate::{HerdrWindow, fonts::StyledFont, i18n::fl, terminal::ExternalUrl};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -40,7 +41,7 @@ impl HerdrWindow {
         let Some(url) = &self.menu.open_link else {
             return div();
         };
-        let button = |id: &'static str, label: &'static str, primary: bool| {
+        let button = |id: &'static str, label: String, primary: bool| {
             div()
                 .id(id)
                 .debug_selector(move || id.into())
@@ -57,7 +58,7 @@ impl HerdrWindow {
                 div()
                     .p(px(8.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Are you sure you want to open this link?"),
+                    .child(fl!("open-link-title")),
             )
             .child(
                 div().px(px(8.)).child(
@@ -73,9 +74,10 @@ impl HerdrWindow {
                 ),
             )
             .child(
-                div().p(px(8.)).text_color(rgb(theme.muted)).child(
-                    "A program in the terminal printed it. It opens in another application.",
-                ),
+                div()
+                    .p(px(8.))
+                    .text_color(rgb(theme.muted))
+                    .child(fl!("open-link-note")),
             )
             .child(
                 div()
@@ -83,18 +85,20 @@ impl HerdrWindow {
                     .flex_wrap()
                     .gap(px(8.))
                     .p(px(8.))
-                    .child(button("open-link-yes", "Yes", true).on_click(cx.listener(
-                        |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.confirm_open_link(window, cx);
-                        },
-                    )))
-                    .child(button("open-link-no", "No", false).on_click(cx.listener(
-                        |this, _, window, cx| {
+                    .child(
+                        button("open-link-yes", fl!("open-link-yes"), true).on_click(cx.listener(
+                            |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.confirm_open_link(window, cx);
+                            },
+                        )),
+                    )
+                    .child(button("open-link-no", fl!("open-link-no"), false).on_click(
+                        cx.listener(|this, _, window, cx| {
                             cx.stop_propagation();
                             this.dismiss_menu(window, cx);
-                        },
-                    ))),
+                        }),
+                    )),
             )
     }
 }

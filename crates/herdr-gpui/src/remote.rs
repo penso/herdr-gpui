@@ -12,6 +12,8 @@
 mod dialog;
 mod indicator;
 pub(crate) use indicator::MENU_WIDTH;
+pub(crate) mod links;
+pub(crate) mod nearby;
 mod revoke;
 pub(crate) mod supervisor;
 
@@ -22,6 +24,7 @@ use herdr_remote_control::control::Device;
 pub(crate) use revoke::Revoke;
 pub(crate) use supervisor::{Health, Supervisor};
 
+use crate::i18n::fl;
 use std::path::PathBuf;
 
 /// The daemon's private state directory: the app's own, under `remote/`.
@@ -50,33 +53,50 @@ fn host(state_dir: PathBuf) -> crate::Result<service::Host> {
     })
 }
 
-/// "Last seen 3 h ago" and the like, from milliseconds since the epoch.
-pub(crate) fn ago(then_ms: u64, now_ms: u64) -> String {
-    let seconds = now_ms.saturating_sub(then_ms) / 1000;
-    match seconds {
-        0..60 => "just now".to_owned(),
-        60..3600 => format!("{} min ago", seconds / 60),
-        3600..86_400 => format!("{} h ago", seconds / 3600),
-        _ => match seconds / 86_400 {
-            1 => "yesterday".to_owned(),
-            days => format!("{days} days ago"),
-        },
-    }
+/// "Last seen 2 h ago · notifications on".
+pub(crate) fn device_line(device: &Device, now_ms: u64) -> String {
+    let (seen, ago) = match device.last_seen_ms {
+        _ if device.connected => ("connected", String::new()),
+        Some(seen) => ("seen", crate::ago::text(now_ms.saturating_sub(seen) / 1000)),
+        None => ("never", String::new()),
+    };
+    let push = if device.push { "on" } else { "off" };
+    fl!("remote-device-line", seen = seen, ago = ago, push = push)
 }
 
-/// "Last seen 2 h ago · Notifications on · Connected".
-pub(crate) fn device_line(device: &Device, now_ms: u64) -> String {
-    let seen = match device.last_seen_ms {
-        _ if device.connected => "Connected now".to_owned(),
-        Some(seen) => format!("Last seen {}", ago(seen, now_ms)),
-        None => "Never connected".to_owned(),
+/// The other machines a phone is paired with from here, or being paired
+/// with: "Also on devbox, gpu box · pairing lab · failed on ci". `None`
+/// when there are none.
+pub(crate) fn hosts_line(device: &Device) -> Option<String> {
+    use herdr_remote_control::control::hosts::HostState;
+    let names = |wanted: fn(&HostState) -> bool| {
+        device
+            .hosts
+            .iter()
+            .filter(|link| wanted(&link.state))
+            .map(|link| crate::notifications::safe_text(&link.name, 64))
+            .collect::<Vec<_>>()
+            .join(", ")
     };
-    let push = if device.push {
-        "notifications on"
-    } else {
-        "notifications off"
-    };
-    format!("{seen} \u{b7} {push}")
+    let parts: Vec<String> = [
+        (
+            "Also on ",
+            names(|state| matches!(state, HostState::Paired(_))),
+        ),
+        (
+            "pairing ",
+            names(|state| matches!(state, HostState::Pending | HostState::Asking)),
+        ),
+        (
+            "failed on ",
+            names(|state| matches!(state, HostState::Failed { .. })),
+        ),
+    ]
+    .into_iter()
+    .filter(|(_, names)| !names.is_empty())
+    .map(|(label, names)| format!("{label}{names}"))
+    .collect();
+    (!parts.is_empty()).then(|| parts.join(" \u{b7} "))
 }
 
 /// Milliseconds since the Unix epoch, now.

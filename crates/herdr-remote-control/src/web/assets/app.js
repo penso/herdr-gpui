@@ -545,7 +545,10 @@ function handleEvent(block) {
       continue;
     }
     element.outerHTML = html;
-    if (id === "term-screen") fitTerminal();
+    if (id === "term-screen") {
+      fitTerminal();
+      echoScreen();
+    }
   }
   // New chat entries: the server sends only what changed after the
   // stream's first patch, so these follow the entries already shown.
@@ -804,7 +807,7 @@ window.addEventListener("popstate", route);
 // ---- terminal tabs: the screen arrives as patches; what is typed goes to
 // the pane key by key, in Herdr's key syntax, in order ----
 
-const term = { ctrl: false, alt: false, queue: [], sending: false, zoomed: false };
+const term = { ctrl: false, alt: false, queue: [], sending: false, zoomed: false, echo: [], screenAt: 0 };
 
 const termPane = () => document.getElementById("term")?.dataset.pane;
 const termInput = () => document.getElementById("term-input");
@@ -841,7 +844,11 @@ function showModifiers() {
 function sendKeys(keys) {
   const pane = termPane();
   if (!pane || !keys.length) return;
-  for (const key of keys) term.queue.push({ pane, key });
+  for (const key of keys) {
+    term.queue.push({ pane, key });
+    term.echo.push({ pane, glyph: glyphOf(key), state: "queued" });
+  }
+  showEcho();
   flushInput();
 }
 
@@ -849,6 +856,7 @@ function pasteText(text) {
   const pane = termPane();
   if (!pane || !text) return;
   term.queue.push({ pane, text });
+  term.echo.push({ pane, glyph: "", state: "queued" });
   flushInput();
 }
 
@@ -858,6 +866,7 @@ function pastePicture(file) {
   const pane = termPane();
   if (!pane || !file) return;
   term.queue.push({ pane, file });
+  term.echo.push({ pane, glyph: "", state: "queued" });
   flushInput();
 }
 
@@ -881,32 +890,104 @@ async function pasteClipboard() {
 }
 
 /// The next request: one paste or picture, or up to 64 keys in a row for
-/// one pane.
+/// one pane; `count` is how many queued inputs it carries.
 function nextInput() {
   const first = term.queue.shift();
-  if (first.file !== undefined) return { pane: first.pane, kind: "upload", raw: first.file };
-  if (first.text !== undefined) return { pane: first.pane, kind: "paste", body: { text: first.text } };
+  if (first.file !== undefined) return { pane: first.pane, kind: "upload", raw: first.file, count: 1 };
+  if (first.text !== undefined) return { pane: first.pane, kind: "paste", body: { text: first.text }, count: 1 };
   const keys = [first.key];
   while (keys.length < 64 && term.queue.length && term.queue[0].pane === first.pane && term.queue[0].key !== undefined) {
     keys.push(term.queue.shift().key);
   }
-  return { pane: first.pane, kind: "keys", body: { keys } };
+  return { pane: first.pane, kind: "keys", body: { keys }, count: keys.length };
 }
 
 async function flushInput() {
   if (term.sending) return;
   term.sending = true;
   while (term.queue.length) {
-    const { pane, kind, body, raw } = nextInput();
+    const { pane, kind, body, raw, count } = nextInput();
+    const sent = echoSending(count);
     try {
       await api(`/api/term/${encodeURIComponent(pane)}/${kind}`, { method: "POST", body, raw });
+      echoDelivered(sent);
     } catch (error) {
       // What followed was typed after it; sent alone, it would mean something else.
       term.queue = [];
+      term.echo = [];
+      showEcho();
       flash(error.message);
     }
   }
   term.sending = false;
+}
+
+// ---- the echo strip: what was typed but is not on the screen yet, so a
+// slow network does not leave typing blind. Each input keeps one entry,
+// in the order sent; an entry goes once the computer took it and a screen
+// arrived after, or a moment after it was taken when the screen did not
+// change (a password, a program that draws nothing) ----
+
+/// How long a taken input stays in the strip with no new screen.
+const ECHO_LINGER = 1000;
+
+const ECHO_GLYPHS = { space: " ", plus: "+", minus: "-", slash: "/", backtick: "`", enter: "⏎", tab: "⇥", backspace: "\b" };
+
+/// What a key shows in the strip: its character, a mark for Enter and Tab,
+/// backspace as removal, and nothing for arrows and chords.
+function glyphOf(key) {
+  return key.length === 1 ? key : ECHO_GLYPHS[key] || "";
+}
+
+/// Marks the next `count` queued entries as sent; answers when.
+function echoSending(count) {
+  const at = performance.now();
+  for (const entry of term.echo) {
+    if (!count) break;
+    if (entry.state !== "queued") continue;
+    entry.state = "sent";
+    count -= 1;
+  }
+  return at;
+}
+
+/// The computer took what went out at `sentAt`. A screen that arrived
+/// meanwhile was read after it, as the computer reads one at once.
+function echoDelivered(sentAt) {
+  const now = performance.now();
+  for (const entry of term.echo) {
+    if (entry.state === "sent") Object.assign(entry, { state: "taken", takenAt: now });
+  }
+  if (term.screenAt > sentAt) dropTaken(now);
+  setTimeout(() => dropTaken(performance.now() - ECHO_LINGER), ECHO_LINGER);
+}
+
+/// A screen arrived: whatever the computer took is on it.
+function echoScreen() {
+  term.screenAt = performance.now();
+  dropTaken(term.screenAt);
+}
+
+/// Drops the leading entries taken by `before`.
+function dropTaken(before) {
+  const kept = term.echo.findIndex((entry) => entry.state !== "taken" || entry.takenAt > before);
+  term.echo = kept < 0 ? [] : term.echo.slice(kept);
+  showEcho();
+}
+
+function showEcho() {
+  const strip = document.getElementById("term-echo");
+  if (!strip) return;
+  const pane = termPane();
+  const shown = [];
+  for (const { glyph } of term.echo.filter((entry) => entry.pane === pane)) {
+    if (glyph !== "\b") shown.push(...glyph);
+    else if (shown.length && shown[shown.length - 1] !== "⌫") shown.pop();
+    else shown.push("⌫");
+  }
+  strip.hidden = !shown.length;
+  strip.firstElementChild.textContent = shown.join("");
+  strip.scrollLeft = strip.scrollWidth;
 }
 
 /// Fits the widest line to the screen's width, unless the text was made

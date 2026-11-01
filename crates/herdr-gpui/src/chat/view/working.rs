@@ -4,6 +4,7 @@
 //! conversation is scrolled back.
 
 use super::layout::Look;
+use crate::i18n::fl;
 use crate::motion;
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{EntryKind, Status, ToolStatus, Transcript};
@@ -34,14 +35,14 @@ impl Working {
             {
                 step_title(&tool.title)
             }
-            Some(EntryKind::Agent { .. }) => "Writing".to_owned(),
-            _ => "Thinking".to_owned(),
+            Some(EntryKind::Agent { .. }) => fl!("chat-working-writing"),
+            _ => fl!("chat-working-thinking"),
         };
         let elapsed = transcript
             .turn
             .map(|turn| now_ms.saturating_sub(turn.started_ms))
             .filter(|elapsed| *elapsed >= 1000)
-            .map(herdr_chat_protocol::display::duration);
+            .map(crate::chat::text::duration);
         Some(Self { doing, elapsed })
     }
 }
@@ -56,7 +57,7 @@ fn step_title(title: &str) -> String {
         .filter(|inner| !inner.contains('`'))
         .unwrap_or(line);
     if line.is_empty() {
-        "Working".to_owned()
+        fl!("chat-working")
     } else {
         line.to_owned()
     }
@@ -105,7 +106,7 @@ pub(super) fn row(working: Option<&Working>, look: &Look<'_>) -> Div {
                         .min_w_0()
                         .truncate()
                         .text_color(rgb(theme.subtext()))
-                        .child(format!("{}\u{2026}", working.doing)),
+                        .child(fl!("chat-working-doing", doing = working.doing.as_str())),
                 )
                 .children(working.elapsed.clone().map(|elapsed| {
                     div()

@@ -3,6 +3,8 @@ use super::super::{Page, git::Row};
 use crate::{pr_actions::Action, pull_request::MergeMethod, sidebar::layout_tests::REPO_KEY};
 use gpui::{Entity, TestAppContext, VisualTestContext, point, px, size};
 
+mod en_xa;
+
 fn input() -> crate::pull_request::Input {
     crate::pull_request::Input {
         checkout: None,
@@ -57,7 +59,7 @@ fn an_open_pull_request_offers_review_comment_and_merge(cx: &mut TestAppContext)
             [
                 "Commit...",
                 "Push",
-                "Open pull request #8",
+                "Open pull request #\u{2068}8\u{2069}",
                 "Checks and comments",
                 "Comment...",
                 "Merge..."

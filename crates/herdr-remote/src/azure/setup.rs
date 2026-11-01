@@ -156,19 +156,16 @@ fn ensure_herdr(
     let installed = wait_installed(gateway, cancelled)?;
     if !installed {
         if !install {
-            return Err(cloud::Error::Install(format!(
-                "Herdr is not installed on Azure VM {}; enable Install Herdr and retry",
-                vm_name
-            ))
+            return Err(cloud::Error::Install(install::Failure::NotInstalled {
+                machine: Some(vm_name.to_string()),
+                retry: install::Retry::Enable,
+            })
             .into());
         }
         report(cloud::Step::InstallingHerdr);
         gateway.with_command(|command| install::install(command, &cancelled))??;
         if !gateway.with_command(|command| install::installed(command, &cancelled))?? {
-            return Err(cloud::Error::Install(
-                "the installer finished but Herdr is not on the expected paths".into(),
-            )
-            .into());
+            return Err(cloud::Error::Install(install::Failure::Missing).into());
         }
     }
     Ok(())

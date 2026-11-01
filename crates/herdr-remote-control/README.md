@@ -26,6 +26,24 @@ sessions, and per-address rate limits. It is synchronous and takes every time
 as milliseconds since the Unix epoch, so the server calls it under a mutex and
 tests pass explicit times.
 
+### Other machines
+
+Allowing a phone also pairs it directly with the SSH and cloud machines Herdr
+UI connects to (`control::hosts`, `auth::links`). This daemon only relays.
+Herdr UI names the machines with `Hosts`, and the desktop's `Approve` lists
+the ticked ones. The phone sends one new key per machine to
+`POST /api/v2/hosts/{host}/pair`. Herdr UI takes each request
+(`HostPairings`) and reports back (`HostPaired`). Revoking a phone owes each
+machine a revocation, kept in `host-revokes.json` until Herdr UI clears it.
+
+On a machine, Herdr UI runs `herdr-remote-control enroll` over SSH, which
+`app::enroll` implements. It takes the phone's key and this computer's APNs
+files on stdin. It installs the user service unless one is installed, turns
+on `[remote]` in that machine's Herdr UI settings when there are any, and
+asks the running daemon to add the phone (`Enroll`). Then it prints the
+machine's fingerprint and addresses. `herdr-remote-control revoke --device ID`
+undoes it.
+
 The pairing QR prefers a Tailscale address when one is available, then a LAN
 address. The desktop dialog highlights the Tailscale connection and reveals
 alternatives under **Other addresses**. Each address names its interfaces on

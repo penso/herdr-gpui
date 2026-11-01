@@ -21,6 +21,7 @@ TARGETS = ("aarch64-apple-darwin", "x86_64-apple-darwin",
 SHIPPED = (
     "herdr-acp",
     "herdr-automate",
+    "herdr-nearby",
     "herdr-remote-control",
 )
 # keep-sorted end

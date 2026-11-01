@@ -1,6 +1,7 @@
 //! Opt-in native rich-chat fixture, reached only through --sidebar-test.
 //! Synthetic messages go through the real chat reducer, parser, worker jobs,
 //! layout, input controls, and painter. No daemon or agent is contacted.
+//! Its messages are sample data, like a test's.
 
 use std::{
     path::PathBuf,
@@ -29,7 +30,7 @@ mod selection;
 
 const PANE: &str = "rich-chat-preview";
 const WAIT: Duration = Duration::from_secs(20);
-const MATH: &str = r#"## Weighted estimation
+const MATH: &str = r#"## Weighted estimation // i18n: data
 
 Compare prose x + y = 12 with inline math $x + y = 12$: both should read at the same size.
 
@@ -59,10 +60,10 @@ yield_estimate = weights.sum()
 uncertainty = (weights ** 2).sum() ** 0.5
 ```
 "#;
-const DIAGRAM: &str = "## Analysis flow\n\n```mermaid\nflowchart LR\n A[Events] --> B[Selection]\n B --> C[Weights]\n C --> D[Estimate]\n```\n\nThe diagram is rendered by the same background worker queue as mathematical expressions.\n";
-const CODE: &str = "## Code keeps its structure\n\nInline `left\tright` retains separation. The tab-indented block scrolls horizontally.\n\n```rust\nfn main() {\n\tlet α = \"a deliberately long source line that extends beyond the narrow reading column while keeping its original indentation, Unicode, and copied content intact\";\n\tprintln!(\"{α}\");\n\n\t// A blank source line keeps the same line height.\n}\n```\n\nThis indented Markdown image stays literal code:\n\n    ![example](https://example.org/plot.png)\n";
-const USER: &str = "Check **four** with $x^2$, `inline code`, and a [reference](https://example.org).\n\n$$y=x+1$$\n\n```python\nprint(2 ** 2)\n```\n\n| Input | Result |\n|:--|--:|\n| 2 | 4 |";
-const CONVERSATION: &str = r#"## A clearer conversation
+const DIAGRAM: &str = "## Analysis flow\n\n```mermaid\nflowchart LR\n A[Events] --> B[Selection]\n B --> C[Weights]\n C --> D[Estimate]\n```\n\nThe diagram is rendered by the same background worker queue as mathematical expressions.\n"; // i18n: data
+const CODE: &str = "## Code keeps its structure\n\nInline `left\tright` retains separation. The tab-indented block scrolls horizontally.\n\n```rust\nfn main() {\n\tlet α = \"a deliberately long source line that extends beyond the narrow reading column while keeping its original indentation, Unicode, and copied content intact\";\n\tprintln!(\"{α}\");\n\n\t// A blank source line keeps the same line height.\n}\n```\n\nThis indented Markdown image stays literal code:\n\n    ![example](https://example.org/plot.png)\n"; // i18n: data
+const USER: &str = "Check **four** with $x^2$, `inline code`, and a [reference](https://example.org).\n\n$$y=x+1$$\n\n```python\nprint(2 ** 2)\n```\n\n| Input | Result |\n|:--|--:|\n| 2 | 4 |"; // i18n: data
+const CONVERSATION: &str = r#"## A clearer conversation // i18n: data
 
 Messages should be comfortable to read. Ordinary paragraphs, **important details**, and links should share the same typography, whether the answer contains an equation or just a few sentences.
 
@@ -182,11 +183,11 @@ pub(crate) fn start(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
         };
         match result {
             Ok(()) => {
-                eprintln!("RICH CHAT native fixture PASS");
+                eprintln!("RICH CHAT native fixture PASS"); // i18n: data
                 std::process::exit(0);
             }
             Err(error) => {
-                eprintln!("RICH CHAT native fixture FAIL: {error:#}");
+                eprintln!("RICH CHAT native fixture FAIL: {error:#}"); // i18n: data
                 std::process::exit(1);
             }
         }
@@ -331,25 +332,25 @@ fn install(
     view.config.sidebar_style.activity_bar = false;
     view.sidebar_width = Some(if options.narrow { 150. } else { 220. });
     view.theme = if options.light {
-        view.config.theme_named("Catppuccin Latte", true)?
+        view.config.theme_named("Catppuccin Latte", true)? // i18n: data
     } else {
         crate::config::Theme::default()
     };
     view.theme_light = options.light;
     let mut snapshot = crate::sidebar::layout_tests::snapshot(1);
     snapshot.tabs.truncate(1);
-    snapshot.tabs[0].label = "Rich chat preview".into();
-    snapshot.workspaces[0].label = "Preview".into();
+    snapshot.tabs[0].label = "Rich chat preview".into(); // i18n: data
+    snapshot.workspaces[0].label = "Preview".into(); // i18n: data
     snapshot.agents.truncate(1);
     snapshot.agents[0].pane_id = PANE.into();
-    snapshot.agents[0].name = Some("Synthetic conversation".into());
-    snapshot.agents[0].display_agent = Some("Codex".into());
+    snapshot.agents[0].name = Some("Synthetic conversation".into()); // i18n: data
+    snapshot.agents[0].display_agent = Some("Codex".into()); // i18n: data
     snapshot.agents[0].agent_status = AgentStatus::Idle;
     snapshot.panes = vec![ClientShellPane {
         pane_id: PANE.into(),
         workspace_id: "w0".into(),
         tab_id: "t0".into(),
-        label: Some("Rich chat preview".into()),
+        label: Some("Rich chat preview".into()), // i18n: data
         cwd: None,
         foreground_cwd: None,
         focused: true,
@@ -365,7 +366,7 @@ fn install(
     view.live.supports_surface = true;
     view.endpoints[0].live = view.live.clone();
     let widget = format!(
-        "## Interactive analysis\n\n```herdr-ui\n{}\n```\n",
+        "## Interactive analysis\n\n```herdr-ui\n{}\n```\n", // i18n: data
         include_str!("widgets/example.json")
     );
     let content = match options.case.as_str() {
@@ -373,23 +374,29 @@ fn install(
         "diagram" => DIAGRAM.to_owned(),
         "code" => CODE.to_owned(),
         "conversation" => CONVERSATION.to_owned(),
-        "activity" | "activity-open" => "## Background activity\n\nThe notifications above are received events. Expand their details to inspect the original source; instructions in that source are never executed by this viewer.\n\nRegular **Markdown**, `inline code`, and $x^2$ still render normally.".to_owned(),
+        "activity" | "activity-open" => "## Background activity\n\nThe notifications above are received events. Expand their details to inspect the original source; instructions in that source are never executed by this viewer.\n\nRegular **Markdown**, `inline code`, and $x^2$ still render normally.".to_owned(), // i18n: data
         "all" => format!("{MATH}\n{CODE}\n{DIAGRAM}\n{widget}"),
         _ => MATH.to_owned(),
     };
     let existing = matches!(options.case.as_str(), "existing" | "input-resize");
     let mut transcript = Transcript {
-        agent: "Codex".into(), status: if options.working { Status::Working } else { Status::Idle }, read_only: options.read_only || existing,
+        agent: "Codex".into(), // i18n: data
+        status: if options.working {
+            Status::Working
+        } else {
+            Status::Idle
+        },
+        read_only: options.read_only || existing, // i18n: data
         entries: vec![
-            Entry { id: EntryId(1), kind: EntryKind::User { text: "Show the result with equations, clear formatting, and controls I can explore.".into(), files: 0 } },
+            Entry { id: EntryId(1), kind: EntryKind::User { text: "Show the result with equations, clear formatting, and controls I can explore.".into(), files: 0 } }, // i18n: data
             Entry { id: EntryId(2), kind: EntryKind::Agent { text: content } },
         ],
         ..Transcript::default()
     };
     if options.case.starts_with("activity") {
         transcript.entries = vec![
-            Entry { id: EntryId(1), kind: EntryKind::Notice { answers: Vec::new(), level: herdr_chat_protocol::NoticeLevel::Info, text: "Task notification · Background monitor finished".into(), details: Some("<task-notification>\n<task-id>synthetic</task-id>\n<summary>Background monitor finished</summary>\n<event>No intervention needed</event>\n</task-notification>".into()) } },
-            Entry { id: EntryId(2), kind: EntryKind::Notice { answers: Vec::new(), level: herdr_chat_protocol::NoticeLevel::Info, text: "Scheduled reminder · Review the daily summary".into(), details: Some("Review the daily summary. This synthetic reminder is plain source, not an actionable permission or command.".into()) } },
+            Entry { id: EntryId(1), kind: EntryKind::Notice { answers: Vec::new(), level: herdr_chat_protocol::NoticeLevel::Info, text: "Task notification · Background monitor finished".into(), details: Some("<task-notification>\n<task-id>synthetic</task-id>\n<summary>Background monitor finished</summary>\n<event>No intervention needed</event>\n</task-notification>".into()) } }, // i18n: data
+            Entry { id: EntryId(2), kind: EntryKind::Notice { answers: Vec::new(), level: herdr_chat_protocol::NoticeLevel::Info, text: "Scheduled reminder · Review the daily summary".into(), details: Some("Review the daily summary. This synthetic reminder is plain source, not an actionable permission or command.".into()) } }, // i18n: data
             Entry { id: EntryId(3), kind: transcript.entries.remove(1).kind },
         ];
     }
@@ -504,7 +511,7 @@ fn install(
             let mut input = crate::search_input::SearchInput::new(cx);
             input.set_frameless(cx);
             input.set_appearance(font, theme, cx);
-            input.set_placeholder("Preview only — no agent is connected", cx);
+            input.set_placeholder("Preview only — no agent is connected", cx); // i18n: data
             if let Some(draft) = &options.draft {
                 input.set_text_at(draft, draft.len(), cx);
             }
@@ -515,7 +522,7 @@ fn install(
             pane.attachments = options.attach.clone();
         }
     }
-    window.set_window_title("Herdr · Rich chat preview");
+    window.set_window_title("Herdr · Rich chat preview"); // i18n: data
     window.resize(size(
         px(if options.narrow { 650. } else { 1280. }),
         px(860.),
@@ -558,12 +565,12 @@ fn fit_surface(view: &mut HerdrWindow) {
         // The fixture never connects to a daemon or submits any prompt.
         let lines = [
             "",
-            "> Explain the uncertainty in more detail",
+            "> Explain the uncertainty in more detail", // i18n: data
             "",
-            "  GPT-6-Astra ultra   ~/analysis   synthetic session",
-            "  Enter to send  |  Shift-Enter newline  |  Esc interrupt",
-            "  Paste images and files here using the original agent editor",
-            "  Preview only: no agent is connected",
+            "  GPT-6-Astra ultra   ~/analysis   synthetic session", // i18n: data
+            "  Enter to send  |  Shift-Enter newline  |  Esc interrupt", // i18n: data
+            "  Paste images and files here using the original agent editor", // i18n: data
+            "  Preview only: no agent is connected",                // i18n: data
             "",
         ];
         for (offset, line) in lines.iter().enumerate() {
@@ -653,14 +660,14 @@ fn visuals_ready(view: &HerdrWindow) -> Result<bool> {
 fn attachment_entries() -> Result<Vec<Entry>> {
     use herdr_chat_protocol::{Author, Image, NoticeLevel};
     // Synthetic 240×128 RGB checkerboard; no file, URL, or private screenshot.
-    const CHECKERBOARD: &str = "iVBORw0KGgoAAAANSUhEUgAAAPAAAACACAIAAAC6FXMEAAAB6ElEQVR42u3SMQ0AIAxFwUpDG8IQws6OBFYMdGhzSQW8/F7sc1NvzJV6+vX/FwbVD7RB9QMNhH6ggdAPtH6gDaofaIPqBxoI/UADoR9o/UAbVD/QBtUPNBD6gQZCP9D6gTaofqANqh9oIPQDDYR+oPUDbVD9QAOhH2gg9AMNhH6g9QNtUP1AA6EfaCD0A61fP9D6gTao/gKgPUx/p36g9QNtUP1AA6EfaCD0A60faIPqB9qg+oEGQj/QQOgHWj/QBtUPtEH1Aw2EfqCB0A+0fqANqh9og+oHGgj9QAOhH2j9QBtUP9BA6AcaCP1AA6EfaP1AG1Q/0EDoBxoI/UDr1w+0fqANqr8CaA/T36kfaP1AG1Q/0EDoBxoI/UDrB9qg+oE2qH6ggdAPNBD6gdYPtEH1A21Q/UADoR9oIPQDrR9og+oH2qD6gQZCP9BA6AdaP9AG1Q80EPqBBkI/0EDoB1o/0AbVDzQQ+oEGQj/Q+vUDrR9og+qvANrD9HfqB1o/0AbVDzQQ+oEGQj/Q+oE2qH6gDaofaCD0Aw2EfqD1A21Q/UAbVD/QQOgHGgj9QOsH2qD6gTaofqCB0A80EPqB1g+0QfUDDYR+oIHQDzQQ+oHWD7RB9QMNhH6ggdAPtH79QOsH2qD6C/Q/rkEStgLPXQwAAAAASUVORK5CYII=";
+    const CHECKERBOARD: &str = "iVBORw0KGgoAAAANSUhEUgAAAPAAAACACAIAAAC6FXMEAAAB6ElEQVR42u3SMQ0AIAxFwUpDG8IQws6OBFYMdGhzSQW8/F7sc1NvzJV6+vX/FwbVD7RB9QMNhH6ggdAPtH6gDaofaIPqBxoI/UADoR9o/UAbVD/QBtUPNBD6gQZCP9D6gTaofqANqh9oIPQDDYR+oPUDbVD9QAOhH2gg9AMNhH6g9QNtUP1AA6EfaCD0A61fP9D6gTao/gKgPUx/p36g9QNtUP1AA6EfaCD0A60faIPqB9qg+oEGQj/QQOgHWj/QBtUPtEH1Aw2EfqCB0A+0fqANqh9og+oHGgj9QAOhH2j9QBtUP9BA6AcaCP1AA6EfaP1AG1Q/0EDoBxoI/UDr1w+0fqANqr8CaA/T36kfaP1AG1Q/0EDoBxoI/UDrB9qg+oE2qH6ggdAPNBD6gdYPtEH1A21Q/UADoR9oIPQDrR9og+oH2qD6gQZCP9BA6AdaP9AG1Q80EPqBBkI/0EDoB1o/0AbVDzQQ+oEGQj/Q+vUDrR9og+qvANrD9HfqB1o/0AbVDzQQ+oEGQj/Q+oE2qH6gDaofaCD0Aw2EfqD1A21Q/UAbVD/QQOgHGgj9QOsH2qD6gTaofqCB0A80EPqB1g+0QfUDDYR+oIHQDzQQ+oHWD7RB9QMNhH6ggdAPtH79QOsH2qD6C/Q/rkEStgLPXQwAAAAASUVORK5CYII="; // i18n: data
     Ok(vec![
         Entry {
             id: EntryId(1),
             kind: EntryKind::Notice {
                 answers: Vec::new(),
                 level: NoticeLevel::Info,
-                text: "Environment context updated".into(),
+                text: "Environment context updated".into(), // i18n: data
                 details: Some("<environment_context>\n  <cwd>/tmp/herdr-rich-fixture</cwd>\n</environment_context>".into()),
             },
         },
@@ -669,8 +676,8 @@ fn attachment_entries() -> Result<Vec<Entry>> {
             kind: EntryKind::Notice {
                 answers: Vec::new(),
                 level: NoticeLevel::Info,
-                text: "Image attachment · Image #1".into(),
-                details: Some("<image name=[Image #1] path=\"/tmp/herdr-rich-fixture/checkerboard.png\"></image>".into()),
+                text: "Image attachment · Image #1".into(), // i18n: data
+                details: Some("<image name=[Image #1] path=\"/tmp/herdr-rich-fixture/checkerboard.png\"></image>".into()), // i18n: data
             },
         },
         Entry {
@@ -684,14 +691,14 @@ fn attachment_entries() -> Result<Vec<Entry>> {
         Entry {
             id: EntryId(4),
             kind: EntryKind::User {
-                text: "Can you explain this image and link the notes?".into(),
+                text: "Can you explain this image and link the notes?".into(), // i18n: data
                 files: 0,
             },
         },
         Entry {
             id: EntryId(5),
             kind: EntryKind::Agent {
-                text: "The attachment shows a blue checkerboard.\n\n[Changes and verification details](/tmp/herdr-rich-fixture/notes.md)\n\nThe document opens only when you click its link.".into(),
+                text: "The attachment shows a blue checkerboard.\n\n[Changes and verification details](/tmp/herdr-rich-fixture/notes.md)\n\nThe document opens only when you click its link.".into(), // i18n: data
             },
         },
     ])
@@ -714,16 +721,16 @@ fn earlier_turns() -> Vec<Entry> {
     vec![
         user(
             1,
-            "I can't drag and drop a screenshot on this field in agent mode, is it supposed to work?",
+            "I can't drag and drop a screenshot on this field in agent mode, is it supposed to work?", // i18n: data
         ),
         agent(
             2,
-            "Yes, it is supposed to work. The chat view is drawn over the terminal and blocks the mouse, so the terminal's drop handler never ran. The chat now takes the drop itself.",
+            "Yes, it is supposed to work. The chat view is drawn over the terminal and blocks the mouse, so the terminal's drop handler never ran. The chat now takes the drop itself.", // i18n: data
         ),
-        user(3, "Copy the screenshot and paste it does not work either."),
+        user(3, "Copy the screenshot and paste it does not work either."), // i18n: data
         agent(
             4,
-            "The composer's paste only read text. A copied screenshot is now saved to a private file and attached, and copied Finder files attach instead of pasting their names.",
+            "The composer's paste only read text. A copied screenshot is now saved to a private file and attached, and copied Finder files attach instead of pasting their names.", // i18n: data
         ),
     ]
 }
@@ -749,41 +756,41 @@ fn tool_entries() -> Vec<Entry> {
         Entry {
             id: EntryId(1),
             kind: EntryKind::User {
-                text: "Why does the send button stay pink when the box is empty?".into(),
+                text: "Why does the send button stay pink when the box is empty?".into(), // i18n: data
                 files: 0,
             },
         },
         Entry {
             id: EntryId(2),
             kind: EntryKind::Agent {
-                text: "I'll check the composer's button state and run its tests.".into(),
+                text: "I'll check the composer's button state and run its tests.".into(), // i18n: data
             },
         },
         tool(
             3,
             ToolKind::Execute,
             ToolStatus::Completed,
-            "`cargo test -p herdr-gpui --bins chat::tests::stop`",
+            "`cargo test -p herdr-gpui --bins chat::tests::stop`", // i18n: data
             &[],
-            text("running 3 tests\ntest chat::tests::stop::the_send_button_stops_a_running_turn ... ok\ntest chat::tests::stop::a_written_prompt_turns_stop_back_into_send ... ok\ntest chat::tests::stop::send_stays_off_until_something_is_written ... FAILED\n\nfailures:\n    send button was Send, expected Off\n\ntest result: FAILED. 2 passed; 1 failed"),
+            text("running 3 tests\ntest chat::tests::stop::the_send_button_stops_a_running_turn ... ok\ntest chat::tests::stop::a_written_prompt_turns_stop_back_into_send ... ok\ntest chat::tests::stop::send_stays_off_until_something_is_written ... FAILED\n\nfailures:\n    send button was Send, expected Off\n\ntest result: FAILED. 2 passed; 1 failed"), // i18n: data
         ),
         tool(
             4,
             ToolKind::Read,
             ToolStatus::Completed,
-            "Read crates/herdr-gpui/src/chat/view/composer.rs",
+            "Read crates/herdr-gpui/src/chat/view/composer.rs", // i18n: data
             &["crates/herdr-gpui/src/chat/view/composer.rs:191"],
-            text("let send = match chat.send {\n    SendButton::Stop => round(\"chat-stop\"),\n    SendButton::Send | SendButton::Off => round(\"chat-send\"),\n};"),
+            text("let send = match chat.send {\n    SendButton::Stop => round(\"chat-stop\"),\n    SendButton::Send | SendButton::Off => round(\"chat-send\"),\n};"), // i18n: data
         ),
         tool(
             5,
             ToolKind::Edit,
             ToolStatus::Completed,
-            "Edit crates/herdr-gpui/src/chat/chats.rs",
+            "Edit crates/herdr-gpui/src/chat/chats.rs", // i18n: data
             &["crates/herdr-gpui/src/chat/chats.rs:172"],
             vec![ToolContent::Diff {
-                new: "let drafted = !text.trim().is_empty();".into(),
-                old: Some("let drafted = true;".into()),
+                new: "let drafted = !text.trim().is_empty();".into(), // i18n: data
+                old: Some("let drafted = true;".into()), // i18n: data
                 path: "crates/herdr-gpui/src/chat/chats.rs".into(),
             }],
         ),
@@ -791,14 +798,14 @@ fn tool_entries() -> Vec<Entry> {
             6,
             ToolKind::Execute,
             ToolStatus::Failed,
-            "`just lint-linux`",
+            "`just lint-linux`", // i18n: data
             &[],
-            text("error: Docker is not running"),
+            text("error: Docker is not running"), // i18n: data
         ),
         Entry {
             id: EntryId(7),
             kind: EntryKind::Agent {
-                text: "Found it: the button counted the box as **written** even when it was empty, so `Send` stayed on. It now checks the text, and the stop test passes.\n\nThe Linux lint did not run because Docker is stopped; start it and run `just lint-linux` again.".into(),
+                text: "Found it: the button counted the box as **written** even when it was empty, so `Send` stayed on. It now checks the text, and the stop test passes.\n\nThe Linux lint did not run because Docker is stopped; start it and run `just lint-linux` again.".into(), // i18n: data
             },
         },
     ]
@@ -808,11 +815,11 @@ fn question_entries() -> Vec<Entry> {
     use herdr_chat_protocol::{NoticeLevel, QuestionAnswer};
     let answers = vec![
         QuestionAnswer {
-            question: "Which model should we use for $y=x^2$?".into(),
-            answer: "Use the **quadratic** model with $x=2$.".into(),
+            question: "Which model should we use for $y=x^2$?".into(), // i18n: data
+            answer: "Use the **quadratic** model with $x=2$.".into(),  // i18n: data
         },
         QuestionAnswer {
-            question: "How should the example print the result?".into(),
+            question: "How should the example print the result?".into(), // i18n: data
             answer: "```python\nprint(2 ** 2)\n```".into(),
         },
     ];
@@ -838,13 +845,13 @@ fn question_entries() -> Vec<Entry> {
                 answers,
                 details: Some(details),
                 level: NoticeLevel::Info,
-                text: "Questions answered".into(),
+                text: "Questions answered".into(), // i18n: data
             },
         },
         Entry {
             id: EntryId(2),
             kind: EntryKind::Agent {
-                text: "I will use these choices in the example.".into(),
+                text: "I will use these choices in the example.".into(), // i18n: data
             },
         },
     ]

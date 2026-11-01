@@ -713,9 +713,13 @@ impl Config {
     }
 
     /// Without a home directory there is no desktop theme to find, and the
-    /// managed default stays.
+    /// managed default stays. Tests load temporary files and must not follow
+    /// the desktop of the machine running them; `follow_omarchy` is tested
+    /// against a home of its own.
     fn with_desktop_theme(mut self, overrides: &str) -> Self {
-        if let Ok(home) = home() {
+        if !cfg!(test)
+            && let Ok(home) = home()
+        {
             self.follow_omarchy(overrides, &home);
         }
         self

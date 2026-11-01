@@ -14,7 +14,15 @@ fn with_terminal(dir: &std::path::Path) -> Shared {
             label: "app".into(),
             branch: None,
             cwd: "/code/app".into(),
-            chats: Vec::new(),
+            worktree: None,
+            chats: vec![crate::hub::ChatRow {
+                pane: "c1".into(),
+                tab: "t1".into(),
+                endpoint: herdr_chat_protocol::EndpointId::random(),
+                agent: Some("claude".into()),
+                title: "Claude".into(),
+                status: herdr_client::protocol::AgentStatus::Idle,
+            }],
             terminals: vec![crate::hub::layout_terminal("t2", "zsh")],
         }],
     };
@@ -25,7 +33,7 @@ fn with_terminal(dir: &std::path::Path) -> Shared {
     })
 }
 
-fn authorized(request: HttpRequest<Body>, token: &str) -> HttpRequest<Body> {
+pub(super) fn authorized(request: HttpRequest<Body>, token: &str) -> HttpRequest<Body> {
     let (mut parts, body) = request.into_parts();
     parts.headers.insert(
         header::AUTHORIZATION,
@@ -98,6 +106,42 @@ fn actions_call_herdrs_methods_without_focusing() {
         action_call(Action::CloseTab, "p", "t", "w").1["tab_id"],
         "t"
     );
+}
+
+#[test]
+fn an_action_answers_the_pane_to_show_next() {
+    use crate::web::terminal::{Action, next_pane};
+    assert_eq!(next_pane(Action::SplitRight, "p1", Some("p2")), Some("p2"));
+    assert_eq!(next_pane(Action::NewTab, "p1", Some("p3")), Some("p3"));
+    // A split Herdr did not report stays on the pane it split.
+    assert_eq!(next_pane(Action::SplitDown, "p1", None), Some("p1"));
+    assert_eq!(next_pane(Action::Zoom, "p1", None), Some("p1"));
+    assert_eq!(next_pane(Action::ClosePane, "p1", None), None);
+    assert_eq!(next_pane(Action::CloseTab, "p1", Some("p9")), None);
+}
+
+#[tokio::test]
+async fn actions_reach_terminal_and_chat_panes_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = with_terminal(dir.path());
+    let (_, token) = signed_in(&state, 7);
+    let close = |pane: &str| {
+        authorized(
+            post(
+                &format!("/api/term/{pane}/action"),
+                json!({ "action": "close_pane" }),
+            ),
+            &token,
+        )
+    };
+    assert_eq!(send(&state, close("p9")).await.0, StatusCode::NOT_FOUND);
+    // A terminal's pane and a chat's pane both reach Herdr, which this
+    // test has none of.
+    for pane in ["t2-p1", "c1"] {
+        let (status, _, body) = send(&state, close(pane)).await;
+        assert_ne!(status, StatusCode::NOT_FOUND, "{pane}: {body}");
+        assert_ne!(status, StatusCode::OK, "{pane}: {body}");
+    }
 }
 
 #[tokio::test]

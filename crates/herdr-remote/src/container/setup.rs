@@ -7,6 +7,7 @@ pub use super::{
     machine::State,
     settings::{DEFAULT_CPUS, DEFAULT_IMAGE, DEFAULT_MEMORY},
 };
+use crate::cloud::Value;
 use crate::cloud::{self, CloudProvider, SavedDevice, Spec, install};
 
 /// The session every container device attaches to.
@@ -132,19 +133,17 @@ fn install_herdr(
         return Ok(());
     }
     if !approved {
-        return Err(cloud::Error::Install(format!(
-            "Herdr is not installed in {id}; allow installing it and try again"
-        ))
+        return Err(cloud::Error::Install(install::Failure::NotInstalled {
+            machine: Some(id.to_string()),
+            retry: install::Retry::Allow,
+        })
         .into());
     }
     report(cloud::Step::InstallingHerdr);
     install::install(machine::exec(engine, id)?, &cancelled)?;
     // The installer's own success is not proof the bridge will find it.
     if !install::installed(machine::exec(engine, id)?, &cancelled)? {
-        return Err(cloud::Error::Install(
-            "the installer finished but Herdr is not on the expected paths".into(),
-        )
-        .into());
+        return Err(cloud::Error::Install(install::Failure::Missing).into());
     }
     Ok(())
 }
@@ -269,7 +268,7 @@ pub fn destroy_saved(id: &str) -> crate::Result<()> {
         return Ok(());
     };
     let engine =
-        Engine::from_key(&device.account).ok_or(super::Error::Field("container engine"))?;
+        Engine::from_key(&device.account).ok_or(super::Error::Field(Value::ContainerEngine))?;
     machine::delete(engine, id, &|| false)?;
     Ok(cloud::remove(CloudProvider::Container, id)?)
 }
@@ -283,7 +282,7 @@ pub fn stop_saved(id: &str) -> crate::Result<()> {
         return Ok(());
     };
     let engine =
-        Engine::from_key(&device.account).ok_or(super::Error::Field("container engine"))?;
+        Engine::from_key(&device.account).ok_or(super::Error::Field(Value::ContainerEngine))?;
     Ok(super::lifecycle::stop(engine, id, || {
         machine::stop(engine, id, &|| false)
     })?)

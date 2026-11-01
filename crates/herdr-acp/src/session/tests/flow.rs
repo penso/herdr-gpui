@@ -18,7 +18,11 @@ fn a_turn_streams_into_one_agent_entry_and_ends_idle() {
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].kind.text(), Some("fix the bug"));
     assert_eq!(entries[1].kind.text(), Some("On it."));
-    assert!(matches!(entries[2].kind, EntryKind::Turn(_)));
+    let EntryKind::Turn(turn) = &entries[2].kind else {
+        panic!("the turn ends with its summary");
+    };
+    // Lists say how long ago a chat last answered from this.
+    assert!(turn.ended_ms.is_some_and(|ended| ended >= turn.duration_ms));
     assert_eq!(harness.transcript().status, Status::Idle);
     assert_eq!(
         *harness.reports.borrow(),

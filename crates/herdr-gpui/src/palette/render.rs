@@ -264,10 +264,7 @@ impl HerdrWindow {
                         look,
                     ))
                     .when_some(seen_at, |pane, at| {
-                        let age = crate::checkpoint::age(
-                            i64::try_from(at).unwrap_or(i64::MAX),
-                            i64::try_from(super::frecency::now()).unwrap_or(i64::MAX),
-                        );
+                        let age = crate::ago::text(super::frecency::now().saturating_sub(at));
                         pane.child(
                             div()
                                 .debug_selector(|| "palette-preview-age".into())

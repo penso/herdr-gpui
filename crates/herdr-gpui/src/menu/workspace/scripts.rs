@@ -3,7 +3,7 @@
 //! The scripts themselves are `crate::worktree_scripts`.
 
 use super::super::{Removal, WorkspaceTarget, danger, state::Deletion};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 
@@ -98,10 +98,12 @@ impl HerdrWindow {
             )) => {
                 return None;
             }
-            ArchiveCheck::Reading => note("Checking for an archive script...".into()),
-            ArchiveCheck::Failed(error) => {
-                note(format!("The archive script cannot run: {error}")).text_color(danger(theme))
-            }
+            ArchiveCheck::Reading => note(fl!("workspace-dialog-archive-checking")),
+            ArchiveCheck::Failed(error) => note(fl!(
+                "workspace-dialog-archive-failed",
+                error = error.to_string()
+            ))
+            .text_color(danger(theme)),
             ArchiveCheck::Read(_) => {
                 let config = deletion.archive.script()?;
                 let trusted = cx.default_global::<Trust>().trusts(&Grant {
@@ -114,10 +116,9 @@ impl HerdrWindow {
                     digest: config.digest.clone(),
                 });
                 note(if trusted {
-                    "The repository's archive script runs first, in a new tab. The checkout is removed only if it succeeds.".into()
+                    fl!("workspace-dialog-archive-trusted")
                 } else {
-                    "The repository has an archive script. You can review it before anything runs."
-                        .into()
+                    fl!("workspace-dialog-archive-untrusted")
                 })
             }
         })

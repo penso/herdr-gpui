@@ -180,8 +180,11 @@ fn run(
             let titled = call(
                 &target.socket,
                 "pane.report_metadata",
+                // A report without clear flags replaces what this source
+                // reported before, so the display name goes with the title
+                // or clients fall back to `acp` and lose the agent's logo.
                 json!({"pane_id": target.pane, "source": SOURCE, "agent": AGENT,
-                    "title": latest, "seq": seq.next()}),
+                    "display_agent": display, "title": latest, "seq": seq.next()}),
             )
             .is_ok();
             let label = naming::label(display, &latest);

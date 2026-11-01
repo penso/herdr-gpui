@@ -3,7 +3,16 @@
 
 use super::*;
 use crate::apns::payload::MAX_PAYLOAD;
+use herdr_chat_protocol::{PermissionKind, PermissionOption};
 use serde_json::Value;
+
+fn option(id: &str, kind: PermissionKind, name: &str) -> PermissionOption {
+    PermissionOption {
+        id: id.to_owned(),
+        kind,
+        name: name.to_owned(),
+    }
+}
 
 macro_rules! fixture {
     ($name:literal) => {
@@ -17,10 +26,12 @@ macro_rules! fixture {
 
 fn base_state() -> ContentState {
     ContentState {
-        cost: None,
+        options: Vec::new(),
+        permission: None,
         phase: Phase::Working,
         plan_done: None,
         plan_total: None,
+        previous: Vec::new(),
         question: None,
         started_at: 1_799_999_990,
         step: "Working".to_owned(),
@@ -70,10 +81,15 @@ fn question_update_matches_the_swift_fixture() {
         },
         pane: "w1-p3".to_owned(),
         state: ContentState {
-            cost: Some("$0.34".to_owned()),
+            options: vec![
+                option("allow", PermissionKind::AllowOnce, "Allow once"),
+                option("reject", PermissionKind::RejectOnce, "Deny"),
+            ],
+            permission: Some(7),
             phase: Phase::Question,
             plan_done: Some(2),
             plan_total: Some(4),
+            previous: vec!["Read lib.rs".to_owned(), "Edit lib.rs".to_owned()],
             question: Some("Run just ci".to_owned()),
             step: "Run the tests".to_owned(),
             waiting: 1,
@@ -93,10 +109,9 @@ fn end_matches_the_swift_fixture() {
         },
         pane: "w1-p3".to_owned(),
         state: ContentState {
-            cost: Some("$0.48".to_owned()),
             phase: Phase::Finished,
             step: "Run the tests".to_owned(),
-            summary: Some("Worked 6m 2s \u{b7} $0.48".to_owned()),
+            summary: Some("Worked 6m 2s".to_owned()),
             working: 0,
             ..base_state()
         },

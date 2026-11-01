@@ -10,6 +10,7 @@ use std::ops::Range;
 
 mod external;
 mod path;
+mod wrap;
 pub(crate) use path::{escape_into, escaped_len};
 
 pub(crate) use external::ExternalUrl;
@@ -143,12 +144,25 @@ pub(crate) enum RowTarget {
     External(ExternalUrl),
 }
 
-/// A link read from one row, and the frame columns it covers.
+/// A link read from the rows of a pane or popup, and the frame columns it
+/// covers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RowLink {
     pub(crate) target: RowTarget,
+    /// The first row the link covers, and its columns there.
     pub(crate) row: u16,
     pub(crate) columns: Range<u16>,
+    /// The rows below `row` that a link wrapped across goes on to, top to
+    /// bottom, with the columns it covers on each; empty for a link on one
+    /// row.
+    pub(crate) continued: Vec<(u16, Range<u16>)>,
+}
+
+impl RowLink {
+    /// Every row the link covers, top to bottom, with its columns there.
+    pub(crate) fn rows(&self) -> impl Iterator<Item = (u16, Range<u16>)> + '_ {
+        std::iter::once((self.row, self.columns.clone())).chain(self.continued.iter().cloned())
+    }
 }
 
 /// A row-local link in a pane, which a popup never is.
@@ -199,7 +213,7 @@ fn located(
 ) -> Option<(Option<String>, RowLink)> {
     // Share popup isolation, pane bounds, and invalid-geometry handling with input.
     let target = wheel_target(surface, x, y, cell_width, cell_height)?;
-    let (frame, x, y, start, end, pane_id) = match target.target {
+    let (frame, x, y, columns, rows, pane_id) = match target.target {
         InputTarget::Popup(_) => {
             let popup = surface.popup.as_ref()?;
             let origin = popup_origin(&surface.frame, &popup.frame, cell_width, cell_height);
@@ -207,19 +221,20 @@ fn located(
                 &popup.frame,
                 x - f32::from(origin.x),
                 y - f32::from(origin.y),
-                0,
-                popup.frame.width,
+                0..popup.frame.width,
+                0..popup.frame.height,
                 None,
             )
         }
         InputTarget::Pane(id) => {
             let pane = surface.panes.iter().find(|pane| pane.pane_id == id)?;
+            let rect = pane.inner_rect;
             (
                 &surface.frame,
                 x,
                 y,
-                pane.inner_rect.x,
-                pane.inner_rect.x.saturating_add(pane.inner_rect.width),
+                rect.x..rect.x.saturating_add(rect.width),
+                rect.y..rect.y.saturating_add(rect.height),
                 Some(id),
             )
         }
@@ -228,8 +243,8 @@ fn located(
         frame,
         (x / cell_width).floor() as u16,
         (y / cell_height).floor() as u16,
-        start,
-        end,
+        columns,
+        rows,
     )?;
     Some((pane_id, link))
 }
@@ -294,11 +309,23 @@ fn link_cell(
     (cells.get(source)?.modifier & HIDDEN == 0).then_some((cells, selected, source))
 }
 
-fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) -> Option<RowLink> {
-    let (cells, selected, source) = link_cell(frame, column, row, start, end)?;
+/// The link at cell (`column`, `row`) of the pane or popup that covers
+/// `columns` and `rows` of `frame`, which it never leaves.
+fn frame_link(
+    frame: &FrameData,
+    column: u16,
+    row: u16,
+    columns: Range<u16>,
+    rows: Range<u16>,
+) -> Option<RowLink> {
+    if !rows.contains(&row) {
+        return None;
+    }
+    let (cells, selected, source) = link_cell(frame, column, row, columns.start, columns.end)?;
     let cell = &cells[source];
     // Cell indexes fit the row, whose width is a `u16`.
-    let columns = |cells: Range<usize>| start + cells.start as u16..start + cells.end as u16;
+    let left = columns.start;
+    let span = |cells: Range<usize>| left + cells.start as u16..left + cells.end as u16;
     // An explicit link is authoritative, even if its destination is disallowed.
     if let Some(index) = cells[selected].hyperlink.or(cell.hyperlink) {
         let destination = frame.hyperlinks.get(index as usize)?;
@@ -319,75 +346,86 @@ fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) ->
         return Some(RowLink {
             target,
             row,
-            columns: columns(first..last + 1),
+            columns: span(first..last + 1),
+            continued: Vec::new(),
         });
     }
-    // Byte offsets into the row's text, so a link maps back to its cells.
-    let mut text = String::new();
-    let mut starts = Vec::with_capacity(cells.len());
-    for cell in cells {
-        starts.push(text.len());
-        if cell.skip {
-            continue;
-        }
-        let symbol = shown(cell);
-        if text.len() + symbol.len() > MAX_ROW_BYTES {
-            return None;
-        }
-        text.push_str(symbol);
+    // Most rows end their line before the right edge and are read alone;
+    // text under the point that a neighbouring row may continue is read with
+    // the rows it may span, as one line.
+    let area = wrap::Area::new(frame, columns, rows);
+    let lines = area.around(row, source);
+    let first = *lines.start();
+    let run = area.read(lines)?;
+    let found = Plain::read(&run.text, run.start_of(row, source)?)?;
+    // Text past either end of what was read may go on with the link, off
+    // screen or beyond the rows read: a destination is never guessed.
+    if found.open() || (found.range().start == 0 && area.continued_above(first)) {
+        return None;
     }
-    let hit = starts[source];
-    // Plain links are row-local: the surface doesn't distinguish soft wraps
-    // from separate lines, so joining rows could silently change the
-    // destination. A daemon offering `pane.link.resolve` reads wrapped URLs
-    // from its own terminal state instead; see `crate::links`.
-    let (range, target) = match plain_url(&text, hit) {
-        Some((_, true)) => return None,
-        Some((range, false)) => {
-            let target = plain_address(&text[range.clone()])?;
-            (range, target)
-        }
-        None => {
-            let found = path::plain_path(&text, hit)?;
-            // A path starting the row may be the tail of whatever filled the
-            // row above, such as a wrapped URL.
-            if found.open || (found.range.start == 0 && row_full(frame, row, end)) {
-                return None;
-            }
-            let target = RowTarget::Path {
-                path: found.path.into_owned(),
-                line: found.line,
-                explicit: false,
-            };
-            (found.range, target)
-        }
-    };
-    let first = (0..cells.len()).find(|&i| !cells[i].skip && starts[i] >= range.start)?;
-    let last = (0..cells.len())
-        .rev()
-        .find(|&i| !cells[i].skip && starts[i] < range.end)?;
-    // A wide character's continuation cells belong to the link too.
-    let end = (last + 1..cells.len())
-        .find(|&i| !cells[i].skip)
-        .unwrap_or(cells.len());
+    let segments = run.segments(found.range());
+    let target = found.target(&run.text)?;
+    // The surface does not tell a wrapped row from a line that happened to
+    // fill it, so text read across rows is a link only where the disk
+    // confirms it: a file, which is one only once it is found. A web address
+    // the terminal wrapped is the daemon's to read (`pane.link.resolve`),
+    // from the terminal's own wrap flags.
+    if segments.len() > 1 && !matches!(target, RowTarget::Path { .. }) {
+        return None;
+    }
+    let mut segments = segments.into_iter();
+    let (row, columns) = segments.next()?;
     Some(RowLink {
         target,
         row,
-        columns: columns(first..end),
+        columns,
+        continued: segments.collect(),
     })
 }
 
-/// Whether the row above `row` prints up to the pane's right edge, `end`,
-/// where its text may wrap onto `row`.
-fn row_full(frame: &FrameData, row: u16, end: u16) -> bool {
-    let Some(above) = row.checked_sub(1) else {
-        return false;
-    };
-    let index = usize::from(above) * usize::from(frame.width) + usize::from(end) - 1;
-    frame
-        .cells
-        .get(index)
-        .is_some_and(|cell| cell.skip || shown(cell) != " ")
+/// Plain text that may be a link: an address with one of the plain schemes,
+/// or else a file path.
+enum Plain<'a> {
+    Address { range: Range<usize>, open: bool },
+    Path(path::PlainPath<'a>),
+}
+
+impl<'a> Plain<'a> {
+    /// What `text` may link to at the byte at `hit`. An address there is
+    /// never read as a path, whatever it names.
+    fn read(text: &'a str, hit: usize) -> Option<Self> {
+        match plain_url(text, hit) {
+            Some((range, open)) => Some(Self::Address { range, open }),
+            None => path::plain_path(text, hit).map(Self::Path),
+        }
+    }
+
+    fn range(&self) -> &Range<usize> {
+        match self {
+            Self::Address { range, .. } => range,
+            Self::Path(found) => &found.range,
+        }
+    }
+
+    /// Whether it runs to the end of the text, where it may continue.
+    fn open(&self) -> bool {
+        match self {
+            Self::Address { open, .. } => *open,
+            Self::Path(found) => found.open,
+        }
+    }
+
+    /// What it points at, read from the `text` it was found in.
+    fn target(self, text: &str) -> Option<RowTarget> {
+        match self {
+            Self::Address { range, .. } => plain_address(text.get(range)?),
+            Self::Path(found) => Some(RowTarget::Path {
+                path: found.path.into_owned(),
+                line: found.line,
+                explicit: false,
+            }),
+        }
+    }
 }
 
 /// The schemes read from plain text. Any other is plain text.
@@ -415,10 +453,10 @@ fn address_starts(text: &str) -> Vec<(usize, &'static str)> {
     starts
 }
 
-/// The byte range of the plain address in one row's `text` that covers the
-/// byte at `hit`, trimmed of the prose punctuation around it, and whether the
-/// address runs to the end of the row, where it may continue off-screen or on
-/// the next row.
+/// The byte range of the plain address in `text` that covers the byte at
+/// `hit`, trimmed of the prose punctuation around it, and whether the address
+/// runs to the end of the text, where it may continue off-screen or on the
+/// next row.
 pub(super) fn plain_url(text: &str, hit: usize) -> Option<(Range<usize>, bool)> {
     for (start, scheme) in address_starts(text) {
         if start > hit {

@@ -143,7 +143,10 @@ fn platforms_come_from_uname() {
     );
     for bad in ["", "Linux", "FreeBSD amd64", "Linux riscv64"] {
         assert!(
-            matches!(Platform::parse(bad), Err(Error::Platform(_))),
+            matches!(
+                Platform::parse(bad),
+                Err(crate::host_build::Error::Platform(_))
+            ),
             "{bad}"
         );
     }
@@ -199,8 +202,11 @@ fn the_install_script_checks_the_copy_and_stays_in_home() {
     };
     let script = install::script(&plan);
     assert!(script.contains("version='0.3.1'"));
-    assert!(script.contains("$HOME/.local/share/herdr-automate/bin/$version"));
-    assert!(script.contains("ln -sfn \"$dir/herdr-automate\" \"$HOME/.local/bin/herdr-automate\""));
+    assert!(
+        script.contains("program=herdr-automate") || script.contains("program='herdr-automate'")
+    );
+    assert!(script.contains("$HOME/.local/share/$program/bin/$version"));
+    assert!(script.contains("ln -sfn \"$dir/$program\" \"$HOME/.local/bin/$program\""));
     assert!(script.contains("exit 3"));
     assert!(!script.contains("sudo"));
 }

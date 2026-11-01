@@ -2,6 +2,7 @@
 //! card's local form and edits only that.
 
 use super::{Card, Request, SliderDrag, button, field, label};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     chat::ChatInput,
@@ -213,7 +214,7 @@ impl HerdrWindow {
                     .child(stepper("plus", "+", step, cx))
                     .child(div().min_w(px(44.)).text_right().child(value.to_string())),
             )
-            .child(label(theme, &format!("{min} to {max}")));
+            .child(label(theme, &fl!("chat-form-range", min = min, max = max)));
         field(theme, control.label, slider)
     }
 
@@ -360,18 +361,19 @@ impl HerdrWindow {
         let read_only = card.input != ChatInput::Composer;
         let request = card.request.clone();
         let prompt = prompt.to_owned();
-        let caption = match mode {
-            ActionMode::Draft => "Add to message",
-            ActionMode::Send => "Send to agent",
-        };
-        let caption = if read_only {
-            "Read-only transcript"
-        } else {
-            caption
+        let caption = match (read_only, mode) {
+            (true, _) => fl!("chat-form-read-only"),
+            (false, ActionMode::Draft) => fl!("chat-form-draft"),
+            (false, ActionMode::Send) => fl!("chat-form-send"),
         };
         div().flex().flex_col().gap(px(5.)).child(
             crate::accessibility::disabled(
-                button(&self.theme, id, format!("{title} · {caption}"), !read_only),
+                button(
+                    &self.theme,
+                    id,
+                    fl!("chat-form-action", title = title, caption = caption),
+                    !read_only,
+                ),
                 read_only,
             )
             .when(read_only, |button| button.opacity(0.5))

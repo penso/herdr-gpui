@@ -8,6 +8,7 @@ use super::{
     section::{ago, severity_color},
 };
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use std::time::SystemTime;
 
@@ -35,9 +36,10 @@ impl HerdrWindow {
         let look = self.security_look();
         let reported = self.shown_reports();
         if !reported.is_empty() {
-            list = list.child(
-                self.security_group("Reported to you", format!("{} in triage", reported.len())),
-            );
+            list = list.child(self.security_group(
+                fl!("security-reported"),
+                fl!("security-in-triage", count = reported.len()),
+            ));
             let now = SystemTime::now();
             for (index, repo, report) in reported {
                 let color = report
@@ -48,7 +50,7 @@ impl HerdrWindow {
                     report
                         .reporter
                         .as_ref()
-                        .map(|login| format!("reported by {login}")),
+                        .map(|login| fl!("security-reported-by", login = login.as_str())),
                     report
                         .created_at
                         .map(|at| ago(now.duration_since(at.into()).unwrap_or_default())),
@@ -75,8 +77,10 @@ impl HerdrWindow {
             if alerts.is_empty() {
                 continue;
             }
-            list = list
-                .child(self.security_group(repo.name.clone(), format!("{} open", alerts.len())));
+            list = list.child(self.security_group(
+                repo.name.clone(),
+                fl!("security-open-count", count = alerts.len()),
+            ));
             for alert in alerts {
                 let item = Item::Alert {
                     repo: repo.name.clone(),

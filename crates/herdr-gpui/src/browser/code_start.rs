@@ -4,6 +4,7 @@
 use super::code_view::centered;
 #[cfg(not(test))]
 use crate::config::{CodeEdit, Config};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     code_server::launcher::{LICENSE_TERMS, LICENSE_URL, PRIVACY_URL},
@@ -14,7 +15,7 @@ impl HerdrWindow {
     /// The terms, links to read them, and the button that accepts them.
     pub(super) fn render_code_consent(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = &self.theme;
-        let link = |id: &'static str, label: &'static str, url: &'static str| {
+        let link = |id: &'static str, label: String, url: &'static str| {
             div()
                 .id(id)
                 .text_color(crate::menu::accent(theme))
@@ -39,7 +40,7 @@ impl HerdrWindow {
                 cx.stop_propagation();
                 this.accept_code_license(cx);
             }))
-            .child("Accept and start");
+            .child(fl!("browser-vscode-accept"));
         centered(
             div()
                 .debug_selector(|| "code-consent".into())
@@ -53,7 +54,7 @@ impl HerdrWindow {
                     div()
                         .text_color(rgb(theme.foreground))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child("Start VS Code"),
+                        .child(fl!("browser-vscode-start")),
                 )
                 .child(div().text_color(rgb(theme.muted)).child(LICENSE_TERMS))
                 .child(
@@ -62,8 +63,16 @@ impl HerdrWindow {
                         .flex_wrap()
                         .justify_center()
                         .gap(px(16.))
-                        .child(link("code-license-link", "License Terms", LICENSE_URL))
-                        .child(link("code-privacy-link", "Privacy Statement", PRIVACY_URL)),
+                        .child(link(
+                            "code-license-link",
+                            fl!("browser-vscode-license"),
+                            LICENSE_URL,
+                        ))
+                        .child(link(
+                            "code-privacy-link",
+                            fl!("browser-vscode-privacy"),
+                            PRIVACY_URL,
+                        )),
                 )
                 .child(accept),
         )

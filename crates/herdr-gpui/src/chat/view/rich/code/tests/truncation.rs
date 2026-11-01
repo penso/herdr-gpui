@@ -3,7 +3,7 @@ use super::*;
 #[core::prelude::v1::test]
 fn the_truncation_note_names_the_limits_that_cut_the_block() {
     assert_eq!(
-        truncation_note(),
+        truncation_note().replace(['\u{2068}', '\u{2069}'], ""),
         "Preview limited to 512 lines and 4,000 characters per line; Copy code includes the full block."
     );
     for (number, text) in [

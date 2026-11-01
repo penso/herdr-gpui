@@ -4,7 +4,7 @@
 //! token typed cannot be one. The fixture window is headless, so nothing
 //! here reads the keyring, runs direnv or `glab`, or reaches GitLab.
 #![allow(clippy::unwrap_used)]
-use super::{HostStatus, Token, merge_hosts, status_line};
+use super::{HostStatus, Token, merge_hosts};
 use crate::{HerdrWindow, menu::Page, orchestrator::GitLabRead};
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 use herdr_orchestrator::gitlab::{
@@ -14,11 +14,17 @@ use herdr_orchestrator::gitlab::{
 };
 use std::{path::PathBuf, sync::Arc};
 
+mod en_xa;
 mod keyboard;
 mod plain_saved;
 mod recheck;
 mod saves;
 mod welcome;
+
+/// An instance's line without Fluent's isolation marks around names.
+fn status_line(status: &HostStatus) -> String {
+    super::status_line(status).replace(['\u{2068}', '\u{2069}'], "")
+}
 
 fn page(cx: &mut TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);

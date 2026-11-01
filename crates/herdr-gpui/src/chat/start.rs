@@ -10,7 +10,12 @@
 //! so nothing typed depends on where the app is installed, and the agent's
 //! name comes from the shared table, never from daemon text.
 
-use crate::{HerdrWindow, NavigationTarget, browser::GroupId, window::Flash};
+use crate::{
+    HerdrWindow, NavigationTarget,
+    browser::GroupId,
+    i18n::{Localize, fl},
+    window::Flash,
+};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::Agent;
 use herdr_client::Method;
@@ -283,7 +288,7 @@ impl HerdrWindow {
 
     fn flash_chat_error(&mut self, error: &Error, cx: &mut Context<Self>) {
         self.show_flash(
-            Flash::warning(format!("The chat did not start: {error}")),
+            Flash::warning(fl!("chat-start-failed", error = error.localize())),
             cx,
         );
     }
@@ -308,9 +313,9 @@ impl HerdrWindow {
         if !current {
             self.chats.starting = None;
             return self.show_flash(
-                Flash::warning(format!(
-                    "The chat did not start: {}",
-                    crate::Error::StaleConnection
+                Flash::warning(fl!(
+                    "chat-start-failed",
+                    error = crate::Error::StaleConnection.localize()
                 )),
                 cx,
             );
@@ -318,12 +323,12 @@ impl HerdrWindow {
         if Instant::now() >= starting.deadline {
             self.chats.starting = None;
             return self.show_flash(
-                Flash::warning(format!("The chat did not start: {}", Error::Timeout)),
+                Flash::warning(fl!("chat-start-failed", error = Error::Timeout.localize())),
                 cx,
             );
         }
         let request = starting.request.clone();
-        let Some(result) = self.take_script_response(&request) else {
+        let Some(result) = self.take_answer(crate::state::Answer::Script, &request) else {
             return;
         };
         let Some(starting) = self.chats.starting.take() else {
@@ -354,7 +359,7 @@ impl HerdrWindow {
                 cx.notify();
             }
             Err(error) => self.show_flash(
-                Flash::warning(format!("The chat did not start: {error}")),
+                Flash::warning(fl!("chat-start-failed", error = error.localize())),
                 cx,
             ),
         }

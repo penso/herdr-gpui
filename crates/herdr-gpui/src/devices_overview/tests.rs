@@ -2,6 +2,7 @@
 
 mod add_device;
 mod clock;
+mod en_xa;
 mod history;
 mod model;
 mod narrow_layout;

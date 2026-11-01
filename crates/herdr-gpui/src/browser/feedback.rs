@@ -21,6 +21,8 @@ pub(crate) const TAKE_BUDGET: usize = 240 * 1024;
 /// `text` cut, at a character, to fit `budget` as JSON, saying so: a batch
 /// over the budget could never be handed out in one answer.
 pub(crate) fn fit(text: String, budget: usize) -> String {
+    // The agent reads it, in English like the notes' prompt.
+    // i18n: data
     const CUT: &str = "\n[Notes cut: too long for one answer]";
     if json_size(&text) <= budget {
         return text;

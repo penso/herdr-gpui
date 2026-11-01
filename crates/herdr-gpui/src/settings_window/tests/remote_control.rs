@@ -30,6 +30,7 @@ fn status() -> Status {
             "https://[fd7a:115c::3]:7443".into(),
         ],
         fingerprint: "5F:2A:C1:9E".into(),
+        computer: String::new(),
         herdr: true,
         chats: 2,
         devices: 2,
@@ -46,6 +47,8 @@ fn devices() -> Vec<Device> {
             last_seen_ms: Some(0),
             push: true,
             connected: true,
+            via: None,
+            hosts: Vec::new(),
         },
         Device {
             id: DeviceId("d2".into()),
@@ -54,6 +57,8 @@ fn devices() -> Vec<Device> {
             last_seen_ms: None,
             push: false,
             connected: false,
+            via: None,
+            hosts: Vec::new(),
         },
     ]
 }
@@ -256,12 +261,11 @@ fn the_switch_row_says_how_the_daemon_stands() {
 #[test]
 fn a_device_line_says_when_it_was_seen() {
     let [pixel, ipad] = <[Device; 2]>::try_from(devices()).unwrap();
+    let line =
+        |device: &Device, now| device_line(device, now).replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(line(&pixel, 5_000), "Connected now \u{b7} notifications on");
     assert_eq!(
-        device_line(&pixel, 5_000),
-        "Connected now \u{b7} notifications on"
-    );
-    assert_eq!(
-        device_line(&ipad, 5_000),
+        line(&ipad, 5_000),
         "Never connected \u{b7} notifications off"
     );
     let away = Device {
@@ -270,7 +274,7 @@ fn a_device_line_says_when_it_was_seen() {
         ..pixel
     };
     assert_eq!(
-        device_line(&away, 2 * 86_400_000),
+        line(&away, 2 * 86_400_000),
         "Last seen 2 days ago \u{b7} notifications on"
     );
 }

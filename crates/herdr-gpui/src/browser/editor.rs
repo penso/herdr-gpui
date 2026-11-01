@@ -1,6 +1,7 @@
 //! Shared shell for HTTP-backed editors. Providers supply launch/readiness and
 //! workspace URL policy; identity, groups, persistence and native pages are shared.
 use super::{GroupId, Location, Pick, Store, Tab, TabId, view::store};
+use crate::i18n::fl;
 use crate::{HerdrWindow, window::Flash};
 use gpui::{prelude::*, *};
 
@@ -16,9 +17,11 @@ pub(crate) enum Editor {
 }
 
 impl Editor {
+    /// The product's name, the same in every language.
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Px0 => "px0",
+            // i18n: data
             Self::VsCode => "VS Code",
         }
     }
@@ -60,17 +63,17 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Option<TabId> {
         if !super::EMBEDDED {
-            self.show_flash(Flash::warning("This build cannot show pages"), cx);
+            self.show_flash(Flash::warning(fl!("browser-no-pages")), cx);
             return None;
         }
         let Some((scope, workspace)) = self.browser_key() else {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            self.show_flash(Flash::warning(fl!("browser-open-workspace-first")), cx);
             return None;
         };
         let Some(id) = Store::update(cx, |store| {
             store.open_editor_tab(scope, &workspace, editor, location)
         }) else {
-            self.show_flash(Flash::warning("Too many browser tabs are open"), cx);
+            self.show_flash(Flash::warning(fl!("browser-too-many-tabs")), cx);
             return None;
         };
         match group.or_else(|| self.ensure_layout().map(|layout| layout.active())) {
@@ -114,7 +117,9 @@ impl HerdrWindow {
         #[cfg(any(target_os = "macos", windows))]
         if let Err(error) = self.browser.pages.ensure(tab, window, cx) {
             tracing::warn!(%error, "Cannot create an editor page");
-            self.browser.failed.insert(tab.id, error.to_string().into());
+            self.browser
+                .failed
+                .insert(tab.id, crate::i18n::Localize::localize(&error).into());
         }
         #[cfg(not(any(target_os = "macos", windows)))]
         let _ = window;

@@ -1,5 +1,14 @@
 use super::*;
-use crate::apns::send::request;
+use crate::apns::send::{Push, PushType, request};
+
+fn live(priority: Priority, body: &[u8]) -> Push {
+    Push {
+        body: body.to_vec(),
+        collapse_id: None,
+        priority,
+        push_type: PushType::LiveActivity,
+    }
+}
 
 #[test]
 fn only_apples_two_hosts() {
@@ -9,9 +18,8 @@ fn only_apples_two_hosts() {
         let request = request(
             &config(sandbox),
             &token(1),
-            Priority::Low,
+            &live(Priority::Low, b""),
             "jwt",
-            Vec::new(),
         )
         .unwrap();
         assert_eq!(request.uri().scheme_str(), Some("https"));
@@ -29,9 +37,8 @@ fn request_carries_the_live_activity_headers() {
     let request = request(
         &config(false),
         &token(1),
-        Priority::High,
+        &live(Priority::High, b"{}"),
         "header.claims.signature",
-        b"{}".to_vec(),
     )
     .unwrap();
     assert_eq!(request.method(), hyper::Method::POST);
@@ -40,7 +47,7 @@ fn request_carries_the_live_activity_headers() {
     assert_eq!(header("apns-push-type"), "liveactivity");
     assert_eq!(
         header("apns-topic"),
-        "so.pen.herdr-remote.push-type.liveactivity"
+        "so.pen.herdr.remote.push-type.liveactivity"
     );
     assert_eq!(header("apns-priority"), "10");
     assert_eq!(header("content-type"), "application/json");
