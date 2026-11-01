@@ -83,7 +83,7 @@ pub(crate) enum Bind {
 }
 
 impl Bind {
-    fn parse(host: &str) -> Option<Self> {
+    pub(crate) fn parse(host: &str) -> Option<Self> {
         let host = host.trim_start_matches('[').trim_end_matches(']');
         // `ss` names the interface of a link-scoped address: `fe80::1%eth0`.
         let host = host.split('%').next().unwrap_or(host);
@@ -102,7 +102,7 @@ impl Bind {
 
     /// Which of two sockets on one port to keep: the one reachable from more
     /// places.
-    fn reach(self) -> u8 {
+    pub(crate) fn reach(self) -> u8 {
         match self {
             Self::Address(_) => 0,
             Self::Loopback => 1,
@@ -286,7 +286,7 @@ pub(crate) fn parse(text: &str) -> Result<Ports> {
 }
 
 /// `127.0.0.1:3000`, `[::1]:3000`, `*:3000`, `0.0.0.0:3000`.
-fn listener(address: &str, process: Option<&str>) -> Option<Port> {
+pub(crate) fn listener(address: &str, process: Option<&str>) -> Option<Port> {
     let (host, number) = address.rsplit_once(':')?;
     let number: u16 = number.parse().ok().filter(|number| *number > 0)?;
     Some(Port {

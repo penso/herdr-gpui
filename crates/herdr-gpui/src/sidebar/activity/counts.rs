@@ -52,7 +52,7 @@ impl Counts {
     fn count(self, panel: ActivityPanel) -> Option<Count> {
         match panel {
             ActivityPanel::Overview => Some(self.needs),
-            ActivityPanel::Workspaces | ActivityPanel::Usage => None,
+            ActivityPanel::Workspaces | ActivityPanel::Ports | ActivityPanel::Usage => None,
             ActivityPanel::PullRequests => Some(self.pull_requests),
             ActivityPanel::Issues => Some(self.issues),
             ActivityPanel::Security => Some(self.security),

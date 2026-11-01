@@ -9,6 +9,7 @@ sidebar-activity-pull-requests = Pull requests
 sidebar-activity-issues = Issues
 sidebar-activity-security = Security
 sidebar-activity-automations = Automations
+sidebar-activity-ports = Ports
 sidebar-activity-usage = Usage
 sidebar-activity-settings = Settings
 # A screen reader's name for a button with a count: $label is the section,

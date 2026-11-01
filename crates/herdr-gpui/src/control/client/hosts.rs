@@ -96,6 +96,8 @@ pub(super) fn ports(command: PortsCommand, context: &Context) -> crate::Result<O
         PortsCommand::Forward(port) => HostOp::Forward { port },
         PortsCommand::Unforward(port) => HostOp::Unforward { port },
         PortsCommand::Open(port) => HostOp::OpenPort { port },
+        PortsCommand::All => HostOp::LocalPorts,
+        PortsCommand::Signal(port, action) => HostOp::SignalPort { port, action },
     };
     match context.call(Request::Host, op)? {
         Response::Done { message } => Ok(Output::message(message)),
@@ -104,6 +106,13 @@ pub(super) fn ports(command: PortsCommand, context: &Context) -> crate::Result<O
         } => {
             let empty = ports.listening.is_empty() && ports.forwards.is_empty();
             let output = Output::data(text::ports(&ports), &ports)?;
+            Ok(if empty { output.nothing() } else { output })
+        }
+        Response::Host {
+            reply: Reply::LocalPorts(ports),
+        } => {
+            let empty = ports.listening.is_empty();
+            let output = Output::data(text::local_ports(&ports), &ports)?;
             Ok(if empty { output.nothing() } else { output })
         }
         response => Err(unexpected(response)),

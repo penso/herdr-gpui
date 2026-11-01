@@ -77,6 +77,7 @@ impl Page {
             Self::Palette => fl!("menu-page-command-palette"),
             Self::Pane => fl!("menu-page-pane"),
             Self::PaneProcesses => fl!("menu-page-processes"),
+            Self::PortSignal => fl!("menu-page-ports"),
             Self::PrComment => fl!("menu-page-comment-on-pull-request"),
             Self::PrMerge => fl!("menu-page-merge-pull-request"),
             Self::PrReview => fl!("menu-page-pull-request"),

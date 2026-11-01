@@ -12,6 +12,8 @@ use serde_json::{Value, json};
 pub(crate) mod carry;
 mod moves;
 mod processes;
+// The Ports section shows its processes' usage the same way.
+pub(crate) use processes::{cpu_text, memory_text};
 
 #[cfg(test)]
 pub(crate) mod tests;

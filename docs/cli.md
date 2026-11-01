@@ -68,7 +68,7 @@ Every command accepts:
 | `window detach\|reconnect` | Detach from, or reconnect to, the selected host |
 | `ui sidebar\|statusbar [on\|off\|toggle]` | For this window and session |
 | `ui font-size +\|-\|reset\|POINTS` | The terminal font size for this session |
-| `ui panel workspaces\|overview\|pull-requests\|issues\|security\|automations\|usage` | Show an activity bar section: Workspaces with the sidebar expanded, Overview of what needs you on every host, the focused workspace's pull requests or issues across the window, the vulnerability reports and Dependabot alerts of your repositories, every host's automation scripts and runs, or every host's plan usage |
+| `ui panel workspaces\|overview\|pull-requests\|issues\|security\|automations\|ports\|usage` | Show an activity bar section: Workspaces with the sidebar expanded, Overview of what needs you on every host, the focused workspace's pull requests or issues across the window, the vulnerability reports and Dependabot alerts of your repositories, every host's automation scripts and runs, every port this computer's user listens on, or every host's plan usage |
 | `run COMMAND` | Any app command by its `[keybindings]` name, as the palette runs it |
 | `commands` | The names `run` accepts (no app needed) |
 | `open DIR` | Open a folder as **Open Project** in the palette does, starting the app if needed (below) |
@@ -145,6 +145,9 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `ports [list]` | Ports your workspace listens on, and forwards |
 | `ports forward\|unforward PORT` | Forward a port of the SSH host to this machine |
 | `ports open PORT` | `localhost:PORT` in a tab, forwarded first when remote |
+| `ports all` | Every TCP port this computer's user listens on, as the Ports section lists them, whoever started it: bind address, a clear name (a macOS app's name, or what an interpreter runs, such as `vite` or `manage.py runserver`), process, pid, command line, project and working directory, CPU and resident memory, uptime, whether it is paused or a system listener, and the Herdr workspace that started it. Keeps the section's scan running for a minute and waits up to 20 seconds for its first listing. macOS and Linux only (exit 8 elsewhere); exits 4 when nothing listens |
+| `ports stop\|pause PORT` | Ask in the app to stop (SIGTERM, then SIGKILL a few seconds later) or pause (SIGSTOP) the processes listening on `PORT` of this computer. Nothing is signalled until the user confirms there; exits 5 when nothing of yours listens on it, 6 while a dialog is open |
+| `ports resume PORT` | Resume (SIGCONT) the paused processes listening on `PORT` of this computer; exits 5 when none is paused |
 | `usage`, `system` | Plan usage and load of the selected host: CPU, memory, disk, uptime, and its GPU and video memory when it has one and `show_gpu_load` or `show_sidebar_gpu_load` is on |
 | `security` | Private vulnerability reports in triage (titles and metadata only, never their descriptions) and open Dependabot alerts of the github.com repositories the window's workspaces hold, most severe first, as the Security section last read them. Exits 4 when there are none |
 | `security open REPOSITORY ALERT\|GHSA` | Show alert `ALERT` (its number) or private report `GHSA` (its GHSA ID) of `REPOSITORY` (`owner/name`) in the Security section, beside its list: the fix, the advisory, and the dependency for an alert; the report, its advisory draft, and its conversation for a report. Only items the section lists open; nothing on GitHub changes |

@@ -114,6 +114,7 @@ impl Localize for Error {
             }
             Self::LocalGit(_) => fl!("error-local-git"),
             Self::LocalNetworkDenied => fl!("error-local-network-denied"),
+            Self::LocalPorts(error) => error.localize(),
             Self::LocalWorktreeNote => fl!("error-local-worktree-note"),
             Self::LogRead { path: file, source } => fl!(
                 "error-log-read",
