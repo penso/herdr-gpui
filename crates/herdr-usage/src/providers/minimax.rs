@@ -231,34 +231,40 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
         Provider(&Minimax),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         windows,
     )
-    .with_balances(points.map(|points| Balance::new("Points", points, Unit::Count(Count::Points))))
+    .with_balances(points.map(|points| {
+        Balance::new(
+            Text::message("usage-minimax-points"),
+            points,
+            Unit::Count(Count::Points),
+        )
+    }))
     .with_sections(others.into_iter().map(Section::Limit)))
 }
 
 /// `general` and `MiniMax-M*` are text generation; the rest are named by
-/// what they make.
-fn service_name(model: &str) -> String {
+/// what they make, or else by the model's own name.
+fn service_name(model: &str) -> Text {
     let lower = model.trim().to_lowercase();
     if is_text(model) {
-        "Text".into()
+        Text::message("usage-minimax-text")
     } else if lower == "video" {
-        "Video".into()
+        Text::message("usage-minimax-video")
     } else if lower.contains("speech") {
-        "Speech".into()
+        Text::message("usage-minimax-speech")
     } else if lower.contains("hailuo") && lower.contains("fast") {
-        "Image to video".into()
+        Text::message("usage-minimax-image-to-video")
     } else if lower.contains("hailuo") {
-        "Text to video".into()
+        Text::message("usage-minimax-text-to-video")
     } else if lower.starts_with("image-") {
-        "Image".into()
+        Text::message("usage-minimax-image")
     } else if lower.contains("music") {
-        "Music".into()
+        Text::message("usage-minimax-music")
     } else {
-        model.trim().to_owned()
+        Text::service(model.trim())
     }
 }
 
@@ -279,7 +285,7 @@ struct Lane {
 }
 
 impl Lane {
-    fn window(&self, service: &str, text: bool, weekly: bool, now: SystemTime) -> Option<Window> {
+    fn window(&self, service: &Text, text: bool, weekly: bool, now: SystemTime) -> Option<Window> {
         let full = self.remaining_percent.is_some_and(|left| left >= 100.);
         let empty = self.total.unwrap_or(0.) == 0. && self.remaining.unwrap_or(0.) == 0.;
         // Status 3 is a lane the plan does not include, or an unlimited weekly
@@ -319,12 +325,14 @@ impl Lane {
             _ if text && weekly => Kind::Weekly,
             Some(length) if text && near(length, SESSION) => Kind::Session,
             Some(length) if near(length, Duration::from_secs(86_400)) => {
-                Kind::Named(format!("{service} daily").into())
+                Kind::Named(Text::message("usage-minimax-daily").arg("service", service.clone()))
             }
-            Some(length) => {
-                Kind::Named(format!("{service} {}h", length.as_secs().div_ceil(3600)).into())
-            }
-            None => Kind::Named(Text::from(service.to_owned())),
+            Some(length) => Kind::Named(
+                Text::message("usage-minimax-hours")
+                    .arg("service", service.clone())
+                    .arg("hours", length.as_secs().div_ceil(3600)),
+            ),
+            None => Kind::Named(service.clone()),
         };
         let length = if weekly {
             length.or(Some(WEEK))
@@ -489,9 +497,40 @@ mod tests {
         let Section::Limit(video) = &report.sections[0] else {
             panic!("limit");
         };
-        assert_eq!(video.kind, Kind::Named("Video daily".into()));
+        assert_eq!(
+            video.kind,
+            Kind::Named(
+                Text::message("usage-minimax-daily")
+                    .arg("service", Text::message("usage-minimax-video"))
+            )
+        );
         assert_eq!(video.percent(), 70);
         assert_eq!(report.balances[0].amount, 14000.);
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-minimax-points")
+        );
+    }
+
+    #[test]
+    fn other_lanes_are_named_by_what_they_make_or_their_model() {
+        let body = r#"{"model_remains": [{"model_name": "speech-2.5",
+            "current_interval_remaining_percent": 40,
+            "start_time": 1780243200000, "end_time": 1780257600000},
+            {"model_name": "custom-model", "current_interval_remaining_percent": 10}]}"#;
+        let report = parse(body, at(1_780_250_000)).unwrap();
+        assert_eq!(
+            report.windows[0].kind,
+            Kind::Named(
+                Text::message("usage-minimax-hours")
+                    .arg("service", Text::message("usage-minimax-speech"))
+                    .arg("hours", 4)
+            )
+        );
+        let Section::Limit(custom) = &report.sections[0] else {
+            panic!("limit");
+        };
+        assert_eq!(custom.kind, Kind::Named(Text::service("custom-model")));
     }
 
     #[test]

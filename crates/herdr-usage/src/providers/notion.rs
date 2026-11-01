@@ -10,7 +10,7 @@
 //! and CodexBar's persisted session cache. Allowances only exist on Business
 //! and Enterprise workspaces; others show that instead of windows.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -231,7 +231,7 @@ pub(crate) fn parse(
         let length = window.window.as_deref().and_then(window_length);
         let kind = match length {
             Some(length) if length <= ROLLING => Kind::Session,
-            _ => Kind::Named("Rolling".into()),
+            _ => Kind::Named(Text::message("usage-notion-rolling")),
         };
         let resets_at = status
             .resets_in_seconds
@@ -253,18 +253,21 @@ pub(crate) fn parse(
             Some(resets_at.and_then(calendar_month).unwrap_or(MONTH)),
         ));
     }
-    let mut facts: Vec<(String, String)> = Vec::new();
+    let mut facts = Vec::new();
     if let Some(name) = workspace
         .name
         .as_deref()
         .filter(|name| !name.trim().is_empty())
     {
-        facts.push(("Workspace".into(), name.trim().to_owned()));
+        facts.push((
+            Text::message("usage-notion-workspace"),
+            Text::service(name.trim()),
+        ));
     }
     if not_applicable {
         facts.push((
-            "Allowance".into(),
-            "Not tracked; allowances apply to Business and Enterprise workspaces".into(),
+            Text::message("usage-notion-allowance"),
+            Text::message("usage-notion-not-tracked"),
         ));
     }
     if let Some(enforcement) = status
@@ -272,22 +275,27 @@ pub(crate) fn parse(
         .as_deref()
         .filter(|enforcement| !enforcement.trim().is_empty())
     {
-        facts.push(("Enforcement".into(), title_case(enforcement)));
+        // Notion's own word, such as `preview`.
+        facts.push((
+            Text::message("usage-notion-enforcement"),
+            Text::service(title_case(enforcement)),
+        ));
     }
     let account = Account {
-        email: email.map(Text::from),
+        email: email.map(Text::service),
         plan: (workspace
             .tier
             .as_deref()
             .map(title_case)
             .filter(|tier| !tier.is_empty()))
-        .map(Text::from),
+        .map(Text::service),
     };
     Ok(
         Report::new(Provider(&Notion), account, windows).with_sections((!facts.is_empty()).then(
             || Section::Facts {
-                title: "Notion AI".into(),
-                facts: pairs(facts),
+                // The product's name.
+                title: Text::service("Notion AI"),
+                facts,
             },
         )),
     )
@@ -433,6 +441,29 @@ mod tests {
         );
         // 2026-08-29 back to 2026-07-29 is 31 days.
         assert_eq!(monthly.length, Some(Duration::from_secs(31 * 86_400)));
+        let Section::Facts { facts, .. } = &report.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-notion-workspace"),
+                    Text::service("Acme")
+                ),
+                (
+                    Text::message("usage-notion-enforcement"),
+                    Text::service("Preview")
+                ),
+            ]
+        );
+        let daily = STATUS.replace(r#""window": "6h""#, r#""window": "1d""#);
+        let report = parse(&daily, None, &workspace, now).unwrap();
+        // Named windows sort after the monthly one.
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-notion-rolling"))
+        );
     }
 
     #[test]
@@ -453,7 +484,19 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[1].0, "Allowance");
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-notion-workspace"),
+                    Text::service("Home")
+                ),
+                (
+                    Text::message("usage-notion-allowance"),
+                    Text::message("usage-notion-not-tracked")
+                ),
+            ]
+        );
     }
 
     #[test]

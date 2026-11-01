@@ -443,6 +443,10 @@ impl PartialEq for Report {
 }
 
 impl Report {
+    /// Windows go session, daily, weekly, monthly, then named ones by their
+    /// words: a message's ID and arguments, or the service's text. Providers
+    /// pick message IDs that keep their windows in a sensible order, and
+    /// their tests hold it.
     pub fn new(provider: Provider, account: Account, mut windows: Vec<Window>) -> Self {
         windows.sort_by(|a, b| a.kind.cmp(&b.kind));
         Self {

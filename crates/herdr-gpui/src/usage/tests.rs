@@ -17,6 +17,7 @@ mod status_bar_room;
 mod text;
 mod words;
 mod words_b;
+mod words_c;
 
 fn provider(id: &str) -> Provider {
     registry::find(id).unwrap()

@@ -6,15 +6,9 @@ const NODE: &str = r#"{"memory":40000000000,
         "loaded":{"fixture/small:Q4_K_M":2000000000,"fixture/large:Q4_K_M":8000000000},
         "stored":{"fixture/small:Q4_K_M":2000000000,"fixture/large:Q4_K_M":8000000000,"fixture/idle":500000000}}"#;
 
-fn facts(report: &Report, index: usize) -> (&str, Vec<(&str, &str)>) {
+fn facts(report: &Report, index: usize) -> (&Text, &[(Text, Text)]) {
     match &report.sections[index] {
-        Section::Facts { title, facts } => (
-            title.as_str(),
-            facts
-                .iter()
-                .map(|(label, value)| (label.as_str(), value.as_str()))
-                .collect(),
-        ),
+        Section::Facts { title, facts } => (title, facts),
         section => panic!("unexpected section {section:?}"),
     }
 }
@@ -23,33 +17,56 @@ fn facts(report: &Report, index: usize) -> (&str, Vec<(&str, &str)>) {
 fn loaded_weights_fill_the_memory_window_largest_first() {
     let report = parse(NODE, true, Some("0.9.0".into())).unwrap();
     assert_eq!(report.windows.len(), 1);
-    assert_eq!(report.windows[0].kind, Kind::Named("Memory".into()));
+    assert_eq!(
+        report.windows[0].kind,
+        Kind::Named(Text::message("usage-llmman-memory"))
+    );
     assert_eq!(report.windows[0].percent(), 25);
     assert_eq!(report.windows[0].resets_at, None);
     assert_eq!(
-        report.account.plan.as_ref().map(Text::as_str),
-        Some("API key")
+        report.account.plan,
+        Some(Text::message("usage-llmman-api-key"))
     );
     assert_eq!(
         facts(&report, 0),
         (
-            "Daemon",
-            vec![
-                ("Loaded", "2 · 10.0 GB"),
-                ("Stored", "3 · 10.5 GB"),
-                ("Memory", "10.0 GB of 40.0 GB"),
-                ("Version", "0.9.0"),
-            ]
+            &Text::message("usage-llmman-daemon"),
+            &[
+                (
+                    Text::message("usage-llmman-loaded"),
+                    Text::service("2 · 10.0 GB")
+                ),
+                (
+                    Text::message("usage-llmman-stored"),
+                    Text::service("3 · 10.5 GB")
+                ),
+                (
+                    Text::message("usage-llmman-memory"),
+                    Text::message("usage-llmman-memory-used")
+                        .arg("used", "10.0 GB")
+                        .arg("total", "40.0 GB")
+                ),
+                (
+                    Text::message("usage-llmman-version"),
+                    Text::service("0.9.0")
+                ),
+            ][..]
         )
     );
     assert_eq!(
         facts(&report, 1),
         (
-            "Loaded models",
-            vec![
-                ("fixture/large:Q4_K_M", "8.0 GB"),
-                ("fixture/small:Q4_K_M", "2.0 GB"),
-            ]
+            &Text::message("usage-llmman-loaded-models"),
+            &[
+                (
+                    Text::service("fixture/large:Q4_K_M"),
+                    Text::service("8.0 GB")
+                ),
+                (
+                    Text::service("fixture/small:Q4_K_M"),
+                    Text::service("2.0 GB")
+                ),
+            ][..]
         )
     );
 }
@@ -59,13 +76,22 @@ fn an_idle_open_daemon_still_reports() {
     let report = parse(r#"{"memory":0,"loaded":{},"stored":{}}"#, false, None).unwrap();
     assert!(report.windows.is_empty());
     assert_eq!(
-        report.account.plan.as_ref().map(Text::as_str),
-        Some("Local daemon")
+        report.account.plan,
+        Some(Text::message("usage-llmman-local-daemon"))
     );
     assert_eq!(report.sections.len(), 1);
     assert_eq!(
         facts(&report, 0).1,
-        [("Loaded", "0 · 0 B"), ("Stored", "0 · 0 B")]
+        [
+            (
+                Text::message("usage-llmman-loaded"),
+                Text::service("0 · 0 B")
+            ),
+            (
+                Text::message("usage-llmman-stored"),
+                Text::service("0 · 0 B")
+            ),
+        ]
     );
 }
 

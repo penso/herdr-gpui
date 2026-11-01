@@ -15,7 +15,7 @@
 //! `LLMMAN_HOST` is read on the probed host, which is this app's environment
 //! when the host is this machine, as in CodexBar.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -201,12 +201,14 @@ pub(crate) fn parse(body: &str, keyed: bool, version: Option<String>) -> Result<
     let node: Node = json(body)?;
     let total = |models: &BTreeMap<String, u64>| models.values().sum::<u64>();
     let in_use = total(&node.loaded);
-    let count =
-        |models: &BTreeMap<String, u64>| format!("{} · {}", models.len(), size(total(models)));
+    // A count and a size, such as `2 · 10.0 GB`: figures only.
+    let count = |models: &BTreeMap<String, u64>| {
+        Text::service(format!("{} · {}", models.len(), size(total(models))))
+    };
 
     let windows = if node.memory > 0 {
         vec![Window::new(
-            Kind::Named("Memory".into()),
+            Kind::Named(Text::message("usage-llmman-memory")),
             in_use as f64 / node.memory as f64 * 100.,
             None,
             None,
@@ -216,41 +218,52 @@ pub(crate) fn parse(body: &str, keyed: bool, version: Option<String>) -> Result<
     };
 
     let mut summary = vec![
-        ("Loaded".to_owned(), count(&node.loaded)),
-        ("Stored".to_owned(), count(&node.stored)),
+        (Text::message("usage-llmman-loaded"), count(&node.loaded)),
+        (Text::message("usage-llmman-stored"), count(&node.stored)),
     ];
     if node.memory > 0 {
         summary.push((
-            "Memory".to_owned(),
-            format!("{} of {}", size(in_use), size(node.memory)),
+            Text::message("usage-llmman-memory"),
+            Text::message("usage-llmman-memory-used")
+                .arg("used", size(in_use))
+                .arg("total", size(node.memory)),
         ));
     }
-    summary.extend(version.map(|version| ("Version".to_owned(), version)));
+    summary.extend(version.map(|version| {
+        (
+            Text::message("usage-llmman-version"),
+            Text::service(version),
+        )
+    }));
 
     let mut loaded: Vec<_> = node.loaded.iter().filter(|(name, _)| label(name)).collect();
     loaded.sort_by(|(a, a_size), (b, b_size)| b_size.cmp(a_size).then_with(|| a.cmp(b)));
     let models: Vec<_> = loaded
         .into_iter()
         .take(MODELS)
-        .map(|(name, weight)| (name.clone(), size(*weight)))
+        .map(|(name, weight)| (Text::service(name), Text::service(size(*weight))))
         .collect();
 
-    let plan = if keyed { "API key" } else { "Local daemon" };
+    let plan = if keyed {
+        Text::message("usage-llmman-api-key")
+    } else {
+        Text::message("usage-llmman-local-daemon")
+    };
     let mut sections = vec![Section::Facts {
-        title: "Daemon".into(),
-        facts: pairs(summary),
+        title: Text::message("usage-llmman-daemon"),
+        facts: summary,
     }];
     if !models.is_empty() {
         sections.push(Section::Facts {
-            title: "Loaded models".into(),
-            facts: pairs(models),
+            title: Text::message("usage-llmman-loaded-models"),
+            facts: models,
         });
     }
     Ok(Report::new(
         Provider(&Llmman),
         Account {
             email: None,
-            plan: Some(Text::from(plan.to_owned())),
+            plan: Some(plan),
         },
         windows,
     )

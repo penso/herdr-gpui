@@ -11,7 +11,7 @@
 //! which would need the token revealed; `expires_at` stored by Hermes is
 //! still honored.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -232,45 +232,70 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let usd = || Unit::Currency("USD".into());
     let mut balances = Vec::new();
     match (remaining, grant) {
-        (Some(remaining), Some(grant)) => balances
-            .push(Balance::new("Subscription credits", remaining.max(0.), usd()).out_of(grant)),
+        (Some(remaining), Some(grant)) => balances.push(
+            Balance::new(
+                Text::message("usage-nous-subscription-credits"),
+                remaining.max(0.),
+                usd(),
+            )
+            .out_of(grant),
+        ),
         (Some(remaining), None) => {
             balances.push(Balance::new(
-                "Subscription credits",
+                Text::message("usage-nous-subscription-credits"),
                 remaining.max(0.),
                 usd(),
             ));
         }
-        (None, Some(grant)) => balances.push(Balance::new("Monthly grant", grant, usd())),
+        (None, Some(grant)) => balances.push(Balance::new(
+            Text::message("usage-nous-monthly-grant"),
+            grant,
+            usd(),
+        )),
         (None, None) => {}
     }
-    balances.extend(purchased.map(|amount| Balance::new("Top-up credits", amount, usd())));
-    balances.extend(total.map(|amount| Balance::new("Total usable", amount, usd())));
-    let mut facts: Vec<(String, String)> = Vec::new();
+    balances.extend(
+        purchased
+            .map(|amount| Balance::new(Text::message("usage-nous-top-up-credits"), amount, usd())),
+    );
+    balances.extend(
+        total.map(|amount| Balance::new(Text::message("usage-nous-total-usable"), amount, usd())),
+    );
+    let mut facts = Vec::new();
     if let Some(organization) = account
         .organisation
         .and_then(|organization| organization.name)
         .filter(|name| !name.trim().is_empty())
     {
-        facts.push(("Organization".into(), organization.trim().to_owned()));
+        facts.push((
+            Text::message("usage-nous-organization"),
+            Text::service(organization.trim()),
+        ));
     }
     if let Some(rollover) = rollover.filter(|rollover| *rollover > 0.) {
-        facts.push(("Rollover credits".into(), format!("${rollover:.2}")));
+        facts.push((
+            Text::message("usage-nous-rollover-credits"),
+            Text::service(format!("${rollover:.2}")),
+        ));
     }
     if let Some(renews) = renews {
         facts.push((
-            "Renews".into(),
-            chrono::DateTime::<chrono::Utc>::from(renews)
-                .format("%b %-d")
-                .to_string(),
+            Text::message("usage-nous-renews"),
+            Text::service(
+                chrono::DateTime::<chrono::Utc>::from(renews)
+                    .format("%b %-d")
+                    .to_string(),
+            ),
         ));
     }
     let plan = subscription
         .plan
         .map(|plan| plan.trim().to_owned())
         .filter(|plan| !plan.is_empty())
+        .map(Text::service)
         .or_else(|| {
-            (access.has_active_subscription == Some(true)).then(|| "Subscription".to_owned())
+            (access.has_active_subscription == Some(true))
+                .then(|| Text::message("usage-nous-subscription"))
         });
     let email = account
         .user
@@ -280,15 +305,15 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     Ok(Report::new(
         Provider(&Nous),
         Account {
-            email: email.map(Text::from),
-            plan: plan.map(Text::from),
+            email: email.map(Text::service),
+            plan,
         },
         windows,
     )
     .with_balances(balances)
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Subscription".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-nous-subscription"),
+        facts,
     })))
 }
 
@@ -381,21 +406,33 @@ mod tests {
         let balances: Vec<_> = report
             .balances
             .iter()
-            .map(|balance| (balance.label.as_str(), balance.amount, balance.total))
+            .map(|balance| (balance.label.clone(), balance.amount, balance.total))
             .collect();
         assert_eq!(
             balances,
             [
-                ("Subscription credits", 55., Some(220.)),
-                ("Top-up credits", 19.25, None),
-                ("Total usable", 74.25, None),
+                (
+                    Text::message("usage-nous-subscription-credits"),
+                    55.,
+                    Some(220.)
+                ),
+                (Text::message("usage-nous-top-up-credits"), 19.25, None),
+                (Text::message("usage-nous-total-usable"), 74.25, None),
             ]
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Organization".into(), "Example account".into()));
-        assert_eq!(facts[1], ("Renews".into(), "Oct 12".into()));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-nous-organization"),
+                    Text::service("Example account")
+                ),
+                (Text::message("usage-nous-renews"), Text::service("Oct 12")),
+            ]
+        );
     }
 
     #[test]
@@ -412,7 +449,29 @@ mod tests {
     fn grant_without_remaining_has_no_meter() {
         let report = parse(r#"{"subscription":{"plan":"Ultra","monthly_credits":220}}"#).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Monthly grant");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-nous-monthly-grant")
+        );
+        let unnamed = parse(
+            r#"{"subscription":{"rollover_credits":2},
+                "paid_service_access":{"has_active_subscription":true}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            unnamed.account.plan,
+            Some(Text::message("usage-nous-subscription"))
+        );
+        let Section::Facts { facts, .. } = &unnamed.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(
+            facts,
+            &[(
+                Text::message("usage-nous-rollover-credits"),
+                Text::service("$2.00")
+            )]
+        );
     }
 
     #[test]

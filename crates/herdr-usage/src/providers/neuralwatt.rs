@@ -5,7 +5,7 @@
 //! credits (which never reset) are a balance, and a per-key spending
 //! allowance is an extra limit. Everything CodexBar reads is ported.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -97,7 +97,7 @@ fn parse(body: &str) -> Result<Report> {
         .and_then(|at| Timestamp::Text(at).time());
     let kind = match subscription.billing_interval.as_deref() {
         Some(interval) if interval.to_lowercase().starts_with("year") => {
-            Kind::Named("Yearly".into())
+            Kind::Named(Text::message("usage-neuralwatt-yearly"))
         }
         _ => Kind::Monthly,
     };
@@ -110,8 +110,10 @@ fn parse(body: &str) -> Result<Report> {
     let windows: Vec<Window> = match (consumed, included) {
         (Some(consumed), Some(included)) => {
             facts.push((
-                "Energy".to_owned(),
-                format!("{} / {} kWh", plain(consumed), plain(included)),
+                Text::message("usage-neuralwatt-energy"),
+                Text::message("usage-neuralwatt-energy-used")
+                    .arg("used", plain(consumed))
+                    .arg("included", plain(included)),
             ));
             vec![Window::new(kind, consumed / included * 100., end, length)]
         }
@@ -128,32 +130,31 @@ fn parse(body: &str) -> Result<Report> {
             .zip(positive(allowance.limit_usd))
             .map(|(spent, limit)| spent / limit * 100.)
     };
-    let allowance = allowance_used.map(|used| {
-        Section::Limit(Window::new(
-            Kind::Named(
-                format!(
-                    "Key {}",
-                    words(allowance.period.as_deref().unwrap_or("allowance"))
-                )
-                .into(),
-            ),
-            used,
-            None,
-            None,
-        ))
-    });
+    // The period is the service's word, such as `monthly`.
+    let name = match allowance.period.as_deref() {
+        Some(period) => Text::message("usage-neuralwatt-key-period").arg("period", words(period)),
+        None => Text::message("usage-neuralwatt-key-allowance"),
+    };
+    let allowance =
+        allowance_used.map(|used| Section::Limit(Window::new(Kind::Named(name), used, None, None)));
 
     if let Some(month) = quota.usage.and_then(|usage| usage.current_month) {
-        let mut spend = format!("${:.2}", month.cost_usd.unwrap_or(0.));
-        if let Some(requests) = month.requests {
-            spend.push_str(&format!(" · {} requests", group(requests)));
-        }
-        facts.push(("This month".into(), spend));
+        let cost = format!("${:.2}", month.cost_usd.unwrap_or(0.));
+        let spend = match month.requests {
+            Some(requests) => Text::message("usage-neuralwatt-month-requests")
+                .arg("cost", cost)
+                .arg("requests", group(requests))
+                .arg("count", requests),
+            None => Text::service(cost),
+        };
+        facts.push((Text::message("usage-neuralwatt-this-month"), spend));
     }
     if let Some(total) = total {
         facts.push((
-            "Credits used".into(),
-            format!("${:.2} of ${total:.2}", used.unwrap_or(0.)),
+            Text::message("usage-neuralwatt-credits-used"),
+            Text::message("usage-neuralwatt-credits-of")
+                .arg("used", format!("${:.2}", used.unwrap_or(0.)))
+                .arg("total", format!("${total:.2}")),
         ));
     }
 
@@ -161,25 +162,31 @@ fn parse(body: &str) -> Result<Report> {
         .plan
         .map(|plan| plan.trim().replace('_', " "))
         .filter(|plan| !plan.is_empty())
-        .map(|plan| format!("{} plan", words(&plan)))
-        .or_else(|| balance.accounting_method.map(|method| words(&method)));
+        .map(|plan| Text::message("usage-neuralwatt-plan").arg("plan", words(&plan)))
+        // The accounting method is the service's word, such as `energy`.
+        .or_else(|| {
+            balance
+                .accounting_method
+                .map(|method| Text::service(words(&method)))
+        });
     Ok(Report::new(
         Provider(&Neuralwatt),
-        Account {
-            email: None,
-            plan: plan.map(Text::from),
-        },
+        Account { email: None, plan },
         windows,
     )
-    .with_balances(
-        remaining.map(|left| Balance::new("Prepaid credits", left, Unit::Currency("USD".into()))),
-    )
+    .with_balances(remaining.map(|left| {
+        Balance::new(
+            Text::message("usage-neuralwatt-prepaid-credits"),
+            left,
+            Unit::Currency("USD".into()),
+        )
+    }))
     .with_sections(
         allowance
             .into_iter()
             .chain((!facts.is_empty()).then(|| Section::Facts {
-                title: "Usage".into(),
-                facts: pairs(facts),
+                title: Text::message("usage-report-usage"),
+                facts,
             })),
     ))
 }
@@ -270,8 +277,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Standard plan")
+            report.account.plan,
+            Some(Text::message("usage-neuralwatt-plan").arg("plan", "Standard"))
         );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
@@ -285,14 +292,42 @@ mod tests {
         let Section::Limit(allowance) = &report.sections[0] else {
             panic!("expected the key allowance");
         };
-        assert_eq!(allowance.kind, Kind::Named("Key Monthly".into()));
+        assert_eq!(
+            allowance.kind,
+            Kind::Named(Text::message("usage-neuralwatt-key-period").arg("period", "Monthly"))
+        );
         assert_eq!(allowance.used, 25.);
         let Section::Facts { facts, .. } = &report.sections[1] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&("Energy".into(), "13.90 / 20 kWh".into())));
-        assert!(facts.contains(&("This month".into(), "$4.20 · 1,234 requests".into())));
-        assert!(facts.contains(&("Credits used".into(), "$17.32 of $50.00".into())));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-neuralwatt-energy"),
+                    Text::message("usage-neuralwatt-energy-used")
+                        .arg("used", "13.90")
+                        .arg("included", "20")
+                ),
+                (
+                    Text::message("usage-neuralwatt-this-month"),
+                    Text::message("usage-neuralwatt-month-requests")
+                        .arg("cost", "$4.20")
+                        .arg("requests", "1,234")
+                        .arg("count", 1234)
+                ),
+                (
+                    Text::message("usage-neuralwatt-credits-used"),
+                    Text::message("usage-neuralwatt-credits-of")
+                        .arg("used", "$17.32")
+                        .arg("total", "$50.00")
+                ),
+            ]
+        );
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-neuralwatt-prepaid-credits")
+        );
     }
 
     #[test]
@@ -303,10 +338,7 @@ mod tests {
         )
         .unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Token")
-        );
+        assert_eq!(report.account.plan, Some(Text::service("Token")));
         assert_eq!(report.balances[0].text(), "$51.00");
     }
 
@@ -335,6 +367,18 @@ mod tests {
             panic!("expected the key allowance");
         };
         assert_eq!(allowance.used, 100.);
+        let unnamed = parse(
+            r#"{"balance": {"credits_remaining_usd": 1},
+                "key": {"allowance": {"blocked": true}}}"#,
+        )
+        .unwrap();
+        let Section::Limit(allowance) = &unnamed.sections[0] else {
+            panic!("expected the key allowance");
+        };
+        assert_eq!(
+            allowance.kind,
+            Kind::Named(Text::message("usage-neuralwatt-key-allowance"))
+        );
     }
 
     #[test]

@@ -8,7 +8,7 @@
 //! one: an explicitly set token is simply tried first.
 
 use crate::model::Count;
-use crate::text::pairs;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -88,7 +88,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let mut windows = Vec::new();
     if monthly > 0. {
         windows.push(Window::new(
-            Kind::Named("Monthly credits".into()),
+            Kind::Named(Text::message("usage-manus-monthly-credits")),
             (monthly - periodic) / monthly * 100.,
             None,
             None,
@@ -97,19 +97,24 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     if max_refresh > 0. {
         let reset = credits.next_refresh_time.as_ref().and_then(refresh_time);
         windows.push(Window::new(
-            Kind::Named("Daily refresh".into()),
+            Kind::Named(Text::message("usage-manus-daily-refresh")),
             (max_refresh - refresh) / max_refresh * 100.,
             reset,
             None,
         ));
     }
     let count = |value: f64| group(value.round() as i64);
-    let mut facts = vec![("Free".into(), count(free))];
+    let of = |left: f64, total: f64| {
+        Text::message("usage-manus-left-of")
+            .arg("left", count(left))
+            .arg("total", count(total))
+    };
+    let mut facts = vec![(
+        Text::message("usage-manus-free"),
+        Text::service(count(free)),
+    )];
     if monthly > 0. {
-        facts.push((
-            "Monthly".into(),
-            format!("{} of {}", count(periodic), count(monthly)),
-        ));
+        facts.push((Text::message("usage-manus-monthly"), of(periodic, monthly)));
     }
     if max_refresh > 0. {
         let label = credits
@@ -117,17 +122,22 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .as_deref()
             .map(str::trim)
             .filter(|interval| !interval.is_empty())
-            .map_or_else(|| "Refresh".to_owned(), title_case);
-        facts.push((
-            label,
-            format!("{} of {}", count(refresh), count(max_refresh)),
-        ));
+            // The service's own interval, such as `daily`, names it.
+            .map_or_else(
+                || Text::message("usage-manus-refresh"),
+                |interval| Text::service(title_case(interval)),
+            );
+        facts.push((label, of(refresh, max_refresh)));
     }
     Ok(Report::new(Provider(&Manus), Account::default(), windows)
-        .with_balances([Balance::new("Balance", total, Unit::Count(Count::Credits))])
+        .with_balances([Balance::new(
+            Text::message("usage-manus-balance"),
+            total,
+            Unit::Count(Count::Credits),
+        )])
         .with_sections([Section::Facts {
-            title: "Credits".into(),
-            facts: pairs(facts),
+            title: Text::message("usage-manus-credits"),
+            facts,
         }]))
 }
 
@@ -222,7 +232,10 @@ mod tests {
         assert_eq!(report.windows.len(), 2);
         // Named windows sort by name: "Daily refresh" before "Monthly credits".
         let monthly = &report.windows[1];
-        assert_eq!(monthly.kind, Kind::Named("Monthly credits".into()));
+        assert_eq!(
+            monthly.kind,
+            Kind::Named(Text::message("usage-manus-monthly-credits"))
+        );
         assert_eq!(monthly.percent(), 25);
         let daily = &report.windows[0];
         assert_eq!(daily.percent(), 67);
@@ -232,7 +245,28 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("facts");
         };
-        assert!(facts.contains(&("Daily".into(), "100 of 300".into())));
+        assert_eq!(
+            facts,
+            &[
+                (Text::message("usage-manus-free"), Text::service("300")),
+                (
+                    Text::message("usage-manus-monthly"),
+                    Text::message("usage-manus-left-of")
+                        .arg("left", "3,000")
+                        .arg("total", "4,000")
+                ),
+                (
+                    Text::service("Daily"),
+                    Text::message("usage-manus-left-of")
+                        .arg("left", "100")
+                        .arg("total", "300")
+                ),
+            ]
+        );
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-manus-balance")
+        );
     }
 
     #[test]
@@ -243,6 +277,10 @@ mod tests {
         assert_eq!(report.balances[0].amount, 12.);
         let daily = &report.windows[0];
         assert_eq!(daily.percent(), 0);
+        let Section::Facts { facts, .. } = &report.sections[0] else {
+            panic!("facts");
+        };
+        assert_eq!(facts[1].0, Text::message("usage-manus-refresh"));
         assert_eq!(
             daily.resets_at,
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(978_307_200 + 780_000_000))

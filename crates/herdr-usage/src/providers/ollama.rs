@@ -133,13 +133,17 @@ pub(crate) fn parse_tags(body: &str) -> Result<Report> {
         Provider(&Ollama),
         Account {
             email: None,
-            plan: Some("API key".into()),
+            plan: Some(Text::message("usage-ollama-api-key")),
         },
         Vec::new(),
     )
     .with_sections([Section::Facts {
-        title: "Ollama Cloud".into(),
-        facts: vec![("Models".into(), Text::from(tags.models.len().to_string()))],
+        // The product's name.
+        title: Text::service("Ollama Cloud"),
+        facts: vec![(
+            Text::message("usage-ollama-models"),
+            Text::service(tags.models.len().to_string()),
+        )],
     }]))
 }
 
@@ -158,7 +162,7 @@ pub(crate) fn parse(html: &str) -> Result<Report> {
             block(html, HOURLY_LABEL).map(|block| {
                 (
                     block,
-                    Kind::Named("Hourly".into()),
+                    Kind::Named(Text::message("usage-ollama-hourly")),
                     Duration::from_secs(3600),
                 )
             })
@@ -181,8 +185,8 @@ pub(crate) fn parse(html: &str) -> Result<Report> {
     .map(|((used, resets_at), kind, length)| Window::new(kind, used, resets_at, Some(length)))
     .collect();
     let account = Account {
-        email: email(html).map(Text::from),
-        plan: plan(html).map(|plan| title_case(&plan)).map(Text::from),
+        email: email(html).map(Text::service),
+        plan: plan(html).map(|plan| Text::service(title_case(&plan))),
     };
     Ok(Report::new(Provider(&Ollama), account, windows))
 }
@@ -386,7 +390,6 @@ fn signed_out(html: &str) -> bool {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
 
     fn at(rfc3339: &str) -> Option<SystemTime> {
         Timestamp::Text(rfc3339.into()).time()
@@ -475,6 +478,11 @@ mod tests {
         assert_eq!(weekly.kind, Kind::Weekly);
         assert!((weekly.used - 0.7).abs() < 1e-4);
         assert_eq!(weekly.resets_at, at("2026-02-02T00:00:00Z"));
+        let hourly = parse("<span>Hourly usage</span><span>5% used</span>").unwrap();
+        assert_eq!(
+            hourly.windows[0].kind,
+            Kind::Named(Text::message("usage-ollama-hourly"))
+        );
     }
 
     #[test]
@@ -510,12 +518,15 @@ mod tests {
             parse_tags(r#"{"models":[{"name":"gpt-oss:120b"},{"name":"qwen3"}]}"#).unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("API key")
+            report.account.plan,
+            Some(Text::message("usage-ollama-api-key"))
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], pair(("Models".to_owned(), "2".to_owned())));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-ollama-models"), Text::service("2"))
+        );
     }
 }

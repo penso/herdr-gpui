@@ -8,7 +8,7 @@
 //! separate wrapper script writes to `~/.codexbar/mimo-local-usage.json`.
 //! That file belongs to CodexBar's own tooling, not to MiMo.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -110,21 +110,30 @@ pub(crate) fn parse(balance: &str, detail: Option<&str>, usage: Option<&str>) ->
             period_end.map(|_| MONTH),
         )
     });
-    let money =
-        |amount: f64| Balance::new("", amount, Unit::Currency(currency.clone())).amount_text();
+    let money = |amount: f64| {
+        Text::service(
+            Balance::new(Text::service(""), amount, Unit::Currency(currency.clone())).amount_text(),
+        )
+    };
     let mut facts = Vec::new();
     if let (Some(paid), Some(granted)) = (balance.cash_balance, balance.gift_balance) {
-        facts.push(("Paid".to_owned(), money(paid)));
-        facts.push(("Granted".to_owned(), money(granted)));
+        facts.push((Text::message("usage-mimo-paid"), money(paid)));
+        facts.push((Text::message("usage-mimo-granted"), money(granted)));
     }
     if let Some(item) = &item {
         facts.push((
-            "Token plan".to_owned(),
-            format!("{} of {} credits", group(item.used), group(item.limit)),
+            Text::message("usage-mimo-token-plan"),
+            Text::message("usage-mimo-credits-used")
+                .arg("used", group(item.used))
+                .arg("limit", group(item.limit))
+                .arg("count", item.limit),
         ));
     }
     if detail.as_ref().is_some_and(|detail| detail.expired) {
-        facts.push(("Token plan".to_owned(), "Expired".to_owned()));
+        facts.push((
+            Text::message("usage-mimo-token-plan"),
+            Text::message("usage-mimo-expired"),
+        ));
     }
     let plan = detail
         .and_then(|detail| detail.plan_code)
@@ -134,14 +143,18 @@ pub(crate) fn parse(balance: &str, detail: Option<&str>, usage: Option<&str>) ->
         Provider(&Mimo),
         Account {
             email: None,
-            plan: plan.map(Text::from),
+            plan: plan.map(Text::service),
         },
         window.into_iter().collect(),
     )
-    .with_balances([Balance::new("Balance", amount, Unit::Currency(currency))])
+    .with_balances([Balance::new(
+        Text::message("usage-mimo-balance"),
+        amount,
+        Unit::Currency(currency),
+    )])
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Account".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-mimo-account"),
+        facts,
     })))
 }
 
@@ -205,7 +218,6 @@ struct UsageItem {
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::text::pair;
     use std::time::{Duration, SystemTime};
 
     /// CodexBar's combined-snapshot fixtures.
@@ -234,14 +246,23 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], pair(("Paid".to_owned(), "$20.00".to_owned())));
-        assert_eq!(facts[1], pair(("Granted".to_owned(), "$5.51".to_owned())));
         assert_eq!(
-            facts[2],
-            pair((
-                "Token plan".to_owned(),
-                "10,100,158 of 200,000,000 credits".to_owned()
-            ))
+            facts,
+            &[
+                (Text::message("usage-mimo-paid"), Text::service("$20.00")),
+                (Text::message("usage-mimo-granted"), Text::service("$5.51")),
+                (
+                    Text::message("usage-mimo-token-plan"),
+                    Text::message("usage-mimo-credits-used")
+                        .arg("used", "10,100,158")
+                        .arg("limit", "200,000,000")
+                        .arg("count", 200_000_000)
+                ),
+            ]
+        );
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-mimo-balance")
         );
     }
 

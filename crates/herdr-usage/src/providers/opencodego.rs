@@ -202,21 +202,28 @@ fn report(windows: Vec<Window>, balance: Option<f64>) -> Report {
         Provider(&Opencodego),
         Account {
             email: None,
-            plan: (!windows.is_empty())
-                .then(|| "Go".to_owned())
-                .map(Text::from),
+            // The plan's name.
+            plan: (!windows.is_empty()).then(|| Text::service("Go")),
         },
         windows,
     )
-    .with_balances(
-        balance.map(|balance| Balance::new("Zen balance", balance, Unit::Currency("USD".into()))),
-    )
+    .with_balances(balance.map(|balance| {
+        Balance::new(
+            Text::message("usage-opencodego-zen-balance"),
+            balance,
+            Unit::Currency("USD".into()),
+        )
+    }))
 }
 
 fn no_subscription(balance: Option<f64>) -> Report {
     report(Vec::new(), balance).with_sections([Section::Facts {
-        title: "Subscription".into(),
-        facts: vec![("OpenCode Go".into(), "None".into())],
+        title: Text::message("usage-opencodego-subscription"),
+        // The product's name, and that the workspace has none of it.
+        facts: vec![(
+            Text::service("OpenCode Go"),
+            Text::message("usage-opencodego-none"),
+        )],
     }])
 }
 
@@ -411,7 +418,20 @@ mod tests {
     fn missing_subscription_keeps_the_balance() {
         let report = parse_console("null", Some(5.), at(NOW)).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Zen balance");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-opencodego-zen-balance")
+        );
+        assert_eq!(
+            report.sections,
+            vec![Section::Facts {
+                title: Text::message("usage-opencodego-subscription"),
+                facts: vec![(
+                    Text::service("OpenCode Go"),
+                    Text::message("usage-opencodego-none")
+                )],
+            }]
+        );
         let report = parse_console(r#"{"access":null}"#, None, at(NOW)).unwrap();
         assert!(report.balances.is_empty());
     }

@@ -3,7 +3,7 @@
 //! `LLM_PROXY_API_KEY`, here or on the probed host) at the configured
 //! `base_url`. Everything CodexBar reads is ported.
 
-use crate::text::{Text, pair};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -119,43 +119,65 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     let cost = summary.approx_cost.or((summed > 0.).then_some(summed));
 
     let windows = remaining
-        .map(|left| Window::new(Kind::Named("Quota".into()), 100. - left, reset, None))
+        .map(|left| {
+            Window::new(
+                Kind::Named(Text::message("usage-llmproxy-quota")),
+                100. - left,
+                reset,
+                None,
+            )
+        })
         .into_iter()
         .collect();
     let account = Account {
         email: None,
-        plan: Some(format!("{active}/{credentials} active keys").into()),
+        plan: Some(
+            Text::message("usage-llmproxy-active-keys")
+                .arg("active", active.to_string())
+                .arg("keys", credentials.to_string()),
+        ),
     };
     let totals = Section::Facts {
-        title: "Totals".into(),
+        title: Text::message("usage-llmproxy-totals"),
         facts: vec![
-            ("Requests".into(), Text::from(count(requests))),
-            ("Tokens".into(), Text::from(count(tokens))),
+            (
+                Text::message("usage-llmproxy-requests"),
+                Text::service(count(requests)),
+            ),
+            (
+                Text::message("usage-llmproxy-tokens"),
+                Text::service(count(tokens)),
+            ),
         ],
     };
     let top = (!providers.is_empty()).then(|| Section::Facts {
-        title: "Providers".into(),
+        title: Text::message("usage-llmproxy-providers"),
         facts: providers
             .iter()
             .take(TOP)
             .map(|(name, provider)| {
-                let mut text = format!(
-                    "{} req · {} tok",
-                    count(provider.requests),
-                    count(provider.tokens)
-                );
-                if let Some(cost) = provider.cost {
-                    text.push_str(&format!(" · ${cost:.2}"));
-                }
-                (name.clone(), text)
+                let (requests, tokens) = (count(provider.requests), count(provider.tokens));
+                let text = match provider.cost {
+                    Some(cost) => Text::message("usage-llmproxy-provider-cost")
+                        .arg("requests", requests)
+                        .arg("tokens", tokens)
+                        .arg("cost", format!("${cost:.2}")),
+                    None => Text::message("usage-llmproxy-provider")
+                        .arg("requests", requests)
+                        .arg("tokens", tokens),
+                };
+                (Text::service(name), text)
             })
-            .map(pair)
             .collect(),
     });
     Ok(Report::new(Provider(&Llmproxy), account, windows)
-        .with_balances(
-            cost.map(|cost| Balance::new("Approx. spend", cost, Unit::Currency("USD".into()))),
-        )
+        .with_balances(cost.map(|cost| {
+            Balance::new(
+                Text::message("usage-llmproxy-approx-spend"),
+                cost,
+                Unit::Currency("USD".into()),
+            )
+        }))
         .with_sections(std::iter::once(totals).chain(top)))
 }
 
@@ -268,21 +290,31 @@ mod tests {
             Timestamp::Text("2026-05-18T12:00:00Z".into()).time()
         );
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("3/4 active keys")
+            report.account.plan,
+            Some(
+                Text::message("usage-llmproxy-active-keys")
+                    .arg("active", "3")
+                    .arg("keys", "4")
+            )
         );
         assert_eq!(report.balances[0].amount, 15.5);
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected totals");
         };
-        assert_eq!(facts[0].1, "160");
-        assert_eq!(facts[1].1, "7,000");
+        assert_eq!(facts[0].1, Text::service("160"));
+        assert_eq!(facts[1].1, Text::service("7,000"));
         let Section::Facts { facts, .. } = &report.sections[1] else {
             panic!("expected providers");
         };
         assert_eq!(
             facts[0],
-            ("openai".into(), "120 req · 6,000 tok · $12.50".into())
+            (
+                Text::service("openai"),
+                Text::message("usage-llmproxy-provider-cost")
+                    .arg("requests", "120")
+                    .arg("tokens", "6,000")
+                    .arg("cost", "$12.50")
+            )
         );
     }
 

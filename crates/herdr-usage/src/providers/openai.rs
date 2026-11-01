@@ -10,7 +10,7 @@
 //! CodexBar's opt-in fallback does. There is no local sign-in: the Codex CLI's
 //! ChatGPT sign-in is the separate Codex provider.
 
-use crate::text::{Text, pairs, share};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -195,8 +195,10 @@ struct Day {
     input: u64,
     cached: u64,
     output: u64,
-    lines: HashMap<String, f64>,
-    models: HashMap<String, u64>,
+    /// By line item, or `None` for spend the API names no line item for.
+    lines: HashMap<Option<String>, f64>,
+    /// By model, or `None` for tokens the API names no model for.
+    models: HashMap<Option<String>, u64>,
 }
 
 /// Admin API buckets gathered by UTC day start.
@@ -219,7 +221,7 @@ impl Tally {
                     .filter(|value| value.is_finite())
                     .unwrap_or(0.);
                 day.cost += amount;
-                *day.lines.entry(name(result.line_item, "API")).or_default() += amount;
+                *day.lines.entry(name(result.line_item)).or_default() += amount;
             }
         }
         Ok(next)
@@ -238,9 +240,7 @@ impl Tally {
                 day.input += input;
                 day.cached += result.input_cached_tokens;
                 day.output += output;
-                *day.models
-                    .entry(name(result.model, "Responses and Chat Completions"))
-                    .or_default() += input + output;
+                *day.models.entry(name(result.model)).or_default() += input + output;
             }
         }
         Ok(next)
@@ -258,13 +258,9 @@ impl Tally {
                 .sum::<f64>()
         };
         let total = spend(since(days));
-        let label = if days == 1 {
-            "Spend today".to_owned()
-        } else {
-            format!("Spend, last {days} days")
-        };
-        let mut lines: HashMap<&str, f64> = HashMap::new();
-        let mut models: HashMap<&str, u64> = HashMap::new();
+        let label = Text::message("usage-openai-spend-days").arg("days", days);
+        let mut lines: HashMap<Option<&str>, f64> = HashMap::new();
+        let mut models: HashMap<Option<&str>, u64> = HashMap::new();
         let (mut requests, mut input, mut cached, mut output) = (0, 0, 0, 0);
         for (_, day) in &window {
             requests += day.requests;
@@ -272,33 +268,56 @@ impl Tally {
             cached += day.cached;
             output += day.output;
             for (line, cost) in &day.lines {
-                *lines.entry(line.as_str()).or_default() += *cost;
+                *lines.entry(line.as_deref()).or_default() += *cost;
             }
             for (model, tokens) in &day.models {
-                *models.entry(model.as_str()).or_default() += *tokens;
+                *models.entry(model.as_deref()).or_default() += *tokens;
             }
         }
         let mut sections = vec![Section::Facts {
-            title: "Spend".into(),
+            title: Text::message("usage-openai-spend"),
             facts: vec![
-                ("Today".into(), Text::from(usd(spend(today)))),
-                ("Last 7 days".into(), Text::from(usd(spend(since(7))))),
+                (
+                    Text::message("usage-openai-today"),
+                    Text::service(usd(spend(today))),
+                ),
+                (
+                    Text::message("usage-openai-last-7-days"),
+                    Text::service(usd(spend(since(7)))),
+                ),
             ],
         }];
         if requests > 0 || input + output > 0 {
             sections.push(Section::Facts {
-                title: "Completions".into(),
+                title: Text::message("usage-openai-completions"),
                 facts: vec![
-                    ("Requests".into(), Text::from(count(requests))),
-                    ("Input tokens".into(), Text::from(count(input))),
-                    ("Cached input tokens".into(), Text::from(count(cached))),
-                    ("Output tokens".into(), Text::from(count(output))),
+                    (
+                        Text::message("usage-openai-requests"),
+                        Text::service(count(requests)),
+                    ),
+                    (
+                        Text::message("usage-openai-input-tokens"),
+                        Text::service(count(input)),
+                    ),
+                    (
+                        Text::message("usage-openai-cached-input-tokens"),
+                        Text::service(count(cached)),
+                    ),
+                    (
+                        Text::message("usage-openai-output-tokens"),
+                        Text::service(count(output)),
+                    ),
                 ],
             });
         }
-        sections.extend(shares("Spend by line item", lines.into_iter()));
         sections.extend(shares(
-            "Tokens by model",
+            Text::message("usage-openai-spend-by-line-item"),
+            Text::message("usage-openai-unnamed-line-item"),
+            lines.into_iter(),
+        ));
+        sections.extend(shares(
+            Text::message("usage-openai-tokens-by-model"),
+            Text::message("usage-openai-unnamed-model"),
             models
                 .into_iter()
                 .map(|(model, tokens)| (model, tokens as f64)),
@@ -313,8 +332,10 @@ impl Tally {
         let account = Account {
             email: None,
             plan: Some(match project {
-                Some(project) => format!("Admin API: {project}").into(),
-                None => "Admin API".into(),
+                Some(project) => {
+                    Text::message("usage-openai-admin-api-project").arg("project", project)
+                }
+                None => Text::message("usage-openai-admin-api"),
             }),
         };
         Report::new(Provider(&Openai), account, Vec::new())
@@ -328,30 +349,37 @@ impl Tally {
     }
 }
 
-/// The largest parts of a whole, as percentages of it.
-fn shares<'a>(title: &str, parts: impl Iterator<Item = (&'a str, f64)>) -> Option<Section> {
-    let mut parts: Vec<(&str, f64)> = parts.filter(|(_, value)| *value > 0.).collect();
+/// The largest parts of a whole, as percentages of it; a part the API names
+/// nothing for is called `unnamed`.
+fn shares<'a>(
+    title: Text,
+    unnamed: Text,
+    parts: impl Iterator<Item = (Option<&'a str>, f64)>,
+) -> Option<Section> {
+    let mut parts: Vec<(Option<&str>, f64)> = parts.filter(|(_, value)| *value > 0.).collect();
     let whole: f64 = parts.iter().map(|(_, value)| value).sum();
     if whole <= 0. {
         return None;
     }
-    parts.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+    parts.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     Some(Section::Shares {
-        title: title.into(),
+        title,
         shares: parts
             .into_iter()
             .take(TOP)
-            .map(|(label, value)| (label.to_owned(), (value / whole * 100.) as f32))
-            .map(share)
+            .map(|(label, value)| {
+                let label = label.map_or_else(|| unnamed.clone(), Text::service);
+                (label, (value / whole * 100.) as f32)
+            })
             .collect(),
     })
 }
 
-fn name(value: Option<String>, fallback: &str) -> String {
+/// The API's name for a line item or model, when it gives one.
+fn name(value: Option<String>) -> Option<String> {
     value
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| fallback.to_owned())
 }
 
 fn count(value: u64) -> String {
@@ -379,27 +407,37 @@ pub(crate) fn parse_grants(body: &str, now: i64) -> Result<Report> {
         })
         .min();
     let available = grants.total_available.max(0.);
-    let mut balance = Balance::new("API credits left", available, Unit::Currency("USD".into()));
+    let mut balance = Balance::new(
+        Text::message("usage-openai-api-credits-left"),
+        available,
+        Unit::Currency("USD".into()),
+    );
     if grants.total_granted > 0. {
         balance = balance.out_of(grants.total_granted);
     }
-    let mut facts = vec![("Used".to_owned(), usd(grants.total_used))];
+    let mut facts = vec![(
+        Text::message("usage-openai-used"),
+        Text::service(usd(grants.total_used)),
+    )];
     if let Some(expiry) = expiry
         .and_then(|at| at.duration_since(SystemTime::UNIX_EPOCH).ok())
         .and_then(|since| i64::try_from(since.as_secs()).ok())
         .and_then(|secs| chrono::DateTime::from_timestamp(secs, 0))
     {
-        facts.push(("Next expiry".into(), expiry.format("%Y-%m-%d").to_string()));
+        facts.push((
+            Text::message("usage-openai-next-expiry"),
+            Text::service(expiry.format("%Y-%m-%d").to_string()),
+        ));
     }
     let account = Account {
         email: None,
-        plan: Some("API balance".into()),
+        plan: Some(Text::message("usage-openai-api-balance")),
     };
     Ok(Report::new(Provider(&Openai), account, Vec::new())
         .with_balances([balance])
         .with_sections([Section::Facts {
-            title: "Credit grants".into(),
-            facts: pairs(facts),
+            title: Text::message("usage-openai-credit-grants"),
+            facts,
         }]))
 }
 
@@ -534,27 +572,52 @@ mod tests {
         assert_eq!(tally.add_completions(&completions()).unwrap(), None);
         let report = tally.report(NOW, 30, None);
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Spend, last 30 days");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-openai-spend-days").arg("days", 30)
+        );
         assert!((report.balances[0].amount - 5.0).abs() < 1e-9);
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Admin API")
+            report.account.plan,
+            Some(Text::message("usage-openai-admin-api"))
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected spend facts");
         };
-        assert_eq!(facts[0], ("Today".into(), "$3.00".into()));
-        assert_eq!(facts[1], ("Last 7 days".into(), "$5.00".into()));
+        assert_eq!(
+            facts,
+            &[
+                (Text::message("usage-openai-today"), Text::service("$3.00")),
+                (
+                    Text::message("usage-openai-last-7-days"),
+                    Text::service("$5.00")
+                ),
+            ]
+        );
         let Section::Facts { facts, .. } = &report.sections[1] else {
             panic!("expected completion facts");
         };
-        assert_eq!(facts[0], ("Requests".into(), "7".into()));
-        assert_eq!(facts[1], ("Input tokens".into(), "1,000".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-openai-requests"), Text::service("7"))
+        );
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-openai-input-tokens"),
+                Text::service("1,000")
+            )
+        );
         let Section::Shares { shares, .. } = &report.sections[2] else {
             panic!("expected line item shares");
         };
-        assert_eq!(shares[0].0, "API");
+        assert_eq!(shares[0].0, Text::message("usage-openai-unnamed-line-item"));
         assert_eq!(shares[0].1.round(), 60.);
+        assert_eq!(shares[1].0, Text::service("gpt-4o, input"));
+        let Section::Shares { shares, .. } = &report.sections[3] else {
+            panic!("expected model shares");
+        };
+        assert_eq!(shares[0].0, Text::service("gpt-4o-2024-08-06"));
         let daily = report.detail::<Daily>().unwrap();
         assert_eq!(daily.days.len(), 2);
         assert_eq!(daily.days[1].1, 3.0);
@@ -565,11 +628,14 @@ mod tests {
         let mut tally = Tally::default();
         tally.add_costs(&costs()).unwrap();
         let report = tally.report(NOW, 1, Some("proj_abc"));
-        assert_eq!(report.balances[0].label, "Spend today");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-openai-spend-days").arg("days", 1)
+        );
         assert!((report.balances[0].amount - 3.0).abs() < 1e-9);
         assert_eq!(
-            report.account.plan.as_ref().map(Text::as_str),
-            Some("Admin API: proj_abc")
+            report.account.plan,
+            Some(Text::message("usage-openai-admin-api-project").arg("project", "proj_abc"))
         );
     }
 
@@ -602,7 +668,15 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected grant facts");
         };
-        assert_eq!(facts[0], ("Used".into(), "$4.50".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-openai-used"), Text::service("$4.50"))
+        );
+        assert_eq!(facts[1].0, Text::message("usage-openai-next-expiry"));
         assert_eq!(facts.len(), 2);
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-openai-api-balance"))
+        );
     }
 }

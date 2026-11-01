@@ -8,7 +8,7 @@
 //! a pasted cURL command in place of the header; here only the header is
 //! accepted.
 
-use crate::text::{Text, pairs};
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -203,12 +203,15 @@ fn build(
             .unwrap_or(0.)
             .max(0.);
         windows.push(Window::new(
-            Kind::Named("Token quota".into()),
+            Kind::Named(Text::message("usage-longcat-token-quota")),
             used / total * 100.,
             None,
             None,
         ));
-        facts.push(("Tokens used".to_owned(), format!("{used:.0}/{total:.0}")));
+        facts.push((
+            Text::message("usage-longcat-tokens-used"),
+            Text::service(format!("{used:.0}/{total:.0}")),
+        ));
     }
     if let Some(fuel) = fuel {
         let packages = fuel
@@ -231,28 +234,28 @@ fn build(
                 left.iter().sum::<f64>()
             };
             windows.push(Window::new(
-                Kind::Named("Fuel pack".into()),
+                Kind::Named(Text::message("usage-longcat-fuel-pack")),
                 (total - remaining).max(0.) / total * 100.,
                 nearest,
                 None,
             ));
             facts.push((
-                "Fuel pack left".to_owned(),
-                format!("{remaining:.0}/{total:.0}"),
+                Text::message("usage-longcat-fuel-pack-left"),
+                Text::service(format!("{remaining:.0}/{total:.0}")),
             ));
         }
     }
     Report::new(
         Provider(&Longcat),
         Account {
-            email: name.map(Text::from),
+            email: name.map(Text::service),
             plan: None,
         },
         windows,
     )
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Quota".into(),
-        facts: pairs(facts),
+        title: Text::message("usage-longcat-quota"),
+        facts,
     }))
 }
 
@@ -297,7 +300,13 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "1212576/50000000");
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-longcat-tokens-used"),
+                Text::service("1212576/50000000")
+            )
+        );
     }
 
     #[test]
@@ -309,7 +318,10 @@ mod tests {
         let report = build(None, None, None, Some(&fuel));
         assert_eq!(report.windows.len(), 1);
         let window = &report.windows[0];
-        assert_eq!(window.kind, Kind::Named("Fuel pack".into()));
+        assert_eq!(
+            window.kind,
+            Kind::Named(Text::message("usage-longcat-fuel-pack"))
+        );
         assert_eq!(window.used, 25.);
         assert_eq!(
             window.resets_at,

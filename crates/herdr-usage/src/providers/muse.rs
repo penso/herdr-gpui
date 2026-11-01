@@ -83,23 +83,23 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .map(|email| email.trim().to_owned())
         .filter(|email| !email.is_empty());
     let account = Account {
-        email: email.map(Text::from),
-        plan: plan.or_else(|| Some("Muse login".into())).map(Text::from),
+        email: email.map(Text::service),
+        plan: Some(plan.map_or_else(|| Text::message("usage-muse-login"), Text::service)),
     };
     let status = if key.require_payment == Some(true) {
-        Some("Payment method required; finish billing at https://dev.meta.ai")
+        Some(Text::message("usage-muse-payment-required"))
     } else if key.is_subs_active != Some(true) {
-        Some("No active subscription on this login")
+        Some(Text::message("usage-muse-no-subscription"))
     } else if key.subs_usage.is_none() {
-        Some("Quota not included in this login response")
+        Some(Text::message("usage-muse-no-quota"))
     } else {
         None
     };
     if let Some(status) = status {
         return Ok(
             Report::new(Provider(&Muse), account, Vec::new()).with_sections([Section::Facts {
-                title: "Subscription".into(),
-                facts: vec![("Status".into(), status.into())],
+                title: Text::message("usage-muse-subscription"),
+                facts: vec![(Text::message("usage-muse-status"), status)],
             }]),
         );
     }
@@ -113,7 +113,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         let kind = if length == SESSION {
             Kind::Session
         } else {
-            Kind::Named(format!("{} hours", minutes / 60.).into())
+            Kind::Named(Text::message("usage-muse-hours").arg("hours", minutes / 60.))
         };
         windows.push(Window::new(
             kind,
@@ -217,8 +217,31 @@ mod tests {
                 report.account.plan.as_ref().map(Text::as_str),
                 Some("Muse Code Power Usage")
             );
-            assert_eq!(report.sections.len(), 1);
+            assert_eq!(
+                report.sections,
+                vec![Section::Facts {
+                    title: Text::message("usage-muse-subscription"),
+                    facts: vec![(
+                        Text::message("usage-muse-status"),
+                        Text::message("usage-muse-no-quota")
+                    )],
+                }]
+            );
         }
+    }
+
+    #[test]
+    fn another_rolling_window_is_named_by_its_hours() {
+        let body = ACCOUNT.replace(
+            "\"window_duration_mins\":300",
+            "\"window_duration_mins\":120",
+        );
+        let report = parse(&body).unwrap();
+        // Named windows sort after the weekly one.
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-muse-hours").arg("hours", 2.))
+        );
     }
 
     #[test]
@@ -229,6 +252,17 @@ mod tests {
         ] {
             assert!(parse(body).unwrap().windows.is_empty());
         }
+        let unpaid = parse(r#"{"require_payment":true,"is_subs_active":false}"#).unwrap();
+        assert_eq!(unpaid.account.plan, Some(Text::message("usage-muse-login")));
+        let Section::Facts { facts, .. } = &unpaid.sections[0] else {
+            panic!("facts expected");
+        };
+        assert_eq!(facts[0].1, Text::message("usage-muse-payment-required"));
+        let inactive = parse(r#"{"is_subs_active":false}"#).unwrap();
+        let Section::Facts { facts, .. } = &inactive.sections[0] else {
+            panic!("facts expected");
+        };
+        assert_eq!(facts[0].1, Text::message("usage-muse-no-subscription"));
     }
 
     #[test]
