@@ -18,8 +18,13 @@ fn the_send_button_and_queued_lines_are_messages() {
 
 #[test]
 fn each_reason_notes_were_kept_has_its_own_sentence() {
-    let kept = [Kept::NoAgent, Kept::NotReady, Kept::PaneGone, Kept::Unreachable]
-        .map(|reason| crate::i18n::fl!("agent-notes-kept", reason = reason.selector()));
+    let kept = [
+        Kept::NoAgent,
+        Kept::NotReady,
+        Kept::PaneGone,
+        Kept::Unreachable,
+    ]
+    .map(|reason| crate::i18n::fl!("agent-notes-kept", reason = reason.selector()));
     assert_eq!(
         kept,
         [

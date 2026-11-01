@@ -5,6 +5,7 @@
 //! painted grid. At most one search is in flight: a step asked for meanwhile
 //! waits in a single slot and is sent, against the newest content revision,
 //! once the answer arrives. Nothing here touches the window or the socket.
+// i18n: migrated
 
 pub(crate) mod memory;
 

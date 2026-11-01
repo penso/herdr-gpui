@@ -16,7 +16,13 @@ fn the_find_bar_and_copy_mode_draw_only_messages() {
 
         cx.simulate_keystrokes("x");
         let request = next_request(&mut peer);
-        answer(&view, &mut peer, cx, &request, matches(&[(110, 0, 1)], 0, 0, 3));
+        answer(
+            &view,
+            &mut peer,
+            cx,
+            &request,
+            matches(&[(110, 0, 1)], 0, 0, 3),
+        );
         cx.update(|window, _| window.refresh());
         draw(cx);
         assert_translated("Find count", &uncut(recorder.take()), &["x".to_owned()]);

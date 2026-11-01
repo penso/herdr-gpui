@@ -1,6 +1,6 @@
 // i18n: migrated
-use crate::i18n::fl;
 use super::*;
+use crate::i18n::fl;
 use crate::{config::corners, fonts::StyledFont};
 
 /// Prefer just below the selection, flip above it at the bottom edge, and
@@ -273,16 +273,18 @@ impl HerdrWindow {
                                     .text_color(rgb(theme.subtext()))
                                     .child(hint),
                             )
-                            .child(button("terminal-note-queue", fl!("window-annotate-queue"), false).on_click(
-                                cx.listener(|this, _, window, cx| {
-                                    this.add_terminal_note(false, window, cx)
-                                }),
-                            ))
-                            .child(button("terminal-note-send", fl!("window-annotate-send"), true).on_click(
-                                cx.listener(|this, _, window, cx| {
-                                    this.add_terminal_note(true, window, cx)
-                                }),
-                            )),
+                            .child(
+                                button("terminal-note-queue", fl!("window-annotate-queue"), false)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.add_terminal_note(false, window, cx)
+                                    })),
+                            )
+                            .child(
+                                button("terminal-note-send", fl!("window-annotate-send"), true)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.add_terminal_note(true, window, cx)
+                                    })),
+                            ),
                     ),
             )
     }

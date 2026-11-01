@@ -9,8 +9,8 @@
 //! focus instead of the field stopping every key.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     find::{Search, Step, memory::Left},
     scrollback::{Inbox, reveal_offset},

@@ -340,10 +340,7 @@ impl HerdrWindow {
     ) -> Delivered {
         let text = typable(&text);
         let Some(target) = target else {
-            self.show_flash(
-                Flash::success(fl!("agent-notes-copied-no-agent")),
-                cx,
-            );
+            self.show_flash(Flash::success(fl!("agent-notes-copied-no-agent")), cx);
             return Delivered::Copy(text);
         };
         let waiting = cx
@@ -428,10 +425,7 @@ impl HerdrWindow {
             return self.deliver_notes(None, text, pending, None, cx);
         };
         if !origin.is_some_and(|origin| origin.current(self)) {
-            self.show_flash(
-                Flash::warning(fl!("agent-notes-session-not-shown")),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("agent-notes-session-not-shown")), cx);
             return Delivered::Copy(typable(&text));
         }
         let scope = crate::browser::scope(&self.endpoints[self.selected_endpoint]);
@@ -562,10 +556,7 @@ impl HerdrWindow {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         if stale {
-            self.show_flash(
-                Flash::warning(fl!("agent-notes-daemon-not-selected")),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("agent-notes-daemon-not-selected")), cx);
         }
         // A tab shows its batch as queued until it leaves.
         if self.deliveries.queue.len() < queued {

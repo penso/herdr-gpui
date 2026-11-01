@@ -9,8 +9,8 @@
 //! the find bar; Enter and Escape bubble out of the field to the prompt.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     copy_mode::{Command, CopyMode, Outcome, Request},
     scrollback::Inbox,
@@ -359,7 +359,10 @@ impl HerdrWindow {
         match sent {
             Ok(request) => self.await_selection_read(state.inbox.clone(), request),
             Err(error) => {
-                self.local_error = Some(fl!("window-find-selection-not-copied", error = error.localize()));
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ));
                 cx.notify();
             }
         }
@@ -387,7 +390,10 @@ impl HerdrWindow {
             Method::PaneScroll,
             serde_json::json!({"pane_id": pane_id, "offset_from_bottom": offset}),
         ) {
-            self.local_error = Some(fl!("window-find-copy-scroll-failed", error = error.localize()));
+            self.local_error = Some(fl!(
+                "window-find-copy-scroll-failed",
+                error = error.localize()
+            ));
             cx.notify();
         }
     }

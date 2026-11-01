@@ -6,8 +6,8 @@
 //! terminal: its key handler steps aside while the field has focus.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::{Flash, HerdrWindow};
+use crate::i18n::{Localize, fl};
 use crate::{
     Error,
     agent_notes::Origin,
@@ -126,17 +126,14 @@ impl HerdrWindow {
                     return;
                 }
                 Err(Error::SelectionOffscreen) => {
-                    self.show_flash(
-                        Flash::warning(fl!("window-annotate-offscreen")),
-                        cx,
-                    );
+                    self.show_flash(Flash::warning(fl!("window-annotate-offscreen")), cx);
                     return;
                 }
                 Err(error) => {
-                    self.show_flash(Flash::warning(fl!(
-                            "window-annotate-failed",
-                            error = error.localize()
-                        )), cx);
+                    self.show_flash(
+                        Flash::warning(fl!("window-annotate-failed", error = error.localize())),
+                        cx,
+                    );
                     return;
                 }
             };
@@ -298,10 +295,7 @@ impl HerdrWindow {
                     .copy(),
             );
             if stale {
-                self.show_flash(
-                    Flash::warning(fl!("window-annotate-stale-copied")),
-                    cx,
-                );
+                self.show_flash(Flash::warning(fl!("window-annotate-stale-copied")), cx);
             }
         }
         if let Some(text) = clipboard.text() {

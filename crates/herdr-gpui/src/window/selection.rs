@@ -6,8 +6,8 @@
 //! painted cells.
 // i18n: migrated
 
-use crate::i18n::{Localize, fl};
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{scrollback::Inbox, terminal::Selection};
 use gpui::{ClipboardItem, Context, Pixels, Point};
 use herdr_client::{
@@ -333,7 +333,12 @@ impl HerdrWindow {
         };
         match result {
             Ok((inbox, request)) => self.await_selection_read(inbox, request),
-            Err(error) => self.local_error = Some(fl!("window-find-selection-not-copied", error = error.localize())),
+            Err(error) => {
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ))
+            }
         }
         true
     }
@@ -396,7 +401,10 @@ impl HerdrWindow {
             }
             Err(error) => {
                 drop(state);
-                self.local_error = Some(fl!("window-find-selection-scroll-failed", error = error.localize()));
+                self.local_error = Some(fl!(
+                    "window-find-selection-scroll-failed",
+                    error = error.localize()
+                ));
                 self.selection_follow.pointer = None;
                 cx.notify();
             }
@@ -481,7 +489,12 @@ impl HerdrWindow {
                     error = herdr_client::Error::ResponseType.localize()
                 ));
             }
-            Err(error) => self.local_error = Some(fl!("window-find-selection-not-copied", error = error.localize())),
+            Err(error) => {
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ))
+            }
         }
         cx.notify();
     }
@@ -501,7 +514,10 @@ impl HerdrWindow {
                 true
             }
             Err(error) => {
-                self.local_error = Some(fl!("window-find-selection-not-copied", error = error.localize()));
+                self.local_error = Some(fl!(
+                    "window-find-selection-not-copied",
+                    error = error.localize()
+                ));
                 false
             }
         }
