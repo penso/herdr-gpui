@@ -32,26 +32,9 @@ pub(crate) struct Stepfun;
 static META: Meta = Meta::new("stepfun", "StepFun")
     .dashboard("https://platform.stepfun.com/plan-usage")
     .settings(&[
-        Setting::new(
-            "token",
-            &["STEPFUN_TOKEN"],
-            "Your StepFun Oasis-Token. Sign in at https://platform.stepfun.com, open \
-             Developer Tools > Application > Cookies for platform.stepfun.com, and copy the \
-             value of the Oasis-Token cookie. Set webid too.",
-        ),
-        Setting::new(
-            "webid",
-            &[],
-            "The value of the Oasis-Webid cookie next to Oasis-Token on \
-             platform.stepfun.com. StepFun rejects a token sent with another device's web id.",
-        ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Instead of token and webid: sign in at https://platform.stepfun.com, open \
-             Developer Tools > Application > Cookies for platform.stepfun.com, and copy the \
-             Oasis-Token and Oasis-Webid cookies as \"Oasis-Token=…; Oasis-Webid=…\".",
-        ),
+        Setting::new("token", &["STEPFUN_TOKEN"], "usage-stepfun-setting-token"),
+        Setting::new("webid", &[], "usage-stepfun-setting-webid"),
+        Setting::new("cookie", &[], "usage-stepfun-setting-cookie"),
     ]);
 
 impl Service for Stepfun {

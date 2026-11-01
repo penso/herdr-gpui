@@ -42,8 +42,7 @@ static META: Meta = Meta::new("warp", "Warp")
     .settings(&[Setting::new(
         "api_key",
         &["WARP_API_KEY", "WARP_TOKEN"],
-        "A Warp API key (wk-…). In Warp open your profile menu, then Settings → Platform → \
-         API Keys, and create one. See https://docs.warp.dev/reference/cli/api-keys.",
+        "usage-warp-setting-api-key",
     )]);
 
 impl Service for Warp {

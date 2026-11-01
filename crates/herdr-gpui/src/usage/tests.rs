@@ -7,6 +7,7 @@ use super::{
 };
 
 mod en_xa;
+mod example_config;
 mod footer_fit;
 mod icons;
 mod keychain_grants;

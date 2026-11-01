@@ -59,19 +59,11 @@ pub(crate) struct Ollama;
 static META: Meta = Meta::new("ollama", "Ollama")
     .dashboard("https://ollama.com/settings")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "The ollama.com browser session, needed for quota. Sign in at \
-             https://ollama.com/signin, open Developer Tools → Application → Cookies → \
-             https://ollama.com, copy the session cookie (wos-session, or __Secure-session \
-             on older sign-ins), and paste it as \"name=value\".",
-        ),
+        Setting::new("cookie", &[], "usage-ollama-setting-cookie"),
         Setting::new(
             "api_key",
             &["OLLAMA_API_KEY", "OLLAMA_KEY"],
-            "An Ollama API key from https://ollama.com/settings/keys. It only verifies \
-             access: Ollama shows quota on its website, not through the API.",
+            "usage-ollama-setting-api-key",
         ),
     ]);
 

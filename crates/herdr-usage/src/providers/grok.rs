@@ -39,9 +39,7 @@ static META: Meta = Meta::new("grok", "Grok")
     .settings(&[Setting::new(
         "token",
         &["GROK_OAUTH_TOKEN"],
-        "A SuperGrok bearer token, only needed when the Grok CLI is not signed in on the \
-         selected host (run `grok login` there instead when you can). It is the \"key\" of \
-         the https://auth.x.ai entry in ~/.grok/auth.json. xai- API keys do not work.",
+        "usage-grok-setting-token",
     )]);
 
 impl Service for Grok {

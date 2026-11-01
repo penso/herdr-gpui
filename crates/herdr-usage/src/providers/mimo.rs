@@ -31,21 +31,8 @@ pub(crate) struct Mimo;
 static META: Meta = Meta::new("mimo", "Xiaomi MiMo")
     .dashboard("https://platform.xiaomimimo.com/#/console/balance")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "The MiMo console session. Sign in at \
-             https://platform.xiaomimimo.com/#/console/balance, open Developer Tools → \
-             Application → Cookies → https://platform.xiaomimimo.com, copy the \
-             api-platform_serviceToken and userId cookies (and api-platform_ph and \
-             api-platform_slh when present), and paste them as \
-             \"api-platform_serviceToken=value; userId=value\".",
-        ),
-        Setting::new(
-            "base_url",
-            &["MIMO_API_URL"],
-            "Optional HTTPS API URL. Defaults to https://platform.xiaomimimo.com/api/v1.",
-        ),
+        Setting::new("cookie", &[], "usage-mimo-setting-cookie"),
+        Setting::new("base_url", &["MIMO_API_URL"], "usage-mimo-setting-base-url"),
     ]);
 
 impl Service for Mimo {

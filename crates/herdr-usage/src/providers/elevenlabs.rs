@@ -27,13 +27,12 @@ static META: Meta = Meta::new("elevenlabs", "ElevenLabs")
         Setting::new(
             "api_key",
             &["ELEVENLABS_API_KEY", "XI_API_KEY"],
-            "An ElevenLabs API key with the user_read permission, from \
-             https://elevenlabs.io/app/settings/api-keys.",
+            "usage-elevenlabs-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["ELEVENLABS_API_URL"],
-            "Optional HTTPS API origin for a proxy. Defaults to https://api.elevenlabs.io.",
+            "usage-elevenlabs-setting-base-url",
         ),
     ]);
 

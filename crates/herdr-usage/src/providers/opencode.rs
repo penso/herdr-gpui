@@ -48,20 +48,11 @@ pub(crate) struct Opencode;
 static META: Meta = Meta::new("opencode", "OpenCode")
     .dashboard("https://opencode.ai/auth")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "Your opencode.ai session. Sign in at https://opencode.ai/auth, open Developer \
-             Tools > Application > Cookies > https://opencode.ai, and copy the auth and \
-             __Host-console_session cookies (either one alone also works). Paste them as \
-             \"auth=value; __Host-console_session=value\".",
-        ),
+        Setting::new("cookie", &[], "usage-opencode-setting-cookie"),
         Setting::new(
             "workspace_id",
             &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
-            "Optional. The workspace to read, as a wrk_... ID or the \
-             https://opencode.ai/workspace/... URL of its dashboard. Defaults to the first \
-             workspace of the account.",
+            "usage-opencode-setting-workspace-id",
         ),
     ]);
 

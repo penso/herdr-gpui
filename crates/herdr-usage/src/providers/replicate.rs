@@ -28,10 +28,7 @@ static META: Meta = Meta::new("replicate", "Replicate")
     .settings(&[Setting::new(
         "cookie",
         &[],
-        "Sign in at https://replicate.com/account/billing, open Developer Tools > \
-         Application > Cookies > https://replicate.com, and copy sessionid (and csrftoken \
-         when present) as one \"sessionid=value; csrftoken=value\" header. An API token \
-         does not work here.",
+        "usage-replicate-setting-cookie",
     )]);
 
 impl Service for Replicate {

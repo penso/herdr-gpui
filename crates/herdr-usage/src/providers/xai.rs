@@ -28,15 +28,9 @@ static META: Meta = Meta::new("xai", "xAI")
         Setting::new(
             "api_key",
             &["XAI_MANAGEMENT_API_KEY"],
-            "A Management API key from https://console.x.ai under Settings > Management \
-             Keys, with billing read access. Inference API keys are not accepted.",
+            "usage-xai-setting-api-key",
         ),
-        Setting::new(
-            "team_id",
-            &["XAI_TEAM_ID"],
-            "The xAI team ID to bill against, shown in the xAI Console URL and team \
-             settings. The Management key must belong to this team.",
-        ),
+        Setting::new("team_id", &["XAI_TEAM_ID"], "usage-xai-setting-team-id"),
     ]);
 
 impl Service for Xai {

@@ -29,14 +29,12 @@ static META: Meta = Meta::new("clawrouter", "ClawRouter")
         Setting::new(
             "api_key",
             &["CLAWROUTER_API_KEY"],
-            "A ClawRouter policy API key, created at \
-             https://clawrouter.openclaw.ai/dashboard/access.",
+            "usage-clawrouter-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["CLAWROUTER_BASE_URL"],
-            "Optional HTTPS service root or /v1 URL of another ClawRouter deployment. \
-             Defaults to https://clawrouter.openclaw.ai.",
+            "usage-clawrouter-setting-base-url",
         ),
     ]);
 

@@ -29,15 +29,12 @@ static META: Meta = Meta::new("bifrost", "Bifrost").settings(&[
     Setting::new(
         "api_key",
         &["BIFROST_API_KEY"],
-        "Your Bifrost virtual key (vk-…), from the gateway's Virtual Keys page. It is \
-             sent as the x-bf-vk header to base_url only.",
+        "usage-bifrost-setting-api-key",
     ),
     Setting::new(
         "base_url",
         &["BIFROST_BASE_URL"],
-        "Your Bifrost gateway's URL, e.g. https://bifrost.example.com. Bifrost has no \
-             public host. It must be HTTPS unless it is on localhost, a private network, \
-             or a .local host.",
+        "usage-bifrost-setting-base-url",
     ),
 ]);
 
