@@ -456,6 +456,7 @@ fn check(
 #[cfg_attr(unix, test_case(Text::Wrapped, NONE, NONE, SOLID_AND_HAND, Click::Address(WRAPPED) ; "https address that wraps onto more rows"))]
 #[cfg_attr(unix, test_case(Text::Plain("mailto:name@example.com"), NONE, NONE, SOLID_AND_HAND, Click::Address("mailto:name@example.com") ; "mailto address"))]
 #[cfg_attr(unix, test_case(Text::Plain("vscode://file{work}/src/sample.rs"), NONE, NONE, SOLID_AND_HAND, Click::Address("vscode://file{work}/src/sample.rs") ; "vscode address"))]
+#[cfg_attr(unix, test_case(Text::Plain("vscodium://file{work}/src/sample.rs"), NONE, NONE, SOLID_AND_HAND, Click::Address("vscodium://file{work}/src/sample.rs") ; "vscodium address"))]
 #[cfg_attr(unix, test_case(Text::Plain("ssh://example.com"), NONE, NONE, NONE, Click::Nothing ; "another scheme"))]
 #[cfg_attr(unix, test_case(Text::Plain("example.com/something/"), NONE, NONE, NONE, Click::Nothing ; "address with no scheme"))]
 fn link(text: Text, rest: Look, hover: Look, cmd_hover: Look, cmd_click: Click) {

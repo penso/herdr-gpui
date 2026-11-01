@@ -53,6 +53,7 @@ fn only_mail_and_editor_addresses_open_without_asking() {
     for (url, trusted) in [
         ("mailto:name@example.com", true),
         ("vscode://file/tmp", true),
+        ("vscodium://file/tmp", true),
         ("ssh://example.com", false),
         ("tel:+15550100", false),
         ("javascript:alert(1)", false),

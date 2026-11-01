@@ -4,8 +4,9 @@
 //! answer, and starts it again with backoff whenever it stops. The UI thread
 //! only reads its state and asks it to stop, never waiting for it.
 //!
-//! A supervisor exists only once the user accepted VS Code's server license
-//! in the app, since the child is started with `--accept-server-license-terms`.
+//! A supervisor for VS Code exists only once the user accepted its server
+//! license in the app, since the child is started with
+//! `--accept-server-license-terms`. VSCodium's server has no license.
 use super::{Error, Server, token::Token};
 use crate::browser::WebUrl;
 use std::{
@@ -347,7 +348,10 @@ impl Drop for Supervisor {
     }
 }
 
-/// `code serve-web` on the loopback port, with the token file.
+/// `code serve-web` on the loopback port, with the token file. VSCodium's
+/// `codium-tunnel` takes the same arguments; its server has no license, so
+/// accepting the terms asks it nothing, and a plan for VS Code exists only
+/// once the user accepted them.
 pub(super) fn serve_web(plan: &Plan, port: NonZeroU16) -> Command {
     let mut command = herdr_client::new_command(&plan.program);
     command

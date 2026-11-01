@@ -3,7 +3,7 @@
 use super::*;
 use crate::{
     code_server::{
-        Launcher, Server,
+        Install, Launcher, Server, VS_CODE,
         launcher::Cli,
         supervisor::{Address, Report, Status},
     },
@@ -27,7 +27,10 @@ fn refuses_token(_: &WebUrl) -> crate::Result<Server> {
 fn found(cx: &mut gpui::TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     let (view, cx) = window(cx);
     cx.update(|_, cx| {
-        Launcher::fixture(cx, Cli::Found("/Applications/code-tunnel".into()));
+        Launcher::fixture(
+            cx,
+            Cli::Found(Install::new(&VS_CODE, "/Applications/code-tunnel")),
+        );
         view.update(cx, |view, _| {
             view.browser.code_server.probe = refuses_token;
             view.browser.code_server.started_probe = answers;
