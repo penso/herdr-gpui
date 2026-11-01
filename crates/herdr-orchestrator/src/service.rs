@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use herdr_client::ConnectTarget;
 use herdr_github::Tokens;
 use herdr_remote::teleport::{AgentKind, Host};
-use sources::{recognize, statuses};
+use sources::{recognize, replaced_by, statuses};
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
@@ -661,7 +661,8 @@ impl Worker {
         self.data_version = Some(store.data_version()?);
         let mut items = store.items()?;
         if !self.uncached.is_empty() {
-            items.retain(|item| !self.uncached.contains_key(&item.key.source));
+            let replaced = replaced_by(&self.uncached);
+            items.retain(|item| !replaced.contains(&item.key.source));
             items.extend(self.uncached.values().flatten().cloned());
         }
         self.snapshot.items = Arc::new(items);
