@@ -3,6 +3,7 @@ use crate::catalog::Catalog;
 
 mod key_lines;
 mod planning;
+mod profiles;
 mod replies;
 mod state_file;
 

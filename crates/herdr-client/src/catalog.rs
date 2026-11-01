@@ -69,9 +69,10 @@ fn store_host(path: &Path, host: &SavedHost) -> Result<SavedHost> {
     Ok(host.clone())
 }
 
-/// Append each of `hosts` that no profile has the ID or target of yet, as
-/// many as the catalog has room for, and return how many were added. The
-/// rest of the catalog, its selection included, is kept as it is.
+/// Append each of `hosts` that no profile has the ID, or the target and
+/// session, of yet, as many as the catalog has room for in profiles and
+/// bytes, and return how many were added. The rest of the catalog, its
+/// selection included, is kept as it is.
 pub(crate) fn add_hosts(path: &Path, hosts: &[SavedHost]) -> Result<usize> {
     let _guard = WRITER.lock().unwrap_or_else(|error| error.into_inner());
     let mut catalog = load_catalog(path)?;
@@ -80,15 +81,22 @@ pub(crate) fn add_hosts(path: &Path, hosts: &[SavedHost]) -> Result<usize> {
         if catalog.ssh.len() >= MAX_HOSTS {
             break;
         }
-        if catalog
-            .ssh
-            .iter()
-            .any(|saved| saved.id == host.id || saved.target == host.target)
-        {
+        if catalog.ssh.iter().any(|saved| {
+            saved.id == host.id || (saved.target == host.target && saved.session == host.session)
+        }) {
             continue;
         }
         catalog.ssh.push(host.clone());
-        added += 1;
+        match encode_catalog(&catalog) {
+            Ok(_) => added += 1,
+            Err(Error::CatalogLimit) => {
+                catalog.ssh.pop();
+                break;
+            }
+            Err(error) => {
+                return Err(Error::storage(StorageOperation::Validate, path, error));
+            }
+        }
     }
     if added > 0 {
         write_catalog(path, &catalog)?;

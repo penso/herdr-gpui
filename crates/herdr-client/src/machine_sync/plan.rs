@@ -1,13 +1,14 @@
 //! What one sync changes, worked out from what every machine reported before
 //! anything is written. Pure, so every rule is tested without SSH.
 //!
-//! Catalogs only grow: a machine missing from one is appended, and nothing a
-//! machine already lists is changed or removed. A machine is the same one in
-//! two catalogs when they share its profile ID or its exact target.
+//! Catalogs only grow: a profile missing from one is appended, and nothing a
+//! machine already lists is changed or removed. A profile is the same one in
+//! two catalogs when they share its ID, or its exact target and session: one
+//! machine may be saved once per Herdr session on it.
 use super::{SyncState, keys::PublicKey, remote::Collected};
 use crate::{
     SavedHost,
-    catalog::{MAX_HOSTS, encode_catalog},
+    catalog::{Catalog, MAX_HOSTS, encode_catalog},
 };
 
 /// A saved device of this machine that takes part, and what it reported, or
@@ -17,8 +18,8 @@ pub(crate) struct Member<'a> {
     pub(crate) collected: Option<&'a Collected>,
 }
 
-/// One machine of the list, under every profile ID it is known by.
-struct Machine {
+/// One saved profile of the list, under every ID it is known by.
+struct Profile {
     /// The ID other catalogs get first, then the machine's own.
     ids: Vec<String>,
     label: String,
@@ -26,7 +27,7 @@ struct Machine {
     session: String,
 }
 
-impl Machine {
+impl Profile {
     fn of(host: &SavedHost) -> Self {
         Self {
             ids: vec![host.id.clone()],
@@ -37,6 +38,12 @@ impl Machine {
     }
 
     fn matches(&self, host: &SavedHost) -> bool {
+        self.ids.contains(&host.id) || same_profile(&self.target, &self.session, host)
+    }
+
+    /// Whether `host` is this profile's machine, under any session. Leaving a
+    /// machine out leaves out every profile on it.
+    fn same_machine(&self, host: &SavedHost) -> bool {
         self.ids.contains(&host.id) || self.target == host.target
     }
 
@@ -51,14 +58,34 @@ impl Machine {
     }
 }
 
+/// Whether `host` is saved for exactly `target` and `session`.
+fn same_profile(target: &str, session: &str, host: &SavedHost) -> bool {
+    host.target == target && host.session == session
+}
+
+/// Appends `host` unless the catalog would pass its byte limit, which a
+/// catalog of long targets can reach before [`MAX_HOSTS`]. Returns whether
+/// it was added.
+fn push_within_limit(catalog: &mut Catalog, host: SavedHost) -> super::Result<bool> {
+    catalog.ssh.push(host);
+    match encode_catalog(catalog) {
+        Ok(_) => Ok(true),
+        Err(crate::Error::CatalogLimit) => {
+            catalog.ssh.pop();
+            Ok(false)
+        }
+        Err(error) => Err(super::Error::Catalog(Box::new(error))),
+    }
+}
+
 /// What to write on one member.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct MemberWrite {
     /// `authorized_keys` lines of every other machine's key.
     pub(crate) keys: Vec<String>,
-    /// The catalog with the machines it lacked, or `None` when it lacks none.
+    /// The catalog with the profiles it lacked, or `None` when it lacks none.
     pub(crate) catalog: Option<Vec<u8>>,
-    /// How many machines `catalog` adds.
+    /// How many profiles `catalog` adds.
     pub(crate) devices: usize,
     /// The sync state to give the member when it has none, so it keeps the
     /// list in step from then on too.
@@ -84,20 +111,20 @@ pub(crate) fn plan(
     members: &[Member],
 ) -> super::Result<Plan> {
     // This machine first, then one machine per member, in member order.
-    let mut machines = vec![Machine {
+    let mut profiles = vec![Profile {
         ids: vec![state.id.clone()],
         label: state.label.clone(),
         target: state.target.clone(),
         session: "default".to_owned(),
     }];
     for member in members {
-        let mut machine = Machine::of(member.host);
+        let mut profile = Profile::of(member.host);
         if let Some(own) = member.collected.and_then(|c| c.state.as_ref())
             && own.id != member.host.id
         {
-            machine.ids.push(own.id.clone());
+            profile.ids.push(own.id.clone());
         }
-        machines.push(machine);
+        profiles.push(profile);
     }
     let mut learned = Vec::new();
     for collected in members.iter().filter_map(|member| member.collected) {
@@ -108,15 +135,14 @@ pub(crate) fn plan(
                 .is_some_and(|state| state.excluded.contains(&host.id))
         };
         for host in &collected.catalog.ssh {
-            let known = local
-                .iter()
-                .any(|saved| saved.id == host.id || saved.target == host.target)
-                || machines.iter().any(|machine| machine.matches(host));
+            let known = local.iter().any(|saved| {
+                saved.id == host.id || same_profile(&saved.target, &saved.session, host)
+            }) || profiles.iter().any(|profile| profile.matches(host));
             if !host.enabled || excluded(host) || known {
                 continue;
             }
             learned.push(host.clone());
-            machines.push(Machine::of(host));
+            profiles.push(Profile::of(host));
         }
     }
     let mut writes = Vec::with_capacity(members.len());
@@ -125,44 +151,51 @@ pub(crate) fn plan(
             writes.push(None);
             continue;
         };
-        // The member's own machine is never listed or authorized on itself.
-        let itself = index + 1;
+        // The member's own machine is never listed or authorized on itself,
+        // under any session.
+        let itself = |position: usize, profile: &Profile| {
+            position == index + 1 || profile.target == member.host.target
+        };
         // The member may know a machine under its own ID, matched by target,
         // and leave it out under that ID.
-        let excluded = |machine: &Machine| {
-            collected.state.as_ref().is_some_and(|state| {
-                machine
-                    .ids
-                    .iter()
-                    .any(|id| state.excluded.contains(id.as_str()))
-                    || collected
-                        .catalog
-                        .ssh
+        let excluded =
+            |profile: &Profile| {
+                collected.state.as_ref().is_some_and(|state| {
+                    profile
+                        .ids
                         .iter()
-                        .any(|host| machine.matches(host) && state.excluded.contains(&host.id))
-            })
-        };
+                        .any(|id| state.excluded.contains(id.as_str()))
+                        || collected.catalog.ssh.iter().any(|host| {
+                            profile.same_machine(host) && state.excluded.contains(&host.id)
+                        })
+                })
+            };
         let mut catalog = collected.catalog.clone();
         let mut devices = 0;
-        for (position, machine) in machines.iter().enumerate() {
-            if position == itself || excluded(machine) || catalog.ssh.len() >= MAX_HOSTS {
+        for (position, profile) in profiles.iter().enumerate() {
+            if catalog.ssh.len() >= MAX_HOSTS {
+                break;
+            }
+            if itself(position, profile)
+                || excluded(profile)
+                || catalog.ssh.iter().any(|host| profile.matches(host))
+            {
                 continue;
             }
-            if catalog.ssh.iter().any(|host| machine.matches(host)) {
-                continue;
+            if !push_within_limit(&mut catalog, profile.host())? {
+                break;
             }
-            catalog.ssh.push(machine.host());
             devices += 1;
         }
         let mut keys = Vec::new();
-        if !excluded(&machines[0]) {
+        if !excluded(&profiles[0]) {
             keys.push(own_key.line(&state.label));
         }
         for (other, member) in members.iter().enumerate() {
             let Some(key) = member.collected.map(|c| &c.key) else {
                 continue;
             };
-            if other == index || excluded(&machines[other + 1]) || key == &collected.key {
+            if other == index || excluded(&profiles[other + 1]) || key == &collected.key {
                 continue;
             }
             keys.push(key.line(&member.host.label));
