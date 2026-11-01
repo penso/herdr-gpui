@@ -497,7 +497,7 @@ mod linux {
 mod windows;
 
 #[cfg(target_os = "macos")]
-pub(super) mod macos;
+pub(crate) mod macos;
 
 #[cfg(all(test, target_os = "macos"))]
 mod pasteboard_tests;

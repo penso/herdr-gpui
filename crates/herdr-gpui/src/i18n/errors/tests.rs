@@ -9,6 +9,7 @@ mod automations;
 mod backdrop;
 mod caffeine;
 mod chat;
+mod chat_protocol;
 mod client;
 mod clipboard;
 #[cfg(feature = "cloud")]
