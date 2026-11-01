@@ -183,7 +183,7 @@ impl Supervisor {
         }
         let via = match &supervisor.health {
             Health::Running(status) if !status.computer.is_empty() => status.computer.clone(),
-            _ => "This computer".to_owned(),
+            _ => "This computer".to_owned(), // i18n: data
         };
         for pairing in incoming.pairings {
             let key = (pairing.device.clone(), pairing.host.clone());
