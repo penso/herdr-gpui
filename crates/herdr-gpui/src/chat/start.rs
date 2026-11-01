@@ -328,7 +328,7 @@ impl HerdrWindow {
             );
         }
         let request = starting.request.clone();
-        let Some(result) = self.take_script_response(&request) else {
+        let Some(result) = self.take_answer(crate::state::Answer::Script, &request) else {
             return;
         };
         let Some(starting) = self.chats.starting.take() else {

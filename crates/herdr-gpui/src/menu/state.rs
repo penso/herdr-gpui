@@ -159,6 +159,8 @@ pub(crate) struct MenuState {
     pub(crate) worktree: Option<super::WorktreeSource>,
     /// The host a new worktree or workspace goes to, when another one could.
     pub(crate) dispatch: Option<crate::dispatch::Picker>,
+    /// What a new worktree's first pane shows, when its host can start agents.
+    pub(crate) landing: Option<crate::worktree_landing::Picker>,
     pub(crate) pr: crate::pull_request::Lookup,
     /// Also read by the sidebar, which paints each worktree's cached PR badge.
     pub(crate) pr_cache: crate::pull_request::Cache,
@@ -435,6 +437,7 @@ impl MenuState {
             pane: None,
             worktree: None,
             dispatch: None,
+            landing: None,
         }
     }
 
@@ -510,6 +513,7 @@ impl MenuState {
         self.close = None;
         self.worktree = None;
         self.dispatch = None;
+        self.landing = None;
         self.pr.clear();
         self.pr_connection = None;
     }
