@@ -231,6 +231,9 @@ pub struct Listing {
     /// The canonical keys of the pull requests the token's owner created,
     /// matched by identity id rather than by the name rows show.
     pub authored: HashSet<String>,
+    /// Each active pull request's review verdict, by repository and number,
+    /// as the shared status map keys them. Never stored.
+    pub statuses: HashMap<(String, u64), super::PrStatus>,
 }
 
 /// The reply of `GET {organization}/_apis/connectionData`.
@@ -287,9 +290,14 @@ pub fn list_pull_requests(
 ) -> super::Result<Listing> {
     let started = Utc::now();
     let repository = Repository::of(source)?;
-    let mut creators = HashMap::new();
-    let (mut items, complete) = pull_requests(source, &repository, &mut creators, fetch)?;
-    let settled = settled(source, &repository, &mut creators, fetch)?;
+    let mut noted = Noted::default();
+    let (mut items, complete) = pull_requests(source, &repository, &mut noted, fetch)?;
+    let settled = settled(source, &repository, &mut noted, fetch)?;
+    let Noted { creators, statuses } = noted;
+    let statuses = statuses
+        .into_iter()
+        .map(|(number, status)| ((source.repository.clone(), number), status))
+        .collect();
     let later: HashSet<String> = settled
         .iter()
         .map(|item| item.key.native_id.clone())
@@ -324,6 +332,7 @@ pub fn list_pull_requests(
         complete,
         viewer,
         authored,
+        statuses,
     })
 }
 
@@ -333,7 +342,7 @@ pub fn list_pull_requests(
 fn settled(
     source: &SourceKey,
     repository: &Repository<'_>,
-    creators: &mut HashMap<u64, String>,
+    noted: &mut Noted,
     fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
 ) -> super::Result<Vec<Item>> {
     let web = repository.repository_web()?;
@@ -347,7 +356,7 @@ fn settled(
         items.extend(
             page.value
                 .into_iter()
-                .inspect(|node| note_creator(creators, node))
+                .inspect(|node| noted.note(node))
                 .map(|node| node.into_item(source, &web)),
         );
     }
@@ -385,7 +394,7 @@ pub fn reader(
 fn pull_requests(
     source: &SourceKey,
     repository: &Repository<'_>,
-    creators: &mut HashMap<u64, String>,
+    noted: &mut Noted,
     fetch: &mut impl FnMut(Call) -> super::Result<Vec<u8>>,
 ) -> super::Result<(Vec<Item>, bool)> {
     let web = repository.repository_web()?;
@@ -402,7 +411,7 @@ fn pull_requests(
             page.value
                 .into_iter()
                 .filter(|node| seen.insert(node.id()))
-                .inspect(|node| note_creator(creators, node))
+                .inspect(|node| noted.note(node))
                 .map(|node| node.into_item(source, &web)),
         );
         if !more {
@@ -442,10 +451,24 @@ fn work_items(
     Ok((items, complete))
 }
 
-/// Records who created `node`, by identity id, when the listing says.
-fn note_creator(creators: &mut HashMap<u64, String>, node: &pull_request::PullRequestNode) {
-    if let Some(id) = node.creator() {
-        creators.insert(node.id(), id.to_owned());
+/// What a listing learns of each pull request beyond its item, by id: who
+/// created it, by identity id, and where an active one's reviews stand.
+#[derive(Default)]
+struct Noted {
+    creators: HashMap<u64, String>,
+    statuses: HashMap<u64, super::PrStatus>,
+}
+
+impl Noted {
+    fn note(&mut self, node: &pull_request::PullRequestNode) {
+        if let Some(id) = node.creator() {
+            self.creators.insert(node.id(), id.to_owned());
+        }
+        // A pull request settled since it was read active has none.
+        match node.status() {
+            Some(status) => self.statuses.insert(node.id(), status),
+            None => self.statuses.remove(&node.id()),
+        };
     }
 }
 

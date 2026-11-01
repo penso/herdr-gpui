@@ -328,3 +328,62 @@ fn the_readers_own_are_matched_by_identity_not_by_their_shared_name() {
     let authored: Vec<&String> = listing.authored.iter().collect();
     assert_eq!(authored, [&listing.items[0].key.canonical()]);
 }
+
+#[test]
+fn reviewer_votes_add_up_to_one_verdict() {
+    use crate::azure::pull_request::review;
+    // (vote, required)
+    let cases: [(&[(i64, bool)], Review); 9] = [
+        (&[], Review::Required),
+        (&[(0, true)], Review::Required),
+        (&[(10, false), (-10, false)], Review::Rejected),
+        (&[(10, true), (-5, false)], Review::WaitingForAuthor),
+        (&[(10, true), (0, true)], Review::Required),
+        (&[(10, true), (0, false)], Review::Approved),
+        (&[(5, true), (10, true)], Review::ApprovedWithSuggestions),
+        (&[(0, false), (10, false)], Review::Approved),
+        (&[(5, false)], Review::ApprovedWithSuggestions),
+    ];
+    for (votes, verdict) in cases {
+        assert_eq!(review(votes.iter().copied()), verdict, "{votes:?}");
+    }
+}
+
+#[test]
+fn a_listing_reads_active_pull_requests_review_verdicts() {
+    let reviewers = |votes: Value| json!({ "reviewers": votes });
+    let (mut fetch, _) = replies(vec![
+        json!({ "value": [
+            pull_request(1, reviewers(json!([
+                { "vote": 10, "isRequired": true, "displayName": "Dev Two" },
+                { "vote": 5, "displayName": "Dev Three" },
+            ]))),
+            pull_request(2, reviewers(json!([{ "vote": -5, "uniqueName": "dev@example.test" }]))),
+            pull_request(3, json!({})),
+        ] }),
+        json!({ "value": [pull_request(4, json!({ "status": "completed" }))] }),
+        json!({ "value": [] }),
+        reader(),
+    ]);
+    let listing = azure::list_pull_requests(
+        &SourceKey {
+            provider: Provider::Azure,
+            host: "dev.azure.com".into(),
+            repository: "contoso/Fabrikam/web".into(),
+        },
+        None,
+        &mut fetch,
+    )
+    .unwrap();
+    let verdict = |number: u64| {
+        listing
+            .statuses
+            .get(&("contoso/Fabrikam/web".to_owned(), number))
+            .and_then(|status| status.review)
+    };
+    assert_eq!(verdict(1), Some(Review::ApprovedWithSuggestions));
+    assert_eq!(verdict(2), Some(Review::WaitingForAuthor));
+    assert_eq!(verdict(3), Some(Review::Required));
+    // A merged one has no review to wait on.
+    assert_eq!(verdict(4), None);
+}

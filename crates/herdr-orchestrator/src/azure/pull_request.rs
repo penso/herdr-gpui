@@ -33,6 +33,19 @@ pub struct PullRequestNode {
     labels: Vec<Label>,
     /// Named in an organization-wide listing, which mixes repositories.
     repository: Option<RepositoryRef>,
+    #[serde(default)]
+    reviewers: Vec<Reviewer>,
+}
+
+/// One reviewer's vote: 10 approved, 5 approved with suggestions, 0 none,
+/// -5 waiting for the author, -10 rejected.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Reviewer {
+    #[serde(default)]
+    vote: i64,
+    #[serde(default)]
+    is_required: bool,
 }
 
 #[derive(Deserialize)]
@@ -68,6 +81,25 @@ fn branch(name: String) -> String {
 impl PullRequestNode {
     pub fn id(&self) -> u64 {
         self.pull_request_id
+    }
+
+    /// Where an active pull request's reviews stand, from its reviewers'
+    /// votes: any rejection rejects it, else any wait waits for the author;
+    /// else it is approved once every required reviewer approved (or, with
+    /// none required, anyone did), with suggestions when a vote said so;
+    /// else it needs review. Settled pull requests have none.
+    pub fn status(&self) -> Option<crate::PrStatus> {
+        if self.status != "active" {
+            return None;
+        }
+        Some(crate::PrStatus {
+            review: Some(review(
+                self.reviewers
+                    .iter()
+                    .map(|reviewer| (reviewer.vote, reviewer.is_required)),
+            )),
+            ..crate::PrStatus::default()
+        })
     }
 
     /// Who created it, by identity id, when the listing says.
@@ -149,5 +181,35 @@ impl PullRequestNode {
             }),
             activity: None,
         }
+    }
+}
+
+/// The verdict of reviewers' `(vote, required)` pairs; see
+/// [`PullRequestNode::status`].
+pub fn review(votes: impl IntoIterator<Item = (i64, bool)>) -> crate::Review {
+    use crate::Review;
+    let votes: Vec<(i64, bool)> = votes.into_iter().collect();
+    if votes.iter().any(|(vote, _)| *vote <= -10) {
+        return Review::Rejected;
+    }
+    if votes.iter().any(|(vote, _)| *vote < 0) {
+        return Review::WaitingForAuthor;
+    }
+    let required: Vec<i64> = votes
+        .iter()
+        .filter(|(_, required)| *required)
+        .map(|(vote, _)| *vote)
+        .collect();
+    let approved = if required.is_empty() {
+        votes.iter().any(|(vote, _)| *vote >= 5)
+    } else {
+        required.iter().all(|vote| *vote >= 5)
+    };
+    if !approved {
+        Review::Required
+    } else if votes.iter().any(|(vote, _)| *vote == 5) {
+        Review::ApprovedWithSuggestions
+    } else {
+        Review::Approved
     }
 }

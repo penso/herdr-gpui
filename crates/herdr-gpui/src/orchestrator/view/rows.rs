@@ -511,11 +511,16 @@ impl Next {
         {
             Self::Review
         } else if mine
-            && (review == Some(Review::ChangesRequested) || checks == Some(CheckState::Failed))
+            && (matches!(
+                review,
+                Some(Review::ChangesRequested | Review::WaitingForAuthor | Review::Rejected)
+            ) || checks == Some(CheckState::Failed))
         {
             Self::Fix
-        } else if review == Some(Review::Approved)
-            && !matches!(checks, Some(CheckState::Failed | CheckState::Pending))
+        } else if matches!(
+            review,
+            Some(Review::Approved | Review::ApprovedWithSuggestions)
+        ) && !matches!(checks, Some(CheckState::Failed | CheckState::Pending))
             && item.state == "open"
         {
             Self::Merge
@@ -553,7 +558,13 @@ pub(crate) fn status_of<'a>(
     item: &Item,
     statuses: &'a HashMap<(String, u64), PrStatus>,
 ) -> Option<&'a PrStatus> {
-    let number = item.github_pull_request()?.number;
+    // GitHub's are read and stored; Azure DevOps's come from its listing,
+    // whose repositories have three parts. A GitLab path may equal a GitHub
+    // one, so it never borrows GitHub's.
+    let number = match item.key.source.provider {
+        Provider::Github | Provider::Azure => item.pull_request.as_ref()?.number,
+        Provider::Gitlab | Provider::Beads => return None,
+    };
     statuses.get(&(item.key.source.repository.clone(), number))
 }
 

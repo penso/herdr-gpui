@@ -29,6 +29,16 @@ impl Worker {
         authored.retain(|item| !item.starts_with(&prefix));
         authored.extend(listing.authored.iter().cloned());
         self.snapshot.authored = std::sync::Arc::new(authored);
+        // Its review verdicts, beside other sources' statuses.
+        let mut statuses = (*self.snapshot.pr_status).clone();
+        statuses.retain(|(repository, _), _| *repository != key.repository);
+        statuses.extend(
+            listing
+                .statuses
+                .iter()
+                .map(|(at, status)| (at.clone(), status.clone())),
+        );
+        self.snapshot.pr_status = std::sync::Arc::new(statuses);
         if !listing.complete || !writable {
             self.uncached.insert(key.clone(), listing.items);
             return Ok(if listing.complete {

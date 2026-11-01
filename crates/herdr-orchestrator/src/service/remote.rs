@@ -15,7 +15,7 @@ use crate::{
 };
 use chrono::Utc;
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -126,6 +126,8 @@ pub struct Read {
     pub viewer: Option<String>,
     /// The reader's own, by identity id rather than by name.
     pub authored: HashSet<String>,
+    /// Active pull requests' review verdicts, by repository and number.
+    pub statuses: HashMap<(String, u64), crate::PrStatus>,
     pub catalog: Option<azure::organization::Catalog>,
 }
 
@@ -146,6 +148,7 @@ pub fn read(
             let authored = mine.items.iter().map(|item| item.key.canonical()).collect();
             Ok(Read {
                 authored,
+                statuses: mine.statuses,
                 items: mine.items,
                 complete: mine.complete,
                 viewer: mine.viewer,
@@ -159,6 +162,7 @@ pub fn read(
                 complete: listing.complete,
                 viewer: listing.viewer,
                 authored: listing.authored,
+                statuses: listing.statuses,
                 catalog: None,
             })
         }
@@ -173,6 +177,7 @@ pub fn apply(snapshot: &mut Snapshot, read: Read) {
         snapshot.viewer = read.viewer;
     }
     snapshot.authored = Arc::new(read.authored);
+    snapshot.pr_status = Arc::new(read.statuses);
     if let Some(catalog) = read.catalog {
         snapshot.catalog = Some(Arc::new(catalog));
     }

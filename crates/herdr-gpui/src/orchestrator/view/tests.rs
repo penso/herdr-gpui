@@ -21,6 +21,7 @@ mod non_projects;
 mod outside_git;
 mod pills;
 mod pr_empty;
+mod pr_status;
 mod refresh;
 mod row_start;
 mod rows;

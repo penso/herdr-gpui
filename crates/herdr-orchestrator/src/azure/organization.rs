@@ -131,6 +131,8 @@ pub struct Mine {
     pub complete: bool,
     /// The reader's display name, which their pull requests carry.
     pub viewer: Option<String>,
+    /// Each active one's review verdict, by repository and number.
+    pub statuses: std::collections::HashMap<(String, u64), crate::PrStatus>,
 }
 
 /// Lists every pull request the token's owner created in `organization`, in
@@ -146,6 +148,7 @@ pub fn mine(
     };
     let mut items = Vec::new();
     let mut seen = HashSet::new();
+    let mut statuses = std::collections::HashMap::new();
     let mut skip = 0;
     loop {
         let page: pull_request::Page =
@@ -160,6 +163,9 @@ pub fn mine(
             if !seen.insert((source.repository.clone(), node.id())) {
                 continue;
             }
+            if let Some(status) = node.status() {
+                statuses.insert((source.repository.clone(), node.id()), status);
+            }
             let web = Repository::of(&source)?.repository_web()?;
             items.push(node.into_item(&source, &web));
         }
@@ -170,6 +176,7 @@ pub fn mine(
                 items,
                 complete,
                 viewer: reader.name,
+                statuses,
             });
         }
     }
