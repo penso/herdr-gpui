@@ -805,6 +805,7 @@ impl HerdrWindow {
             return;
         }
         if action == WorkspaceAction::NewWorktree {
+            self.menu.landing = self.open_landing(cx);
             self.open_worktree_source(window, cx);
             cx.notify();
             return;
