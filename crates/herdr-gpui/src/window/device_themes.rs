@@ -242,7 +242,10 @@ impl HerdrWindow {
                         if pinned.is_some() {
                             this.device_themes.pinned = None;
                         }
-                        this.local_error = Some(fl!("window-device-themes-save-failed", error = error.localize()));
+                        this.local_error = Some(fl!(
+                            "window-device-themes-save-failed",
+                            error = error.localize()
+                        ));
                     }
                 }
                 cx.notify();

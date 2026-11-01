@@ -292,7 +292,9 @@ impl HerdrWindow {
     ) {
         bring_forward(window, cx);
         // An earlier link's complaint no longer applies.
-        let complaint = cx.try_global::<Complaint>().and_then(|shown| shown.0.as_ref());
+        let complaint = cx
+            .try_global::<Complaint>()
+            .and_then(|shown| shown.0.as_ref());
         if complaint.is_some() && self.local_error.as_ref() == complaint {
             self.local_error = None;
         }

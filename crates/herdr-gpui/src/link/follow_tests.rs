@@ -98,10 +98,7 @@ fn a_refused_link_answers_the_command_line_in_english() {
         other => panic!("not an error: {other:?}"),
     };
     crate::i18n::leak_tests::under_en_xa("link refusals in English", |_, _| {
-        assert_eq!(
-            message(Refusal::NoDevice("nas".into())),
-            "No device nas"
-        );
+        assert_eq!(message(Refusal::NoDevice("nas".into())), "No device nas");
         assert_eq!(
             REFUSALS.map(message),
             [
@@ -121,7 +118,10 @@ fn a_refused_link_tells_the_window_in_messages() {
     crate::i18n::leak_tests::under_en_xa("link refusals en-XA leak", |_, _| {
         for refusal in REFUSALS {
             let shown = crate::i18n::fl!("link-open-failed", reason = refusal.shown());
-            assert!(herdr_i18n::pseudo::is_marked(&shown), "{refusal:?}: {shown}");
+            assert!(
+                herdr_i18n::pseudo::is_marked(&shown),
+                "{refusal:?}: {shown}"
+            );
         }
         assert!(herdr_i18n::pseudo::is_marked(&crate::i18n::fl!(
             "link-open-dialog-first"

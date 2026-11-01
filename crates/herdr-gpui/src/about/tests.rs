@@ -7,7 +7,7 @@ mod en_xa;
 /// The visible copyright must not drift from the repository's NOTICE.
 #[test]
 fn copyright_tracks_the_repository_notice() {
-    let notice = include_str!("../../../NOTICE");
+    let notice = include_str!("../../../../NOTICE");
     let holder = notice
         .lines()
         .find_map(|line| line.strip_prefix("Copyright "))
