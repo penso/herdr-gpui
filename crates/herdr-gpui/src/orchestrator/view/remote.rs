@@ -12,7 +12,7 @@ use crate::orchestrator::{Provider, RemoteScope, SourceKey, azure::organization:
 use std::sync::Arc;
 
 /// The most organizations a view reads its reader's pull requests from.
-const MAX_ORGANIZATIONS: usize = 8;
+pub(super) const MAX_ORGANIZATIONS: usize = 8;
 /// The most repositories a view lists without a checkout.
 pub(super) const MAX_BROWSED: usize = 16;
 
@@ -55,13 +55,25 @@ impl OrchestratorView {
     /// that is briefly unreadable does not drop what was browsed.
     pub(super) fn sync_remotes(&mut self) -> bool {
         let mut added = false;
+        // Organizations are kept for the session, so those already read count
+        // toward the cap, whether or not a checkout still names them.
+        let mut running = self
+            .repos
+            .iter()
+            .filter(|repo| matches!(repo.remote, Some(RemoteScope::Mine { .. })))
+            .count();
         for organization in self.known_organizations() {
             let scope = RemoteScope::Mine { organization };
             let key = remote_key(&scope);
-            if !self.repos.iter().any(|repo| repo.key == key) {
-                self.repos.push(Repo::start_remote(scope));
-                added = true;
+            if self.repos.iter().any(|repo| repo.key == key) {
+                continue;
             }
+            if running >= MAX_ORGANIZATIONS {
+                break;
+            }
+            self.repos.push(Repo::start_remote(scope));
+            running += 1;
+            added = true;
         }
         if added {
             self.refresh_rows();

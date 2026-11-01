@@ -328,3 +328,48 @@ fn azure_mine_keeps_the_readers_own_and_not_a_namesakes(cx: &mut TestAppContext)
     });
     assert_eq!(listed(&view, cx), ["contoso/Fabrikam/web!1"]);
 }
+
+#[gpui::test]
+fn organizations_kept_for_the_session_count_toward_the_cap(cx: &mut TestAppContext) {
+    use crate::orchestrator::view::{remote::MAX_ORGANIZATIONS, repo::Repo};
+    let dir = tempfile::tempdir().unwrap();
+    let request = Request {
+        target: herdr_client::ConnectTarget::Local,
+        checkout: dir.path().join("web").to_string_lossy().into_owned(),
+        workspace_id: "w1".into(),
+        token: None,
+        data_root: Some(dir.path().join("data")),
+        gitlab_store: Default::default(),
+        timing: Timing::default(),
+    };
+    let config = crate::config::Config::default();
+    let look = Look {
+        theme: crate::config::Theme::default(),
+        ui: config.ui.clone(),
+        mono: config.terminal.clone(),
+    };
+    let (view, cx) = cx.add_window_view(|_, cx| OrchestratorView::with_repo(request, look, cx));
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            // Organizations read earlier, whose checkouts have since closed.
+            for index in 0..MAX_ORGANIZATIONS {
+                view.repos.push(Repo::start_remote(RemoteScope::Mine {
+                    organization: format!("contoso-{index}"),
+                }));
+            }
+            view.repo_mut().snapshot.repo = Some(RepoInfo {
+                repository: crate::orchestrator::Repository::Local(dir.path().join(".git")),
+                main_root: dir.path().to_string_lossy().into_owned(),
+                beads: false,
+                remote: Some(Remote {
+                    name: "origin".into(),
+                    url: "https://dev.azure.com/fabrikam/Tools/_git/cli".into(),
+                    source: azure("fabrikam/Tools/cli"),
+                }),
+            });
+            assert!(!view.sync_remotes());
+            assert!(!view.repo_keys().iter().any(|key| key.ends_with("fabrikam")));
+            assert_eq!(view.repos.len(), MAX_ORGANIZATIONS + 1);
+        })
+    });
+}
