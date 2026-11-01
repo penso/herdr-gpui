@@ -1,5 +1,5 @@
 //! The `en-XA` leak test for the find bar and copy mode: the bar's field,
-//! its count, and copy mode's corner label draw only messages, apart from
+//! its count, a failed search, and copy mode's corner label draw only messages, apart from
 //! the query typed.
 use super::*;
 use crate::i18n::leak_tests::{assert_translated, draw, uncut, under_en_xa};
@@ -29,6 +29,16 @@ fn the_find_bar_and_copy_mode_draw_only_messages() {
 
         answer_none(&view, &mut peer, cx);
         assert_translated("No results", &uncut(recorder.take()), &["xy".to_owned()]);
+
+        // A search the client could not queue says why, in the shown language.
+        view.update(cx, |view, cx| {
+            if let Some(bar) = view.find.as_mut() {
+                bar.search.send_failed(&herdr_client::Error::Full);
+            }
+            cx.notify();
+        });
+        draw(cx);
+        assert_translated("Failed search", &uncut(recorder.take()), &["xy".to_owned()]);
 
         cx.simulate_keystrokes("escape");
         cx.update(|window, cx| view.update(cx, |view, cx| view.enter_copy_mode(window, cx)));

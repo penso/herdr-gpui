@@ -10,6 +10,7 @@
 pub(crate) mod memory;
 
 use crate::{
+    i18n::Localize,
     scrollback::{match_count, push_matches, refresh_from, viewport_top},
     terminal_painter::Highlight,
 };
@@ -223,7 +224,7 @@ impl Search {
     /// The search could not be queued; the step is dropped and said so.
     pub(crate) fn send_failed(&mut self, error: &herdr_client::Error) {
         self.queued = None;
-        self.error = Some(error.to_string());
+        self.error = Some(error.localize());
     }
 
     /// Applies the answer to `request`, returning the match to scroll into
@@ -255,7 +256,7 @@ impl Search {
             }
             Err(error) => {
                 if sent.query == self.query {
-                    self.error = Some(error.to_string());
+                    self.error = Some(error.localize());
                 }
                 return None;
             }
