@@ -150,7 +150,7 @@ impl HerdrWindow {
             }
             return;
         };
-        let Some(result) = self.take_script_response(&request) else {
+        let Some(result) = self.take_answer(crate::state::Answer::Script, &request) else {
             return;
         };
         let created = result
