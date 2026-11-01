@@ -17,13 +17,19 @@ fn reported(view: &crate::HerdrWindow) -> Vec<String> {
         .profile
         .as_ref()
         .map(|profile| format!("@{}", profile.login));
-    ["GitHub", "GitLab", "github.com/login/device", "ABCD-1234"]
-        .map(str::to_owned)
-        .into_iter()
-        .chain(auth.message.clone())
-        .chain(note)
-        .chain(login)
-        .collect()
+    [
+        "GitHub",
+        "GitLab",
+        "Azure DevOps",
+        "github.com/login/device",
+        "ABCD-1234",
+    ]
+    .map(str::to_owned)
+    .into_iter()
+    .chain(auth.message.clone())
+    .chain(note)
+    .chain(login)
+    .collect()
 }
 
 fn show(

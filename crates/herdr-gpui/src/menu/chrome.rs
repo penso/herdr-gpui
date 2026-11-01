@@ -519,6 +519,7 @@ impl HerdrWindow {
                         | Page::AppUpdate
                         | Page::GitHub
                         | Page::GitLab
+                        | Page::AzureDevOps
                         | Page::AddDevice
                         | Page::AddWsl
                         | Page::Usage(_)
@@ -569,14 +570,17 @@ impl HerdrWindow {
                         .min(px(crate::remote::MENU_WIDTH)))
                     .shadow_lg()
             })
-            .when(matches!(page, Page::GitHub | Page::GitLab), |panel| {
-                panel
-                    .w((viewport.width - px(32.)).max(px(0.)).min(px(400.)))
-                    .flex()
-                    .flex_col()
-                    .overflow_hidden()
-                    .shadow_lg()
-            })
+            .when(
+                matches!(page, Page::GitHub | Page::GitLab | Page::AzureDevOps),
+                |panel| {
+                    panel
+                        .w((viewport.width - px(32.)).max(px(0.)).min(px(400.)))
+                        .flex()
+                        .flex_col()
+                        .overflow_hidden()
+                        .shadow_lg()
+                },
+            )
             .when(
                 matches!(
                     page,
@@ -694,6 +698,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_github_auth(cx));
         } else if page == Page::GitLab {
             panel = panel.child(self.render_gitlab_page(cx));
+        } else if page == Page::AzureDevOps {
+            panel = panel.child(self.render_azure_page(cx));
         } else if page == Page::RemoteDevices {
             panel = panel.child(self.render_remote_menu(cx));
         } else if page == Page::Workspace {

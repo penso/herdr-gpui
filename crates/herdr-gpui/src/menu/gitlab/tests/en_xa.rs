@@ -30,6 +30,7 @@ fn reported() -> Vec<String> {
     cut([
         "GitHub",
         "GitLab",
+        "Azure DevOps",
         "gitlab.com",
         "gitlab.example.com",
         "@akanoa",

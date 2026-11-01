@@ -2,6 +2,11 @@ use super::*;
 use chrono::{DateTime, Utc};
 
 mod actions;
+mod azure;
+mod azure_account;
+// The private credential file these save to is Unix-only.
+#[cfg(unix)]
+mod azure_saved;
 mod beads;
 mod beads_only;
 #[cfg(unix)]

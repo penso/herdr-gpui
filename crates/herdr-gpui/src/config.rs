@@ -87,6 +87,7 @@ pub use fonts::symbol_fallbacks;
 pub use fonts::{FONT_SIZE_RANGE, FONT_SIZE_STEP, FontConfig};
 pub(crate) use github::MAX_ACCOUNTS;
 pub use github::{GitHubAccount, GitHubConfig};
+pub use herdr_orchestrator::azure::Config as AzureDevOpsConfig;
 pub use herdr_orchestrator::gitlab::Config as GitLabConfig;
 pub use herdr_remote::config::AzureConfig;
 #[cfg(feature = "azure")]
@@ -172,6 +173,8 @@ pub struct Config {
     pub agents_placement: AgentsPlacement,
     /// What shows behind the main window's terminals and chrome.
     pub azure: AzureConfig,
+    /// Where Azure DevOps tokens pasted in the account menu are saved.
+    pub azure_devops: AzureDevOpsConfig,
     pub backdrop: Backdrop,
     pub bell: BellConfig,
     pub boat: BoatConfig,
@@ -406,6 +409,7 @@ impl Default for Config {
             agent_skill: AgentSkillConfig::default(),
             agents_placement: AgentsPlacement::default(),
             azure: AzureConfig::default(),
+            azure_devops: AzureDevOpsConfig::default(),
             backdrop: Backdrop::default(),
             bell: BellConfig::default(),
             boat: BoatConfig::default(),
@@ -497,6 +501,7 @@ struct Settings {
     agent_skill: AgentSkillConfig,
     agents_placement: AgentsPlacement,
     azure: AzureConfig,
+    azure_devops: AzureDevOpsConfig,
     backdrop: Backdrop,
     bell: BellConfig,
     boat: BoatConfig,
@@ -816,6 +821,7 @@ impl Config {
         settings.github.client_id_with_override(None)?;
         settings.github.check_accounts()?;
         config.github = settings.github;
+        config.azure_devops = settings.azure_devops;
         config.gitlab = settings.gitlab;
         #[cfg(feature = "azure")]
         settings.azure.check()?;

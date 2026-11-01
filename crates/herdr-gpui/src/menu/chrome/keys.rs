@@ -228,6 +228,10 @@ impl HerdrWindow {
             self.gitlab_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::AzureDevOps) {
+            self.azure_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::Themes) {
             self.theme_picker_key(event, window, cx);
             return;

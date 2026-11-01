@@ -6,7 +6,7 @@
 use super::{
     Access, Error, HerdrSession, Item, Provider, Result, Run, SourceKey, Store,
     actions::{Action, Site},
-    beads, database_path, github, gitlab,
+    azure, beads, database_path, github, gitlab,
     location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use herdr_client::ConnectTarget;
 use herdr_github::Tokens;
 use herdr_remote::teleport::{AgentKind, Host};
-use sources::{recognize, statuses};
+use sources::{recognize, replaced_by, statuses};
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
@@ -30,6 +30,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod azure_source;
 mod gitlab_source;
 mod sources;
 
@@ -72,6 +73,8 @@ pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
             herdr_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
             _ => BACKOFF,
         },
+        Error::Azure(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Azure(_) => BACKOFF,
         Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
         Error::Gitlab(_) => BACKOFF,
         _ => return BACKOFF,
@@ -95,6 +98,8 @@ pub struct Request {
     /// The accounts GitHub is read with; each source uses the one that
     /// reads its repository's owner.
     pub token: Option<Tokens>,
+    /// Where Azure DevOps tokens pasted in the account menu are saved.
+    pub azure_store: herdr_credentials::Store,
     /// Where GitLab tokens pasted in the account menu are saved.
     pub gitlab_store: herdr_credentials::Store,
     /// The folder holding the databases, and agent-launcher's to carry
@@ -147,7 +152,8 @@ pub enum SyncState {
     Capped {
         count: usize,
     },
-    /// GitHub needs a signed-in account, or GitLab a token that works.
+    /// GitHub needs a signed-in account, or GitLab or Azure DevOps a token
+    /// that works.
     SignIn,
     /// A provider or host this build cannot read yet, such as GitHub Enterprise.
     Unsupported,
@@ -230,6 +236,7 @@ impl Service {
             retry: Vec::new(),
             uncached: HashMap::new(),
             resume: HashMap::new(),
+            azure_token: None,
             gitlab_token: None,
             cooldown: None,
         };
@@ -313,6 +320,10 @@ struct Worker {
     /// and a refusal look again, so a new `glab auth login` or a renewed
     /// connected account is picked up without reopening the view.
     gitlab_token: Option<(String, Option<gitlab::account::Found>)>,
+    /// The Azure DevOps token, once looked up, and the organization it is
+    /// for; Refresh and a refusal look again, so a new `az login` or a token
+    /// saved in the account menu is picked up without reopening the view.
+    azure_token: Option<(String, Option<azure::token::Found>)>,
     cooldown: Option<Duration>,
 }
 
@@ -336,6 +347,7 @@ impl Worker {
                 Ok(Command::Refresh(token)) => {
                     self.request.token = token;
                     self.gitlab_token = None;
+                    self.azure_token = None;
                     self.retry.clear();
                     let token = self.request.token.clone();
                     self.sync(token.as_ref());
@@ -645,7 +657,8 @@ impl Worker {
         self.data_version = Some(store.data_version()?);
         let mut items = store.items()?;
         if !self.uncached.is_empty() {
-            items.retain(|item| !self.uncached.contains_key(&item.key.source));
+            let replaced = replaced_by(&self.uncached);
+            items.retain(|item| !replaced.contains(&item.key.source));
             items.extend(self.uncached.values().flatten().cloned());
         }
         self.snapshot.items = Arc::new(items);
@@ -745,6 +758,7 @@ impl Worker {
                     self.retry.push((key.clone(), Instant::now() + wait));
                     match &error {
                         // Waits as a failure does, but offers the sign-in.
+                        Error::Azure(source) if source.needs_sign_in() => SyncState::SignIn,
                         Error::Gitlab(source) if source.needs_sign_in() => SyncState::SignIn,
                         _ => SyncState::Failed(Arc::new(error)),
                     }
@@ -883,6 +897,7 @@ impl Worker {
                     count,
                 })
             }
+            Provider::Azure => self.sync_azure(key, writable),
             Provider::Gitlab => {
                 let previous = store.checkpoint(key)?;
                 let listing = self.gitlab_listing(key, previous.as_ref())?;
