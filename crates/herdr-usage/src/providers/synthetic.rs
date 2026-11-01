@@ -515,6 +515,17 @@ mod tests {
         assert_eq!(report.windows[1].percent(), 50);
     }
 
+    /// Only the dedicated search lane runs an hour: a generic quota the
+    /// service happens to name the same way is the service's own name.
+    #[test]
+    fn a_generic_quota_named_search_hourly_keeps_no_length() {
+        let report =
+            parse(r#"{"data":{"quotas":[{"name":"Search hourly","usedPercent":0.2}]}}"#).unwrap();
+        let window = &report.windows[0];
+        assert_eq!(window.kind, Kind::Named(Text::service("Search hourly")));
+        assert_eq!(window.length, None);
+    }
+
     #[test]
     fn a_response_without_quotas_is_an_error() {
         assert!(matches!(
