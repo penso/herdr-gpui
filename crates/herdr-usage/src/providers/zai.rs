@@ -411,8 +411,10 @@ pub(crate) fn parse_tokens(body: &str) -> Option<Section> {
         return None;
     }
     // A model without a name sorts where its English name did.
-    let name = |model: &Option<String>| model.clone().unwrap_or_else(|| "Unknown".into());
-    totals.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| name(&a.0).cmp(&name(&b.0))));
+    fn name(model: &Option<String>) -> &str {
+        model.as_deref().unwrap_or("Unknown")
+    }
+    totals.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| name(&a.0).cmp(name(&b.0))));
     Some(Section::Facts {
         title: Text::message("usage-zai-tokens-last-30-days"),
         facts: totals
