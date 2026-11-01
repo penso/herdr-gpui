@@ -10,6 +10,7 @@ use super::{
 use crate::{
     config::corners,
     dispatch::{Candidate, Repository, rank},
+    i18n::fl,
 };
 use gpui::{prelude::*, *};
 
@@ -60,9 +61,9 @@ impl OrchestratorView {
                 GREEN
             };
             let note = match candidate.repository {
-                Repository::Present => "repository here",
-                Repository::Missing => "clones it first",
-                Repository::Unknown => "",
+                Repository::Present => Some(fl!("orchestrator-host-has-repository")),
+                Repository::Missing => Some(fl!("orchestrator-host-clones")),
+                Repository::Unknown => None,
             };
             let endpoint = candidate.endpoint_id.clone();
             let current = candidate.current;
@@ -92,7 +93,9 @@ impl OrchestratorView {
                                 .truncate()
                                 .child(candidate.label.clone()),
                         )
-                        .when(rank == 0, |el| el.child(look.muted("best"))),
+                        .when(rank == 0, |el| {
+                            el.child(look.muted(fl!("orchestrator-host-best")))
+                        }),
                 )
                 .child(
                     div()
@@ -108,8 +111,8 @@ impl OrchestratorView {
                                 .bg(rgb(look.hue(hue))),
                         ),
                 )
-                .child(look.muted(format!("{} working", candidate.working)))
-                .when(!note.is_empty(), |el| el.child(look.muted(note)))
+                .child(look.muted(fl!("orchestrator-host-working", count = candidate.working)))
+                .when_some(note, |el, note| el.child(look.muted(note)))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(dialog) = &mut this.dialog {
                         dialog.host = (!current).then(|| endpoint.clone());

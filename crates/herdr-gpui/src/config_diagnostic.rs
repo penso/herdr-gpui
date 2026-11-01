@@ -22,11 +22,63 @@ pub(crate) struct ConfigDiagnostic {
     dismissed: bool,
     /// The card shows its lines in full rather than one row each.
     expanded: bool,
+    /// The locale the app's own text was written in, so a language switch
+    /// can write it again. `None` for the daemon's text, which has none.
+    locale: Option<herdr_i18n::Locale>,
 }
 
 impl ConfigDiagnostic {
-    /// Follows the current diagnostic text, `None` once it is gone.
+    /// Follows the current diagnostic text, `None` once it is gone. The
+    /// text is untrusted, as the daemon's is, so it loses control and
+    /// direction characters.
     pub(crate) fn sync(&mut self, text: Option<&str>) {
+        self.locale = None;
+        self.follow(text, |line| {
+            crate::notifications::safe_text(line, MAX_LINE_CHARS)
+        });
+    }
+
+    /// Follows the app's own text, built from messages whose placeables
+    /// already lost what untrusted text does. It keeps its isolation and
+    /// direction marks, which a right-to-left language needs.
+    pub(crate) fn sync_own(&mut self, text: Option<&str>) {
+        if self.source.as_deref() == text {
+            return;
+        }
+        self.locale = text.and_then(|_| crate::i18n::shown_locale());
+        self.follow(text, own_line);
+    }
+
+    /// Writes the app's own text again with `text` once the windows show
+    /// another locale than it was written in. The same warning in another
+    /// language keeps its dismissal and opened card. Returns whether the
+    /// lines changed; nothing is written while there is no own text.
+    pub(crate) fn relocale(&mut self, text: impl FnOnce() -> Option<String>) -> bool {
+        if self.source.is_none() || self.locale.is_none() {
+            return false;
+        }
+        let locale = crate::i18n::shown_locale();
+        if self.locale == locale {
+            return false;
+        }
+        self.locale = locale;
+        let Some(text) = text() else {
+            self.follow(None, own_line);
+            return true;
+        };
+        let lines = display_lines(&text, own_line);
+        let changed = lines != self.lines;
+        self.source = Some(text);
+        self.lines = lines;
+        changed
+    }
+
+    /// Whether there is text to show, dismissed or not.
+    pub(crate) fn has_text(&self) -> bool {
+        self.source.is_some()
+    }
+
+    fn follow(&mut self, text: Option<&str>, clean: impl Fn(&str) -> String) {
         if self.source.as_deref() == text {
             return;
         }
@@ -35,7 +87,7 @@ impl ConfigDiagnostic {
         self.dismissed = false;
         self.expanded = false;
         self.source = text.map(str::to_owned);
-        self.lines = text.and_then(display_lines);
+        self.lines = text.and_then(|text| display_lines(text, clean));
     }
 
     /// The lines to show, unless dismissed.
@@ -65,11 +117,17 @@ impl ConfigDiagnostic {
     }
 }
 
-fn display_lines(text: &str) -> Option<Arc<[String]>> {
+fn own_line(line: &str) -> String {
+    crate::truncate::cut_chars(line, MAX_LINE_CHARS)
+        .unwrap_or(line)
+        .to_owned()
+}
+
+fn display_lines(text: &str, clean: impl Fn(&str) -> String) -> Option<Arc<[String]>> {
     let bounded: String = text.chars().take(MAX_CHARS).collect();
     let lines: Arc<[String]> = bounded
         .lines()
-        .map(|line| crate::notifications::safe_text(line, MAX_LINE_CHARS))
+        .map(clean)
         .filter(|line| !line.trim().is_empty())
         .map(|line| line.trim().to_owned())
         .take(MAX_LINES)
@@ -83,6 +141,8 @@ mod tests {
     use super::*;
 
     mod expansion;
+    mod own_text;
+    mod relocale;
 
     fn shown(state: &ConfigDiagnostic) -> Option<Vec<String>> {
         state.visible().map(|lines| lines.to_vec())

@@ -86,8 +86,12 @@ fn every_reach_has_a_stable_name() {
 #[test]
 fn update_states_are_named_with_their_version_or_reason() {
     assert_eq!(
-        describe(&State::Disabled("Local build".into())),
-        ("disabled", Some("Local build".to_owned()), None)
+        describe(&State::Disabled(crate::updater::Disabled::Secondary)),
+        (
+            "disabled",
+            Some(crate::updater::Disabled::Secondary.to_string()),
+            None
+        )
     );
     assert_eq!(describe(&State::Checking), ("checking", None, None));
     assert_eq!(
@@ -98,8 +102,12 @@ fn update_states_are_named_with_their_version_or_reason() {
         ("available", None, Some("1.2.0"))
     );
     assert_eq!(
-        describe(&State::Error("offline".into())),
-        ("error", Some("offline".to_owned()), None)
+        describe(&State::Error(crate::updater::Error::HttpStatus(503).into())),
+        (
+            "error",
+            Some("Update request returned HTTP 503".to_owned()),
+            None
+        )
     );
     assert_eq!(
         describe(&State::Upgrading {

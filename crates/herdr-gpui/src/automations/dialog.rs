@@ -4,7 +4,12 @@
 //! before anything is. `herdr-gpui automation approve` only opens the first.
 
 use super::{Action, Error, Machine, fetch, install};
-use crate::{HerdrWindow, menu::Page, window::Flash};
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+    menu::Page,
+    window::Flash,
+};
 use gpui::{prelude::*, *};
 use herdr_automation::report::{ScriptCaps, ScriptState};
 use std::sync::Arc;
@@ -229,9 +234,13 @@ impl HerdrWindow {
                 let stage = match result {
                     Ok(message) => {
                         let done = if message.trim().is_empty() {
-                            format!("Automations are on for {label}.")
+                            fl!("automations-enabled", host = label.as_str())
                         } else {
-                            format!("{label}: {message}")
+                            fl!(
+                                "automations-enabled-said",
+                                host = label.as_str(),
+                                message = message.as_str()
+                            )
                         };
                         this.show_flash(Flash::success(done.clone()), cx);
                         Stage::Done(done)
@@ -268,40 +277,33 @@ impl HerdrWindow {
     fn render_automation_approval(&self, approve: &Approve, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let mut facts = vec![
-            format!("Host: {}", approve.host),
-            format!("File: {}", approve.path),
-            format!("Content: sha256 {}", approve.hash),
+            fl!("automations-approve-host", host = approve.host.as_str()),
+            fl!("automations-approve-file", path = approve.path.as_str()),
+            fl!("automations-approve-content", hash = approve.hash.as_str()),
         ];
         if let Some(caps) = approve.caps {
-            facts.push(format!(
-                "Caps: {} agent{} per run · {} tokens a day · {} per run",
-                caps.agents_per_run,
-                if caps.agents_per_run == 1 { "" } else { "s" },
-                super::format::tokens(caps.tokens_per_day),
-                super::format::span(i64::try_from(caps.wall_time_seconds).unwrap_or(i64::MAX)),
-            ));
+            facts.push(super::model::caps(caps));
         }
         let plan = match &approve.plan {
             Some(plan) => self.automation_plan(plan, "automation-approve-plan"),
             None => div()
                 .debug_selector(|| "automation-approve-no-plan".into())
                 .text_color(rgb(theme.ink(theme.palette[3])))
-                .child(
-                    "The host reported no plan for this script, so there is nothing to \
-                     review and it cannot be approved here. Check it with \
-                     `herdr-automate check` on the host.",
-                ),
+                .child(fl!("automations-approve-no-plan")),
         };
         // Only what the user can read in full is offered for approval.
         let confirm = approve
             .plan
             .is_some()
-            .then(|| format!("Approve on {}", approve.host));
+            .then(|| fl!("automations-approve-confirm", host = approve.host.as_str()));
         self.automation_dialog_frame(
             "automation-approve",
-            format!("Approve {} on {}?", approve.name, approve.host),
-            "Approving lets it run on its schedule with exactly this content. \
-             Any change to the file needs approval again.",
+            fl!(
+                "automations-approve-title",
+                name = approve.name.as_str(),
+                host = approve.host.as_str()
+            ),
+            fl!("automations-approve-note"),
         )
         .children(facts.into_iter().map(|fact| {
             // Wrapped, never cut: the hash and path are what is approved.
@@ -327,15 +329,16 @@ impl HerdrWindow {
 
     fn render_automation_enable(&self, enable: &Enable, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
-        let (title, verb) = if enable.update {
-            (format!("Update automations on {}?", enable.host), "Update")
+        let host = enable.host.as_str();
+        let title = if enable.update {
+            fl!("automations-update-title", host = host)
         } else {
-            (format!("Enable automations on {}?", enable.host), "Enable")
+            fl!("automations-enable-title", host = host)
         };
         let mut frame = self.automation_dialog_frame(
             "automation-enable",
             title,
-            "Nothing is written outside your home directory on the host, and nothing runs as root.",
+            fl!("automations-enable-note"),
         );
         let mut confirm = None;
         match &enable.stage {
@@ -343,14 +346,14 @@ impl HerdrWindow {
                 frame = frame.child(
                     div()
                         .text_color(rgb(theme.muted))
-                        .child("Checking the host's platform…"),
+                        .child(fl!("automations-enable-checking")),
                 );
             }
             Stage::Installing { .. } => {
                 frame = frame.child(
                     div()
                         .text_color(rgb(theme.muted))
-                        .child("Copying and starting herdr-automate…"),
+                        .child(fl!("automations-enable-installing")),
                 );
             }
             Stage::Done(message) => {
@@ -366,39 +369,40 @@ impl HerdrWindow {
                     div()
                         .debug_selector(|| "automation-enable-error".into())
                         .text_color(rgb(theme.ink(theme.palette[3])))
-                        .child(error.to_string()),
+                        .child(error.localize()),
                 );
             }
             Stage::Ready(plan) => {
                 let short: String = plan.sha256.chars().take(12).collect();
-                let mut lines = vec![
-                    format!(
-                        "Copies herdr-automate {} for {} ({}, sha256 {short}…) from this app.",
-                        plan.version,
-                        plan.platform,
-                        super::format::bytes(plan.size)
+                let lines = [
+                    fl!(
+                        "automations-enable-copies",
+                        version = plan.version.as_str(),
+                        platform = plan.platform.to_string(),
+                        size = super::format::bytes(plan.size),
+                        hash = short
                     ),
-                    format!(
-                        "Into ~/.local/share/herdr-automate/bin/{}/herdr-automate, linked from ~/.local/bin/{}.",
-                        plan.version,
-                        fetch::PROGRAM
+                    fl!(
+                        "automations-enable-into",
+                        version = plan.version.as_str(),
+                        program = fetch::PROGRAM
                     ),
+                    if enable.update {
+                        fl!("automations-enable-then-update")
+                    } else {
+                        fl!("automations-enable-then-install")
+                    },
                 ];
-                lines.push(if enable.update {
-                    "Then stops the running daemon once its runs finish (`herdr-automate shutdown`, \
-                     up to about 40 s) and starts the new one (`herdr-automate start`)."
-                        .to_owned()
-                } else {
-                    "Then installs a user service with `herdr-automate install-service` \
-                     (a systemd user unit on Linux, a launchd agent on macOS) and starts the daemon."
-                        .to_owned()
-                });
                 frame = frame.children(
                     lines
                         .into_iter()
                         .map(|line| div().text_color(rgb(theme.subtext())).child(line)),
                 );
-                confirm = Some(format!("{verb} on {}", enable.host));
+                confirm = Some(if enable.update {
+                    fl!("automations-update-confirm", host = host)
+                } else {
+                    fl!("automations-enable-confirm", host = host)
+                });
             }
         }
         frame.child(self.automation_dialog_buttons(
@@ -412,12 +416,7 @@ impl HerdrWindow {
         ))
     }
 
-    fn automation_dialog_frame(
-        &self,
-        selector: &'static str,
-        title: String,
-        note: &'static str,
-    ) -> Div {
+    fn automation_dialog_frame(&self, selector: &'static str, title: String, note: String) -> Div {
         div()
             .debug_selector(move || selector.into())
             .flex()
@@ -447,7 +446,11 @@ impl HerdrWindow {
                     .debug_selector(move || format!("{prefix}-cancel"))
                     .p(px(6.))
                     .cursor_pointer()
-                    .child(if confirm.is_some() { "Cancel" } else { "Close" })
+                    .child(if confirm.is_some() {
+                        fl!("automations-cancel")
+                    } else {
+                        fl!("automations-close")
+                    })
                     .on_click(cx.listener(|this, _, window, cx| {
                         cx.stop_propagation();
                         this.automations.dialog = None;

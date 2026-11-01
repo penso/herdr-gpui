@@ -2,12 +2,14 @@
 //! local checkout. A checkout already open in a workspace is focused; any
 //! other is only opened after the user agrees in the window, since a link can
 //! come from any web page and opening one starts a shell in that directory.
+// i18n: migrated
 
 use super::Link;
 use crate::{
     HerdrWindow, NavigationTarget,
     control::{ErrorCode, Response},
     endpoint::LOCAL,
+    i18n::{FluentValue, Localize, fl},
 };
 use gpui::{App, Context, Global, Window, WindowHandle};
 use herdr_client::protocol::ClientShellSnapshot;
@@ -47,6 +49,61 @@ pub(crate) struct Pending(Option<Link>);
 
 impl Global for Pending {}
 
+/// Why a link was not followed. The command line reports it in English,
+/// as all its output is; the window shows it in its own language.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Refusal {
+    Closed,
+    DialogOpen,
+    NoDevice(String),
+    NotConnected,
+    NotificationGone,
+}
+
+impl Refusal {
+    fn code(&self) -> ErrorCode {
+        match self {
+            Self::Closed => ErrorCode::NoWindow,
+            Self::DialogOpen => ErrorCode::WindowBusy,
+            Self::NoDevice(_) | Self::NotificationGone => ErrorCode::NotFound,
+            Self::NotConnected => ErrorCode::Busy,
+        }
+    }
+
+    /// The message saying why, with its arguments.
+    fn message(&self) -> (&'static str, Vec<(&'static str, FluentValue<'static>)>) {
+        match self {
+            Self::Closed => ("link-refused-closed", Vec::new()),
+            Self::DialogOpen => ("link-refused-dialog-open", Vec::new()),
+            Self::NoDevice(id) => (
+                "link-refused-no-device",
+                vec![("device", FluentValue::from(id.clone()))],
+            ),
+            Self::NotConnected => ("link-refused-not-connected", Vec::new()),
+            Self::NotificationGone => ("link-refused-notification-gone", Vec::new()),
+        }
+    }
+
+    pub(crate) fn response(&self) -> Response {
+        let (id, args) = self.message();
+        Response::error(self.code(), crate::i18n::english(id, &args))
+    }
+
+    /// The reason in the window's language.
+    pub(crate) fn shown(&self) -> String {
+        let (id, args) = self.message();
+        crate::i18n::message(id, &args)
+    }
+}
+
+/// Puts a link's complaint on the status line, remembered by the window so
+/// the next link it follows clears it.
+fn complain(view: &mut HerdrWindow, text: String, cx: &mut Context<HerdrWindow>) {
+    view.link_complaint = Some(text.clone());
+    view.local_error = Some(text);
+    cx.notify();
+}
+
 pub(crate) fn defer(link: Link, cx: &mut App) {
     cx.set_global(Pending(Some(link)));
 }
@@ -80,54 +137,59 @@ pub(crate) fn poll(view: &HerdrWindow, window: &Window, cx: &mut Context<HerdrWi
         return;
     };
     cx.defer(move |cx| {
-        let response = follow(link, handle, cx);
-        if let Response::Error { message, .. } = response {
+        if let Err(refusal) = follow_link(link, handle, cx) {
             let _ = handle.update(cx, |view, _, cx| {
-                view.local_error = Some(format!("Open link: {message}"));
-                cx.notify();
+                complain(view, fl!("link-open-failed", reason = refusal.shown()), cx);
             });
         }
     });
 }
 
+/// Follows `link` for the command line, which reports in English.
 pub(crate) fn follow(link: Link, handle: WindowHandle<HerdrWindow>, cx: &mut App) -> Response {
-    let closed = || Response::error(ErrorCode::NoWindow, "The window closed");
+    follow_link(link, handle, cx).unwrap_or_else(|refusal| refusal.response())
+}
+
+/// Follows `link`, answering what was done in the command line's English,
+/// or why it was not.
+fn follow_link(
+    link: Link,
+    handle: WindowHandle<HerdrWindow>,
+    cx: &mut App,
+) -> Result<Response, Refusal> {
     match link {
         Link::Notification { tag } => {
             if crate::window::system_notifications::open(&tag, cx) {
-                Response::done("Opened the notification's pane")
+                // i18n: data
+                Ok(Response::done("Opened the notification's pane"))
             } else {
-                Response::error(ErrorCode::NotFound, "That notification is no longer known")
+                Err(Refusal::NotificationGone)
             }
         }
         Link::Device { id } => handle
             .update(cx, |view, window, cx| {
                 if view.menu.page.is_some() {
-                    return Response::error(
-                        ErrorCode::WindowBusy,
-                        "A dialog is open in the window; close it first",
-                    );
+                    return Err(Refusal::DialogOpen);
                 }
                 if !view.select_endpoint(&id, cx) {
-                    return Response::error(ErrorCode::NotFound, format!("No device {id}"));
+                    return Err(Refusal::NoDevice(id));
                 }
                 bring_forward(window, cx);
-                Response::done(format!(
+                Ok(Response::done(format!(
+                    // i18n: data
                     "Showing {}",
                     view.endpoints[view.selected_endpoint].label
-                ))
+                )))
             })
-            .unwrap_or_else(|_| closed()),
+            .unwrap_or(Err(Refusal::Closed)),
         Link::Open { path } => {
             let Ok(snapshot) = handle.read_with(cx, |view, _| local_snapshot(view)) else {
-                return closed();
+                return Err(Refusal::Closed);
             };
             let Some(snapshot) = snapshot else {
-                return Response::error(
-                    ErrorCode::Busy,
-                    "Herdr UI is not connected to this computer's Herdr",
-                );
+                return Err(Refusal::NotConnected);
             };
+            // i18n: data
             let message = format!("Opening {}", path.display());
             let check = cx
                 .background_executor()
@@ -139,7 +201,7 @@ pub(crate) fn follow(link: Link, handle: WindowHandle<HerdrWindow>, cx: &mut App
                 });
             })
             .detach();
-            Response::done(message)
+            Ok(Response::done(message))
         }
     }
 }
@@ -223,10 +285,8 @@ impl HerdrWindow {
     ) {
         bring_forward(window, cx);
         // An earlier link's complaint no longer applies.
-        if self
-            .local_error
-            .as_deref()
-            .is_some_and(|error| error.starts_with("Open link:"))
+        if let Some(complaint) = self.link_complaint.take()
+            && self.local_error.as_ref() == Some(&complaint)
         {
             self.local_error = None;
         }
@@ -236,14 +296,16 @@ impl HerdrWindow {
                 ..
             }) => {
                 if !self.navigate_endpoint(LOCAL, NavigationTarget::Workspace(&workspace), cx) {
-                    self.local_error = Some("Open link: close the open dialog first".into());
+                    complain(self, fl!("link-open-dialog-first"), cx);
                 }
             }
             Ok(Checkout {
                 path,
                 workspace: None,
             }) => self.ask_to_open_checkout(path, window, cx),
-            Err(error) => self.local_error = Some(format!("Open link: {error}")),
+            Err(error) => {
+                complain(self, fl!("link-open-failed", reason = error.localize()), cx);
+            }
         }
         cx.notify();
     }
