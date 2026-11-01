@@ -35,7 +35,7 @@ pub(crate) use rows::{LiveAgent, Tab as List, key_label};
 
 use super::{Notice, Provider, Request, Service, Snapshot, SyncState};
 use crate::{
-    i18n::{Localize, fl},
+    i18n::fl,
     search_input::{self, SearchInput},
 };
 use gpui::{prelude::*, *};
@@ -443,6 +443,7 @@ impl OrchestratorView {
     #[cfg(test)]
     pub(crate) fn notice_text(&self) -> Option<String> {
         let notice = self.notice.as_ref()?;
+        use crate::i18n::Localize;
         Some(match &notice.outcome {
             Ok(done) => dispatch::done(*done),
             Err(error) => error.localize(),
