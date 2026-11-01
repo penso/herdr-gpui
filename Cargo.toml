@@ -59,7 +59,7 @@ font-kit             = { package = "zed-font-kit", version = "=0.14.1-zed" }
 # parses them to check `fl!` calls. i18n-embed 0.16 does not build without
 # its default `rust-embed` feature, though the app embeds files itself.
 fluent               = "0.17"
-fluent-langneg       = "0.13"
+fluent-langneg       = "0.14"
 fluent-syntax        = "0.12"
 i18n-embed           = { features = ["fluent-system"], version = "0.16" }
 # The user's preferred languages, as the OS lists them.
