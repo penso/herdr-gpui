@@ -6,7 +6,10 @@
 use super::*;
 use crate::{
     config::status_bar::Detail,
-    i18n::leak_tests::{assert_translated, uncut, under_en_xa},
+    i18n::{
+        Localize,
+        leak_tests::{assert_translated, uncut, under_en_xa},
+    },
     sidebar::{
         ActivityPanel,
         layout_tests::{fixture_window, full_draw},
@@ -42,6 +45,18 @@ fn fresh(seen: &mut Vec<String>, drawn: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+/// `drawn` without data cut short to fit, such as a long provider name in a
+/// narrow tab, whose whole GPUI may never shape.
+fn uncut_data(drawn: Vec<String>, data: &[String]) -> Vec<String> {
+    drawn
+        .into_iter()
+        .filter(|line| {
+            line.strip_suffix('…')
+                .is_none_or(|stem| !data.iter().any(|data| data.starts_with(stem)))
+        })
+        .collect()
+}
+
 const HOUR: Duration = Duration::from_secs(3600);
 
 /// A report with every kind of line the panel draws: a session window on
@@ -72,11 +87,17 @@ fn full(provider: Provider) -> Report {
     report
 }
 
+/// The providers that read with a report or an access prompt.
+const REPORTING: [&str; 4] = ["claude", "openai", "codex", "copilot"];
+
 /// A provider that reads a setting, so its panel shows how to set it up
-/// while it has no report.
+/// while it has no report. None of the others: the panel opens the first
+/// reading of a provider, which would then be another one's.
 fn configurable() -> Provider {
     registry::all()
-        .find(|provider| !provider.service().meta().settings.is_empty())
+        .find(|provider| {
+            !provider.service().meta().settings.is_empty() && !REPORTING.contains(&provider.id())
+        })
         .unwrap()
 }
 
@@ -99,8 +120,7 @@ fn others() -> Vec<ClaudeAccount> {
 }
 
 fn readings() -> Vec<Reading> {
-    let claude = provider("claude");
-    let openai = provider("openai");
+    let [claude, openai, codex, copilot] = REPORTING.map(provider);
     let daily = OpenaiDaily {
         days: vec![("Oct 28".into(), 1.5), ("Oct 29".into(), 3.25)],
     };
@@ -119,13 +139,13 @@ fn readings() -> Vec<Reading> {
             access: None,
         },
         Reading {
-            provider: provider("codex"),
+            provider: codex,
             report: None,
             error: None,
             access: Some(Access::Needed),
         },
         Reading {
-            provider: provider("copilot"),
+            provider: copilot,
             report: None,
             error: None,
             access: Some(Access::Denied),
@@ -214,9 +234,21 @@ fn usage_shows_only_messages_and_what_services_report() {
                 })
             });
             draw(cx);
+            let drawn = recorder.take();
+            if provider == configurable() {
+                // Its own reading: no sign-in, and how to set one up.
+                let missing = herdr_usage::Error::NotSignedIn.localize();
+                assert!(
+                    drawn.iter().any(|text| text.contains(&missing)),
+                    "{drawn:?}"
+                );
+                let meta = provider.service().meta();
+                let key = format!("[usage.providers.{}] {}", meta.id, meta.settings[0].name);
+                assert!(drawn.iter().any(|text| text.contains(&key)), "{drawn:?}");
+            }
             assert_translated(
                 &format!("usage panel for {}", provider.id()),
-                &fresh(&mut seen, recorder.take()),
+                &uncut_data(fresh(&mut seen, drawn), &data),
                 &data,
             );
         }
