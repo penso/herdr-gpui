@@ -19,15 +19,19 @@ fn local_port_requests_have_a_stable_wire_form() {
     assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request);
     let listing = serde_json::to_string(&HostOp::LocalPorts).unwrap();
     assert_eq!(listing, r#"{"op":"local_ports"}"#);
+}
+
+/// Both wait for a fresh scan of this computer, so the client must allow
+/// them as long as the window may take, not its default.
+#[test]
+fn local_port_commands_allow_for_a_fresh_scan() {
     assert_eq!(HostOp::LocalPorts.wait_seconds(), LOCAL_PORTS_WAIT_SECONDS);
-    assert_eq!(
-        HostOp::SignalPort {
-            port: 1,
-            action: PortAction::Stop
-        }
-        .wait_seconds(),
-        0
-    );
+    for action in [PortAction::Stop, PortAction::Pause, PortAction::Resume] {
+        assert_eq!(
+            HostOp::SignalPort { port: 1, action }.wait_seconds(),
+            LOCAL_PORTS_WAIT_SECONDS
+        );
+    }
 }
 
 #[test]
