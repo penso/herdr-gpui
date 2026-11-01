@@ -575,11 +575,6 @@ impl OrchestratorView {
         })
     }
 
-    /// A GitLab source waits for a token that works.
-    pub(crate) fn gitlab_needs_sign_in(&self) -> bool {
-        self.needs_sign_in(Provider::Gitlab)
-    }
-
     /// A `provider` source waits for a token that works.
     pub(crate) fn needs_sign_in(&self, provider: Provider) -> bool {
         self.repos

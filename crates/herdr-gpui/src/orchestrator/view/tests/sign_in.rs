@@ -68,7 +68,10 @@ fn a_gitlab_source_waiting_for_a_token_asks_for_the_gitlab_sign_in(cx: &mut Test
     assert_eq!(*asked.borrow(), [Provider::Gitlab]);
     let (hosts, waiting): (Vec<GitLabRead>, bool) = cx.update(|_, cx| {
         let view = view.read(cx);
-        (view.gitlab_hosts().collect(), view.gitlab_needs_sign_in())
+        (
+            view.gitlab_hosts().collect(),
+            view.needs_sign_in(Provider::Gitlab),
+        )
     });
     assert_eq!(
         hosts,
