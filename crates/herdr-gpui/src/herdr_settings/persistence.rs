@@ -54,7 +54,7 @@ pub(super) struct Snapshot {
 /// diagnostics show only its size.
 impl std::fmt::Debug for Snapshot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Snapshot")
+        f.debug_struct("Snapshot") // i18n: data
             .field("text_len", &self.text.as_ref().map(String::len))
             .field("identity", &self.identity)
             .field("directory", &self.directory)

@@ -1,6 +1,6 @@
 use crate::{
     config::Theme,
-    state::{ConnectionStatus, LiveState},
+    state::{Answer, ConnectionStatus, LiveState},
     terminal::InputTarget,
 };
 use herdr_client::{
@@ -20,6 +20,11 @@ pub(crate) struct ConnectionBridge {
     pub drained: Arc<AtomicBool>,
     pub integrations: Arc<Mutex<IntegrationInbox>>,
     pub(crate) links: Arc<Mutex<crate::links::LinkInbox>>,
+    /// Answers the window has read whose mailbox copy could not be cleared
+    /// then, as the event reader held it. Cleared at the next update, which
+    /// holds the mailbox, so they are not copied into every later one. At
+    /// most one per [`Answer`]; touched only by the window.
+    retired: Mutex<Vec<(Answer, String)>>,
     /// Scrollback answers, fenced with the connection like the main inbox.
     pub scrollback: Arc<Mutex<crate::scrollback::Inbox>>,
     sound_cancel: Arc<AtomicBool>,
@@ -123,6 +128,7 @@ impl ConnectionBridge {
             drained: Arc::new(AtomicBool::new(true)),
             integrations: Arc::default(),
             links: Arc::default(),
+            retired: Mutex::default(),
             scrollback: Arc::default(),
         }
     }
@@ -146,6 +152,8 @@ impl ConnectionBridge {
         self.drained = Arc::new(AtomicBool::new(true));
         self.integrations = Arc::default();
         self.links = Arc::default();
+        // The new mailbox holds none of the old answers.
+        self.retired = Mutex::default();
         self.scrollback = Arc::default();
     }
 
@@ -304,6 +312,11 @@ impl ConnectionBridge {
 
     pub fn take_update(&self) -> Option<LiveState> {
         let mut state = self.inbox.try_lock().ok()?;
+        if let Ok(mut retired) = self.retired.lock() {
+            for (answer, request) in retired.drain(..) {
+                state.clear_answer(answer, &request);
+            }
+        }
         if !state.dirty {
             return None;
         }
@@ -346,6 +359,20 @@ impl ConnectionBridge {
         Some(update)
     }
 
+    /// Clear `request`'s answer from the mailbox once the window has read it,
+    /// now if the mailbox is free and otherwise at the next update. Never
+    /// blocks, and a newer request in the slot is left alone.
+    pub(crate) fn retire_answer(&self, answer: Answer, request: &str) {
+        if let Ok(mut state) = self.inbox.try_lock() {
+            state.clear_answer(answer, request);
+            return;
+        }
+        if let Ok(mut retired) = self.retired.lock() {
+            retired.retain(|(pending, _)| *pending != answer);
+            retired.push((answer, request.to_owned()));
+        }
+    }
+
     /// Drain only when the background settings loader can accept a reload.
     /// Inbox contention leaves the coalesced request pending for the next poll.
     pub(crate) fn take_settings_reload(&self) -> bool {
@@ -372,6 +399,29 @@ impl ConnectionBridge {
             .ok_or(crate::Error::NotConnected)?
             .request(boot_id, method, params)?;
         state.dialog_response = Some((id.clone(), None));
+        Ok(id)
+    }
+
+    /// [`Self::request_dialog`] for a `worktree.create` whose chosen landing
+    /// also waits on the answer, registered in both slots under one lock so
+    /// even an immediate answer reaches the landing.
+    pub(crate) fn request_creation(
+        &self,
+        boot_id: &str,
+        method: Method,
+        params: serde_json::Value,
+    ) -> crate::Result<String> {
+        let mut state = self
+            .inbox
+            .try_lock()
+            .map_err(|_| crate::Error::ConnectionBusy)?;
+        let id = self
+            .handle
+            .as_ref()
+            .ok_or(crate::Error::NotConnected)?
+            .request(boot_id, method, params)?;
+        state.dialog_response = Some((id.clone(), None));
+        state.landing_response = Some((id.clone(), None));
         Ok(id)
     }
 

@@ -1,5 +1,6 @@
 //! Local TUI sound settings and endpoint-scoped semantic notification policy.
 //! Policy adapted from Herdr; see SOUND-NOTICE.md.
+// i18n: migrated
 mod config;
 mod error;
 mod playback;
