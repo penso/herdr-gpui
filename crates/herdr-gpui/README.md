@@ -8,6 +8,9 @@ development targets remain attach-only. On Unix, GUI launches resolve the login-
 environment once on the connection worker so daemon plugins can find tools such as
 `node`. Terminal launches skip the shell probe. Failed probes fall back to standard
 per-user and Homebrew bin directories; the probe has a five-second timeout.
+When neither the launch nor the login shell sets `LC_ALL`, `LC_CTYPE`, or `LANG`,
+the daemon and other children get `LANG=en_US.UTF-8` on macOS and `C.UTF-8` on other
+Unix, so panes do not run in the C locale.
 It does not link or install Herdr, stop
 daemons, or spawn a local PTY. It emulates terminals only for
 [Herdr 2](#herdr-2-terminals), whose daemon streams raw output. Herdr's remote bridge may start
