@@ -158,6 +158,7 @@ fn counters_distinguish_elapsed_context_and_completed_usage() {
             id: EntryId(0),
             kind: EntryKind::Turn(TurnSummary {
                 duration_ms: 12000,
+                ended_ms: None,
                 end: TurnEnd::Done,
                 tokens: Some(Tokens {
                     input: 100,
@@ -205,6 +206,7 @@ fn a_duration_record_without_an_outcome_does_not_claim_success_or_failure() {
         id: EntryId(1),
         kind: EntryKind::Turn(TurnSummary {
             duration_ms: 23000,
+            ended_ms: None,
             end: TurnEnd::Other,
             tokens: None,
         }),

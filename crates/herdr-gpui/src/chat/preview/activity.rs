@@ -20,7 +20,7 @@ pub(super) fn install(case: &str, transcript: &mut Transcript) -> AgentStatus {
     });
     transcript.entries = vec![
         Entry { id: EntryId(1), kind: EntryKind::Turn(TurnSummary {
-            duration_ms: 23000, end: TurnEnd::Done,
+            duration_ms: 23000, ended_ms: None, end: TurnEnd::Done,
             tokens: Some(Tokens { input: 3200, output: 1250, thought: 700, total: 4450, cached: 0 }),
         }) },
         // i18n: data
@@ -63,6 +63,7 @@ pub(super) fn install(case: &str, transcript: &mut Transcript) -> AgentStatus {
                     id: EntryId(5),
                     kind: EntryKind::Turn(TurnSummary {
                         duration_ms: 809000,
+                        ended_ms: None,
                         end: if case == "live-failed" {
                             TurnEnd::Failed
                         } else {
