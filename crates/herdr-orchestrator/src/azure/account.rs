@@ -20,6 +20,9 @@ pub struct Account {
     /// The organization's projects the token can see, sorted, or `None` when
     /// it may not list them, which reading pull requests does not need.
     pub projects: Option<Vec<String>>,
+    /// The organization has more projects than the [`MAX_PROJECTS`] read,
+    /// so their count is a lower bound.
+    pub more_projects: bool,
 }
 
 #[derive(Deserialize)]
@@ -98,10 +101,13 @@ pub fn check_at(origin: &str, organization: &str, token: &Token) -> Result<Accou
     let mut projects_url = url(&["_apis", "projects"])?;
     projects_url
         .query_pairs_mut()
-        .append_pair("$top", &MAX_PROJECTS.to_string())
+        // One more than is kept tells whether the list was cut short.
+        .append_pair("$top", &(MAX_PROJECTS + 1).to_string())
         .append_pair("api-version", super::API_VERSION);
+    let mut more_projects = false;
     let projects = match get::<Projects>(origin, organization, token, projects_url) {
         Ok(projects) => {
+            more_projects = projects.value.len() > MAX_PROJECTS;
             let mut names: Vec<String> = projects
                 .value
                 .into_iter()
@@ -119,6 +125,7 @@ pub fn check_at(origin: &str, organization: &str, token: &Token) -> Result<Accou
         name,
         email,
         projects,
+        more_projects,
     })
 }
 

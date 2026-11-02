@@ -104,6 +104,9 @@ fn source_label(source: Source) -> String {
 /// How many projects a check found, as a card and the saved message say it.
 pub(crate) fn projects_note(account: &Account) -> String {
     match &account.projects {
+        Some(projects) if account.more_projects => {
+            fl!("azure-devops-menu-projects-more", count = projects.len())
+        }
         Some(projects) => fl!("azure-devops-menu-projects", count = projects.len()),
         None => fl!("azure-devops-menu-projects-hidden"),
     }

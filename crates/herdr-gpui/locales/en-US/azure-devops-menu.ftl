@@ -25,6 +25,8 @@ azure-devops-menu-projects =
         [one] 1 project
        *[other] { $count } projects
     }
+# More projects than the page reads: $count is a lower bound.
+azure-devops-menu-projects-more = { $count }+ projects
 azure-devops-menu-projects-hidden = the token does not list projects
 
 azure-devops-menu-looking = Looking for a token…

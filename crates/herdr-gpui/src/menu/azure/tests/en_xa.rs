@@ -34,6 +34,7 @@ fn the_azure_devops_page_shows_only_messages_under_en_xa() {
                 name: "Dev Example".into(),
                 email: None,
                 projects: Some(vec!["web".into()]),
+                more_projects: false,
             };
             let azure = &mut view.menu.azure;
             azure.organizations = vec![

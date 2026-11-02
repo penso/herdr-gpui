@@ -14,6 +14,7 @@ fn found(source: Source, account: Option<Result<Account, azure::Error>>) -> Look
 
 fn account(projects: Option<usize>) -> Account {
     Account {
+        more_projects: false,
         name: "Dev Example".into(),
         email: Some("dev@example.test".into()),
         projects: projects.map(|count| (0..count).map(|index| format!("p{index}")).collect()),
@@ -32,6 +33,17 @@ fn a_card_says_where_its_token_comes_from_and_what_it_reads() {
     assert_eq!(
         line(found(Source::Cli, Some(Ok(account(Some(1)))))),
         "Signed in, from the Azure CLI (az); 1 project."
+    );
+    // A list cut short at the page's bound counts as a lower bound.
+    assert_eq!(
+        line(found(
+            Source::Saved,
+            Some(Ok(Account {
+                more_projects: true,
+                ..account(Some(500))
+            }))
+        )),
+        "Signed in, saved here; 500+ projects."
     );
     assert_eq!(
         line(found(Source::Saved, Some(Ok(account(None))))),

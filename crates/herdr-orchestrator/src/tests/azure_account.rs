@@ -36,13 +36,14 @@ fn a_token_is_checked_with_the_organizations_connection_data_and_projects() {
         found.projects.as_deref(),
         Some(&["Fabrikam Fiber".to_owned(), "web".to_owned()][..])
     );
+    assert!(!found.more_projects);
     let requests = server.join().unwrap();
     assert!(
         requests[0].starts_with("GET /contoso/_apis/connectionData "),
         "{requests:?}"
     );
     assert!(
-        requests[1].starts_with("GET /contoso/_apis/projects?%24top=500&api-version=7.1 "),
+        requests[1].starts_with("GET /contoso/_apis/projects?%24top=501&api-version=7.1 "),
         "{requests:?}"
     );
 }
@@ -75,5 +76,20 @@ fn a_refused_token_or_unknown_organization_is_not_saved() {
     let (address, server) = serve(vec![(200, "{}".to_owned())]);
     let error = account::check_at(&format!("http://{address}"), "contoso", &pat()).unwrap_err();
     assert!(matches!(error, azure::Error::Authentication));
+    server.join().unwrap();
+}
+
+#[test]
+fn an_organization_with_more_projects_than_are_read_says_so() {
+    let projects = serde_json::json!({
+        "value": (0..=account::MAX_PROJECTS)
+            .map(|index| serde_json::json!({"id": index.to_string(), "name": format!("project-{index:03}")}))
+            .collect::<Vec<_>>(),
+    })
+    .to_string();
+    let (address, server) = serve(vec![(200, connection()), (200, projects)]);
+    let found = account::check_at(&format!("http://{address}"), "contoso", &pat()).unwrap();
+    assert_eq!(found.projects.unwrap().len(), account::MAX_PROJECTS);
+    assert!(found.more_projects);
     server.join().unwrap();
 }
