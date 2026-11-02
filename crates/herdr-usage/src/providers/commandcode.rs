@@ -8,6 +8,7 @@
 //! omits the grant. CodexBar also accepts a bare session token; here the
 //! cookie is pasted as `name=value`.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -54,10 +55,7 @@ static META: Meta = Meta::new("commandcode", "Command Code")
     .settings(&[Setting::new(
         "cookie",
         &[],
-        "Sign in to https://commandcode.ai, open Developer Tools > Application > Cookies \
-         for https://commandcode.ai, and copy the session cookie: \
-         __Secure-better-auth.session_token (or __Secure-commandcode_prod_.session_token, \
-         whichever is present). Paste it as \"name=value\".",
+        "usage-commandcode-setting-cookie",
     )]);
 
 impl Service for Commandcode {
@@ -148,13 +146,21 @@ pub(crate) fn parse(credits: &str, subscription: Option<&str>) -> Result<Report>
         windows.push(Window::new(Kind::Monthly, used, period_end, Some(MONTH)));
     }
     let usd = || Unit::Currency("USD".into());
-    let left = Balance::new("Monthly credits left", remaining.max(0.), usd());
+    let left = Balance::new(
+        Text::message("usage-commandcode-monthly-left"),
+        remaining.max(0.),
+        usd(),
+    );
     let mut balances = vec![match total {
         Some(total) => left.out_of(total),
         None => left,
     }];
     if purchased > 0. {
-        balances.push(Balance::new("Purchased credits", purchased, usd()));
+        balances.push(Balance::new(
+            Text::message("usage-commandcode-purchased"),
+            purchased,
+            usd(),
+        ));
     }
     let plan_name = match (plan, known) {
         (Some((_, name, _)), _) => Some((*name).to_owned()),
@@ -169,7 +175,7 @@ pub(crate) fn parse(credits: &str, subscription: Option<&str>) -> Result<Report>
     };
     let account = Account {
         email: None,
-        plan: plan_name,
+        plan: plan_name.map(Text::service),
     };
     Ok(Report::new(Provider(&Commandcode), account, windows).with_balances(balances))
 }
@@ -232,7 +238,7 @@ mod tests {
     #[test]
     fn rolling_windows_and_plan_sized_month() {
         let report = parse(CREDITS, Some(SUBSCRIPTION)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Go"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Go"));
         let kinds: Vec<_> = report.windows.iter().map(|window| &window.kind).collect();
         assert_eq!(kinds, [&Kind::Session, &Kind::Weekly, &Kind::Monthly]);
         assert!((report.windows[0].used - 25.).abs() < 1e-4);
@@ -248,8 +254,13 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Monthly credits left", 8.5, usd.clone()).out_of(10.),
-                Balance::new("Purchased credits", 2., usd),
+                Balance::new(
+                    Text::message("usage-commandcode-monthly-left"),
+                    8.5,
+                    usd.clone()
+                )
+                .out_of(10.),
+                Balance::new(Text::message("usage-commandcode-purchased"), 2., usd),
             ]
         );
     }

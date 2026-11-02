@@ -42,7 +42,9 @@ fn a_phones_machines_read_by_where_they_stand() {
         link("other", HostState::Offered),
     ];
     assert_eq!(
-        hosts_line(&device).as_deref(),
+        hosts_line(&device)
+            .map(|line| line.replace(['\u{2068}', '\u{2069}'], ""))
+            .as_deref(),
         Some("Also on devbox \u{b7} pairing lab, ci \u{b7} failed on old")
     );
 }

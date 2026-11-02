@@ -11,6 +11,7 @@
 //! which would need the token revealed; `expires_at` stored by Hermes is
 //! still honored.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -38,15 +39,12 @@ static META: Meta = Meta::new("nous", "Nous Portal")
         Setting::new(
             "token",
             &["NOUS_PORTAL_ACCESS_TOKEN"],
-            "A Nous Portal OAuth access token, used instead of Hermes Agent's login in \
-             ~/.hermes/auth.json (sign in with `hermes auth add nous`). It lasts about an \
-             hour; portal API keys are not accepted.",
+            "usage-nous-setting-token",
         ),
         Setting::new(
             "base_url",
             &["NOUS_PORTAL_BASE_URL", "HERMES_PORTAL_BASE_URL"],
-            "An HTTPS portal origin such as https://portal.nousresearch.com, for a preview \
-             deployment. Plain HTTP is refused.",
+            "usage-nous-setting-base-url",
         ),
     ]);
 
@@ -234,59 +232,89 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     let usd = || Unit::Currency("USD".into());
     let mut balances = Vec::new();
     match (remaining, grant) {
-        (Some(remaining), Some(grant)) => balances
-            .push(Balance::new("Subscription credits", remaining.max(0.), usd()).out_of(grant)),
+        (Some(remaining), Some(grant)) => balances.push(
+            Balance::new(
+                Text::message("usage-nous-subscription-credits"),
+                remaining.max(0.),
+                usd(),
+            )
+            .out_of(grant),
+        ),
         (Some(remaining), None) => {
             balances.push(Balance::new(
-                "Subscription credits",
+                Text::message("usage-nous-subscription-credits"),
                 remaining.max(0.),
                 usd(),
             ));
         }
-        (None, Some(grant)) => balances.push(Balance::new("Monthly grant", grant, usd())),
+        (None, Some(grant)) => balances.push(Balance::new(
+            Text::message("usage-nous-monthly-grant"),
+            grant,
+            usd(),
+        )),
         (None, None) => {}
     }
-    balances.extend(purchased.map(|amount| Balance::new("Top-up credits", amount, usd())));
-    balances.extend(total.map(|amount| Balance::new("Total usable", amount, usd())));
+    balances.extend(
+        purchased
+            .map(|amount| Balance::new(Text::message("usage-nous-top-up-credits"), amount, usd())),
+    );
+    balances.extend(
+        total.map(|amount| Balance::new(Text::message("usage-nous-total-usable"), amount, usd())),
+    );
     let mut facts = Vec::new();
     if let Some(organization) = account
         .organisation
         .and_then(|organization| organization.name)
         .filter(|name| !name.trim().is_empty())
     {
-        facts.push(("Organization".into(), organization.trim().to_owned()));
+        facts.push((
+            Text::message("usage-nous-organization"),
+            Text::service(organization.trim()),
+        ));
     }
     if let Some(rollover) = rollover.filter(|rollover| *rollover > 0.) {
-        facts.push(("Rollover credits".into(), format!("${rollover:.2}")));
+        facts.push((
+            Text::message("usage-nous-rollover-credits"),
+            Text::service(format!("${rollover:.2}")),
+        ));
     }
     if let Some(renews) = renews {
         facts.push((
-            "Renews".into(),
-            chrono::DateTime::<chrono::Utc>::from(renews)
-                .format("%b %-d")
-                .to_string(),
+            Text::message("usage-nous-renews"),
+            Text::service(
+                chrono::DateTime::<chrono::Utc>::from(renews)
+                    .format("%b %-d")
+                    .to_string(),
+            ),
         ));
     }
     let plan = subscription
         .plan
         .map(|plan| plan.trim().to_owned())
         .filter(|plan| !plan.is_empty())
+        .map(Text::service)
         .or_else(|| {
-            (access.has_active_subscription == Some(true)).then(|| "Subscription".to_owned())
+            (access.has_active_subscription == Some(true))
+                .then(|| Text::message("usage-nous-subscription"))
         });
     let email = account
         .user
         .and_then(|user| user.email)
         .map(|email| email.trim().to_owned())
         .filter(|email| !email.is_empty());
-    Ok(
-        Report::new(Provider(&Nous), Account { email, plan }, windows)
-            .with_balances(balances)
-            .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Subscription".into(),
-                facts,
-            })),
+    Ok(Report::new(
+        Provider(&Nous),
+        Account {
+            email: email.map(Text::service),
+            plan,
+        },
+        windows,
     )
+    .with_balances(balances)
+    .with_sections((!facts.is_empty()).then(|| Section::Facts {
+        title: Text::message("usage-nous-subscription"),
+        facts,
+    })))
 }
 
 fn truthy(value: &serde_json::Value) -> bool {
@@ -363,8 +391,14 @@ mod tests {
     #[test]
     fn keeps_subscription_and_purchased_credits_apart() {
         let report = parse(ACCOUNT).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("dev@example.com"));
-        assert_eq!(report.account.plan.as_deref(), Some("Ultra"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("dev@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Ultra")
+        );
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].kind, Kind::Monthly);
         assert_eq!(report.windows[0].used, 75.);
@@ -372,21 +406,33 @@ mod tests {
         let balances: Vec<_> = report
             .balances
             .iter()
-            .map(|balance| (balance.label.as_str(), balance.amount, balance.total))
+            .map(|balance| (balance.label.clone(), balance.amount, balance.total))
             .collect();
         assert_eq!(
             balances,
             [
-                ("Subscription credits", 55., Some(220.)),
-                ("Top-up credits", 19.25, None),
-                ("Total usable", 74.25, None),
+                (
+                    Text::message("usage-nous-subscription-credits"),
+                    55.,
+                    Some(220.)
+                ),
+                (Text::message("usage-nous-top-up-credits"), 19.25, None),
+                (Text::message("usage-nous-total-usable"), 74.25, None),
             ]
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Organization".into(), "Example account".into()));
-        assert_eq!(facts[1], ("Renews".into(), "Oct 12".into()));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-nous-organization"),
+                    Text::service("Example account")
+                ),
+                (Text::message("usage-nous-renews"), Text::service("Oct 12")),
+            ]
+        );
     }
 
     #[test]
@@ -403,7 +449,29 @@ mod tests {
     fn grant_without_remaining_has_no_meter() {
         let report = parse(r#"{"subscription":{"plan":"Ultra","monthly_credits":220}}"#).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Monthly grant");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-nous-monthly-grant")
+        );
+        let unnamed = parse(
+            r#"{"subscription":{"rollover_credits":2},
+                "paid_service_access":{"has_active_subscription":true}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            unnamed.account.plan,
+            Some(Text::message("usage-nous-subscription"))
+        );
+        let Section::Facts { facts, .. } = &unnamed.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(
+            facts,
+            &[(
+                Text::message("usage-nous-rollover-credits"),
+                Text::service("$2.00")
+            )]
+        );
     }
 
     #[test]

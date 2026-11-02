@@ -27,7 +27,8 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some((tab, terminal)) = self.core_terminals.focused_pane(window, cx) else {
+        let focused = self.core_terminals.focused_pane(window, cx);
+        let Some((tab, terminal)) = focused.or_else(|| self.focused_core_chat(window, cx)) else {
             return false;
         };
         let Some(shown) = self.core_terminals.tabs.get_mut(&tab) else {
@@ -50,12 +51,14 @@ impl HerdrWindow {
                     Command::SplitRight => Axis::Row,
                     _ => Axis::Column,
                 };
-                self.core_terminals.wanted = Some(Purpose::Split {
-                    tab,
-                    at: terminal,
-                    axis,
-                });
-                self.start_core_shell();
+                self.start_core_program(
+                    Purpose::Split {
+                        tab,
+                        at: terminal,
+                        axis,
+                    },
+                    herdr_backend::Spawn::default(),
+                );
             }
             Command::FocusLeft | Command::FocusRight | Command::FocusUp | Command::FocusDown => {
                 let Some(next) = direction(command)

@@ -63,7 +63,7 @@ fn a_missing_family_still_warns_when_gpui_substitutes_a_default() -> anyhow::Res
 
     assert_eq!(config.terminal.family, "Missing Fixture");
     assert_eq!(
-        config.diagnostic().as_deref(),
+        plain(config.diagnostic()).as_deref(),
         Some("Configured fonts not installed: \"Missing Fixture\"")
     );
     Ok(())

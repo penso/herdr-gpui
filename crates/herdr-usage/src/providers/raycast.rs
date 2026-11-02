@@ -6,6 +6,8 @@
 //! lives in the Raycast app's private storage. Top-up packages and the
 //! per-model breakdown are not fetched, as CodexBar does not either.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -26,13 +28,7 @@ pub(crate) struct Raycast;
 
 static META: Meta = Meta::new("raycast", "Raycast")
     .dashboard("https://www.raycast.com/settings")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Sign in at https://www.raycast.com/settings, open Developer Tools > Application > \
-         Cookies > https://www.raycast.com, and copy __raycast_session (and csrf_token when \
-         present) as one \"__raycast_session=value; csrf_token=value\" header.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-raycast-setting-cookie")]);
 
 impl Service for Raycast {
     fn meta(&self) -> &'static Meta {
@@ -71,6 +67,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         Some(at) => Some(at.time().ok_or_else(invalid)?),
         None => None,
     };
+    // Raycast's own plan names, or its tier as it sends it.
     let plan = credits
         .funding_subscription
         .and_then(|funding| funding.tier)
@@ -82,8 +79,11 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             "max" => "Max".to_owned(),
             _ => tier,
         });
-    let account = Account { email: None, plan };
-    let credits_unit = || Unit::Count("credits".into());
+    let account = Account {
+        email: None,
+        plan: plan.map(Text::service),
+    };
+    let credits_unit = || Unit::Count(Count::Credits);
     // Rolled-over credits can leave more than the grant; the reported total
     // stays the denominator, so that reads as nothing used.
     let report = match (remaining, total) {
@@ -94,27 +94,44 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
                 account,
                 vec![Window::new(Kind::Monthly, used, renewal, Some(MONTH))],
             )
-            .with_balances([Balance::new("Credits left", remaining, credits_unit()).out_of(total)])
+            .with_balances([Balance::new(
+                Text::message("usage-raycast-credits-left"),
+                remaining,
+                credits_unit(),
+            )
+            .out_of(total)])
         }
         _ => {
             let mut facts = Vec::new();
             if let Some(remaining) = remaining {
-                facts.push(("Left".into(), trimmed(remaining)));
+                facts.push((
+                    Text::message("usage-raycast-left"),
+                    Text::service(trimmed(remaining)),
+                ));
             }
             if let Some(total) = total {
-                facts.push(("Total".into(), trimmed(total)));
+                facts.push((
+                    Text::message("usage-raycast-total"),
+                    Text::service(trimmed(total)),
+                ));
             }
             if let Some(renewal) = renewal {
                 let at = chrono::DateTime::<chrono::Utc>::from(renewal);
-                facts.push(("Renews".into(), at.format("%b %-d").to_string()));
+                facts.push((
+                    Text::message("usage-raycast-renews"),
+                    Text::service(at.format("%b %-d").to_string()),
+                ));
             }
             Report::new(Provider(&Raycast), account, Vec::new())
-                .with_balances(
-                    remaining
-                        .map(|remaining| Balance::new("Credits left", remaining, credits_unit())),
-                )
+                .with_balances(remaining.map(|remaining| {
+                    Balance::new(
+                        Text::message("usage-raycast-credits-left"),
+                        remaining,
+                        credits_unit(),
+                    )
+                }))
                 .with_sections([Section::Facts {
-                    title: "Credits".into(),
+                    title: Text::message("usage-raycast-credits"),
                     facts,
                 }])
         }
@@ -151,7 +168,7 @@ mod tests {
           "funding_subscription": {"tier": "pro", "status": "active"}
         }"#;
         let report = parse(body).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows.len(), 1);
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
@@ -168,7 +185,7 @@ mod tests {
             "funding_subscription": {"tier": "pro_plus"}}"#;
         let report = parse(body).unwrap();
         assert_eq!(report.windows[0].used, 0.);
-        assert_eq!(report.account.plan.as_deref(), Some("Pro+"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro+"));
     }
 
     #[test]
@@ -179,8 +196,14 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Left".into(), "12.5".into()));
-        assert_eq!(facts[1], ("Total".into(), "0".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-raycast-left"), Text::service("12.5"))
+        );
+        assert_eq!(
+            facts[1],
+            (Text::message("usage-raycast-total"), Text::service("0"))
+        );
     }
 
     #[test]

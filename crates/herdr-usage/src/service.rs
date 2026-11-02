@@ -16,14 +16,21 @@ use std::time::{Duration, SystemTime};
 pub struct Setting {
     pub name: &'static str,
     pub env: &'static [&'static str],
-    /// What the value is and where to find it, e.g. which cookie to copy
-    /// from which site's developer tools.
-    pub help: &'static str,
+    /// The Fluent message, in the app's `locales/*/usage-<id>.ftl`, saying
+    /// what the value is and where to find it, e.g. which cookie to copy
+    /// from which site's developer tools. Crates below the app have no
+    /// messages (docs/i18n.md), so the app writes it in the shown language
+    /// and generates the example config's comments from its English.
+    pub message: &'static str,
 }
 
 impl Setting {
-    pub const fn new(name: &'static str, env: &'static [&'static str], help: &'static str) -> Self {
-        Self { name, env, help }
+    pub const fn new(
+        name: &'static str,
+        env: &'static [&'static str],
+        message: &'static str,
+    ) -> Self {
+        Self { name, env, message }
     }
 }
 

@@ -94,12 +94,12 @@ fn the_home_volume_is_the_deepest_mount_holding_home() {
 
 #[test]
 fn sizes_and_uptimes_read_short() {
-    assert_eq!(storage(7 << 29), "3.5 GB");
-    assert_eq!(storage(381 << 30), "381 GB");
-    assert_eq!(storage(1229 << 30), "1.2 TB");
-    assert_eq!(uptime(116 * 86_400 + 59 * 60), "116d 0h");
-    assert_eq!(uptime(3 * 3600 + 12 * 60 + 5), "3h 12m");
-    assert_eq!(uptime(59), "0m");
+    assert_eq!(plain(storage(7 << 29)), "3.5 GB");
+    assert_eq!(plain(storage(381 << 30)), "381 GB");
+    assert_eq!(plain(storage(1229 << 30)), "1.2 TB");
+    assert_eq!(plain(uptime(116 * 86_400 + 59 * 60)), "116d 0h");
+    assert_eq!(plain(uptime(3 * 3600 + 12 * 60 + 5)), "3h 12m");
+    assert_eq!(plain(uptime(59)), "0m");
     assert_eq!(
         Disk {
             available: 1,
@@ -133,4 +133,9 @@ fn this_machine_reports_its_uptime_and_home_volume() {
     assert!(sample.uptime.is_some_and(|seconds| seconds > 0));
     let disk = sample.disk.expect("the home directory lies on some volume");
     assert!(disk.total > 0 && disk.available <= disk.total, "{disk:?}");
+}
+
+/// Shown text without Fluent's isolation marks around its numbers.
+fn plain(text: String) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
 }

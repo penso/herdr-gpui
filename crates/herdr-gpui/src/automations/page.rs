@@ -7,8 +7,8 @@ mod script;
 #[cfg(test)]
 pub(crate) use {run::total_usage, script::daily_tokens};
 
-use super::{HostState, Mode, Opened};
-use crate::HerdrWindow;
+use super::{HostState, Opened};
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{prelude::*, *};
 use herdr_automation::report::ScriptStatus;
 
@@ -44,7 +44,7 @@ impl HerdrWindow {
                 .child(
                     div()
                         .text_color(rgb(self.theme.muted))
-                        .child("This script is not on its host's last reading."),
+                        .child(fl!("automations-page-gone")),
                 )
                 .into_any_element(),
         };
@@ -68,14 +68,8 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = &self.theme;
-        let mut trail: Vec<(SharedString, Option<Opened>)> = vec![(
-            match self.automations.mode {
-                Mode::Hosts => "Hosts",
-                Mode::Timeline => "Timeline",
-            }
-            .into(),
-            None,
-        )];
+        let mut trail: Vec<(SharedString, Option<Opened>)> =
+            vec![(self.automations.mode.title().into(), None)];
         if let Some((host, script)) = script {
             trail.push((
                 script.name.clone().into(),
@@ -86,7 +80,10 @@ impl HerdrWindow {
             ));
         }
         if let Opened::Run { run, .. } = opened {
-            trail.push((format!("Run #{run}").into(), Some(opened.clone())));
+            trail.push((
+                fl!("automations-run-number", run = *run).into(),
+                Some(opened.clone()),
+            ));
         }
         let mut row = div()
             .flex()
@@ -177,7 +174,7 @@ impl HerdrWindow {
                 block.child(
                     div()
                         .text_color(rgb(theme.muted))
-                        .child(format!("… {skipped} earlier lines")),
+                        .child(fl!("automations-earlier-lines", count = skipped)),
                 )
             })
             .children(shown.map(|line| {

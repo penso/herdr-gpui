@@ -5,7 +5,7 @@
 //! ranges into it, so a change of hundreds of thousands of lines stays
 //! compact. File contents are untrusted: every line is stripped of control
 //! and direction-override characters and bounded before it is stored.
-use crate::notifications::unsafe_char;
+use crate::{i18n::fl, notifications::unsafe_char};
 use std::{collections::HashMap, ops::Range, sync::Arc};
 
 mod bases;
@@ -339,13 +339,13 @@ impl Status {
     }
 
     /// What a file header says of it; nothing for an edit.
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> Option<String> {
         match self {
-            Self::Modified => "",
-            Self::Added => "new",
-            Self::Deleted => "deleted",
-            Self::Renamed => "renamed",
-            Self::Untracked => "untracked",
+            Self::Modified => None,
+            Self::Added => Some(fl!("review-status-added")),
+            Self::Deleted => Some(fl!("review-status-deleted")),
+            Self::Renamed => Some(fl!("review-status-renamed")),
+            Self::Untracked => Some(fl!("review-status-untracked")),
         }
     }
 }
@@ -360,8 +360,21 @@ pub(crate) enum Body {
     Binary,
     /// Too large to read unless asked.
     Large,
-    /// Could not be read; why, as the user reads it.
-    Failed(String),
+    /// Could not be read.
+    Failed(Unreadable),
+}
+
+/// Why a file's lines could not be read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Unreadable {
+    /// Git could not give its change.
+    Change,
+    /// Reading the untracked file failed.
+    File,
+    /// Not a regular file, such as a link out of the checkout.
+    NotFile,
+    /// Larger than even asking allows.
+    TooLarge,
 }
 
 /// One changed file.
@@ -456,20 +469,20 @@ pub(crate) fn lockfile(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path);
     matches!(
         name,
-        "Cargo.lock"
+        "Cargo.lock" // i18n: data
             | "package-lock.json"
             | "npm-shrinkwrap.json"
             | "yarn.lock"
             | "pnpm-lock.yaml"
             | "bun.lock"
-            | "Gemfile.lock"
+            | "Gemfile.lock" // i18n: data
             | "poetry.lock"
             | "uv.lock"
-            | "Pipfile.lock"
+            | "Pipfile.lock" // i18n: data
             | "composer.lock"
             | "go.sum"
             | "flake.lock"
-            | "Package.resolved"
+            | "Package.resolved" // i18n: data
             | "pubspec.lock"
             | "mix.lock"
     )

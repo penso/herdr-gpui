@@ -153,7 +153,8 @@ fn session_only_review_and_run_transfer_history_and_flags_without_git_or_files()
         panic!("session-only review");
     };
     assert_eq!(session.cwd, f.mapped.to_str().unwrap());
-    assert!(session.describe().contains("claude"));
+    let (_, action) = session.resume().unwrap();
+    assert_eq!(action, Action::Resume(AgentKind::Claude));
     let mut steps = Vec::new();
     let moved = carry::run(
         &f.origin,

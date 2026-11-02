@@ -5,6 +5,7 @@
 //! CodexBar reads is ported: character credits with their reset, voice and
 //! professional voice slots, and the plan tier and status.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -27,13 +28,12 @@ static META: Meta = Meta::new("elevenlabs", "ElevenLabs")
         Setting::new(
             "api_key",
             &["ELEVENLABS_API_KEY", "XI_API_KEY"],
-            "An ElevenLabs API key with the user_read permission, from \
-             https://elevenlabs.io/app/settings/api-keys.",
+            "usage-elevenlabs-setting-api-key",
         ),
         Setting::new(
             "base_url",
             &["ELEVENLABS_API_URL"],
-            "Optional HTTPS API origin for a proxy. Defaults to https://api.elevenlabs.io.",
+            "usage-elevenlabs-setting-base-url",
         ),
     ]);
 
@@ -77,12 +77,12 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     );
     let slots = [
         (
-            "Voice slots",
+            Text::message("usage-elevenlabs-voice-slots"),
             subscription.voice_slots_used,
             subscription.voice_limit,
         ),
         (
-            "Professional voices",
+            Text::message("usage-elevenlabs-professional-voices"),
             subscription.professional_voice_slots_used,
             subscription.professional_voice_limit,
         ),
@@ -94,18 +94,19 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     })
     .collect::<Vec<_>>();
     let mut facts = vec![(
-        "Credits".to_owned(),
-        format!(
-            "{} of {}",
-            group(subscription.character_count),
-            group(subscription.character_limit)
-        ),
+        Text::message("usage-elevenlabs-credits"),
+        Text::message("usage-elevenlabs-of")
+            .arg("used", group(subscription.character_count))
+            .arg("limit", group(subscription.character_limit)),
     )];
-    facts.extend(
-        slots
-            .iter()
-            .map(|(title, used, limit)| ((*title).to_owned(), format!("{used} of {limit}"))),
-    );
+    facts.extend(slots.iter().map(|(title, used, limit)| {
+        (
+            title.clone(),
+            Text::message("usage-elevenlabs-of")
+                .arg("used", used.to_string())
+                .arg("limit", limit.to_string()),
+        )
+    }));
     let tier = subscription
         .tier
         .as_deref()
@@ -123,6 +124,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .as_deref()
         .map(str::trim)
         .filter(|status| !status.is_empty());
+    // The tier and status are ElevenLabs' own words, such as past_due.
     let plan = match (tier, status) {
         (Some(tier), Some(status)) if !status.eq_ignore_ascii_case("active") => {
             Some(format!("{tier} · {status}"))
@@ -132,7 +134,10 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
     };
     Ok(Report::new(
         Provider(&Elevenlabs),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
         vec![credits],
     )
     .with_sections(
@@ -140,14 +145,14 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
             .iter()
             .map(|(title, used, limit)| {
                 Section::Limit(Window::new(
-                    Kind::Named((*title).to_owned()),
+                    Kind::Named(title.clone()),
                     percent(*used, *limit),
                     None,
                     None,
                 ))
             })
             .chain([Section::Facts {
-                title: "Usage".into(),
+                title: Text::message("usage-report-usage"),
                 facts,
             }])
             .collect::<Vec<_>>(),
@@ -193,7 +198,10 @@ mod tests {
     fn reads_credits_slots_and_plan() {
         let report = parse(SUBSCRIPTION).unwrap();
         assert_eq!(report.provider.id(), "elevenlabs");
-        assert_eq!(report.account.plan.as_deref(), Some("Creator Annual"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Creator Annual")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert_eq!(window.percent(), 25);
@@ -204,7 +212,10 @@ mod tests {
         let Section::Limit(voices) = &report.sections[0] else {
             panic!("expected a limit");
         };
-        assert_eq!(voices.kind, Kind::Named("Voice slots".into()));
+        assert_eq!(
+            voices.kind,
+            Kind::Named(Text::message("usage-elevenlabs-voice-slots"))
+        );
         assert_eq!(voices.percent(), 10);
         let Section::Limit(professional) = &report.sections[1] else {
             panic!("expected a limit");
@@ -215,7 +226,21 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Credits".to_owned(), "25,000 of 100,000".to_owned())
+            (
+                Text::message("usage-elevenlabs-credits"),
+                Text::message("usage-elevenlabs-of")
+                    .arg("used", "25,000")
+                    .arg("limit", "100,000")
+            )
+        );
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-elevenlabs-voice-slots"),
+                Text::message("usage-elevenlabs-of")
+                    .arg("used", "3")
+                    .arg("limit", "30")
+            )
         );
     }
 
@@ -224,7 +249,10 @@ mod tests {
         let report =
             parse(r#"{"tier":"free","character_count":0,"character_limit":0,"status":"past_due"}"#)
                 .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Free · past_due"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Free · past_due")
+        );
         assert_eq!(report.windows[0].percent(), 0);
         assert_eq!(report.sections.len(), 1);
     }

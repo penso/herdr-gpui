@@ -40,7 +40,7 @@ fn reads_session_weekly_and_model_windows() {
         [
             (Kind::Session, 25, Some(SESSION)),
             (Kind::Weekly, 16, Some(WEEK)),
-            (Kind::Named("Fable".into()), 80, Some(WEEK)),
+            (Kind::Named(Text::service("Fable")), 80, Some(WEEK)),
         ]
     );
     assert_eq!(

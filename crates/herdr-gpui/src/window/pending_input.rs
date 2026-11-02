@@ -19,9 +19,14 @@
 //!
 //! A paste or drop refused because too many waited discards the input the gap
 //! held after it; input made once the frame returned still follows.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow};
-use crate::{connection::ConnectionBridge, terminal::InputTarget};
+use crate::{
+    connection::ConnectionBridge,
+    i18n::{Localize, fl},
+    terminal::InputTarget,
+};
 use gpui::{Context, Pixels, Point};
 use herdr_client::protocol::ClientPaneInputEvent;
 use std::{
@@ -38,7 +43,9 @@ const MAX_PENDING_EVENTS: usize = 256;
 const MAX_PENDING_ACTIONS: usize = 4;
 
 /// Shown when input is refused because the hold queue is full.
-const STOPPED: &str = "Input not sent: the terminal stopped updating";
+fn stopped() -> String {
+    fl!("window-input-stopped")
+}
 
 /// What delivering one held input did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -134,7 +141,7 @@ impl HerdrWindow {
             if self.disconnected() {
                 // Nothing typed into a lost connection is replayed into the
                 // next one: the user sees that it went nowhere.
-                self.show_flash(Flash::warning("Not connected: input not sent"), cx);
+                self.show_flash(Flash::warning(fl!("window-input-not-connected")), cx);
                 return false;
             }
             // Typing across a projection gap is use of the window too.
@@ -158,7 +165,7 @@ impl HerdrWindow {
             && let Err(error) =
                 ConnectionBridge::send_input(handle, &target.boot, &target.input, event)
         {
-            self.local_error = Some(format!("Input not sent: {error}"));
+            self.local_error = Some(fl!("window-input-failed", error = error.localize()));
             cx.notify();
             return false;
         }
@@ -196,7 +203,7 @@ impl HerdrWindow {
             };
             self.hold_after_gap(held, cx);
         } else if self.disconnected() {
-            self.show_flash(Flash::warning("Not connected: input not sent"), cx);
+            self.show_flash(Flash::warning(fl!("window-input-not-connected")), cx);
         } else {
             let held = Held::Paste {
                 image_only,
@@ -230,13 +237,13 @@ impl HerdrWindow {
     /// Why a paste cannot go out now, with the reason shown, or None.
     pub(super) fn refuse_paste(&mut self, cx: &mut Context<Self>) -> Option<Delivery> {
         let reason = if self.menu.page.is_some() {
-            "Paste not sent: a menu is open"
+            fl!("window-input-paste-menu")
         } else if self.mouse_focus_pending() {
-            "Paste not sent: the window was taking focus"
+            fl!("window-input-paste-focus")
         } else {
             return None;
         };
-        self.local_error = Some(reason.into());
+        self.local_error = Some(reason);
         cx.notify();
         Some(Delivery::Refused)
     }
@@ -295,7 +302,7 @@ impl HerdrWindow {
             || (!matches!(held, Held::Event(_))
                 && self.pending_input.actions() >= MAX_PENDING_ACTIONS);
         if full {
-            self.local_error = Some(STOPPED.into());
+            self.local_error = Some(stopped());
             cx.notify();
             // A refused paste or drop ends the batch where it was made.
             let marked = matches!(self.pending_input.events.back(), Some(Held::Refused));
@@ -380,7 +387,7 @@ impl HerdrWindow {
         match self.pending_input.target.clone().filter(|_| unchanged) {
             Some(target) => self.deliver_held(&target, held, cx),
             None => {
-                self.local_error = Some("Input not sent: focus changed before it arrived".into());
+                self.local_error = Some(fl!("window-input-focus-changed"));
                 cx.notify();
             }
         }
@@ -420,7 +427,7 @@ impl HerdrWindow {
                         .filter(|held| !matches!(held, Held::Refused))
                         .count();
                     if discarded > 0 {
-                        self.local_error = Some(STOPPED.into());
+                        self.local_error = Some(stopped());
                         self.discard_held(Delivery::Refused, discarded, cx);
                     }
                     Delivery::Queued
@@ -519,13 +526,13 @@ impl HerdrWindow {
             Some(handle) => {
                 match ConnectionBridge::send_input(handle, &target.boot, &target.input, event) {
                     Ok(()) => return Delivery::Queued,
-                    Err(error) => error.to_string(),
+                    Err(error) => error.localize(),
                 }
             }
-            None => crate::Error::NotConnected.to_string(),
+            None => crate::Error::NotConnected.localize(),
         };
         // Display text only: the error's cause is not propagated further.
-        self.local_error = Some(format!("Input not sent: {error}"));
+        self.local_error = Some(fl!("window-input-failed", error = error));
         cx.notify();
         Delivery::Refused
     }
@@ -533,19 +540,21 @@ impl HerdrWindow {
     /// Report the `remaining` held inputs dropped after one that was refused
     /// or started a remote file copy, after the reason it did not go out.
     fn discard_held(&mut self, delivery: Delivery, remaining: usize, cx: &mut Context<Self>) {
-        let note = match remaining {
-            0 => return,
-            1 => "(1 held input discarded)".to_owned(),
-            n => format!("({n} held inputs discarded)"),
-        };
+        if remaining == 0 {
+            return;
+        }
         let reason = match delivery {
-            Delivery::Copying => "Input not sent: the files are still copying".to_owned(),
+            Delivery::Copying => fl!("window-input-still-copying"),
             Delivery::Queued | Delivery::Preparing | Delivery::Refused => self
                 .local_error
                 .take()
-                .unwrap_or_else(|| "Input not sent".to_owned()),
+                .unwrap_or_else(|| fl!("window-input-refused")),
         };
-        self.local_error = Some(format!("{reason} {note}"));
+        self.local_error = Some(fl!(
+            "window-input-discarded",
+            reason = reason,
+            count = remaining
+        ));
         cx.notify();
     }
 

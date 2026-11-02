@@ -215,11 +215,22 @@ fn command_frame(frame: serde_json::Value) -> Frame {
     }
 }
 
-/// Where this run listens, and its id for the Herdr token.
+/// Where this run listens, and its id for the Herdr token: the one the
+/// client that started it chose, when it gave a valid one in
+/// [`herdr_chat_protocol::ENDPOINT_ENV`], or else a new one.
 pub(crate) fn address() -> Result<(PathBuf, EndpointId)> {
-    let id = EndpointId::random();
+    let id = endpoint_id(std::env::var_os(herdr_chat_protocol::ENDPOINT_ENV).as_deref());
     let address = herdr_chat_protocol::endpoint_address(&id).ok_or(Error::NoEndpointDir)?;
     Ok((address, id))
+}
+
+/// The id `given` names, or a new one when it names none. A herdr-core
+/// client labels the terminal with the id it gives, so it finds the chat.
+fn endpoint_id(given: Option<&std::ffi::OsStr>) -> EndpointId {
+    given
+        .and_then(std::ffi::OsStr::to_str)
+        .and_then(|value| value.parse().ok())
+        .unwrap_or_else(EndpointId::random)
 }
 
 #[cfg(test)]

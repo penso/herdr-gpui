@@ -21,7 +21,10 @@ fn a_new_approval_or_failure_is_told_once() {
     next.runs
         .insert(0, run(129, "nightly", RunState::Halted, NOW));
     let notices = seen.observe("box", &next);
-    let titles: Vec<&str> = notices.iter().map(|notice| notice.title.as_str()).collect();
+    let titles: Vec<String> = notices
+        .iter()
+        .map(|notice| notice.title.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
     assert_eq!(
         titles,
         ["nightly failed on box", "lint waits for approval on box"]

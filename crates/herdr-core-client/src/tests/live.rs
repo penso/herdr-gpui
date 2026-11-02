@@ -176,18 +176,21 @@ fn a_real_core_through_the_backend_traits() {
     let binary = std::env::var_os("HERDR_CORE_TEST_BINARY").expect("HERDR_CORE_TEST_BINARY");
     let sandbox = Sandbox::start(binary);
     let backend = crate::CoreBackend::new(sandbox.connect(), 1000);
+    // A chat's terminal carries its endpoint as a label every client lists.
     let spawn = Spawn {
         argv: vec!["sh".into()],
+        labels: [("acp".to_owned(), "ab".repeat(16))].into(),
         name: Some("traits".into()),
         ..Spawn::default()
     };
     let info = backend.spawn(&spawn).unwrap();
+    assert_eq!(info.labels, spawn.labels);
     assert!(
         backend
             .terminals()
             .unwrap()
             .iter()
-            .any(|terminal| terminal.id == info.id)
+            .any(|terminal| terminal.id == info.id && terminal.labels == spawn.labels)
     );
 
     let mut terminal = backend

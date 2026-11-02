@@ -27,18 +27,27 @@ fn interface(offer: &Offer, origin: &str) -> String {
         .get(origin)
         .filter(|details| !details.interfaces.is_empty())
         .map(|details| safe_text(&details.interfaces.join(", "), 160))
-        .unwrap_or_else(|| "Interface unavailable".into())
+        .unwrap_or_else(|| fl!("remote-pair-no-interface"))
 }
 
-fn hint(kind: AddressKind) -> &'static str {
+fn hint(kind: AddressKind) -> String {
     match kind {
-        AddressKind::Tailscale => {
-            "Connect both devices to the same Tailscale network. Works across networks when access is allowed."
-        }
-        AddressKind::Local => "Same local network; network isolation may block access.",
-        AddressKind::Bridge => "Local bridge; phone reachability is not verified.",
-        AddressKind::Loopback => "Only reachable on this computer, not from your phone.",
-        AddressKind::Other => "Phone reachability depends on your network.",
+        AddressKind::Tailscale => fl!("remote-pair-hint-tailscale"),
+        AddressKind::Local => fl!("remote-pair-hint-local"),
+        AddressKind::Bridge => fl!("remote-pair-hint-bridge"),
+        AddressKind::Loopback => fl!("remote-pair-hint-loopback"),
+        AddressKind::Other => fl!("remote-pair-hint-other"),
+    }
+}
+
+/// The kind of network an address is on, from the daemon's typed kind.
+fn network(kind: AddressKind) -> String {
+    match kind {
+        AddressKind::Bridge => fl!("remote-pair-network-bridge"),
+        AddressKind::Local => fl!("remote-pair-network-local"),
+        AddressKind::Loopback => fl!("remote-pair-network-loopback"),
+        AddressKind::Other => fl!("remote-pair-network-other"),
+        AddressKind::Tailscale => fl!("remote-pair-network-tailscale"),
     }
 }
 
@@ -103,11 +112,10 @@ impl HerdrWindow {
             .gap(px(4.))
             .when_some(selected, |summary, origin| {
                 summary
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(format!("QR uses {}", kind(offer, origin).label())),
-                    )
+                    .child(div().font_weight(FontWeight::SEMIBOLD).child(fl!(
+                        "remote-pair-qr-uses",
+                        network = network(kind(offer, origin))
+                    )))
                     .child(
                         div()
                             .text_size(px(11.))
@@ -140,10 +148,13 @@ impl HerdrWindow {
             .flex_col()
             .gap(px(8.))
             .when(offer.address_details.is_empty(), |body| {
-                body.child(div()
-                    .debug_selector(|| "remote-pair-older-daemon".into())
-                    .text_size(px(11.)).text_color(rgb(theme.subtext()))
-                    .child("Network labels need the updated remote-control daemon. Restart it in Settings > Remote control, then reopen pairing."))
+                body.child(
+                    div()
+                        .debug_selector(|| "remote-pair-older-daemon".into())
+                        .text_size(px(11.))
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("remote-pair-older-daemon")),
+                )
             })
             .child(
                 div()
@@ -161,7 +172,7 @@ impl HerdrWindow {
                             .child(
                                 div()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child(kind(offer, origin).label()),
+                                    .child(network(kind(offer, origin))),
                             )
                             .when(tailscale, |row| {
                                 row.child(
@@ -172,7 +183,7 @@ impl HerdrWindow {
                                         .rounded(px(corners::SMALL))
                                         .bg(rgb(theme.primary_wash()))
                                         .text_color(rgb(theme.ink(theme.primary())))
-                                        .child("Recommended"),
+                                        .child(fl!("remote-pair-recommended")),
                                 )
                             }),
                     )
@@ -191,9 +202,9 @@ impl HerdrWindow {
                         .debug_selector(|| "remote-pair-other-addresses".into())
                         .role(Role::Button)
                         .aria_label(if dialog.other_addresses.is_open() {
-                            "Hide other addresses"
+                            fl!("remote-pair-hide-addresses")
                         } else {
-                            "Show other addresses"
+                            fl!("remote-pair-show-addresses")
                         })
                         .flex()
                         .gap(px(6.))
@@ -211,7 +222,10 @@ impl HerdrWindow {
                                 .size(px(12.))
                                 .text_color(rgb(theme.ink(theme.primary()))),
                         )
-                        .child(format!("Other addresses ({})", offer.addresses.len() - 1))
+                        .child(fl!(
+                            "remote-pair-other-addresses",
+                            count = offer.addresses.len() - 1
+                        ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             cx.stop_propagation();
                             let open = this
@@ -258,20 +272,28 @@ impl HerdrWindow {
         let origin = &offer.addresses[index];
         let selected = offer.url.starts_with(&format!("{origin}/"));
         let label = addresses(std::slice::from_ref(origin));
-        let network = kind(offer, origin);
+        let kind = kind(offer, origin);
         let interface = interface(offer, origin);
         let address = origin.clone();
         div()
             .id(("remote-pair-address", index))
             .debug_selector(move || format!("remote-pair-address-{index}"))
             .role(Role::Button)
-            .aria_label(format!(
-                "{} {} · {} · {}",
-                if selected { "Selected:" } else { "Use" },
-                network.label(),
-                interface,
-                label
-            ))
+            .aria_label(if selected {
+                fl!(
+                    "remote-pair-address-selected",
+                    network = network(kind),
+                    interface = interface.clone(),
+                    address = label.clone()
+                )
+            } else {
+                fl!(
+                    "remote-pair-address-use",
+                    network = network(kind),
+                    interface = interface.clone(),
+                    address = label.clone()
+                )
+            })
             .flex_none()
             .flex()
             .gap(px(8.))
@@ -307,11 +329,7 @@ impl HerdrWindow {
                     .min_w_0()
                     .flex_1()
                     .when(detailed, |body| {
-                        body.child(
-                            div()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(network.label()),
-                        )
+                        body.child(div().font_weight(FontWeight::SEMIBOLD).child(network(kind)))
                     })
                     .child(
                         div()
@@ -330,7 +348,7 @@ impl HerdrWindow {
                             div()
                                 .text_size(px(11.))
                                 .text_color(rgb(theme.subtext()))
-                                .child(hint(network)),
+                                .child(hint(kind)),
                         )
                     }),
             )

@@ -1,6 +1,7 @@
 //! Times, durations, and token counts as the section prints them. The
 //! daemon reports Unix seconds; they are shown in this computer's zone.
 
+use crate::i18n::fl;
 use chrono::{DateTime, Datelike, Local, NaiveDate, TimeZone};
 
 /// Unix seconds now.
@@ -43,12 +44,13 @@ where
 pub(crate) fn until(at: i64, now: i64) -> String {
     let left = at - now;
     match left {
-        ..=59 => "now".to_owned(),
-        60..3600 => format!("in {} min", left / 60),
-        3600..86_400 => match (left % 3600) / 60 {
-            0 => format!("in {} h", left / 3600),
-            minutes => format!("in {} h {minutes} min", left / 3600),
-        },
+        ..=59 => fl!("automations-in-now"),
+        60..3600 => fl!("automations-in-minutes", minutes = left / 60),
+        3600..86_400 => fl!(
+            "automations-in-hours",
+            hours = left / 3600,
+            minutes = (left % 3600) / 60
+        ),
         _ => when(at, now),
     }
 }
@@ -57,10 +59,18 @@ pub(crate) fn until(at: i64, now: i64) -> String {
 pub(crate) fn span(seconds: i64) -> String {
     let seconds = seconds.max(0);
     match seconds {
-        0..60 => format!("{seconds}s"),
-        60..3600 => format!("{}m{:02}s", seconds / 60, seconds % 60),
-        3600..86_400 => format!("{}h {:02}m", seconds / 3600, (seconds % 3600) / 60),
-        _ => format!("{} d", seconds / 86_400),
+        0..60 => fl!("automations-span-seconds", seconds = seconds),
+        60..3600 => fl!(
+            "automations-span-minutes",
+            minutes = seconds / 60,
+            seconds = format!("{:02}", seconds % 60)
+        ),
+        3600..86_400 => fl!(
+            "automations-span-hours",
+            hours = seconds / 3600,
+            minutes = format!("{:02}", (seconds % 3600) / 60)
+        ),
+        _ => fl!("automations-span-days", days = seconds / 86_400),
     }
 }
 
@@ -82,9 +92,11 @@ pub(crate) fn tokens(count: u64) -> String {
 
 /// Bytes, short: `512 KB`, `3.1 GB`.
 pub(crate) fn bytes(count: u64) -> String {
-    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+    // The unit picks the message; its value is written here, one decimal
+    // below ten.
+    const UNITS: [&str; 4] = ["kb", "mb", "gb", "tb"];
     if count < 1024 {
-        return format!("{count} B");
+        return fl!("automations-size", value = count.to_string(), unit = "b");
     }
     let mut value = count as f64 / 1024.;
     let mut unit = 0;
@@ -92,11 +104,12 @@ pub(crate) fn bytes(count: u64) -> String {
         value /= 1024.;
         unit += 1;
     }
-    if value < 10. {
-        format!("{value:.1} {}", UNITS[unit])
+    let value = if value < 10. {
+        format!("{value:.1}")
     } else {
-        format!("{value:.0} {}", UNITS[unit])
-    }
+        format!("{value:.0}")
+    };
+    fl!("automations-size", value = value, unit = UNITS[unit])
 }
 
 /// CPU time in milliseconds, as [`span`] prints it.

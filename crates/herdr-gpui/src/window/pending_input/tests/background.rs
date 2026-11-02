@@ -78,7 +78,11 @@ fn input_after_a_paste_whose_preparation_fails_is_discarded(cx: &mut TestAppCont
     });
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
-        let error = view.local_error.as_deref().unwrap_or_default();
+        let error = view
+            .local_error
+            .as_deref()
+            .map(crate::i18n::leak_tests::unmarked)
+            .unwrap_or_default();
         assert!(error.starts_with("Paste not sent: "), "{error:?}");
         assert!(error.ends_with(" (2 held inputs discarded)"), "{error:?}");
         assert_eq!(view.pending_input.len(), 0);
@@ -99,7 +103,13 @@ fn a_key_made_after_the_frame_returns_passes_a_refused_paste_mark(cx: &mut TestA
         for _ in 0..5 {
             ctrl_v(view, cx);
         }
-        assert_eq!(view.local_error.as_deref(), Some(STOPPED));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(STOPPED)
+        );
         view.local_error = None;
         frame_returns(view, cx);
         view.send(text("a"), cx);

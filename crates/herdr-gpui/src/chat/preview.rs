@@ -18,7 +18,7 @@ use herdr_client::protocol::{
 };
 
 use super::{
-    Route, Target,
+    Route, Surface, Target,
     prepared::{Body, Part},
     visual::Shown,
 };
@@ -478,6 +478,7 @@ fn install(
             pane_id: PANE.into(),
             endpoint: herdr_chat_protocol::EndpointId::random(),
             route: Route::Local,
+            surface: Surface::Herdr,
         },
         transcript,
     )?;

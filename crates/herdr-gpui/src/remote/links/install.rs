@@ -198,7 +198,7 @@ fn build_from_source(host: &Host, cancelled: &AtomicBool) -> Result<String, Erro
     let built = host
         .capture(
             &format!(
-                "[ -x {} ] && echo built || true\n",
+                "[ -x {} ] && echo built || true\n", // i18n: data
                 installed_path(&version)
             ),
             cancelled,
@@ -243,7 +243,7 @@ fn build_from_source(host: &Host, cancelled: &AtomicBool) -> Result<String, Erro
 /// The checkout this development build was made from, while it is there.
 fn source_root() -> Option<PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?.parent()?;
-    (root.join("Cargo.toml").is_file() && root.join(".git").exists()).then(|| root.to_owned())
+    (root.join("Cargo.toml").is_file() && root.join(".git").exists()).then(|| root.to_owned()) // i18n: data
 }
 
 /// A tree of the checkout as it is now: uncommitted changes and files
@@ -286,6 +286,7 @@ fn snapshot(root: &Path) -> Result<String, Error> {
 /// incrementally.
 pub(crate) fn build_script(version: &str) -> String {
     format!(
+        // i18n: data
         r#"version={version}
 cache="$HOME/.cache/{PROGRAM}"
 # Each build unpacks into its own folder: two phones pairing this host at
@@ -316,6 +317,7 @@ ln -sfn "$dir/{PROGRAM}" "$HOME/.local/bin/{PROGRAM}"
 /// Prints the SHA-256 of the build of `version` the host holds, or nothing.
 pub(crate) fn probe_script(version: &str) -> String {
     format!(
+        // i18n: data
         "file={}\n\
          if [ -f \"$file\" ]; then\n\
          if command -v sha256sum >/dev/null 2>&1; then sum=$(sha256sum \"$file\"); else sum=$(shasum -a 256 \"$file\"); fi\n\

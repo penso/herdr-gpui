@@ -131,18 +131,18 @@ pub(crate) fn answer(result: Result<Response, control::Error>) -> Vec<u8> {
         Ok(Response::NearbyStarted(started)) => serde_json::to_value(started),
         Ok(Response::NearbyRevealed(revealed)) => serde_json::to_value(revealed),
         Ok(Response::Error { message, .. }) => Ok(json!({ "error": message })),
-        Ok(_) => Ok(json!({ "error": "the computer gave an answer this relay does not read" })),
+        Ok(_) => Ok(json!({ "error": "the computer gave an answer this relay does not read" })), // i18n: data
         Err(error) => Ok(json!({ "error": error.to_string() })),
     };
     value
-        .unwrap_or_else(|_| json!({ "error": "the answer could not be written" }))
+        .unwrap_or_else(|_| json!({ "error": "the answer could not be written" })) // i18n: data
         .to_string()
         .into_bytes()
 }
 
 /// An answer for a frame that was not a nearby message.
 pub(crate) fn refusal() -> Vec<u8> {
-    json!({ "error": "that message is not one Herdr reads" })
+    json!({ "error": "that message is not one Herdr reads" }) // i18n: data
         .to_string()
         .into_bytes()
 }
@@ -218,7 +218,7 @@ pub(crate) fn host_name() -> String {
         .ok()
         .map(|name| name.trim().chars().take(64).collect::<String>())
         .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| "Herdr".to_owned())
+        .unwrap_or_else(|| "Herdr".to_owned()) // i18n: data
 }
 
 /// Reads one line of at most [`MAX_LINE`] bytes into `line`. Returns

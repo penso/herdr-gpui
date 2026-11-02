@@ -59,7 +59,7 @@ font-kit             = { package = "zed-font-kit", version = "=0.14.1-zed" }
 # parses them to check `fl!` calls. i18n-embed 0.16 does not build without
 # its default `rust-embed` feature, though the app embeds files itself.
 fluent               = "0.17"
-fluent-langneg       = "0.13"
+fluent-langneg       = "0.14"
 fluent-syntax        = "0.12"
 i18n-embed           = { features = ["fluent-system"], version = "0.16" }
 # The user's preferred languages, as the OS lists them.
@@ -169,7 +169,7 @@ hkdf                 = "0.13"
 p256                 = { default-features = false, features = ["ecdh", "ecdsa", "pem", "std"], version = "0.14" }
 sha2                 = "0.11.0"
 # Reads embedded bitmap strikes to spot fonts GPUI's Linux rasterizer panics on.
-skrifa               = { default-features = false, features = ["std"], version = "0.48" }
+skrifa               = { default-features = false, features = ["std"], version = "0.49" }
 # Tests hold a port with a socket that is bound but never listens; mdns-sd
 # already locks this version.
 socket2              = "0.6.5"

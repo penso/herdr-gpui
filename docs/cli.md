@@ -134,7 +134,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `fan-out PROMPT [--agent KIND[:N]]...` | Open the fan-out dialog prefilled; you start it there |
 | `chat [status]` | The `herdr-acp` chat panes of the window's host, this machine or an SSH host: agent, status, model, context window use, and whether the chat view or the terminal shows |
 | `chat show\|hide\|toggle [--pane ID]` | Show the native chat view over your pane (or ID, else the focused one), or its terminal |
-| `chat new AGENT [--pane ID]` | Open a tab running a `herdr-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). On an SSH host the tab runs that host's `herdr-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). Exits 8 when `herdr-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`herdr-acp agents` lists those that are) |
+| `chat new AGENT [--pane ID]` | Open a tab running a `herdr-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). On an SSH host the tab runs that host's `herdr-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). With no Herdr pane to go by, as when called from a Herdr 2 pane, a Herdr 2 tab in the active group splits its pane in use with the chat instead (see [Chats in Herdr 2 panes](rich-chat.md#chats-in-herdr-2-panes)); its pane id in `chat` is `core:` and the terminal's. Exits 8 when `herdr-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`herdr-acp agents` lists those that are) |
 
 ### Hosts
 

@@ -1,10 +1,15 @@
 //! What a click asks of a host: run a script now, pause or resume it or the
 //! whole host, stop a run, start the daemon, approve a script. Each runs
 //! `herdr-automate` on the background executor; the host is read again
-//! once it answers, and a refusal is shown as the program worded it.
+//! once it answers, and a refusal is shown in the window's language, with
+//! what the program said kept as it worded it.
 
 use super::{Error, HostState, Machine, fetch};
-use crate::{HerdrWindow, window::Flash};
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+    window::Flash,
+};
 use gpui::{prelude::*, *};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,14 +53,14 @@ impl Action {
     }
 
     /// What the button says while the host works on it.
-    pub(crate) fn doing(&self) -> &'static str {
+    pub(crate) fn doing(&self) -> String {
         match self {
-            Self::Approve { .. } => "Approving…",
-            Self::Pause { .. } | Self::PauseAll => "Pausing…",
-            Self::Resume { .. } | Self::ResumeAll => "Resuming…",
-            Self::RunNow { .. } => "Starting…",
-            Self::Start => "Starting the daemon…",
-            Self::Stop { .. } => "Stopping…",
+            Self::Approve { .. } => fl!("automations-doing-approve"),
+            Self::Pause { .. } | Self::PauseAll => fl!("automations-doing-pause"),
+            Self::Resume { .. } | Self::ResumeAll => fl!("automations-doing-resume"),
+            Self::RunNow { .. } => fl!("automations-doing-run"),
+            Self::Start => fl!("automations-doing-start"),
+            Self::Stop { .. } => fl!("automations-doing-stop"),
         }
     }
 }
@@ -123,9 +128,18 @@ impl HerdrWindow {
         cx.notify();
     }
 
-    /// Says what went wrong on `label`, as the program worded it.
+    /// Says what went wrong on `label`.
     pub(crate) fn automation_failed(&mut self, label: &str, error: &Error, cx: &mut Context<Self>) {
         tracing::warn!(category = "automations", host = label, %error, "automation command failed");
-        self.show_flash(Flash::warning(format!("{label}: {error}")), cx);
+        self.show_flash(Flash::warning(failure(label, error)), cx);
     }
+}
+
+/// The warning for a command that failed on the host named `label`.
+pub(super) fn failure(label: &str, error: &Error) -> String {
+    fl!(
+        "automations-action-failed",
+        host = label,
+        error = error.localize()
+    )
 }

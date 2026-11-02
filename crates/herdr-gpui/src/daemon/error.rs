@@ -29,5 +29,5 @@ fn message(error: &serde_json::Value) -> &str {
         .or_else(|| error.as_str())
         .or_else(|| error.get("code").and_then(serde_json::Value::as_str))
         .filter(|message| !message.is_empty())
-        .unwrap_or("Invalid daemon error")
+        .unwrap_or("Invalid daemon error") // i18n: data
 }

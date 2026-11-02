@@ -7,6 +7,8 @@ pub enum Error {
     Approved { path: String, host: String },
     #[error(transparent)]
     Build(#[from] crate::host_build::Error),
+    #[error("herdr-automate: the command failed")]
+    Failed,
     #[error("herdr-automate printed output this app cannot read")]
     Json(#[source] serde_json::Error),
     #[error("herdr-automate is not installed on this host")]
@@ -35,5 +37,7 @@ pub enum Error {
     UnknownVersion,
     #[error("Automations cannot reach this kind of host")]
     UnsupportedHost,
+    #[error("herdr-automate: unexpected version output: {0}")]
+    Version(String),
     // keep-sorted end
 }

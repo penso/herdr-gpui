@@ -26,7 +26,7 @@ pub(crate) const HELLO_WINDOW: Duration = Duration::from_secs(60);
 /// Challenges one phone may hold unanswered, as the daemon keeps per device.
 const NONCES_KEPT: usize = 4;
 /// What the phone reads for every failure, so it learns nothing from which.
-pub(crate) const REFUSED: &str = "presence was not accepted";
+pub(crate) const REFUSED: &str = "presence was not accepted"; // i18n: data
 
 /// A phone's presence message.
 #[derive(Deserialize)]

@@ -1,8 +1,10 @@
 //! Semantic input on its way to a pane or popup: keystrokes, paste, and wheel
 //! deltas. Nothing here synthesizes terminal keys for an operation that has an
 //! endpoint API method, and nothing is sent while a menu page holds input.
+// i18n: migrated
 
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     connection::ConnectionBridge,
     terminal::{
@@ -267,7 +269,7 @@ impl HerdrWindow {
             ConnectionBridge::send_inputs(handle, &snapshot.boot_id, &target.target, inputs)
         };
         if let Err(error) = result {
-            self.local_error = Some(format!("Wheel input not sent: {error}"));
+            self.local_error = Some(fl!("window-input-wheel-failed", error = error.localize()));
             // The rows asked for never left, so nothing may wait on them.
             self.presentation.scroll.clear();
             cx.notify();

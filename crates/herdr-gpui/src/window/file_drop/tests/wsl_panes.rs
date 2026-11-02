@@ -27,7 +27,10 @@ fn a_wsl_pane_is_given_mapped_paths_and_never_a_file_copy(cx: &mut gpui::TestApp
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
             Some("Files not pasted: invalid WSL distribution name")
         );
         assert!(view.file_transfer.is_none());
@@ -50,7 +53,10 @@ fn a_wsl_pane_that_is_not_ready_refuses_the_files(cx: &mut gpui::TestAppContext)
             Delivery::Refused
         );
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
             Some("Files not pasted: The connection is not ready. Try again.")
         );
     });

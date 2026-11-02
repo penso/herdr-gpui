@@ -214,7 +214,10 @@ fn fan_out_opens_composed_and_picks_agents_once_known(cx: &mut gpui::TestAppCont
             assert_eq!(fan_out.picked_for_test(), 2);
             assert!(fan_out.composing(), "the user starts it");
             assert_eq!(
-                fan_out.error_for_test(),
+                fan_out
+                    .error_for_test()
+                    .map(|error| error.replace(['\u{2068}', '\u{2069}'], ""))
+                    .as_deref(),
                 Some("Not installed on Local: kimi")
             );
         })

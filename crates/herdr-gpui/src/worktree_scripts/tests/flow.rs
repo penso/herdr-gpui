@@ -206,7 +206,10 @@ fn missing_scripts_are_reported_only_when_asked_for(cx: &mut gpui::TestAppContex
         view.update(cx, |view, _| {
             assert_eq!(step(view), "none");
             let (flash, _) = view.flash.as_ref().unwrap();
-            assert_eq!(flash.text, "No run script in .herdr/worktree.toml");
+            assert_eq!(
+                flash.text.replace(['\u{2068}', '\u{2069}'], ""),
+                "No run script in .herdr/worktree.toml"
+            );
         })
     });
     // A broken file says why instead of running anything.
@@ -221,7 +224,11 @@ fn missing_scripts_are_reported_only_when_asked_for(cx: &mut gpui::TestAppContex
     cx.update(|_, cx| {
         view.update(cx, |view, _| {
             assert_eq!(step(view), "none");
-            let error = view.local_error.as_deref().unwrap();
+            let error = view
+                .local_error
+                .as_deref()
+                .unwrap()
+                .replace(['\u{2068}', '\u{2069}'], "");
             assert!(
                 error.starts_with("The run script did not start: .herdr/worktree.toml:"),
                 "{error}"

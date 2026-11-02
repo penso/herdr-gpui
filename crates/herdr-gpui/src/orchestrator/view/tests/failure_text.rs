@@ -8,7 +8,7 @@ fn a_failure_names_its_backend_once() {
         "Beads is not installed on this host (bd was not found)"
     );
     assert_eq!(
-        failure_text(Provider::Github, &"rate limited"),
-        "GitHub: rate limited"
+        failure_text(Provider::Github, &Error::Busy).replace(['\u{2068}', '\u{2069}'], ""),
+        format!("GitHub: {}", Error::Busy)
     );
 }

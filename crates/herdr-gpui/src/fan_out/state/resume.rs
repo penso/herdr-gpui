@@ -72,9 +72,10 @@ impl FanOut {
                     })
                 });
                 let state = match (&saved.checkout, &checkout, saved.step) {
-                    (Some(lost), None, _) => LaneState::Failed(format!(
-                        "{} is not the daemon it was, or cannot be scripted here; its worktree stays at {}",
-                        lost.endpoint_id, lost.path
+                    (Some(lost), None, _) => LaneState::Failed(crate::i18n::fl!(
+                        "fan-out-lane-lost",
+                        host = lost.endpoint_id.as_str(),
+                        path = lost.path.as_str()
                     )),
                     (_, _, Checkpoint::Prompted) => LaneState::Running,
                     (_, _, step) => LaneState::Interrupted(step),
@@ -105,10 +106,7 @@ impl FanOut {
             prompt: record.prompt.unwrap_or_default(),
             lanes,
             base: record.commit,
-            error: lost_prompt.then(|| {
-                "The prompt was too long to keep, so interrupted lanes cannot be finished here."
-                    .to_owned()
-            }),
+            error: lost_prompt.then(|| crate::i18n::fl!("fan-out-prompt-lost")),
             sender,
             events,
             work: Arc::new(AtomicBool::new(false)),

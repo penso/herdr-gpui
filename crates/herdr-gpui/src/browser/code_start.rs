@@ -7,7 +7,7 @@ use crate::config::{CodeEdit, Config};
 use crate::i18n::fl;
 use crate::{
     HerdrWindow,
-    code_server::launcher::{LICENSE_TERMS, LICENSE_URL, PRIVACY_URL},
+    code_server::launcher::{LICENSE_URL, PRIVACY_URL, license_terms},
 };
 use gpui::{prelude::*, *};
 
@@ -56,7 +56,7 @@ impl HerdrWindow {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(fl!("browser-vscode-start")),
                 )
-                .child(div().text_color(rgb(theme.muted)).child(LICENSE_TERMS))
+                .child(div().text_color(rgb(theme.muted)).child(license_terms()))
                 .child(
                     div()
                         .flex()

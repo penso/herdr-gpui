@@ -85,15 +85,27 @@ pub enum Action {
 
 impl Action {
     /// What the user reads once it succeeded.
-    fn done(&self) -> &'static str {
+    fn done(&self) -> Done {
         match self {
-            Self::Dispatch(_) => "Agent started",
-            Self::Stop { .. } => "Agent stopped",
-            Self::Send { .. } => "Message sent",
-            Self::Remove { .. } => "Run removed",
-            Self::DeleteBead { .. } => "Bead deleted",
+            Self::Dispatch(_) => Done::Started,
+            Self::Stop { .. } => Done::Stopped,
+            Self::Send { .. } => Done::Sent,
+            Self::Remove { .. } => Done::Removed,
+            Self::DeleteBead { .. } => Done::BeadDeleted,
         }
     }
+}
+
+/// What an action did, for the app to say in its own words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Done {
+    // keep-sorted start
+    BeadDeleted,
+    Removed,
+    Sent,
+    Started,
+    Stopped,
+    // keep-sorted end
 }
 
 /// Whether `model` is a name an agent's `--model` could take: no spaces,
@@ -107,8 +119,8 @@ pub fn valid_model(model: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '@'))
 }
 
-/// Runs `action` to completion; the success text, or why it failed.
-pub fn perform(site: &Site, action: &Action, cancelled: &AtomicBool) -> Result<&'static str> {
+/// Runs `action` to completion; what it did, or why it failed.
+pub fn perform(site: &Site, action: &Action, cancelled: &AtomicBool) -> Result<Done> {
     match action {
         Action::Dispatch(request) => dispatch(site, request, cancelled)?,
         Action::Stop { run } => {

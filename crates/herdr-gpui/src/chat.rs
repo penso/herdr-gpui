@@ -16,6 +16,7 @@
 // i18n: migrated
 
 mod chats;
+mod core_pane;
 mod discovery;
 mod existing;
 mod glide;
@@ -144,8 +145,22 @@ impl Error {
 pub(crate) struct Target {
     pub(crate) endpoint: EndpointId,
     pub(crate) existing: Option<existing::Binding>,
+    /// The chat's key in the window: a Herdr pane's id, or for a herdr-core
+    /// terminal the key [`core_pane::key`] makes. Code that acts on the pane
+    /// itself matches [`Self::surface`] instead.
     pub(crate) pane_id: String,
     pub(crate) route: Route,
+    pub(crate) surface: Surface,
+}
+
+/// Which daemon's pane a chat is drawn over.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub(crate) enum Surface {
+    /// A pane of the selected Herdr, drawn over its surface frame.
+    #[default]
+    Herdr,
+    /// A herdr-core terminal, drawn over its pane in a herdr-core tab.
+    Core(herdr_backend::TerminalId),
 }
 
 impl Target {
