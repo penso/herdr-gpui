@@ -547,7 +547,20 @@ impl HerdrWindow {
         else {
             return;
         };
-        self.open_workspace_menu(&id, Point::default(), window, cx);
+        self.open_workspace_dialog_for(&id, action, Point::default(), window, cx);
+    }
+
+    /// Opens `id`'s dialog for `action`, as its menu's row would, so the
+    /// dialog checks and targets the workspace exactly as the menu does.
+    pub(crate) fn open_workspace_dialog_for(
+        &mut self,
+        id: &str,
+        action: WorkspaceAction,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_workspace_menu(id, anchor, window, cx);
         if self.menu.page == Some(Page::Workspace) {
             self.open_workspace_dialog(action, window, cx);
         }

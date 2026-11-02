@@ -523,13 +523,26 @@ impl HerdrWindow {
                 .when(multi, |row| {
                     row.debug_selector(|| format!("workspace-{endpoint_id}-{id}"))
                 })
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.navigate_endpoint(
+                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                    let selected = this.navigate_endpoint(
                         &navigate_endpoint,
                         NavigationTarget::Workspace(&id),
                         cx,
                     );
                     window.focus(&this.focus, cx);
+                    // The first click of a double-click has already selected
+                    // the row, so the second only opens the rename dialog its
+                    // menu's Rename opens, which takes focus. The fold chevron
+                    // stops its clicks, so folding fast never renames.
+                    if selected && event.click_count() == 2 {
+                        this.open_workspace_dialog_for(
+                            &id,
+                            crate::menu::WorkspaceAction::Rename,
+                            event.position(),
+                            window,
+                            cx,
+                        );
+                    }
                 }))
                 // Only the selected endpoint's rows arm the hover menu:
                 // another endpoint's menu would have to select it first, and
