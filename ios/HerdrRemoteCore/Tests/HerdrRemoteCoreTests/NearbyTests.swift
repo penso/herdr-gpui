@@ -107,3 +107,41 @@ struct NearbySASTests {
         #expect(phone.code != relay.daemon_side.code)
     }
 }
+
+struct NearbySightingsTests {
+    private let start = Date(timeIntervalSince1970: 1_000)
+
+    @Test func aPeripheralIsNewOnlyUntilSeen() {
+        var sightings = NearbySightings()
+        let id = UUID()
+        let first = sightings.saw(id, at: start)
+        let again = sightings.saw(id, at: start + 1)
+        #expect(first && !again)
+    }
+
+    /// The dialog closed: the computer stops advertising, its entry goes,
+    /// and its next advertisement is new again.
+    @Test func aSilentPeripheralExpiresAndReturnsAsNew() {
+        var sightings = NearbySightings()
+        let quiet = UUID(), loud = UUID()
+        _ = sightings.saw(quiet, at: start)
+        _ = sightings.saw(loud, at: start)
+        _ = sightings.saw(loud, at: start + NearbySightings.lifetime)
+        let early = sightings.expire(at: start + NearbySightings.lifetime)
+        #expect(early.isEmpty)
+        let late = sightings.expire(at: start + NearbySightings.lifetime + 1)
+        #expect(late == [quiet])
+        let back = sightings.saw(quiet, at: start + 20)
+        #expect(back)
+    }
+
+    @Test func aPairingInProgressDoesNotExpire() {
+        var sightings = NearbySightings()
+        let pairing = UUID()
+        _ = sightings.saw(pairing, at: start)
+        let kept = sightings.expire(at: start + 60, keeping: [pairing])
+        #expect(kept.isEmpty)
+        let done = sightings.expire(at: start + 60)
+        #expect(done == [pairing])
+    }
+}

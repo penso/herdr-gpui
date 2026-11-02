@@ -18,6 +18,10 @@ final class NearbyBluetooth: NSObject {
     /// Peripherals whose `info` is being read, to list them.
     private var probing: Set<UUID> = []
     private var exchanges: [UUID: Exchange] = [:]
+    /// When each peripheral last advertised, to drop a computer whose
+    /// pairing dialog closed.
+    private var sightings = NearbySightings()
+    private var expiry: Task<Void, Never>?
 
     static let service = CBUUID(string: "DD750B9A-9568-4FC3-B357-B7515AE46DED")
     static let info = CBUUID(string: "820A3154-F1B2-47C2-B8BE-D89E812464A2")
@@ -56,14 +60,44 @@ final class NearbyBluetooth: NSObject {
     func stop() {
         wanted = false
         manager?.stopScan()
-        for id in probing { peripherals[id].map { manager?.cancelPeripheralConnection($0) } }
+        // Forget every peripheral, not only those being probed: a scan
+        // ignores one it already knows, so a computer paired, then
+        // forgotten, would never be listed again while the app runs.
+        for (id, peripheral) in peripherals {
+            fail(id, Failure.gone)
+            manager?.cancelPeripheralConnection(peripheral)
+        }
+        peripherals = [:]
         probing = []
         computers = []
+        sightings.removeAll()
+        expiry?.cancel()
+        expiry = nil
     }
 
     private func scan() {
         guard wanted else { return }
-        manager?.scanForPeripherals(withServices: [Self.service])
+        // Every advertisement, not only the first: one that stops means the
+        // computer's dialog closed. iOS coalesces them in the background,
+        // where a listed computer then expires, as no card shows there.
+        manager?.scanForPeripherals(withServices: [Self.service], options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        guard expiry == nil else { return }
+        expiry = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                self?.expireSilent()
+            }
+        }
+    }
+
+    /// Drops computers that stopped advertising, unless pairing with them.
+    private func expireSilent() {
+        for id in sightings.expire(at: Date(), keeping: Set(exchanges.keys)) {
+            if probing.contains(id), let peripheral = peripherals[id] {
+                manager?.cancelPeripheralConnection(peripheral)
+            }
+            drop(id)
+        }
     }
 
     /// The two pairing messages over this peripheral's `pair` characteristic.
@@ -118,6 +152,7 @@ extension NearbyBluetooth: @preconcurrency CBCentralManagerDelegate, @preconcurr
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
         let id = peripheral.identifier
+        _ = sightings.saw(id, at: Date())
         guard peripherals[id] == nil else { return }
         peripherals[id] = peripheral
         probing.insert(id)
@@ -134,8 +169,8 @@ extension NearbyBluetooth: @preconcurrency CBCentralManagerDelegate, @preconcurr
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        // Listed computers stay until scanning stops; a dialog closed since
-        // then answers the next pairing attempt with a refusal.
+        // Listed computers stay until they stop advertising (`expireSilent`);
+        // a dialog closed since then answers a pairing attempt with a refusal.
         fail(peripheral.identifier, Failure.gone)
         if probing.contains(peripheral.identifier) { drop(peripheral.identifier) }
     }

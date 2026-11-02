@@ -69,6 +69,9 @@ struct RootView: View {
             }
         }
         .animation(.spring(duration: 0.4), value: model.nearbyOffer?.id)
+        .onChange(of: model.offeredNearby) { _, offered in
+            model.dismissedNearby.formIntersection(offered)
+        }
         // Bluetooth looks for computers only while pairing is likely, so
         // its permission prompt comes when the person is pairing.
         .onChange(of: pairing || model.computers.isEmpty, initial: true) { _, looking in

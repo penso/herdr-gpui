@@ -172,6 +172,13 @@ final class AppModel {
         pendingRoute = .chat(PaneKey(device: computer.device, pane: link.pane), title: title ?? "Chat")
     }
 
+    /// The computers nearby whose pairing dialog is open now. A dismissed
+    /// offer stays dismissed only while it is here: one that closes and
+    /// opens its dialog again offers again.
+    var offeredNearby: Set<String> {
+        Set((nearby.computers + bluetooth.computers).filter(\.pairing).map(\.id))
+    }
+
     /// A computer nearby with its pairing dialog open that this phone has
     /// not paired, for the proximity card.
     var nearbyOffer: NearbyComputer? {
