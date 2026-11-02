@@ -5,7 +5,7 @@
 use herdr_backend::{Backend as _, TerminalId, TerminalInfo};
 use herdr_core_client::CoreBackend;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::mpsc::{Receiver, TryRecvError, sync_channel},
     time::{Duration, Instant},
 };
@@ -17,6 +17,9 @@ type Listed = Receiver<Result<Vec<TerminalInfo>, herdr_core_client::Error>>;
 
 #[derive(Default)]
 pub(super) struct Infos {
+    /// Terminals started since the last list was asked for, which a list
+    /// already on its way may not name yet.
+    fresh: HashSet<TerminalId>,
     known: HashMap<TerminalId, TerminalInfo>,
     last: Option<Instant>,
     pending: Option<Listed>,
@@ -27,6 +30,14 @@ impl Infos {
         self.known.get(id)
     }
 
+    /// Records a terminal just started, until the next list replaces it,
+    /// and hands it back.
+    pub(super) fn insert(&mut self, info: TerminalInfo) -> TerminalInfo {
+        self.fresh.insert(info.id.clone());
+        self.known.insert(info.id.clone(), info.clone());
+        info
+    }
+
     /// Takes a finished read and starts the next when one is due. True when
     /// what is known changed.
     pub(super) fn poll(&mut self, backend: Option<&CoreBackend>, now: Instant) -> bool {
@@ -34,10 +45,18 @@ impl Infos {
         if let Some(pending) = &self.pending {
             match pending.try_recv() {
                 Ok(Ok(list)) => {
-                    let known: HashMap<TerminalId, TerminalInfo> = list
+                    let mut known: HashMap<TerminalId, TerminalInfo> = list
                         .into_iter()
                         .map(|info| (info.id.clone(), info))
                         .collect();
+                    // A fresh terminal outlives one list that missed it.
+                    for id in self.fresh.drain() {
+                        if let Some(info) = self.known.get(&id)
+                            && !known.contains_key(&id)
+                        {
+                            known.insert(id, info.clone());
+                        }
+                    }
                     changed = known != self.known;
                     self.known = known;
                     self.pending = None;
@@ -70,3 +89,7 @@ impl Infos {
         changed
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests;

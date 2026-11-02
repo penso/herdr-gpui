@@ -117,6 +117,11 @@ class LinuxDistroTests(unittest.TestCase):
                                         ("archlinux", ("vulkan-icd-loader", "wayland"))):
                     for name in names:
                         self.assertIn(name, depends[packager])
+                # Every format points at the open-source Vulkan drivers.
+                recommends = {packager: override["recommends"] for packager, override in config["overrides"].items()}
+                self.assertIn("mesa-vulkan-drivers | vulkan-icd", recommends["deb"])
+                self.assertIn("mesa-vulkan-drivers", recommends["rpm"])
+                self.assertEqual(recommends["archlinux"], ["vulkan-radeon", "vulkan-intel"])
                 self.assertEqual(config["rpm"]["buildhost"], "herdr-gpui-release")
                 self.assertEqual(sorted(p.name for p in archive.parent.iterdir()),
                                  sorted([archive.name, *(p.name for p in self.outputs(target, archive.parent))]))
@@ -210,6 +215,12 @@ class LinuxDistroTests(unittest.TestCase):
                 copy.write_bytes(archive.read_bytes())
                 self.package(target, copy, nfpm=os.environ["HERDR_TEST_NFPM"])
                 self.assertEqual([path.read_bytes() for path in self.outputs(target, again)], first)
+                # nfpm before 2.48.0 silently dropped optional Arch dependencies.
+                arch_package = next(p for p in self.outputs(target, archive.parent) if p.name.endswith(".pkg.tar.zst"))
+                pkginfo = subprocess.run(["tar", "--zstd", "-xOf", str(arch_package), ".PKGINFO"],
+                                         check=True, capture_output=True, text=True).stdout
+                self.assertIn("optdepend = vulkan-radeon\n", pkginfo)
+                self.assertIn("optdepend = vulkan-intel\n", pkginfo)
 
 
 if __name__ == "__main__":

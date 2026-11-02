@@ -48,7 +48,8 @@ DEPENDS = {
 RECOMMENDS = {
     "deb": ["mesa-vulkan-drivers | vulkan-icd", "fonts-dejavu-core"],
     "rpm": ["mesa-vulkan-drivers"],
-    "archlinux": [],
+    # Arch splits Mesa's Vulkan drivers by vendor; nfpm writes these as optdepends.
+    "archlinux": ["vulkan-radeon", "vulkan-intel"],
 }
 
 

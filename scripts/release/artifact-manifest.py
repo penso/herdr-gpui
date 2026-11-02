@@ -39,9 +39,20 @@ UPDATER_SIGNATURES = ("update-manifest.sig", "package-manifest.sig", "windows-ma
                       "host-manifest.sig")
 
 
+def compact_checksums(version):
+    # Published releases are immutable. Keep their exact old asset contract
+    # verifiable while fitting new releases under installed updaters' 128 cap.
+    return tuple(map(int, version.split("."))) >= (20261102, 2)
+
+
 def asset_names(version):
-    return sorted(name + suffix for name in base_names(version)
-                  for suffix in ("", ".sha256", ".sha512", ".sig", ".crt"))
+    bases = base_names(version)
+    suffixes = ("", ".sha256", ".sig", ".crt") if compact_checksums(version) else (
+        "", ".sha256", ".sha512", ".sig", ".crt")
+    names = [name + suffix for name in bases for suffix in suffixes]
+    if compact_checksums(version):
+        names.append("SHA512SUMS")
+    return sorted(names)
 
 
 def check_files(directory, names):
@@ -58,6 +69,23 @@ def check_files(directory, names):
 def digest(path, algorithm):
     with path.open("rb") as source:
         return hashlib.file_digest(source, algorithm).hexdigest()
+
+
+def consolidate_checksums(directory, version):
+    """Validate the signer's full output before replacing SHA-512 sidecars."""
+    bases = base_names(version)
+    check_files(directory, [name + suffix for name in bases
+                            for suffix in ("", ".sha256", ".sha512", ".sig", ".crt")])
+    lines = []
+    for name in bases:
+        expected = f"{digest(directory / name, 'sha512')}  {name}\n"
+        if (directory / f"{name}.sha512").read_text() != expected:
+            raise ValueError(f"Invalid sha512 sidecar: {name}")
+        lines.append(expected)
+    with (directory / "SHA512SUMS").open("x") as output:
+        output.write("".join(lines))
+    for name in bases:
+        (directory / f"{name}.sha512").unlink()
 
 
 def verify_manifest(directory, version):
@@ -98,12 +126,21 @@ def main():
             raise ValueError("Final DMG checksum mismatch")
         print(actual)
         return
+    if args.mode == "create" and compact_checksums(version):
+        if len(names) + 1 >= 128:
+            raise ValueError("Release must have fewer than 128 assets for installed updaters")
+        consolidate_checksums(directory, version)
     check_files(directory, names + ([] if args.mode == "create" else ["SHA256SUMS"]))
+    sha512_lines = []
     for name in base_names(version):
         for algorithm in ("sha256", "sha512"):
             expected = f"{digest(directory / name, algorithm)}  {name}\n"
-            if (directory / f"{name}.{algorithm}").read_text() != expected:
+            if algorithm == "sha512" and compact_checksums(version):
+                sha512_lines.append(expected)
+            elif (directory / f"{name}.{algorithm}").read_text() != expected:
                 raise ValueError(f"Invalid {algorithm} sidecar: {name}")
+    if compact_checksums(version) and (directory / "SHA512SUMS").read_text() != "".join(sha512_lines):
+        raise ValueError("Invalid SHA512SUMS manifest")
     if args.mode == "create":
         with (directory / "SHA256SUMS").open("x") as output:
             for name in names:
