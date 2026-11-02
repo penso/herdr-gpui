@@ -1,5 +1,6 @@
 //! Embedded development icon; app bundles use their native Info.plist icon.
 //! The same artwork identifies the build in the About box on every platform.
+// i18n: migrated
 pub(super) const PNG: &[u8] = if env!("HERDR_BUILD_WORKTREE").as_bytes()[0] == b'1' {
     include_bytes!("../../../assets/icons/herdr-worktree-1024.png")
 } else {
@@ -10,9 +11,9 @@ pub(super) const PNG: &[u8] = if env!("HERDR_BUILD_WORKTREE").as_bytes()[0] == b
 // backing scale, rather than downsampling the About box's single large PNG.
 #[cfg(target_os = "macos")]
 const ICNS: &[u8] = if env!("HERDR_BUILD_WORKTREE").as_bytes()[0] == b'1' {
-    include_bytes!("../../../assets/icons/Herdr-worktree.icns")
+    include_bytes!("../../../assets/icons/Herdr-worktree.icns") // i18n: data
 } else {
-    include_bytes!("../../../assets/icons/Herdr.icns")
+    include_bytes!("../../../assets/icons/Herdr.icns") // i18n: data
 };
 
 #[cfg(target_os = "macos")]
@@ -24,7 +25,7 @@ pub fn install() {
     let Some(main_thread) = MainThreadMarker::new() else {
         return;
     };
-    NSProcessInfo::processInfo().setProcessName(&NSString::from_str("Herdr"));
+    NSProcessInfo::processInfo().setProcessName(&NSString::from_str("Herdr")); // i18n: data
     if NSBundle::mainBundle()
         .objectForInfoDictionaryKey(&NSString::from_str("CFBundleIconFile"))
         .is_some()
@@ -75,8 +76,8 @@ mod tests {
         use objc2_app_kit::NSImage;
         use objc2_foundation::NSData;
 
-        let stable = include_bytes!("../../../assets/icons/Herdr.icns").as_slice();
-        let worktree = include_bytes!("../../../assets/icons/Herdr-worktree.icns").as_slice();
+        let stable = include_bytes!("../../../assets/icons/Herdr.icns").as_slice(); // i18n: data
+        let worktree = include_bytes!("../../../assets/icons/Herdr-worktree.icns").as_slice(); // i18n: data
         assert_ne!(stable, worktree);
         assert_eq!(
             super::ICNS,

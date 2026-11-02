@@ -5,6 +5,7 @@
 use super::{OrchestratorView, look::agent_icon};
 use crate::{
     config::{corners, mix},
+    i18n::{Localize, fl},
     orchestrator::{
         Action, DispatchRequest, Item, Notice, SourceKey,
         actions::valid_model,
@@ -15,6 +16,7 @@ use crate::{
     teleport::AgentKind,
 };
 use gpui::{prelude::*, *};
+use herdr_orchestrator::actions::Done;
 
 #[cfg(test)]
 mod tests;
@@ -31,9 +33,33 @@ pub(crate) struct Dialog {
     model: Entity<SearchInput>,
     /// Another host to start on, by endpoint; the tab's own when `None`.
     pub(super) host: Option<String>,
-    problem: Option<&'static str>,
+    problem: Option<Problem>,
     /// A read-only review of a pull request rather than work on an issue.
     review: bool,
+}
+
+/// Why the dialog will not dispatch yet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Problem {
+    /// No agent installed on the chosen host is picked.
+    Agent,
+    /// Git would refuse the branch name.
+    Branch,
+    /// The extra instructions are over [`MAX_EXTRA`].
+    Extra,
+    /// The model name could become another option.
+    Model,
+}
+
+impl Problem {
+    fn text(self) -> String {
+        match self {
+            Self::Agent => fl!("orchestrator-problem-agent"),
+            Self::Branch => fl!("orchestrator-problem-branch"),
+            Self::Extra => fl!("orchestrator-problem-extra"),
+            Self::Model => fl!("orchestrator-problem-model"),
+        }
+    }
 }
 
 /// A destructive action waiting for the user to confirm it.
@@ -58,40 +84,70 @@ pub(crate) enum Confirm {
     },
 }
 
+/// What a finished action did, as the banner says it.
+pub(super) fn done(done: Done) -> String {
+    match done {
+        Done::BeadDeleted => fl!("orchestrator-done-bead-deleted"),
+        Done::Removed => fl!("orchestrator-done-removed"),
+        Done::Sent => fl!("orchestrator-done-sent"),
+        Done::Started => fl!("orchestrator-done-started"),
+        Done::Stopped => fl!("orchestrator-done-stopped"),
+    }
+}
+
+/// A merge method's confirming button, as GitHub words it.
+pub(super) fn merge_action(method: MergeMethod) -> String {
+    match method {
+        MergeMethod::Merge => fl!("orchestrator-merge-commit"),
+        MergeMethod::Squash => fl!("orchestrator-merge-squash"),
+        MergeMethod::Rebase => fl!("orchestrator-merge-rebase"),
+    }
+}
+
 impl Confirm {
-    fn text(&self) -> (String, String, &'static str) {
+    /// Its title, what it does, its button, and the button's ID.
+    fn text(&self) -> (String, String, String, &'static str) {
         match self {
             Self::Stop { agent, .. } => (
-                format!("Stop {agent}?"),
-                "Sends Esc, then Ctrl-C to the agent. The worktree is kept.".into(),
-                "Stop",
+                fl!("orchestrator-confirm-stop-title", agent = agent.as_str()),
+                fl!("orchestrator-confirm-stop-body"),
+                fl!("orchestrator-stop"),
+                "stop",
             ),
             Self::Remove { branch, .. } if branch.is_empty() => (
-                "Remove run?".into(),
-                "Forgets this failed run. It has no worktree to remove.".into(),
-                "Remove",
+                fl!("orchestrator-confirm-remove-run-title"),
+                fl!("orchestrator-confirm-remove-run-body"),
+                fl!("orchestrator-remove"),
+                "remove",
             ),
             Self::Remove { branch, .. } => (
-                "Remove worktree?".into(),
-                format!(
-                    "Removes the checkout of {branch}, discarding uncommitted changes. Committed work stays on the branch."
+                fl!("orchestrator-confirm-remove-worktree-title"),
+                fl!(
+                    "orchestrator-confirm-remove-worktree-body",
+                    branch = branch.as_str()
                 ),
-                "Remove",
+                fl!("orchestrator-remove"),
+                "remove",
             ),
             Self::Merge { method, target } => (
-                format!("{} #{}?", method.action(), target.number),
-                format!(
-                    "Merges pull request #{} at head commit {}; GitHub refuses if the branch moved since.",
-                    target.number,
-                    target.head().get(..12).unwrap_or(target.head()),
+                fl!(
+                    "orchestrator-confirm-merge-title",
+                    action = merge_action(*method),
+                    number = target.number
                 ),
-                "Merge",
+                fl!(
+                    "orchestrator-confirm-merge-body",
+                    number = target.number,
+                    head = target.head().get(..12).unwrap_or(target.head())
+                ),
+                fl!("orchestrator-merge"),
+                "merge",
             ),
             Self::DeleteBead { id, .. } => (
-                format!("Delete {id} permanently?"),
-                "Runs bd delete --force. This cannot be undone and removes it for everyone using this .beads."
-                    .into(),
-                "Delete",
+                fl!("orchestrator-confirm-delete-bead-title", id = id.as_str()),
+                fl!("orchestrator-confirm-delete-bead-body"),
+                fl!("orchestrator-delete"),
+                "delete",
             ),
         }
     }
@@ -186,11 +242,11 @@ impl OrchestratorView {
             (Some(_), true) => crate::orchestrator::naming::review_branch(found),
             _ => crate::orchestrator::naming::branch(found),
         };
-        let field = |placeholder: &str, text: &str, cx: &mut Context<Self>| {
+        let field = |placeholder: fn() -> String, text: &str, cx: &mut Context<Self>| {
             let (ui, theme) = (self.look.ui.clone(), self.look.theme.clone());
             cx.new(|cx| {
                 let mut input = SearchInput::new(cx);
-                input.set_placeholder(placeholder, cx);
+                input.set_placeholder_with(placeholder, cx);
                 input.set_appearance(ui, theme, cx);
                 if !text.is_empty() {
                     input.set_text_selected(text, cx);
@@ -198,9 +254,9 @@ impl OrchestratorView {
                 input
             })
         };
-        let branch = field("Branch name", &branch_name, cx);
-        let extra = field("Extra instructions, appended verbatim (optional)", "", cx);
-        let model = field("Agent default", "", cx);
+        let branch = field(|| fl!("orchestrator-branch-placeholder"), &branch_name, cx);
+        let extra = field(|| fl!("orchestrator-extra-placeholder"), "", cx);
+        let model = field(|| fl!("orchestrator-model-placeholder"), "", cx);
         let kind = self
             .snapshot()
             .installed
@@ -249,25 +305,25 @@ impl OrchestratorView {
                     .as_ref()
                     .is_some_and(|agents| agents.contains(kind))
         }) else {
-            dialog.problem = Some("Pick an agent installed on this host.");
+            dialog.problem = Some(Problem::Agent);
             cx.notify();
             return;
         };
         let branch = dialog.branch.read(cx).text().trim().to_owned();
         if !prompt::valid_branch(&branch) {
-            dialog.problem = Some("That branch name is not one Git accepts.");
+            dialog.problem = Some(Problem::Branch);
             cx.notify();
             return;
         }
         let extra = dialog.extra.read(cx).text().to_owned();
         if extra.len() > MAX_EXTRA {
-            dialog.problem = Some("Extra instructions are limited to 16 KiB.");
+            dialog.problem = Some(Problem::Extra);
             cx.notify();
             return;
         }
         let model = dialog.model.read(cx).text().trim().to_owned();
         if !model.is_empty() && !valid_model(&model) {
-            dialog.problem = Some("A model name has no spaces and does not start with a dash.");
+            dialog.problem = Some(Problem::Model);
             cx.notify();
             return;
         }
@@ -357,8 +413,8 @@ impl OrchestratorView {
         let look = &self.look;
         let notice = self.notice.as_ref()?;
         let (hue, text) = match &notice.outcome {
-            Ok(text) => (super::look::GREEN, (*text).to_owned()),
-            Err(error) => (super::look::RED, error.to_string()),
+            Ok(text) => (super::look::GREEN, done(*text)),
+            Err(error) => (super::look::RED, error.localize()),
         };
         Some(
             div()
@@ -376,11 +432,15 @@ impl OrchestratorView {
                 .child(look.dot(look.hue(hue), 7.))
                 .child(div().flex_1().min_w_0().text_size(look.small()).child(text))
                 .child(
-                    look.icon_button("orchestrator-notice-close", "icons/close.svg", "Dismiss")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.notice = None;
-                            cx.notify();
-                        })),
+                    look.icon_button(
+                        "orchestrator-notice-close",
+                        "icons/close.svg",
+                        fl!("orchestrator-dismiss"),
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.notice = None;
+                        cx.notify();
+                    })),
                 )
                 .into_any_element(),
         )
@@ -425,7 +485,7 @@ impl OrchestratorView {
 
     fn render_confirm(&self, confirm: &Confirm, cx: &mut Context<Self>) -> AnyElement {
         let look = &self.look;
-        let (title, body, verb) = confirm.text();
+        let (title, body, verb, key) = confirm.text();
         let confirm = confirm.clone();
         card(look)
             .w(px(420.))
@@ -442,13 +502,17 @@ impl OrchestratorView {
                     .gap_2()
                     .child(div().flex_1())
                     .child(
-                        look.button("orchestrator-confirm-cancel", "Cancel", false)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_overlays(window, cx);
-                            })),
+                        look.button(
+                            "orchestrator-confirm-cancel",
+                            fl!("orchestrator-cancel"),
+                            false,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.close_overlays(window, cx);
+                        })),
                     )
-                    .child(
-                        danger(look, verb).on_click(cx.listener(move |this, _, window, cx| {
+                    .child(danger(look, key, verb).on_click(cx.listener(
+                        move |this, _, window, cx| {
                             match confirm.clone() {
                                 Confirm::Merge { method, target } => {
                                     this.merge(method, &target, cx)
@@ -460,8 +524,8 @@ impl OrchestratorView {
                                 }
                             }
                             this.close_overlays(window, cx);
-                        })),
-                    ),
+                        },
+                    ))),
             )
             .into_any_element()
     }
@@ -480,9 +544,9 @@ impl OrchestratorView {
             .unwrap_or(herdr_client::ConnectTarget::Local)
         {
             herdr_client::ConnectTarget::Ssh { target, .. } => target.clone(),
-            _ => "this machine".into(),
+            _ => fl!("orchestrator-this-machine"),
         };
-        let section = |title: &'static str, body: AnyElement| {
+        let section = |title: String, body: AnyElement| {
             div()
                 .flex()
                 .flex_col()
@@ -500,7 +564,7 @@ impl OrchestratorView {
                 .border_color(rgb(theme.active))
                 .child(input.clone())
         };
-        let profiles = std::iter::once((None, "built-in".to_owned())).chain(
+        let profiles = std::iter::once((None, fl!("orchestrator-profile-built-in"))).chain(
             self.snapshot()
                 .profiles
                 .iter()
@@ -517,7 +581,10 @@ impl OrchestratorView {
             .children(profiles.map(|(index, name)| {
                 let on = index == dialog.profile;
                 div()
-                    .id(SharedString::from(format!("orchestrator-profile-{name}")))
+                    .id(SharedString::from(format!(
+                        "orchestrator-profile-{}",
+                        index.map_or(0, |index| index + 1)
+                    )))
                     .px_3()
                     .py(px(3.))
                     .rounded(px(corners::SMALL))
@@ -545,13 +612,13 @@ impl OrchestratorView {
                 if dialog.host == self.snapshot().installed_endpoint
                     && self.snapshot().installed_error.is_some()
                 {
-                    "Could not discover agents. Select the host to retry."
+                    fl!("orchestrator-agents-failed")
                 } else if self.snapshot().installed.is_none()
                     || dialog.host != self.snapshot().installed_endpoint
                 {
-                    "Looking for installed agents\u{2026}"
+                    fl!("orchestrator-agents-looking")
                 } else {
-                    "No supported agent is installed on this host."
+                    fl!("orchestrator-agents-none")
                 },
             )
             .into_any_element()
@@ -602,29 +669,42 @@ impl OrchestratorView {
                             .text_size(px(look.ui.size + 3.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(if dialog.review {
-                                "Review with agent"
+                                fl!("orchestrator-review-with-agent")
                             } else {
-                                "Dispatch agent"
+                                fl!("orchestrator-dispatch-agent")
                             }),
                     )
-                    .child(look.chip(format!("on {host}")))
+                    .child(look.chip(fl!("orchestrator-on-host", host = host)))
                     .child(
-                        look.icon_button("orchestrator-dialog-close", "icons/close.svg", "Close")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_overlays(window, cx);
-                            })),
+                        look.icon_button(
+                            "orchestrator-dialog-close",
+                            "icons/close.svg",
+                            fl!("orchestrator-close"),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.close_overlays(window, cx);
+                        })),
                     ),
             )
             .when_some(item, |el, item| el.child(item_line(look, item)))
-            .child(section("PROMPT", segmented.into_any_element()))
-            .child(section("AGENT", tiles))
-            .when_some(self.render_hosts(dialog, cx), |el, hosts| {
-                el.child(section("HOST", hosts))
-            })
-            .child(section("MODEL", field(&dialog.model).into_any_element()))
-            .child(section("BRANCH", field(&dialog.branch).into_any_element()))
             .child(section(
-                "EXTRA INSTRUCTIONS",
+                fl!("orchestrator-section-prompt"),
+                segmented.into_any_element(),
+            ))
+            .child(section(fl!("orchestrator-section-agent"), tiles))
+            .when_some(self.render_hosts(dialog, cx), |el, hosts| {
+                el.child(section(fl!("orchestrator-section-host"), hosts))
+            })
+            .child(section(
+                fl!("orchestrator-section-model"),
+                field(&dialog.model).into_any_element(),
+            ))
+            .child(section(
+                fl!("orchestrator-section-branch"),
+                field(&dialog.branch).into_any_element(),
+            ))
+            .child(section(
+                fl!("orchestrator-section-extra"),
                 field(&dialog.extra).into_any_element(),
             ))
             .when_some(dialog.problem, |el, problem| {
@@ -632,7 +712,7 @@ impl OrchestratorView {
                     div()
                         .text_size(look.small())
                         .text_color(rgb(look.hue(super::look::RED)))
-                        .child(problem),
+                        .child(problem.text()),
                 )
             })
             .child(
@@ -641,16 +721,24 @@ impl OrchestratorView {
                     .gap_2()
                     .child(div().flex_1())
                     .child(
-                        look.button("orchestrator-dialog-cancel", "Cancel", false)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_overlays(window, cx);
-                            })),
+                        look.button(
+                            "orchestrator-dialog-cancel",
+                            fl!("orchestrator-cancel"),
+                            false,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.close_overlays(window, cx);
+                        })),
                     )
                     .child(
-                        look.button("orchestrator-dialog-dispatch", "Dispatch", true)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.submit_dispatch(window, cx)),
-                            ),
+                        look.button(
+                            "orchestrator-dialog-dispatch",
+                            fl!("orchestrator-dispatch"),
+                            true,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.submit_dispatch(window, cx)),
+                        ),
                     ),
             )
             .into_any_element()
@@ -688,10 +776,10 @@ fn card(look: &super::Look) -> Div {
         .shadow_lg()
 }
 
-fn danger(look: &super::Look, label: &'static str) -> Stateful<Div> {
+fn danger(look: &super::Look, key: &'static str, label: String) -> Stateful<Div> {
     let fill = look.hue(super::look::RED);
     div()
-        .id(SharedString::from(format!("orchestrator-confirm-{label}")))
+        .id(SharedString::from(format!("orchestrator-confirm-{key}")))
         .px_3()
         .py(px(4.))
         .rounded(px(corners::CONTROL))

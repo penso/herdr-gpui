@@ -71,6 +71,26 @@ usage-pace = { $standing ->
 # $amount and $total are amounts with their unit, such as $12.30.
 usage-balance-of = { $amount } of { $total }
 
+# A balance counted in a service's credits. $amount is the number as
+# written, such as 1,250; $count is the same number, for the plural.
+usage-amount-credits = { $count ->
+        [one] { $amount } credit
+       *[other] { $amount } credits
+    }
+# A balance counted in a service's points; as usage-amount-credits.
+usage-amount-points = { $count ->
+        [one] { $amount } point
+       *[other] { $amount } points
+    }
+# A balance counted in code reviews; as usage-amount-credits.
+usage-amount-reviews = { $count ->
+        [one] { $amount } review
+       *[other] { $amount } reviews
+    }
+# A balance in a unit only one service uses, named as it names it ($unit),
+# such as DIEM.
+usage-amount-named = { $amount } { $unit }
+
 # The panel.
 usage-dashboard = Usage Dashboard
 usage-status-page = Status Page

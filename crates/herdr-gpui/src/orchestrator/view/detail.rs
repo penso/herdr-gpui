@@ -14,6 +14,7 @@ use super::{
 use crate::{
     config::{corners, mix},
     fonts::StyledFont,
+    i18n::fl,
     orchestrator::{Access, Item, Owner},
     release_notes,
 };
@@ -88,8 +89,12 @@ impl OrchestratorView {
         let look = &self.look;
         let theme = &look.theme;
         let (list, list_icon, list_tab) = match item.pull_request {
-            Some(_) => ("Pull requests", "icons/git-branch.svg", Tab::PullRequests),
-            None => ("Issues", "icons/note.svg", Tab::Issues),
+            Some(_) => (
+                fl!("orchestrator-pull-requests"),
+                "icons/git-branch.svg",
+                Tab::PullRequests,
+            ),
+            None => (fl!("orchestrator-issues"), "icons/note.svg", Tab::Issues),
         };
         let repo = self
             .snapshot()
@@ -139,14 +144,11 @@ impl OrchestratorView {
                     let on = tab == active;
                     let label = match tab {
                         DetailTab::Agent if runs > 0 => format!("{}  {runs}", tab.label()),
-                        _ => tab.label().to_owned(),
+                        _ => tab.label(),
                     };
                     div()
-                        .id(SharedString::from(format!(
-                            "orchestrator-detail-{}",
-                            tab.label()
-                        )))
-                        .debug_selector(move || format!("orchestrator-tab-{}", tab.label()))
+                        .id(SharedString::from(format!("orchestrator-detail-{tab:?}")))
+                        .debug_selector(move || format!("orchestrator-tab-{tab:?}"))
                         .pb_2()
                         .border_b_2()
                         .border_color(rgb(if on {
@@ -184,26 +186,36 @@ impl OrchestratorView {
             .gap_1()
             .text_size(look.small())
             .text_color(rgb(look.theme.muted))
-            .children(at.map(|at| div().pr_1().child(format!("{} of {}", at + 1, keys.len()))))
+            .children(at.map(|at| {
+                div().pr_1().child(fl!(
+                    "orchestrator-position",
+                    at = at + 1,
+                    count = keys.len()
+                ))
+            }))
             .child(
                 look.icon_button(
                     "orchestrator-detail-previous",
                     "icons/chevron-up.svg",
-                    "Previous",
+                    fl!("orchestrator-previous"),
                 )
                 .on_click(cx.listener(|this, _, _, cx| this.step_detail(-1, cx))),
             )
             .child(
-                look.icon_button("orchestrator-detail-next", "icons/chevron-down.svg", "Next")
-                    .debug_selector(|| "orchestrator-detail-next".into())
-                    .on_click(cx.listener(|this, _, _, cx| this.step_detail(1, cx))),
+                look.icon_button(
+                    "orchestrator-detail-next",
+                    "icons/chevron-down.svg",
+                    fl!("orchestrator-next"),
+                )
+                .debug_selector(|| "orchestrator-detail-next".into())
+                .on_click(cx.listener(|this, _, _, cx| this.step_detail(1, cx))),
             )
             .when_some(url, |el, url| {
                 el.child(
                     look.icon_button(
                         "orchestrator-detail-web",
                         "icons/external.svg",
-                        "Open in browser",
+                        fl!("orchestrator-open-in-browser"),
                     )
                     .on_click(cx.listener(move |_, _, _, cx| {
                         cx.emit(Event::OpenUrl(url.clone()));
@@ -214,7 +226,7 @@ impl OrchestratorView {
                 look.icon_button(
                     "orchestrator-detail-close",
                     "icons/close.svg",
-                    "Close details",
+                    fl!("orchestrator-close-details"),
                 )
                 .debug_selector(|| "orchestrator-detail-close".into())
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -280,7 +292,7 @@ impl OrchestratorView {
                     )
             })
             .when_some(item.parent_id.clone(), |el, parent| {
-                el.child(look.muted(format!("child of {parent}")))
+                el.child(look.muted(fl!("orchestrator-child-of", parent = parent)))
             })
     }
 
@@ -289,7 +301,7 @@ impl OrchestratorView {
     fn breadcrumbs(
         &self,
         repo: &str,
-        list: &'static str,
+        list: String,
         list_icon: &'static str,
         list_tab: Tab,
         item: &Item,
@@ -322,11 +334,15 @@ impl OrchestratorView {
             .min_w_0()
             .text_size(look.size())
             .child(
-                look.icon_button("orchestrator-back", "icons/arrow-left.svg", "Back")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.detail = None;
-                        cx.notify();
-                    })),
+                look.icon_button(
+                    "orchestrator-back",
+                    "icons/arrow-left.svg",
+                    fl!("orchestrator-back"),
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.detail = None;
+                    cx.notify();
+                })),
             )
             .child(
                 step(
@@ -366,7 +382,8 @@ impl OrchestratorView {
         let look = &self.look;
         let body = item.description.as_deref().unwrap_or("");
         let content = if body.trim().is_empty() {
-            look.muted("No description.").into_any_element()
+            look.muted(fl!("orchestrator-no-description-short"))
+                .into_any_element()
         } else {
             let lines = self.description.lines(body);
             release_notes::render("orchestrator-description", &lines, &look.theme, &look.mono)
@@ -378,7 +395,11 @@ impl OrchestratorView {
             .flex()
             .flex_col()
             .gap_2()
-            .child(div().font_weight(FontWeight::SEMIBOLD).child("Description"))
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(fl!("orchestrator-tab-description")),
+            )
             .child(content)
             .into_any_element()
     }
@@ -401,11 +422,11 @@ impl OrchestratorView {
             .flex_col()
             .gap_3();
         if item_runs.is_empty() {
-            column = column.child(look.muted("No agent has worked on this yet."));
+            column = column.child(look.muted(fl!("orchestrator-no-runs")));
         }
         for (position, row) in item_runs.iter().enumerate() {
             if position == 1 {
-                column = column.child(look.label("EARLIER RUNS"));
+                column = column.child(look.label(fl!("orchestrator-earlier-runs")));
             }
             column = column.child(self.run_card(runs, *row, position == 0, cx));
         }
@@ -414,7 +435,7 @@ impl OrchestratorView {
                 div()
                     .text_size(look.small())
                     .text_color(rgb(theme.muted))
-                    .child("Status comes from each host's Herdr snapshot. Runs started by agent-launcher are shown here; it alone updates them."),
+                    .child(fl!("orchestrator-runs-note")),
             )
             .into_any_element()
     }
@@ -429,7 +450,7 @@ impl OrchestratorView {
             .workspace
             .as_ref()
             .and_then(|workspace| workspace.host.clone())
-            .unwrap_or_else(|| "local".into());
+            .unwrap_or_else(|| fl!("orchestrator-host-local"));
         let branch = run
             .workspace
             .as_ref()
@@ -514,27 +535,42 @@ impl OrchestratorView {
     fn render_details(&self, item: &Item, cx: &mut Context<Self>) -> AnyElement {
         let look = &self.look;
         let theme = &look.theme;
-        let mut rows: Vec<(&'static str, String)> = vec![
-            ("Key", item.key.canonical()),
-            ("Identifier", item.identifier.clone()),
-            ("State", item.state.clone()),
+        let mut rows: Vec<(String, String)> = vec![
+            (fl!("orchestrator-details-key"), item.key.canonical()),
+            (
+                fl!("orchestrator-details-identifier"),
+                item.identifier.clone(),
+            ),
+            (fl!("orchestrator-details-state"), item.state.clone()),
         ];
         if let Some(url) = &item.url {
-            rows.push(("URL", url.clone()));
+            rows.push((fl!("orchestrator-details-url"), url.clone()));
         }
         if let Some(pr) = &item.pull_request {
-            rows.push(("Base", format!("{} @ {}", pr.base_ref, pr.base_sha)));
-            rows.push(("Head", format!("{} @ {}", pr.head_ref, pr.head_sha)));
+            rows.push((
+                fl!("orchestrator-details-base"),
+                format!("{} @ {}", pr.base_ref, pr.base_sha),
+            ));
+            rows.push((
+                fl!("orchestrator-details-head"),
+                format!("{} @ {}", pr.head_ref, pr.head_sha),
+            ));
             if let Some(head) = &pr.head_repository {
-                rows.push(("Head repository", head.clone()));
+                rows.push((fl!("orchestrator-details-head-repository"), head.clone()));
             }
         }
         if let Some(activity) = item.activity {
             let count =
                 |value: Option<u64>| value.map_or_else(|| "\u{2014}".to_owned(), |v| v.to_string());
-            rows.push(("Comments", count(activity.comments)));
-            rows.push(("Review comments", count(activity.review_comments)));
-            rows.push(("Commits", count(activity.commits)));
+            rows.push((
+                fl!("orchestrator-details-comments"),
+                count(activity.comments),
+            ));
+            rows.push((
+                fl!("orchestrator-details-review-comments"),
+                count(activity.review_comments),
+            ));
+            rows.push((fl!("orchestrator-details-commits"), count(activity.commits)));
         }
         let time = |value: Option<chrono::DateTime<chrono::Utc>>| {
             value.map_or_else(|| "\u{2014}".to_owned(), |value| value.to_rfc3339())
@@ -542,8 +578,8 @@ impl OrchestratorView {
         let deletable = item.key.source.provider == crate::orchestrator::Provider::Beads
             && self.snapshot().access == Some(Access::ReadWrite);
         let (source, id) = (item.key.source.clone(), item.key.native_id.clone());
-        rows.push(("Created", time(item.created_at)));
-        rows.push(("Updated", time(item.updated_at)));
+        rows.push((fl!("orchestrator-details-created"), time(item.created_at)));
+        rows.push((fl!("orchestrator-details-updated"), time(item.updated_at)));
         div()
             .id("orchestrator-details")
             .flex_1()
@@ -569,17 +605,21 @@ impl OrchestratorView {
             .when(deletable, |el| {
                 el.child(div().h_4()).child(
                     div().flex().child(
-                        look.button("orchestrator-delete-bead", "Delete bead\u{2026}", false)
-                            .text_color(rgb(look.hue(super::look::RED)))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.ask(
-                                    Confirm::DeleteBead {
-                                        source: source.clone(),
-                                        id: id.clone(),
-                                    },
-                                    cx,
-                                );
-                            })),
+                        look.button(
+                            "orchestrator-delete-bead",
+                            fl!("orchestrator-delete-bead"),
+                            false,
+                        )
+                        .text_color(rgb(look.hue(super::look::RED)))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.ask(
+                                Confirm::DeleteBead {
+                                    source: source.clone(),
+                                    id: id.clone(),
+                                },
+                                cx,
+                            );
+                        })),
                     ),
                 )
             })
@@ -617,8 +657,12 @@ impl OrchestratorView {
             .gap_2()
             .when(live, |el| {
                 el.child(
-                    look.button(("orchestrator-card-open", index), "Open pane", true)
-                        .on_click(cx.listener(move |this, _, _, cx| this.open_run(index, cx))),
+                    look.button(
+                        ("orchestrator-card-open", index),
+                        fl!("orchestrator-open-pane"),
+                        true,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| this.open_run(index, cx))),
                 )
             })
             .when(own && writable && current && live, |el| {
@@ -634,20 +678,28 @@ impl OrchestratorView {
                         .child(self.message.clone()),
                 )
                 .child(
-                    look.button(("orchestrator-card-send", index), "Send", false)
-                        .on_click(cx.listener(|this, _, _, cx| this.send_message(cx))),
+                    look.button(
+                        ("orchestrator-card-send", index),
+                        fl!("orchestrator-send"),
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| this.send_message(cx))),
                 )
                 .child(
-                    look.button(("orchestrator-card-stop", index), "Stop", false)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.ask(
-                                Confirm::Stop {
-                                    run: stop_run.clone(),
-                                    agent: agent.clone(),
-                                },
-                                cx,
-                            );
-                        })),
+                    look.button(
+                        ("orchestrator-card-stop", index),
+                        fl!("orchestrator-stop"),
+                        false,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.ask(
+                            Confirm::Stop {
+                                run: stop_run.clone(),
+                                agent: agent.clone(),
+                            },
+                            cx,
+                        );
+                    })),
                 )
             })
             .when(own && writable && removable, |el| {
@@ -655,7 +707,7 @@ impl OrchestratorView {
                     look.icon_button(
                         ("orchestrator-card-remove", index),
                         "icons/trash.svg",
-                        "Remove",
+                        fl!("orchestrator-remove"),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.ask(

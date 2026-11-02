@@ -5,10 +5,10 @@
 //! sign-in may not read, and those GitHub would not answer for.
 
 use super::{Alert, Alerts, Item, Repo, Report, Reports, Severity};
-use crate::i18n::fl;
+use crate::i18n::{Localize, fl};
 use crate::{HerdrWindow, orchestrator::pane};
 use gpui::{prelude::*, *};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 impl HerdrWindow {
     pub(crate) fn render_security_section(
@@ -19,12 +19,10 @@ impl HerdrWindow {
         let theme = &self.theme;
         let font = &self.config.ui;
         let small = px(font.size - 1.);
-        let updated = self.security.read_at().map(|at| {
-            fl!(
-                "security-updated",
-                ago = ago(SystemTime::now().duration_since(at).unwrap_or_default())
-            )
-        });
+        let updated = self
+            .security
+            .read_at()
+            .map(|at| fl!("security-updated", ago = since(SystemTime::now(), at)));
         let header = div()
             .debug_selector(|| "security-section-header".into())
             .flex_none()
@@ -190,7 +188,7 @@ impl HerdrWindow {
                 Ok(Reports::Hidden) => hidden.push(repo.name.as_str()),
                 Err(error) => failed.push((
                     repo.name.as_str(),
-                    fl!("security-reports-failed", error = error.to_string()),
+                    fl!("security-reports-failed", error = error.localize()),
                 )),
                 Ok(Reports::Off | Reports::Open { .. }) => {}
             }
@@ -207,7 +205,7 @@ impl HerdrWindow {
                 Ok(Alerts::Open { .. }) => quiet.push(repo.name.as_str()),
                 Ok(Alerts::Off) => off.push(repo.name.as_str()),
                 Ok(Alerts::Hidden) => unreadable.push(repo.name.as_str()),
-                Err(error) => failed.push((repo.name.as_str(), error.to_string())),
+                Err(error) => failed.push((repo.name.as_str(), error.localize())),
             }
         }
         // What the search hides is no news about the rest.
@@ -291,9 +289,7 @@ impl HerdrWindow {
                 Some(severity) => (severity.text(), severity_color(theme, severity)),
                 None => (fl!("security-unrated"), theme.muted),
             };
-            let age = report
-                .created_at
-                .map(|at| ago(now.duration_since(at.into()).unwrap_or_default()));
+            let age = report.created_at.map(|at| since(now, at.into()));
             let detail = [
                 Some(repo.name.clone()),
                 Some(report.advisory.clone()).filter(|id| !id.is_empty()),
@@ -581,11 +577,7 @@ pub(super) fn severity_color(theme: &crate::config::Theme, severity: Severity) -
     }
 }
 
-/// How long ago a read finished, to the minute.
-pub(super) fn ago(elapsed: Duration) -> String {
-    match elapsed.as_secs() / 60 {
-        0 => fl!("security-ago-just-now"),
-        minutes @ 1..60 => fl!("security-ago-minutes", minutes = minutes),
-        minutes => fl!("security-ago-hours", hours = minutes / 60),
-    }
+/// How long before `now` something happened: "5 min ago", "yesterday".
+pub(super) fn since(now: SystemTime, at: SystemTime) -> String {
+    crate::ago::text(now.duration_since(at).unwrap_or_default().as_secs())
 }

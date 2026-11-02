@@ -39,7 +39,7 @@ impl Creation {
                 provider: self.provider.key().to_owned(),
                 id: String::new(),
                 endpoint: String::new(),
-                label: format!("New {name} {noun} {index}"),
+                label: format!("New {name} {noun} {index}"), // i18n: data
                 state: DeviceState::Waiting,
                 step: None,
                 error: None,
@@ -113,7 +113,7 @@ pub(crate) fn start(
                 batch,
                 index,
                 DeviceState::Failed,
-                Some("Herdr UI could not start a worker for it"),
+                Some("Herdr UI could not start a worker for it"), // i18n: data
             );
         }
     }
@@ -140,7 +140,7 @@ pub(crate) fn create(creation: &Creation, report: &Report) -> crate::Result<()> 
     let Some(script) = crate::config::Config::load()?.cloud.script(provider)? else {
         return Ok(());
     };
-    report.step(DeviceState::SettingUp, "Running the setup script…".into());
+    report.step(DeviceState::SettingUp, "Running the setup script…".into()); // i18n: data
     let machine = exec::Machine {
         provider,
         account: device.account,

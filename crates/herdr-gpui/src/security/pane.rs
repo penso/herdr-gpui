@@ -9,9 +9,9 @@ mod report;
 use super::{
     Severity,
     page::{Found, Loaded, Opened, Page},
-    section::{ago, severity_color},
+    section::severity_color,
 };
-use crate::i18n::fl;
+use crate::i18n::{Localize, fl};
 use crate::{
     HerdrWindow,
     config::{corners, mix},
@@ -86,7 +86,7 @@ impl HerdrWindow {
         };
         let (page, failed) = match self.security.page(&opened.item) {
             Some(Loaded::Read(page)) => (Some(page.as_ref()), None),
-            Some(Loaded::Failed(error)) => (None, Some(error.to_string())),
+            Some(Loaded::Failed(error)) => (None, Some(error.localize())),
             Some(Loaded::Reading { .. }) | None => (None, None),
         };
         let wide = self.security.list_hidden();
@@ -518,15 +518,9 @@ pub(super) fn date(at: DateTime<Utc>) -> String {
     )
 }
 
+/// How long ago `at` was: "5 h ago", "yesterday".
 pub(super) fn since(at: DateTime<Utc>) -> String {
-    let elapsed = SystemTime::now()
-        .duration_since(at.into())
-        .unwrap_or_default();
-    if elapsed.as_secs() >= 48 * 3600 {
-        fl!("security-ago-days", days = elapsed.as_secs() / 86_400)
-    } else {
-        ago(elapsed)
-    }
+    super::section::since(SystemTime::now(), at.into())
 }
 
 pub(super) fn severity_text(look: &Look, severity: Severity, cvss: Option<f64>) -> AnyElement {

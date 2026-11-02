@@ -6,6 +6,7 @@
 //! The submodules start such a server for VS Code tabs: [`cli`] finds VS Code's
 //! command, [`token`] keeps the connection token, [`supervisor`] runs the
 //! child process, and [`launcher`] ties them to the windows and the config.
+// i18n: migrated
 mod cli;
 mod error;
 pub(crate) mod launcher;
@@ -134,10 +135,10 @@ impl From<&ureq::Error> for NoAnswer {
 impl fmt::Display for NoAnswer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Refused => f.write_str("Connection refused"),
+            Self::Refused => f.write_str("Connection refused"), // i18n: data
             Self::Timeout => write!(f, "No answer within {} seconds", TIMEOUT.as_secs()),
-            Self::UnknownHost => f.write_str("Unknown host"),
-            Self::Other => f.write_str("No connection"),
+            Self::UnknownHost => f.write_str("Unknown host"), // i18n: data
+            Self::Other => f.write_str("No connection"),      // i18n: data
         }
     }
 }

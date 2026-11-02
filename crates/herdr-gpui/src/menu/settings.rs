@@ -230,7 +230,7 @@ impl HerdrWindow {
                         });
                         this.config = config;
                         this.sound.set_volume(this.config.sound.volume);
-                        this.gui_config_diagnostic.sync(this.config.diagnostic().as_deref());
+                        this.gui_config_diagnostic.sync_own(this.config.diagnostic().as_deref());
                         crate::settings_window::apply_loaded_theme(&mut this.config, &mut this.theme, theme_revision, cx);
                         this.tick_toasts(
                             this.menu.page.is_some() || this.toasts_hidden,

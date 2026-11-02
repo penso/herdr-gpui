@@ -174,7 +174,11 @@ fn a_replaced_connection_fails_the_script_on_screen(cx: &mut gpui::TestAppContex
             });
             view.poll_cloud_setup_tab(cx);
             assert!(view.cloud_setup.is_none());
-            let error = view.local_error.clone().unwrap();
+            let error = view
+                .local_error
+                .clone()
+                .unwrap()
+                .replace(['\u{2068}', '\u{2069}'], "");
             assert!(error.contains("setup script for Build box"), "{error}");
         })
     });

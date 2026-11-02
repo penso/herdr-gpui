@@ -15,6 +15,7 @@ use std::{
 };
 
 mod addresses;
+mod en_xa;
 mod hosts;
 mod keyboard;
 mod networks;

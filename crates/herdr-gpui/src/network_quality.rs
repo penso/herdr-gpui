@@ -4,6 +4,7 @@
 //! day, so a metered link such as a phone hotspot can afford it, unlike a
 //! throughput test. The UI thread only starts and stops the worker and takes
 //! its probes on later ticks.
+// i18n: migrated
 
 mod probe;
 mod render;

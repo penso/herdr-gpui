@@ -2,6 +2,13 @@ use super::*;
 use herdr_client::protocol::{PaneSurfaceScrollMetrics, SurfaceRect};
 use herdr_client::scrollback::CopyMotionResult;
 
+/// The search label as English reads it, without the isolation marks
+/// Fluent puts around each placeable.
+fn search_label(mode: &CopyMode) -> Option<String> {
+    mode.search_label()
+        .map(|label| label.replace(['\u{2068}', '\u{2069}'], ""))
+}
+
 /// A 20x10 pane with 50 rows of history, scrolled `offset` up.
 fn pane(offset: u64) -> PaneSurfacePane {
     let rect = SurfaceRect {

@@ -8,6 +8,7 @@
 //! a time, and keys typed meanwhile wait in a bounded queue so a fast
 //! typist's sequence still runs in order. Nothing here touches the window or
 //! the socket.
+// i18n: migrated
 
 use crate::{
     scrollback::{match_count, push_matches, push_range, refresh_from, viewport_top},

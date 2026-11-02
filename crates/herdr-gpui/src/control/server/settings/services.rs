@@ -19,7 +19,7 @@ use std::time::Duration;
 /// detail is English: the command line's words are not localized.
 pub(super) fn describe(state: &State) -> (&'static str, Option<String>, Option<&str>) {
     match state {
-        State::Disabled(reason) => ("disabled", Some(reason.clone()), None),
+        State::Disabled(reason) => ("disabled", Some(reason.to_string()), None),
         State::Idle => ("idle", None, None),
         State::Checking => ("checking", None, None),
         State::Current => ("current", None, None),
@@ -32,7 +32,7 @@ pub(super) fn describe(state: &State) -> (&'static str, Option<String>, Option<&
         State::Restart { version } => ("restart", None, Some(version)),
         State::Restarting => ("restarting", None, None),
         State::Cancelling => ("cancelling", None, None),
-        State::Error(message) => ("error", Some(message.clone()), None),
+        State::Error(failure) => ("error", Some(failure.to_string()), None),
     }
 }
 

@@ -16,7 +16,7 @@ use crate::teleport::{
 };
 use crate::{
     HerdrWindow, NavigationTarget,
-    i18n::fl,
+    i18n::{errors::Localize, fl},
     menu::Page,
     progress::{self, Progress},
     window::Flash,
@@ -240,7 +240,7 @@ impl Teleport {
     }
 
     /// Apply finished work. Returns a completed move's outcome once.
-    fn poll(&mut self) -> (bool, Option<Result<Outcome, String>>) {
+    fn poll(&mut self) -> (bool, Option<Result<Outcome, Error>>) {
         let mut changed = false;
         while let Ok(event) = self.events.try_recv() {
             changed = true;
@@ -257,14 +257,13 @@ impl Teleport {
                     }
                 }
                 Event::Moved(result) => {
-                    let result = result.map_err(|error| error.to_string());
                     if let Err(error) = &result {
-                        self.stage = Stage::Failed(error.clone());
+                        self.stage = Stage::Failed(error.localize());
                     }
                     return (true, Some(result));
                 }
                 Event::Reviewed(Err(error)) => {
-                    self.stage = Stage::Failed(error.to_string());
+                    self.stage = Stage::Failed(error.localize());
                 }
             }
         }
@@ -309,7 +308,7 @@ impl HerdrWindow {
             Err(error) if !open => {
                 self.teleport = None;
                 self.show_flash(
-                    Flash::warning(fl!("teleport-failed", error = error.to_string())),
+                    Flash::warning(fl!("teleport-failed", error = error.localize())),
                     cx,
                 );
                 return;
@@ -344,7 +343,7 @@ impl HerdrWindow {
                 "teleport-done-warnings",
                 host = destination.as_str(),
                 count = outcome.warnings.len(),
-                first = first.as_str()
+                first = text::warning(first)
             )),
         };
         self.show_flash(flash, cx);

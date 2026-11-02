@@ -21,6 +21,7 @@ pub mod provision;
 pub mod remote;
 mod sessions;
 pub mod snapshot;
+mod warning;
 
 pub use {
     error::{Error, Step},
@@ -36,6 +37,7 @@ pub use {
         Envelope, HostSnapshot, PaneInfoResult, ProcessInfo, ProcessInfoResult, SnapshotResult,
         WorkspaceCreated, WorktreeCreated,
     },
+    warning::Warning,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use {

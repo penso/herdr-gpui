@@ -18,39 +18,39 @@ pub(super) type CjkFonts = &'static [(CjkScript, &'static str)];
 /// Every macOS release since 10.11 ships PingFang, Hiragino Sans, and Apple
 /// SD Gothic Neo.
 pub(super) const MACOS_CJK_FONTS: CjkFonts = &[
-    (CjkScript::Simplified, "PingFang SC"),
-    (CjkScript::Traditional, "PingFang TC"),
-    (CjkScript::HongKong, "PingFang HK"),
-    (CjkScript::Japanese, "Hiragino Sans"),
-    (CjkScript::Korean, "Apple SD Gothic Neo"),
+    (CjkScript::Simplified, "PingFang SC"),     // i18n: data
+    (CjkScript::Traditional, "PingFang TC"),    // i18n: data
+    (CjkScript::HongKong, "PingFang HK"),       // i18n: data
+    (CjkScript::Japanese, "Hiragino Sans"),     // i18n: data
+    (CjkScript::Korean, "Apple SD Gothic Neo"), // i18n: data
 ];
 
 /// The `UI` cuts are the interface variants Windows draws its own chrome
 /// with. Microsoft JhengHei serves Hong Kong as well as Taiwan.
 pub(super) const WINDOWS_CJK_FONTS: CjkFonts = &[
-    (CjkScript::Simplified, "Microsoft YaHei UI"),
-    (CjkScript::Traditional, "Microsoft JhengHei UI"),
-    (CjkScript::HongKong, "Microsoft JhengHei UI"),
-    (CjkScript::Japanese, "Yu Gothic UI"),
-    (CjkScript::Korean, "Malgun Gothic"),
+    (CjkScript::Simplified, "Microsoft YaHei UI"), // i18n: data
+    (CjkScript::Traditional, "Microsoft JhengHei UI"), // i18n: data
+    (CjkScript::HongKong, "Microsoft JhengHei UI"), // i18n: data
+    (CjkScript::Japanese, "Yu Gothic UI"),         // i18n: data
+    (CjkScript::Korean, "Malgun Gothic"),          // i18n: data
 ];
 
 /// Distributions package Noto Sans CJK, its Source Han Sans twin, or only
 /// the older WenQuanYi and Droid faces, which draw Chinese shapes.
 pub(super) const LINUX_CJK_FONTS: CjkFonts = &[
-    (CjkScript::Simplified, "Noto Sans CJK SC"),
-    (CjkScript::Traditional, "Noto Sans CJK TC"),
-    (CjkScript::HongKong, "Noto Sans CJK HK"),
-    (CjkScript::Japanese, "Noto Sans CJK JP"),
-    (CjkScript::Korean, "Noto Sans CJK KR"),
-    (CjkScript::Simplified, "Source Han Sans SC"),
-    (CjkScript::Traditional, "Source Han Sans TC"),
-    (CjkScript::HongKong, "Source Han Sans HC"),
-    (CjkScript::Japanese, "Source Han Sans"),
-    (CjkScript::Korean, "Source Han Sans K"),
-    (CjkScript::Simplified, "WenQuanYi Micro Hei"),
-    (CjkScript::Simplified, "WenQuanYi Zen Hei"),
-    (CjkScript::Simplified, "Droid Sans Fallback"),
+    (CjkScript::Simplified, "Noto Sans CJK SC"), // i18n: data
+    (CjkScript::Traditional, "Noto Sans CJK TC"), // i18n: data
+    (CjkScript::HongKong, "Noto Sans CJK HK"),   // i18n: data
+    (CjkScript::Japanese, "Noto Sans CJK JP"),   // i18n: data
+    (CjkScript::Korean, "Noto Sans CJK KR"),     // i18n: data
+    (CjkScript::Simplified, "Source Han Sans SC"), // i18n: data
+    (CjkScript::Traditional, "Source Han Sans TC"), // i18n: data
+    (CjkScript::HongKong, "Source Han Sans HC"), // i18n: data
+    (CjkScript::Japanese, "Source Han Sans"),    // i18n: data
+    (CjkScript::Korean, "Source Han Sans K"),    // i18n: data
+    (CjkScript::Simplified, "WenQuanYi Micro Hei"), // i18n: data
+    (CjkScript::Simplified, "WenQuanYi Zen Hei"), // i18n: data
+    (CjkScript::Simplified, "Droid Sans Fallback"), // i18n: data
 ];
 
 pub(super) const PLATFORM_CJK_FONTS: CjkFonts = if cfg!(target_os = "linux") {

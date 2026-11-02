@@ -4,6 +4,7 @@ use super::{ACTIVATION_TIMEOUT, LOCAL, Redraw};
 use crate::{
     HerdrWindow,
     avatars::Checkout,
+    i18n::{Localize, fl},
     notification_mutes::{Daemon, Mutes},
     state::{Answer, DialogResponse},
 };
@@ -39,7 +40,7 @@ impl HerdrWindow {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         if self.config.clipboard_toast.enabled {
-            self.show_flash(crate::window::Flash::success("copied to clipboard"), cx);
+            self.show_flash(crate::window::Flash::success(fl!("endpoint-copied")), cx);
         }
         true
     }
@@ -54,8 +55,11 @@ impl HerdrWindow {
         // can replace it; input held across a gap may only go there.
         self.flush_pending_input(cx);
         if let Some(error) = self.catalog.poll_write() {
-            crate::storage_warning::warn_storage_failure("Save host selection", &error);
-            self.local_error = Some(format!("Save host selection: {error}"));
+            crate::storage_warning::warn_storage_failure("Save host selection", &error); // i18n: data
+            self.local_error = Some(fl!(
+                "endpoint-save-selection-failed",
+                error = error.localize()
+            ));
             cx.notify();
         }
         if let Some(result) = self.catalog.poll() {
@@ -68,7 +72,8 @@ impl HerdrWindow {
                     self.reconcile_devices(update.hosts, update.wsl, cx);
                 }
                 Err(error) => {
-                    self.local_error = Some(format!("Host catalog: {error}"));
+                    self.local_error =
+                        Some(fl!("endpoint-catalog-failed", error = error.localize()));
                     cx.notify();
                 }
             }
@@ -183,7 +188,10 @@ impl HerdrWindow {
             if let Err(error) = endpoint.flush_config_reload()
                 && index == self.selected_endpoint
             {
-                self.local_error = Some(format!("Reload config: {error}"));
+                self.local_error = Some(fl!(
+                    "endpoint-reload-config-failed",
+                    error = error.localize()
+                ));
             }
         }
         crate::palette::LastSeen::trim(
@@ -267,7 +275,8 @@ impl HerdrWindow {
                     self.sent_focus = None;
                 }
                 Err(error) => {
-                    self.local_error = Some(format!("Activate: {error}"));
+                    self.local_error =
+                        Some(fl!("endpoint-activate-failed", error = error.localize()));
                     self.activation_deadline = Some(Instant::now());
                 }
             }
@@ -287,13 +296,15 @@ impl HerdrWindow {
             .is_some_and(|deadline| Instant::now() >= deadline)
             || self.live.activation.as_ref().is_some_and(|a| a.failed)
         {
-            let mut error = format!(
-                "{}: surface activation failed or timed out",
-                self.endpoints[self.selected_endpoint].label
-            );
-            if let Some(reason) = &self.live.error {
-                error.push_str(&format!(": {reason}"));
-            }
+            let device = self.endpoints[self.selected_endpoint].label.clone();
+            let error = match &self.live.error {
+                Some(reason) => fl!(
+                    "endpoint-activation-failed-because",
+                    device = device,
+                    reason = reason.clone()
+                ),
+                None => fl!("endpoint-activation-failed", device = device),
+            };
             if self.selected_endpoint != 0 {
                 self.switch_endpoint(LOCAL, cx);
             } else {

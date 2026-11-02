@@ -244,10 +244,7 @@ impl OrchestratorView {
                 .sources
                 .iter()
                 .find_map(|status| match &status.state {
-                    SyncState::Failed(error) => Some(failure_text(
-                        Provider::Azure,
-                        &crate::i18n::errors::Localize::localize(error),
-                    )),
+                    SyncState::Failed(error) => Some(failure_text(Provider::Azure, error)),
                     _ => None,
                 })
         });

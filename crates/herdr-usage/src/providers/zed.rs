@@ -19,6 +19,7 @@
 //! Not ported: the Linux editor sign-in lives in the Secret Service, which
 //! the probe cannot read.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -41,14 +42,7 @@ pub(crate) struct Zed;
 static META: Meta = Meta::new("zed", "Zed")
     .dashboard("https://zed.dev/account")
     .status_page("https://status.zed.dev")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "The zed.dev browser session, for token spend. Sign in at https://zed.dev in your \
-         browser (signing in inside the editor is not enough), open Developer Tools → \
-         Application → Cookies → https://zed.dev, copy the zed.session cookie, and paste it \
-         as \"zed.session=value\".",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-zed-setting-cookie")]);
 
 impl Service for Zed {
     fn meta(&self) -> &'static Meta {
@@ -192,13 +186,13 @@ fn predictions(
     usage: &EditPredictions,
     null_is_unlimited: bool,
     period: Option<(SystemTime, Duration)>,
-) -> Result<(Option<Window>, (String, String))> {
+) -> Result<(Option<Window>, (Text, Text))> {
     Ok(match predictions_limit(&usage.limit, null_is_unlimited)? {
         Predictions::Unlimited => (
             None,
             (
-                "Edit predictions".into(),
-                format!("{} used · Unlimited", usage.used),
+                Text::message("usage-zed-edit-predictions"),
+                Text::message("usage-zed-used-unlimited").arg("used", usage.used.to_string()),
             ),
         ),
         Predictions::Limited(limit) => (
@@ -211,8 +205,10 @@ fn predictions(
                 )
             }),
             (
-                "Edit predictions".into(),
-                format!("{} of {limit}", usage.used.min(limit)),
+                Text::message("usage-zed-edit-predictions"),
+                Text::message("usage-zed-used-of")
+                    .arg("used", usage.used.min(limit).to_string())
+                    .arg("limit", limit.to_string()),
             ),
         ),
     })
@@ -228,16 +224,21 @@ pub(crate) fn parse_editor(body: &str) -> Result<Report> {
     let (window, prediction) = predictions(&me.plan.usage.edit_predictions, false, period)?;
     let mut facts = vec![prediction];
     if me.plan.has_overdue_invoices {
-        facts.push(("Billing".into(), "Overdue invoices".into()));
+        facts.push((
+            Text::message("usage-zed-billing"),
+            Text::message("usage-zed-overdue-invoices"),
+        ));
     }
     let account = Account {
-        email: Some(me.user.github_login.trim().to_owned()).filter(|login| !login.is_empty()),
-        plan: plan_name(&me.plan.plan_v3),
+        email: Some(me.user.github_login.trim().to_owned())
+            .filter(|login| !login.is_empty())
+            .map(Text::service),
+        plan: plan_name(&me.plan.plan_v3).map(Text::service),
     };
     Ok(
         Report::new(Provider(&Zed), account, window.into_iter().collect()).with_sections([
             Section::Facts {
-                title: "Plan".into(),
+                title: Text::message("usage-zed-plan"),
                 facts,
             },
         ]),
@@ -250,23 +251,33 @@ pub(crate) fn parse_billing(body: &str) -> Result<Report> {
     let spend = &billing.current_usage.token_spend;
     let spent = spend.spend_in_cents / 100.;
     let cap = spend.limit_in_cents.map(|cents| cents / 100.);
-    let balance = Balance::new("Token spend", spent, Unit::Currency("USD".into()));
+    let balance = Balance::new(
+        Text::message("usage-zed-token-spend"),
+        spent,
+        Unit::Currency("USD".into()),
+    );
     let mut facts = vec![
         prediction,
-        ("Spent".into(), usd(spent)),
+        (Text::message("usage-zed-spent"), Text::service(usd(spent))),
         (
-            "Spend limit".into(),
-            cap.map_or_else(|| "Not reported".into(), usd),
+            Text::message("usage-zed-spend-limit"),
+            cap.map_or_else(
+                || Text::message("usage-zed-not-reported"),
+                |cap| Text::service(usd(cap)),
+            ),
         ),
     ];
     if let Some(cap) = cap {
-        facts.push(("Remaining budget".into(), usd(cap - spent)));
+        facts.push((
+            Text::message("usage-zed-remaining-budget"),
+            Text::service(usd(cap - spent)),
+        ));
     }
     Ok(Report::new(
         Provider(&Zed),
         Account {
             email: None,
-            plan: plan_name(&billing.plan),
+            plan: plan_name(&billing.plan).map(Text::service),
         },
         window.into_iter().collect(),
     )
@@ -275,7 +286,7 @@ pub(crate) fn parse_billing(body: &str) -> Result<Report> {
         None => balance,
     }])
     .with_sections([Section::Facts {
-        title: "Current billing period".into(),
+        title: Text::message("usage-zed-current-billing-period"),
         facts,
     }]))
 }
@@ -368,8 +379,14 @@ mod tests {
     fn reads_the_editor_plan_and_billing_period() {
         let report = parse_editor(&editor_fixture("{\"limited\": 120}")).unwrap();
         assert_eq!(report.provider.id(), "zed");
-        assert_eq!(report.account.email.as_deref(), Some("octocat"));
-        assert_eq!(report.account.plan.as_deref(), Some("Zed Pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("octocat")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Zed Pro")
+        );
         let window = &report.windows[0];
         assert_eq!(window.percent(), 25);
         assert_eq!(window.length, Some(Duration::from_secs(31 * 86_400)));
@@ -379,11 +396,19 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Edit predictions".to_owned(), "30 of 120".to_owned())
+            (
+                Text::message("usage-zed-edit-predictions"),
+                Text::message("usage-zed-used-of")
+                    .arg("used", "30")
+                    .arg("limit", "120")
+            )
         );
         assert_eq!(
             facts[1],
-            ("Billing".to_owned(), "Overdue invoices".to_owned())
+            (
+                Text::message("usage-zed-billing"),
+                Text::message("usage-zed-overdue-invoices")
+            )
         );
     }
 
@@ -394,7 +419,10 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "30 used · Unlimited");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-zed-used-unlimited").arg("used", "30")
+        );
     }
 
     #[test]
@@ -405,14 +433,36 @@ mod tests {
     #[test]
     fn reads_browser_billing() {
         let report = parse_billing(BILLING_BODY).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Zed Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Zed Pro")
+        );
         assert_eq!(report.windows[0].percent(), 12);
         let balance = &report.balances[0];
         assert_eq!(balance.text(), "$2.50 of $10.00");
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&("Remaining budget".to_owned(), "$7.50".to_owned())));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-zed-edit-predictions"),
+                    Text::message("usage-zed-used-of")
+                        .arg("used", "12")
+                        .arg("limit", "100")
+                ),
+                (Text::message("usage-zed-spent"), Text::service("$2.50")),
+                (
+                    Text::message("usage-zed-spend-limit"),
+                    Text::service("$10.00")
+                ),
+                (
+                    Text::message("usage-zed-remaining-budget"),
+                    Text::service("$7.50")
+                ),
+            ]
+        );
     }
 
     #[test]

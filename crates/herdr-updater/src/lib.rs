@@ -9,10 +9,12 @@
 mod channel;
 mod error;
 mod progress;
+mod reason;
 pub use channel::UpdateChannel;
 pub use error::{Error, Result};
 pub use error::{quota_exhausted, rate_limit_reset, retry_hint};
 pub use progress::Progress;
+pub use reason::{Disabled, Failure};
 #[cfg(unix)]
 mod brew;
 #[cfg(unix)]
@@ -26,8 +28,10 @@ mod unsupported;
 use unsupported::brew;
 #[cfg(not(any(unix, windows)))]
 use unsupported::install;
+/// The Windows installer's checks; only its [`windows::Error`] is public,
+/// so the app can name each failure in the shown language.
 #[cfg(windows)]
-mod windows;
+pub mod windows;
 #[cfg(windows)]
 use windows as install;
 
@@ -68,7 +72,7 @@ pub const PREVIEW_NOTES: &str = "## 20260920.2\n\n### Added\n- Release notes are
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum State {
-    Disabled(String),
+    Disabled(Disabled),
     Idle,
     Checking,
     Current,
@@ -99,7 +103,7 @@ pub enum State {
     },
     Restarting,
     Cancelling,
-    Error(String),
+    Error(Failure),
 }
 
 impl State {
@@ -228,7 +232,7 @@ pub struct Updater {
 impl Default for Updater {
     fn default() -> Self {
         Self {
-            state: State::Disabled("In-app updates require a release build with an embedded update verification key. Local builds and test fixtures never check automatically.".into()),
+            state: State::Disabled(Disabled::LocalBuild),
             commands: None,
             cancelled: Arc::new(AtomicBool::new(false)),
             stopped: Arc::new(AtomicBool::new(false)),
@@ -250,10 +254,7 @@ impl Updater {
     /// stage and restart the same installation at once.
     pub fn secondary() -> Self {
         let mut updater = Self::default();
-        updater.state = State::Disabled(
-            "another window owns app updates in this process. Use the window that was open first."
-                .into(),
-        );
+        updater.state = State::Disabled(Disabled::Secondary);
         updater
     }
 
@@ -267,12 +268,12 @@ impl Updater {
             return updater;
         }
         if release::target().is_none() {
-            updater.state = State::Disabled("No standalone updater is available for this platform. Use your package manager or download a supported release.".into());
+            updater.state = State::Disabled(Disabled::Platform);
             return updater;
         }
         #[cfg(windows)]
         if let Some(reason) = windows::missing_publisher() {
-            updater.state = State::Disabled(reason.to_string());
+            updater.state = State::Disabled(Disabled::Unsupported(Error::from(reason).into()));
             return updater;
         }
         // At most one operation and its cancellation acknowledgement are queued.
@@ -290,7 +291,7 @@ impl Updater {
                 updater.check();
             }
             Err(error) => {
-                updater.state = State::Disabled(format!("Could not start updater: {error}"))
+                updater.state = State::Disabled(Disabled::Unsupported(Error::Start(error).into()))
             }
         }
         updater
@@ -352,7 +353,7 @@ impl Updater {
             }
             Err(mpsc::TrySendError::Full(_)) => (),
             Err(mpsc::TrySendError::Disconnected(_)) => {
-                self.state = State::Error("Update worker stopped".into());
+                self.state = State::Error(Error::WorkerStopped.into());
             }
         }
     }
@@ -435,10 +436,7 @@ impl Updater {
                     self.restart = None;
                     self.state = State::Cancelling;
                 }
-                Err(_) => {
-                    self.state =
-                        State::Error("Update worker could not acknowledge cancellation".into())
-                }
+                Err(_) => self.state = State::Error(Error::CancelUnacknowledged.into()),
             }
         }
     }
@@ -479,7 +477,8 @@ impl Updater {
         changed || scheduled
     }
 
-    pub fn commit_restart(&mut self) -> Result<bool> {
+    /// A failed commit is also App Updates' state, so the panel shows it.
+    pub fn commit_restart(&mut self) -> Result<bool, Failure> {
         if self.committed {
             return Ok(false);
         }
@@ -498,9 +497,10 @@ impl Updater {
             return Ok(false);
         }
         if let Err(error) = guard.commit() {
-            self.state = State::Error(error.to_string());
+            let failure = Failure::from(error);
+            self.state = State::Error(failure.clone());
             self.restart = None;
-            return Err(error);
+            return Err(failure);
         }
         self.committed = true;
         Ok(true)
@@ -601,7 +601,7 @@ fn worker(
                     publish(
                         &mailbox,
                         generation,
-                        State::Disabled(reason.to_string()),
+                        State::Disabled(Disabled::Unsupported(Error::from(reason).into())),
                         None,
                     );
                     continue;
@@ -726,7 +726,7 @@ fn worker(
             // Display text never carries remote diagnostics, so it is safe to log.
             result.unwrap_or_else(|error| {
                 tracing::warn!(category = "updater", %error, "update operation failed");
-                State::Error(error.to_string())
+                State::Error(error.into())
             })
         };
         publish(&mailbox, generation, state, None);

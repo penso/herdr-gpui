@@ -1,5 +1,6 @@
 //! Building a window: its effects run in a fixed order before the fields,
 //! which stay sorted so parallel additions land on different lines.
+// i18n: migrated
 
 use super::{HerdrWindow, SurfaceSignal, function_keys, prefix};
 #[cfg(feature = "integration-test")]
@@ -82,7 +83,7 @@ impl HerdrWindow {
         let configured_terminal_size = config.terminal.size;
         let status_bar_visible = config.status_bar.show;
         let mut gui_config_diagnostic = crate::config_diagnostic::ConfigDiagnostic::default();
-        gui_config_diagnostic.sync(config.diagnostic().as_deref());
+        gui_config_diagnostic.sync_own(config.diagnostic().as_deref());
         let catalog = endpoint::Catalog::new(&target);
         let menu = menu::MenuState::new(cx);
         // Starts the thread that reads and saves the marks file.
@@ -182,6 +183,7 @@ impl HerdrWindow {
             editor_panes: Vec::new(),
             endpoints: vec![endpoint::Endpoint::new(
                 endpoint::LOCAL.into(),
+                // i18n: data
                 "Local".into(),
                 target,
                 true,
@@ -211,6 +213,7 @@ impl HerdrWindow {
             last_input: None,
             last_pointer: None,
             last_queued_options: None,
+            link_complaint: None,
             links: Default::default(),
             listening_ports: Default::default(),
             live: LiveState::default(),

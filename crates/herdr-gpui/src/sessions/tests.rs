@@ -483,3 +483,5 @@ fn an_answer_from_a_host_the_device_no_longer_points_at_is_dropped() {
         "the previous host's sessions are not this device's"
     );
 }
+
+mod en_xa;

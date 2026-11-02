@@ -5,7 +5,8 @@ use super::{Review, rows::mark_slot};
 use crate::{
     HerdrWindow,
     browser::TabId,
-    review::diff::{Body, FileDiff, RowId, Status},
+    i18n::fl,
+    review::diff::{Body, FileDiff, RowId, Status, Unreadable},
 };
 use gpui::{prelude::*, *};
 
@@ -15,6 +16,16 @@ fn counts(file: &FileDiff) -> Option<(String, String)> {
         format!("+{}", file.added?),
         format!("\u{2212}{}", file.removed?),
     ))
+}
+
+/// Why a file's lines are not shown.
+fn unreadable(why: Unreadable) -> String {
+    match why {
+        Unreadable::Change => fl!("review-unreadable-change"),
+        Unreadable::File => fl!("review-unreadable-file"),
+        Unreadable::NotFile => fl!("review-unreadable-not-file"),
+        Unreadable::TooLarge => fl!("review-unreadable-too-large"),
+    }
 }
 
 impl HerdrWindow {
@@ -80,7 +91,7 @@ impl HerdrWindow {
             .text_color(rgb(theme.muted))
             .font_weight(FontWeight::NORMAL)
             .child(crate::toggles::checkbox(theme, 12., viewed))
-            .child("Viewed")
+            .child(fl!("review-viewed"))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 this.toggle_review_viewed(id, file, cx);
@@ -126,13 +137,13 @@ impl HerdrWindow {
             .child(mark_slot(theme, review.marks.get(&row).copied()).h(px(line_height)))
             .child(fold)
             .child(div().flex_1().min_w_0().child(name))
-            .when(!entry.status.label().is_empty(), |header| {
+            .when_some(entry.status.label(), |header, label| {
                 header.child(
                     div()
                         .flex_none()
                         .font_weight(FontWeight::NORMAL)
                         .text_color(rgb(theme.muted))
-                        .child(entry.status.label()),
+                        .child(label),
                 )
             })
             .children(counts)
@@ -167,23 +178,25 @@ impl HerdrWindow {
         };
         let reading = review.reading.contains(&file);
         let (text, action) = match &entry.body {
-            _ if reading => ("Reading\u{2026}".to_owned(), None),
-            Body::Pending => ("Reading\u{2026}".to_owned(), None),
-            Body::Binary => ("Binary file not shown".to_owned(), None),
+            _ if reading => (fl!("review-reading"), None),
+            Body::Pending => (fl!("review-reading"), None),
+            Body::Binary => (fl!("review-binary"), None),
             Body::Large => (
                 match counts(entry) {
-                    Some((added, removed)) => {
-                        format!("Large change not shown: {added} {removed} lines")
-                    }
-                    None => "Large file not shown".to_owned(),
+                    Some((added, removed)) => fl!(
+                        "review-large-change",
+                        added = added.as_str(),
+                        removed = removed.as_str()
+                    ),
+                    None => fl!("review-large-file"),
                 },
-                Some("Load diff"),
+                Some(fl!("review-load-diff")),
             ),
-            Body::Failed(why) => (why.clone(), Some("Try again")),
+            Body::Failed(why) => (unreadable(*why), Some(fl!("review-try-again"))),
             Body::Loaded(lines) if lines.truncated => {
-                (format!("Cut short after {} lines", lines.len()), None)
+                (fl!("review-cut-short", count = lines.len()), None)
             }
-            Body::Loaded(_) => ("No changes to show".to_owned(), None),
+            Body::Loaded(_) => (fl!("review-no-lines"), None),
         };
         div()
             .id(("review-placeholder", file))

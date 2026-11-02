@@ -10,6 +10,8 @@
 //! and its pseudo-terminal fallback for Kiro CLI releases that print nothing
 //! through pipes; the `/context` window breakdown is left out too.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -114,9 +116,9 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
         if credits.is_some() {
             balances.push(
                 Balance::new(
-                    "Credits left",
+                    Text::message("usage-kiro-credits-left"),
                     (total - used).max(0.),
-                    Unit::Count("credits".into()),
+                    Unit::Count(Count::Credits),
                 )
                 .out_of(total),
             );
@@ -127,7 +129,7 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
             .and_then(leading_number)
             .map(|(days, _)| now + Duration::from_secs((days.max(0.) as u64) * 86_400));
         windows.push(Window::new(
-            Kind::Named("Bonus credits".into()),
+            Kind::Named(Text::message("usage-kiro-bonus-credits")),
             used / total * 100.,
             expires,
             None,
@@ -138,32 +140,38 @@ pub(crate) fn parse(output: &str, email: Option<String>, now: SystemTime) -> Res
     if let Some(status) = after(&text, "Overages:").map(|rest| line(rest).trim().to_owned())
         && !status.is_empty()
     {
-        facts.push(("Overages".to_owned(), status));
+        facts.push((Text::message("usage-kiro-overages"), Text::service(status)));
     }
     if let Some((used, _)) =
         after(&text, "Credits used:").and_then(|rest| leading_number(rest.trim_start()))
     {
-        facts.push(("Overage credits used".to_owned(), plain(used)));
+        facts.push((
+            Text::message("usage-kiro-overage-credits-used"),
+            Text::service(plain(used)),
+        ));
     }
     if let Some((cost, rest)) = after(&text, "Est. cost:").and_then(|rest| {
         let rest = rest.trim_start();
         leading_number(rest.strip_prefix('$').unwrap_or(rest))
     }) && rest.trim_start().starts_with("USD")
     {
-        facts.push(("Estimated overage cost".to_owned(), format!("${cost:.2}")));
+        facts.push((
+            Text::message("usage-kiro-estimated-overage-cost"),
+            Text::service(format!("${cost:.2}")),
+        ));
     }
 
     Ok(Report::new(
         Provider(&Kiro),
         Account {
-            email,
-            plan: Some(display_plan(&plan.name)),
+            email: email.map(Text::service),
+            plan: Some(Text::service(display_plan(&plan.name))),
         },
         windows,
     )
     .with_balances(balances)
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Overages".into(),
+        title: Text::message("usage-kiro-overages"),
         facts,
     })))
 }
@@ -397,15 +405,28 @@ mod tests {
                       Credits (12.50 of 50 covered in plan)\n\
                       ████████████████████ 25%\n";
         let report = parse(output, Some("person@example.com".into()), now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kiro Free"));
-        assert_eq!(report.account.email.as_deref(), Some("person@example.com"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kiro Free")
+        );
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("person@example.com")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert_eq!(window.percent(), 25);
         assert!(window.resets_at.is_some());
         assert_eq!(
             report.balances,
-            vec![Balance::new("Credits left", 37.5, Unit::Count("credits".into())).out_of(50.)]
+            vec![
+                Balance::new(
+                    Text::message("usage-kiro-credits-left"),
+                    37.5,
+                    Unit::Count(Count::Credits)
+                )
+                .out_of(50.)
+            ]
         );
     }
 
@@ -422,10 +443,16 @@ mod tests {
             "https://app.kiro.dev/account/usage\n",
         );
         let report = parse(output, None, now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kiro Free"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kiro Free")
+        );
         assert_eq!(report.windows[0].percent(), 0);
         let bonus = &report.windows[1];
-        assert_eq!(bonus.kind, Kind::Named("Bonus credits".into()));
+        assert_eq!(
+            bonus.kind,
+            Kind::Named(Text::message("usage-kiro-bonus-credits"))
+        );
         assert_eq!(bonus.percent(), 2);
         assert_eq!(
             bonus.resets_at,
@@ -434,8 +461,11 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Overages".into(),
-                facts: vec![("Overages".into(), "Disabled".into())],
+                title: Text::message("usage-kiro-overages"),
+                facts: vec![(
+                    Text::message("usage-kiro-overages"),
+                    Text::service("Disabled")
+                )],
             }]
         );
     }
@@ -450,7 +480,10 @@ mod tests {
     #[test]
     fn keeps_a_plan_only_summary() {
         let report = parse("Plan: KIRO PRO MAX | 1 usage breakdowns\n", None, now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Kiro Pro Max"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Kiro Pro Max")
+        );
         assert!(report.windows.is_empty());
         assert!(report.balances.is_empty());
     }
@@ -463,16 +496,28 @@ mod tests {
                       Credits used: 12.5\n\
                       Est. cost: $0.50 USD\n";
         let report = parse(output, None, now()).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Q Developer Pro"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Q Developer Pro")
+        );
         assert_eq!(report.windows[0].percent(), 40);
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Overages".into(),
+                title: Text::message("usage-kiro-overages"),
                 facts: vec![
-                    ("Overages".into(), "Enabled".into()),
-                    ("Overage credits used".into(), "12.50".into()),
-                    ("Estimated overage cost".into(), "$0.50".into()),
+                    (
+                        Text::message("usage-kiro-overages"),
+                        Text::service("Enabled")
+                    ),
+                    (
+                        Text::message("usage-kiro-overage-credits-used"),
+                        Text::service("12.50")
+                    ),
+                    (
+                        Text::message("usage-kiro-estimated-overage-cost"),
+                        Text::service("$0.50")
+                    ),
                 ],
             }]
         );

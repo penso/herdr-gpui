@@ -10,6 +10,7 @@ use crate::browser::TabId;
 use crate::{
     HerdrWindow,
     config::Theme,
+    i18n::fl,
     panel_resize::PanelDrag,
     review::diff::{Anchor, Body, FileDiff, RowId, Status},
 };
@@ -221,7 +222,7 @@ impl HerdrWindow {
             }))
             .when(review.hide_viewed, |button| button.bg(rgb(theme.active)))
             .hover(|button| button.bg(rgb(theme.active)))
-            .child("Hide viewed")
+            .child(fl!("review-hide-viewed"))
             .on_click(cx.listener(move |this, _, _, cx| {
                 if let Some(review) = this.reviews.get_mut(&id) {
                     review.hide_viewed = !review.hide_viewed;
@@ -259,11 +260,13 @@ impl HerdrWindow {
                     .px_2()
                     .py_1()
                     .text_color(rgb(theme.muted))
-                    .child(div().flex_1().min_w_0().truncate().child(if files == 1 {
-                        "1 file changed".to_owned()
-                    } else {
-                        format!("{files} files changed")
-                    }))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .child(fl!("review-files-changed", count = files)),
+                    )
                     .child(hide),
             )
             .child(

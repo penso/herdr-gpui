@@ -1,4 +1,5 @@
 use super::*;
+use crate::text::Text;
 use crate::{probe::Shell, providers::codex};
 use std::{
     fs,
@@ -130,7 +131,7 @@ fn opencode_oauth_reads_plan_usage_on_the_selected_host() {
         host.with_json_parser(Some(parser));
         let report = host.fetch().unwrap().unwrap();
         assert_eq!(report.provider, provider("codex"));
-        assert_eq!(report.account.plan.as_deref(), Some("Plus"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Plus"));
         assert_eq!(report.windows[0].kind, Kind::Session);
         assert_eq!(report.windows[0].percent(), 23);
         let requests = host.requests();

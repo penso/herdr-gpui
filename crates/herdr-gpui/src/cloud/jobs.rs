@@ -6,8 +6,11 @@
 //! provider's own work, reporting the shared [`Step`]s.
 
 use super::worker::{self, Worker};
-use crate::HerdrWindow;
 use crate::cloud::{CloudProvider, SavedDevice, Step};
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+};
 use gpui::Context;
 
 enum Update {
@@ -146,16 +149,13 @@ impl HerdrWindow {
                 );
                 match result {
                     Ok(saved) => {
-                        let then = if job.setup.is_some() {
-                            "; its setup script runs in a new tab when it connects"
-                        } else {
-                            " to start working"
-                        };
+                        let setup = if job.setup.is_some() { "yes" } else { "no" };
                         self.local_transfer_notice(
-                            &format!("{name} {noun} ready"),
-                            format!(
-                                "{} is ready. Choose it in the device picker{then}.",
-                                saved.label
+                            &fl!("cloud-jobs-ready", provider = name, noun = noun),
+                            fl!(
+                                "cloud-jobs-ready-detail",
+                                device = saved.label.clone(),
+                                setup = setup
                             ),
                             cx,
                         );
@@ -171,8 +171,12 @@ impl HerdrWindow {
                         }
                     }
                     Err(error) => self.local_transfer_notice(
-                        &format!("{name} {noun} setup failed"),
-                        format!("{}: {error}", job.name),
+                        &fl!("cloud-jobs-failed", provider = name, noun = noun),
+                        fl!(
+                            "cloud-jobs-failed-detail",
+                            device = job.name.clone(),
+                            error = error.localize()
+                        ),
                         cx,
                     ),
                 }

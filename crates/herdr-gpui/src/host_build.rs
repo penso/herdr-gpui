@@ -9,6 +9,7 @@
 //!
 //! Automations copy `herdr-automate` this way, and remote control copies
 //! `herdr-remote-control`.
+// i18n: migrated
 
 use herdr_client::shell_quote;
 use sha2::{Digest, Sha256};
@@ -55,8 +56,8 @@ impl Platform {
             return Err(unknown());
         };
         let os = match system {
-            "Linux" => "linux",
-            "Darwin" => "macos",
+            "Linux" => "linux",  // i18n: data
+            "Darwin" => "macos", // i18n: data
             _ => return Err(unknown()),
         };
         let arch = match machine {
@@ -88,7 +89,7 @@ impl std::fmt::Display for Platform {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let os = match self.os {
             "macos" => "macOS",
-            "linux" => "Linux",
+            "linux" => "Linux", // i18n: data
             other => other,
         };
         write!(f, "{os} {}", self.arch)
@@ -152,6 +153,7 @@ pub(crate) fn digest(program: &'static str, path: &Path) -> Result<(u64, String)
 /// place, exiting [`CHECKSUM_EXIT`] when the copy does not match `sha256`.
 pub(crate) fn copy_script(program: &str, version: &str, sha256: &str) -> String {
     format!(
+        // i18n: data
         r#"program={program}
 version={version}
 sum={sum}

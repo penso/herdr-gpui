@@ -5,6 +5,8 @@
 //! the balance. CodexBar's daily bar chart is summarized as per-period facts
 //! and a per-model split. Poe has no OAuth or cookie sign-in to port.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -33,7 +35,7 @@ static META: Meta = Meta::new("poe", "Poe")
     .settings(&[Setting::new(
         "api_key",
         &["POE_API_KEY"],
-        "A Poe API key, created or copied at https://poe.com/api/keys.",
+        "usage-poe-setting-api-key",
     )]);
 
 impl Service for Poe {
@@ -210,16 +212,18 @@ impl Summary {
         })
     }
 
-    fn text(&self) -> String {
-        let mut text = format!(
-            "{} · {} requests",
-            points(self.points),
-            group(self.requests as i64)
-        );
-        if let Some(cost) = self.cost {
-            text.push_str(&format!(" · ${cost:.2}"));
+    fn text(&self) -> Text {
+        match self.cost {
+            None => Text::message("usage-poe-summary")
+                .arg("points", points(self.points))
+                .arg("requests", self.requests)
+                .arg("count", group(self.requests as i64)),
+            Some(cost) => Text::message("usage-poe-summary-cost")
+                .arg("points", points(self.points))
+                .arg("requests", self.requests)
+                .arg("count", group(self.requests as i64))
+                .arg("cost", format!("${cost:.2}")),
         }
-        text
     }
 }
 
@@ -233,25 +237,28 @@ fn report(balance: Option<f64>, entries: &[Entry], now: SystemTime) -> Report {
     let week = now.checked_sub(7 * DAY).unwrap_or(SystemTime::UNIX_EPOCH);
     let mut facts = Vec::new();
     if let Some(balance) = balance {
-        facts.push(("Current balance".to_owned(), points(balance)));
+        facts.push((Text::message("usage-poe-current-balance"), points(balance)));
     }
     let mut sections = Vec::new();
     if !entries.is_empty() {
         let summaries = [
             (
-                "Today",
+                Text::message("usage-poe-today"),
                 Summary::of(entries.iter().filter(|entry| day(entry.at) == today)),
             ),
             (
-                "Last 7 days",
+                Text::message("usage-poe-last-7-days"),
                 Summary::of(entries.iter().filter(|entry| entry.at >= week)),
             ),
-            ("Last 30 days", Summary::of(entries)),
+            (
+                Text::message("usage-poe-last-30-days"),
+                Summary::of(entries),
+            ),
         ];
         facts.extend(
             summaries
-                .iter()
-                .map(|(label, summary)| ((*label).to_owned(), summary.text())),
+                .into_iter()
+                .map(|(label, summary)| (label, summary.text())),
         );
         let mut models: HashMap<&str, f64> = HashMap::new();
         for entry in entries {
@@ -260,43 +267,61 @@ fn report(balance: Option<f64>, entries: &[Entry], now: SystemTime) -> Report {
         let mut models: Vec<_> = models.into_iter().collect();
         models.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
         if let Some((model, spent)) = models.first() {
-            facts.push(("Top model".into(), format!("{model} · {}", points(*spent))));
+            facts.push((
+                Text::message("usage-poe-top-model"),
+                Text::message("usage-poe-model-points")
+                    .arg("model", *model)
+                    .arg("points", points(*spent)),
+            ));
         }
         let total: f64 = models.iter().map(|(_, spent)| spent).sum();
         if total > 0. {
             sections.push(Section::Shares {
-                title: "Points by model, last 30 days".into(),
+                title: Text::message("usage-poe-points-by-model"),
                 shares: models
                     .iter()
                     .take(5)
-                    .map(|(model, spent)| ((*model).to_owned(), (spent / total * 100.) as f32))
+                    .map(|(model, spent)| (Text::service(*model), (spent / total * 100.) as f32))
                     .collect(),
             });
         }
     }
     let facts = (!facts.is_empty()).then(|| Section::Facts {
-        title: "Points".into(),
+        title: Text::message("usage-poe-points"),
         facts,
     });
     Report::new(Provider(&Poe), Account::default(), Vec::new())
-        .with_balances(
-            balance.map(|balance| Balance::new("Points", balance, Unit::Count("points".into()))),
-        )
+        .with_balances(balance.map(|balance| {
+            Balance::new(
+                Text::message("usage-poe-points"),
+                balance,
+                Unit::Count(Count::Points),
+            )
+        }))
         .with_sections(facts.into_iter().chain(sections))
 }
 
-fn points(value: f64) -> String {
-    if value >= 1000. || value.fract() == 0. {
-        format!("{} points", group(value.round() as i64))
+fn points(value: f64) -> Text {
+    let amount = if value >= 1000. || value.fract() == 0. {
+        group(value.round() as i64)
     } else {
-        format!("{value:.1} points")
-    }
+        format!("{value:.1}")
+    };
+    Text::message("usage-poe-point-count")
+        .arg("points", value)
+        .arg("amount", amount)
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
+
+    fn point_count(points: f64, amount: &str) -> Text {
+        Text::message("usage-poe-point-count")
+            .arg("points", points)
+            .arg("amount", amount)
+    }
 
     fn at(seconds: u64) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(seconds)
@@ -323,7 +348,15 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts, &[("Current balance".into(), "1,500 points".into())]);
+        assert_eq!(
+            facts,
+            &[(
+                Text::message("usage-poe-current-balance"),
+                Text::message("usage-poe-point-count")
+                    .arg("points", 1500.)
+                    .arg("amount", "1,500")
+            )]
+        );
     }
 
     #[test]
@@ -353,25 +386,42 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        let fact = |label: &str| {
-            facts
-                .iter()
-                .find(|(name, _)| name == label)
-                .map(|(_, value)| value.as_str())
+        let summary = |points: f64, amount: &str, requests: u64| {
+            Text::message("usage-poe-summary-cost")
+                .arg("points", point_count(points, amount))
+                .arg("requests", requests)
+                .arg("count", requests.to_string())
+                .arg("cost", "$0.09")
         };
-        assert_eq!(fact("Current balance"), Some("42.5 points"));
-        assert_eq!(fact("Today"), Some("300 points · 1 requests · $0.09"));
-        assert_eq!(fact("Last 7 days"), Some("400 points · 2 requests · $0.09"));
         assert_eq!(
-            fact("Last 30 days"),
-            Some("1,000 points · 3 requests · $0.09")
+            facts,
+            &[
+                (
+                    Text::message("usage-poe-current-balance"),
+                    point_count(42.5, "42.5")
+                ),
+                (Text::message("usage-poe-today"), summary(300., "300", 1)),
+                (
+                    Text::message("usage-poe-last-7-days"),
+                    summary(400., "400", 2)
+                ),
+                (
+                    Text::message("usage-poe-last-30-days"),
+                    summary(1000., "1,000", 3)
+                ),
+                (
+                    Text::message("usage-poe-top-model"),
+                    Text::message("usage-poe-model-points")
+                        .arg("model", "Claude-Sonnet")
+                        .arg("points", point_count(900., "900"))
+                ),
+            ]
         );
-        assert_eq!(fact("Top model"), Some("Claude-Sonnet · 900 points"));
         let Section::Shares { shares, .. } = &report.sections[1] else {
             panic!("expected shares");
         };
-        assert_eq!(shares[0], ("Claude-Sonnet".into(), 90.));
-        assert_eq!(shares[1], ("GPT-5".into(), 10.));
+        assert_eq!(shares[0], (Text::service("Claude-Sonnet"), 90.));
+        assert_eq!(shares[1], (Text::service("GPT-5"), 10.));
     }
 
     #[test]

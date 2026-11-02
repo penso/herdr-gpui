@@ -17,6 +17,7 @@ use super::{
     remote::MatchReason,
     sessions::{Route, move_session},
     snapshot::{SnapshotResult, TabCreated, WorktreeCreated},
+    warning::Warning,
 };
 use herdr_client::shell_quote;
 use std::{collections::HashMap, io::Seek, sync::atomic::AtomicBool};
@@ -32,6 +33,8 @@ pub struct Origin {
 }
 
 mod session;
+#[cfg(any(test, feature = "test-support"))]
+pub use session::session_review;
 pub use session::{SessionReview, check_session};
 
 /// Where on the destination the user chose to put the pane.
@@ -88,39 +91,14 @@ pub enum Review {
     // keep-sorted end
 }
 
-/// What the destination pane will run for `work`, as a review lists it.
-pub fn describe(work: &Work, action: &Action) -> String {
-    let program = work.program().unwrap_or("shell");
-    match action {
-        Action::Shell => "Shell".to_owned(),
-        Action::Resume(agent) => format!("{}: resume session", agent.binary()),
-        Action::Handoff { to, .. } if to.binary() == program => {
-            format!("{program}: handoff note, then start again")
-        }
-        Action::Handoff { to, .. } => {
-            format!("{program}: handoff note, continued by {}", to.binary())
-        }
-        Action::Start(argv) => format!("Start {}", command_line(argv)),
-        Action::Run(argv) => format!("Run {}", command_line(argv)),
-        Action::Missing(program) => format!("{program}: not installed there, skipped"),
-    }
-}
-
-impl RepositoryReview {
-    /// What the destination pane will run, as the review lists it.
-    pub fn describe(&self) -> String {
-        describe(&self.work, &self.action)
-    }
-}
-
 /// Where the pane went.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Carried {
     pub endpoint_id: String,
     pub workspace_id: String,
     pub pane_id: String,
     /// Things that did not carry over, for the user to see.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Warning>,
 }
 
 /// Read the pane and the destination, and decide what the move does.
@@ -383,7 +361,10 @@ fn run_repository(
         );
         match asked {
             Err(Error::Cancelled) => return Err(Error::Cancelled),
-            Err(error) => warnings.push(format!("No handoff note: {error}")),
+            Err(error) => warnings.push(Warning::NoHandoffNote {
+                pane: None,
+                source: error,
+            }),
             Ok(()) => {}
         }
     }
@@ -475,14 +456,14 @@ fn run_repository(
     })
 }
 
-fn retire(origin: &Origin, warnings: &mut Vec<String>, report: &mut impl FnMut(Step)) {
+fn retire(origin: &Origin, warnings: &mut Vec<Warning>, report: &mut impl FnMut(Step)) {
     report(Step::Retire);
     if let Err(error) = origin.place.host.herdr_ok(
         Step::Retire,
         &["pane", "close", &origin.pane_id],
         &AtomicBool::new(false),
     ) {
-        warnings.push(format!("The source pane stayed open: {error}"));
+        warnings.push(Warning::SourcePaneOpen { source: error });
     }
 }
 
@@ -494,7 +475,7 @@ fn into_worktree(
     branch: Option<&str>,
     from: &super::Host,
     reference: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<Warning>,
     report: &mut impl FnMut(Step),
     cancelled: &AtomicBool,
 ) -> Result<(String, String)> {
@@ -542,7 +523,7 @@ fn into_space(
     from: &super::Host,
     space: &Space<'_>,
     reference: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<Warning>,
     report: &mut impl FnMut(Step),
     cancelled: &AtomicBool,
 ) -> Result<(String, String)> {
@@ -597,7 +578,7 @@ fn launch(
     from: &super::Host,
     path: &str,
     pane: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<Warning>,
     report: &mut impl FnMut(Step),
     cancelled: &AtomicBool,
 ) -> Result<()> {
@@ -669,16 +650,16 @@ fn destination_argv(
     review: &RepositoryReview,
     from: &super::Host,
     path: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<Warning>,
     cancelled: &AtomicBool,
 ) -> Result<Option<Vec<String>>> {
     Ok(match &review.action {
         Action::Shell => None,
         Action::Missing(program) => {
-            warnings.push(format!(
-                "{program} is not installed on {}",
-                review.destination.label
-            ));
+            warnings.push(Warning::ProgramMissing {
+                program: program.clone(),
+                host: review.destination.label.clone(),
+            });
             None
         }
         Action::Resume(agent) => {
@@ -702,7 +683,10 @@ fn destination_argv(
                     Ok(argv) => argv,
                     Err(Error::Cancelled) => return Err(Error::Cancelled),
                     Err(error) => {
-                        warnings.push(format!("{} started afresh: {error}", agent.binary()));
+                        warnings.push(Warning::AgentStartedAfresh {
+                            agent: *agent,
+                            source: error,
+                        });
                         agent.start_argv(None)
                     }
                 },

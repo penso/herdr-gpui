@@ -21,7 +21,7 @@ impl HerdrWindow {
         let hint = fan_out
             .hosts
             .suggestion()
-            .map(|best| format!("{} has the most room", best.label));
+            .map(|best| crate::i18n::fl!("fan-out-most-room", host = best.label.as_str()));
         let switch = div()
             .id("fan-out-spread")
             .debug_selector(|| "fan-out-spread".into())
@@ -38,7 +38,12 @@ impl HerdrWindow {
                 }
             }))
             .child(checkbox(theme, size, fan_out.spread))
-            .child(div().flex_1().min_w_0().child("Spread agents across hosts"))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(crate::i18n::fl!("fan-out-spread")),
+            )
             .children(hint.map(|hint| {
                 div()
                     .flex_none()

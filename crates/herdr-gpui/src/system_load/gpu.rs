@@ -57,6 +57,7 @@ const NVIDIA_QUERY: &str =
 
 /// Prints a `gpu-amd` line per AMD card and a `gpu-nvidia` line per NVIDIA
 /// card. `timeout` keeps a wedged driver from stalling the whole sample.
+// i18n: data
 pub(super) const LINUX_COMMAND: &str = "for herdr_g in /sys/class/drm/card*/device/gpu_busy_percent; do \
      [ -r \"$herdr_g\" ] || continue; herdr_d=${herdr_g%/gpu_busy_percent}; \
      printf 'gpu-amd %s %s %s\\n' \"$(cat \"$herdr_g\" 2>/dev/null)\" \
@@ -68,6 +69,7 @@ pub(super) const LINUX_COMMAND: &str = "for herdr_g in /sys/class/drm/card*/devi
      --format=csv,noheader,nounits 2>/dev/null | sed 's/^/gpu-nvidia /'; fi";
 
 /// Prints a `gpu-apple` line per GPU with its utilization.
+// i18n: data
 pub(super) const MACOS_COMMAND: &str = "ioreg -r -d 1 -w 0 -c IOAccelerator 2>/dev/null | \
      grep -o '\"Device Utilization %\"=[0-9]*' | sed 's/^.*=/gpu-apple /'";
 
@@ -175,7 +177,7 @@ impl Local {
 /// `"Device Utilization %"=12` in each accelerator's performance statistics.
 #[cfg(any(target_os = "macos", test))]
 pub(super) fn apple_cards(text: &str) -> impl Iterator<Item = Card> + '_ {
-    const KEY: &str = "\"Device Utilization %\"=";
+    const KEY: &str = "\"Device Utilization %\"="; // i18n: data
     text.match_indices(KEY).filter_map(|(start, _)| {
         let digits: String = text[start + KEY.len()..]
             .chars()

@@ -4,6 +4,7 @@
 //! reads is ported: the five-hour, weekly-token, and hourly-search lanes, the
 //! weekly credit budget, and the generic quota shapes CodexBar falls back to.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -26,8 +27,7 @@ static META: Meta = Meta::new("synthetic", "Synthetic")
     .settings(&[Setting::new(
         "api_key",
         &["SYNTHETIC_API_KEY"],
-        "A Synthetic API key, created as described in \
-         https://dev.synthetic.new/docs/api/getting-started.",
+        "usage-synthetic-setting-api-key",
     )]);
 
 impl Service for Synthetic {
@@ -151,7 +151,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         (slot(&["weeklyTokenLimit"]), Some(Kind::Weekly)),
         (
             slot(&["search", "hourly"]),
-            Some(Kind::Named("Search hourly".into())),
+            Some(Kind::Named(Text::message("usage-synthetic-search-hourly"))),
         ),
     ];
     let quotas: Vec<(Quota, Option<Kind>)> = if slots.iter().any(|(slot, _)| slot.is_some()) {
@@ -189,7 +189,7 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .find_map(|(quota, _)| quota.credits)
         .map(|(used, limit)| {
             Balance::new(
-                "Weekly credits left",
+                Text::message("usage-synthetic-weekly-credits-left"),
                 (limit - used).max(0.),
                 Unit::Currency("USD".into()),
             )
@@ -202,10 +202,15 @@ pub(crate) fn parse(body: &str) -> Result<Report> {
         .collect();
     let plan = first_string(&root, PLAN_KEYS)
         .or_else(|| data.and_then(|data| first_string(data, PLAN_KEYS)));
-    Ok(
-        Report::new(Provider(&Synthetic), Account { email: None, plan }, windows)
-            .with_balances(balance),
+    Ok(Report::new(
+        Provider(&Synthetic),
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
+        windows,
     )
+    .with_balances(balance))
 }
 
 struct Quota {
@@ -226,10 +231,15 @@ impl Quota {
             Some(24) => Kind::Daily,
             Some(168) => Kind::Weekly,
             Some(720 | 744) => Kind::Monthly,
-            _ => Kind::Named(self.label.unwrap_or_else(|| format!("Quota {}", index + 1))),
+            _ => Kind::Named(self.label.map_or_else(
+                || Text::message("usage-synthetic-quota").arg("number", index + 1),
+                Text::service,
+            )),
         });
         let length = self.length.or_else(|| match &kind {
-            Kind::Named(name) if name == "Search hourly" => Some(Duration::from_secs(3600)),
+            Kind::Named(name) if *name == Text::message("usage-synthetic-search-hourly") => {
+                Some(Duration::from_secs(3600))
+            }
             _ => None,
         });
         Window::new(kind, self.used, self.resets_at, length)
@@ -463,14 +473,17 @@ mod tests {
     fn reads_the_named_lanes_and_weekly_credits() {
         let report = parse(QUOTAS).unwrap();
         assert_eq!(report.provider.id(), "synthetic");
-        assert_eq!(report.account.plan.as_deref(), Some("Starter"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Starter")
+        );
         let kinds: Vec<_> = report.windows.iter().map(|w| w.kind.clone()).collect();
         assert_eq!(
             kinds,
             [
                 Kind::Session,
                 Kind::Weekly,
-                Kind::Named("Search hourly".into())
+                Kind::Named(Text::message("usage-synthetic-search-hourly"))
             ]
         );
         assert_eq!(report.windows[0].percent(), 20);
@@ -494,12 +507,23 @@ mod tests {
             ]}}"#,
         )
         .unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows[0].kind, Kind::Daily);
         assert_eq!(report.windows[0].percent(), 25);
         assert_eq!(report.windows[0].resets_at, Some(at(1_776_400_000.)));
-        assert_eq!(report.windows[1].kind, Kind::Named("Burst".into()));
+        assert_eq!(report.windows[1].kind, Kind::Named(Text::service("Burst")));
         assert_eq!(report.windows[1].percent(), 50);
+    }
+
+    /// Only the dedicated search lane runs an hour: a generic quota the
+    /// service happens to name the same way is the service's own name.
+    #[test]
+    fn a_generic_quota_named_search_hourly_keeps_no_length() {
+        let report =
+            parse(r#"{"data":{"quotas":[{"name":"Search hourly","usedPercent":0.2}]}}"#).unwrap();
+        let window = &report.windows[0];
+        assert_eq!(window.kind, Kind::Named(Text::service("Search hourly")));
+        assert_eq!(window.length, None);
     }
 
     #[test]

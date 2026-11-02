@@ -44,7 +44,7 @@ pub(crate) fn list(input: &Input, cancelled: &impl Fn() -> bool) -> crate::Resul
     let (ok, output) = run(&mut command, deadline, cancelled)?;
     if !ok {
         return Err(herdr_vcs::Error::from(crate::git::Error::Failed {
-            operation: "list branches",
+            operation: "list branches", // i18n: data
             details: clean(output.trim()),
         })
         .into());
@@ -84,7 +84,7 @@ mod tests {
             "refs/heads/worktree/brave-river\0/worktrees/brave-river",
             "refs/remotes/origin/fix/crash\0",
             "refs/heads/-hostile\0",
-            "not a ref line",
+            "not a ref line", // i18n: data
         ]
         .join("\n");
         assert_eq!(
@@ -114,7 +114,7 @@ mod tests {
                     "-c",
                     "user.email=test@example.invalid",
                 ])
-                .args(["-c", "user.name=Test", "-C"])
+                .args(["-c", "user.name=Test", "-C"]) // i18n: data
                 .arg(&repo)
                 .args(args)
                 .output()

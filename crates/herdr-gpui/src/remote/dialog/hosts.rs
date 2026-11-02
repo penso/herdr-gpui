@@ -89,10 +89,11 @@ impl HerdrWindow {
                 .flex()
                 .flex_col()
                 .gap(px(4.))
-                .child(div().text_color(rgb(theme.subtext())).child(
-                    "Also pair it with these machines, so it reaches them while this computer \
-                     sleeps:",
-                ))
+                .child(
+                    div()
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("remote-pair-hosts")),
+                )
                 .children(rows),
         )
     }

@@ -37,7 +37,7 @@ pub(crate) struct RemotePaneHistory {
 impl std::fmt::Debug for RemotePaneHistory {
     // The file may hold private settings unrelated to this switch.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RemotePaneHistory")
+        f.debug_struct("RemotePaneHistory") // i18n: data
             .field("exists", &self.text.is_some())
             .field("enabled", &self.enabled)
             .finish()
@@ -149,6 +149,7 @@ fn run(
 /// non-regular files are refused, as the local editor refuses them.
 fn read_script() -> String {
     format!(
+        // i18n: data
         r#"{PATH}
 if [ -L "$path" ]; then exit {UNSAFE_EXIT}; fi
 if [ ! -e "$path" ]; then exit 0; fi
@@ -167,22 +168,26 @@ exec cat "$path""#,
 fn write_script(expected: Option<usize>) -> String {
     let check = match expected {
         None => format!(
+            // i18n: data
             r#"if [ -e "$path" ] || [ -L "$path" ]; then exit {CONFLICT_EXIT}; fi
 mv -f -- "$tmp" "$tmp.new" || exit 1"#
         ),
         Some(0) => format!(
+            // i18n: data
             r#"if [ ! -f "$path" ] || [ -s "$path" ]; then exit {CONFLICT_EXIT}; fi
 mv -f -- "$tmp" "$tmp.new" || exit 1"#
         ),
         // dd on a regular file reads whole blocks, so one block of exactly the
         // expected length splits the input without a byte-at-a-time copy.
         Some(length) => format!(
+            // i18n: data
             r#"dd if="$tmp" of="$tmp.old" bs={length} count=1 2>/dev/null || exit 1
 dd if="$tmp" of="$tmp.new" bs={length} skip=1 2>/dev/null || exit 1
 if [ ! -f "$path" ] || ! cmp -s "$tmp.old" "$path"; then exit {CONFLICT_EXIT}; fi"#
         ),
     };
     format!(
+        // i18n: data
         r#"umask 077
 {PATH}
 if [ -L "$path" ]; then exit {UNSAFE_EXIT}; fi

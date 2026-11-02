@@ -5,6 +5,7 @@ use super::{Action, Request, Seen, SeenKey};
 use crate::{
     HerdrWindow,
     browser::{Location, Store, WebUrl},
+    i18n::{Localize, fl},
     port_forward::State,
     usage::Host,
     window::Flash,
@@ -109,9 +110,7 @@ impl HerdrWindow {
         let label = self.endpoints[index].label.clone();
         let Ok(url) = WebUrl::from_typed(&address) else {
             self.show_flash(
-                Flash::warning(format!(
-                    "An agent on {label} asked for an address that cannot open"
-                )),
+                Flash::warning(fl!("remote-browser-bad-address", device = label)),
                 cx,
             );
             return;
@@ -127,19 +126,17 @@ impl HerdrWindow {
             .map(|(target, _)| target.to_owned())
         else {
             self.show_flash(
-                Flash::warning(format!(
-                    "An agent on {label} asked for {}, which only a saved SSH host can forward",
-                    url.address()
+                Flash::warning(fl!(
+                    "remote-browser-needs-ssh",
+                    device = label,
+                    address = url.address()
                 )),
                 cx,
             );
             return;
         };
         if self.remote_browser.len() >= MAX_FORWARDING {
-            self.show_flash(
-                Flash::warning("Too many pages are waiting for a forward"),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("remote-browser-too-many-forwards")), cx);
             return;
         }
         let running = self
@@ -148,7 +145,7 @@ impl HerdrWindow {
             .find(|forward| forward.remote_port() == port)
             .is_some_and(|forward| !matches!(forward.state(), State::Ended(_)));
         if !running && let Err(error) = self.port_forwards.start(&target, port) {
-            self.show_flash(Flash::warning(error.to_string()), cx);
+            self.show_flash(Flash::warning(error.localize()), cx);
             return;
         }
         self.remote_browser.push(Forwarding {
@@ -200,7 +197,10 @@ impl HerdrWindow {
                 Some(State::Ended(_)) | None => {}
                 Some(State::Starting) if now >= page.until => {
                     self.show_flash(
-                        Flash::warning(format!("Port {} took too long to forward", page.port)),
+                        Flash::warning(fl!(
+                            "remote-browser-forward-timeout",
+                            port = page.port.to_string()
+                        )),
                         cx,
                     );
                 }
@@ -229,7 +229,7 @@ impl HerdrWindow {
             .open_agent_tab(index, workspace, pane, &location, focus, window, cx)
             .is_none()
         {
-            self.show_flash(Flash::warning("Too many browser tabs are open"), cx);
+            self.show_flash(Flash::warning(fl!("remote-browser-too-many-tabs")), cx);
         }
     }
 }

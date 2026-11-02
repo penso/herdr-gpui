@@ -133,7 +133,7 @@ impl Catalog {
             self.pending = None;
             self.next_poll = Instant::now() + Duration::from_secs(2);
             if let Some(failure) = self.new_failure(&result) {
-                failure.warn("Host catalog");
+                failure.warn("Host catalog"); // i18n: data
             }
             return Some(result);
         }

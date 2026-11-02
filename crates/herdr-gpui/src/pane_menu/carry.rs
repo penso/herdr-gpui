@@ -7,7 +7,7 @@
 
 use super::Target;
 use crate::direction::Logical;
-use crate::i18n::fl;
+use crate::i18n::{errors::Localize, fl};
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -15,7 +15,7 @@ use crate::{
     teleport::{
         Follow, HostRepositories, Place, Step,
         carry::{self, Carried, Choice, Landing, Origin, Review},
-        host_for,
+        host_for, text,
     },
     window::Flash,
 };
@@ -165,11 +165,11 @@ impl Carry {
                     let stopped = crate::teleport::Error::WorkerStopped;
                     return match self.stage {
                         Stage::Reviewing => {
-                            self.stage = Stage::Failed(stopped.to_string());
+                            self.stage = Stage::Failed(stopped.localize());
                             (true, None)
                         }
                         Stage::Moving(_) => {
-                            self.stage = Stage::Failed(stopped.to_string());
+                            self.stage = Stage::Failed(stopped.localize());
                             (true, Some(Err(stopped)))
                         }
                         Stage::Ready(_) | Stage::Failed(_) => (changed, None),
@@ -179,11 +179,11 @@ impl Carry {
             changed = true;
             match event {
                 Event::Reviewed(Ok(review)) => self.stage = Stage::Ready(review),
-                Event::Reviewed(Err(error)) => self.stage = Stage::Failed(error.to_string()),
+                Event::Reviewed(Err(error)) => self.stage = Stage::Failed(error.localize()),
                 Event::Step(step) => self.stage = Stage::Moving(Some(step)),
                 Event::Moved(result) => {
                     if let Err(error) = &result {
-                        self.stage = Stage::Failed(error.to_string());
+                        self.stage = Stage::Failed(error.localize());
                     }
                     return (true, Some(result));
                 }
@@ -388,7 +388,7 @@ impl HerdrWindow {
             Err(error) if !open => {
                 self.pane_carry = None;
                 self.show_flash(
-                    Flash::warning(fl!("pane-menu-carry-failed", error = error.to_string())),
+                    Flash::warning(fl!("pane-menu-carry-failed", error = error.localize())),
                     cx,
                 );
                 return;
@@ -409,7 +409,7 @@ impl HerdrWindow {
                 "pane-menu-carry-moved-warnings",
                 destination = destination,
                 count = carried.warnings.len(),
-                first = first.to_string(),
+                first = text::warning(first),
             )),
         };
         self.show_flash(flash, cx);
@@ -451,7 +451,7 @@ impl HerdrWindow {
             return;
         };
         match carry.stage {
-            Stage::Ready(_) if working => carry.stage = Stage::Failed(Refusal::Busy.to_string()),
+            Stage::Ready(_) if working => carry.stage = Stage::Failed(Refusal::Busy.localize()),
             Stage::Ready(_) => carry.start(),
             Stage::Failed(_) => return self.dismiss_menu(window, cx),
             Stage::Reviewing | Stage::Moving(_) => return,
@@ -496,9 +496,10 @@ impl HerdrWindow {
                                 "pane-menu-carry-session-cwd",
                                 directory = review.cwd.to_string()
                             )))
-                            .child(
-                                line(review.describe()).debug_selector(|| "pane-carry-runs".into()),
-                            )
+                            .children(review.resume().map(|(work, action)| {
+                                line(text::pane(work, &action))
+                                    .debug_selector(|| "pane-carry-runs".into())
+                            }))
                             .child(line(fl!("pane-menu-carry-session-note")).text_color(subtext))
                             .child(line(fl!("pane-menu-carry-closes")).text_color(subtext));
                     }
@@ -549,7 +550,7 @@ impl HerdrWindow {
                                 untracked = state.untracked,
                             )))
                             .child(
-                                line(review.describe())
+                                line(text::pane(&review.work, &review.action))
                                     .debug_selector(|| "pane-carry-runs".into())
                                     .when(
                                         matches!(review.action, carry::Action::Missing(_)),
@@ -567,7 +568,7 @@ impl HerdrWindow {
                     .child(
                         line(step.map_or_else(
                             || fl!("pane-menu-carry-starting"),
-                            |step| step.label().to_owned(),
+                            |step| text::step(Some(step)),
                         ))
                         .debug_selector(|| "pane-carry-step".into())
                         .text_color(muted),
