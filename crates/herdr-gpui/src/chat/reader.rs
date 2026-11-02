@@ -104,9 +104,7 @@ impl HerdrWindow {
         window.focus(&focus, cx);
         cx.stop_propagation();
         self.note_input();
-        if self.input_ready() {
-            self.focus_clicked_pane(pane_id, cx);
-        }
+        self.focus_chat_surface(pane_id, cx);
         self.redraw_terminal(cx);
         cx.notify();
     }

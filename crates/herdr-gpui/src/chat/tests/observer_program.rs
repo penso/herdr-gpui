@@ -19,6 +19,7 @@ fn observed() -> Target {
         }),
         pane_id: "w1:p1".into(),
         route: Route::Local,
+        surface: Surface::Herdr,
     }
 }
 

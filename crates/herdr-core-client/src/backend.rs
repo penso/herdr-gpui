@@ -82,6 +82,11 @@ impl herdr_backend::Backend for CoreBackend {
                 .collect(),
             // A terminal the user opened outlives its program's loss.
             keep: true,
+            labels: spawn
+                .labels
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.as_str()))
+                .collect(),
             name: spawn.name.as_deref(),
             ..Run::default()
         };
@@ -214,6 +219,7 @@ pub(crate) fn info(terminal: &Terminal) -> Result<TerminalInfo> {
         agent: terminal.status.as_ref().map_or(AgentStatus::Unknown, agent),
         cwd,
         id: TerminalId::new(terminal.address.clone())?,
+        labels: terminal.labels.clone(),
         name: terminal.name.clone(),
         state: run_state(terminal),
         title: terminal.title.clone().filter(|title| !title.is_empty()),
