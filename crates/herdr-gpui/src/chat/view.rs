@@ -586,6 +586,7 @@ impl HerdrWindow {
         let transcript = chat.session.transcript();
         let status = &transcript.status;
         let activity = self.chat_activity(chat);
+        let needs_input = self.chat_needs_input(chat);
         let dot = activity.phase.color(theme);
         let pane_id = chat.target.pane_id.clone();
         let button = |id: &'static str| {

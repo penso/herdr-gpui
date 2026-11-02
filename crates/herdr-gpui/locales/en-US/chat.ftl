@@ -109,6 +109,8 @@ chat-tool-state-running = running
 chat-tool-state-done = done
 chat-tool-state-failed = failed
 chat-tool-state-stopped = stopped
+chat-tool-state-thinking = thinking
+chat-tool-state-waiting = waiting
 # A sub-agent's steps.
 chat-tool-steps = { $count ->
     [one] { $count } step

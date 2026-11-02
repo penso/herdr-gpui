@@ -8,11 +8,11 @@ fn tool_state(
     activity: Option<ActivityState>,
     status: ToolStatus,
     kind: ToolKind,
-) -> (&'static str, usize) {
-    let word = super::tool_state(activity, status);
+) -> (String, usize) {
+    let word = super::tool_state(activity, status).label();
     match (activity, status, kind) {
-        (None, ToolStatus::Pending, _) => ("waiting", 3),
-        (None, ToolStatus::InProgress, ToolKind::Think) => ("thinking", 5),
+        (None, ToolStatus::Pending, _) => (fl!("chat-tool-state-waiting"), 3),
+        (None, ToolStatus::InProgress, ToolKind::Think) => (fl!("chat-tool-state-thinking"), 5),
         (Some(ActivityState::Running), _, _) | (None, ToolStatus::InProgress, _) => (word, 4),
         (Some(ActivityState::Finished), _, _) | (None, ToolStatus::Completed, _) => (word, 2),
         (Some(ActivityState::Failed), _, _) | (None, ToolStatus::Failed, _) => (word, 1),

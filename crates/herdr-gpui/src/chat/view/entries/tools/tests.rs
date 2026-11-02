@@ -5,23 +5,23 @@ use core::prelude::v1::test;
 fn activity_colors_follow_semantics_and_keep_status_words() {
     assert_eq!(
         tool_state(None, ToolStatus::Pending, ToolKind::Execute),
-        ("waiting", 3)
+        ("waiting".into(), 3)
     );
     assert_eq!(
         tool_state(None, ToolStatus::InProgress, ToolKind::Execute),
-        ("running", 4)
+        ("running".into(), 4)
     );
     assert_eq!(
         tool_state(None, ToolStatus::InProgress, ToolKind::Think),
-        ("thinking", 5)
+        ("thinking".into(), 5)
     );
     assert_eq!(
         tool_state(None, ToolStatus::Completed, ToolKind::Think),
-        ("done", 2)
+        ("done".into(), 2)
     );
     assert_eq!(
         tool_state(None, ToolStatus::Failed, ToolKind::Execute),
-        ("failed", 1)
+        ("failed".into(), 1)
     );
 }
 
@@ -41,7 +41,7 @@ fn background_activity_overrides_the_call_status_and_its_color() {
         ] {
             assert_eq!(
                 tool_state(Some(activity), status, ToolKind::Think),
-                expected
+                (expected.0.into(), expected.1)
             );
         }
     }
