@@ -27,6 +27,7 @@ fn closing_the_view_does_not_cancel_an_accepted_action() {
     action.join().unwrap();
 }
 
+mod azure_replaced;
 mod extras;
 mod glab_mapping;
 mod syncing_count;

@@ -12,6 +12,7 @@
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
 pub mod actions;
+pub mod azure;
 pub mod beads;
 pub mod cache;
 mod error;

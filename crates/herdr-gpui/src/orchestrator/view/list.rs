@@ -649,6 +649,7 @@ pub(super) fn source_mark(look: &Look, provider: Provider) -> AnyElement {
 
 pub(super) fn source_icon(provider: Provider) -> &'static str {
     match provider {
+        Provider::Azure => "icons/azure-devops.svg",
         Provider::Github => "icons/github.svg",
         Provider::Beads => "icons/beads.svg",
         Provider::Gitlab => "icons/gitlab.svg",
