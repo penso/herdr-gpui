@@ -7,6 +7,7 @@
 //! default, or China mainland (`api.moonshot.cn`, CNY) with `region =
 //! "china"`. Kimi Code subscriptions are a separate provider (`kimi`).
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -30,17 +31,12 @@ static META: Meta = Meta::new("moonshot", "Moonshot / Kimi Open Platform")
         Setting::new(
             "api_key",
             &["MOONSHOT_API_KEY", "MOONSHOT_KEY"],
-            "A Moonshot / Kimi Open Platform API key, from \
-             https://platform.moonshot.ai/console/api-keys (International) or \
-             https://platform.moonshot.cn/console/api-keys (China mainland). Use a key \
-             issued for the region set below.",
+            "usage-moonshot-setting-api-key",
         ),
         Setting::new(
             "region",
             &["MOONSHOT_REGION"],
-            "Which platform issued the key: \"international\" (the default, \
-             api.moonshot.ai, balances in USD) or \"china\" (api.moonshot.cn, balances \
-             in CNY).",
+            "usage-moonshot-setting-region",
         ),
     ]);
 
@@ -101,19 +97,33 @@ pub(crate) fn parse(body: &str, region: Region) -> Result<Report> {
     }
     let data = response.data;
     let unit = || Unit::Currency(region.currency().into());
-    let text = |amount: f64| Balance::new("", amount, unit()).amount_text();
+    let text =
+        |amount: f64| Text::service(Balance::new(Text::service(""), amount, unit()).amount_text());
     let mut facts = vec![
-        ("Voucher".to_owned(), text(data.voucher_balance)),
-        ("Cash".to_owned(), text(data.cash_balance)),
+        (
+            Text::message("usage-moonshot-voucher"),
+            text(data.voucher_balance),
+        ),
+        (
+            Text::message("usage-moonshot-cash"),
+            text(data.cash_balance),
+        ),
     ];
     if data.cash_balance < 0. {
-        facts.push(("In deficit".to_owned(), text(data.cash_balance.abs())));
+        facts.push((
+            Text::message("usage-moonshot-in-deficit"),
+            text(data.cash_balance.abs()),
+        ));
     }
     Ok(
         Report::new(Provider(&Moonshot), Account::default(), Vec::new())
-            .with_balances([Balance::new("Available", data.available_balance, unit())])
+            .with_balances([Balance::new(
+                Text::message("usage-moonshot-available"),
+                data.available_balance,
+                unit(),
+            )])
             .with_sections([Section::Facts {
-                title: "Balance".into(),
+                title: Text::message("usage-moonshot-balance"),
                 facts,
             }]),
     )
@@ -148,16 +158,22 @@ mod tests {
         let report = parse(FIXTURE, Region::International).unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(report.balances.len(), 1);
-        assert_eq!(report.balances[0].label, "Available");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-moonshot-available")
+        );
         assert!((report.balances[0].amount - 49.58894).abs() < 1e-9);
         assert_eq!(report.balances[0].unit, Unit::Currency("USD".into()));
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Balance".into(),
+                title: Text::message("usage-moonshot-balance"),
                 facts: vec![
-                    ("Voucher".into(), "$46.59".into()),
-                    ("Cash".into(), "$3.00".into()),
+                    (
+                        Text::message("usage-moonshot-voucher"),
+                        Text::service("$46.59")
+                    ),
+                    (Text::message("usage-moonshot-cash"), Text::service("$3.00")),
                 ],
             }]
         );
@@ -174,7 +190,13 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("facts expected");
         };
-        assert_eq!(facts[2], ("In deficit".into(), "$1.50".into()));
+        assert_eq!(
+            facts[2],
+            (
+                Text::message("usage-moonshot-in-deficit"),
+                Text::service("$1.50")
+            )
+        );
     }
 
     #[test]

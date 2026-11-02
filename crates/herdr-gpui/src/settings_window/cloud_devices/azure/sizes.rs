@@ -8,8 +8,8 @@ use super::{AzureCard, SettingsWindow, VM_SIZE};
 use crate::azure::{
     settings::DEFAULT_VM_SIZE,
     sizes::{
-        Catalog, DEFAULT_SANDBOX_MILLICORES, SANDBOX_MILLICORES, SandboxSize, VM_CHOICES,
-        ephemeral_placement, is_arm,
+        Catalog, DEFAULT_SANDBOX_MILLICORES, DeviceSize, Price, SANDBOX_MILLICORES, SandboxSize,
+        VM_CHOICES, VmSpec, ephemeral_placement, is_arm,
     },
 };
 use crate::direction::Logical;
@@ -32,8 +32,7 @@ pub(super) fn vm_detail(catalog: Option<&Catalog>, size: &str) -> Vec<String> {
 
 fn vm_lines(catalog: Option<&Catalog>, size: &str) -> Vec<String> {
     let Some(catalog) = catalog else {
-        // Architecture names, the same in every language.
-        return vec![if is_arm(size) { "Arm" } else { "x64" }.to_owned()]; // i18n: data
+        return vec![arch(size)];
     };
     let Some(spec) = catalog.vms.get(size) else {
         return vec![fl!(
@@ -44,20 +43,100 @@ fn vm_lines(catalog: Option<&Catalog>, size: &str) -> Vec<String> {
     let price = match (catalog.spot_prices.get(size), catalog.vm_prices.get(size)) {
         (Some(spot), Some(regular)) => Some(fl!(
             "settings-cloud-azure-price-spot-regular",
-            spot = spot.text(true),
-            regular = regular.text(false)
+            spot = price(*spot, true),
+            regular = price(*regular, false)
         )),
         (Some(spot), None) => Some(fl!(
             "settings-cloud-azure-price-spot",
-            spot = spot.text(true)
+            spot = price(*spot, true)
         )),
         (None, Some(regular)) => Some(fl!(
             "settings-cloud-azure-price-regular",
-            regular = regular.text(true)
+            regular = price(*regular, true)
         )),
         (None, None) => None,
     };
-    std::iter::once(spec.summary(size)).chain(price).collect()
+    std::iter::once(vm_spec(*spec, size)).chain(price).collect()
+}
+
+/// Arm or x64.
+fn arch(size: &str) -> String {
+    fl!(
+        "azure-sizes-arch",
+        arch = if is_arm(size) { "arm" } else { "x64" }
+    )
+}
+
+/// `4 GiB`, or `1.5 GiB` when not whole.
+fn memory(mib: u64) -> String {
+    let gib = if mib.is_multiple_of(1024) {
+        (mib / 1024).to_string()
+    } else {
+        format!("{:.1}", mib as f64 / 1024.0)
+    };
+    fl!("azure-sizes-gib", gib = gib)
+}
+
+fn vm_spec(spec: VmSpec, size: &str) -> String {
+    fl!(
+        "azure-sizes-vm",
+        cores = spec.cores,
+        memory = memory(spec.memory_mb),
+        arch = arch(size)
+    )
+}
+
+fn sandbox_size(size: SandboxSize) -> String {
+    fl!(
+        "azure-sizes-sandbox",
+        cores = size.cores(),
+        memory = memory(u64::from(size.memory_mib))
+    )
+}
+
+/// `$0.0095/hr`, with `· ~$7/mo` when `month`: four decimals under a
+/// dollar, two above.
+fn price(price: Price, month: bool) -> String {
+    let amount = if price.0 < 1.0 {
+        format!("{:.4}", price.0)
+    } else {
+        format!("{:.2}", price.0)
+    };
+    if !month {
+        return fl!("azure-sizes-hourly", amount = amount);
+    }
+    let monthly = format!("{:.0}", price.monthly());
+    fl!(
+        "azure-sizes-hourly-monthly",
+        amount = amount,
+        monthly = monthly
+    )
+}
+
+/// A saved machine's size as its row in the card lists it.
+pub(super) fn device_size(size: &DeviceSize) -> String {
+    match size {
+        DeviceSize::Vm {
+            size,
+            spec: Some(spec),
+            spot,
+        } => fl!(
+            "azure-sizes-device-vm",
+            size = size.as_str(),
+            spec = vm_spec(*spec, size),
+            spot = if *spot { "yes" } else { "no" }
+        ),
+        DeviceSize::Vm {
+            size,
+            spec: None,
+            spot,
+        } => fl!(
+            "azure-sizes-device-vm-unlisted",
+            size = size.as_str(),
+            spot = if *spot { "yes" } else { "no" }
+        ),
+        DeviceSize::Sandbox(size) => sandbox_size(*size),
+    }
 }
 
 fn sandbox_detail(catalog: Option<&Catalog>, size: SandboxSize) -> Vec<String> {
@@ -68,13 +147,13 @@ fn sandbox_line(catalog: Option<&Catalog>, size: SandboxSize) -> String {
     match catalog.and_then(|catalog| catalog.sandbox_rates) {
         Some(rates) => fl!(
             "settings-cloud-azure-sandbox-price",
-            size = size.short(),
+            size = sandbox_size(size),
             disk = size.disk_gib(),
-            price = rates.hourly(size).text(false)
+            price = price(rates.hourly(size), false)
         ),
         None => fl!(
             "settings-cloud-azure-sandbox-size",
-            size = size.short(),
+            size = sandbox_size(size),
             disk = size.disk_gib()
         ),
     }
@@ -284,3 +363,6 @@ impl SettingsWindow {
             .child(div().row().flex_wrap().gap(px(8.)).children(choices))
     }
 }
+
+#[cfg(test)]
+mod tests;

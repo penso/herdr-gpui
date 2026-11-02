@@ -1,7 +1,8 @@
 //! The review's header: the panels' toggles, which changes show and against
 //! what, and how they are drawn: unified or side by side, with or without
 //! changes in whitespace alone, with a field to find text in them.
-use super::{Layout, Review, panels};
+use super::{Agent, Layout, Review, panels};
+use crate::i18n::fl;
 use crate::{HerdrWindow, browser::TabId, review::diff::Scope};
 use gpui::{prelude::*, *};
 
@@ -14,8 +15,11 @@ impl HerdrWindow {
     ) -> Div {
         let theme = &self.theme;
         let destination = match &review.agent {
-            Some(agent) => format!("Notes go to {}", agent.label),
-            None => "No agent in this workspace; notes can be copied".into(),
+            Some(Agent {
+                label: Some(label), ..
+            }) => fl!("review-notes-go-to", agent = label.as_str()),
+            Some(Agent { label: None, .. }) => fl!("review-notes-go-to-agent"),
+            None => fl!("review-no-agent"),
         };
         div()
             .flex()
@@ -30,7 +34,7 @@ impl HerdrWindow {
                 div()
                     .flex_none()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Review changes"),
+                    .child(fl!("review-title")),
             )
             .child(self.render_review_scope(id, review.scope, cx))
             .child(
@@ -43,7 +47,9 @@ impl HerdrWindow {
                     .gap_1()
                     .text_color(rgb(theme.muted))
                     .child(div().min_w_0().truncate().child(match review.scope {
-                        Scope::Branch => format!("{} against", review.checkout.branch),
+                        Scope::Branch => {
+                            fl!("review-against", branch = review.checkout.branch.as_str())
+                        }
                         Scope::Uncommitted => review.checkout.branch.clone(),
                     }))
                     .when(review.scope == Scope::Branch, |against| {
@@ -56,14 +62,14 @@ impl HerdrWindow {
                         .debug_selector(|| "review-reading".into())
                         .flex_none()
                         .text_color(rgb(theme.muted))
-                        .child("Reading\u{2026}"),
+                        .child(fl!("review-reading")),
                 )
             })
             .child(
                 self.review_icon_button(
                     "review-search-open",
                     "icons/search.svg",
-                    "Find in changes",
+                    fl!("review-find"),
                     review.search.open,
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -75,7 +81,7 @@ impl HerdrWindow {
                 self.review_icon_button(
                     "review-whitespace",
                     "icons/whitespace.svg",
-                    "Hide whitespace changes",
+                    fl!("review-hide-whitespace"),
                     review.ignore_whitespace,
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -99,7 +105,7 @@ impl HerdrWindow {
         &self,
         name: &'static str,
         icon: &'static str,
-        hint: &'static str,
+        hint: String,
         on: bool,
     ) -> Stateful<Div> {
         let theme = &self.theme;
@@ -123,7 +129,7 @@ impl HerdrWindow {
             })))
             .tooltip(move |_, cx| {
                 cx.new(|_| crate::usage::Hint {
-                    text: hint.into(),
+                    text: hint.clone().into(),
                     foreground,
                     surface,
                 })
@@ -141,14 +147,13 @@ impl HerdrWindow {
 
     /// The two layout icons in the header.
     fn render_review_layout(&self, id: TabId, current: Layout, cx: &mut Context<Self>) -> Div {
-        let button =
-            |name: &'static str, icon: &'static str, hint: &'static str, layout: Layout| {
-                self.review_icon_button(name, icon, hint, layout == current)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.set_review_layout(id, layout, cx);
-                    }))
-            };
+        let button = |name: &'static str, icon: &'static str, hint: String, layout: Layout| {
+            self.review_icon_button(name, icon, hint, layout == current)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.set_review_layout(id, layout, cx);
+                }))
+        };
         div()
             .flex()
             .flex_none()
@@ -156,20 +161,20 @@ impl HerdrWindow {
             .child(button(
                 "review-layout-unified",
                 "icons/diff-unified.svg",
-                "Unified",
+                fl!("review-layout-unified"),
                 Layout::Unified,
             ))
             .child(button(
                 "review-layout-split",
                 "icons/diff-split.svg",
-                "Side by side",
+                fl!("review-layout-split"),
                 Layout::Split,
             ))
     }
 
     fn render_review_scope(&self, id: TabId, current: Scope, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
-        let segment = |name: &'static str, label: &'static str, scope: Scope| {
+        let segment = |name: &'static str, label: String, scope: Scope| {
             let chosen = scope == current;
             div()
                 .id(name)
@@ -199,9 +204,13 @@ impl HerdrWindow {
             .gap_1()
             .child(segment(
                 "review-scope-uncommitted",
-                "Uncommitted",
+                fl!("review-scope-uncommitted"),
                 Scope::Uncommitted,
             ))
-            .child(segment("review-scope-branch", "Branch", Scope::Branch))
+            .child(segment(
+                "review-scope-branch",
+                fl!("review-scope-branch"),
+                Scope::Branch,
+            ))
     }
 }

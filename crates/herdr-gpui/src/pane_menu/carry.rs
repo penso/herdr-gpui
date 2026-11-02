@@ -7,6 +7,7 @@
 
 use super::Target;
 use crate::direction::Logical;
+use crate::i18n::{errors::Localize, fl};
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -14,7 +15,7 @@ use crate::{
     teleport::{
         Follow, HostRepositories, Place, Step,
         carry::{self, Carried, Choice, Landing, Origin, Review},
-        host_for,
+        host_for, text,
     },
     window::Flash,
 };
@@ -164,11 +165,11 @@ impl Carry {
                     let stopped = crate::teleport::Error::WorkerStopped;
                     return match self.stage {
                         Stage::Reviewing => {
-                            self.stage = Stage::Failed(stopped.to_string());
+                            self.stage = Stage::Failed(stopped.localize());
                             (true, None)
                         }
                         Stage::Moving(_) => {
-                            self.stage = Stage::Failed(stopped.to_string());
+                            self.stage = Stage::Failed(stopped.localize());
                             (true, Some(Err(stopped)))
                         }
                         Stage::Ready(_) | Stage::Failed(_) => (changed, None),
@@ -178,11 +179,11 @@ impl Carry {
             changed = true;
             match event {
                 Event::Reviewed(Ok(review)) => self.stage = Stage::Ready(review),
-                Event::Reviewed(Err(error)) => self.stage = Stage::Failed(error.to_string()),
+                Event::Reviewed(Err(error)) => self.stage = Stage::Failed(error.localize()),
                 Event::Step(step) => self.stage = Stage::Moving(Some(step)),
                 Event::Moved(result) => {
                     if let Err(error) = &result {
-                        self.stage = Stage::Failed(error.to_string());
+                        self.stage = Stage::Failed(error.localize());
                     }
                     return (true, Some(result));
                 }
@@ -244,7 +245,10 @@ impl HerdrWindow {
                 place,
             };
             let Some(repository) = repository else {
-                devices.push(device(Choice::SessionOnly, "Agent Session Only".to_owned()));
+                devices.push(device(
+                    Choice::SessionOnly,
+                    fl!("pane-menu-carry-session-only"),
+                ));
                 continue;
             };
             let Some(snapshot) = endpoint.live.snapshot.as_deref() else {
@@ -263,7 +267,10 @@ impl HerdrWindow {
             if spaces.is_empty() {
                 continue;
             }
-            devices.push(device(Choice::NewWorktree, "New Worktree".to_owned()));
+            devices.push(device(
+                Choice::NewWorktree,
+                fl!("pane-menu-carry-new-worktree"),
+            ));
             devices.extend(spaces.into_iter().map(|space| {
                 device(
                     Choice::Space {
@@ -381,7 +388,7 @@ impl HerdrWindow {
             Err(error) if !open => {
                 self.pane_carry = None;
                 self.show_flash(
-                    Flash::warning(format!("Moving the pane failed: {error}")),
+                    Flash::warning(fl!("pane-menu-carry-failed", error = error.localize())),
                     cx,
                 );
                 return;
@@ -397,10 +404,12 @@ impl HerdrWindow {
             tracing::warn!(%warning, "pane move");
         }
         let flash = match carried.warnings.first() {
-            None => Flash::success(format!("Moved to {destination}")),
-            Some(first) => Flash::warning(format!(
-                "Moved to {destination} with {} warning(s): {first}",
-                carried.warnings.len()
+            None => Flash::success(fl!("pane-menu-carry-moved", destination = destination)),
+            Some(first) => Flash::warning(fl!(
+                "pane-menu-carry-moved-warnings",
+                destination = destination,
+                count = carried.warnings.len(),
+                first = text::warning(first),
             )),
         };
         self.show_flash(flash, cx);
@@ -442,7 +451,7 @@ impl HerdrWindow {
             return;
         };
         match carry.stage {
-            Stage::Ready(_) if working => carry.stage = Stage::Failed(Refusal::Busy.to_string()),
+            Stage::Ready(_) if working => carry.stage = Stage::Failed(Refusal::Busy.localize()),
             Stage::Ready(_) => carry.start(),
             Stage::Failed(_) => return self.dismiss_menu(window, cx),
             Stage::Reviewing | Stage::Moving(_) => return,
@@ -468,36 +477,31 @@ impl HerdrWindow {
         };
         let line = |text: String| div().min_w_0().child(text);
         let mut body = div().flex().flex_col().gap(px(6.)).p(px(8.));
-        body = body.child(
-            div()
-                .text_color(muted)
-                .truncate()
-                .child(format!("Move pane to {}", carry.destination)),
-        );
+        body = body.child(div().text_color(muted).truncate().child(fl!(
+            "pane-menu-carry-title",
+            destination = carry.destination.to_string()
+        )));
         let (primary, armed) = match &carry.stage {
             Stage::Reviewing => {
-                body = body.child(bar(Progress::Busy)).child(
-                    line("Checking the destination and the pane's program\u{2026}".into())
-                        .text_color(muted),
-                );
-                ("Move", false)
+                body = body
+                    .child(bar(Progress::Busy))
+                    .child(line(fl!("pane-menu-carry-reviewing")).text_color(muted));
+                (fl!("pane-menu-carry-move"), false)
             }
             Stage::Ready(review) => {
                 match review {
                     Review::SessionOnly(review) => {
                         body = body
-                            .child(line(format!("New workspace in {}", review.cwd)))
-                            .child(
-                                line(review.describe()).debug_selector(|| "pane-carry-runs".into()),
-                            )
-                            .child(
-                                line("Only the agent session moves. No files are copied.".into())
-                                    .text_color(subtext),
-                            )
-                            .child(
-                                line("The pane here closes once it runs there.".into())
-                                    .text_color(subtext),
-                            );
+                            .child(line(fl!(
+                                "pane-menu-carry-session-cwd",
+                                directory = review.cwd.to_string()
+                            )))
+                            .children(review.resume().map(|(work, action)| {
+                                line(text::pane(work, &action))
+                                    .debug_selector(|| "pane-carry-runs".into())
+                            }))
+                            .child(line(fl!("pane-menu-carry-session-note")).text_color(subtext))
+                            .child(line(fl!("pane-menu-carry-closes")).text_color(subtext));
                     }
                     Review::Repository(review) => {
                         let state = &review.state;
@@ -508,13 +512,13 @@ impl HerdrWindow {
                                 },
                                 _,
                             ) => {
-                                format!("Branch {branch}, in a new worktree")
+                                fl!("pane-menu-carry-branch", branch = branch.as_str())
                             }
                             (Landing::Worktree { branch: None }, Some(branch)) => {
-                                format!("A new branch from {branch}, which is in use there")
+                                fl!("pane-menu-carry-branch-in-use", branch = branch.as_str())
                             }
                             (Landing::Worktree { branch: None }, None) => {
-                                "A new branch from this commit".to_owned()
+                                fl!("pane-menu-carry-branch-commit")
                             }
                             (
                                 Landing::Space {
@@ -524,52 +528,53 @@ impl HerdrWindow {
                                 },
                                 _,
                             ) => {
-                                format!(
-                                    "A new tab in {checkout}, fast-forwarded to this commit first"
+                                fl!(
+                                    "pane-menu-carry-tab-fast-forward",
+                                    checkout = checkout.as_str()
                                 )
                             }
                             (Landing::Space { checkout, .. }, _) => {
-                                format!("A new tab in {checkout}")
+                                fl!("pane-menu-carry-tab", checkout = checkout.as_str())
                             }
                         };
                         body = body
-                    .child(line(format!("Into {}", review.repository.label)))
-                    .child(line(branch))
-                    .child(line(format!(
-                        "{} unpushed commit(s), {} changed file(s), {} untracked",
-                        state.unpushed, state.changed, state.untracked
-                    )))
-                    .child(
-                        line(review.describe())
-                            .debug_selector(|| "pane-carry-runs".into())
-                            .when(matches!(review.action, carry::Action::Missing(_)), |row| {
-                                row.text_color(danger)
-                            }),
-                    )
-                    .child(
-                        line(
-                            "The changes are copied: this checkout keeps them. The pane here closes once it runs there."
-                                .into(),
-                        )
-                        .text_color(subtext),
-                    );
+                            .child(line(fl!(
+                                "pane-menu-carry-into",
+                                repository = review.repository.label.as_str()
+                            )))
+                            .child(line(branch))
+                            .child(line(fl!(
+                                "pane-menu-carry-state",
+                                unpushed = state.unpushed,
+                                changed = state.changed,
+                                untracked = state.untracked,
+                            )))
+                            .child(
+                                line(text::pane(&review.work, &review.action))
+                                    .debug_selector(|| "pane-carry-runs".into())
+                                    .when(
+                                        matches!(review.action, carry::Action::Missing(_)),
+                                        |row| row.text_color(danger),
+                                    ),
+                            )
+                            .child(line(fl!("pane-menu-carry-copied")).text_color(subtext));
                     }
                 }
-                ("Move", true)
+                (fl!("pane-menu-carry-move"), true)
             }
             Stage::Moving(step) => {
                 body = body
                     .child(bar(Progress::Working(step.map_or(0., Step::progress))))
                     .child(
-                        line(step.map_or("Starting", Step::label).to_owned())
-                            .debug_selector(|| "pane-carry-step".into())
-                            .text_color(muted),
+                        line(step.map_or_else(
+                            || fl!("pane-menu-carry-starting"),
+                            |step| text::step(Some(step)),
+                        ))
+                        .debug_selector(|| "pane-carry-step".into())
+                        .text_color(muted),
                     )
-                    .child(
-                        line("Closing this menu does not stop the move.".into())
-                            .text_color(subtext),
-                    );
-                ("Moving\u{2026}", false)
+                    .child(line(fl!("pane-menu-carry-keeps-going")).text_color(subtext));
+                (fl!("pane-menu-carry-moving"), false)
             }
             Stage::Failed(error) => {
                 body = body.child(
@@ -577,7 +582,7 @@ impl HerdrWindow {
                         .debug_selector(|| "pane-carry-error".into())
                         .text_color(danger),
                 );
-                ("Close", true)
+                (fl!("pane-menu-carry-close"), true)
             }
         };
         body.child(

@@ -49,6 +49,7 @@ pub(crate) fn theme_css(theme: &Theme) -> String {
         ("warn", theme.ink(theme.palette[3])),
         ("bad", theme.ink(theme.palette[1])),
     ];
+    // i18n: data
     let mut css = String::from("/* The user's Herdr UI theme, for kit.css. */\n");
     css.push_str(":root:not(#hk-untheme) {\n");
     css.push_str(if light {

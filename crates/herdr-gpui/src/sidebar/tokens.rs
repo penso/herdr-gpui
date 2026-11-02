@@ -1,7 +1,7 @@
 //! Resolve sidebar tokens, omitting missing values and empty rows.
 
 use super::{
-    agents::{agent_names, agent_place, state_label, status_text},
+    agents::{agent_names, agent_place, state_label, status_key, status_text},
     segment_budgets,
 };
 use crate::config::{AgentLayout, AgentToken, Rows, SpaceLayout, SpaceToken, TokenStyle};
@@ -65,8 +65,11 @@ fn shared_text<'a>(strings: &mut HashMap<&'a str, SharedString>, text: &'a str) 
         .clone()
 }
 
+/// Resolves each configured token. Rules on the status token match `state`,
+/// the English status, so a rule keeps working in every language.
 fn resolve_rows<T>(
     rows: &Rows<T>,
+    state: &str,
     mut value: impl FnMut(&T) -> Option<TokenKind>,
 ) -> Vec<Vec<ResolvedToken>> {
     rows.iter()
@@ -75,9 +78,10 @@ fn resolve_rows<T>(
                 .iter()
                 .filter_map(|configured| {
                     let kind = value(&configured.token)?;
-                    let style = match kind.text() {
-                        Some(text) => configured.style_for(text)?,
-                        None => configured.style,
+                    let style = match &kind {
+                        TokenKind::Text(_, TextRole::Status) => configured.style_for(state)?,
+                        TokenKind::Text(text, _) => configured.style_for(text)?,
+                        _ => configured.style,
                     };
                     Some(ResolvedToken { kind, style })
                 })
@@ -107,35 +111,41 @@ pub(super) fn agent_rows(
                 .find(|pane| pane.pane_id == agent.pane_id)
                 .and_then(|pane| pane.label.as_deref())
         });
-    let state_text = state_label(
-        agent,
-        match agent.agent_status {
-            AgentStatus::Unknown => "idle",
-            status => status_text(status),
-        },
-    );
+    let status = match agent.agent_status {
+        AgentStatus::Unknown => AgentStatus::Idle,
+        status => status,
+    };
+    let fallback = status_text(status);
+    let state_text = state_label(agent, &fallback);
+    let state_rule = state_label(agent, status_key(status));
     let tokens = token_values(&agent.tokens);
     let mut strings = HashMap::new();
     let mut text = |value, role| TokenKind::Text(shared_text(&mut strings, value), role);
-    let mut rows = resolve_rows(layout.rows_for(agent.agent.as_deref()), |token| {
-        Some(match token {
-            AgentToken::StateIcon => TokenKind::StateIcon,
-            AgentToken::StateText => text(&state_text, TextRole::Status),
-            AgentToken::Machine => text(machine?, TextRole::Secondary),
-            AgentToken::Workspace => text(workspace, TextRole::Workspace),
-            AgentToken::Tab => text(tab?, TextRole::Secondary),
-            AgentToken::Pane => text(pane?, TextRole::Secondary),
-            AgentToken::Agent => text(
-                agent_names(agent).into_iter().flatten().next()?,
-                TextRole::Agent,
-            ),
-            AgentToken::TerminalTitle => text(agent.terminal_title.as_deref()?, TextRole::Muted),
-            AgentToken::TerminalTitleStripped => {
-                text(agent.terminal_title_stripped.as_deref()?, TextRole::Muted)
-            }
-            AgentToken::Custom(name) => text(tokens.get(name.as_str())?, TextRole::Muted),
-        })
-    });
+    let mut rows = resolve_rows(
+        layout.rows_for(agent.agent.as_deref()),
+        &state_rule,
+        |token| {
+            Some(match token {
+                AgentToken::StateIcon => TokenKind::StateIcon,
+                AgentToken::StateText => text(&state_text, TextRole::Status),
+                AgentToken::Machine => text(machine?, TextRole::Secondary),
+                AgentToken::Workspace => text(workspace, TextRole::Workspace),
+                AgentToken::Tab => text(tab?, TextRole::Secondary),
+                AgentToken::Pane => text(pane?, TextRole::Secondary),
+                AgentToken::Agent => text(
+                    agent_names(agent).into_iter().flatten().next()?,
+                    TextRole::Agent,
+                ),
+                AgentToken::TerminalTitle => {
+                    text(agent.terminal_title.as_deref()?, TextRole::Muted)
+                }
+                AgentToken::TerminalTitleStripped => {
+                    text(agent.terminal_title_stripped.as_deref()?, TextRole::Muted)
+                }
+                AgentToken::Custom(name) => text(tokens.get(name.as_str())?, TextRole::Muted),
+            })
+        },
+    );
     if rows.is_empty() {
         rows.push(vec![ResolvedToken {
             kind: TokenKind::StateIcon,
@@ -158,13 +168,14 @@ pub(super) fn space_rows(
     layout: &SpaceLayout,
     context: SpaceContext<'_>,
 ) -> Vec<Vec<ResolvedToken>> {
+    let state = status_text(context.status);
     let mut strings = HashMap::new();
     let mut text = |value, role| TokenKind::Text(shared_text(&mut strings, value), role);
     let tokens = token_values(context.tokens);
-    let mut rows = resolve_rows(&layout.rows, |token| {
+    let mut rows = resolve_rows(&layout.rows, status_key(context.status), |token| {
         Some(match token {
             SpaceToken::StateIcon => TokenKind::StateIcon,
-            SpaceToken::StateText => text(status_text(context.status), TextRole::Status),
+            SpaceToken::StateText => text(&state, TextRole::Status),
             SpaceToken::Workspace => text(context.label, TextRole::Workspace),
             SpaceToken::Branch | SpaceToken::GitStatus if context.indented => return None,
             SpaceToken::Branch => text(context.branch?, TextRole::Secondary),

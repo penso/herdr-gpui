@@ -12,7 +12,7 @@ use crate::{
         preferences::Preference,
         remote::{Bind, Certificate, Edit, Privacy},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     remote::{Health, Supervisor, supervisor::Lease},
     search_input::SearchInput,
     settings_window::{
@@ -200,7 +200,7 @@ impl SettingsWindow {
                 if let Err(error) = result {
                     view.error = Some(fl!(
                         "settings-remote-revoke-failed",
-                        error = error.to_string()
+                        error = error.localize()
                     ));
                 }
                 cx.notify();
@@ -284,6 +284,16 @@ impl SettingsWindow {
                     Preference::Remote(Edit::KeepRunning(!remote.keep_running)),
                     cx,
                 )),
+            )
+            .child(
+                ui::row(theme, "remote-presence", fl!("settings-remote-presence"))
+                    .description(fl!("settings-remote-presence-note"))
+                    .switch(self.preference_toggle(
+                        "remote-presence-toggle",
+                        remote.presence,
+                        Preference::Remote(Edit::Presence(!remote.presence)),
+                        cx,
+                    )),
             )
             .child(
                 ui::row(theme, "remote-restart", fl!("settings-remote-restart"))
@@ -617,7 +627,10 @@ impl SettingsWindow {
                 .description(if asking {
                     fl!("settings-remote-device-revoke-ask")
                 } else {
-                    device_line(device, now)
+                    match crate::remote::hosts_line(device) {
+                        Some(hosts) => format!("{} \u{b7} {hosts}", device_line(device, now)),
+                        None => device_line(device, now),
+                    }
                 })
                 .when(asking, |row| row.control(cancel))
                 .control(

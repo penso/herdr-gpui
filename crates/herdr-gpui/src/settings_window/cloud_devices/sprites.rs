@@ -17,7 +17,7 @@ use crate::{
     },
     config::{Config, SpritesFields},
     github::Store,
-    i18n::fl,
+    i18n::{Localize, fl},
     search_input::SearchInput,
     sprites::{
         Settings,
@@ -146,7 +146,9 @@ impl SettingsWindow {
                 tracing::error!(category = "sprites_worker", error_kind = ?error.kind(), "Could not start the Sprites settings worker");
                 if let Some(card) = &mut self.sprites_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -292,7 +294,7 @@ impl SettingsWindow {
                     (_, Some(Ok(count))) => fl!("settings-cloud-sprites-count", count = *count),
                     (_, Some(Err(error))) => fl!(
                         "settings-cloud-sprites-token-unusable",
-                        error = error.to_string()
+                        error = error.localize()
                     ),
                     (_, None) => fl!("settings-cloud-checking"),
                 },

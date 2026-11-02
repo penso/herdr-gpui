@@ -2,6 +2,7 @@ use super::*;
 use crate::controls::{COMMANDS, Command};
 use gpui::{Modifiers, TestAppContext, size};
 
+mod en_xa;
 mod focus;
 
 fn info(command: Command) -> &'static CommandInfo {

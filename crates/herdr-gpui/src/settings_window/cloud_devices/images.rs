@@ -14,7 +14,10 @@ use crate::cloud::{
     worker::{self, Worker},
 };
 use crate::direction::Logical;
-use crate::{fonts::StyledFont, i18n::fl};
+use crate::{
+    fonts::StyledFont,
+    i18n::{Localize, fl},
+};
 use gpui::{prelude::*, *};
 use std::time::Duration;
 
@@ -148,7 +151,7 @@ impl SettingsWindow {
             Ok(Err(error)) => Some(fl!(
                 "settings-cloud-image-build-error",
                 project = entry.project.label.clone(),
-                error = error.to_string(),
+                error = error.localize(),
                 path = entry.origin.path.clone()
             )),
             Err(_) => Some(fl!("settings-cloud-image-no-window")),
@@ -186,7 +189,7 @@ impl SettingsWindow {
             Ok(reset) => self.sandbox_images.reset = Some(reset),
             Err(_) => {
                 self.sandbox_images.message =
-                    Some(crate::cloud::Error::Worker("image reset").to_string()); // i18n: data
+                    Some(crate::cloud::Error::Worker(crate::cloud::Worker::ImageReset).localize());
             }
         }
         cx.notify();
@@ -398,26 +401,12 @@ fn short(reference: &str) -> &str {
 /// A build's status line: the step, then what the builder said, which is
 /// its own output and shown as it is.
 fn progress_text(progress: &crate::cloud::image::Progress) -> String {
-    match progress.step {
-        Some((step, total)) => fl!(
-            "settings-cloud-image-step",
-            step = step,
-            total = total,
-            status = progress.status.clone()
-        ),
-        None => progress.status.clone(),
-    }
+    crate::cloud::status::build(progress)
 }
 
 /// When something happened, in words: "just now", "5 min ago".
 fn ago(seconds: u64) -> String {
-    let elapsed = catalog::now().saturating_sub(seconds);
-    match elapsed {
-        0..60 => fl!("settings-cloud-ago-now"),
-        60..3600 => fl!("settings-cloud-ago-minutes", count = elapsed / 60),
-        3600..86_400 => fl!("settings-cloud-ago-hours", count = elapsed / 3600),
-        _ => fl!("settings-cloud-ago-days", count = elapsed / 86_400),
-    }
+    crate::ago::text(catalog::now().saturating_sub(seconds))
 }
 
 #[cfg(test)]

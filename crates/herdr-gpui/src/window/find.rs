@@ -7,8 +7,10 @@
 //! unhandled for the platform to insert them (and to compose them through an
 //! IME), so the terminal's own key handler steps aside while the field has
 //! focus instead of the field stopping every key.
+// i18n: migrated
 
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     find::{Search, Step, memory::Left},
     scrollback::{Inbox, reveal_offset},
@@ -40,7 +42,7 @@ impl HerdrWindow {
     /// query last searched over that pane.
     pub(crate) fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.live.supports_copy_search {
-            self.show_flash(super::Flash::warning("Find needs a newer Herdr daemon"), cx);
+            self.show_flash(super::Flash::warning(fl!("window-find-needs-newer")), cx);
             return;
         }
         let Some(pane) = self.focused_surface_pane().cloned() else {
@@ -84,7 +86,7 @@ impl HerdrWindow {
         self.dismiss_find(Some(Left::Closed), window, cx);
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
-            input.set_placeholder("Find", cx);
+            input.set_placeholder_with(|| fl!("window-find-placeholder"), cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         if focus {
@@ -295,7 +297,7 @@ impl HerdrWindow {
             Method::PaneScroll,
             serde_json::json!({"pane_id": bar.search.pane_id(), "offset_from_bottom": offset}),
         ) {
-            self.local_error = Some(format!("Scroll not sent: {error}"));
+            self.local_error = Some(fl!("window-find-scroll-failed", error = error.localize()));
             cx.notify();
         }
     }

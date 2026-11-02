@@ -1,6 +1,6 @@
 //! Which panes run a chat program this window may attach to.
 
-use super::{MAX_CHATS, Route, Target};
+use super::{MAX_CHATS, Route, Surface, Target};
 use crate::state::LiveState;
 use herdr_chat_protocol::{EndpointId, TOKEN};
 use herdr_client::{ConnectTarget, protocol::ClientShellSnapshot};
@@ -61,6 +61,7 @@ pub(crate) fn targets(snapshot: &ClientShellSnapshot, route: Option<&Route>) -> 
                 existing: None,
                 pane_id: agent.pane_id.clone(),
                 route: route.clone(),
+                surface: Surface::Herdr,
             })
         })
         .filter(|target| seen.insert(target.pane_id.clone()))
@@ -88,6 +89,7 @@ pub(crate) fn with_existing(
             existing: Some(binding.clone()),
             pane_id: binding.pane_id.clone(),
             route: route.clone(),
+            surface: Surface::Herdr,
         })
     });
     targets
@@ -127,6 +129,7 @@ pub(crate) fn with_mirrors(
             existing: None,
             pane_id: mirror.pane.clone(),
             route: route.clone(),
+            surface: Surface::Herdr,
         })
     });
     targets

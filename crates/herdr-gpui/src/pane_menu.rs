@@ -1,4 +1,6 @@
+// i18n: migrated
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow, close_modal::CloseConfirmation, menu::Page, pane_move::Destination,
     search_input::SearchInput,
@@ -151,22 +153,24 @@ impl Action {
         })
     }
 
-    fn label(self, target: &Target) -> &'static str {
+    fn label(self, target: &Target) -> String {
         match self {
-            Self::Rename => "Rename",
-            Self::SplitRight => "Split Right",
-            Self::SplitDown => "Split Down",
-            Self::Swap => "Swap with Focused Pane",
-            Self::Zoom if target.zoomed => "Unzoom",
-            Self::Zoom => "Zoom",
-            Self::MoveToNewTab => "Move to New Tab",
-            Self::MoveToNewWorkspace => "Move to New Workspace",
-            Self::MoveTo => "Move to\u{2026}",
-            Self::EditScrollback => "Open Scrollback in Editor",
-            Self::RightClick if target.right_click_passthrough => "Open This Menu on Right-Click",
-            Self::RightClick => "Send Right-Clicks to Pane",
-            Self::Processes => "Processes",
-            Self::Close => "Close",
+            Self::Rename => fl!("pane-menu-rename"),
+            Self::SplitRight => fl!("pane-menu-split-right"),
+            Self::SplitDown => fl!("pane-menu-split-down"),
+            Self::Swap => fl!("pane-menu-swap"),
+            Self::Zoom if target.zoomed => fl!("pane-menu-unzoom"),
+            Self::Zoom => fl!("pane-menu-zoom"),
+            Self::MoveToNewTab => fl!("pane-menu-move-to-new-tab"),
+            Self::MoveToNewWorkspace => fl!("pane-menu-move-to-new-workspace"),
+            Self::MoveTo => fl!("pane-menu-move-to"),
+            Self::EditScrollback => fl!("pane-menu-edit-scrollback"),
+            Self::RightClick if target.right_click_passthrough => {
+                fl!("pane-menu-right-click-menu")
+            }
+            Self::RightClick => fl!("pane-menu-right-click-pane"),
+            Self::Processes => fl!("pane-menu-processes"),
+            Self::Close => fl!("pane-menu-close"),
         }
     }
 }
@@ -413,7 +417,7 @@ impl HerdrWindow {
                 let input = cx.new(SearchInput::new);
                 input.update(cx, |input, cx| {
                     input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-                    input.set_placeholder("Pane name (blank clears)", cx);
+                    input.set_placeholder_with(|| fl!("pane-menu-rename-placeholder"), cx);
                     input.set_text_selected(&target.label, cx);
                     window.focus(&input.focus, cx);
                 });
@@ -714,11 +718,15 @@ impl HerdrWindow {
             body =
                 body.p(px(8.))
                     .gap(px(12.))
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Rename pane"))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(fl!("pane-menu-rename-title")),
+                    )
                     .child(
                         div()
                             .text_color(rgb(self.theme.subtext()))
-                            .child("Leave blank to clear the custom label."),
+                            .child(fl!("pane-menu-rename-hint")),
                     )
                     .when_some(pane.input.clone(), |body, input| {
                         if pane.pending.is_some() {
@@ -737,7 +745,7 @@ impl HerdrWindow {
                                     .id("pane-rename-cancel")
                                     .p(px(6.))
                                     .cursor_pointer()
-                                    .child("Cancel")
+                                    .child(fl!("pane-menu-cancel"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.dismiss_menu(window, cx)
                                     })),
@@ -750,9 +758,9 @@ impl HerdrWindow {
                                     .bg(rgb(self.theme.active))
                                     .cursor_pointer()
                                     .child(if pane.pending.is_some() {
-                                        "Renaming..."
+                                        fl!("pane-menu-renaming")
                                     } else {
-                                        "Rename"
+                                        fl!("pane-menu-rename-submit")
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.submit_pane_rename(window, cx)

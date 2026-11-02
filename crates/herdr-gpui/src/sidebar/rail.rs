@@ -20,6 +20,7 @@ use super::{
     workspaces::workspace_label,
 };
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::notification_mutes::{Daemon, Silenced};
 use crate::{
     Command, HerdrWindow, NavigationTarget,
@@ -29,7 +30,7 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::{AgentStatus, ClientShellAgent};
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 /// Wide enough for the shared mark grid: a two-digit workspace number, an
 /// agent icon, and a drawn status icon, plus even padding inside the highlight.
@@ -188,7 +189,7 @@ impl HerdrWindow {
                 let menu_id = endpoint_id.clone();
                 let connected = endpoint.live.status.is_connected();
                 let text = if endpoint.collapsed {
-                    format!("{} (collapsed)", endpoint.label)
+                    fl!("sidebar-rail-collapsed", host = endpoint.label.as_str())
                 } else {
                     endpoint.label.clone()
                 };
@@ -536,7 +537,7 @@ impl HerdrWindow {
                 rail_button("rail-new-workspace", font, look, theme)
                     .text_color(rgb(theme.muted))
                     .hover(|s| s.text_color(rgb(theme.foreground)))
-                    .tooltip(hint.with("New workspace"))
+                    .tooltip(hint.with(fl!("sidebar-new-workspace")))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.command(Command::Workspace, window, cx);
                     }))
@@ -816,22 +817,23 @@ pub(super) fn host_initial(label: &str) -> String {
 }
 
 /// The status word a tooltip names, none for an unknown status.
-fn status_word(status: AgentStatus) -> Option<&'static str> {
+fn status_word(status: AgentStatus) -> Option<String> {
     (status != AgentStatus::Unknown).then(|| status_text(status))
 }
 
 /// An agent's status word: its integration's state label when it set one.
-fn agent_status_word(agent: &ClientShellAgent) -> Option<Cow<'static, str>> {
-    let word = state_label(agent, status_word(agent.agent_status).unwrap_or(""));
+fn agent_status_word(agent: &ClientShellAgent) -> Option<String> {
+    let fallback = status_word(agent.agent_status).unwrap_or_default();
+    let word = state_label(agent, &fallback).into_owned();
     (!word.is_empty()).then_some(word)
 }
 
 /// A workspace's status word, saying so when its notifications are muted.
-fn muted_word(status: Option<&str>, muted: bool) -> Option<Cow<'_, str>> {
+fn muted_word(status: Option<String>, muted: bool) -> Option<String> {
+    let muted = muted.then(|| fl!("sidebar-spoken-muted"));
     match (status, muted) {
-        (status, false) => status.map(Cow::Borrowed),
-        (Some(status), true) => Some(format!("{status}, notifications muted").into()),
-        (None, true) => Some("notifications muted".into()),
+        (Some(status), Some(muted)) => Some([status, muted].join(&fl!("sidebar-spoken-separator"))),
+        (status, muted) => status.or(muted),
     }
 }
 
@@ -844,20 +846,15 @@ pub(super) fn describe(
     place: Option<&str>,
     status: Option<&str>,
 ) -> SharedString {
-    let mut text = String::new();
-    if let Some(host) = host {
-        text.push_str(host);
-        text.push_str(": ");
-    }
-    text.push_str(name);
-    if let Some(place) = place {
-        text.push_str(" in ");
-        text.push_str(place);
-    }
+    let mut text = match place {
+        Some(place) => fl!("sidebar-rail-in", name = name, place = place),
+        None => name.to_owned(),
+    };
     if let Some(status) = status {
-        text.push_str(" (");
-        text.push_str(status);
-        text.push(')');
+        text = fl!("sidebar-rail-status", text = text, status = status);
+    }
+    if let Some(host) = host {
+        text = fl!("sidebar-rail-host", host = host, text = text);
     }
     text.into()
 }

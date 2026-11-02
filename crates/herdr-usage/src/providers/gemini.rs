@@ -14,6 +14,7 @@
 //! a non-Gmail address; and the consumer-tier migration guidance, which here
 //! is the usual rejected sign-in.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -69,15 +70,12 @@ static META: Meta = Meta::new("gemini", "Gemini")
         Setting::new(
             "client_id",
             &["GEMINI_OAUTH_CLIENT_ID"],
-            "The Gemini CLI's OAuth client id, used to refresh an expired sign-in. \
-             Normally found in the installed CLI (OAUTH_CLIENT_ID in \
-             @google/gemini-cli-core/dist/src/code_assist/oauth2.js); set it only when \
-             the CLI is not on the host's PATH.",
+            "usage-gemini-setting-client-id",
         ),
         Setting::new(
             "client_secret",
             &["GEMINI_OAUTH_CLIENT_SECRET"],
-            "The matching OAUTH_CLIENT_SECRET from the same file.",
+            "usage-gemini-setting-client-secret",
         ),
     ]);
 
@@ -214,9 +212,9 @@ struct CodeAssist {
 impl CodeAssist {
     /// A named paid tier wins; a free tier on a non-Gmail account is
     /// Workspace, as CodexBar reads the `hd` claim.
-    fn plan(&self, email: Option<&str>) -> Option<String> {
+    fn plan(&self, email: Option<&str>) -> Option<Text> {
         if let Some(paid) = &self.paid {
-            return Some(paid.clone());
+            return Some(Text::service(paid));
         }
         let workspace =
             email
@@ -226,10 +224,10 @@ impl CodeAssist {
                     domain != "gmail.com" && domain != "googlemail.com"
                 });
         match self.tier.as_deref()? {
-            "standard-tier" => Some("Paid".into()),
-            "free-tier" if workspace => Some("Workspace".into()),
-            "free-tier" => Some("Free".into()),
-            "legacy-tier" => Some("Legacy".into()),
+            "standard-tier" => Some(Text::message("usage-gemini-paid")),
+            "free-tier" if workspace => Some(Text::message("usage-gemini-workspace")),
+            "free-tier" => Some(Text::message("usage-gemini-free")),
+            "legacy-tier" => Some(Text::message("usage-gemini-legacy")),
             _ => None,
         }
     }
@@ -275,8 +273,9 @@ fn gemini_project(body: &str) -> Option<String> {
 }
 
 /// Each model keeps its lowest remaining share; Pro, Flash, and Flash Lite
-/// models become the daily windows, as CodexBar groups them.
-pub(crate) fn parse(body: &str, email: Option<String>, plan: Option<String>) -> Result<Report> {
+/// models become the daily windows, as CodexBar groups them; the families
+/// are Gemini's model names.
+pub(crate) fn parse(body: &str, email: Option<String>, plan: Option<Text>) -> Result<Report> {
     let answer: Quota = json(body)?;
     let mut models: Vec<(String, f64, Option<SystemTime>)> = Vec::new();
     for bucket in answer.buckets.unwrap_or_default() {
@@ -314,7 +313,7 @@ pub(crate) fn parse(body: &str, email: Option<String>, plan: Option<String>) -> 
                 .filter(|(id, ..)| family(id) == Some(name))
                 .min_by(|a, b| a.1.total_cmp(&b.1))?;
             Some(Window::new(
-                Kind::Named(name.into()),
+                Kind::Named(Text::service(name)),
                 100. - fraction * 100.,
                 *reset,
                 Some(DAY),
@@ -323,16 +322,26 @@ pub(crate) fn parse(body: &str, email: Option<String>, plan: Option<String>) -> 
         .collect();
     let facts = models
         .iter()
-        .map(|(id, fraction, _)| (id.clone(), format!("{}% left", (fraction * 100.).round())))
+        .map(|(id, fraction, _)| {
+            (
+                Text::service(id),
+                Text::message("usage-gemini-left")
+                    .arg("percent", format!("{}", (fraction * 100.).round())),
+            )
+        })
         .collect();
-    Ok(
-        Report::new(Provider(&Gemini), Account { email, plan }, windows).with_sections([
-            Section::Facts {
-                title: "Models".into(),
-                facts,
-            },
-        ]),
+    Ok(Report::new(
+        Provider(&Gemini),
+        Account {
+            email: email.map(Text::service),
+            plan,
+        },
+        windows,
     )
+    .with_sections([Section::Facts {
+        title: Text::message("usage-gemini-models"),
+        facts,
+    }]))
 }
 
 #[derive(Deserialize)]
@@ -399,7 +408,12 @@ mod tests {
             {"modelId": "gemini-2.5-flash", "remainingFraction": 0.4, "resetTime": "2025-01-01T00:00:00Z", "tokenType": "OUTPUT"},
             {"modelId": "gemini-2.5-flash-lite", "remainingFraction": 0.8, "resetTime": "2025-01-01T00:00:00Z"}
         ]}"#;
-        let report = parse(body, Some("me@gmail.com".into()), Some("Free".into())).unwrap();
+        let report = parse(
+            body,
+            Some("me@gmail.com".into()),
+            Some(Text::message("usage-gemini-free")),
+        )
+        .unwrap();
         let used: Vec<_> = report
             .windows
             .iter()
@@ -423,11 +437,21 @@ mod tests {
             report.windows[0].resets_at,
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_735_689_600))
         );
-        assert_eq!(report.account.email.as_deref(), Some("me@gmail.com"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("me@gmail.com")
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("facts");
         };
         assert_eq!(facts.len(), 3);
+        assert_eq!(
+            facts[0],
+            (
+                Text::service("gemini-2.5-flash"),
+                Text::message("usage-gemini-left").arg("percent", "40")
+            )
+        );
         assert!(parse(r#"{"buckets": []}"#, None, None).is_err());
     }
 
@@ -438,17 +462,20 @@ mod tests {
                 "cloudaicompanionProject": "cloudaicompanion-123"}"#,
         );
         assert_eq!(assist.project.as_deref(), Some("cloudaicompanion-123"));
-        assert_eq!(assist.plan(Some("me@gmail.com")).as_deref(), Some("Free"));
         assert_eq!(
-            assist.plan(Some("me@acme.com")).as_deref(),
-            Some("Workspace")
+            assist.plan(Some("me@gmail.com")),
+            Some(Text::message("usage-gemini-free"))
+        );
+        assert_eq!(
+            assist.plan(Some("me@acme.com")),
+            Some(Text::message("usage-gemini-workspace"))
         );
         let paid = parse_code_assist(
             r#"{"currentTier": {"id": "standard-tier"}, "paidTier": {"name": "Plus"},
                 "cloudaicompanionProject": {"id": "proj-1"}}"#,
         );
         assert_eq!(paid.project.as_deref(), Some("proj-1"));
-        assert_eq!(paid.plan(None).as_deref(), Some("Plus"));
+        assert_eq!(paid.plan(None), Some(Text::service("Plus")));
         assert_eq!(parse_code_assist("not json"), CodeAssist::default());
         // Live shape for an account Google no longer offers a tier to.
         let ineligible = parse_code_assist(

@@ -329,6 +329,7 @@ fn inspect_host(
     }
     // Linux is the supported host for this observer. Read only known pids;
     // globbing stays disabled because a process name may contain metacharacters.
+    // i18n: data
     let mut script = String::from("set -f\n[ \"$(uname -s)\" = Linux ] || exit 1\n");
     let mut names = Vec::new();
     for pid in pids {
@@ -405,6 +406,7 @@ fn inspect_host(
 /// `/proc/<pid>/stat`, after a record separator naming it. The command name
 /// before them may hold spaces or `)`, so the fields are read after its
 /// last `) `.
+// i18n: data
 const STAT_SCRIPT: &str = r#"printf '\036%s\n' {pid}
 if [ -r /proc/{pid}/stat ]; then
   IFS= read -r stat < /proc/{pid}/stat || :

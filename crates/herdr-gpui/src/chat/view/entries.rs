@@ -15,7 +15,7 @@ use super::{
     disclosure::{HeaderText, chevron},
     layout::{Row, layout_for, side},
 };
-use crate::{HerdrWindow, config::corners, fonts::StyledFont, notifications::safe_text};
+use crate::{HerdrWindow, config::corners, fonts::StyledFont, i18n::fl, notifications::safe_text};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{
     ActivityState, Entry, EntryKind, NoticeLevel, Tool, ToolKind, ToolStatus,
@@ -27,31 +27,54 @@ mod tools;
 
 use steps::steps_label;
 
-fn tool_kind(kind: ToolKind) -> &'static str {
+fn tool_kind(kind: ToolKind) -> String {
     match kind {
-        ToolKind::Read => "Read",
-        ToolKind::Edit => "Edit",
-        ToolKind::Delete => "Delete",
-        ToolKind::Move => "Move",
-        ToolKind::Search => "Search",
-        ToolKind::Execute => "Run",
-        ToolKind::Think => "Think",
-        ToolKind::Subagent => "Sub-agent",
-        ToolKind::Fetch => "Fetch",
-        ToolKind::SwitchMode => "Mode",
-        ToolKind::Other => "Tool",
+        ToolKind::Read => fl!("chat-tool-read"),
+        ToolKind::Edit => fl!("chat-tool-edit"),
+        ToolKind::Delete => fl!("chat-tool-delete"),
+        ToolKind::Move => fl!("chat-tool-move"),
+        ToolKind::Search => fl!("chat-tool-search"),
+        ToolKind::Execute => fl!("chat-tool-run"),
+        ToolKind::Think => fl!("chat-tool-think"),
+        ToolKind::Subagent => fl!("chat-tool-subagent"),
+        ToolKind::Fetch => fl!("chat-tool-fetch"),
+        ToolKind::SwitchMode => fl!("chat-tool-mode"),
+        ToolKind::Other => fl!("chat-tool-other"),
     }
 }
 
-/// The word a tool call's card shows for where it stands: what it started
-/// when it started something, which can outlive the call, else the call.
-fn tool_state(activity: Option<ActivityState>, status: ToolStatus) -> &'static str {
+/// Where a tool call's card says it stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ToolState {
+    Done,
+    Failed,
+    Pending,
+    Running,
+    Stopped,
+}
+
+impl ToolState {
+    /// The word the card shows.
+    fn label(self) -> String {
+        match self {
+            Self::Done => fl!("chat-tool-state-done"),
+            Self::Failed => fl!("chat-tool-state-failed"),
+            Self::Pending => fl!("chat-tool-state-pending"),
+            Self::Running => fl!("chat-tool-state-running"),
+            Self::Stopped => fl!("chat-tool-state-stopped"),
+        }
+    }
+}
+
+/// Where a tool call's card says it stands: what it started when it
+/// started something, which can outlive the call, else the call.
+fn tool_state(activity: Option<ActivityState>, status: ToolStatus) -> ToolState {
     match (activity, status) {
-        (Some(ActivityState::Running), _) | (None, ToolStatus::InProgress) => "running",
-        (Some(ActivityState::Finished), _) | (None, ToolStatus::Completed) => "done",
-        (Some(ActivityState::Failed), _) | (None, ToolStatus::Failed) => "failed",
-        (Some(ActivityState::Killed), _) => "stopped",
-        (None, ToolStatus::Pending) => "pending",
+        (Some(ActivityState::Running), _) | (None, ToolStatus::InProgress) => ToolState::Running,
+        (Some(ActivityState::Finished), _) | (None, ToolStatus::Completed) => ToolState::Done,
+        (Some(ActivityState::Failed), _) | (None, ToolStatus::Failed) => ToolState::Failed,
+        (Some(ActivityState::Killed), _) => ToolState::Stopped,
+        (None, ToolStatus::Pending) => ToolState::Pending,
     }
 }
 
@@ -166,7 +189,7 @@ impl HerdrWindow {
                     entry.id,
                     Region::Body(0),
                     Cell::default(),
-                    summary.describe(),
+                    crate::chat::text::turn(summary),
                     cx,
                 );
                 layout_for(self.config.chat.layout).turn(text.into_any_element(), &self.chat_look())

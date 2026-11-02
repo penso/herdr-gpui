@@ -21,8 +21,6 @@ use tokio::sync::{broadcast::error::RecvError, mpsc};
 const CHAT_COALESCE: Duration = Duration::from_millis(120);
 /// How long list changes gather before one patch goes out.
 const LIST_COALESCE: Duration = Duration::from_millis(400);
-/// How often a terminal's screen is read while a phone shows it.
-const SCREEN_INTERVAL: Duration = Duration::from_millis(300);
 /// Patches queued for a slow phone before the stream gives up.
 const QUEUE: usize = 32;
 /// How often an open stream checks that its session still holds, so one
@@ -37,13 +35,13 @@ pub(super) struct Target {
 }
 
 /// One open stream, counted against its device until it is dropped.
-struct Connected {
+pub(crate) struct Connected {
     state: Shared,
     device: DeviceId,
 }
 
 impl Connected {
-    fn new(state: Shared, device: DeviceId) -> Self {
+    pub(crate) fn new(state: Shared, device: DeviceId) -> Self {
         *state.connected().entry(device.clone()).or_default() += 1;
         Self { state, device }
     }
@@ -207,10 +205,12 @@ async fn follow_chat(state: &Shared, pane: &str, sender: &mpsc::Sender<Sse>) {
     }
 }
 
-/// Sends the pane's screen whenever it changes, read every
-/// [`SCREEN_INTERVAL`]: Herdr's API has no output events. Reading stops
-/// with the stream, so an idle phone costs nothing.
+/// Sends the pane's screen whenever it changes, read on a timer and again
+/// at once after typing ([`Typed`](super::Typed)): Herdr's API has no
+/// output events. Reading stops with the stream, so an idle phone costs
+/// nothing.
 async fn follow_terminal(state: &Shared, pane: &str, sender: &mpsc::Sender<Sse>) {
+    let mut pace = state.typed.pace(pane);
     let mut last = None;
     let mut failures = 0;
     loop {
@@ -244,7 +244,7 @@ async fn follow_terminal(state: &Shared, pane: &str, sender: &mpsc::Sender<Sse>)
             }
         }
         tokio::select! {
-            () = tokio::time::sleep(SCREEN_INTERVAL) => {}
+            () = pace.wait() => {}
             () = sender.closed() => return,
         }
     }

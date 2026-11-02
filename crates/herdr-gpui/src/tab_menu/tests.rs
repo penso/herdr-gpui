@@ -4,6 +4,7 @@ use core::prelude::v1::test;
 use gpui::VisualTestContext;
 use std::sync::Arc;
 
+mod en_xa;
 // Moves run POSIX host scripts and are never offered on other clients.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod moves;

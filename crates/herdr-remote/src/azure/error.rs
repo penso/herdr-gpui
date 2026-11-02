@@ -8,9 +8,9 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0} is not valid.")]
-    Field(&'static str),
+    Field(crate::cloud::Value),
     #[error("{0} must be UTF-8.")]
-    Encoding(&'static str),
+    Encoding(crate::cloud::Value),
     #[error("Azure needs a subscription ID. Configure one in Settings > Cloud Devices.")]
     MissingSubscription,
     #[error("Azure needs credentials (client secret or Azure CLI login).")]

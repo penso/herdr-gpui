@@ -23,7 +23,7 @@ use crate::{
     },
     config::{CoderConfig, CoderFields, Config},
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -193,8 +193,9 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "coder_worker", error_kind = ?error.kind(), "Could not start Coder settings worker");
                 if let Some(cloud) = &mut self.coder_card {
-                    // i18n: data
-                    cloud.message = Some(crate::coder::Error::Worker("settings").to_string());
+                    cloud.message = Some(
+                        crate::coder::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }

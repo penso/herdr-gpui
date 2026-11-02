@@ -4,8 +4,15 @@
 //! drawing frames only while something is still moving.
 mod slow;
 
-use gpui::{AnimationElement, AnimationExt, ElementId, IntoElement, Styled, px};
-use std::time::{Duration, Instant};
+use gpui::{
+    AnimationElement, AnimationExt, Div, ElementId, IntoElement, ParentElement, Pixels, Styled,
+    div, px,
+};
+use std::{
+    cell::Cell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 pub(crate) use slow::{duration, is_slow, now, set_slow};
 
@@ -40,6 +47,82 @@ pub(crate) fn pop_in<E: IntoElement + Styled + 'static>(
             element.opacity(k).mt(px(-(1. - k) * DROP))
         },
     )
+}
+
+/// A disclosure opening, such as a device unfolding its sessions: the space
+/// grows from nothing to the content's height while the content fades in,
+/// so the rows around it move smoothly instead of jumping and then
+/// settling. The content lays out at its full height inside a clip;
+/// `height` keeps that height from the frame before, which is what the
+/// space grows towards (the first frame, still unmeasured, shows nothing).
+/// Once open it is the content's own height, so rows added later show at
+/// once. `from` is how open it already was, when it reverses a [`fold`]
+/// that had not finished.
+///
+/// How far it has come is a function of `since`, when it began to open, not
+/// of when this element first drew: drawn again elsewhere, as the device
+/// picker is beneath a dialog, it carries on rather than opening again. The
+/// animation only keeps frames coming while it moves. Unit tests see it open.
+pub(crate) fn unfold(
+    content: impl IntoElement,
+    id: impl Into<ElementId>,
+    height: Rc<Cell<Pixels>>,
+    since: Instant,
+    from: f32,
+) -> AnimationElement<Div> {
+    let measured = height.clone();
+    div()
+        // In a list of capped height, it keeps its size as rows do.
+        .flex_none()
+        .flex()
+        .flex_col()
+        .overflow_hidden()
+        .on_children_prepainted(move |bounds, _, _| {
+            if let Some(content) = bounds.first() {
+                measured.set(content.size.height);
+            }
+        })
+        .child(div().flex_none().child(content))
+        .with_animation(
+            id,
+            gpui::Animation::new(duration(ENTER)),
+            move |element, _| match progress(since, now(), duration(ENTER)).filter(|_| !cfg!(test))
+            {
+                Some(k) => {
+                    let shown = from + (1. - from) * k;
+                    element.h(height.get() * shown).opacity(shown)
+                }
+                None => element,
+            },
+        )
+}
+
+/// A disclosure closing, [`unfold`] run backwards: the space shrinks from
+/// `height`, how tall it was when it began to close at `since`, to nothing
+/// while the content fades out, so the rows below move back up instead of
+/// jumping. Like [`unfold`], it follows `since`, not its first frame. Its
+/// caller stops drawing it once [`LEAVE`] has passed. Unit tests never draw
+/// it, as they see a fold finished at once.
+pub(crate) fn fold(
+    content: impl IntoElement,
+    id: impl Into<ElementId>,
+    height: Pixels,
+    since: Instant,
+) -> AnimationElement<Div> {
+    div()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .overflow_hidden()
+        .child(div().flex_none().child(content))
+        .with_animation(
+            id,
+            gpui::Animation::new(duration(LEAVE)),
+            move |element, _| {
+                let shown = 1. - progress(since, now(), duration(LEAVE)).unwrap_or(1.);
+                element.h(height * shown).opacity(shown)
+            },
+        )
 }
 
 /// Something that opens and closes, such as a panel: how much of it shows.

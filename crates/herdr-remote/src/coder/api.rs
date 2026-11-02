@@ -3,6 +3,7 @@
 //! `codersdk`; unknown fields are ignored and unknown states never read as ready.
 
 use super::{Error, Result, Settings, http, store};
+use crate::cloud::Value;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
@@ -296,7 +297,7 @@ fn segment(value: &str) -> Result<&str> {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
     {
-        return Err(Error::Field("Coder identifier"));
+        return Err(Error::Field(Value::CoderIdentifier));
     }
     Ok(value)
 }
@@ -376,7 +377,7 @@ impl<'a> Client<'a> {
         preset: Option<&Preset>,
     ) -> Result<Workspace> {
         if !super::names::valid(name) {
-            return Err(Error::Field("workspace name"));
+            return Err(Error::Field(Value::WorkspaceName));
         }
         let path = match &self.settings.organization {
             Some(org) => format!(

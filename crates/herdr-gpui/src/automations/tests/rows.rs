@@ -3,6 +3,11 @@ use super::*;
 use crate::automations::{format, model};
 use chrono::FixedOffset;
 
+/// `text` without the isolation marks Fluent puts around each placeable.
+fn plain(text: String) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}
+
 fn find<'a>(status: &'a Status, name: &str) -> &'a ScriptStatus {
     status
         .scripts
@@ -22,7 +27,7 @@ fn each_script_shows_its_state() {
     invalid.reason = Some("line 3: unknown step".into());
     assert_eq!(model::look(&invalid), Look::Failed);
     assert_eq!(
-        model::detail(&invalid, &status, NOW),
+        plain(model::detail(&invalid, &status, NOW)),
         "line 3: unknown step"
     );
 }
@@ -32,19 +37,19 @@ fn each_row_says_what_runs_waits_or_fails() {
     let status = status();
     let now = NOW;
     assert_eq!(
-        model::detail(find(&status, "nightly"), &status, now),
+        plain(model::detail(find(&status, "nightly"), &status, now)),
         "Step 2/3 · 12m00s"
     );
     assert_eq!(
-        model::detail(find(&status, "triage"), &status, now),
+        plain(model::detail(find(&status, "triage"), &status, now)),
         "Failed: pull: checkout is dirty"
     );
     assert_eq!(
-        model::detail(find(&status, "deploy"), &status, now),
+        plain(model::detail(find(&status, "deploy"), &status, now)),
         "Changed by git pull · awaiting approval"
     );
     assert_eq!(
-        model::detail(find(&status, "cleanup"), &status, now),
+        plain(model::detail(find(&status, "cleanup"), &status, now)),
         "Paused"
     );
     assert!(model::needs_you(find(&status, "triage")));
@@ -126,18 +131,18 @@ fn times_durations_and_counts_read_short() {
     assert_eq!(format::when_in(NOW + 15 * 60, NOW, &utc), "12:15");
     assert_eq!(format::when_in(NOW - 33 * HOUR, NOW, &utc), "Sun 03:00");
     assert_eq!(format::when_in(NOW - 20 * 24 * HOUR, NOW, &utc), "Sep 29");
-    assert_eq!(format::until(NOW + 72 * 60, NOW), "in 1 h 12 min");
-    assert_eq!(format::until(NOW + 5 * 60, NOW), "in 5 min");
-    assert_eq!(format::span(3), "3s");
-    assert_eq!(format::span(12 * 60 + 4), "12m04s");
-    assert_eq!(format::span(2 * HOUR + 4 * 60), "2h 04m");
-    assert_eq!(format::span(4 * 24 * HOUR), "4 d");
+    assert_eq!(plain(format::until(NOW + 72 * 60, NOW)), "in 1 h 12 min");
+    assert_eq!(plain(format::until(NOW + 5 * 60, NOW)), "in 5 min");
+    assert_eq!(plain(format::span(3)), "3s");
+    assert_eq!(plain(format::span(12 * 60 + 4)), "12m04s");
+    assert_eq!(plain(format::span(2 * HOUR + 4 * 60)), "2h 04m");
+    assert_eq!(plain(format::span(4 * 24 * HOUR)), "4 d");
     assert_eq!(format::tokens(940), "940");
     assert_eq!(format::tokens(340_000), "340k");
     assert_eq!(format::tokens(1_200_000), "1.2M");
     assert_eq!(format::tokens(10_000_000), "10M");
-    assert_eq!(format::bytes(3_300_000_000), "3.1 GB");
-    assert_eq!(format::cpu(700_000), "11m40s");
+    assert_eq!(plain(format::bytes(3_300_000_000)), "3.1 GB");
+    assert_eq!(plain(format::cpu(700_000)), "11m40s");
 }
 
 #[test]

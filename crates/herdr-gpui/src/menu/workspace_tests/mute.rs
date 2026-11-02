@@ -1,4 +1,5 @@
 use super::*;
+use crate::menu::workspace::popover::Label;
 use crate::notification_mutes::{Daemon, Mutes};
 use gpui::{
     Element, IntoElement,
@@ -11,14 +12,14 @@ fn the_header_toggle_names_what_it_does(cx: &mut gpui::TestAppContext) {
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             for (action, name) in [
-                (WorkspaceMenuAction::Mute, "Mute notifications"),
-                (WorkspaceMenuAction::Unmute, "Unmute notifications"),
+                (WorkspaceMenuAction::Mute, Label::MUTE),
+                (WorkspaceMenuAction::Unmute, Label::UNMUTE),
             ] {
                 let element = view.render_workspace_mute(action, name, cx).into_element();
                 let mut node = Node::new(element.a11y_role().unwrap());
                 element.write_a11y_info(&mut node);
                 assert_eq!(node.role(), Role::Button);
-                assert_eq!(node.label(), Some(name));
+                assert_eq!(node.label(), Some(name.english().as_str()));
             }
         })
     });

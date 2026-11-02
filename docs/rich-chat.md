@@ -58,6 +58,24 @@ and approvals keep that interface visible; failed or unmatched discovery falls
 back to it. Local and remote discovery retain their before/after identity checks,
 grouping the reads into two command streams instead of four.
 
+## Chats in Herdr 2 panes
+
+In a Herdr 2 (herdr-core) tab, starting a chat from the tab strip's launcher
+or the group menu splits the pane in use and runs the chat beside it. A tab
+can hold several chats side by side, each in its own pane, along with plain
+terminals. The window picks the chat's endpoint before `herdr-acp` starts:
+it passes the id in `HERDR_ACP_ENDPOINT` and labels the terminal `acp=<id>`
+in herdr-core. Because herdr-core keeps the label, the chat view comes back
+after a restart and appears in every window that shows the pane.
+`herdr-acp` reports its status to herdr-core with OSC 7501, so the pane's
+activity dot behaves as it does in Herdr.
+
+The window only attaches to terminals of the herdr-core on this machine. A
+chat in a terminal on another machine that core added keeps its terminal
+view. Mirror tabs only watch, so they show the terminal rather than a chat.
+A `herdr-acp` started by hand in a Herdr 2 pane has no label, so it also
+keeps its terminal view.
+
 ## Sub-agents and background shells
 
 When the agent hands a task to a sub-agent or leaves a command running in the

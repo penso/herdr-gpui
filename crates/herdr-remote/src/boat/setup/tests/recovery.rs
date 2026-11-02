@@ -121,7 +121,9 @@ fn ssh_and_installation_failures_preserve_the_device_and_original_error() {
         AppError::Provider(ProviderError::Boat(BoatError::SshMissing(
             std::io::Error::from(std::io::ErrorKind::NotFound),
         ))),
-        AppError::Cloud(cloud::Error::Install("fixture installer failure".into())),
+        AppError::Cloud(cloud::Error::Install(install::Failure::Output(
+            "fixture installer failure".into(),
+        ))),
         AppError::Cloud(cloud::Error::InstallTimeout),
         AppError::Cloud(cloud::Error::Cancelled),
     ] {

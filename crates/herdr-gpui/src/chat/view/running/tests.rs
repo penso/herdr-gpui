@@ -21,6 +21,11 @@ fn transcript(activities: Vec<Activity>) -> Transcript {
     }
 }
 
+/// `text` without the isolation marks around its numbers.
+fn plain(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}
+
 #[core::prelude::v1::test]
 fn nothing_shows_once_nothing_runs() {
     assert_eq!(Running::of(&transcript(Vec::new()), 0), None);
@@ -45,7 +50,10 @@ fn the_summary_counts_what_runs_by_kind() {
         5_000,
     )
     .unwrap();
-    assert_eq!(running.summary, "2 sub-agents \u{b7} 1 background shell");
+    assert_eq!(
+        plain(&running.summary),
+        "2 sub-agents \u{b7} 1 background shell"
+    );
     let one = Running::of(
         &transcript(vec![
             activity("a", ActivityKind::Shell, ActivityState::Running, 0),
@@ -54,7 +62,7 @@ fn the_summary_counts_what_runs_by_kind() {
         0,
     )
     .unwrap();
-    assert_eq!(one.summary, "1 background shell \u{b7} 1 task");
+    assert_eq!(plain(&one.summary), "1 background shell \u{b7} 1 task");
 }
 
 #[core::prelude::v1::test]
@@ -75,7 +83,15 @@ fn running_rows_come_first_then_the_latest_to_end() {
     .unwrap();
     let labels: Vec<&str> = running.rows.iter().map(|row| row.label.as_str()).collect();
     assert_eq!(labels, ["live label", "new label", "old label"]);
-    assert_eq!(running.rows[0].elapsed, "1m 4s", "running counts to now");
-    assert_eq!(running.rows[1].elapsed, "41s", "ended counts to its end");
+    assert_eq!(
+        plain(&running.rows[0].elapsed),
+        "1m 4s",
+        "running counts to now"
+    );
+    assert_eq!(
+        plain(&running.rows[1].elapsed),
+        "41s",
+        "ended counts to its end"
+    );
     assert_eq!(running.rows[1].state, ActivityState::Failed);
 }

@@ -4,6 +4,7 @@
 //! Runs on the connection worker; every wait observes `stop`.
 
 use super::{Error, Result, Settings, api, store};
+use crate::cloud::Value;
 use herdr_client::Transport;
 use secrecy::{ExposeSecret, SecretString};
 use std::{
@@ -66,7 +67,7 @@ pub fn ssh_command(
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
     {
-        return Err(Error::Field("Coder workspace"));
+        return Err(Error::Field(Value::CoderWorkspace));
     }
     let mut command = herdr_client::new_command(cli);
     command

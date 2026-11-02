@@ -8,6 +8,8 @@ use crate::{
 use core::prelude::v1::test;
 use gpui::{TestAppContext, VisualTestContext};
 
+mod en_xa;
+
 fn creation(provider: CloudProvider, count: u32) -> Creation {
     Creation {
         provider,
@@ -54,14 +56,16 @@ fn closing_the_question_creates_nothing(cx: &mut TestAppContext) {
 
 #[test]
 fn the_count_and_choices_read_plainly() {
+    // Without Fluent's isolation marks around each name and number.
+    let plain = |creation: &Creation| title(creation).replace(['\u{2068}', '\u{2069}'], "");
     let mut one = creation(CloudProvider::ALL[0], 1);
     let name = crate::cloud::name(one.provider);
-    assert!(machines(&one).starts_with(&format!("1 {name} ")));
+    assert!(plain(&one).starts_with(&format!("Create 1 {name} ")));
     one.count = 4;
-    assert!(machines(&one).starts_with(&format!("4 {name} ")));
-    assert!(machines(&one).ends_with('s'));
+    assert!(plain(&one).starts_with(&format!("Create 4 {name} ")));
+    assert!(plain(&one).ends_with("s?"));
     one.spec.shape = Shape::Sandbox;
-    assert!(machines(&one).ends_with(" sandboxes"));
+    assert!(plain(&one).ends_with(" sandboxes?"));
     let lines = choices(&one);
     assert!(lines.iter().any(|line| line.contains("Herdr is installed")));
     assert!(lines.iter().any(|line| line.contains("setup script runs")));

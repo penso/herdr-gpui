@@ -5,6 +5,7 @@ use super::{
     api::{self, State},
     relay::{self, Event},
 };
+use crate::cloud::Value;
 use crate::config::AzureConfig;
 use base64::Engine as _;
 use std::ffi::OsString;
@@ -98,7 +99,7 @@ fn sandbox_settings_reject_values_that_would_leave_their_url_segment() {
         };
         let error = Settings::resolve(&config, |_| None).unwrap_err();
         assert!(
-            matches!(error, Error::Field(name) if name == field),
+            matches!(error, Error::Field(Value::Key(name)) if name == field),
             "{error:?}"
         );
     }

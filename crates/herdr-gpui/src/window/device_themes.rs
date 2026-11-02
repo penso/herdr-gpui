@@ -2,6 +2,8 @@
 //! terminal changes: the chrome keeps the app theme. Every terminal a window
 //! paints belongs to its selected endpoint, parked groups included, so one
 //! theme serves the whole terminal area.
+// i18n: migrated
+use crate::i18n::{Localize, fl};
 use crate::{
     HerdrWindow,
     config::{Config, Theme},
@@ -240,7 +242,10 @@ impl HerdrWindow {
                         if pinned.is_some() {
                             this.device_themes.pinned = None;
                         }
-                        this.local_error = Some(format!("Save GUI config: {error}"));
+                        this.local_error = Some(fl!(
+                            "window-device-themes-save-failed",
+                            error = error.localize()
+                        ));
                     }
                 }
                 cx.notify();

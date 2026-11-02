@@ -2,10 +2,12 @@
 //! the panes beneath, and painting the page the menu is currently on. Geometry
 //! here is the same geometry used for hit testing and IME placement.
 
+// i18n: migrated
 mod keys;
 
 use super::{MENU_MARGIN, Page, WorkspaceAction, devices::rail};
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{HerdrWindow, actions, fonts::StyledFont};
 use gpui::{prelude::*, *};
 
@@ -90,7 +92,12 @@ impl HerdrWindow {
         self.local_error = self.endpoints[self.selected_endpoint]
             .reload_config()
             .err()
-            .map(|error| format!("Reload config: {error}"));
+            .map(|error| {
+                fl!(
+                    "menu-chrome-reload-config-failed",
+                    error = error.to_string()
+                )
+            });
     }
 
     pub(super) fn menu_items(&self) -> Vec<&'static str> {
@@ -98,19 +105,19 @@ impl HerdrWindow {
             "settings",
             "shortcuts",
             "themes",
-            "increase font size",
-            "decrease font size",
-            "reset font size",
-            "command palette",
+            "increase font size", // i18n: data
+            "decrease font size", // i18n: data
+            "reset font size",    // i18n: data
+            "command palette",    // i18n: data
             "workspaces",
-            "reload GUI config",
-            "app updates",
-            "preview app update",
-            "GitHub sign-in",
+            "reload GUI config",  // i18n: data
+            "app updates",        // i18n: data
+            "preview app update", // i18n: data
+            "GitHub sign-in",     // i18n: data
             "about",
         ];
         if self.live.status.is_connected() {
-            items.push("reload daemon config");
+            items.push("reload daemon config"); // i18n: data
         }
         items.extend(self.release_notes_item());
         items.push(
@@ -134,28 +141,30 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         match item {
-            "GitHub sign-in" => self.menu.page = Some(Page::GitHub),
+            "GitHub sign-in" => self.menu.page = Some(Page::GitHub), // i18n: data
             "about" => self.open_about(window, cx),
             "settings" => self.open_preferences(window, cx),
             "shortcuts" => self.open_keybinds(window, cx),
             "themes" => self.open_theme_picker(window, cx),
+            // i18n: data
             "increase font size" | "decrease font size" | "reset font size" => {
                 use crate::config::FONT_SIZE_STEP;
                 let size = match item {
-                    "increase font size" => self.config.terminal.size + FONT_SIZE_STEP,
-                    "decrease font size" => self.config.terminal.size - FONT_SIZE_STEP,
+                    "increase font size" => self.config.terminal.size + FONT_SIZE_STEP, // i18n: data
+                    "decrease font size" => self.config.terminal.size - FONT_SIZE_STEP, // i18n: data
                     _ => self.configured_terminal_size,
                 };
                 // `command` refuses to act while a page is open, so apply here.
                 self.set_terminal_font_size(size, cx);
                 self.dismiss_menu(window, cx);
             }
-            "command palette" => self.open_palette(crate::palette::Filter::All, window, cx),
+            "command palette" => self.open_palette(crate::palette::Filter::All, window, cx), // i18n: data
             "workspaces" => self.open_palette(crate::palette::Filter::Navigation, window, cx),
-            "update ready" | "what's new" => self.menu.page = Some(Page::Update),
-            "app updates" => self.open_app_update(false, window, cx),
-            "preview app update" => self.open_app_update(true, window, cx),
-            "reload GUI config" => self.reload_gui_config(window, cx),
+            "update ready" | "what's new" => self.menu.page = Some(Page::Update), // i18n: data
+            "app updates" => self.open_app_update(false, window, cx),             // i18n: data
+            "preview app update" => self.open_app_update(true, window, cx),       // i18n: data
+            "reload GUI config" => self.reload_gui_config(window, cx),            // i18n: data
+            // i18n: data
             "reload daemon config" => {
                 self.reload_daemon_config();
                 self.dismiss_menu(window, cx);
@@ -177,7 +186,7 @@ impl HerdrWindow {
         if self.menu.page == Some(Page::Application) {
             return self.render_application_menu(window, cx);
         }
-        if self.menu.page == Some(Page::Sessions) && self.menu.session_edit.is_some() {
+        if self.menu.page == Some(Page::Devices) && self.menu.session_edit.is_some() {
             let theme = &self.theme;
             let font = &self.config.ui;
             let picker = self
@@ -186,7 +195,7 @@ impl HerdrWindow {
                         .id("session-picker-underlay")
                         .debug_selector(|| "session-picker-underlay".into()),
                     window.viewport_size(),
-                    Page::Sessions,
+                    Page::Devices,
                     px(0.),
                 )
                 .overflow_y_scroll()
@@ -199,7 +208,7 @@ impl HerdrWindow {
                 .text_font(font)
                 .text_size(px(font.size))
                 .line_height(px(font.line_height()))
-                .child(self.render_session_list(cx));
+                .child(self.render_devices(cx));
             // The picker remains visible in its original position beneath the
             // modal's dimmed, input-occluding layer. Only that top layer owns focus.
             return div()
@@ -227,7 +236,7 @@ impl HerdrWindow {
         lift: Pixels,
     ) -> Stateful<Div> {
         let (room, above) = self.footer_room(viewport);
-        let list = matches!(page, Page::Devices | Page::Sessions);
+        let list = page == Page::Devices;
         let width = if list {
             super::devices::MENU_WIDTH
         } else {
@@ -240,7 +249,6 @@ impl HerdrWindow {
         };
         let start = match page {
             Page::Devices => anchor,
-            Page::Sessions => anchor.min((viewport.width - px(width + MENU_MARGIN)).max(px(0.))),
             _ => px(56.),
         };
         let panel = panel
@@ -282,9 +290,8 @@ impl HerdrWindow {
         let Some(page) = self.menu.page else {
             return false;
         };
-        let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
-        let footer_anchored =
-            matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
+        let session_modal = page == Page::Devices && self.menu.session_edit.is_some();
+        let footer_anchored = matches!(page, Page::Menu | Page::Devices) && !session_modal;
         !footer_anchored
             && !matches!(page, Page::Usage(_) | Page::Application)
             && !page.pointer_anchored()
@@ -302,13 +309,12 @@ impl HerdrWindow {
         let font = &self.config.ui;
         let theme = &self.theme;
         let viewport = window.viewport_size();
-        let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
+        let session_modal = page == Page::Devices && self.menu.session_edit.is_some();
         // Add Device's sources share one wide dialog; a narrow window keeps
         // the rail to icons so the form still has room.
         let add_device = rail::Source::of(page).is_some();
         let compact_rail = viewport.width - px(32.) < px(rail::COMPACT_BELOW * (font.size / 12.));
-        let footer_anchored =
-            matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
+        let footer_anchored = matches!(page, Page::Menu | Page::Devices) && !session_modal;
         // A GitHub tab of the new worktree dialog is a picker, not a form.
         let listing =
             self.worktree_listing() || page == Page::Dialog(WorkspaceAction::OpenWorktree);
@@ -323,23 +329,27 @@ impl HerdrWindow {
         let now = crate::motion::now();
         let shown = leaving.unwrap_or_else(|| self.menu.appear.panel(now));
         let lift = super::appear::Appear::offset(dims, shown);
-        let rises = page == Page::Devices;
+        let rises = page == Page::Devices && !session_modal;
+        // The worktree popover widens for captions a language makes longer.
+        let popover = (page == Page::Workspace)
+            .then(|| self.workspace_popover_width(window, (viewport.width - px(24.)).max(px(0.))));
         let mut panel = div()
             .id("menu-panel")
             .debug_selector(|| "menu-panel".into())
             .when(matches!(page, Page::Workspace | Page::Dialog(_)), |panel| {
                 panel
-                    .w(px(if page == Page::Workspace {
-                        340.
-                    } else if page == Page::Dialog(WorkspaceAction::DeleteWorktree) {
-                        480.
-                    } else if settled {
-                        // A listing needs room for a title and its branch.
-                        560.
-                    } else {
-                        420.
-                    })
-                    .min((viewport.width - px(24.)).max(px(0.))))
+                    .w(popover
+                        .unwrap_or(px(
+                            if page == Page::Dialog(WorkspaceAction::DeleteWorktree) {
+                                480.
+                            } else if settled {
+                                // A listing needs room for a title and its branch.
+                                560.
+                            } else {
+                                420.
+                            },
+                        ))
+                        .min((viewport.width - px(24.)).max(px(0.))))
                     // Every dialog may use the window's height: a captioned form
                     // whose buttons need scrolling into view reads as clipped.
                     .max_h((viewport.height - px(24.)).max(px(0.)))
@@ -451,9 +461,12 @@ impl HerdrWindow {
                     // A list of actions takes its longest label's width, which
                     // the UI font and size decide, so no fixed width fits all.
                     let forwards = page == Page::Host && self.host_menu_lists_forwards();
-                    if matches!(page, Page::Tab | Page::Pane | Page::Host) && !forwards {
+                    if matches!(page, Page::Tab | Page::Pane | Page::Group | Page::Host)
+                        && !forwards
+                    {
+                        let least = if page == Page::Group { 240. } else { 180. };
                         return panel
-                            .min_w(px(180.).min(room))
+                            .min_w(px(least).min(room))
                             .max_w(room)
                             .max_h((viewport.height - px(24.)).max(px(0.)));
                     }
@@ -464,7 +477,7 @@ impl HerdrWindow {
                         } else if page == Page::PaneProcesses {
                             // Name, command, pid, CPU and memory columns.
                             560.
-                        } else if matches!(page, Page::Group | Page::MovePane | Page::MoveTab) {
+                        } else if matches!(page, Page::MovePane | Page::MoveTab) {
                             240.
                         } else {
                             360.
@@ -519,7 +532,7 @@ impl HerdrWindow {
                     // the panel around them stays put; a second scroller there
                     // still had its padding to move through. A session create or
                     // delete form has no inner scroller and keeps the panel's.
-                    let lists = matches!(page, Page::Devices | Page::Sessions) && !session_modal;
+                    let lists = page == Page::Devices && !session_modal;
                     panel
                         .when(!settled && !lists, |panel| panel.overflow_y_scroll())
                         .when(lists, |panel| panel.overflow_hidden())
@@ -635,7 +648,7 @@ impl HerdrWindow {
                         .id(item)
                         .debug_selector(move || format!("menu-{item}"))
                         .role(Role::MenuItem)
-                        .aria_label(item)
+                        .aria_label(menu_item_label(item))
                         .when(Some(index) == self.menu.selected, |row| {
                             row.aria_active_descendant()
                         })
@@ -655,7 +668,7 @@ impl HerdrWindow {
                             }
                             cx.notify();
                         }))
-                        .child(item)
+                        .child(menu_item_label(item))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
                             this.activate_menu(item, window, cx);
@@ -663,9 +676,10 @@ impl HerdrWindow {
                 );
             }
         } else if page == Page::Devices {
-            panel = panel.child(self.render_devices(cx));
-        } else if page == Page::Sessions {
-            panel = panel.child(self.render_sessions(cx));
+            panel = match self.menu.session_edit {
+                Some(_) => panel.child(self.render_session_edit(cx)),
+                None => panel.child(self.render_devices(cx)),
+            };
         } else if let Page::Usage(provider) = page {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {
@@ -685,10 +699,11 @@ impl HerdrWindow {
         } else if page == Page::Workspace {
             // The PR card's text width: the panel's inset and border, and the
             // card's own margin, border, and padding.
-            panel = panel.child(self.render_workspace_popover(
-                (px(340.).min((viewport.width - px(24.)).max(px(0.))) - px(36.)).max(px(0.)),
-                cx,
-            ));
+            panel =
+                panel.child(self.render_workspace_popover(
+                    (popover.unwrap_or_default() - px(36.)).max(px(0.)),
+                    cx,
+                ));
         } else if let Page::Dialog(action) = page {
             panel = panel.child(self.render_workspace_dialog(action, cx));
         } else if page == Page::CarryPane {
@@ -763,10 +778,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_open_checkout(cx));
         } else if page == Page::Install {
             panel = panel
-                .child(div().p(px(8.)).child("Herdr must be installed"))
-                .child(div().p(px(8.)).child(
-                    "Install Herdr first, then choose Terminal > Reconnect. The Install button opens the Herdr website; nothing is installed automatically.",
-                ))
+                .child(div().p(px(8.)).child(fl!("menu-chrome-install-title")))
+                .child(div().p(px(8.)).child(fl!("menu-chrome-install-note")))
                 .child(
                     div()
                         .row()
@@ -781,7 +794,7 @@ impl HerdrWindow {
                                 .rounded(px(crate::config::corners::CONTROL))
                                 .bg(rgb(theme.active))
                                 .cursor_pointer()
-                                .child("Install")
+                                .child(fl!("menu-chrome-install"))
                                 .on_click(|_, _, cx| {
                                     cx.stop_propagation();
                                     cx.open_url(crate::about::WEBSITE);
@@ -795,7 +808,7 @@ impl HerdrWindow {
                                 .rounded(px(crate::config::corners::CONTROL))
                                 .hover(|button| button.bg(rgb(theme.active)))
                                 .cursor_pointer()
-                                .child("Dismiss")
+                                .child(fl!("menu-chrome-dismiss"))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.dismiss_menu(window, cx);
@@ -943,5 +956,31 @@ impl HerdrWindow {
             )
             .on_key_down(cx.listener(Self::menu_key_down))
             .child(placed)
+    }
+}
+
+/// What the menu shows for `item`, one of [`HerdrWindow::menu_items`]'
+/// keys, which stay English as its selectors and dispatch do.
+fn menu_item_label(item: &str) -> String {
+    match item {
+        "settings" => fl!("menu-chrome-settings"),
+        "shortcuts" => fl!("menu-chrome-shortcuts"),
+        "themes" => fl!("menu-chrome-themes"),
+        "increase font size" => fl!("menu-chrome-increase-font-size"), // i18n: data
+        "decrease font size" => fl!("menu-chrome-decrease-font-size"), // i18n: data
+        "reset font size" => fl!("menu-chrome-reset-font-size"),       // i18n: data
+        "command palette" => fl!("menu-chrome-command-palette"),       // i18n: data
+        "workspaces" => fl!("menu-chrome-workspaces"),
+        "reload GUI config" => fl!("menu-chrome-reload-gui-config"), // i18n: data
+        "app updates" => fl!("menu-chrome-app-updates"),             // i18n: data
+        "preview app update" => fl!("menu-chrome-preview-app-update"), // i18n: data
+        "GitHub sign-in" => fl!("menu-chrome-github-sign-in"),       // i18n: data
+        "about" => fl!("menu-chrome-about"),
+        "reload daemon config" => fl!("menu-chrome-reload-daemon-config"), // i18n: data
+        "update ready" => fl!("menu-chrome-update-ready"),                 // i18n: data
+        "what's new" => fl!("menu-chrome-whats-new"),                      // i18n: data
+        "detach" => fl!("menu-chrome-detach"),
+        "reconnect" => fl!("menu-chrome-reconnect"),
+        item => item.to_owned(),
     }
 }

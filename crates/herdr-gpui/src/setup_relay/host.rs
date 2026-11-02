@@ -259,7 +259,7 @@ pub(super) fn relay(
         Err(error) => {
             // Say so in the pane rather than leave it to a bare disconnect.
             let mut stream = stream;
-            let message = format!("Herdr could not start the setup: {error}\r\n");
+            let message = format!("Herdr could not start the setup: {error}\r\n"); // i18n: data
             let _ = Frame::Output(message.into_bytes()).write(&mut stream);
             let _ = Frame::Exit(NOT_STARTED).write(&mut stream);
             return Err(error.into());

@@ -50,6 +50,8 @@ pub enum Command {
     TabNumber(u8),
     ToggleSidebar,
     ToggleStatusBar,
+    /// Shows or hides the panel of mod sections on the window's right.
+    ToggleModPanel,
     /// Moves keyboard focus to the next of the terminal, the title bar, the
     /// sidebar, and the status bar, where Tab moves between controls.
     FocusNextRegion,
@@ -57,6 +59,10 @@ pub enum Command {
     /// Hides the window's chrome and every group but the one in use.
     ToggleZenMode,
     DevicesOverview,
+    /// Starts a shell in herdr-core (Herdr 2) and shows it in a tab.
+    NewCoreTerminal,
+    /// Opens a watch-only view of the focused herdr-core pane in a new tab.
+    MirrorCorePane,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -572,6 +578,11 @@ pub const COMMANDS: &[CommandInfo] = &[
         message: "commands-toggle-status-bar",
     },
     CommandInfo {
+        command: Command::ToggleModPanel,
+        name: "toggle_mod_panel",
+        message: "commands-toggle-mod-panel",
+    },
+    CommandInfo {
         command: Command::FocusNextRegion,
         name: "focus_next_region",
         message: "commands-focus-next-region",
@@ -590,6 +601,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         command: Command::DevicesOverview,
         name: "devices_overview",
         message: "commands-devices-overview",
+    },
+    CommandInfo {
+        command: Command::NewCoreTerminal,
+        name: "new_core_terminal",
+        message: "commands-new-core-terminal",
+    },
+    CommandInfo {
+        command: Command::MirrorCorePane,
+        name: "mirror_core_pane",
+        message: "commands-mirror-core-pane",
     },
     CommandInfo {
         command: Command::IncreaseFontSize,
@@ -890,10 +911,13 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::AnnotateSelection
         | Command::ToggleSidebar
         | Command::ToggleStatusBar
+        | Command::ToggleModPanel
         | Command::FocusNextRegion
         | Command::FocusPreviousRegion
         | Command::ToggleZenMode
         | Command::DevicesOverview
+        | Command::NewCoreTerminal
+        | Command::MirrorCorePane
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize

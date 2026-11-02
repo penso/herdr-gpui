@@ -31,6 +31,7 @@ const MAX_SOCKET: usize = 1024;
 /// a long-lived shell, so it must not `exit`, and it adds each `PATH` entry
 /// only when missing: appending on every scan grows `PATH` without bound and
 /// slows every command lookup (issue #754).
+// i18n: data
 pub(crate) const COMMAND: &str = r#"for herdr_dir in /usr/sbin /sbin; do
     case ":$PATH:" in
         *":$herdr_dir:"*) ;;

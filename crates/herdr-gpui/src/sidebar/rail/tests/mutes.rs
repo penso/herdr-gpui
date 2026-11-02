@@ -95,9 +95,12 @@ fn a_mute_marks_only_its_own_hosts_workspace(cx: &mut TestAppContext) {
 
 #[test]
 fn a_muted_workspaces_tooltip_says_so() {
-    assert_eq!(muted_word(Some("done"), false).as_deref(), Some("done"));
     assert_eq!(
-        muted_word(Some("done"), true).as_deref(),
+        muted_word(Some("done".to_owned()), false).as_deref(),
+        Some("done")
+    );
+    assert_eq!(
+        muted_word(Some("done".to_owned()), true).as_deref(),
         Some("done, notifications muted")
     );
     assert_eq!(

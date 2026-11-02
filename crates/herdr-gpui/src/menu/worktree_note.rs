@@ -2,9 +2,11 @@
 //! the sidebar line that shows it, or a shortcut. Notes stay in this app:
 //! saving one never reaches the daemon.
 
+// i18n: migrated
 use super::{Page, WorkspaceAction};
 use crate::{
     HerdrWindow, NavigationTarget,
+    i18n::fl,
     worktree_notes::{Checkout, Notes},
 };
 use gpui::*;
@@ -74,7 +76,7 @@ impl HerdrWindow {
         if self.note_checkout().is_none() {
             self.dismiss_menu(window, cx);
             self.show_flash(
-                crate::window::Flash::warning("Notes are kept on Git checkouts with a branch"),
+                crate::window::Flash::warning(fl!("worktree-popover-note-unavailable")),
                 cx,
             );
             return;

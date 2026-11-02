@@ -31,6 +31,7 @@ fn costs_show_their_currency() {
 fn a_turn_summary_names_how_it_ended() {
     let summary = TurnSummary {
         duration_ms: 12_000,
+        ended_ms: None,
         end: TurnEnd::Done,
         tokens: Some(Tokens {
             cached: 0,
@@ -46,6 +47,7 @@ fn a_turn_summary_names_how_it_ended() {
     );
     let cancelled = TurnSummary {
         duration_ms: 3000,
+        ended_ms: None,
         end: TurnEnd::Cancelled,
         tokens: None,
     };

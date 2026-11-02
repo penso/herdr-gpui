@@ -108,7 +108,7 @@ fn status_asks_for_typed_consent_only_when_the_close_needs_it() {
     let target = WorkspaceTarget::new(&snapshot, &snapshot.workspaces[3]);
     let mut check = CloseCheck::fixture(&snapshot, &target, None);
     assert!(check.status(false).starts_with("Checking"));
-    let consent = "Type close";
+    let consent = "Type \u{2068}close\u{2069}";
     check.report = Some(Report {
         unknown: true,
         ..Report::default()

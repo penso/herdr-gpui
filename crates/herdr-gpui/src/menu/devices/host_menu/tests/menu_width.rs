@@ -42,7 +42,9 @@ fn host_menu_shows_every_label_in_full(cx: &mut TestAppContext) {
     let (view, cx) = open_menu("m5max-ms", 800., cx);
     let font_size = view.read_with(cx, |v, _| px(v.config.ui.size));
     let panel = cx.debug_bounds("menu-panel").unwrap();
-    for (index, &(_, label)) in SSH_ACTIONS.iter().enumerate() {
+    for (index, &(_, message)) in SSH_ACTIONS.iter().enumerate() {
+        let label = crate::i18n::message(message, &[]);
+        let label = label.as_str();
         let row = cx.debug_bounds(ROWS[index]).unwrap();
         let text = cx.debug_bounds(LABELS[index]).unwrap();
         let natural = cx.update(|window, _| {

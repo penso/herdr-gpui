@@ -2,6 +2,7 @@
 //! carry worker reads sessions and home directories, never render or input.
 
 use super::*;
+use crate::i18n::fl;
 use herdr_client::protocol::{ClientShellAgent, ClientShellPane};
 
 /// What the window's snapshot last showed of the pane: its agent entry, whose
@@ -90,7 +91,7 @@ impl Availability {
 
     pub(in crate::pane_menu) fn reason(&self) -> Option<String> {
         match &self.result {
-            None => Some("Checking the agent session and home directory…".into()),
+            None => Some(fl!("pane-menu-carry-checking")),
             Some(Err(error)) => Some(error.to_string()),
             Some(Ok(())) => None,
         }

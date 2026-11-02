@@ -7,9 +7,12 @@ version_check "$1"
 [[ -f $2 && -f $3 && -d $4 ]] || fail 'Two binary files and an existing output directory required'
 [[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
 # The app starts chats with the herdr-acp beside its executable, runs the
-# herdr-remote-control beside it as a user service, and runs automations in
-# the herdr-automate there; each build leaves all three beside its herdr-gpui.
-companions=(herdr-acp herdr-remote-control herdr-automate)
+# herdr-remote-control beside it as a user service, runs automations in the
+# herdr-automate there, starts herdr-nearby (nearby pairing over Bluetooth)
+# while its pairing dialog is open, and runs Herdr 2 terminals in the
+# herdr-core there; each build leaves all five beside its herdr-gpui
+# (herdr-core fetched pinned).
+companions=(herdr-acp herdr-remote-control herdr-automate herdr-nearby herdr-core)
 for companion in "${companions[@]}"; do
     [[ -f $(dirname -- "$2")/$companion && -f $(dirname -- "$3")/$companion ]] || fail "A $companion beside each binary required"
 done
@@ -61,5 +64,6 @@ cp "$release_root/crates/herdr-protocol/NOTICE.md" "$app/Contents/Resources/"
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$app/Contents/Resources/"
 cp "$5" "$app/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 cp "$release_root/crates/herdr-gpui/SOUND-NOTICE.md" "$app/Contents/Resources/"
+cp "$release_root/scripts/release/herdr-core-licenses.txt" "$app/Contents/Resources/HERDR-CORE-LICENSES.txt"
 mv "$app" "$out"
 printf '%s\n' "$out"

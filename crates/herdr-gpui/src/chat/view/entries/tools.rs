@@ -390,7 +390,7 @@ impl HerdrWindow {
                 div()
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(format!("and {more} more locations"))
+                    .child(fl!("chat-more", count = more))
                     .into_any_element(),
             );
         }
@@ -399,7 +399,7 @@ impl HerdrWindow {
                 div()
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child("Terminal output shows in the program's own view")
+                    .child(fl!("chat-tool-terminal-elsewhere"))
                     .into_any_element(),
             );
         }

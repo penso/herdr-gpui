@@ -3,6 +3,7 @@
 //! it on its own, so it never creates a container or installs anything.
 
 use super::{Engine, Error, Result, machine};
+use crate::cloud::Value;
 use herdr_client::Transport;
 use std::{
     io,
@@ -12,7 +13,7 @@ use std::{
 
 /// The engine a saved device was made with, from its account.
 fn engine(account: &str) -> Result<Engine> {
-    Engine::from_key(account).ok_or(Error::Field("container engine"))
+    Engine::from_key(account).ok_or(Error::Field(Value::ContainerEngine))
 }
 
 /// The `exec` command for the container `id`, started first if it stopped.

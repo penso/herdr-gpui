@@ -1,0 +1,9 @@
+{
+  "type": "subscribe",
+  "view": "term",
+  "pane": "p2",
+  "size": {
+    "cols": 46,
+    "rows": 30
+  }
+}

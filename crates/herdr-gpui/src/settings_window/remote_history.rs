@@ -5,6 +5,7 @@
 
 use super::SettingsWindow;
 use crate::herdr_settings::RemotePaneHistory;
+use crate::i18n::Localize;
 use gpui::{AsyncApp, Context, WeakEntity};
 use herdr_client::{ConnectTarget, ScriptHost, SshLane};
 use std::sync::{
@@ -301,7 +302,7 @@ fn queue_reload(
             failure.map(|error| {
                 crate::i18n::fl!(
                     "settings-remote-history-reload-failed",
-                    error = error.to_string()
+                    error = error.localize()
                 )
             })
         })

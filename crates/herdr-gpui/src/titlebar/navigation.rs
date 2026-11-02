@@ -3,6 +3,7 @@
 //! same focus trail (`endpoint::history`).
 
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{HerdrWindow, config::corners, endpoint::Step, titlebar::SIDEBAR_TOGGLE_INSET};
 use gpui::{prelude::*, *};
 
@@ -84,9 +85,10 @@ impl HerdrWindow {
             let enabled = self.can_travel(step);
             let (frame, radius) = style.button();
             let (id, label) = match step {
-                Step::Back => ("titlebar-back", "Back"),
-                Step::Forward => ("titlebar-forward", "Forward"),
+                Step::Back => ("titlebar-back", fl!("titlebar-back")),
+                Step::Forward => ("titlebar-forward", fl!("titlebar-forward")),
             };
+            let label = SharedString::from(label);
             let (hover, pressed) = match style {
                 Style::Segmented => (0x14, 0x24),
                 Style::Fluent => (0x0f, 0x0a),
@@ -96,7 +98,7 @@ impl HerdrWindow {
                 .id(id)
                 .debug_selector(move || id.into())
                 .role(Role::Button)
-                .aria_label(label)
+                .aria_label(label.clone())
                 // With no history that way it is unavailable, and Tab skips it.
                 .map(|control| crate::accessibility::disabled(control, !enabled))
                 .when(enabled, |control| {
@@ -133,7 +135,7 @@ impl HerdrWindow {
                         .active(move |button| button.bg(wash(ink, pressed)))
                         .tooltip(move |_, cx| {
                             cx.new(|_| crate::usage::Hint {
-                                text: label.into(),
+                                text: label.clone(),
                                 foreground: ink,
                                 surface,
                             })

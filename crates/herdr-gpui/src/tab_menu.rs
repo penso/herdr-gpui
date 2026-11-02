@@ -1,3 +1,5 @@
+// i18n: migrated
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::GroupId,
@@ -108,15 +110,15 @@ enum Action {
 }
 
 impl Action {
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::NewTab => "New Tab",
-            Self::Rename => "Rename",
-            Self::MoveToWorkspace => "Move to Workspace\u{2026}",
-            Self::Mute => "Mute Notifications",
-            Self::Unmute => "Unmute Notifications",
-            Self::UnmuteWorkspace => "Unmute Workspace",
-            Self::Close => "Close Tab",
+            Self::NewTab => fl!("tab-menu-new-tab"),
+            Self::Rename => fl!("tab-menu-rename"),
+            Self::MoveToWorkspace => fl!("tab-menu-move-to-workspace"),
+            Self::Mute => fl!("tab-menu-mute"),
+            Self::Unmute => fl!("tab-menu-unmute"),
+            Self::UnmuteWorkspace => fl!("tab-menu-unmute-workspace"),
+            Self::Close => fl!("tab-menu-close"),
         }
     }
 }
@@ -310,7 +312,7 @@ impl HerdrWindow {
                 let input = cx.new(SearchInput::new);
                 input.update(cx, |input, cx| {
                     input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-                    input.set_placeholder("Tab name", cx);
+                    input.set_placeholder_with(|| fl!("tab-menu-rename-placeholder"), cx);
                     input.set_text_selected(&target.label, cx);
                     window.focus(&input.focus, cx);
                 });
@@ -581,7 +583,7 @@ impl HerdrWindow {
                 .debug_selector(|| "tab-move-pending".into())
                 .p(px(8.))
                 .text_color(rgb(self.theme.muted))
-                .child("Moving tab\u{2026}"),
+                .child(fl!("tab-menu-moving")),
         )
     }
 
@@ -605,7 +607,7 @@ impl HerdrWindow {
                 .px(px(8.))
                 .py(px(4.))
                 .text_color(rgb(self.theme.muted))
-                .child("Move to workspace"),
+                .child(fl!("tab-menu-move-heading")),
         );
         for (index, choice) in tab.target.choices.iter().enumerate() {
             let destination = choice.destination.clone();
@@ -698,7 +700,11 @@ impl HerdrWindow {
             body =
                 body.p(px(8.))
                     .gap(px(12.))
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Rename tab"))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(fl!("tab-menu-rename-title")),
+                    )
                     .when_some(tab.input.clone(), |body, input| {
                         if tab.pending.is_some() {
                             body.child(div().child(input.read(cx).text().to_owned()))
@@ -716,7 +722,7 @@ impl HerdrWindow {
                                     .id("tab-rename-cancel")
                                     .p(px(6.))
                                     .cursor_pointer()
-                                    .child("Cancel")
+                                    .child(fl!("tab-menu-cancel"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.dismiss_menu(window, cx)
                                     })),
@@ -729,9 +735,9 @@ impl HerdrWindow {
                                     .bg(rgb(theme.active))
                                     .cursor_pointer()
                                     .child(if tab.pending.is_some() {
-                                        "Renaming..."
+                                        fl!("tab-menu-renaming")
                                     } else {
-                                        "Rename"
+                                        fl!("tab-menu-rename-submit")
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.submit_tab_rename(window, cx)

@@ -1,0 +1,110 @@
+{
+  "start": {
+    "agent": "Codex",
+    "auto_accept": false,
+    "clients": 0,
+    "commands": [],
+    "entries": [],
+    "modes": null,
+    "options": [],
+    "permissions": [],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "starting"
+    },
+    "truncated": false,
+    "turn": null,
+    "usage": null
+  },
+  "changes": [
+    {
+      "change": "permission_asked",
+      "permission": {
+        "call_id": "call-1",
+        "id": 1,
+        "options": [
+          {
+            "id": "allow",
+            "kind": "allow_once",
+            "name": "Allow once"
+          },
+          {
+            "id": "reject",
+            "kind": "reject_once",
+            "name": "Deny"
+          }
+        ],
+        "title": "Run `git push origin fix/mise`?"
+      }
+    },
+    {
+      "change": "permission_asked",
+      "permission": {
+        "call_id": "call-1",
+        "id": 2,
+        "options": [
+          {
+            "id": "allow",
+            "kind": "allow_once",
+            "name": "Allow once"
+          },
+          {
+            "id": "reject",
+            "kind": "reject_once",
+            "name": "Deny"
+          }
+        ],
+        "title": "Run `git push origin fix/mise`?"
+      }
+    },
+    {
+      "change": "permission_resolved",
+      "id": 1
+    },
+    {
+      "change": "auto_accept",
+      "on": true
+    }
+  ],
+  "end": {
+    "agent": "Codex",
+    "auto_accept": true,
+    "clients": 0,
+    "commands": [],
+    "entries": [],
+    "modes": null,
+    "options": [],
+    "permissions": [
+      {
+        "call_id": "call-1",
+        "id": 2,
+        "options": [
+          {
+            "id": "allow",
+            "kind": "allow_once",
+            "name": "Allow once"
+          },
+          {
+            "id": "reject",
+            "kind": "reject_once",
+            "name": "Deny"
+          }
+        ],
+        "title": "Run `git push origin fix/mise`?"
+      }
+    ],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "starting"
+    },
+    "truncated": false,
+    "turn": null,
+    "usage": null
+  }
+}

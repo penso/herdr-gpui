@@ -20,8 +20,8 @@ use gpui::{App, SystemNotification};
 use oo7::zbus::{self, MatchRule, Message, MessageStream, message::Type, zvariant::Value};
 use std::{borrow::Cow, collections::HashMap};
 
-const NAME: &str = "org.freedesktop.Notifications";
-const PATH: &str = "/org/freedesktop/Notifications";
+const NAME: &str = "org.freedesktop.Notifications"; // i18n: data
+const PATH: &str = "/org/freedesktop/Notifications"; // i18n: data
 /// The action a click on the notification body invokes.
 const DEFAULT_ACTION: &str = "default";
 /// Clicks waiting for the UI thread; older ones are dropped, not queued.
@@ -92,7 +92,7 @@ async fn listen() -> Result<(Session, MessageStream), Error> {
         .msg_type(Type::Signal)
         .path(PATH)?
         .interface(NAME)?
-        .member("ActionInvoked")?
+        .member("ActionInvoked")? // i18n: data
         .build();
     // Returns once the bus has added the rule.
     let clicks = MessageStream::for_match_rule(rule, &connection, Some(QUEUED_CLICKS)).await?;
@@ -104,7 +104,7 @@ async fn listen() -> Result<(Session, MessageStream), Error> {
 /// than interpreted.
 async fn markup(connection: &zbus::Connection) -> bool {
     let reply = connection
-        .call_method(Some(NAME), PATH, Some(NAME), "GetCapabilities", &())
+        .call_method(Some(NAME), PATH, Some(NAME), "GetCapabilities", &()) // i18n: data
         .await;
     match reply.and_then(|reply| reply.body().deserialize::<Vec<String>>()) {
         Ok(capabilities) => capabilities.iter().any(|c| c == "body-markup"),
@@ -149,7 +149,7 @@ pub(super) async fn show(
             Some(NAME),
             PATH,
             Some(NAME),
-            "Notify",
+            "Notify", // i18n: data
             &(
                 crate::constants::WINDOW_TITLE,
                 replaces,

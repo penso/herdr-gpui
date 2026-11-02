@@ -101,7 +101,7 @@ fn gui_config_warning_stacks_above_the_endpoint_card(cx: &mut TestAppContext) {
     };
     view.update(cx, |view, cx| {
         view.gui_config_diagnostic
-            .sync(config.diagnostic().as_deref());
+            .sync_own(config.diagnostic().as_deref());
         cx.notify();
     });
     draw(cx);
@@ -123,9 +123,9 @@ fn gui_config_warning_stacks_above_the_endpoint_card(cx: &mut TestAppContext) {
 
     // A reload that names no unknown keys clears it; new ones bring it back.
     view.update(cx, |view, _| {
-        view.gui_config_diagnostic.sync(None);
+        view.gui_config_diagnostic.sync_own(None);
         view.gui_config_diagnostic
-            .sync(config.diagnostic().as_deref());
+            .sync_own(config.diagnostic().as_deref());
     });
     draw(cx);
     assert!(cx.debug_bounds("gui-config-diagnostic").is_some());

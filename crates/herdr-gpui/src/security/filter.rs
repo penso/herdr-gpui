@@ -5,6 +5,7 @@
 //! The cards, the list beside a page, and stepping all show what passes.
 
 use super::{Alert, Item, Repo, Report, page::Found};
+use crate::i18n::fl;
 use crate::{HerdrWindow, orchestrator::Look, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use std::collections::HashSet;
@@ -17,10 +18,10 @@ pub(crate) enum Source {
 }
 
 impl Source {
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::Reports => "Reported to you",
-            Self::Dependabot => "Dependabot",
+            Self::Reports => fl!("security-reported"),
+            Self::Dependabot => fl!("security-dependabot"),
         }
     }
 }
@@ -39,10 +40,7 @@ impl SecuritySearch {
     pub(crate) fn new(cx: &mut Context<HerdrWindow>) -> Self {
         let input = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder(
-                "Filter: summary, package, advisory, repository, reporter\u{2026}",
-                cx,
-            );
+            input.set_placeholder_with(|| fl!("security-filter"), cx);
             input.set_frameless(cx);
             input
         });
@@ -177,13 +175,17 @@ impl HerdrWindow {
             .child(div().flex_1().min_w_0().child(search.input.clone()))
             .when(typed, |field| {
                 field.child(
-                    look.icon_button("security-search-clear", "icons/close.svg", "Clear search")
-                        .debug_selector(|| "security-search-clear".into())
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            let input = this.security_search.input.clone();
-                            input.update(cx, |input, cx| input.clear(cx));
-                            window.focus(&input.read(cx).focus.clone(), cx);
-                        })),
+                    look.icon_button(
+                        "security-search-clear",
+                        "icons/close.svg",
+                        fl!("security-clear-search"),
+                    )
+                    .debug_selector(|| "security-search-clear".into())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        let input = this.security_search.input.clone();
+                        input.update(cx, |input, cx| input.clear(cx));
+                        window.focus(&input.read(cx).focus.clone(), cx);
+                    })),
                 )
             });
         // Counted by the field alone, so a pill says what picking it shows.

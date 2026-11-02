@@ -6,8 +6,8 @@ use crate::chat::{
     },
     selection::{Cell, Segment},
 };
-use crate::config::Theme;
 use crate::review::highlight::{Contrast, Span};
+use crate::{config::Theme, i18n::fl};
 use std::sync::Arc;
 
 impl HerdrWindow {
@@ -119,16 +119,13 @@ impl HerdrWindow {
                     .border_color(rgb(self.theme.active))
                     .text_size(px(self.chat_text_size() - 2.))
                     .text_color(rgb(self.theme.muted))
-                    .child(
-                        if is_diff {
-                            "Diff"
-                        } else if language.is_empty() {
-                            "Code"
-                        } else {
-                            language
-                        }
-                        .to_owned(),
-                    )
+                    .child(if is_diff {
+                        fl!("chat-diff")
+                    } else if language.is_empty() {
+                        fl!("chat-code")
+                    } else {
+                        language.to_owned()
+                    })
                     .child(self.rich_copy(
                         if is_diff { copy::DIFF } else { copy::CODE },
                         Arc::clone(source),
@@ -221,10 +218,10 @@ impl HerdrWindow {
 /// What a cut code block says under its last line, from the limits that
 /// cut it.
 fn truncation_note() -> String {
-    format!(
-        "Preview limited to {} lines and {} characters per line; Copy code includes the full block.",
-        grouped(MAX_CODE_LINES),
-        grouped(MAX_CODE_LINE_CHARS),
+    fl!(
+        "chat-code-truncated",
+        lines = grouped(MAX_CODE_LINES),
+        characters = grouped(MAX_CODE_LINE_CHARS),
     )
 }
 

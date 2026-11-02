@@ -10,8 +10,9 @@
 //! Each lane's progress is journaled (see [`journal`]) so a fan-out cut short
 //! by a quit or crash is shown again on the next launch, for the user to
 //! finish or clean up.
+// i18n: migrated
 
-mod error;
+pub(crate) mod error;
 mod job;
 mod journal;
 mod plan;

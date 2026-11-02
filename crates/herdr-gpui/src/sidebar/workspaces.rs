@@ -159,6 +159,9 @@ pub(crate) fn workspace_label(workspace: &ClientShellWorkspace, indented: bool) 
         .then_some(workspace.branch.as_deref())
         .flatten()
         .map(|branch| branch.strip_prefix("worktree/").unwrap_or(branch));
+    // The fallback, for a workspace with no label at all, stays English
+    // while other areas borrow the label as `&str`.
+    // i18n: data
     first_text([branch, Some(&workspace.label)], "workspace")
 }
 

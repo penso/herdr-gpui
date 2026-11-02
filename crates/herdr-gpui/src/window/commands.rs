@@ -1,6 +1,7 @@
 //! Command dispatch and focus changes. A focus change is fenced behind an
 //! ordered surface barrier so input cannot reach the previous pane while the
 //! navigation and its projection are still in flight.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow, layout_save::LayoutSaves};
 use crate::{
@@ -11,6 +12,7 @@ use crate::{
     },
     controls::{self, Command},
     endpoint::Step,
+    i18n::{Localize, fl},
     log_window,
     menu::{WorkspaceAction, WorktreeShortcut},
     navigation::{NavigationTarget, OwnedNavigationTarget},
@@ -201,14 +203,15 @@ impl HerdrWindow {
         if !self.input_ready() {
             return false;
         }
-        let queued =
-            self.request_focus_change("Navigate", Some((&target).into()), |handle, boot| {
-                match target {
-                    NavigationTarget::Workspace(id) => handle.focus_workspace(boot, id),
-                    NavigationTarget::Tab(id) => handle.focus_tab(boot, id),
-                    NavigationTarget::Pane(id) => handle.focus_pane(boot, id),
-                }
-            });
+        let queued = self.request_focus_change(
+            &fl!("window-notices-navigate"),
+            Some((&target).into()),
+            |handle, boot| match target {
+                NavigationTarget::Workspace(id) => handle.focus_workspace(boot, id),
+                NavigationTarget::Tab(id) => handle.focus_tab(boot, id),
+                NavigationTarget::Pane(id) => handle.focus_pane(boot, id),
+            },
+        );
         self.discard_composition(cx);
         cx.notify();
         queued
@@ -231,7 +234,11 @@ impl HerdrWindow {
             &self.live.snapshot,
         ) {
             if let Err(error) = enqueue(handle, &snapshot.boot_id) {
-                self.local_error = Some(format!("{label}: {error}"));
+                self.local_error = Some(fl!(
+                    "window-notices-request-failed",
+                    operation = label,
+                    error = error.localize()
+                ));
             } else {
                 #[cfg(feature = "integration-test")]
                 self.navigations
@@ -261,7 +268,7 @@ impl HerdrWindow {
             let (request, failed) = match handle.set_surface_active(&snapshot.boot_id, true) {
                 Ok(request) => (request, false),
                 Err(error) => {
-                    self.local_error = Some(error.to_string());
+                    self.local_error = Some(error.localize());
                     (String::new(), true)
                 }
             };
@@ -324,6 +331,9 @@ impl HerdrWindow {
         #[cfg(feature = "integration-test")]
         {
             self.input_probe.actions += 1;
+        }
+        if self.core_pane_command(command, window, cx) {
+            return;
         }
         match command {
             Command::OpenNotificationTarget => {
@@ -411,7 +421,7 @@ impl HerdrWindow {
                 self.toggle_shown_annotating(window, cx);
                 #[cfg(not(any(target_os = "macos", windows)))]
                 self.show_flash(
-                    Flash::warning("Annotating pages needs macOS or Windows"),
+                    Flash::warning(fl!("window-notices-annotate-pages-unsupported")),
                     cx,
                 );
                 return;
@@ -484,6 +494,11 @@ impl HerdrWindow {
             }
             // Every interactive creation path ends here, so Herdr's name prompt
             // covers buttons, menus, shortcuts, and the palette alike.
+            // With Herdr 2 chosen for new terminals, a new tab is herdr-core's.
+            Command::Tab if self.config.herdr_2_terminals => {
+                self.new_core_terminal(window, cx);
+                return;
+            }
             Command::Tab | Command::Workspace if self.open_name_prompt(command, window, cx) => {
                 return;
             }
@@ -550,7 +565,7 @@ impl HerdrWindow {
             }
             Command::EditScrollback if !self.live.supports_edit_scrollback => {
                 self.show_flash(
-                    Flash::warning("Opening scrollback needs a newer Herdr daemon"),
+                    Flash::warning(fl!("window-notices-scrollback-needs-newer")),
                     cx,
                 );
                 return;
@@ -565,12 +580,26 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
+            Command::ToggleModPanel => {
+                self.mods.set_panel_hidden(!self.mods.panel_hidden());
+                cx.notify();
+                return;
+            }
             Command::ToggleZenMode => {
                 self.toggle_zen(window, cx);
                 return;
             }
             Command::DevicesOverview => {
                 self.open_devices_overview(window, cx);
+                return;
+            }
+            Command::NewCoreTerminal => {
+                self.new_core_terminal(window, cx);
+                return;
+            }
+            // A herdr-core pane with the keyboard mirrors itself above.
+            Command::MirrorCorePane => {
+                self.show_flash(Flash::warning(fl!("core-terminals-mirror-needs-pane")), cx);
                 return;
             }
             // A focused page zooms instead of the terminal font, and keeps
@@ -596,7 +625,7 @@ impl HerdrWindow {
             Command::ClearPane if !self.live.supports_pane_clear => {
                 // Older daemons do not advertise `pane.clear`. Say so rather than
                 // typing `clear` into the pane, which could reach a running program.
-                self.local_error = Some("Clear Pane needs a newer Herdr daemon.".into());
+                self.local_error = Some(fl!("window-notices-clear-needs-newer"));
                 cx.notify();
                 return;
             }
@@ -688,7 +717,7 @@ impl HerdrWindow {
                 return;
             }
             Command::MoveTabPrevious | Command::MoveTabNext if !self.live.supports_tab_move => {
-                self.local_error = Some("Moving tabs needs a newer Herdr daemon.".into());
+                self.local_error = Some(fl!("window-notices-move-tabs-needs-newer"));
                 cx.notify();
                 return;
             }
@@ -761,7 +790,7 @@ impl HerdrWindow {
         let home = match crate::config::home() {
             Ok(home) => home,
             Err(error) => {
-                self.show_flash(Flash::warning(error.to_string()), cx);
+                self.show_flash(Flash::warning(error.localize()), cx);
                 return;
             }
         };
@@ -778,10 +807,13 @@ impl HerdrWindow {
             this.update(cx, |this, cx| {
                 let flash = match result {
                     Ok(paths) => Flash::success(match paths.as_slice() {
-                        [path] => format!("Installed the browser skill at {}", path.display()),
-                        _ => format!("Installed the browser skill in {} places", paths.len()),
+                        [path] => fl!(
+                            "window-notices-skill-installed-at",
+                            path = path.display().to_string()
+                        ),
+                        _ => fl!("window-notices-skill-installed-places", count = paths.len()),
                     }),
-                    Err(error) => Flash::warning(error.to_string()),
+                    Err(error) => Flash::warning(error.localize()),
                 };
                 this.show_flash(flash, cx);
             })
@@ -806,7 +838,7 @@ impl HerdrWindow {
     pub(crate) fn render_agent_skill_offer(&self, cx: &mut Context<Self>) -> gpui::Div {
         use gpui::{prelude::*, *};
         let theme = &self.theme;
-        let button = |id: &'static str, label: &'static str, primary: bool| {
+        let button = |id: &'static str, label: String, primary: bool| {
             div()
                 .id(id)
                 .debug_selector(move || id.into())
@@ -819,31 +851,50 @@ impl HerdrWindow {
         };
         div()
             .debug_selector(|| "agent-skill-offer".into())
-            .child(div().p(px(8.)).child("Let agents show you pages?"))
-            .child(div().p(px(8.)).child(
-                "Agents in your panes can open pages and HTML drafts in browser tabs here, read the notes you pin on them, and write automations for you to approve. Skills teach them how.",
-            ))
-            .child(div().p(px(8.)).text_color(rgb(theme.muted)).child(
-                "Install writes herdr-gpui-browser/SKILL.md and herdr-automations/SKILL.md into ~/.claude/skills and ~/.agents/skills, whichever exist, and keeps them up to date. A skill of either name you wrote yourself is left alone. Remove them any time in Settings.",
-            ))
+            .child(
+                div()
+                    .p(px(8.))
+                    .child(fl!("window-notices-skill-offer-title")),
+            )
+            .child(
+                div()
+                    .p(px(8.))
+                    .child(fl!("window-notices-skill-offer-body")),
+            )
+            .child(
+                div()
+                    .p(px(8.))
+                    .text_color(rgb(theme.muted))
+                    .child(fl!("window-notices-skill-offer-detail")),
+            )
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .gap(px(8.))
                     .p(px(8.))
-                    .child(button("agent-skill-install", "Install", true).on_click(cx.listener(
-                        |this, _, window, cx| {
+                    .child(
+                        button(
+                            "agent-skill-install",
+                            fl!("window-notices-skill-offer-install"),
+                            true,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
                             cx.stop_propagation();
                             this.install_browser_skill(window, cx);
-                        },
-                    )))
-                    .child(button("agent-skill-decline", "Not now", false).on_click(cx.listener(
-                        |this, _, window, cx| {
+                        })),
+                    )
+                    .child(
+                        button(
+                            "agent-skill-decline",
+                            fl!("window-notices-skill-offer-decline"),
+                            false,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
                             cx.stop_propagation();
                             this.dismiss_menu(window, cx);
-                        },
-                    ))),
+                        })),
+                    ),
             )
     }
 }

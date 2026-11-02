@@ -5,6 +5,7 @@
 
 use super::{ChatLayout, ComposerParts, Look, Row, Side, summary_row};
 use crate::config::{corners, mix};
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::EntryKind;
 
@@ -32,7 +33,7 @@ impl ChatLayout for Document {
                         .debug_selector(|| "chat-user-label".into())
                         .font_weight(FontWeight::SEMIBOLD)
                         .mb(px(6.))
-                        .child("You"),
+                        .child(fl!("chat-you")),
                 )
                 .child(row.content),
             (Side::User, _) => div()

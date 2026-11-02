@@ -1,10 +1,11 @@
 //! The sandboxed Luau state a script runs in. Its only effects are the
 //! catalog's steps: no clock, randomness, files, network, processes,
 //! `require`, or code loading, so a script makes the same calls every time.
+//! The state itself is `herdr-luau`'s, under its deterministic policy.
 
-use crate::{Budget, Refusal};
-use mlua::{Lua, LuaOptions, StdLib, VmState};
-use std::{cell::Cell, rc::Rc};
+use crate::Result;
+use herdr_luau::{Meter, Policy};
+use mlua::Lua;
 
 /// Bounds on one script's own computation; step work is bounded by caps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,67 +19,35 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
+        let herdr_luau::Limits { interrupts, memory } = herdr_luau::Limits::default();
         Self {
-            interrupts: 10_000_000,
-            memory: 32 * 1024 * 1024,
+            interrupts,
+            memory,
             steps: 32,
         }
     }
 }
 
-/// Globals Luau's base library and mlua add that could break determinism,
-/// load code, or catch a refusal and carry on.
-const REMOVED: &[&str] = &[
-    "collectgarbage",
-    "gcinfo",
-    "getfenv",
-    "loadstring",
-    "newproxy",
-    "pcall",
-    "print",
-    "require",
-    "setfenv",
-    "xpcall",
-];
-
-/// Counts interrupt checks; reset before the load and before each run.
-#[derive(Clone, Default)]
-pub(crate) struct Meter(Rc<Cell<u64>>);
-
-impl Meter {
-    pub(crate) fn reset(&self) {
-        self.0.set(0);
+impl From<Limits> for herdr_luau::Limits {
+    fn from(limits: Limits) -> Self {
+        Self {
+            interrupts: limits.interrupts,
+            memory: limits.memory,
+        }
     }
 }
 
 /// A state with the safe libraries and the budget, not yet sandboxed: the
 /// caller adds the host's globals, then calls [`seal`].
-pub(crate) fn open(limits: Limits, meter: &Meter) -> mlua::Result<Lua> {
-    let libs =
-        StdLib::STRING | StdLib::TABLE | StdLib::MATH | StdLib::UTF8 | StdLib::BIT | StdLib::BUFFER;
-    let lua = Lua::new_with(libs, LuaOptions::new())?;
-    let globals = lua.globals();
-    for name in REMOVED {
-        globals.raw_set(*name, mlua::Value::Nil)?;
-    }
-    let math = globals.raw_get::<mlua::Table>("math")?;
-    math.raw_set("random", mlua::Value::Nil)?;
-    math.raw_set("randomseed", mlua::Value::Nil)?;
-    lua.set_memory_limit(limits.memory)?;
-    let count = meter.0.clone();
-    lua.set_interrupt(move |_| {
-        let used = count.get().saturating_add(1);
-        count.set(used);
-        if used > limits.interrupts {
-            return Err(mlua::Error::external(Refusal::Budget(Budget::Interrupts)));
-        }
-        Ok(VmState::Continue)
-    });
-    Ok(lua)
+pub(crate) fn open(limits: Limits, meter: &Meter) -> Result<Lua> {
+    Ok(herdr_luau::open(
+        limits.into(),
+        Policy::Deterministic,
+        meter,
+    )?)
 }
 
-/// Freezes every library and the host's globals; the script's own globals
-/// go to a fresh table on top.
-pub(crate) fn seal(lua: &Lua) -> mlua::Result<()> {
-    lua.sandbox(true)
+/// Freezes every library and the host's globals.
+pub(crate) fn seal(lua: &Lua) -> Result<()> {
+    Ok(herdr_luau::seal(lua)?)
 }

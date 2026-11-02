@@ -2,6 +2,7 @@
 //! request works with a known-good API root and create options.
 
 use super::{Error, Result};
+use crate::cloud::Value;
 use crate::{config::BoatConfig, credentials::Store};
 use std::ffi::OsString;
 use url::Url;
@@ -28,7 +29,7 @@ impl Settings {
             Some(value) => Some(
                 value
                     .into_string()
-                    .map_err(|_| Error::Encoding("HERDR_BOAT_API_URL"))?,
+                    .map_err(|_| Error::Encoding(Value::Key("HERDR_BOAT_API_URL")))?,
             ),
             None => config.api_url.clone(),
         };
@@ -37,7 +38,7 @@ impl Settings {
         };
         let plain = |value: &Option<String>, field| match value {
             Some(text) if text.is_empty() => Ok(None),
-            Some(text) if !plain_value(text) => Err(Error::Field(field)),
+            Some(text) if !plain_value(text) => Err(Error::Field(Value::Key(field))),
             _ => Ok(value.clone()),
         };
         let machine_type = config
@@ -47,7 +48,7 @@ impl Settings {
         if machine_type
             .is_some_and(|kind| !matches!(kind, "small" | "default" | "large" | "xlarge"))
         {
-            return Err(Error::Field("boat.machine_type"));
+            return Err(Error::Field(Value::Key("boat.machine_type")));
         }
         Ok(Some(Self {
             base: api_root(&url)?,
@@ -77,7 +78,7 @@ fn lifetime(text: &str) -> Result<Option<u32>> {
         .ok()
         .filter(|seconds| (1..=2_592_000).contains(seconds))
         .map(Some)
-        .ok_or(Error::Field("boat.auto_stop (never or 1–2592000 seconds)"))
+        .ok_or(Error::Field(Value::BoatAutoStop))
 }
 
 fn plain_value(value: &str) -> bool {

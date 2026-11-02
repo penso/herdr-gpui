@@ -2,6 +2,8 @@
 use crate::pull_request::{Origin, repository_input};
 use herdr_client::protocol::ClientShellWorktree;
 
+mod en_xa;
+
 #[test]
 fn metadata_priority_alternates_with_round_robin_and_skips_ineligible_workspaces() {
     let mut snapshot = crate::sidebar::layout_tests::ssh_snapshot(6);
@@ -158,8 +160,13 @@ fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
     });
     let title = cx.debug_bounds("workspace-pr-title").unwrap().center();
     // Debug selectors are static; leaking one test label is fine.
-    let first: &'static str = cx
-        .update(|_, cx| format!("workspace-menu-{}", view.read(cx).workspace_items()[0].1).leak());
+    let first: &'static str = cx.update(|_, cx| {
+        format!(
+            "workspace-menu-{}",
+            view.read(cx).workspace_items()[0].1.english()
+        )
+        .leak()
+    });
     let first = cx.debug_bounds(first).unwrap().center();
     cx.simulate_mouse_move(title, None, Default::default());
     cx.update(|_, cx| {

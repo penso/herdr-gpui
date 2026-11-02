@@ -43,6 +43,8 @@ mod worktree_source;
 #[cfg(test)]
 mod announcement_tests;
 #[cfg(test)]
+mod en_xa_tests;
+#[cfg(test)]
 mod font_size_tests;
 #[cfg(test)]
 mod sessions_tests;

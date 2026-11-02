@@ -5,6 +5,7 @@
 
 use super::PaneMenu;
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -110,15 +111,14 @@ fn describe(error: &crate::Error) -> String {
 
 fn report(outcomes: &[(Identity, Outcome)]) -> String {
     let count = |wanted: fn(&Outcome) -> bool| outcomes.iter().filter(|(_, o)| wanted(o)).count();
-    let plural = |n: usize| if n == 1 { "process" } else { "processes" };
     let mut parts = Vec::new();
     let signalled = count(|o| *o == Outcome::Signalled);
     if signalled > 0 {
-        parts.push(format!("Asked {signalled} {} to quit.", plural(signalled)));
+        parts.push(fl!("pane-menu-processes-signalled", count = signalled));
     }
     let exited = count(|o| *o == Outcome::Refused(Refusal::Exited));
     if exited > 0 {
-        parts.push(format!("{exited} had already exited."));
+        parts.push(fl!("pane-menu-processes-exited", count = exited));
     }
     let moved = count(|o| {
         matches!(
@@ -127,11 +127,11 @@ fn report(outcomes: &[(Identity, Outcome)]) -> String {
         )
     });
     if moved > 0 {
-        parts.push(format!("{moved} no longer under this pane, left running."));
+        parts.push(fl!("pane-menu-processes-moved", count = moved));
     }
     let failed = count(|o| *o == Outcome::Failed);
     if failed > 0 {
-        parts.push(format!("{failed} could not be signalled."));
+        parts.push(fl!("pane-menu-processes-failed", count = failed));
     }
     parts.join(" ")
 }
@@ -149,11 +149,14 @@ pub(super) fn memory_text(bytes: u64) -> String {
     const MIB: f64 = (1u64 << 20) as f64;
     let mib = bytes as f64 / MIB;
     if mib >= 1024. {
-        format!("{:.1} GB", mib / 1024.)
+        fl!(
+            "pane-menu-processes-gigabytes",
+            size = format!("{:.1}", mib / 1024.)
+        )
     } else if mib >= 10. {
-        format!("{mib:.0} MB")
+        fl!("pane-menu-processes-megabytes", size = format!("{mib:.0}"))
     } else {
-        format!("{mib:.1} MB")
+        fl!("pane-menu-processes-megabytes", size = format!("{mib:.1}"))
     }
 }
 
@@ -338,9 +341,9 @@ impl HerdrWindow {
         let theme = &self.theme;
         let muted = rgb(theme.muted);
         let title = if pane.target.label.is_empty() {
-            "Processes".to_owned()
+            fl!("pane-menu-processes-title")
         } else {
-            format!("Processes in {}", pane.target.label)
+            fl!("pane-menu-processes-in", pane = pane.target.label.as_str())
         };
         let mut body = div().p(px(8.)).flex().flex_col().gap(px(8.)).child(
             div()
@@ -361,10 +364,10 @@ impl HerdrWindow {
                             .debug_selector(|| "pane-processes-total".into())
                             .flex_none()
                             .text_color(muted)
-                            .child(format!(
-                                "{} · {}",
-                                cpu_text(Some(listing.cpu)),
-                                memory_text(listing.memory)
+                            .child(fl!(
+                                "pane-menu-processes-total",
+                                cpu = cpu_text(Some(listing.cpu)),
+                                memory = memory_text(listing.memory),
                             )),
                     )
                 }),
@@ -378,7 +381,11 @@ impl HerdrWindow {
             .track_scroll(&processes.scroll);
         match &processes.listing {
             None if processes.error.is_none() => {
-                list = list.child(div().text_color(muted).child("Listing processes…"));
+                list = list.child(
+                    div()
+                        .text_color(muted)
+                        .child(fl!("pane-menu-processes-listing")),
+                );
             }
             None => {}
             Some(listing) => {
@@ -436,7 +443,7 @@ impl HerdrWindow {
                                             div()
                                                 .flex_none()
                                                 .text_color(crate::menu::accent(theme))
-                                                .child("foreground"),
+                                                .child(fl!("pane-menu-processes-foreground")),
                                         )
                                     })
                                     .child(
@@ -476,7 +483,7 @@ impl HerdrWindow {
                         div()
                             .px(px(6.))
                             .text_color(muted)
-                            .child(format!("{} more not shown", listing.hidden)),
+                            .child(fl!("pane-menu-processes-hidden", count = listing.hidden)),
                     );
                 }
             }
@@ -485,7 +492,7 @@ impl HerdrWindow {
         let status = processes
             .error
             .clone()
-            .or_else(|| processes.ending.then(|| "Ending processes…".to_owned()))
+            .or_else(|| processes.ending.then(|| fl!("pane-menu-processes-ending")))
             .or_else(|| processes.report.clone());
         let count = processes.chosen.len();
         body.when_some(status, |body, status| {
@@ -513,11 +520,7 @@ impl HerdrWindow {
                     .when(count == 0 || processes.ending, |button| {
                         button.text_color(muted)
                     })
-                    .child(match count {
-                        0 => "End Process…".to_owned(),
-                        1 => "End 1 Process…".to_owned(),
-                        n => format!("End {n} Processes…"),
-                    }),
+                    .child(fl!("pane-menu-processes-end", count = count)),
             ),
         )
     }
@@ -528,7 +531,6 @@ impl HerdrWindow {
         };
         let theme = &self.theme;
         let count = processes.chosen.len();
-        let noun = if count == 1 { "process" } else { "processes" };
         div()
             .p(px(12.))
             .flex()
@@ -538,25 +540,28 @@ impl HerdrWindow {
                 div()
                     .text_size(px(self.config.ui.size * 1.35))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("End {count} {noun}?")),
+                    .child(fl!("pane-menu-processes-confirm-title", count = count)),
             )
-            .child(div().flex().flex_col().children(processes.chosen_rows().map(
-                |row| {
-                    div()
-                        .row()
-                        .gap(px(8.))
-                        .child(div().flex_none().child(row.entry.name.clone()))
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_color(rgb(theme.muted))
-                                .child(format!("pid {}", row.entry.identity.pid)),
-                        )
-                },
-            )))
-            .child(div().text_color(rgb(theme.subtext())).child(
-                "Each is asked to quit (SIGTERM), and may lose unsaved work. Processes they started keep running unless chosen too.",
-            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .children(processes.chosen_rows().map(|row| {
+                        div()
+                            .row()
+                            .gap(px(8.))
+                            .child(div().flex_none().child(row.entry.name.clone()))
+                            .child(div().flex_none().text_color(rgb(theme.muted)).child(fl!(
+                                "pane-menu-processes-pid",
+                                pid = row.entry.identity.pid
+                            )))
+                    })),
+            )
+            .child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("pane-menu-processes-confirm-note")),
+            )
             .child(
                 div()
                     .row()
@@ -573,7 +578,7 @@ impl HerdrWindow {
                             .border_color(rgb(theme.active))
                             .cursor_pointer()
                             .hover(|s| s.bg(rgb(theme.active)))
-                            .child("Cancel")
+                            .child(fl!("pane-menu-processes-cancel"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.leave_kill_confirmation();
                                 cx.notify();
@@ -589,11 +594,7 @@ impl HerdrWindow {
                             .bg(rgb(theme.active))
                             .text_color(crate::menu::danger(theme))
                             .cursor_pointer()
-                            .child(if count == 1 {
-                                "End Process".to_owned()
-                            } else {
-                                format!("End {count} Processes")
-                            })
+                            .child(fl!("pane-menu-processes-confirm", count = count))
                             .on_click(cx.listener(|this, _, _, cx| this.end_pane_processes(cx))),
                     ),
             )

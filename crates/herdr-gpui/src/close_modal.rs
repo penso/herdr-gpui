@@ -1,3 +1,5 @@
+// i18n: migrated
+use crate::i18n::fl;
 use crate::{
     Error, HerdrWindow, Result,
     config::preferences::Preference,
@@ -115,19 +117,15 @@ impl CloseConfirmation {
             .collect();
         match busy.as_slice() {
             [] => None,
-            [agent] => Some(format!(
-                "{} is {}.",
-                crate::sidebar::agent_name(agent),
-                if agent.agent_status == AgentStatus::Blocked {
-                    "waiting on you"
+            [agent] => {
+                let name = crate::sidebar::agent_name(agent);
+                Some(if agent.agent_status == AgentStatus::Blocked {
+                    fl!("close-modal-agent-waiting", agent = name)
                 } else {
-                    "working"
-                }
-            )),
-            agents => Some(format!(
-                "{} agents are working or waiting on you.",
-                agents.len()
-            )),
+                    fl!("close-modal-agent-working", agent = name)
+                })
+            }
+            agents => Some(fl!("close-modal-agents-busy", count = agents.len())),
         }
     }
 
@@ -373,29 +371,109 @@ impl HerdrWindow {
             return div();
         };
         let theme = &self.theme;
-        let kind = if close.pane.is_some() { "pane" } else { "tab" };
-        div().p(px(12.)).flex().flex_col().gap(px(12.))
-            .child(div().text_size(px(self.config.ui.size * 1.35)).font_weight(FontWeight::SEMIBOLD).child(format!("Close {kind}?")))
+        let (title, note, confirm) = if close.pane.is_some() {
+            (
+                fl!("close-modal-pane-title"),
+                fl!("close-modal-pane-note"),
+                fl!("close-modal-close-pane"),
+            )
+        } else {
+            (
+                fl!("close-modal-tab-title"),
+                fl!("close-modal-tab-note"),
+                fl!("close-modal-close-tab"),
+            )
+        };
+        div()
+            .p(px(12.))
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(
+                div()
+                    .text_size(px(self.config.ui.size * 1.35))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(title),
+            )
             .child(div().child(close.label.clone()))
-            .when_some(close.interrupts.clone(), |panel, interrupts| panel.child(div().debug_selector(|| "close-interrupts".into()).text_color(crate::menu::danger(theme)).child(interrupts)))
-            .child(div().text_color(rgb(theme.subtext())).child(if close.pane.is_some() {
-                "This terminates the pane and its running processes. This cannot be undone."
-            } else { "This terminates every pane and running process in this tab. This cannot be undone." }))
-            .when_some(close.error.clone(), |panel, error| panel.child(div().bg(rgb(theme.active)).p(px(8.)).child(error)))
-            .when(self.offers_do_not_ask_again(), |panel| panel.child(div().id("close-do-not-ask").debug_selector(|| "close-do-not-ask".into())
-                .flex().items_center().gap(px(8.)).cursor_pointer().text_color(rgb(theme.muted))
-                .child(crate::toggles::checkbox(theme, self.config.ui.size + 2., close.do_not_ask_again))
-                .child("Do not ask again")
-                .on_click(cx.listener(|this, _, _, cx| this.toggle_do_not_ask_again(cx)))))
-            .child(div().flex().justify_end().gap(px(8.))
-                .child(div().id("close-cancel").debug_selector(|| "close-cancel".into()).px(px(12.)).py(px(6.)).rounded(px(crate::config::corners::CONTROL)).border_1()
-                    .border_color(rgb(if close.confirm_selected { theme.active } else { theme.foreground }))
-                    .cursor_pointer().hover(|s| s.bg(rgb(theme.active))).child("Cancel")
-                    .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))))
-                .child(div().id("close-confirm").debug_selector(|| "close-confirm".into()).px(px(12.)).py(px(6.)).rounded(px(crate::config::corners::CONTROL)).border_1()
-                    .border_color(rgb(if close.confirm_selected { theme.foreground } else { theme.active }))
-                    .bg(rgb(theme.active)).text_color(crate::menu::danger(theme)).cursor_pointer().child(format!("Close {kind}"))
-                    .on_click(cx.listener(|this, _, window, cx| this.confirm_close(window, cx)))))
+            .when_some(close.interrupts.clone(), |panel, interrupts| {
+                panel.child(
+                    div()
+                        .debug_selector(|| "close-interrupts".into())
+                        .text_color(crate::menu::danger(theme))
+                        .child(interrupts),
+                )
+            })
+            .child(div().text_color(rgb(theme.subtext())).child(note))
+            .when_some(close.error.clone(), |panel, error| {
+                panel.child(div().bg(rgb(theme.active)).p(px(8.)).child(error))
+            })
+            .when(self.offers_do_not_ask_again(), |panel| {
+                panel.child(
+                    div()
+                        .id("close-do-not-ask")
+                        .debug_selector(|| "close-do-not-ask".into())
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .cursor_pointer()
+                        .text_color(rgb(theme.muted))
+                        .child(crate::toggles::checkbox(
+                            theme,
+                            self.config.ui.size + 2.,
+                            close.do_not_ask_again,
+                        ))
+                        .child(fl!("close-modal-do-not-ask"))
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_do_not_ask_again(cx))),
+                )
+            })
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .id("close-cancel")
+                            .debug_selector(|| "close-cancel".into())
+                            .px(px(12.))
+                            .py(px(6.))
+                            .rounded(px(crate::config::corners::CONTROL))
+                            .border_1()
+                            .border_color(rgb(if close.confirm_selected {
+                                theme.active
+                            } else {
+                                theme.foreground
+                            }))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgb(theme.active)))
+                            .child(fl!("close-modal-cancel"))
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("close-confirm")
+                            .debug_selector(|| "close-confirm".into())
+                            .px(px(12.))
+                            .py(px(6.))
+                            .rounded(px(crate::config::corners::CONTROL))
+                            .border_1()
+                            .border_color(rgb(if close.confirm_selected {
+                                theme.foreground
+                            } else {
+                                theme.active
+                            }))
+                            .bg(rgb(theme.active))
+                            .text_color(crate::menu::danger(theme))
+                            .cursor_pointer()
+                            .child(confirm)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.confirm_close(window, cx)),
+                            ),
+                    ),
+            )
     }
 }
 

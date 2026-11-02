@@ -9,12 +9,14 @@
 //! A layout also says how wide the chrome around a title is, from the same
 //! constants it draws with: the strip measures tabs before it builds them, to
 //! grow, reveal, and slide them.
+// i18n: migrated
 
 mod cards;
 mod classic;
 mod compact;
 mod curved;
 mod outline;
+pub(crate) mod panes;
 mod pills;
 mod underline;
 
@@ -22,6 +24,7 @@ use crate::{
     backdrop::Fill,
     browser::{Slot, TabId},
     config::{FontConfig, TabLayoutMode, Theme},
+    i18n::fl,
     icons::AgentIcon,
     sidebar::{Indicators, status_indicator},
 };
@@ -280,6 +283,9 @@ pub(crate) trait TabLayout {
     fn connected(&self) -> Option<Connected> {
         None
     }
+
+    /// How a herdr-core tab split into panes reads under these tabs.
+    fn panes(&self) -> &'static dyn panes::PaneChrome;
 }
 
 /// The shape of a connected tab body and the card it flows into.
@@ -438,7 +444,7 @@ fn mute_mark(muted: bool, probe: &Probe, text: u32, cx: &TabContext<'_>) -> Opti
 /// hidden mark would show.
 fn hint(label: SharedString, muted: bool) -> SharedString {
     if muted {
-        format!("{label} (notifications muted)").into()
+        fl!("tab-layout-muted-hint", label = label.to_string()).into()
     } else {
         label
     }
@@ -453,27 +459,32 @@ fn close_button(
     cx: &TabContext<'_>,
 ) -> Stateful<Div> {
     let (id, probe, icon_probe) = probe.close(cx.slot);
-    cx.stop(div().id(id).role(Role::Button).aria_label("Close tab"))
-        .debug_selector(move || probe.clone())
-        .size(px(size))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(crate::config::corners::CONTROL))
-        .hover(move |s| s.bg(rgba((text << 8) | 0x24)))
-        .child(
-            svg()
-                .path("icons/close.svg")
-                .debug_selector(move || icon_probe.clone())
-                .size(px(12.))
-                .text_color(rgb(text)),
-        )
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .on_click(move |event, window, cx| {
-            cx.stop_propagation();
-            close(event, window, cx);
-        })
+    cx.stop(
+        div()
+            .id(id)
+            .role(Role::Button)
+            .aria_label(fl!("tab-layout-close")),
+    )
+    .debug_selector(move || probe.clone())
+    .size(px(size))
+    .flex_none()
+    .flex()
+    .items_center()
+    .justify_center()
+    .rounded(px(crate::config::corners::CONTROL))
+    .hover(move |s| s.bg(rgba((text << 8) | 0x24)))
+    .child(
+        svg()
+            .path("icons/close.svg")
+            .debug_selector(move || icon_probe.clone())
+            .size(px(12.))
+            .text_color(rgb(text)),
+    )
+    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    .on_click(move |event, window, cx| {
+        cx.stop_propagation();
+        close(event, window, cx);
+    })
 }
 
 #[cfg(test)]

@@ -29,7 +29,14 @@ def base_names(version):
             f"herdr-gpui-{version}-aarch64-unknown-linux-gnu-update.tar.gz",
             "update-manifest.json", "update-manifest.sig",
             "package-manifest.json", "package-manifest.sig",
-            "windows-manifest.json", "windows-manifest.sig"]
+            "windows-manifest.json", "windows-manifest.sig",
+            f"herdr-remote-control-{version}-x86_64-unknown-linux-musl",
+            f"herdr-remote-control-{version}-aarch64-unknown-linux-musl",
+            "host-manifest.json", "host-manifest.sig"]
+
+
+UPDATER_SIGNATURES = ("update-manifest.sig", "package-manifest.sig", "windows-manifest.sig",
+                      "host-manifest.sig")
 
 
 def asset_names(version):
@@ -43,7 +50,7 @@ def check_files(directory, names):
         p.is_symlink() or not p.is_file() or not p.stat().st_size for p in files
     ):
         raise ValueError("Missing, empty, symlink, or unexpected release artifact")
-    for signature in ("update-manifest.sig", "package-manifest.sig", "windows-manifest.sig"):
+    for signature in UPDATER_SIGNATURES:
         if signature in names and (directory / signature).stat().st_size != 64:
             raise ValueError("Updater signature must be raw 64-byte Ed25519")
 

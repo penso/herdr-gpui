@@ -101,14 +101,23 @@ public enum API {
 
         public let pushToStart: String?
         public let activities: [Activity]
+        /// The app's own APNs token, for sealed alerts.
+        public let alert: String?
+        /// The public key alerts are sealed to (`NotificationSeal`), as
+        /// base64url X9.63 bytes.
+        public let notifyKey: String?
 
-        public init(pushToStart: String?, activities: [Activity]) {
+        public init(pushToStart: String?, activities: [Activity], alert: String? = nil, notifyKey: String? = nil) {
             self.pushToStart = pushToStart
             self.activities = activities
+            self.alert = alert
+            self.notifyKey = notifyKey
         }
 
         enum CodingKeys: String, CodingKey {
             case pushToStart = "push_to_start"
+            case notifyKey = "notify_key"
+            case alert
             case activities
         }
 
@@ -116,6 +125,8 @@ public enum API {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encodeIfPresent(pushToStart, forKey: .pushToStart)
             try container.encode(activities, forKey: .activities)
+            try container.encodeIfPresent(alert, forKey: .alert)
+            try container.encodeIfPresent(notifyKey, forKey: .notifyKey)
         }
     }
 }

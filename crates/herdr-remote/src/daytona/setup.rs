@@ -84,20 +84,17 @@ fn finish(
     let installed = install::installed(connect::gateway(request, &sandbox)?.command, &cancelled)?;
     if !installed {
         if !install {
-            return Err(cloud::Error::Install(format!(
-                "Herdr is not installed in {}; add it and try again",
-                sandbox.name
-            ))
+            return Err(cloud::Error::Install(install::Failure::NotInstalled {
+                machine: Some(sandbox.name.clone()),
+                retry: install::Retry::Add,
+            })
             .into());
         }
         report(cloud::Step::InstallingHerdr);
         install::install(connect::gateway(request, &sandbox)?.command, &cancelled)?;
         // The installer's own success is not proof the bridge will find it.
         if !install::installed(connect::gateway(request, &sandbox)?.command, &cancelled)? {
-            return Err(cloud::Error::Install(
-                "the installer finished but Herdr is not on the expected paths".into(),
-            )
-            .into());
+            return Err(cloud::Error::Install(install::Failure::Missing).into());
         }
     }
     let device = SavedDevice {

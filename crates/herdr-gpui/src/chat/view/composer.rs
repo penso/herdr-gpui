@@ -7,6 +7,7 @@ use super::{
     Hues,
     layout::{ComposerParts, layout_for},
 };
+use crate::i18n::{Localize, fl};
 use crate::{HerdrWindow, config::corners};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::Command;
@@ -31,7 +32,7 @@ impl HerdrWindow {
                 .p(px(12.))
                 .text_size(self.chat_small_text())
                 .text_color(rgb(theme.subtext()))
-                .child("Continue this conversation in its terminal.")
+                .child(fl!("chat-read-only-hint"))
                 .child(
                     div()
                         .id("chat-reply-terminal")
@@ -50,7 +51,7 @@ impl HerdrWindow {
                         .cursor_pointer()
                         .hover(|button| button.border_color(rgb(theme.primary())))
                         .child(svg().path("icons/terminal.svg").size(px(13.)))
-                        .child("Reply in terminal")
+                        .child(fl!("chat-reply-in-terminal"))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                             cx.stop_propagation();
@@ -61,7 +62,7 @@ impl HerdrWindow {
         let problem = chat.error.clone().or_else(|| {
             chat.session
                 .rejection()
-                .map(|rejection| rejection.to_string())
+                .map(|rejection| rejection.localize())
         });
         let small = px((self.chat_text_size() - 2.).max(10.));
         let round = |id: &'static str| {
@@ -97,15 +98,11 @@ impl HerdrWindow {
             let label = match &chat.target.route {
                 super::super::Route::Ssh(host) => {
                     let host = crate::notifications::safe_text(host, 80);
-                    match chat.uploading {
-                        1 => format!("Copying a file to {host}\u{2026}"),
-                        count => format!("Copying {count} files to {host}\u{2026}"),
-                    }
+                    fl!("chat-copying-files", count = chat.uploading, host = host)
                 }
-                super::super::Route::Local => match chat.uploading {
-                    1 => "Preparing a picture\u{2026}".to_owned(),
-                    count => format!("Preparing {count} pictures\u{2026}"),
-                },
+                super::super::Route::Local => {
+                    fl!("chat-preparing-pictures", count = chat.uploading)
+                }
             };
             div()
                 .debug_selector(|| "chat-uploading".into())
@@ -245,10 +242,7 @@ impl HerdrWindow {
                     .debug_selector(|| "chat-draft-earlier".into())
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(match earlier {
-                        1 => "1 earlier line".to_owned(),
-                        count => format!("{count} earlier lines"),
-                    })
+                    .child(fl!("chat-draft-earlier", count = earlier))
             }))
             .children(
                 chat.draft

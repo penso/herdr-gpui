@@ -37,8 +37,8 @@ pub enum Error {
 
 fn setup_message(code: Option<i32>, output: &str) -> String {
     let ended = match code {
-        Some(code) => format!("The setup script exited {code}"),
-        None => "A signal ended the setup script".to_owned(),
+        Some(code) => format!("The setup script exited {code}"), // i18n: data
+        None => "A signal ended the setup script".to_owned(),    // i18n: data
     };
     if output.is_empty() {
         format!("{ended}.")

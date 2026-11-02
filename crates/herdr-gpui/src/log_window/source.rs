@@ -7,7 +7,7 @@
 //! and otherwise shown as plain text stripped of control characters.
 
 use super::{LogWindow, button, filtered};
-use crate::{automations::LogSource, diagnostics::Record};
+use crate::{automations::LogSource, diagnostics::Record, i18n::fl};
 use gpui::{prelude::*, *};
 use serde_json::{Map, Value};
 use std::{
@@ -37,8 +37,13 @@ pub(super) enum Source {
 impl Source {
     pub(super) fn label(&self) -> String {
         match self {
-            Self::App => "App".to_owned(),
-            Self::Automations(source) => format!("Automations on {}", source.label),
+            Self::App => fl!("log-window-source-app"),
+            Self::Automations(source) => {
+                fl!(
+                    "log-window-source-automations",
+                    host = source.label.as_str()
+                )
+            }
         }
     }
 }
@@ -156,7 +161,7 @@ impl LogWindow {
         self.scroll.reset(0);
         self.status = match &source {
             Source::App => self.app_status.clone(),
-            Source::Automations(_) => "Reading…".to_owned(),
+            Source::Automations(_) => fl!("log-window-reading"),
         };
         if let Source::Automations(log) = &source {
             self.remote = Some(self.follow(log.clone(), cx));
@@ -180,9 +185,9 @@ impl LogWindow {
                     // no more.
                     let off = crate::automations::LogSources::off(cx);
                     if off && this.following {
-                        let status = format!(
-                            "{} · not read while automations are turned off",
-                            Source::Automations(log.clone()).label()
+                        let status = fl!(
+                            "log-window-automations-off",
+                            source = Source::Automations(log.clone()).label()
                         );
                         if this.status != status {
                             this.status = status;
@@ -247,19 +252,20 @@ impl LogWindow {
                                 this.rows = rows;
                                 this.retained = retained;
                                 if let Some(truncated) = truncated {
-                                    this.status = format!(
-                                        "{} · {}",
-                                        Source::Automations(log.clone()).label(),
-                                        if truncated {
-                                            "the end of a longer log"
-                                        } else {
-                                            "the whole log"
-                                        }
-                                    );
+                                    let source = Source::Automations(log.clone()).label();
+                                    this.status = if truncated {
+                                        fl!("log-window-log-tail", source = source)
+                                    } else {
+                                        fl!("log-window-log-whole", source = source)
+                                    };
                                 }
                             }
                             Err(error) => {
-                                this.status = format!("Unable to read {}: {error}", log.label);
+                                this.status = fl!(
+                                    "log-window-host-unreadable",
+                                    host = log.label.as_str(),
+                                    error = error.to_string()
+                                );
                             }
                         }
                         cx.notify();
@@ -297,7 +303,11 @@ impl LogWindow {
                 .flex_wrap()
                 .items_center()
                 .gap_2()
-                .child(div().text_color(rgb(theme.muted)).child("Source"))
+                .child(
+                    div()
+                        .text_color(rgb(theme.muted))
+                        .child(fl!("log-window-source")),
+                )
                 .children(choices.into_iter().enumerate().map(|(index, choice)| {
                     let on = choice == self.source;
                     button(format!("log-source-{index}"), choice.label(), theme)

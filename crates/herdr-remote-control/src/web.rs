@@ -12,18 +12,26 @@
 mod api;
 mod assets;
 mod fragments;
+mod hosts;
 mod indicators;
 mod log;
+mod nearby;
 mod origins;
+mod pace;
 mod render;
 mod stream;
 mod terminal;
 mod uploads;
 
+pub(crate) use api::{NEW_CHAT_WAIT, check_new_workspace, parse_agent};
+pub(crate) use fragments::folders;
 pub(crate) use indicators::{Indicators, Look};
 pub(crate) use log::report_limit;
 pub(crate) use origins::Origins;
+pub(crate) use pace::Typed;
 pub(crate) use render::now_ms;
+pub(crate) use stream::Connected;
+pub(crate) use terminal::read_screen;
 pub(crate) use uploads::Uploads;
 
 use crate::control::DeviceId;
@@ -67,9 +75,14 @@ pub(crate) struct State {
     pub(crate) connected: Mutex<HashMap<DeviceId, usize>>,
     pub(crate) fingerprint: String,
     pub(crate) hub: Arc<Hub>,
+    /// This computer's CPU and memory, as `load` last read them.
+    pub(crate) load: tokio::sync::watch::Receiver<Option<crate::load::Load>>,
     /// The status marks the lists draw, as Herdr UI last sent them.
     pub(crate) look: Look,
     pub(crate) names: RwLock<Names>,
+    /// Devices whose owner is at this computer, as Herdr UI last said:
+    /// their alerts wait until they leave.
+    pub(crate) near: Mutex<crate::push::Near>,
     pub(crate) port: u16,
     pub(crate) privacy: Privacy,
     pub(crate) pull_requests:
@@ -79,12 +92,18 @@ pub(crate) struct State {
     pub(crate) reports: Mutex<auth::RateLimiter<std::net::IpAddr>>,
     /// Origins served before, which an installed app may still send.
     pub(crate) seen: Mutex<Origins>,
+    /// Panes phones type into, so their screens are read again at once.
+    pub(crate) typed: Typed,
     pub(crate) uploads: Uploads,
 }
 
 impl State {
     pub(crate) fn auth(&self) -> MutexGuard<'_, Auth> {
         self.auth.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(crate) fn near(&self) -> MutexGuard<'_, crate::push::Near> {
+        self.near.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Every `https://` origin the server answers at now.
@@ -147,6 +166,8 @@ pub(crate) fn router(state: Shared) -> Router {
         .route(PAIR_CLAIM, post(api::claim))
         .route("/api/pair/claim/{claim}", get(api::claim_status))
         .route("/api/session/challenge", post(api::challenge))
+        .route(nearby::START, post(nearby::start))
+        .route(nearby::REVEAL, post(nearby::reveal))
         .route("/api/origins", get(api::origins))
         .route("/api/session", post(api::session))
         .route("/api/handoff", post(api::handoff))
@@ -178,7 +199,20 @@ pub(crate) fn router(state: Shared) -> Router {
             post(terminal::upload).layer(DefaultBodyLimit::max(uploads::MAX_UPLOAD + 1024)),
         )
         .route("/api/term/{pane}/action", post(terminal::action))
+        .route("/api/term/{pane}/rename", post(terminal::rename))
         .route("/api/stream", get(stream::stream))
+        .route("/api/v2/chat/{pane}", get(crate::native::get_chat))
+        .route("/api/v2/home", get(crate::native::get_home))
+        .route("/api/v2/hosts", get(hosts::list))
+        .route("/api/v2/hosts/{host}/pair", post(hosts::pair))
+        .route("/api/v2/live", get(crate::native::live))
+        .route("/api/v2/new", get(crate::native::new_options))
+        .route("/api/v2/search", get(crate::native::search))
+        .route("/api/v2/workspaces", post(crate::native::create_workspace))
+        .route(
+            "/api/v2/workspaces/{workspace}/chats",
+            post(crate::native::start_chat),
+        )
         .route("/f/home", get(fragments::home))
         .route("/f/board", get(fragments::board))
         .route("/f/chat/{pane}", get(fragments::chat))
@@ -229,6 +263,9 @@ async fn security_headers(request: Request, next: Next) -> Response {
 /// `PAIR_CLAIM` or one segment under it, never a path that only starts with
 /// the same letters.
 fn is_pair_claim(path: &str) -> bool {
+    if path == nearby::START || path == nearby::REVEAL {
+        return true;
+    }
     match path.strip_prefix(PAIR_CLAIM) {
         Some("") => true,
         Some(rest) => rest
@@ -240,8 +277,9 @@ fn is_pair_claim(path: &str) -> bool {
 
 /// Admits this computer's own origins across addresses, and apps its paired
 /// devices use. Any other origin may only claim a pairing, which takes the
-/// token from a code the desktop shows, and ask how the claim stands;
-/// everything else is refused outright, so no page elsewhere can drive the
+/// token from a code the desktop shows, ask how the claim stands, and run
+/// nearby pairing's code exchange, which only works while the desktop's
+/// pairing dialog is open; everything else is refused outright, so no page elsewhere can drive the
 /// API.
 async fn cors(Extract(state): Extract<Shared>, request: Request, next: Next) -> Response {
     let origin = request
@@ -308,7 +346,7 @@ impl FromRequestParts<Shared> for Device {
     }
 }
 
-fn bearer(headers: &HeaderMap) -> Option<&str> {
+pub(crate) fn bearer(headers: &HeaderMap) -> Option<&str> {
     headers
         .get(header::AUTHORIZATION)?
         .to_str()
@@ -337,6 +375,8 @@ pub(crate) enum ApiError {
     NotFound,
     #[error(transparent)]
     Push(#[from] crate::push::Error),
+    #[error("too many connections from this device")]
+    TooManyStreams,
     #[error("sign in again")]
     Unauthorized,
     #[error(transparent)]
@@ -348,9 +388,22 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::TooManyStreams => StatusCode::TOO_MANY_REQUESTS,
             Self::NotFound => StatusCode::NOT_FOUND,
-            Self::Auth(auth::Error::RateLimited) => StatusCode::TOO_MANY_REQUESTS,
+            Self::Auth(auth::Error::RateLimited | auth::Error::NearbyBusy) => {
+                StatusCode::TOO_MANY_REQUESTS
+            }
+            Self::Auth(auth::Error::NearbyExhausted | auth::Error::NoPairing) => {
+                StatusCode::CONFLICT
+            }
+            Self::Auth(auth::Error::UnknownNearby) => StatusCode::NOT_FOUND,
             Self::Auth(auth::Error::UnknownDevice) => StatusCode::FORBIDDEN,
+            Self::Auth(auth::Error::Links(auth::links::Error::UnknownHost)) => {
+                StatusCode::NOT_FOUND
+            }
+            Self::Auth(auth::Error::Links(
+                auth::links::Error::Busy | auth::links::Error::TooMany,
+            )) => StatusCode::TOO_MANY_REQUESTS,
             Self::Auth(
                 auth::Error::Store { .. }
                 | auth::Error::StoreFormat { .. }

@@ -13,6 +13,7 @@ fn target(pane: &str, endpoint: &str) -> Target {
         endpoint: endpoint.parse::<EndpointId>().unwrap(),
         pane_id: pane.into(),
         route: Route::Local,
+        surface: Surface::Herdr,
     }
 }
 

@@ -2,7 +2,7 @@
 //! text and confirm in a flash.
 
 use super::layout::layout_for;
-use crate::{HerdrWindow, config::corners, window::Flash};
+use crate::{HerdrWindow, config::corners, i18n::fl, window::Flash};
 use gpui::{prelude::*, *};
 
 /// Where a message's copy button may sit, by what the message shows.
@@ -15,8 +15,8 @@ pub(super) enum CopyPlacement {
     Footer,
 }
 
-/// A rich block's copy button: its name for tests, its label, and what its
-/// flash says.
+/// A rich block's copy button: its name for tests, and the messages of its
+/// label and of what its flash says.
 #[derive(Clone, Copy)]
 pub(super) struct RichCopy {
     name: &'static str,
@@ -27,33 +27,33 @@ pub(super) struct RichCopy {
 // keep-sorted start
 pub(super) const ANSWERS: RichCopy = RichCopy {
     name: "chat-copy-answers",
-    label: "Copy answers",
-    copied: "Copied the answers",
+    label: "chat-copy-answers-label",
+    copied: "chat-copy-answers-done",
 };
 pub(super) const CODE: RichCopy = RichCopy {
     name: "chat-copy-code",
-    label: "Copy code",
-    copied: "Copied the code",
+    label: "chat-copy-code-label",
+    copied: "chat-copy-code-done",
 };
 pub(super) const DIFF: RichCopy = RichCopy {
     name: "chat-copy-diff",
-    label: "Copy diff",
-    copied: "Copied the diff",
+    label: "chat-copy-diff-label",
+    copied: "chat-copy-diff-done",
 };
 pub(super) const LATEX: RichCopy = RichCopy {
     name: "chat-copy-latex",
-    label: "Copy LaTeX",
-    copied: "Copied the LaTeX",
+    label: "chat-copy-latex-label",
+    copied: "chat-copy-latex-done",
 };
 pub(super) const ORIGINAL: RichCopy = RichCopy {
     name: "chat-copy-original",
-    label: "Copy original",
-    copied: "Copied the original source",
+    label: "chat-copy-original-label",
+    copied: "chat-copy-original-done",
 };
 pub(super) const REMAINING: RichCopy = RichCopy {
     name: "chat-copy-remaining-output",
-    label: "Copy remaining output",
-    copied: "Copied the remaining output",
+    label: "chat-copy-remaining-label",
+    copied: "chat-copy-remaining-done",
 };
 // keep-sorted end
 
@@ -72,7 +72,7 @@ impl HerdrWindow {
                 ("chat-copy", id),
                 format!("chat-copy-{id}"),
                 String::from(text),
-                "Copied the message",
+                fl!("chat-copy-message-done"),
                 cx,
             )
             .invisible()
@@ -89,7 +89,7 @@ impl HerdrWindow {
                     .size(px(11.))
                     .text_color(rgb(theme.muted)),
             )
-            .child("Copy");
+            .child(fl!("chat-copy"));
         layout_for(self.config.chat.layout)
             .copy(button, placement, &self.chat_look())
             .when(placement == CopyPlacement::Footer, |copy| {
@@ -106,13 +106,14 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let look = self.chat_look();
         let backdrop = layout_for(self.config.chat.layout).backdrop(&look);
-        self.chat_copy_button(copy.name, copy.name.to_owned(), source, copy.copied, cx)
+        let copied = crate::i18n::message(copy.copied, &[]);
+        self.chat_copy_button(copy.name, copy.name.to_owned(), source, copied, cx)
             .text_color(rgb(self.theme.subtext()))
             .px(px(6.))
             .py(px(2.))
             .rounded(px(4.))
             .when_some(backdrop, |button, fill| button.bg(rgb(fill)))
-            .child(copy.label)
+            .child(crate::i18n::message(copy.label, &[]))
     }
 
     /// What every copy button shares: it copies `text`, says `copied` in a
@@ -122,7 +123,7 @@ impl HerdrWindow {
         id: impl Into<ElementId>,
         selector: String,
         text: impl AsRef<str> + 'static,
-        copied: &'static str,
+        copied: String,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
@@ -136,7 +137,10 @@ impl HerdrWindow {
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
                 cx.write_to_clipboard(ClipboardItem::new_string(text.as_ref().to_owned()));
-                this.show_flash(Flash::success(copied), cx);
+                this.show_flash(Flash::success(copied.clone()), cx);
             }))
     }
 }
+
+#[cfg(test)]
+mod tests;

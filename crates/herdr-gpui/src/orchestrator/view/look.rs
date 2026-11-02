@@ -5,6 +5,7 @@ use super::rows::Status;
 use crate::{
     config::{FontConfig, Theme, corners, mix},
     fonts::StyledFont,
+    i18n::fl,
 };
 use gpui::{prelude::*, *};
 
@@ -188,7 +189,7 @@ impl Look {
         &self,
         id: impl Into<ElementId>,
         path: &'static str,
-        label: &'static str,
+        label: impl Into<SharedString>,
     ) -> Stateful<Div> {
         let hover = self.theme.active;
         div()
@@ -210,14 +211,15 @@ impl Look {
     pub(crate) fn toggle(
         &self,
         id: impl Into<ElementId>,
-        label: &'static str,
+        label: impl Into<SharedString>,
         on: bool,
     ) -> Stateful<Div> {
         let theme = &self.theme;
+        let label = label.into();
         div()
             .id(id)
             .role(Role::Switch)
-            .aria_label(label)
+            .aria_label(label.clone())
             .aria_toggled(if on { Toggled::True } else { Toggled::False })
             .flex_none()
             .px_3()
@@ -267,14 +269,15 @@ impl Look {
     pub(crate) fn compact_button(
         &self,
         id: impl Into<ElementId>,
-        label: &'static str,
+        label: impl Into<SharedString>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let hover = theme.active;
+        let label = label.into();
         div()
             .id(id)
             .role(Role::Button)
-            .aria_label(label)
+            .aria_label(label.clone())
             .flex_none()
             .px_2()
             .py(px(1.))
@@ -323,9 +326,10 @@ impl Look {
 
     /// The color of an item's state word.
     pub(crate) fn state_hue(&self, state: &str) -> usize {
+        // The provider's state words, never shown from here.
         match state {
             "open" => GREEN,
-            "in_progress" | "in progress" | "draft" => BLUE,
+            "in_progress" | "in progress" | "draft" => BLUE, // i18n: data
             "blocked" => YELLOW,
             "merged" => MAGENTA,
             "closed" | "tombstone" => RED,
@@ -348,7 +352,7 @@ pub(crate) fn agent_icon(agent: &str) -> &'static str {
     crate::icons::AgentIcon::from_identity(Some(agent)).path()
 }
 
-/// "2d", "5h", "12m": how long ago `at` was.
+/// "2d", "5h", "12m": how long ago `at` was, short enough for a column.
 pub(crate) fn age(
     at: Option<chrono::DateTime<chrono::Utc>>,
     now: chrono::DateTime<chrono::Utc>,
@@ -358,10 +362,19 @@ pub(crate) fn age(
     };
     let seconds = (now - at).num_seconds().max(0);
     match seconds {
-        0..60 => "now".into(),
-        60..3_600 => format!("{}m", seconds / 60),
-        3_600..86_400 => format!("{}h", seconds / 3_600),
-        86_400..1_209_600 => format!("{}d", seconds / 86_400),
-        _ => format!("{}w", seconds / 604_800),
+        0..60 => fl!("orchestrator-age-now"),
+        60..3_600 => fl!("orchestrator-age-minutes", count = seconds / 60),
+        3_600..86_400 => fl!("orchestrator-age-hours", count = seconds / 3_600),
+        86_400..1_209_600 => fl!("orchestrator-age-days", count = seconds / 86_400),
+        _ => fl!("orchestrator-age-weeks", count = seconds / 604_800),
     }
+}
+
+/// "5 h ago", "yesterday": how long ago `at` was, in a sentence or a line.
+pub(crate) fn ago(
+    at: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    at.map(|at| crate::ago::text(crate::ago::since(at.timestamp(), now.timestamp())))
+        .unwrap_or_default()
 }

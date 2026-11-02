@@ -1,8 +1,12 @@
 //! The sessions this window can attach to: the named local sessions and, since
 //! a saved device's own sessions need a round trip to its host to list, the devices
-//! themselves. Only the sessions popup asks for either: probing is I/O, so it
+//! themselves. Only a device unfolded in the picker asks: probing is I/O, so it
 //! runs on a worker thread and an idle window never touches the disk or a host.
-use crate::Error;
+// i18n: migrated
+use crate::{
+    Error,
+    i18n::{Localize, fl},
+};
 use herdr_client::{ConnectTarget, LocalSession, RemoteHost, RemoteSession, list_local_sessions};
 use std::{
     collections::HashMap,
@@ -145,19 +149,30 @@ impl Devices {
     /// window may ask. Reports whether the popup should repaint. Opening the
     /// popup does not reset these ages: a host asked a moment ago is still
     /// inside its own interval.
+    /// Asks the `wanted` device for its sessions when its answer is stale:
+    /// only the device the picker has unfolded shows them. Every device in
+    /// `targets` keeps its cached answer.
     pub(super) fn poll(
         &mut self,
         targets: &[(String, RemoteHost)],
-        open: bool,
+        wanted: Option<&str>,
         now: Instant,
     ) -> bool {
-        self.poll_with(targets, open, now, RemoteHost::list_sessions)
+        self.poll_with(
+            targets,
+            wanted.is_some(),
+            wanted,
+            now,
+            RemoteHost::list_sessions,
+        )
     }
 
+    /// `only`, when given, narrows what an open popup asks to that device.
     fn poll_with(
         &mut self,
         targets: &[(String, RemoteHost)],
         open: bool,
+        only: Option<&str>,
         now: Instant,
         probe: impl Fn(&RemoteHost) -> Result<Vec<RemoteSession>, herdr_client::Error>
         + Send
@@ -189,27 +204,21 @@ impl Devices {
                 let discard = std::mem::take(&mut self.discard_pending);
                 for (id, host) in std::mem::take(&mut self.asking) {
                     if !discard && self.asked.get(&id).is_some_and(|(asked, _)| *asked == host) {
-                        self.answers.insert(
-                            id,
-                            DeviceScan::Failed("the device scan stopped unexpectedly".to_owned()),
-                        );
+                        self.answers
+                            .insert(id, DeviceScan::Failed(fl!("sessions-device-scan-stopped")));
                     }
                 }
                 changed = true;
             }
             Some(Err(mpsc::TryRecvError::Empty)) | None => {}
         }
-        if open
-            && self.pending.is_none()
-            && targets
-                .iter()
-                .any(|(id, host)| stale(&self.asked, id, host, now))
-        {
-            let stale: Vec<(String, RemoteHost)> = targets
-                .iter()
-                .filter(|(id, host)| stale(&self.asked, id, host, now))
-                .cloned()
-                .collect();
+        let wanted = |id: &str| only.is_none_or(|only| only == id);
+        let stale: Vec<(String, RemoteHost)> = targets
+            .iter()
+            .filter(|(id, host)| wanted(id) && stale(&self.asked, id, host, now))
+            .cloned()
+            .collect();
+        if open && self.pending.is_none() && !stale.is_empty() {
             self.start(stale, now, probe);
             changed = true;
         }
@@ -256,7 +265,7 @@ impl Devices {
                 // A worker that cannot start must not leave the devices
                 // checking: the popup says what went wrong on each of them.
                 self.asking.clear();
-                let message = Error::from(error).to_string();
+                let message = Error::from(error).localize();
                 for id in ids {
                     self.answers.insert(id, DeviceScan::Failed(message.clone()));
                 }
@@ -298,8 +307,8 @@ fn probe_all(
             // never sits on "Checking…" waiting for a thread that is already gone.
             let answer = match handle.join() {
                 Ok(Ok(sessions)) => DeviceScan::Sessions(sessions),
-                Ok(Err(error)) => DeviceScan::Failed(error.to_string()),
-                Err(_) => DeviceScan::Failed("the device probe stopped unexpectedly".to_owned()),
+                Ok(Err(error)) => DeviceScan::Failed(error.localize()),
+                Err(_) => DeviceScan::Failed(fl!("sessions-device-probe-stopped")),
             };
             answers.push((id.clone(), host.clone(), answer));
         }
@@ -339,8 +348,8 @@ impl Sessions {
                     // A failed scan keeps the last list: names that were right a
                     // moment ago beat an empty popup.
                     Err(error) => {
-                        crate::storage_warning::warn_storage_failure("Session scan", &error);
-                        self.error = Some(error.to_string());
+                        crate::storage_warning::warn_storage_failure("Session scan", &error); // i18n: data
+                        self.error = Some(error.localize());
                     }
                 }
                 changed = true;
@@ -355,7 +364,7 @@ impl Sessions {
                 } else {
                     Some(now + REFRESH)
                 };
-                self.error = Some("the session scan stopped unexpectedly".to_owned());
+                self.error = Some(fl!("sessions-scan-stopped"));
                 changed = true;
             }
             Some(Err(mpsc::TryRecvError::Empty)) | None => {}

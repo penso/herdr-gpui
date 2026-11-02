@@ -31,6 +31,10 @@ const BORDER: f32 = 1.;
 pub(super) struct Cards;
 
 impl TabLayout for Cards {
+    fn panes(&self) -> &'static dyn super::panes::PaneChrome {
+        &super::panes::Curved
+    }
+
     fn width(&self, title: f32, shape: TabShape, font: &FontConfig, indicators: Indicators) -> f32 {
         let status = status_width(shape.lead, font, indicators).map_or(0., |dot| dot + GAP);
         let zoom = shape.marks_width();

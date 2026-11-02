@@ -39,7 +39,7 @@ pub(super) fn render(worktree: bool, branch: &str, pr: &str) -> Option<Div> {
                         .flex_none()
                         .cursor_pointer()
                         .hover(|style| style.underline())
-                        .child(format!("PR #{pr}"))
+                        .child(crate::i18n::fl!("titlebar-pull-request", number = pr))
                         .on_click(move |_, _, cx| cx.open_url(&url)),
                 )
             })

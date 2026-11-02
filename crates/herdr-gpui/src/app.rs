@@ -1,7 +1,9 @@
 //! Process bootstrap and window opening. CLI parsing and the updater helper
 //! run before GPUI starts, so an invalid option or `--build-info` exits without
 //! ever creating a window.
+// i18n: migrated
 
+use crate::i18n::{Localize, fl};
 use crate::{
     APP_VERSION, HerdrWindow, Hide, HideOthers, Quit, ShowAll, ShowLogs, WINDOW_TITLE, app_icon,
     bind_keys, cli,
@@ -34,7 +36,7 @@ impl InitialAppearance {
                 error: None,
             },
             Err(error) => Self {
-                error: Some(format!("Load GUI config: {error}")),
+                error: Some(fl!("app-load-config-failed", error = error.localize())),
                 ..Self::default()
             },
         }
@@ -249,6 +251,7 @@ pub(crate) fn run() -> std::process::ExitCode {
         }
         Err(error) => {
             eprintln!(
+                // i18n: data
                 "{error}\nUsage: herdr-gpui [--socket CLIENT_SOCKET | --session NAME [--dev]]\n       herdr-gpui browser open URL [--workspace ID] [--no-focus]\n       herdr-gpui COMMAND ... (see herdr-gpui --help)"
             );
             return std::process::ExitCode::from(2);
@@ -294,24 +297,30 @@ pub(crate) fn run() -> std::process::ExitCode {
     }
     if mode == LaunchMode::Help {
         println!(
+            // i18n: data
             "herdr-gpui [--socket CLIENT_SOCKET | --session NAME [--dev]]\nConnects to Local and saved SSH hosts; never installs remote software.\nStarts the local Herdr daemon if needed; never stops it.\nExplicit --socket and --dev targets are attach-only; --socket isolates the GUI to one existing daemon."
         );
         println!(
+            // i18n: data
             "  --build-info        Print the executable's build identity without starting the GUI"
         );
         println!(
+            // i18n: data
             "  browser open URL    Show URL in a browser tab of the running app (see browser --help)"
         );
+        // i18n: data
         println!("\nCommands for the running app (each with --help):");
         for (name, summary) in cli::control::FAMILIES {
             println!("  {name:<18}{summary}");
         }
         #[cfg(feature = "integration-test")]
         println!(
+            // i18n: data
             "  --integration-test  Run native GUI checks (requires explicit --socket)\n  --sidebar-test      Run native sidebar fixtures without connecting to a daemon\n  --performance-test  Measure native dense-terminal hover/scroll without a daemon (macOS)"
         );
         #[cfg(feature = "mockup")]
         println!(
+            // i18n: data
             "  --mockup [--feedback PATH]\n                      Compare the UI variants built in from HERDR_MOCKUP_FILE; must come first"
         );
         return std::process::ExitCode::SUCCESS;
@@ -328,6 +337,7 @@ pub(crate) fn run() -> std::process::ExitCode {
     }
     let startup_failed = std::rc::Rc::new(std::cell::Cell::new(false));
     if let Err(error) = diagnostics::init(crate::log_targets::LOG_TARGETS) {
+        // i18n: data
         eprintln!("Unable to initialize diagnostics: {error}");
         return std::process::ExitCode::FAILURE;
     }
@@ -429,6 +439,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::dispatch::History::default()
     };
+    // Nor with where the user's new worktrees land.
+    let worktree_landing = if mode == LaunchMode::Normal {
+        crate::worktree_landing::Remembered::load()
+    } else {
+        crate::worktree_landing::Remembered::default()
+    };
     // Nor with the user's fan-outs, which they would restore or forget.
     let fan_out_journal = if mode == LaunchMode::Normal {
         crate::fan_out::Journal::load()
@@ -452,6 +468,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             notification_mutes.install(cx);
             palette_frecency.install(cx);
             dispatch_history.install(cx);
+            worktree_landing.install(cx);
             fan_out_journal.install(cx);
             agent_skill.install_global(cx);
             keychain_grants.install(cx);
@@ -476,6 +493,11 @@ pub(crate) fn run() -> std::process::ExitCode {
                 crate::cloud::install_idle_checks(cx);
             }
             cx.set_global(appearance.select(light_appearance(cx)));
+            // Only the user's own app follows their saved SSH host choices.
+            if mode == LaunchMode::Normal {
+                let ssh = cx.global::<InitialAppearance>().config.ssh.clone();
+                crate::config::ssh_hosts::install(&ssh, cx);
+            }
             let language = cx.global::<InitialAppearance>().config.language.clone();
             crate::i18n::install(&language, cx);
             app_icon::install();
@@ -550,6 +572,7 @@ pub(crate) fn run() -> std::process::ExitCode {
                 }
                 Err(error) => {
                     tracing::error!("Unable to open main window");
+                    // i18n: data
                     eprintln!("Unable to open Herdr window: {error}");
                     failed.set(true);
                     #[cfg(feature = "integration-test")]
@@ -593,176 +616,4 @@ fn focus_running(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{Config, InitialAppearance, StartupAppearance, Theme};
-    #[cfg(feature = "integration-test")]
-    use super::{ConnectTarget, HerdrWindow};
-    use crate::config::LayoutMode;
-    #[cfg(feature = "integration-test")]
-    use gpui::px;
-
-    #[test]
-    fn startup_appearance_loads_a_coherent_pair_and_reports_errors() {
-        let appearance = InitialAppearance::load(
-            || {
-                let mut config = Config {
-                    theme: "Nord".into(),
-                    ..Default::default()
-                };
-                config.layout.mode = LayoutMode::from(crate::config::Density::Compact);
-                Ok(config)
-            },
-            false,
-        );
-        assert_eq!(
-            appearance.config.layout.mode,
-            LayoutMode::from(crate::config::Density::Compact)
-        );
-        assert_eq!(Some(appearance.theme), Theme::builtin("Nord"));
-        assert!(appearance.error.is_none());
-        for appearance in [
-            InitialAppearance::load(|| Err(crate::Error::MissingHome), false),
-            InitialAppearance::load(
-                || {
-                    Ok(Config {
-                        theme: "../invalid".into(),
-                        ..Default::default()
-                    })
-                },
-                false,
-            ),
-        ] {
-            assert_eq!(
-                appearance.config.layout.mode,
-                LayoutMode::from(crate::config::Density::Normal)
-            );
-            assert_eq!(appearance.theme, Theme::default());
-            assert!(appearance.error.is_some());
-        }
-    }
-
-    #[test]
-    fn only_a_plain_launch_hands_off_to_the_running_app() {
-        use super::{ConnectTarget, focus_running};
-        use crate::cli::LaunchMode;
-        use std::process::ExitCode;
-        let focused = || Ok(String::from("Brought Herdr UI forward"));
-        let local = ConnectTarget::Local;
-        assert_eq!(
-            focus_running(&LaunchMode::Normal, &local, focused),
-            Some(ExitCode::SUCCESS)
-        );
-        // Another target, or another mode, is never handed off, nor asked.
-        let session = ConnectTarget::Session {
-            name: "work".into(),
-            development: false,
-        };
-        let unasked = || -> crate::Result<String> { panic!("asked the running app") };
-        assert_eq!(focus_running(&LaunchMode::Normal, &session, unasked), None);
-        assert_eq!(focus_running(&LaunchMode::Help, &local, unasked), None);
-        assert_eq!(focus_running(&LaunchMode::BuildInfo, &local, unasked), None);
-        // No app answers, or the one that does cannot come forward: start one.
-        let unavailable = || {
-            Err(crate::control::Error::Unavailable {
-                path: "pipe".into(),
-                source: std::io::ErrorKind::NotFound.into(),
-            }
-            .into())
-        };
-        assert_eq!(
-            focus_running(&LaunchMode::Normal, &local, unavailable),
-            None
-        );
-        let refused = || {
-            Err(crate::control::Error::Rejected {
-                code: crate::control::ErrorCode::NoWindow,
-                message: "Herdr UI has no window".into(),
-            }
-            .into())
-        };
-        assert_eq!(focus_running(&LaunchMode::Normal, &local, refused), None);
-        let silent = || Err(crate::control::Error::NoResponse.into());
-        assert_eq!(focus_running(&LaunchMode::Normal, &local, silent), None);
-    }
-
-    #[test]
-    fn startup_resolves_both_sides_so_the_first_frame_needs_no_disk_read() {
-        let load = || {
-            StartupAppearance::load(|| {
-                Ok(Config {
-                    theme: "light:Catppuccin Latte,dark:Nord".into(),
-                    ..Default::default()
-                })
-            })
-        };
-        assert_eq!(
-            Some(load().select(true).theme),
-            Theme::builtin("Catppuccin Latte")
-        );
-        assert_eq!(Some(load().select(false).theme), Theme::builtin("Nord"));
-        let single = StartupAppearance::load(|| {
-            Ok(Config {
-                theme: "Nord".into(),
-                ..Default::default()
-            })
-        });
-        assert!(single.light.is_none());
-        assert_eq!(Some(single.select(true).theme), Theme::builtin("Nord"));
-    }
-
-    #[cfg(feature = "integration-test")]
-    #[gpui::test]
-    fn first_window_frame_uses_startup_layout(cx: &mut gpui::TestAppContext) {
-        use crate::config::{Density, Style};
-        for mode in [Density::Compact, Density::Normal, Density::Comfortable]
-            .into_iter()
-            .flat_map(|density| {
-                [Style::Flat, Style::Rounded].map(|style| LayoutMode::new(density, style))
-            })
-        {
-            let (view, cx) = cx.add_window_view(|window, cx| {
-                let mut appearance = InitialAppearance::load(
-                    || {
-                        Ok(Config {
-                            theme: "Nord".into(),
-                            ..Default::default()
-                        })
-                    },
-                    false,
-                );
-                appearance.config.layout.mode = mode;
-                cx.set_global(appearance);
-                HerdrWindow::new(
-                    ConnectTarget::Socket("/unused-startup.sock".into()),
-                    window,
-                    cx,
-                    true,
-                )
-            });
-            // Draw immediately, without polling a background config completion.
-            cx.update(|window, cx| {
-                let state = view.read(cx);
-                assert_eq!(state.config.layout.mode, mode);
-                assert_eq!(Some(state.theme.clone()), Theme::builtin("Nord"));
-                assert!(state.config_load.is_none());
-                crate::sidebar::layout_tests::full_draw(window, cx).clear(cx);
-            });
-            let row = cx
-                .debug_bounds("row-herdr")
-                .unwrap_or_else(|| panic!("missing first-frame row"));
-            // Rounded rows add padding inside their highlight and spacing
-            // around it: a third of the density's gap, each, twice.
-            assert_eq!(
-                row.size.height,
-                px(match (mode.density(), mode.style()) {
-                    (Density::Compact, Style::Flat) => 16.,
-                    (Density::Normal, Style::Flat) => 32.,
-                    (Density::Comfortable, Style::Flat) => 40.,
-                    (Density::Compact, Style::Rounded) => 16. + 2. + 2.,
-                    (Density::Normal, Style::Rounded) => 32. + 4. + 4.,
-                    (Density::Comfortable, Style::Rounded) => 40. + 6. + 6.,
-                })
-            );
-        }
-    }
-}
+mod tests;

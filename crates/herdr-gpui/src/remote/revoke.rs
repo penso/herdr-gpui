@@ -6,7 +6,11 @@ use super::{
     dialog::{Tone, button},
     supervisor::Supervisor,
 };
-use crate::{HerdrWindow, menu::Page};
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+    menu::Page,
+};
 use gpui::{prelude::*, *};
 use herdr_remote_control::control::Device;
 
@@ -47,7 +51,11 @@ impl HerdrWindow {
                 return;
             };
             let _ = this.update(cx, |view, cx| {
-                view.local_error = Some(format!("Could not revoke {name}: {error}"));
+                view.local_error = Some(fl!(
+                    "remote-revoke-failed",
+                    device = name,
+                    error = error.localize()
+                ));
                 cx.notify();
             });
         });
@@ -59,6 +67,12 @@ impl HerdrWindow {
             return div();
         };
         let name = crate::notifications::safe_text(&device.name, 64);
+        let elsewhere = device.hosts.iter().any(|link| {
+            matches!(
+                link.state,
+                herdr_remote_control::control::hosts::HostState::Paired(_)
+            )
+        });
         div()
             .debug_selector(|| "remote-revoke".into())
             .flex()
@@ -68,30 +82,51 @@ impl HerdrWindow {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("Revoke {name}?")),
+                    .child(fl!("remote-revoke-title", device = name)),
             )
-            .child(div().text_color(rgb(theme.subtext())).child(
-                "It loses remote control of your chats at once: its sessions end and it gets no \
-                 more notifications. Pairing it again needs a new code.",
-            ))
+            .child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("remote-revoke-detail")),
+            )
+            .when(elsewhere, |body| {
+                body.child(
+                    div()
+                        .debug_selector(|| "remote-revoke-hosts".into())
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("remote-revoke-hosts")),
+                )
+            })
             .child(
                 div()
                     .flex()
                     .justify_end()
                     .gap(px(8.))
                     .child(
-                        button(theme, "remote-revoke-cancel", "Cancel", Tone::Plain, true)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.dismiss_menu(window, cx);
-                            })),
+                        button(
+                            theme,
+                            "remote-revoke-cancel",
+                            fl!("remote-revoke-cancel"),
+                            Tone::Plain,
+                            true,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.dismiss_menu(window, cx);
+                        })),
                     )
                     .child(
-                        button(theme, "remote-revoke-submit", "Revoke", Tone::Danger, true)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.confirm_revoke(window, cx);
-                            })),
+                        button(
+                            theme,
+                            "remote-revoke-submit",
+                            fl!("remote-revoke-submit"),
+                            Tone::Danger,
+                            true,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.confirm_revoke(window, cx);
+                        })),
                     ),
             )
     }

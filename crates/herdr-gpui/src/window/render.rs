@@ -188,17 +188,14 @@ impl Render for HerdrWindow {
         );
         // Like the highlight, the link underline paints with the frame that
         // owns its cells, and only while that frame shows the content the
-        // daemon resolved it from. Without one, the row-local reading under
-        // the pointer is underlined instead.
+        // daemon resolved it from. Without one, the local reading under the
+        // pointer is underlined instead, on every row it covers.
         let link_rows: Vec<_> = surface
             .as_deref()
             .zip(self.hovered_daemon_link())
             .filter(|(surface, link)| link.cell.current(surface))
             .map(|(_, link)| link.frame_rows().collect())
-            .or_else(|| {
-                let link = self.hovered_local_link()?;
-                Some(vec![(link.row, link.columns.clone())])
-            })
+            .or_else(|| Some(self.hovered_local_link()?.rows().collect()))
             .unwrap_or_default();
         // Search matches, mapped onto the frame on screen, tint below the
         // selection, which reads as chosen over them. A popup covers the
@@ -720,6 +717,14 @@ impl Render for HerdrWindow {
                 _ => None,
             };
             let body = match (&shown, tab) {
+                // No Herdr 1 is installed: herdr-core's shell stands in.
+                (Shown::Terminal, _)
+                    if terminal_slot == Some(slot) && self.core_fallback_view().is_some() =>
+                {
+                    self.core_fallback_view()
+                        .map(IntoElement::into_any_element)
+                        .unwrap_or_else(|| div().into_any_element())
+                }
                 (Shown::Terminal, _) if terminal_slot == Some(slot) => terminal
                     .take()
                     .map(IntoElement::into_any_element)
@@ -749,6 +754,9 @@ impl Render for HerdrWindow {
                         Some(crate::browser::Location::Devices) => {
                             self.render_devices_tab(slot, &tab, cx)
                         }
+                        Some(crate::browser::Location::CoreTerminal { .. }) => {
+                            self.render_core_terminal_tab(slot, &tab, cx)
+                        }
                         _ => self.render_review_tab(slot, &tab, cx),
                     }
                 }
@@ -769,8 +777,9 @@ impl Render for HerdrWindow {
             let reach = Reach::of(&pages, slot.index);
             groups.push(self.render_group(slot, body, ends, reach, window, cx));
         }
-        let content = self.render_groups(groups, cx);
-        let content = section.unwrap_or_else(|| self.zen_column(content));
+        let content = self.render_groups(groups, window, cx);
+        let content =
+            section.unwrap_or_else(|| self.with_mod_panel(self.zen_column(content), window, cx));
         // Not `||`: asking forgets group motion that has finished.
         if self.groups_moving()
             | self.tabs_growing()
@@ -862,7 +871,7 @@ impl Render for HerdrWindow {
                 |this, _: &crate::actions::ShowUpdateHomebrewPreview, window, cx| {
                     this.open_update_progress_preview(
                         crate::updater::State::Upgrading {
-                            detail: "Refreshing Homebrew metadata with brew update...".into(),
+                            detail: crate::updater::Progress::Refreshing,
                         },
                         window,
                         cx,

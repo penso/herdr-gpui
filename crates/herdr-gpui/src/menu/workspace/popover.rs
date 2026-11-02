@@ -3,29 +3,98 @@
 //! rows for the rarer actions, the destructive action set apart, and the pull
 //! request section below.
 
+// i18n: migrated
+use crate::i18n::fl;
 use crate::{
-    HerdrWindow,
+    HerdrWindow, i18n,
     menu::{WorkspaceAction, WorkspaceMenuAction, accent, danger},
 };
 use gpui::{prelude::*, *};
 
+/// An action's menu label: a message ID, shown in the current language. Its
+/// English names the action's elements, so tests find them in any language.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Label(&'static str);
+
+impl Label {
+    // keep-sorted start
+    pub(crate) const CHECKPOINTS: Self = Self::new("worktree-popover-checkpoints");
+    pub(crate) const CLEAR_TELEPORTED: Self = Self::new("worktree-popover-clear-teleported");
+    pub(crate) const CLOSE: Self = Self::new("worktree-popover-close");
+    pub(crate) const CLOSE_GROUP: Self = Self::new("worktree-popover-close-group");
+    pub(crate) const COLLAPSE_GROUP: Self = Self::new("worktree-popover-collapse-group");
+    pub(crate) const DELETE_WORKTREE: Self = Self::new("worktree-popover-delete-worktree");
+    pub(crate) const EXPAND_GROUP: Self = Self::new("worktree-popover-expand-group");
+    pub(crate) const FAN_OUT: Self = Self::new("worktree-popover-fan-out");
+    pub(crate) const FAN_OUT_COMPARISON: Self = Self::new("worktree-popover-fan-out-comparison");
+    pub(crate) const GO_TO_TELEPORTED: Self = Self::new("worktree-popover-go-to-teleported");
+    pub(crate) const MUTE: Self = Self::new("worktree-popover-mute");
+    pub(crate) const NEW_WORKTREE: Self = Self::new("worktree-popover-new-worktree");
+    pub(crate) const NOTE: Self = Self::new("worktree-popover-note");
+    pub(crate) const OPEN_WORKTREE: Self = Self::new("worktree-popover-open-worktree");
+    pub(crate) const ORCHESTRATOR: Self = Self::new("worktree-popover-orchestrator");
+    pub(crate) const RENAME: Self = Self::new("worktree-popover-rename");
+    pub(crate) const RUN_SCRIPT: Self = Self::new("worktree-popover-run-script");
+    pub(crate) const RUN_SETUP_SCRIPT: Self = Self::new("worktree-popover-run-setup-script");
+    pub(crate) const TELEPORT: Self = Self::new("worktree-popover-teleport");
+    pub(crate) const TELEPORT_BACK: Self = Self::new("worktree-popover-teleport-back");
+    pub(crate) const UNMUTE: Self = Self::new("worktree-popover-unmute");
+    // keep-sorted end
+    #[cfg(feature = "cloud")]
+    pub(crate) const SANDBOX_IMAGES: Self = Self::new("worktree-popover-sandbox-images");
+
+    /// Checked against the English files as it compiles, as `fl!` is.
+    const fn new(id: &'static str) -> Self {
+        i18n::check(id, &[]);
+        Self(id)
+    }
+
+    /// The label in the current language.
+    pub(crate) fn text(self) -> String {
+        i18n::message(self.0, &[])
+    }
+
+    /// What a screen reader says: the label without the "..." that marks a
+    /// row opening a dialog.
+    pub(crate) fn spoken(self) -> String {
+        let text = self.text();
+        text.trim_end_matches("...")
+            .trim_end_matches('\u{2026}')
+            .to_owned()
+    }
+
+    /// The English label, which names the action's elements in tests.
+    pub(crate) fn english(self) -> String {
+        i18n::english(self.0, &[])
+    }
+
+    /// The element ID: the message ID, the same in every language.
+    fn id(self) -> &'static str {
+        self.0
+    }
+}
+
 /// The grid's fixed slots, row by row: working on the checkout, then moving
 /// or leaving it. A slot lists the actions it can show, first available
 /// first, and the action it shows grayed when none is.
-const SLOTS: [(&[WorkspaceMenuAction], WorkspaceMenuAction, &str); 6] = {
+const SLOTS: [(&[WorkspaceMenuAction], WorkspaceMenuAction, Label); 6] = {
     use WorkspaceAction::*;
     use WorkspaceMenuAction::*;
     [
-        (&[Dialog(NewWorktree)], Dialog(NewWorktree), "New worktree"),
-        (&[FanOut], FanOut, "Fan out prompt..."),
-        (&[Dialog(Rename)], Dialog(Rename), "Rename"),
-        (&[GoToTeleported, Teleport], Teleport, "Teleport..."),
+        (
+            &[Dialog(NewWorktree)],
+            Dialog(NewWorktree),
+            Label::NEW_WORKTREE,
+        ),
+        (&[FanOut], FanOut, Label::FAN_OUT),
+        (&[Dialog(Rename)], Dialog(Rename), Label::RENAME),
+        (&[GoToTeleported, Teleport], Teleport, Label::TELEPORT),
         (
             &[ClearTeleported, TeleportBack],
             TeleportBack,
-            "Teleport back",
+            Label::TELEPORT_BACK,
         ),
-        (&[Dialog(Close)], Dialog(Close), "Close"),
+        (&[Dialog(Close)], Dialog(Close), Label::CLOSE),
     ]
 };
 
@@ -41,7 +110,7 @@ const ROW_GAP: f32 = 8.;
 
 /// A row's leading icon, centred in the shared slot. An action without an
 /// icon keeps the empty slot so its label still lines up.
-fn leading_icon(action: WorkspaceMenuAction, label: &'static str, color: Rgba) -> Div {
+fn leading_icon(action: WorkspaceMenuAction, label: Label, color: Rgba) -> Div {
     div()
         .size(px(ICON_SLOT))
         .flex_none()
@@ -55,7 +124,7 @@ fn leading_icon(action: WorkspaceMenuAction, label: &'static str, color: Rgba) -
                     .size(px(ICON_SIZE))
                     .flex_none()
                     .text_color(color)
-                    .debug_selector(move || format!("workspace-menu-icon-{label}")),
+                    .debug_selector(move || format!("workspace-menu-icon-{}", label.english())),
             )
         })
 }
@@ -65,20 +134,26 @@ fn leading_icon(action: WorkspaceMenuAction, label: &'static str, color: Rgba) -
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::menu) struct Tile {
     pub(in crate::menu) action: WorkspaceMenuAction,
-    pub(in crate::menu) label: &'static str,
+    pub(in crate::menu) label: Label,
     pub(in crate::menu) enabled: bool,
 }
 
 impl Tile {
     /// The tile's caption: the menu label, shortened where the tile's icon
     /// and position already say the rest.
-    fn caption(self) -> &'static str {
-        match self.action {
-            WorkspaceMenuAction::FanOut if self.label.starts_with("Fan-out") => "Comparison",
-            WorkspaceMenuAction::FanOut => "Fan out",
-            WorkspaceMenuAction::GoToTeleported => "Go to copy",
-            WorkspaceMenuAction::ClearTeleported => "Clear mark",
-            _ => self.label.trim_end_matches("..."),
+    pub(in crate::menu) fn caption(self) -> String {
+        match self.label {
+            Label::NEW_WORKTREE => fl!("worktree-popover-tile-new-worktree"),
+            Label::FAN_OUT => fl!("worktree-popover-tile-fan-out"),
+            Label::FAN_OUT_COMPARISON => fl!("worktree-popover-tile-comparison"),
+            Label::RENAME => fl!("worktree-popover-tile-rename"),
+            Label::GO_TO_TELEPORTED => fl!("worktree-popover-tile-go-to-teleported"),
+            Label::CLEAR_TELEPORTED => fl!("worktree-popover-tile-clear-teleported"),
+            Label::TELEPORT => fl!("worktree-popover-tile-teleport"),
+            Label::TELEPORT_BACK => fl!("worktree-popover-tile-teleport-back"),
+            Label::CLOSE => fl!("worktree-popover-tile-close"),
+            Label::CLOSE_GROUP => fl!("worktree-popover-tile-close-group"),
+            label => label.spoken(),
         }
     }
 }
@@ -86,8 +161,8 @@ impl Tile {
 /// Lays `items` into the grid. Items no slot takes are returned in order,
 /// for the rows beneath it, except what the header draws.
 pub(in crate::menu) fn layout(
-    items: &[(WorkspaceMenuAction, &'static str)],
-) -> ([Tile; 6], Vec<(WorkspaceMenuAction, &'static str)>) {
+    items: &[(WorkspaceMenuAction, Label)],
+) -> ([Tile; 6], Vec<(WorkspaceMenuAction, Label)>) {
     let tiles = SLOTS.map(|(choices, fallback, label)| {
         choices
             .iter()
@@ -118,7 +193,43 @@ pub(in crate::menu) fn layout(
     (tiles, rest)
 }
 
+/// The popover's width in English, where every caption fits its tile.
+const WIDTH: f32 = 340.;
+
+/// What the popover adds around its grid (inset, border, and the grid's own
+/// padding), and around each caption (the tile's padding).
+const PANEL_INSET: f32 = 28.;
+const TILE_INSET: f32 = 8.;
+const TILE_GAP: f32 = 6.;
+
 impl HerdrWindow {
+    /// The popover's width: 340, or as wide as three of the longest caption
+    /// need in a longer language, and never wider than `room`. Captions are
+    /// short and few, and GPUI caches each shaped line, so measuring them as
+    /// the popover draws costs no more than drawing them.
+    pub(in crate::menu) fn workspace_popover_width(&self, window: &Window, room: Pixels) -> Pixels {
+        let size = px((self.config.ui.size - 1.).max(8.));
+        let font = self.config.ui.font();
+        let (tiles, _) = layout(&self.workspace_items());
+        let widest = tiles
+            .iter()
+            .map(|tile| {
+                let caption = tile.caption();
+                let mut run = window.text_style().to_run(caption.len());
+                run.font = font.clone();
+                window
+                    .text_system()
+                    .shape_line(caption.into(), size, &[run], None)
+                    .width
+            })
+            .max()
+            .unwrap_or_default();
+        let columns = COLUMNS as f32;
+        let needed =
+            (widest + px(TILE_INSET)) * columns + px(TILE_GAP * (columns - 1.) + PANEL_INSET);
+        needed.max(px(WIDTH)).min(room)
+    }
+
     pub(in crate::menu) fn render_workspace_popover(
         &self,
         pr_width: Pixels,
@@ -219,7 +330,7 @@ impl HerdrWindow {
     pub(in crate::menu) fn render_workspace_mute(
         &self,
         action: WorkspaceMenuAction,
-        label: &'static str,
+        label: Label,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
@@ -233,10 +344,10 @@ impl HerdrWindow {
         // One line of the header tall, so it never makes the header taller.
         let line = self.config.ui.line_height();
         div()
-            .id(label)
-            .debug_selector(move || format!("workspace-menu-{label}"))
+            .id(label.id())
+            .debug_selector(move || format!("workspace-menu-{}", label.english()))
             .role(Role::Button)
-            .aria_label(label)
+            .aria_label(label.text())
             .when(selected, |toggle| toggle.aria_active_descendant())
             .flex_none()
             .h(px(line))
@@ -266,7 +377,11 @@ impl HerdrWindow {
                         .debug_selector(|| "workspace-menu-mute-icon".into()),
                 )
             })
-            .child(if muted { "Unmute" } else { "Mute" })
+            .child(if muted {
+                fl!("worktree-popover-unmute-button")
+            } else {
+                fl!("worktree-popover-mute-button")
+            })
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
                 this.activate_workspace_menu(action, window, cx);
@@ -305,13 +420,13 @@ impl HerdrWindow {
         };
         crate::accessibility::disabled(
             div()
-                .id(label)
+                .id(label.id())
                 .role(Role::MenuItem)
-                .aria_label(label.trim_end_matches("..."))
+                .aria_label(label.spoken())
                 .when(selected, |tile| tile.aria_active_descendant()),
             !tile.enabled,
         )
-        .debug_selector(move || format!("workspace-menu-{label}"))
+        .debug_selector(move || format!("workspace-menu-{}", label.english()))
         .flex_1()
         .min_w_0()
         .min_h(px(64.))
@@ -333,12 +448,12 @@ impl HerdrWindow {
                     .size(px(20.))
                     .flex_none()
                     .text_color(ink)
-                    .debug_selector(move || format!("workspace-menu-icon-{label}")),
+                    .debug_selector(move || format!("workspace-menu-icon-{}", label.english())),
             )
         })
         .child(
             div()
-                .debug_selector(move || format!("workspace-menu-label-{label}"))
+                .debug_selector(move || format!("workspace-menu-label-{}", label.english()))
                 .max_w_full()
                 .truncate()
                 .child(tile.caption()),
@@ -363,16 +478,16 @@ impl HerdrWindow {
     fn render_workspace_row(
         &self,
         action: WorkspaceMenuAction,
-        label: &'static str,
+        label: Label,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let selected = Some(action) == self.menu.workspace_selected;
         div()
-            .id(label)
-            .debug_selector(move || format!("workspace-menu-{label}"))
+            .id(label.id())
+            .debug_selector(move || format!("workspace-menu-{}", label.english()))
             .role(Role::MenuItem)
-            .aria_label(label.trim_end_matches("..."))
+            .aria_label(label.spoken())
             .when(selected, |row| row.aria_active_descendant())
             .mx(px(2.))
             .min_h(px(self.config.ui.line_height() + 12.))
@@ -398,8 +513,8 @@ impl HerdrWindow {
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .debug_selector(move || format!("workspace-menu-label-{label}"))
-                    .child(label),
+                    .debug_selector(move || format!("workspace-menu-label-{}", label.english()))
+                    .child(label.text()),
             )
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();
@@ -412,17 +527,17 @@ impl HerdrWindow {
     fn render_workspace_danger(
         &self,
         action: WorkspaceMenuAction,
-        label: &'static str,
+        label: Label,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let red = danger(theme);
         let selected = Some(action) == self.menu.workspace_selected;
         div()
-            .id(label)
-            .debug_selector(move || format!("workspace-menu-{label}"))
+            .id(label.id())
+            .debug_selector(move || format!("workspace-menu-{}", label.english()))
             .role(Role::MenuItem)
-            .aria_label(label.trim_end_matches("..."))
+            .aria_label(label.spoken())
             .when(selected, |row| row.aria_active_descendant())
             .mt(px(6.))
             .mx(px(2.))
@@ -445,8 +560,8 @@ impl HerdrWindow {
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .debug_selector(move || format!("workspace-menu-label-{label}"))
-                    .child(label),
+                    .debug_selector(move || format!("workspace-menu-label-{}", label.english()))
+                    .child(label.text()),
             )
             .on_click(cx.listener(move |this, _, window, cx| {
                 cx.stop_propagation();

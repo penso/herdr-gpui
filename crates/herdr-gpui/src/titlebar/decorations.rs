@@ -6,6 +6,7 @@
 //! draws.
 
 use crate::direction::Logical;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 
 /// The transparent band around a client-decorated window that holds its
@@ -181,7 +182,7 @@ fn render_controls(
 ) -> AnyElement {
     let (active, foreground) = (theme.active, theme.foreground);
     // `label` is what a screen reader calls the button.
-    let button = |id: &'static str, icon: &'static str, label: &'static str| {
+    let button = |id: &'static str, icon: &'static str, label: String| {
         div()
             .id(id)
             .debug_selector(move || id.into())
@@ -212,19 +213,22 @@ fn render_controls(
         .h_full()
         .when(buttons.minimize, |bar| {
             bar.child(
-                button("window-minimize", "icons/window-minimize.svg", "Minimize").on_click(
-                    |_, window, cx| {
-                        cx.stop_propagation();
-                        window.minimize_window();
-                    },
-                ),
+                button(
+                    "window-minimize",
+                    "icons/window-minimize.svg",
+                    fl!("titlebar-minimize"),
+                )
+                .on_click(|_, window, cx| {
+                    cx.stop_propagation();
+                    window.minimize_window();
+                }),
             )
         })
         .when(buttons.maximize, |bar| {
             let (icon, label) = if buttons.maximized {
-                ("icons/window-restore.svg", "Restore")
+                ("icons/window-restore.svg", fl!("titlebar-restore"))
             } else {
-                ("icons/window-maximize.svg", "Maximize")
+                ("icons/window-maximize.svg", fl!("titlebar-maximize"))
             };
             bar.child(
                 button("window-maximize", icon, label).on_click(|_, window, cx| {
@@ -234,10 +238,12 @@ fn render_controls(
             )
         })
         .child(
-            button("window-close", "icons/close.svg", "Close").on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                close(window, cx);
-            }),
+            button("window-close", "icons/close.svg", fl!("titlebar-close")).on_click(
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    close(window, cx);
+                },
+            ),
         )
         .into_any_element()
 }

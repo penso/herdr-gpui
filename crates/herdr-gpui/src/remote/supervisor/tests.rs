@@ -10,6 +10,7 @@ pub(super) fn status(connected: usize) -> Status {
         port: 7443,
         addresses: vec!["https://192.168.1.20:7443".into()],
         fingerprint: "5F:2A".into(),
+        computer: String::new(),
         herdr: true,
         chats: 1,
         devices: 2,
@@ -25,6 +26,8 @@ fn device(id: &str) -> Device {
         last_seen_ms: None,
         push: true,
         connected: false,
+        via: None,
+        hosts: Vec::new(),
     }
 }
 

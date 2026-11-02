@@ -17,6 +17,7 @@
 mod error;
 mod nvim;
 
+// i18n: migrated
 pub(crate) use error::Error;
 
 use crate::{HerdrWindow, NavigationTarget};
@@ -119,6 +120,7 @@ fn placed(command: &str) -> String {
 }
 
 /// The pane's own editor, which listens on `$2` when it is Neovim.
+// i18n: data
 const DEFAULT_SCRIPT: &str = r#"e=${VISUAL:-${EDITOR:-vi}}; case "${e##*/}" in nvim*) [ -n "$2" ] && exec $e --listen "$2" "+$1" "$0";; esac; exec $e "+$1" "$0""#;
 
 /// A file to open, at a line when one is known.
@@ -165,9 +167,10 @@ pub(crate) fn command_line(
         .and_then(Path::to_str)
         .filter(|socket| quotable(socket))
     else {
-        return Ok(format!(" exec sh -c '{script}' '{path}' {line}"));
+        return Ok(format!(" exec sh -c '{script}' '{path}' {line}")); // i18n: data
     };
     Ok(format!(
+        // i18n: data
         " exec sh -c 'mkdir -p -m 700 \"${{2%/*}}\" || set -- \"$1\" \"\"; {script}' '{path}' {line} '{socket}'"
     ))
 }
@@ -412,25 +415,9 @@ impl HerdrWindow {
             self.editor_open = None;
             return;
         }
-        let Some((id, Some(result))) = &self.live.editor_response else {
+        let Some(result) = self.take_answer(crate::state::Answer::Editor, &request) else {
             return;
         };
-        if *id != request {
-            return;
-        }
-        let result = result.clone();
-        self.live.editor_response = None;
-        if let Ok(mut inbox) = self.endpoints[self.selected_endpoint]
-            .connection
-            .inbox
-            .try_lock()
-            && inbox
-                .editor_response
-                .as_ref()
-                .is_some_and(|(id, _)| *id == request)
-        {
-            inbox.editor_response = None;
-        }
         let Some(job) = self.editor_open.take() else {
             return;
         };
@@ -472,7 +459,10 @@ impl HerdrWindow {
             }
             Err(error) => {
                 self.show_flash(
-                    crate::window::Flash::warning(format!("The editor did not open: {error}")),
+                    crate::window::Flash::warning(crate::i18n::fl!(
+                        "editor-not-opened",
+                        error = error.to_string()
+                    )),
                     cx,
                 );
             }

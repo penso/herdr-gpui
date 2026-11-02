@@ -2,6 +2,7 @@
 //! later request works with a known-good API root.
 
 use super::{Error, Result};
+use crate::cloud::Value;
 use crate::{config::SpritesConfig, credentials::Store};
 use std::ffi::OsString;
 use url::Url;
@@ -27,7 +28,7 @@ impl Settings {
             Some(value) => Some(
                 value
                     .into_string()
-                    .map_err(|_| Error::Encoding("HERDR_SPRITES_API_URL"))?,
+                    .map_err(|_| Error::Encoding(Value::Key("HERDR_SPRITES_API_URL")))?,
             ),
             None => config.api_url.clone(),
         };

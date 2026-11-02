@@ -1,0 +1,16 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-terminal"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+alacritty_terminal.workspace = true
+herdr-backend.workspace      = true
+herdr-protocol.workspace     = true
+thiserror.workspace          = true

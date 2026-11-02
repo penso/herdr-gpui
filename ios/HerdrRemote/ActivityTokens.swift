@@ -23,6 +23,8 @@ final class ActivityTokens {
     }
 
     private(set) var pushToStart: String?
+    /// The app's own APNs token, for sealed alerts.
+    private(set) var alert: String?
     private(set) var running: [String: Running] = [:]
     private(set) var lastError: String?
 
@@ -53,6 +55,14 @@ final class ActivityTokens {
         for activity in Activity<ChatActivityAttributes>.activities {
             watch(activity)
         }
+    }
+
+    /// A new APNs token from iOS: every computer gets it, with the key
+    /// alerts are sealed to.
+    func setAlert(_ token: String) {
+        guard token != alert else { return }
+        alert = token
+        Task { await sync() }
     }
 
     private func watch(_ activity: Activity<ChatActivityAttributes>) {
@@ -96,7 +106,16 @@ final class ActivityTokens {
                 .compactMap { running in
                     running.token.map { API.APNsRegistration.Activity(pane: running.attributes.pane, token: $0) }
                 }
-            let registration = API.APNsRegistration(pushToStart: pushToStart, activities: activities)
+            // Each computer seals to its own key. Without one, alerts would
+            // arrive sealed to nobody: send neither, and the computer keeps
+            // using Web Push or nothing.
+            let notifyKey = alert == nil ? nil : try? NotifyKey.loadOrCreate(for: computer.fingerprint).registered
+            let registration = API.APNsRegistration(
+                pushToStart: pushToStart,
+                activities: activities,
+                alert: notifyKey == nil ? nil : alert,
+                notifyKey: notifyKey
+            )
             do {
                 let session = try await sessions.session(for: computer)
                 try await session.client.registerAPNs(registration, bearer: session.token)

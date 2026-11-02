@@ -5,7 +5,7 @@ use super::{Section, SettingsWindow, layouts, themes};
 use crate::{
     config::{Config, FontFace, Theme},
     herdr_settings::{self, Edit},
-    i18n::fl,
+    i18n::{Localize, fl},
 };
 use gpui::*;
 
@@ -228,7 +228,7 @@ impl SettingsWindow {
                 Err(error) if config.theme == "Follow Herdr" => return Err(error),
                 Err(error) => (
                     None,
-                    Some(fl!("settings-error-load-herdr", error = error.to_string())),
+                    Some(fl!("settings-error-load-herdr", error = error.localize())),
                     config.theme(light)?,
                 ),
             };
@@ -290,9 +290,7 @@ impl SettingsWindow {
                     source.read(cx).sound.set_volume(self.config.sound.volume);
                 }
             }
-            Err(error) => {
-                self.error = Some(fl!("settings-error-reload", error = error.to_string()))
-            }
+            Err(error) => self.error = Some(fl!("settings-error-reload", error = error.localize())),
         }
         // Appearance may have changed while the loader was running. Resolve
         // Follow Herdr from the prepared snapshot against the current OS mode.
@@ -482,7 +480,7 @@ impl SettingsWindow {
                     };
                 }
                 if let Err(error) = &saved {
-                    this.error = Some(fl!("settings-error-save", error = error.to_string()));
+                    this.error = Some(fl!("settings-error-save", error = error.localize()));
                 }
                 let _ = this.source.update(cx, |source, _| {
                     // The source's guarded file watcher owns applying changes.
@@ -500,7 +498,7 @@ impl SettingsWindow {
                         {
                             this.status = Some(fl!(
                                 "settings-saved-daemon-unqueued",
-                                error = error.to_string()
+                                error = error.localize()
                             ));
                         }
                     }

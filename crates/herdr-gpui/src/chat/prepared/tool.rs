@@ -36,7 +36,7 @@ impl Preview {
 
 pub(crate) fn label(title: &str, summary: Option<&ToolSummary>) -> String {
     let title = tool_label(title);
-    let title = match title {
+    let title = match title.as_ref() {
         "exec" | "Tool exec" | "exec_command" | "functions.exec" | "Bash" | "bash" => summary
             .and_then(|summary| summary.previews.first())
             .filter(|preview| preview.code.language == "bash")
@@ -47,8 +47,8 @@ pub(crate) fn label(title: &str, summary: Option<&ToolSummary>) -> String {
                     .lines()
                     .find(|line| !line.trim().is_empty())
             })
-            .unwrap_or(title),
-        _ => title,
+            .unwrap_or(title.as_ref()),
+        _ => title.as_ref(),
     };
     crate::notifications::safe_text(title, 300)
 }
@@ -57,12 +57,14 @@ pub(crate) fn original(item: &ToolContent) -> Option<String> {
     match item {
         ToolContent::Text { text } => Some(text.clone()),
         ToolContent::Diff { old, new, path } => Some(match old {
-            Some(old) => format!("{path}\nBefore:\n{old}\nAfter:\n{new}"),
-            None => format!("{path}\nWritten content (previous content unavailable):\n{new}"),
+            Some(old) => format!(
+                "{path}\n{}\n{old}\n{}\n{new}",
+                fl!("chat-diff-before"),
+                fl!("chat-diff-after")
+            ),
+            None => format!("{path}\n{}\n{new}", fl!("chat-diff-written-content")),
         }),
-        ToolContent::Terminal { id } => Some(format!(
-            "Terminal {id}: output is available in the program's terminal view."
-        )),
+        ToolContent::Terminal { id } => Some(fl!("chat-tool-terminal", id = id.to_string())),
         ToolContent::Image { .. } => None,
     }
 }
@@ -149,10 +151,7 @@ pub(crate) fn previews(
                     }
                 }
                 ToolContent::Terminal { id } => {
-                    let source: Arc<str> = format!(
-                        "Terminal {id}: output is available in the program's terminal view."
-                    )
-                    .into();
+                    let source: Arc<str> = fl!("chat-tool-terminal", id = id.to_string()).into();
                     Preview {
                         label: "Terminal".into(),
                         code: code("", source.clone(), visuals),

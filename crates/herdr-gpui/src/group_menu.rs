@@ -5,7 +5,9 @@
 //! and splitting it. A terminal tab comes from the group's "+". Closing a
 //! tab here is the tab's own close; closing the group closes no tab: its
 //! tabs go to the group that takes its room.
+// i18n: migrated
 use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::{GroupId, Pick},
@@ -56,17 +58,18 @@ impl Action {
     /// The row's text, which for a port is where its page opens.
     fn label(&self) -> SharedString {
         match self {
-            Self::NewBrowserTab => "New Browser Tab".into(),
-            Self::Review => "Review Changes".into(),
-            Self::Orchestrator => "Issues and pull requests".into(),
-            Self::VsCode => "VS Code".into(),
+            Self::NewBrowserTab => fl!("group-menu-new-browser-tab").into(),
+            Self::Review => fl!("group-menu-review").into(),
+            Self::Orchestrator => fl!("group-menu-orchestrator").into(),
+            // A product's name.
+            Self::VsCode => "VS Code".into(), // i18n: data
             Self::Chat(agent) => agent.display_name().into(),
             Self::Px0 => "px0".into(),
             Self::Port { link, .. } => link.label().into(),
-            Self::Close => "Close Tab".into(),
-            Self::CloseOthers => "Close Others".into(),
-            Self::CloseGroup => "Close Group".into(),
-            Self::Split => "Split Right".into(),
+            Self::Close => fl!("group-menu-close-tab").into(),
+            Self::CloseOthers => fl!("group-menu-close-others").into(),
+            Self::CloseGroup => fl!("group-menu-close-group").into(),
+            Self::Split => fl!("group-menu-split-right").into(),
         }
     }
 
@@ -89,8 +92,8 @@ impl Action {
     /// Stable for tests: `Port5173` rather than the port's whole value.
     fn selector(&self) -> String {
         match self {
-            Self::Port { number, .. } => format!("group-menu-Port{number}"),
-            Self::Chat(agent) => format!("group-menu-Chat-{agent}"),
+            Self::Port { number, .. } => format!("group-menu-Port{number}"), // i18n: data
+            Self::Chat(agent) => format!("group-menu-Chat-{agent}"),         // i18n: data
             action => format!("group-menu-{action:?}"),
         }
     }
@@ -107,10 +110,10 @@ impl Action {
     }
 
     /// The heading over the rows of this one's section, if it has one.
-    fn heading(&self) -> Option<&'static str> {
+    fn heading(&self) -> Option<String> {
         match self {
-            Self::Chat(_) => Some("New Chat"),
-            Self::Port { .. } => Some("Listening"),
+            Self::Chat(_) => Some(fl!("group-menu-new-chat")),
+            Self::Port { .. } => Some(fl!("group-menu-listening")),
             _ => None,
         }
     }
@@ -316,6 +319,7 @@ impl HerdrWindow {
                 .heading()
                 .filter(|_| section != Some(action.section()));
             section = Some(action.section());
+            let headed = heading.is_some();
             if let Some(heading) = heading {
                 panel = panel.child(
                     div()
@@ -356,7 +360,7 @@ impl HerdrWindow {
                     link: Link::Tunnel(key),
                     ..
                 } if self.tunnels.is_open(key) => Some(crate::listening_ports::close_button(
-                    format!("group-menu-close-Port{number}").into(),
+                    format!("group-menu-close-Port{number}").into(), // i18n: data
                     key,
                     ICON_SIZE,
                     theme,
@@ -369,7 +373,7 @@ impl HerdrWindow {
                     .id(("group-menu-action", index))
                     .flex_none()
                     .debug_selector(move || selector.clone())
-                    .when(starts_section && heading.is_none(), |row| {
+                    .when(starts_section && !headed, |row| {
                         row.mt(px(4.)).border_t_1().border_color(rgb(theme.active))
                     })
                     .min_h(px(self.config.ui.line_height() + 12.))
@@ -394,7 +398,9 @@ impl HerdrWindow {
                     .child(
                         div()
                             .debug_selector(move || label.clone())
-                            .flex_1()
+                            // Its own width counts, so the panel widens to
+                            // fit the longest label.
+                            .flex_grow(1.)
                             .min_w_0()
                             .truncate()
                             .child(action.label()),

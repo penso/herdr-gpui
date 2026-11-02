@@ -35,7 +35,8 @@ fn remote_control_reads_every_key() -> anyhow::Result<()> {
     let config = Config::parse(&format!(
         "[remote]\nenabled = true\nport = 8443\nbind = '192.168.1.20'\n\
          certificate = {{ cert = '{}', key = '{}' }}\n\
-         keep_running = false\nnotifications = 'excerpt'\ndevice_idle_days = 7\n",
+         keep_running = false\nnotifications = 'excerpt'\ndevice_idle_days = 7\n\
+         presence = true\n",
         cert.display(),
         key.display(),
     ))?;
@@ -43,6 +44,7 @@ fn remote_control_reads_every_key() -> anyhow::Result<()> {
     let remote = config.remote;
     assert!(remote.enabled);
     assert!(!remote.keep_running);
+    assert!(remote.presence);
     assert_eq!(remote.port, 8443);
     assert_eq!(remote.bind, Bind::Address("192.168.1.20".parse()?));
     assert_eq!(remote.bind.to_string(), "192.168.1.20");
@@ -133,6 +135,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
         Edit::KeepRunning(false),
         Edit::Notifications(Privacy::Excerpt),
         Edit::DeviceIdleDays(90),
+        Edit::Presence(true),
     ] {
         Config::save_preference_path(Preference::Remote(edit), &path)?;
     }
@@ -147,6 +150,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
             keep_running: false,
             notifications: Privacy::Excerpt,
             port: 9443,
+            presence: true,
         }
     );
     Config::save_preference_path(

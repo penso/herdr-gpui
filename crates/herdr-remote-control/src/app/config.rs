@@ -10,6 +10,7 @@
 //! keep_running = true          # the daemon outlives Herdr UI
 //! notifications = "generic"    # or "excerpt": a short excerpt in each push
 //! device_idle_days = 30         # 0 never forgets a device
+//! presence = false             # hold phone alerts while its owner is at this Mac
 //! ```
 //!
 //! Secrets and device keys never go here: the daemon keeps them in its own
@@ -39,6 +40,9 @@ pub struct RemoteConfig {
     pub keep_running: bool,
     pub notifications: Privacy,
     pub port: u16,
+    /// Whether paired iPhones near this Mac over Bluetooth hold their
+    /// alerts while the desktop is in use (`herdr-nearby`, macOS only).
+    pub presence: bool,
     // keep-sorted end
 }
 
@@ -53,6 +57,7 @@ impl Default for RemoteConfig {
             keep_running: true,
             notifications: Privacy::default(),
             port: DEFAULT_PORT,
+            presence: false,
             // keep-sorted end
         }
     }
@@ -179,6 +184,7 @@ pub enum Edit {
     KeepRunning(bool),
     Notifications(Privacy),
     Port(u16),
+    Presence(bool),
 }
 
 impl Edit {
@@ -210,6 +216,7 @@ impl Edit {
             Self::Notifications(privacy) => ("notifications", privacy.name().into()),
             Self::Port(0) => return Err(Error::Port),
             Self::Port(port) => ("port", i64::from(port).into()),
+            Self::Presence(on) => ("presence", on.into()),
         })
     }
 }

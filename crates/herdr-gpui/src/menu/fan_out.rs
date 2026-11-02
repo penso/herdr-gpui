@@ -2,7 +2,11 @@
 //! creates every lane's worktree, branched from the row's own branch when the
 //! row is a linked checkout.
 
-use super::{Page, WorkspaceTarget, workspace::Source as Addressed};
+// i18n: migrated
+use super::{
+    Page, WorkspaceTarget,
+    workspace::{Source as Addressed, popover::Label},
+};
 use crate::{
     HerdrWindow,
     dialog_input::DialogInput,
@@ -78,18 +82,18 @@ impl HerdrWindow {
     /// The workspace menu's fan-out row: the comparison of a launched fan-out
     /// while there is one, otherwise a new fan-out from a Git workspace on a
     /// host that can be scripted.
-    pub(crate) fn fan_out_item(&self) -> Option<&'static str> {
+    pub(crate) fn fan_out_item(&self) -> Option<Label> {
         if self
             .fan_out
             .as_ref()
             .is_some_and(|fan_out| !fan_out.composing())
         {
-            return Some("Fan-out comparison...");
+            return Some(Label::FAN_OUT_COMPARISON);
         }
         // Host scripts need a POSIX client; see `herdr_client::run_script`.
         let scriptable = cfg!(any(target_os = "linux", target_os = "macos"))
             && host_for(&self.endpoints[self.selected_endpoint].connection.target).is_ok();
-        (scriptable && self.fan_out_source().is_some()).then_some("Fan out prompt...")
+        (scriptable && self.fan_out_source().is_some()).then_some(Label::FAN_OUT)
     }
 
     pub(crate) fn open_fan_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {

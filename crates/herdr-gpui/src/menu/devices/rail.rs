@@ -5,6 +5,7 @@
 
 use super::super::Page;
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 
 /// Below this panel width the rail shows only icons.
@@ -46,14 +47,15 @@ impl Source {
         }
     }
 
-    fn name(self) -> &'static str {
+    fn name(self) -> String {
         match self {
-            Self::Host => "SSH host",
-            Self::Wsl => "WSL",
+            Self::Host => fl!("add-device-source-host"),
+            // A product's name.
+            Self::Wsl => "WSL".to_owned(), // i18n: data
             #[cfg(feature = "cloud")]
-            Self::Cloud(provider) => crate::cloud::name(provider),
+            Self::Cloud(provider) => crate::cloud::name(provider).to_owned(),
             #[cfg(feature = "cloud")]
-            Self::Catalog => "Add provider",
+            Self::Catalog => fl!("add-device-source-catalog"),
         }
     }
 
@@ -115,12 +117,12 @@ enum State {
 }
 
 /// The Devices picker's line under "Add Device…".
-pub(super) fn add_device_offer(cloud: bool) -> &'static str {
+pub(super) fn add_device_offer(cloud: bool) -> String {
     match (cfg!(windows), cloud) {
-        (true, true) => "An SSH host, a WSL distribution, or a cloud machine",
-        (true, false) => "An SSH host or a WSL distribution",
-        (false, true) => "An SSH host or a cloud machine",
-        (false, false) => "Set up a remote host over SSH",
+        (true, true) => fl!("add-device-offer-ssh-wsl-cloud"),
+        (true, false) => fl!("add-device-offer-ssh-wsl"),
+        (false, true) => fl!("add-device-offer-ssh-cloud"),
+        (false, false) => fl!("add-device-offer-ssh"),
     }
 }
 
@@ -295,7 +297,7 @@ impl HerdrWindow {
                     .flex_1()
                     .text_size(px(self.config.ui.size * 1.35))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Add Device"),
+                    .child(fl!("add-device-title")),
             )
             .child(
                 div()
@@ -306,7 +308,7 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .rounded(px(crate::config::corners::CONTROL))
                     .hover(|s| s.bg(rgb(theme.active)))
-                    .child("Close")
+                    .child(fl!("add-device-close"))
                     .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))),
             );
         let sources = self.rail_sources();
@@ -358,7 +360,9 @@ impl HerdrWindow {
         let mut rail = div()
             .debug_selector(|| "add-device-rail".into())
             .flex_none()
-            .w(px(if compact { 52. } else { 172. }))
+            // Wide enough for its names in any language, up to a limit.
+            .when(compact, |rail| rail.w(px(52.)))
+            .when(!compact, |rail| rail.min_w(px(172.)).max_w(px(240.)))
             .p(px(8.))
             .flex()
             .flex_col()
@@ -376,7 +380,7 @@ impl HerdrWindow {
                             .pt(px(10.))
                             .pb(px(4.))
                             .text_color(rgb(theme.muted))
-                            .child("CLOUD"),
+                            .child(fl!("add-device-cloud-heading")),
                     )
                 };
             }
@@ -430,8 +434,15 @@ impl HerdrWindow {
                     .when(!on, |row| row.hover(|s| s.bg(rgb(theme.active))))
                     .child(icon)
                     .when(!compact, |row| {
-                        row.child(div().flex_1().min_w_0().truncate().child(source.name()))
-                            .children(trailing.map(|trailing| div().flex_none().child(trailing)))
+                        // Its own width counts, so the rail widens to fit it.
+                        row.child(
+                            div()
+                                .flex_grow(1.)
+                                .min_w_0()
+                                .truncate()
+                                .child(source.name()),
+                        )
+                        .children(trailing.map(|trailing| div().flex_none().child(trailing)))
                     })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.open_source(source, window, cx);
@@ -455,10 +466,10 @@ impl HerdrWindow {
         let text = match provider {
             #[cfg(feature = "coder")]
             crate::cloud::CloudProvider::Coder if !self.cloud_providers().contains(&provider) => {
-                "Connect a Coder deployment in Settings, then create or attach workspaces here."
-                    .to_owned()
+                fl!("add-device-coder-connect")
             }
-            _ => format!("{}.", crate::cloud::offer(provider)),
+            // The provider's own offer, as herdr-remote words it.
+            _ => format!("{}.", crate::cloud::offer(provider)), // i18n: data
         };
         let pane = div()
             .flex_1()
@@ -525,7 +536,7 @@ impl HerdrWindow {
             .bg(rgb(theme.active))
             .cursor_pointer()
             .hover(|s| s.bg(rgb(theme.active).blend(rgba((theme.foreground << 8) | 0x20))))
-            .child("Open Settings…")
+            .child(fl!("add-device-open-settings"))
     }
 
     /// Enter opens the provider's Settings; Escape closes the dialog.

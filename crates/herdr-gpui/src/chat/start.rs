@@ -10,7 +10,12 @@
 //! so nothing typed depends on where the app is installed, and the agent's
 //! name comes from the shared table, never from daemon text.
 
-use crate::{HerdrWindow, NavigationTarget, browser::GroupId, window::Flash};
+use crate::{
+    HerdrWindow, NavigationTarget,
+    browser::GroupId,
+    i18n::{Localize, fl},
+    window::Flash,
+};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::Agent;
 use herdr_client::Method;
@@ -264,8 +269,13 @@ impl HerdrWindow {
     }
 
     /// [`Self::start_chat`], reporting a failure as a flash.
+    /// A herdr-core tab in the active group splits with the chat instead.
     pub(crate) fn start_chat_or_flash(&mut self, agent: Agent, cx: &mut Context<Self>) {
-        if let Err(error) = self.start_chat(agent, None) {
+        let started = match self.core_chat_group_tab(None, cx) {
+            Some(tab) => self.start_core_chat(agent, tab),
+            None => self.start_chat(agent, None),
+        };
+        if let Err(error) = started {
             self.flash_chat_error(&error, cx);
         }
         cx.notify();
@@ -273,7 +283,15 @@ impl HerdrWindow {
 
     /// Starts a chat from a tab strip's launcher, so its tab opens in that
     /// strip's group as one from the strip's "+" does.
+    /// A herdr-core tab the strip shows splits with the chat instead.
     pub(crate) fn start_chat_in(&mut self, agent: Agent, group: GroupId, cx: &mut Context<Self>) {
+        if let Some(tab) = self.core_chat_group_tab(Some(group), cx) {
+            if let Err(error) = self.start_core_chat(agent, tab) {
+                self.flash_chat_error(&error, cx);
+            }
+            cx.notify();
+            return;
+        }
         match self.start_chat(agent, None) {
             Ok(()) => self.expect_new_tab_in(group),
             Err(error) => self.flash_chat_error(&error, cx),
@@ -283,7 +301,7 @@ impl HerdrWindow {
 
     fn flash_chat_error(&mut self, error: &Error, cx: &mut Context<Self>) {
         self.show_flash(
-            Flash::warning(format!("The chat did not start: {error}")),
+            Flash::warning(fl!("chat-start-failed", error = error.localize())),
             cx,
         );
     }
@@ -308,9 +326,9 @@ impl HerdrWindow {
         if !current {
             self.chats.starting = None;
             return self.show_flash(
-                Flash::warning(format!(
-                    "The chat did not start: {}",
-                    crate::Error::StaleConnection
+                Flash::warning(fl!(
+                    "chat-start-failed",
+                    error = crate::Error::StaleConnection.localize()
                 )),
                 cx,
             );
@@ -318,12 +336,12 @@ impl HerdrWindow {
         if Instant::now() >= starting.deadline {
             self.chats.starting = None;
             return self.show_flash(
-                Flash::warning(format!("The chat did not start: {}", Error::Timeout)),
+                Flash::warning(fl!("chat-start-failed", error = Error::Timeout.localize())),
                 cx,
             );
         }
         let request = starting.request.clone();
-        let Some(result) = self.take_script_response(&request) else {
+        let Some(result) = self.take_answer(crate::state::Answer::Script, &request) else {
             return;
         };
         let Some(starting) = self.chats.starting.take() else {
@@ -354,7 +372,7 @@ impl HerdrWindow {
                 cx.notify();
             }
             Err(error) => self.show_flash(
-                Flash::warning(format!("The chat did not start: {error}")),
+                Flash::warning(fl!("chat-start-failed", error = error.localize())),
                 cx,
             ),
         }

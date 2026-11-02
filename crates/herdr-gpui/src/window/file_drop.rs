@@ -1,6 +1,7 @@
 //! External paths paste locally; one supported image on SSH uses the daemon's
 //! image bridge, and a WSL distribution is given its own paths for them. A
 //! drop never submits the terminal command.
+// i18n: migrated
 
 mod error;
 
@@ -10,6 +11,7 @@ use super::{
     HerdrWindow,
     pending_input::{Delivery, DropAt},
 };
+use crate::i18n::{Localize, fl};
 use crate::{
     Result,
     connection::ConnectionBridge,
@@ -131,7 +133,7 @@ impl HerdrWindow {
     ) -> Delivery {
         // A menu opened during the gap owns input, as it does for a paste.
         if self.menu.page.is_some() {
-            self.local_error = Some("Files not pasted: a menu is open".into());
+            self.local_error = Some(fl!("window-input-files-menu"));
             cx.notify();
             return Delivery::Refused;
         }
@@ -142,7 +144,7 @@ impl HerdrWindow {
         if let Some(target) = target {
             self.paste_files(target, paths, cx)
         } else {
-            self.local_error = Some("Files not pasted: nothing under the drop point".into());
+            self.local_error = Some(fl!("window-input-files-nowhere"));
             cx.notify();
             Delivery::Refused
         }
@@ -182,8 +184,7 @@ impl HerdrWindow {
             self.endpoints[self.selected_endpoint].connection.target,
             herdr_client::ConnectTarget::Cloud { .. }
         ) {
-            self.local_error =
-                Some("Files not pasted: file drops are not supported on cloud devices yet.".into());
+            self.local_error = Some(fl!("window-input-files-cloud"));
             cx.notify();
             return None;
         }
@@ -247,7 +248,7 @@ impl HerdrWindow {
                 Some(delivery)
             }
             Err(error) => {
-                self.local_error = Some(format!("Files not pasted: {error}"));
+                self.local_error = Some(fl!("window-input-files-failed", error = error.localize()));
                 cx.notify();
                 None
             }

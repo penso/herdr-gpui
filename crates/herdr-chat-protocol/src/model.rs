@@ -506,6 +506,9 @@ pub struct Turn {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TurnSummary {
     pub duration_ms: u64,
+    /// When the turn ended (Unix time); absent from older programs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_ms: Option<u64>,
     pub end: TurnEnd,
     /// Tokens the turn used, when the agent reports them.
     #[serde(default)]

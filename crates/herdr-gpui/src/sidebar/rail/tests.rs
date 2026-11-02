@@ -839,12 +839,17 @@ fn tooltips_name_host_place_and_status() {
             Some("build"),
             "review",
             Some("herdr / tab 2"),
-            status_word(AgentStatus::Blocked)
+            status_word(AgentStatus::Blocked).as_deref()
         ),
-        "build: review in herdr / tab 2 (blocked)"
+        "\u{2068}build\u{2069}: \u{2068}\u{2068}\u{2068}review\u{2069} in \u{2068}herdr / tab 2\u{2069}\u{2069} (\u{2068}blocked\u{2069})\u{2069}"
     );
     assert_eq!(
-        describe(None, "herdr", None, status_word(AgentStatus::Unknown)),
+        describe(
+            None,
+            "herdr",
+            None,
+            status_word(AgentStatus::Unknown).as_deref()
+        ),
         "herdr"
     );
     let mut snapshot = snapshot(1);

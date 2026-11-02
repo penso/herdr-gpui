@@ -2,6 +2,7 @@
 //! and the GitLab page itself.
 
 use super::{HostStatus, Token, connect::Connecting, keys::Action, status_line};
+use crate::i18n::fl;
 use crate::{HerdrWindow, fonts::StyledFont, menu::Page, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use herdr_orchestrator::gitlab::account::Source;
@@ -70,7 +71,7 @@ impl HerdrWindow {
             .child(
                 tab(
                     "accounts-tab-github",
-                    "GitHub",
+                    "GitHub", // i18n: data
                     crate::sidebar::github_mark(github_color)
                         .debug_selector(|| "github-mark".into()),
                     page == Page::GitHub,
@@ -88,7 +89,7 @@ impl HerdrWindow {
             .child(
                 tab(
                     "accounts-tab-gitlab",
-                    "GitLab",
+                    "GitLab", // i18n: data
                     gitlab_mark(gitlab_color),
                     page == Page::GitLab,
                 )
@@ -105,7 +106,7 @@ impl HerdrWindow {
                     .id("github-header-close")
                     .debug_selector(|| "github-header-close".into())
                     .role(Role::Button)
-                    .aria_label("Close")
+                    .aria_label(fl!("gitlab-menu-close"))
                     .cursor_pointer()
                     .px(px(8.))
                     .py(px(4.))
@@ -119,7 +120,7 @@ impl HerdrWindow {
                         |style| style.bg(rgb(theme.active)),
                     )
                     .hover(|style| style.bg(rgb(theme.active)))
-                    .child(crate::sidebar::label_text("Close"))
+                    .child(crate::sidebar::label_text(&fl!("gitlab-menu-close")))
                     .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))),
             )
     }
@@ -183,12 +184,12 @@ impl HerdrWindow {
             .and_then(|url| gitlab.avatars.get(url));
         let source = match &status.token {
             Token::Found { source, .. } => Some(source_chip(*source, status)),
-            Token::None if !status.plain => Some("no token"),
+            Token::None if !status.plain => Some(fl!("gitlab-menu-chip-none")),
             _ => None,
         };
         let (title, detail) = match (user, &status.token) {
             (Some(user), _) => (format!("@{}", user.username), None),
-            (None, Token::None) if !status.plain => ("Not connected".to_owned(), None),
+            (None, Token::None) if !status.plain => (fl!("gitlab-menu-not-connected"), None),
             _ => (status.host.clone(), Some(status_line(status))),
         };
         let mut chip = source.map(|label| {
@@ -332,7 +333,7 @@ impl HerdrWindow {
                         ..
                     },
                     Some(checkout),
-                ) => Some(format!("from {checkout}/")),
+                ) => Some(fl!("gitlab-menu-from-folder", checkout = checkout.as_str())),
                 _ => None,
             })
             .flatten();
@@ -383,10 +384,7 @@ impl HerdrWindow {
         let lead = gitlab.welcome_lead();
         let status = gitlab.hosts.get(lead);
         let host = status.map_or("gitlab.com", |status| status.host.as_str());
-        let read_by = status
-            .and_then(|status| status.checkout.as_deref())
-            .map(|checkout| format!(" for {checkout}"))
-            .unwrap_or_default();
+        let checkout = status.and_then(|status| status.checkout.as_deref());
         let others: Vec<&str> = gitlab
             .hosts
             .iter()
@@ -397,7 +395,7 @@ impl HerdrWindow {
         let connect = status.filter(|status| status.can_connect).map(|_| {
             self.gitlab_connect_button(
                 format!("gitlab-connect-{lead}"),
-                format!("Connect {host}"),
+                fl!("gitlab-menu-connect-host", host = host),
                 host,
                 false,
                 cx,
@@ -419,23 +417,27 @@ impl HerdrWindow {
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_size(px(self.config.ui.size * 1.2))
-                    .child("Connect your GitLab account"),
+                    .child(fl!("gitlab-menu-welcome-title")),
             )
             .child(
                 div()
                     .text_center()
                     .text_color(rgb(theme.subtext()))
-                    .child(format!(
-                        "The Orchestrator reads issues from {host}{read_by}. Public projects list \
-                         without an account; connect for private ones."
-                    )),
+                    .child(match checkout {
+                        Some(checkout) => fl!(
+                            "gitlab-menu-welcome-body-for",
+                            host = host,
+                            checkout = checkout
+                        ),
+                        None => fl!("gitlab-menu-welcome-body", host = host),
+                    }),
             )
             .when(!others.is_empty(), |welcome| {
                 welcome.child(
                     div()
                         .text_center()
                         .text_color(rgb(theme.muted))
-                        .child(format!("Also read: {}", others.join(", "))),
+                        .child(fl!("gitlab-menu-also-read", hosts = others.join(", "))),
                 )
             })
             .children(connect)
@@ -443,9 +445,9 @@ impl HerdrWindow {
             .child(self.gitlab_link(
                 "gitlab-paste",
                 if connect_shown(status) {
-                    "Use a personal access token instead"
+                    fl!("gitlab-menu-use-token-instead")
                 } else {
-                    "Paste a personal access token"
+                    fl!("gitlab-menu-paste-token")
                 },
                 false,
                 cx,
@@ -457,10 +459,7 @@ impl HerdrWindow {
                     .rounded(px(crate::config::corners::CONTROL))
                     .bg(rgb(theme.background))
                     .text_color(rgb(theme.muted))
-                    .child(
-                        "Already set up? GITLAB_TOKEN in a project's .envrc or your shell, and \
-                         glab, are picked up on their own.",
-                    ),
+                    .child(fl!("gitlab-menu-already-set-up")),
             )
     }
 
@@ -468,7 +467,7 @@ impl HerdrWindow {
     fn gitlab_link(
         &self,
         id: &'static str,
-        label: &'static str,
+        label: String,
         add: bool,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
@@ -477,7 +476,7 @@ impl HerdrWindow {
             .id(id)
             .debug_selector(move || id.into())
             .role(Role::Link)
-            .aria_label(label)
+            .aria_label(label.clone())
             .cursor_pointer()
             .text_color(accent)
             .hover(|style| style.underline())
@@ -500,7 +499,7 @@ impl HerdrWindow {
                 .debug_selector(|| "gitlab-connecting".into())
                 .ml(px(26.))
                 .text_color(rgb(theme.muted))
-                .child("Asking GitLab for a code\u{2026}");
+                .child(fl!("gitlab-menu-asking"));
         };
         div()
             .debug_selector(|| "gitlab-connecting".into())
@@ -513,7 +512,7 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .gap(px(10.))
-            .child("Approve this code on GitLab:")
+            .child(fl!("gitlab-menu-approve-code"))
             .child(
                 div().id("gitlab-code-scroll").overflow_x_scroll().child(
                     div()
@@ -531,7 +530,7 @@ impl HerdrWindow {
                     .flex_wrap()
                     .gap(px(8.))
                     .child(
-                        self.gitlab_button("gitlab-open", "Open GitLab", true, true)
+                        self.gitlab_button("gitlab-open", fl!("gitlab-menu-open"), true, true)
                             .when(self.menu.gitlab.is_selected(&Action::Open), |button| {
                                 self.selected_look(button)
                             })
@@ -544,9 +543,9 @@ impl HerdrWindow {
                         self.gitlab_button(
                             "gitlab-copy",
                             if connecting.copied {
-                                "Copied"
+                                fl!("gitlab-menu-copied")
                             } else {
-                                "Copy code"
+                                fl!("gitlab-menu-copy-code")
                             },
                             false,
                             true,
@@ -560,7 +559,7 @@ impl HerdrWindow {
                         })),
                     )
                     .child(
-                        self.gitlab_button("gitlab-cancel", "Cancel", false, true)
+                        self.gitlab_button("gitlab-cancel", fl!("gitlab-menu-cancel"), false, true)
                             .when(self.menu.gitlab.is_selected(&Action::Cancel), |button| {
                                 self.selected_look(button)
                             })
@@ -573,7 +572,7 @@ impl HerdrWindow {
             .child(
                 div()
                     .text_color(rgb(theme.muted))
-                    .child("This page updates once GitLab has the approval."),
+                    .child(fl!("gitlab-menu-waiting")),
             )
     }
 
@@ -583,33 +582,36 @@ impl HerdrWindow {
         let ready = !gitlab.working;
         // Nothing has a token, and some instance could take one.
         let welcome = gitlab.shows_welcome();
-        let field =
-            |label: &'static str, selector: &'static str, input: &Option<Entity<SearchInput>>| {
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.))
-                    .child(label)
-                    .children(input.as_ref().map(|input| {
-                        div()
-                            .debug_selector(move || selector.into())
-                            .child(input.clone())
-                    }))
-            };
+        let field = |label: String, selector: &'static str, input: &Option<Entity<SearchInput>>| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .child(label)
+                .children(input.as_ref().map(|input| {
+                    div()
+                        .debug_selector(move || selector.into())
+                        .child(input.clone())
+                }))
+        };
         let form = gitlab.form.then(|| {
             div()
                 .debug_selector(|| "gitlab-token".into())
                 .flex()
                 .flex_col()
                 .gap(px(10.))
-                .child(div().text_color(rgb(theme.muted)).child(
-                    "For an instance without Connect. The token needs the read_api scope; \
-                     GitLab is asked whom it signs in as before it is saved, only ever over \
-                     HTTPS. GITLAB_TOKEN in the project's .envrc or your shell is used before it.",
-                ))
-                .child(field("Instance", "gitlab-host-input", &gitlab.host))
+                .child(
+                    div()
+                        .text_color(rgb(theme.muted))
+                        .child(fl!("gitlab-menu-form-note")),
+                )
                 .child(field(
-                    "Personal access token",
+                    fl!("gitlab-menu-instance"),
+                    "gitlab-host-input",
+                    &gitlab.host,
+                ))
+                .child(field(
+                    fl!("gitlab-menu-token"),
                     "gitlab-token-input",
                     &gitlab.token,
                 ))
@@ -640,7 +642,7 @@ impl HerdrWindow {
                 )
                 .child(self.gitlab_link(
                     "gitlab-paste",
-                    "Paste a token for an instance\u{2026}",
+                    fl!("gitlab-menu-paste-for-instance"),
                     false,
                     cx,
                 ))
@@ -666,20 +668,30 @@ impl HerdrWindow {
             Some(
                 footer
                     .child(
-                        self.gitlab_button("gitlab-form-cancel", "Cancel", false, true)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.hide_gitlab_form(window, cx);
-                            })),
+                        self.gitlab_button(
+                            "gitlab-form-cancel",
+                            fl!("gitlab-menu-form-cancel"),
+                            false,
+                            true,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.hide_gitlab_form(window, cx);
+                        })),
                     )
                     .child(
-                        self.gitlab_button("gitlab-save", "Check and save", true, ready)
-                            .when(ready, |button| {
-                                button.on_click(cx.listener(|this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.save_gitlab(cx);
-                                }))
-                            }),
+                        self.gitlab_button(
+                            "gitlab-save",
+                            fl!("gitlab-menu-check-and-save"),
+                            true,
+                            ready,
+                        )
+                        .when(ready, |button| {
+                            button.on_click(cx.listener(|this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.save_gitlab(cx);
+                            }))
+                        }),
                     ),
             )
         } else if welcome {
@@ -687,7 +699,7 @@ impl HerdrWindow {
         } else {
             Some(
                 footer.child(
-                    self.gitlab_button("gitlab-add", "+ Add instance", false, true)
+                    self.gitlab_button("gitlab-add", fl!("gitlab-menu-add-instance"), false, true)
                         .when(gitlab.is_selected(&Action::Add), |button| {
                             self.selected_look(button)
                         })
@@ -710,13 +722,14 @@ impl HerdrWindow {
 }
 
 /// Where a card's token comes from, in a word or two.
-fn source_chip(source: Source, status: &HostStatus) -> &'static str {
+fn source_chip(source: Source, status: &HostStatus) -> String {
     match source {
-        Source::Saved if status.connected => "connected",
-        Source::Saved => "saved token",
-        Source::Envrc => ".envrc",
-        Source::Environment => "GITLAB_TOKEN",
-        Source::Cli => "glab",
+        Source::Saved if status.connected => fl!("gitlab-menu-chip-connected"),
+        Source::Saved => fl!("gitlab-menu-chip-saved"),
+        // A file, a variable, and a program, by their names.
+        Source::Envrc => ".envrc".to_owned(),
+        Source::Environment => "GITLAB_TOKEN".to_owned(), // i18n: data
+        Source::Cli => "glab".to_owned(),
     }
 }
 

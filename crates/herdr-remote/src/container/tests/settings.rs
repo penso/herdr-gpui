@@ -1,4 +1,5 @@
 use super::*;
+use crate::cloud::Value;
 
 #[test]
 fn invalid_auto_stop_values_return_field_errors_instead_of_panicking() {
@@ -19,7 +20,7 @@ fn invalid_auto_stop_values_return_field_errors_instead_of_panicking() {
         assert!(
             matches!(
                 Settings::resolve(&config),
-                Err(Error::Field("[container] auto_stop"))
+                Err(Error::Field(Value::Key("[container] auto_stop")))
             ),
             "{value}"
         );

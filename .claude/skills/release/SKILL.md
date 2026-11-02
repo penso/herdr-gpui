@@ -45,7 +45,11 @@ requests only, so the release's macOS builds get the macOS runners. `dispatch.sh
 release builds while CI runs, and `ci-gate` holds `sign` and `windows-sign`
 until CI passes, so a failed or cancelled CI run fails the release at `ci-gate`.
 If a CI job fails on a known flake, rerun it (`gh run rerun <id> --failed`)
-while `ci-gate` waits. For a documentation-only commit whose push CI skipped
+while `ci-gate` waits. `sign` also waits for the `nix` job, which calls
+`nix.yml` to build the flake on both Linux architectures from the release
+commit: its one cargo build of all five packages unifies features that CI's
+builds keep apart, so it can fail where CI passed. Rerun it the same way on a
+flake. For a documentation-only commit whose push CI skipped
 the suites, run `gh workflow run ci.yml --repo penso/herdr-gpui --ref main`
 before dispatching. Apple's notary and stapler calls retry ten times in
 `sign-macos.sh`, so a dropped connection there rarely needs a rerun.

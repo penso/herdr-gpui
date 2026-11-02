@@ -1,0 +1,51 @@
+{
+  "apns": {
+    "aps": {
+      "alert": {
+        "body": "New activity",
+        "title": "Herdr"
+      },
+      "interruption-level": "time-sensitive",
+      "mutable-content": 1,
+      "sound": "default",
+      "thread-id": "w1:p2"
+    },
+    "sealed": "BHE1-k_ZOgnc6Yu_aBtL_PUOfA1jVOYq-wv_KjQpYXhl7UwfAt25Aj7lalV-UV1qncZsEfIglg3llDNN9Yh3ZyQBAQEBAQEBAQEBAQFrMxOYQgmgCh1XkUmKZaf8eE-ybpHa3Tf17Vz31hdmFNDGQSIAbbbZtAC809ZaRJTXzfwyb75Q96sEpDPq-nkvEvrZr5UpUXMH1J5phdKy6ID9gFeF1ayRvsNithgQblPtflIhfG92Lr_gKyZfaTavgV2dUuaTyc2b5BWWdToe7GYNVHkVUQWD2Pa9hP8paOi0tqocPWQUjziCt-94FVnYc4zO8s5WqTnUJZcbgtBCCXtdkMwXiHJ9ENPOqleTN131IyCQSfPWV7DZrVLpqh0nKEzPiI80vlkmr_Se9VaVBF7nExK-I26uKfp_Bgg66-qPpWrQ8TCQFQovKzf4wWokCX6g3SkbAA6bo0S9CAHXy33NCj6MCGPZynXdq3JcbbFvE8mnHeDZXwfVtQDP7Yw5kAZ9twzTSJJsacc-Bbu2Zxk6FvfqOr62CZL6wH7LSHMIXvkiyUI_FRGcjBmzDy8fcTRhQA0p_Pi4Bmmt7jE3pkiHwvq-xtYUE1tcumZsTib0JaR5Z5VRHvPIfVkK2kNLicM5SSPPWYts-Rthgy1LtmLy5Gcv26vq9Jx4pMDev-G9-cxk-MDD2Wy3Y9r_Oj1jowdpdAaTbDkfQKwwmOwUZsq5oxxLuT9ejLkqAeUj9XHJhj91RSkSchv7UXxdnc2_tlI40LKKa2E0SeEJLA5nfuLOzerIaLQ"
+  },
+  "device_private_key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+  "plaintext": {
+    "badge": 2,
+    "body": "Run `git push origin fix/mise`?\nherdr-gpui · Fix mise discovery",
+    "clear": false,
+    "computer": "9E92A0DF1CE0967EC34C0C0146005FBC51654330E7D26EC9B5805055755E24F6",
+    "kind": "question",
+    "pane": "w1:p2",
+    "permission": {
+      "id": 7,
+      "options": [
+        {
+          "id": "allow",
+          "kind": "allow_once",
+          "name": "Allow once"
+        },
+        {
+          "id": "always",
+          "kind": "allow_always",
+          "name": "Always allow"
+        },
+        {
+          "id": "reject",
+          "kind": "reject_once",
+          "name": "Deny"
+        },
+        {
+          "id": "never",
+          "kind": "reject_always",
+          "name": "Never"
+        }
+      ]
+    },
+    "title": "Claude needs an answer",
+    "v": 1
+  }
+}

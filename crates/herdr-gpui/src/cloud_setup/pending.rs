@@ -3,7 +3,7 @@
 //! in another window, so the queue is app-wide and waits long. Whichever
 //! window shows the device first runs the script, once.
 
-use crate::{HerdrWindow, window::Flash};
+use crate::{HerdrWindow, i18n::fl, window::Flash};
 #[cfg(test)]
 use gpui::App;
 use gpui::{Context, Global};
@@ -61,10 +61,7 @@ impl PendingSetups {
 }
 
 fn gave_up(label: &str) -> Flash {
-    Flash::warning(format!(
-        "The setup script for {label} did not run: the device was not opened. \
-         Run it from the device's menu."
-    ))
+    Flash::warning(fl!("cloud-setup-gave-up", device = label))
 }
 
 impl HerdrWindow {

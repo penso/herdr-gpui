@@ -103,12 +103,7 @@ impl HerdrWindow {
             .children(AgentFilter::ALL.into_iter().map(|filter| {
                 div()
                     .id(("palette-agent-filter", filter as usize))
-                    .debug_selector(move || {
-                        format!(
-                            "palette-agent-filter-{}",
-                            filter.label().to_lowercase().replace(' ', "-")
-                        )
-                    })
+                    .debug_selector(move || format!("palette-agent-filter-{}", filter.name()))
                     .px_2()
                     .py_1()
                     .rounded(px(crate::config::corners::CONTROL))
@@ -269,10 +264,7 @@ impl HerdrWindow {
                         look,
                     ))
                     .when_some(seen_at, |pane, at| {
-                        let age = crate::checkpoint::age(
-                            i64::try_from(at).unwrap_or(i64::MAX),
-                            i64::try_from(super::frecency::now()).unwrap_or(i64::MAX),
-                        );
+                        let age = crate::ago::text(super::frecency::now().saturating_sub(at));
                         pane.child(
                             div()
                                 .debug_selector(|| "palette-preview-age".into())
@@ -286,7 +278,7 @@ impl HerdrWindow {
                                 .border_1()
                                 .border_color(rgb(theme.active))
                                 .text_color(rgb(theme.muted))
-                                .child(format!("Last seen {age}")),
+                                .child(fl!("palette-go-to-last-seen", age = age)),
                         )
                     })
             }

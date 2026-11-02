@@ -1,0 +1,166 @@
+# The in-app updater's failures, shown wherever the app checks for,
+# downloads, or installs an update. Version numbers, command output, and
+# exit statuses are kept as they are.
+
+# $status is the HTTP status code, such as 404.
+error-updater-http-status = Update request returned HTTP { $status }
+# $time is the local time, such as 14:05, when GitHub takes requests again.
+error-updater-rate-limited-until = GitHub rate limit reached. Retry after { $time }
+error-updater-rate-limited = GitHub rate limit reached. Retry later
+# $status is how the command ended, in the system's words, such as "exit status: 1".
+error-updater-validation-failed = Update validation command failed ({ $status })
+# $field is the codesign field that is missing, such as TeamIdentifier=.
+error-updater-missing-signature-field = Missing code signature { $field }
+# $status is how the installer ended, in the system's words; $detail is its own output.
+error-updater-package-failed = Package installation failed ({ $status }): { $detail }
+# $status is how brew ended, in the system's words; $detail is its own output.
+error-updater-brew-failed = Homebrew command failed ({ $status }): { $detail }
+# $installed, $current, and $expected are release versions, such as 20260921.2.
+error-updater-brew-stale = After refreshing Homebrew, the installed cask is { $installed }; it must be newer than { $current } and at least the expected release { $expected }
+# $status is how the command ended, in the system's words.
+error-updater-relaunch-failed = Could not arm the Dock relaunch ({ $status })
+error-updater-io = Update filesystem or pipe I/O failed
+error-updater-json = Invalid update request JSON
+error-updater-manifest-json = Invalid update manifest
+error-updater-release-json = Invalid GitHub release metadata
+error-updater-public-key = Invalid update public key
+error-updater-signature-length = Invalid signature length
+error-updater-signature = Update manifest signature verification failed
+error-updater-http = Update HTTPS request failed
+error-updater-read-update = Reading update failed
+error-updater-read-archive = Reading archive failed
+error-updater-write-archive = Writing archive failed
+error-updater-create-archive = Creating update archive failed
+error-updater-sync-archive = Syncing update archive failed
+error-updater-open-archive = Opening update archive failed
+error-updater-cancelled = Update cancelled
+error-updater-validation-timeout = Update validation timed out
+error-updater-helper-timeout = Update helper timed out
+error-updater-validation-encoding = Non-UTF-8 validation output
+error-updater-effective-uid = Cannot determine effective UID
+error-updater-unsafe-installation = Unsafe or non-user-owned installation path
+error-updater-lock-contended = Another updater owns this installation
+error-updater-replacement-rollback = Replacement failed; rollback failed; recovery was retained
+error-updater-replacement-cleanup = Replacement failed; backup cleanup failed; recovery was retained
+error-updater-restart-recovery = Restart failed; recovery was retained
+error-updater-record-outcome = Update failed; could not record recovery outcome
+error-updater-invalid-hex = Expected 64 lowercase hexadecimal characters
+error-updater-unsupported-target = Unsupported update target
+error-updater-manifest-schema = Invalid update manifest schema or version
+error-updater-manifest-asset-count = Invalid update manifest asset count
+error-updater-manifest-asset = Invalid update asset name or duplicate target
+error-updater-archive-size = Update archive size is outside permitted bounds
+error-updater-manifest-bounds = Invalid manifest size or expected version
+error-updater-manifest-version = Update manifest version does not match release
+error-updater-untrusted-url = Update URL is outside the permitted HTTPS hosts
+error-updater-invalid-redirect = Missing or invalid update redirect
+error-updater-redirect-limit = Too many update redirects
+error-updater-response-limit = Update response exceeds size limit
+error-updater-metadata-limit = Release metadata exceeds size limit
+error-updater-unstable-release = GitHub release is not a stable vYYYYMMDD.COUNTER release
+error-updater-no-published-release = GitHub lists no published vYYYYMMDD.COUNTER release
+error-updater-release-asset-count = GitHub release has too many assets
+error-updater-release-asset = Invalid GitHub release asset metadata
+error-updater-current-version = Current build has no valid release version
+error-updater-release-version = Invalid release version
+error-updater-missing-signed-metadata = Release is missing signed update metadata
+error-updater-missing-package-metadata = This release has no signed Linux package metadata. Install it from Manual Releases, or check for a newer release
+error-updater-unknown-package = No supported package manager owns this executable. Install a release .deb, .rpm, or Arch package, or use a standalone copy under HOME
+error-updater-package-changed = The installed package changed while the update was being prepared. Check for updates again
+error-updater-missing-policy-kit = Installing packages requires /usr/bin/pkexec and a running desktop PolicyKit authentication agent
+error-updater-package-command = Could not start the package installer
+error-updater-package-authorization = Package installation was not authorized. Retry and approve the system authentication prompt
+error-updater-package-elevation = The package helper must be authorized through PolicyKit for a non-root user
+error-updater-unsafe-package-helper = Package updates require a trusted root-owned /usr/bin/herdr-gpui and root-owned installer storage
+error-updater-package-version = The package manager finished, but the installed version does not match the update
+error-updater-signed-metadata-size = Invalid signed metadata size
+error-updater-missing-platform-asset = Release has no update for this platform
+error-updater-archive-metadata = Signed archive does not match GitHub release metadata
+error-updater-archive-exceeds-size = Update archive exceeds signed size
+error-updater-archive-digest = Update archive size or SHA-256 mismatch
+error-updater-offer-asset = Update offer asset does not match manifest or platform
+error-updater-missing-offer = Check for a release before downloading
+error-updater-missing-prepared = Download and verify an update before installing
+error-updater-missing-validation-pipes = Missing validation output pipes
+error-updater-validation-output-limit = Update validation output exceeded limit
+error-updater-relative-installation = Installation path must be absolute
+error-updater-noncanonical-installation = Noncanonical installation path
+error-updater-symlinked-installation = Symlinked installation path
+error-updater-unsafe-mac-parent = macOS installation parent must be user/root-owned and not world-writable
+error-updater-package-managed = Package-managed installations cannot self-update
+error-updater-unsafe-brew = Unsafe or non-user-owned Homebrew installation
+error-updater-brew-timeout = Homebrew did not finish in time
+error-updater-brew-version = Homebrew did not report an installed cask version
+error-updater-missing-cask = Homebrew is no longer managing this installation
+error-updater-relaunch-missing = Homebrew left no runnable app to restart
+error-updater-outside-home = Standalone Linux updates require installation under HOME
+error-updater-missing-executable-parent = No executable parent
+error-updater-not-standalone = Installation must be an ordinary standalone executable
+error-updater-local-build = Updates are disabled for local builds
+error-updater-root-user = Updating as root is not supported
+error-updater-unsupported-platform = Unsupported installation platform
+error-updater-not-herdr-bundle = Not an installed Herdr.app
+error-updater-missing-home = HOME is not set
+error-updater-missing-installation-parent = No installation parent
+error-updater-not-executable = Installed file is not executable
+error-updater-missing-installation-name = No installation name
+error-updater-unsafe-lock = Unsafe update lock
+error-updater-bundle-version = Bundle version differs from signed manifest
+error-updater-bundle-identifier = Installed or candidate bundle is not so.pen.herdr-gpui
+error-updater-stale-request = Update request is stale or not a newer release
+error-updater-archive-entry-limit = Too many archive entries
+error-updater-archive-path = Unsafe or duplicate archive path
+error-updater-linux-payload = Linux archive must contain exactly the release executable
+error-updater-outside-bundle = Archive is outside Herdr.app
+error-updater-expanded-archive-limit = Expanded archive exceeds limit
+error-updater-missing-link-target = Missing link target
+error-updater-archive-symlink = Unsafe archive symlink
+error-updater-directory-data = Directory contains data
+error-updater-missing-archive-parent = Missing archive parent
+error-updater-payload-not-executable = Release file is not executable
+error-updater-archive-entry-type = Unsupported archive entry type
+error-updater-trailing-archive-data = Trailing archive data
+error-updater-archive-symlink-parent = Archive writes beneath a symlink
+error-updater-missing-symlink-parent = Missing symlink parent
+error-updater-symlink-escape = Symlink chain escapes bundle
+error-updater-empty-archive = Empty update archive
+error-updater-bundle-not-executable = Bundle executable is not executable
+error-updater-signing-identity-changed = Update code signing identity changed
+error-updater-unauthenticated-offer = Offer differs from authenticated manifest
+error-updater-restart-arguments-limit = Restart arguments exceed limit
+error-updater-request-limit = Oversized update request
+error-updater-malformed-request = Malformed update request
+error-updater-missing-control-pipe = Missing helper control pipe
+error-updater-helper-owner-stopped = Update helper owner stopped
+error-updater-missing-helper-output = Missing helper stdout
+error-updater-helper-not-ready = Update helper did not become ready
+error-updater-recovery-exists = Recovery path already exists
+error-updater-missing-destination-parent = No destination parent
+error-updater-recovery-changed = Installation or backup changed; recovery was retained
+error-updater-stage-location = Stage is not adjacent to installation
+error-updater-stage-permissions = Stage is not private
+error-updater-commit-barrier = Update commit barrier timed out or disconnected
+error-updater-not-committed = Update was not committed
+error-updater-installation-changed = Installation changed during update
+error-updater-missing-installer-metadata = This release has no signed Windows installer metadata. Download it from GitHub, or check for a newer release
+error-updater-start = Could not start updater
+error-updater-worker-stopped = Update worker stopped
+error-updater-cancel-unacknowledged = Update worker could not acknowledge cancellation
+
+# Why App Updates never checks, after "In-app updates unavailable:" (update-panel-disabled).
+error-updater-disabled-local-build = In-app updates require a release build with an embedded update verification key. Local builds and test fixtures never check automatically.
+error-updater-disabled-platform = No standalone updater is available for this platform. Use your package manager or download a supported release.
+# Starts lowercase, as it follows a colon.
+error-updater-disabled-secondary = another window owns app updates in this process. Use the window that was open first.
+
+# Windows only: why the update installer could not be checked or started.
+error-updater-windows-location = In-app updates replace the copy installed in %LOCALAPPDATA%\Programs\Herdr UI, and this one runs from elsewhere. Download the new release from GitHub instead
+error-updater-windows-local-app-data = %LOCALAPPDATA% is not set, so the installed copy cannot be found
+error-updater-windows-missing-publisher = This build names no Windows publisher to check update installers against. Download the new release from GitHub instead
+error-updater-windows-installer-path = The update installer's path cannot be passed to Windows
+# $code is Windows' error code in hexadecimal, such as 0x800b0100.
+error-updater-windows-untrusted = Windows does not trust the update installer's signature ({ $code })
+error-updater-windows-missing-signer = Windows verified the update installer but named no signer
+# $found is the name on the installer's signature, in quotes.
+error-updater-windows-signer = The update installer is signed by { $found }, not by Herdr UI's publisher
+error-updater-windows-launch = Could not start the update installer

@@ -4,7 +4,7 @@
 //! and after each change, so the row shows what Windows will do.
 // i18n: migrated
 use super::{SettingsWindow, ui};
-use crate::i18n::fl;
+use crate::i18n::{Localize, fl};
 use crate::launch_at_login::{self, State};
 use gpui::{prelude::*, *};
 
@@ -50,7 +50,7 @@ impl SettingsWindow {
                     tracing::warn!(%error, "Could not change launch at login");
                     this.error = Some(fl!(
                         "settings-general-error-launch-at-login",
-                        error = error.to_string()
+                        error = error.localize()
                     ));
                 }
                 match state {
@@ -61,7 +61,7 @@ impl SettingsWindow {
                         if saved.is_ok() {
                             this.error = Some(fl!(
                                 "settings-general-error-launch-at-login",
-                                error = error.to_string()
+                                error = error.localize()
                             ));
                         }
                     }

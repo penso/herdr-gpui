@@ -142,8 +142,8 @@ pub(crate) fn home(lists: &Lists<'_>) -> Markup {
                             @if let Some(pane) = terminal.first_pane() {
                                 li data-find=(lists.find(workspace, &[&terminal.label, terminal.cwd.as_deref().unwrap_or_default()])) {
                                     (nav(&format!("/term/{}", urlencode(&pane.pane)), "row", html! {
-                                        @if let Some((agent, _)) = &terminal.agent {
-                                            (agent_icon(agent.as_deref(), "w-[30px] h-[30px] text-base"))
+                                        @if let Some(agent) = &terminal.agent {
+                                            (agent_icon(agent.name.as_deref(), "w-[30px] h-[30px] text-base"))
                                         } @else {
                                             span class="grid place-items-center w-[30px] h-[30px] rounded-lg bg-raised text-green font-mono text-[11px] font-bold shrink-0" { "›_" }
                                         }
@@ -151,8 +151,8 @@ pub(crate) fn home(lists: &Lists<'_>) -> Markup {
                                         @if terminal.panes.len() > 1 {
                                             span class="text-muted text-xs" { (terminal.panes.len()) " panes" }
                                         }
-                                        @if let Some((_, status)) = terminal.agent {
-                                            (status_mark(status, lists.indicators))
+                                        @if let Some(agent) = &terminal.agent {
+                                            (status_mark(agent.status, lists.indicators))
                                         }
                                         span class="text-faint" { (icons::chevron_right(18)) }
                                     }))

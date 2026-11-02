@@ -15,7 +15,16 @@
 //! The page is the agent's, so it is untrusted: it only ever loads because
 //! the user asked, and it gets what a local browser tab gets, no more.
 
-use crate::{HerdrWindow, browser::TabId, notifications::safe_text};
+mod error;
+
+pub(crate) use error::Error;
+
+use crate::{
+    HerdrWindow,
+    browser::TabId,
+    i18n::{Localize, fl},
+    notifications::safe_text,
+};
 use gpui::{AppContext as _, Context, Window};
 use herdr_chat_protocol::EntryId;
 use std::{
@@ -85,10 +94,7 @@ impl HerdrWindow {
         let copied = match source {
             PageSource::File(path) => {
                 if let super::Route::Ssh(host) = &pane.target.route {
-                    pane.error = Some(format!(
-                        "That page is on {}; open it there to see it",
-                        safe_text(host, 80)
-                    ));
+                    pane.error = Some(fl!("chat-page-remote", host = safe_text(host, 80)));
                     cx.notify();
                     return;
                 }
@@ -107,20 +113,15 @@ impl HerdrWindow {
             let copied = copied.await;
             let _ = this.update_in(cx, |this, window, cx| match copied {
                 Ok(path) => this.open_chat_file(&pane_id, key, path, window, cx),
-                Err(error) => this.chat_page_failed(&pane_id, &error, cx),
+                Err(error) => this.chat_page_failed(&pane_id, error.localize(), cx),
             });
         })
         .detach();
     }
 
-    fn chat_page_failed(
-        &mut self,
-        pane_id: &str,
-        error: &dyn std::fmt::Display,
-        cx: &mut Context<Self>,
-    ) {
+    fn chat_page_failed(&mut self, pane_id: &str, error: String, cx: &mut Context<Self>) {
         if let Some(pane) = self.chats.pane_mut(pane_id) {
-            pane.error = Some(format!("The page could not be shown: {error}"));
+            pane.error = Some(fl!("chat-page-failed", error = error));
         }
         cx.notify();
     }
@@ -137,7 +138,7 @@ impl HerdrWindow {
         let home = crate::config::home().ok();
         let file = match crate::browser::LocalFile::new(&path, home.as_deref()) {
             Ok(file) => file,
-            Err(error) => return self.chat_page_failed(pane_id, &error, cx),
+            Err(error) => return self.chat_page_failed(pane_id, error.localize(), cx),
         };
         let open = self
             .chats
@@ -148,8 +149,11 @@ impl HerdrWindow {
         }
         self.chats.opened_pages += 1;
         let id = TabId::panel(self.chats.opened_pages);
-        if let Err(error) = self.open_chat_page(id, file, "HTML page".to_owned(), window, cx) {
-            return self.chat_page_failed(pane_id, &error, cx);
+        // A chat's page has no tab to show its title on.
+        // i18n: data
+        let title = "HTML page".to_owned();
+        if let Err(error) = self.open_chat_page(id, file, title, window, cx) {
+            return self.chat_page_failed(pane_id, error.localize(), cx);
         }
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             self.close_chat_page(id);
@@ -178,12 +182,9 @@ impl HerdrWindow {
         match url::Url::from_file_path(&path) {
             Ok(url) => {
                 cx.open_url(url.as_str());
-                self.show_flash(
-                    crate::window::Flash::success("Opened the page in your browser"),
-                    cx,
-                );
+                self.show_flash(crate::window::Flash::success(fl!("chat-page-opened")), cx);
             }
-            Err(()) => self.chat_page_failed(pane_id, &"not a file path", cx),
+            Err(()) => self.chat_page_failed(pane_id, Error::NotFile.localize(), cx),
         }
     }
 
@@ -239,23 +240,22 @@ impl HerdrWindow {
 const MAX_FILE: u64 = 4 * 1024 * 1024;
 
 /// The HTML file at `path`, when it is a bounded regular file.
-fn read_page(path: &Path) -> std::io::Result<Vec<u8>> {
+fn read_page(path: &Path) -> Result<Vec<u8>, Error> {
     use std::io::Read as _;
     let mut html = Vec::new();
     std::fs::File::open(path)?
         .take(MAX_FILE + 1)
         .read_to_end(&mut html)?;
     if html.len() as u64 > MAX_FILE {
-        return Err(std::io::Error::other("the page is too large"));
+        return Err(Error::TooLarge);
     }
     Ok(html)
 }
 
 /// Writes a page to `index.html` in a folder of its own, named by what it
 /// holds, and returns the file. Blocks, so it runs off the UI thread.
-fn write_page(html: &[u8]) -> std::io::Result<PathBuf> {
-    let root =
-        private_folder("pages").ok_or_else(|| std::io::Error::other("no folder for pages"))?;
+fn write_page(html: &[u8]) -> Result<PathBuf, Error> {
+    let root = private_folder("pages").ok_or(Error::Folder)?;
     let mut hasher = DefaultHasher::new();
     html.hash(&mut hasher);
     let folder = root.join(format!("{:016x}", hasher.finish()));

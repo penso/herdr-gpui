@@ -1,0 +1,32 @@
+{
+  "daemon_side": {
+    "aes_nonce": "AQIDBAUGBwgJCgsM",
+    "code": "443216",
+    "commit": "XZJU0X0NfF2Z6f6LLjpKCl2Wic3E1gJspXDBihGk-ng",
+    "daemon_nonce": "UlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlI",
+    "daemon_private_key": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI",
+    "daemon_public_key": "BDrThhqVYhOSUWu1k-8FWD7S5YZvXLYmCjAXI3_Ym5Cv0JYcfjcHWmeRo5xh9WKVsCttJlZ7YV5gqkHuHI6DOI0",
+    "fingerprint": "9E92A0DF1CE0967EC34C0C0146005FBC51654330E7D26EC9B5805055755E24F6",
+    "key": "NTGt7EAnLRQ39PXdi7moLaeLsw8RyEq4g2GNkxgb_1E",
+    "phone_nonce": "dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHQ",
+    "phone_private_key": "ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ",
+    "phone_public_key": "BEKKgk6nz1atKmTtNotxMV2AzuhGAHz_HS7qLD8PkhU3MErlmPmN0Q0fECgRpOLRYcP9i7sZPUslvulQrIOcD50",
+    "plaintext": "{\"token\":\"enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6eno\",\"origins\":[\"https://192.168.1.20:7443\",\"https://100.64.0.3:7443\"]}",
+    "sealed": "AQIDBAUGBwgJCgsMnAmb-bJchcN8yJo6NqKLJkI3ItIs3xPm3ykns0546uSxb85Mfsx8fd1b_jmRZIsqHPwTxpYD6JIj3lAO9xZFGpL8DX82Hxi2WucCvg_riaMTlnPzTQJHta-Rqmj4SxGgr_ZeQojhMUtsrhogpuU3og6JLvr9gPzFodNaPRiVbrpPbInP7ui5sB4"
+  },
+  "phone_side": {
+    "aes_nonce": "AQIDBAUGBwgJCgsM",
+    "code": "552741",
+    "commit": "K7EMqHOs2xXkRWXoLwAW1H2lW6Cug1fJKgOQ2U8PVJw",
+    "daemon_nonce": "c3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3M",
+    "daemon_private_key": "Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M",
+    "daemon_public_key": "BC7SGS8PknUgCs00-9jGzlqRpFlIhBEyC0xt4-aiLX-gbyN09gU0qQCWKXFNBjQCo8PtYNsFfveZmnoxp4rrwMc",
+    "fingerprint": "9E92A0DF1CE0967EC34C0C0146005FBC51654330E7D26EC9B5805055755E24F6",
+    "key": "vIdJJxepDtQOQ8o_sR9DRvLlil_gndjqGPH3_Ch095M",
+    "phone_nonce": "MTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE",
+    "phone_private_key": "ISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISE",
+    "phone_public_key": "BEYtuhrk_BqWi02s8gzdbb4frjSqlxUUpj00BcPRz9ODtYu7CMEzg0KMWFPHHEyFHhNLBWgh5Gj-Cpd6v0MT3eE",
+    "plaintext": "{\"token\":\"enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6eno\",\"origins\":[\"https://192.168.1.20:7443\",\"https://100.64.0.3:7443\"]}",
+    "sealed": "AQIDBAUGBwgJCgsMel6FGlJUSFTbK640z2YIHs3pTEtODQ2jjDxm8hFEoXFT_e6_uuRz8TKq3U1N5nOca8wy3KUba6BP43NENnMGC7VQDjvcMJkAt0XqQv_xKASPRZjRV1We73kNHH0bFPA8on2cxSMegCGqOAxaJSdt42VjjCnaT5IsTFmKpjbGhl4FZnku5Xea8Zw"
+  }
+}

@@ -1,7 +1,8 @@
-//! Live Activities on paired iPhones through the Apple Push Notification
-//! service: the companion app in `ios/` shows one activity per running chat
-//! on the lock screen and in the Dynamic Island, and the daemon starts,
-//! updates, and ends it with `liveactivity` pushes.
+//! Live Activities and notifications on paired iPhones through the Apple
+//! Push Notification service: the companion app in `ios/` shows one
+//! activity per running chat on the lock screen and in the Dynamic Island,
+//! which the daemon starts, updates, and ends with `liveactivity` pushes,
+//! and chat notifications sealed to the device.
 //!
 //! - [`Config`]: the user's own APNs key (`STATE_DIR/apns/AuthKey.p8`) and
 //!   `config.json`. Without them the feature is off.
@@ -15,23 +16,27 @@
 //!   store's opaque slot as JSON.
 //! - [`Sender`]: the HTTP/2 request to `api.push.apple.com` (or the
 //!   sandbox), on the daemon's Tokio runtime.
+//! - [`alert`]: chat notifications for the native app, sealed to the
+//!   device with [`seal`] so APNs relays only ciphertext.
 //!
 //! A device only ever supplies hex tokens: the host is one of Apple's two,
 //! chosen by the user's config, so a paired device cannot make the daemon
 //! post anywhere else.
 
+pub(crate) mod alert;
 mod config;
 mod decide;
 mod jwt;
 mod pacer;
 mod payload;
+pub(crate) mod seal;
 mod send;
 mod tokens;
 
 use std::{io, path::PathBuf};
 
 pub(crate) use config::Config;
-pub(crate) use decide::decide;
+pub(crate) use decide::{computer_id, decide};
 pub(crate) use jwt::ProviderToken;
 pub(crate) use pacer::Pacer;
 #[cfg(test)]
@@ -87,12 +92,18 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    #[error("the notification key is not a P-256 point in base64url")]
+    NotifyKey,
     #[error("a Live Activity's pane must be 1 to 128 characters with no control characters")]
     Pane,
     #[error("the APNs payload is {len} bytes, more than {max}", max = payload::MAX_PAYLOAD)]
     PayloadTooLarge { len: usize },
+    #[error("could not get random bytes to seal a notification")]
+    Random(#[source] getrandom::Error),
     #[error("could not build the APNs request")]
     Request(#[from] hyper::http::Error),
+    #[error("could not seal the notification")]
+    Seal,
     #[error("could not sign the APNs provider token")]
     Sign(#[source] p256::ecdsa::Error),
     #[error("APNs did not answer in time")]
@@ -105,6 +116,19 @@ pub enum Error {
 }
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
+
+/// A sender with a made-up key and team, which never connects until it
+/// sends, for other modules' tests.
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+pub(crate) fn sender_for_tests() -> Sender {
+    let key = p256::ecdsa::SigningKey::from(
+        p256::SecretKey::from_slice(&[7; 32]).expect("a valid scalar"),
+    );
+    let config = config::from_parts("ABCDE12345", "XYZ9876543", "so.pen.herdr.remote", true, key)
+        .expect("a valid config");
+    Sender::new(config).expect("a sender")
+}
 
 #[cfg(test)]
 mod tests;

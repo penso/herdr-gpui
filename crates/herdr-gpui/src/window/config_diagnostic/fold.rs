@@ -113,7 +113,7 @@ pub(super) fn chevron(
         .debug_selector(move || format!("{card}-fold"))
         .role(Role::Button)
         // The state is the node's expanded flag, so the name stays put.
-        .aria_label("Full message")
+        .aria_label(crate::i18n::fl!("window-notices-diagnostic-full"))
         .flex_none()
         .size(px(CONTROL))
         .rounded(px(corners::CONTROL))

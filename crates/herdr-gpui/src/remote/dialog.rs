@@ -4,11 +4,12 @@
 //! run off the UI thread; [`super::pairing`] decides what each answer means.
 
 use super::{
+    nearby,
     pairing::{Answer, Pairing, Phase, spaced},
     qr::{self, Qr},
     supervisor::{Client, Lease, Supervisor},
 };
-use crate::{HerdrWindow, config::Theme, fonts::StyledFont, menu::Page};
+use crate::{HerdrWindow, config::Theme, fonts::StyledFont, i18n::fl, menu::Page};
 use gpui::{prelude::*, *};
 use herdr_remote_control::control::Request;
 use std::{
@@ -17,6 +18,10 @@ use std::{
 };
 
 mod addresses;
+mod hosts;
+
+/// What keeps this computer advertised for nearby pairing.
+type NearbyAdvert = nearby::Advert;
 
 /// How often the dialog looks for a request to send, and redraws its ring.
 const STEP: Duration = Duration::from_millis(250);
@@ -31,11 +36,16 @@ const NAME_LIMIT: usize = 64;
 /// a pairing still open at the daemon, so its token stops working at once.
 pub(crate) struct PairingDialog {
     pub(crate) pairing: Pairing,
+    /// The other machines the phone may be allowed on too.
+    pub(crate) hosts: Vec<hosts::Choice>,
     addresses_scroll: ScrollHandle,
     other_addresses: crate::motion::Toggle,
     client: Option<Client>,
     _addresses_task: Option<Task<()>>,
     _lease: Option<Lease>,
+    /// The nearby advertisement while an offer shows; dropping it stops
+    /// advertising this computer for pairing.
+    _nearby: Option<NearbyAdvert>,
     _task: Option<Task<()>>,
 }
 
@@ -44,6 +54,7 @@ impl PairingDialog {
     /// does. The dialog may still be drawn as it goes; it asks nothing more,
     /// and no longer keeps the daemon polled at the open dialog's pace.
     pub(crate) fn close(&mut self) {
+        self._nearby = None;
         self._lease = None;
         self._task = None;
         self._addresses_task = None;
@@ -84,7 +95,7 @@ impl HerdrWindow {
         let pairing = match (&client, self.config.remote.enabled) {
             (_, false) => Pairing::new(false),
             (Some(_), true) => Pairing::new(true),
-            (None, true) => Pairing::failed("Remote control is not available in this window."),
+            (None, true) => Pairing::failed(fl!("remote-pair-unavailable-here")),
         };
         let task = client
             .clone()
@@ -92,11 +103,13 @@ impl HerdrWindow {
             .map(|client| Self::drive_pairing(client, cx));
         self.menu.remote_pairing = Some(PairingDialog {
             pairing: pairing.with_address(address),
+            hosts: hosts::choices(Supervisor::hosts(cx)),
             addresses_scroll: ScrollHandle::new(),
             other_addresses: crate::motion::Toggle::default(),
             client,
             _addresses_task: None,
             _lease: Supervisor::lease(cx),
+            _nearby: None,
             _task: task,
         });
         self.menu.page = Some(Page::RemoteControl);
@@ -139,6 +152,16 @@ impl HerdrWindow {
                     if new_offer {
                         dialog.reveal_selected_address();
                     }
+                    // Nearby pairing runs while an offer or its claim shows,
+                    // and stops once the pairing is answered or fails.
+                    match dialog.pairing.phase() {
+                        Phase::Showing { offer, .. } if dialog._nearby.is_none() => {
+                            let offer = (offer.fingerprint.clone(), offer.url.clone());
+                            dialog._nearby = Self::advertise_nearby(offer, cx);
+                        }
+                        Phase::Showing { .. } | Phase::Claimed { .. } => {}
+                        _ => dialog._nearby = None,
+                    }
                     if matches!(dialog.pairing.phase(), Phase::Approved { .. }) {
                         Supervisor::refresh(cx);
                     }
@@ -152,9 +175,22 @@ impl HerdrWindow {
         })
     }
 
+    /// Advertises this computer for nearby pairing while the offer shows,
+    /// through the app's one `herdr-nearby` helper, which relays each
+    /// phone's frame to the daemon. Nothing starts when the helper is not
+    /// beside the executable.
+    fn advertise_nearby(
+        (fingerprint, url): (String, String),
+        cx: &mut Context<Self>,
+    ) -> Option<NearbyAdvert> {
+        let line = nearby::advertise(&nearby::host_name(), &fingerprint, nearby::port(&url));
+        nearby::Station::advertise_pairing(cx, line)
+    }
+
     fn answer_pairing(&mut self, allow: bool, cx: &mut Context<Self>) {
         if let Some(dialog) = &mut self.menu.remote_pairing {
-            dialog.pairing.answer(allow);
+            let ticked = hosts::ticked(&dialog.hosts);
+            dialog.pairing.answer_with_hosts(allow, ticked);
             cx.notify();
         }
     }
@@ -228,7 +264,7 @@ impl HerdrWindow {
     pub(crate) fn remote_dialog_open(&self) -> bool {
         matches!(
             self.menu.page,
-            Some(Page::RemoteControl | Page::RevokeDevice)
+            Some(Page::RemoteControl | Page::RevokeDevice | Page::RemoteHostAsk)
         )
     }
 
@@ -237,6 +273,7 @@ impl HerdrWindow {
         match self.menu.page {
             Some(Page::RemoteControl) => Some(self.render_pairing(cx)),
             Some(Page::RevokeDevice) => Some(self.render_revoke(cx)),
+            Some(Page::RemoteHostAsk) => Some(self.render_host_ask(cx)),
             _ => None,
         }
     }
@@ -248,9 +285,13 @@ impl HerdrWindow {
         };
         let body = match dialog.pairing.phase() {
             Phase::Off => self.pairing_message(
-                "Remote control is off.",
-                "Turn it on in Settings > Remote control to pair a phone.",
-                Some(("remote-pair-settings", "Open Settings", Action::Settings)),
+                &fl!("remote-pair-off"),
+                &fl!("remote-pair-off-detail"),
+                Some((
+                    "remote-pair-settings",
+                    fl!("remote-pair-open-settings"),
+                    Action::Settings,
+                )),
                 cx,
             ),
             Phase::Requesting => self.pairing_offer(None, cx),
@@ -263,27 +304,35 @@ impl HerdrWindow {
                 ..
             } => self.pairing_claim(device_name, code, app.as_deref(), *answer, cx),
             Phase::Approved { device_name } => self.pairing_message(
-                &format!("{} can now control your chats.", name(device_name)),
-                "Revoke it any time in Settings > Remote control.",
-                Some(("remote-pair-done", "Done", Action::Close)),
+                &fl!("remote-pair-approved", device = name(device_name)),
+                &fl!("remote-pair-approved-detail"),
+                Some(("remote-pair-done", fl!("remote-pair-done"), Action::Close)),
                 cx,
             ),
             Phase::Denied => self.pairing_message(
-                "Not paired.",
-                "The device was turned away and its code no longer works.",
-                Some(("remote-pair-close", "Close", Action::Close)),
+                &fl!("remote-pair-denied"),
+                &fl!("remote-pair-denied-detail"),
+                Some(("remote-pair-close", fl!("remote-pair-close"), Action::Close)),
                 cx,
             ),
             Phase::Expired { device_name } => self.pairing_message(
-                &format!("The request from {} expired.", name(device_name)),
-                "Nothing was granted. Scan a new code to try again.",
-                Some(("remote-pair-again", "New code", Action::Restart)),
+                &fl!("remote-pair-expired", device = name(device_name)),
+                &fl!("remote-pair-expired-detail"),
+                Some((
+                    "remote-pair-again",
+                    fl!("remote-pair-new-code"),
+                    Action::Restart,
+                )),
                 cx,
             ),
             Phase::Failed { message } => self.pairing_message(
-                "Pairing is unavailable.",
+                &fl!("remote-pair-failed"),
                 &crate::notifications::safe_text(message, 300),
-                Some(("remote-pair-retry", "Try again", Action::Restart)),
+                Some((
+                    "remote-pair-retry",
+                    fl!("remote-pair-try-again"),
+                    Action::Restart,
+                )),
                 cx,
             ),
         };
@@ -302,14 +351,14 @@ impl HerdrWindow {
                         div()
                             .flex_1()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Remote control"),
+                            .child(fl!("remote-pair-title")),
                     )
                     .child(
                         div()
                             .id("remote-pair-x")
                             .debug_selector(|| "remote-pair-x".into())
                             .role(Role::Button)
-                            .aria_label("Close")
+                            .aria_label(fl!("remote-pair-close"))
                             .p(px(4.))
                             .rounded(px(crate::config::corners::SMALL))
                             .cursor_pointer()
@@ -354,11 +403,13 @@ impl HerdrWindow {
                 .child(
                     div()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child("Scan with your phone's camera"),
+                        .child(fl!("remote-pair-scan")),
                 )
-                .child(div().text_color(rgb(theme.subtext())).child(
-                    "Choose how your phone reaches this computer. Up/Down changes the QR address.",
-                ))
+                .child(
+                    div()
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("remote-pair-choose-address")),
+                )
                 .child(self.pairing_selected_address(offer))
                 .children(countdown.map(|(left, share)| {
                     div()
@@ -368,14 +419,15 @@ impl HerdrWindow {
                         .gap(px(6.))
                         .text_color(rgb(theme.subtext()))
                         .child(ring(share, crate::menu::accent(theme), rgb(theme.active)))
-                        .child(format!(
-                            "New code in {} s",
-                            left.as_secs_f32().ceil() as u64
+                        .child(fl!(
+                            "remote-pair-countdown",
+                            seconds = left.as_secs_f32().ceil() as u64
                         ))
-                })),
+                }))
+                .children(self.nearby_hint(cx)),
             None => div()
                 .text_color(rgb(theme.subtext()))
-                .child("Asking for a pairing code\u{2026}"),
+                .child(fl!("remote-pair-asking")),
         };
         div()
             .flex()
@@ -396,12 +448,35 @@ impl HerdrWindow {
                         .text_font(&self.config.terminal)
                         .text_size(px(10.))
                         .text_color(rgb(theme.subtext()))
-                        .child(format!(
-                            "CA {}",
-                            crate::notifications::safe_text(&offer.fingerprint, 200)
+                        .child(fl!(
+                            "remote-pair-fingerprint",
+                            fingerprint = crate::notifications::safe_text(&offer.fingerprint, 200)
                         )),
                 )
             })
+    }
+
+    /// One line on Bluetooth pairing, when the helper reported its radio.
+    fn nearby_hint(&self, cx: &App) -> Option<Div> {
+        self.menu.remote_pairing.as_ref()?;
+        let radio = nearby::Station::radio(cx)?;
+        let text = match radio {
+            nearby::Radio::On if cfg!(target_os = "macos") => fl!("remote-pair-nearby-mac"),
+            nearby::Radio::On => fl!("remote-pair-nearby"),
+            nearby::Radio::Unauthorized if cfg!(target_os = "macos") => {
+                fl!("remote-pair-nearby-allow-mac")
+            }
+            nearby::Radio::Unauthorized => fl!("remote-pair-nearby-allow"),
+            nearby::Radio::Off | nearby::Radio::Unsupported | nearby::Radio::Unknown => {
+                return None;
+            }
+        };
+        Some(
+            div()
+                .debug_selector(|| "remote-pair-nearby".into())
+                .text_color(rgb(self.theme.subtext()))
+                .child(text),
+        )
     }
 
     fn pairing_claim(
@@ -414,24 +489,26 @@ impl HerdrWindow {
     ) -> Div {
         let theme = &self.theme;
         let waiting = answer.is_some();
+        // The device's name, bold, inside the sentence that asks.
+        let device = name(device_name);
+        let asks = fl!("remote-pair-wants", device = device.clone());
+        let bold = asks.find(&device).map(|start| start..start + device.len());
         div()
             .debug_selector(|| "remote-pair-claim".into())
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(4.))
-                    .child(
-                        div()
-                            .debug_selector(|| "remote-pair-device".into())
-                            .font_weight(FontWeight::BOLD)
-                            .child(name(device_name)),
+            .child(div().debug_selector(|| "remote-pair-device".into()).child(
+                StyledText::new(asks).with_highlights(bold.map(|range| {
+                    (
+                        range,
+                        HighlightStyle {
+                            font_weight: Some(FontWeight::BOLD),
+                            ..Default::default()
+                        },
                     )
-                    .child("wants remote control of your chats."),
-            )
+                })),
+            ))
             // Approving admits this origin to the daemon's API, so the user
             // sees which app asked: one installed from another computer.
             .when_some(app, |claim, app| {
@@ -439,16 +516,16 @@ impl HerdrWindow {
                     div()
                         .debug_selector(|| "remote-pair-app".into())
                         .text_color(rgb(theme.subtext()))
-                        .child(format!(
-                            "It asks from the Herdr app at {}. Allow it only if you are adding this computer to that app.",
-                            crate::notifications::safe_text(app, 255)
+                        .child(fl!(
+                            "remote-pair-app",
+                            app = crate::notifications::safe_text(app, 255)
                         )),
                 )
             })
             .child(
                 div()
                     .text_color(rgb(theme.subtext()))
-                    .child("Allow it only if the phone shows the same code."),
+                    .child(fl!("remote-pair-same-code")),
             )
             .child(
                 div()
@@ -459,27 +536,36 @@ impl HerdrWindow {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(spaced(code)),
             )
+            .children(self.pairing_hosts(!waiting, cx))
             .child(
                 div()
                     .flex()
                     .justify_end()
                     .gap(px(8.))
                     .child(
-                        button(theme, "remote-pair-deny", "Deny", Tone::Plain, !waiting).when(
+                        button(
+                            theme,
+                            "remote-pair-deny",
+                            fl!("remote-pair-deny"),
+                            Tone::Plain,
                             !waiting,
-                            |button| {
-                                button.on_click(cx.listener(|this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.answer_pairing(false, cx);
-                                }))
-                            },
-                        ),
+                        )
+                        .when(!waiting, |button| {
+                            button.on_click(cx.listener(|this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.answer_pairing(false, cx);
+                            }))
+                        }),
                     )
                     .child(
                         button(
                             theme,
                             "remote-pair-allow",
-                            if waiting { "Allowing\u{2026}" } else { "Allow" },
+                            if waiting {
+                                fl!("remote-pair-allowing")
+                            } else {
+                                fl!("remote-pair-allow")
+                            },
                             Tone::Primary,
                             !waiting,
                         )
@@ -497,7 +583,7 @@ impl HerdrWindow {
         &self,
         title: &str,
         detail: &str,
-        action: Option<(&'static str, &'static str, Action)>,
+        action: Option<(&'static str, String, Action)>,
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = &self.theme;
@@ -558,15 +644,16 @@ pub(super) enum Tone {
 pub(super) fn button(
     theme: &Theme,
     id: &'static str,
-    label: &'static str,
+    label: impl Into<SharedString>,
     tone: Tone,
     enabled: bool,
 ) -> Stateful<Div> {
+    let label = label.into();
     let button = div()
         .id(id)
         .debug_selector(move || id.into())
         .role(Role::Button)
-        .aria_label(label);
+        .aria_label(label.clone());
     crate::accessibility::disabled(button, !enabled)
         .px(px(12.))
         .py(px(6.))
@@ -591,7 +678,7 @@ pub(super) fn button(
 fn name(device_name: &str) -> String {
     let name = crate::notifications::safe_text(device_name.trim(), NAME_LIMIT);
     if name.is_empty() {
-        "A device".to_owned()
+        fl!("remote-pair-unnamed")
     } else {
         name
     }

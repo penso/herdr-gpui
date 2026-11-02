@@ -14,7 +14,7 @@
 //!                     "pane": "w1-p3",
 //!                     "workspace": "herdr-gpui" },
 //!     "content-state": { "phase": "working", "step": "Reading lib.rs",
-//!                        "startedAt": 1799999990, "cost": "$0.34",
+//!                        "startedAt": 1799999990,
 //!                        "planDone": 2, "planTotal": 4,
 //!                        "working": 1, "waiting": 0 },
 //!     "alert": { "title": "Claude is working", "body": "herdr-gpui · remote plan" } } }
@@ -22,13 +22,20 @@
 //!
 //! `startedAt` is seconds since the Unix epoch: the Swift side decodes it
 //! itself rather than through `JSONDecoder`'s date strategy, which ActivityKit
-//! does not let an app choose. `question` and `summary` appear in the
-//! question and finished phases; every optional key may be absent.
+//! does not let an app choose. `question`, `permission`, and `options` (the
+//! answer buttons, `{id, kind, name}`) appear in the question phase,
+//! `summary` in the finished one, and `previous` (the steps before `step`)
+//! once there are some; every optional key may be absent.
 
 use super::{Error, Result};
+use herdr_chat_protocol::PermissionOption;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
+/// Answer buttons the lock screen shows at most.
+pub(crate) const MAX_BUTTONS: usize = 3;
+/// Steps shown above the current one.
+pub(crate) const MAX_PREVIOUS: usize = 2;
 /// The largest payload APNs accepts for a Live Activity.
 pub(crate) const MAX_PAYLOAD: usize = 4096;
 /// The Swift type push-to-start names.
@@ -67,15 +74,22 @@ pub(crate) struct Attributes {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ContentState {
-    /// The turn's cost so far, formatted, such as `$0.34`.
+    /// The waiting permission's first [`MAX_BUTTONS`] options, in the
+    /// question phase, for the lock screen's answer buttons.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) options: Vec<PermissionOption>,
+    /// The waiting permission's id, in the question phase.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) cost: Option<String>,
+    pub(crate) permission: Option<u64>,
     pub(crate) phase: Phase,
     /// Plan entries completed, when the agent keeps a plan.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) plan_done: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) plan_total: Option<u32>,
+    /// The [`MAX_PREVIOUS`] steps before `step`, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) previous: Vec<String>,
     /// The question waiting, in the question phase.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) question: Option<String>,

@@ -88,7 +88,7 @@ fn results_group_devices_then_worktrees_then_branches_in_sidebar_order() {
     let hits = search("STUDIO", &devices(&snapshot));
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].kind, Kind::Device);
-    assert_eq!(hits[0].context, "0 spaces");
+    assert_eq!(hits[0].context, "\u{2068}0\u{2069} spaces");
     assert_eq!(
         hits[0].target,
         Target::Device {

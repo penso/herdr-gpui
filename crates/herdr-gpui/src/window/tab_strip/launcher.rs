@@ -4,6 +4,7 @@
 //! the selected host show, and none while no chat can start there.
 
 use super::HerdrWindow;
+use crate::i18n::fl;
 use crate::{
     browser::Slot,
     config::{ChatLauncher, corners},
@@ -169,7 +170,7 @@ impl HerdrWindow {
     /// and click, for the caller to shape and fill.
     fn agent_button(&self, slot: Slot, agent: Agent, cx: &mut Context<Self>) -> Stateful<Div> {
         let selector = format!("chat-launch-{}", agent.name());
-        let label = SharedString::from(format!("New {} chat", agent.display_name()));
+        let label = SharedString::from(fl!("tab-strip-new-chat", agent = agent.display_name()));
         let (foreground, surface) = (self.theme.foreground, self.theme.surface);
         div()
             .id(SharedString::from(slot.selector(&selector)))

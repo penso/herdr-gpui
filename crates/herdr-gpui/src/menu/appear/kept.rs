@@ -31,6 +31,8 @@ pub(in crate::menu) struct Kept {
     merge_method: Option<crate::pull_request::MergeMethod>,
     merge_target: Option<crate::pr_actions::Target>,
     remote_pairing: Option<crate::remote::PairingDialog>,
+    /// The device All Devices showed unfolded, so it leaves as it was.
+    unfolded_device: Option<String>,
 }
 
 impl Kept {
@@ -53,5 +55,6 @@ impl Kept {
         std::mem::swap(&mut self.merge_method, &mut menu.merge_method);
         std::mem::swap(&mut self.merge_target, &mut menu.merge_target);
         std::mem::swap(&mut self.remote_pairing, &mut menu.remote_pairing);
+        std::mem::swap(&mut self.unfolded_device, &mut menu.unfolded_device);
     }
 }

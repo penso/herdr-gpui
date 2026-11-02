@@ -32,13 +32,19 @@ impl Severity {
         }
     }
 
+    /// The English word an agent's prompt names it by.
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Critical => "Critical",
-            Self::High => "High",
-            Self::Moderate => "Moderate",
-            Self::Low => "Low",
+            Self::Critical => "Critical", // i18n: data
+            Self::High => "High",         // i18n: data
+            Self::Moderate => "Moderate", // i18n: data
+            Self::Low => "Low",           // i18n: data
         }
+    }
+
+    /// The word the window shows.
+    pub(crate) fn text(self) -> String {
+        crate::i18n::fl!("security-severity", severity = self.name())
     }
 
     /// Whether the bar counts it: a low or moderate alert alone is not worth
@@ -113,7 +119,7 @@ pub(crate) struct Account(pub(crate) Tokens);
 
 impl std::fmt::Debug for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Account(..)")
+        f.write_str("Account(..)") // i18n: data
     }
 }
 

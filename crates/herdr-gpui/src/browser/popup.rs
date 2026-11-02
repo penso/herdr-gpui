@@ -38,6 +38,7 @@ pub(crate) struct Popup(MainThreadBound<Box<Built>>);
 
 impl std::fmt::Debug for Popup {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // i18n: data
         f.write_str("Popup")
     }
 }

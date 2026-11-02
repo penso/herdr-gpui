@@ -127,7 +127,7 @@ fn a_read_page_shows_its_facts_and_the_list_folds_into_a_column(cx: &mut gpui::T
 fn tabs_switch_and_closing_returns_the_cards(cx: &mut gpui::TestAppContext) {
     let (view, cx) = shown(cx);
     read(&view, cx, alert_item(), alert_page());
-    let tab = cx.debug_bounds("security-tab-Advisory").unwrap();
+    let tab = cx.debug_bounds("security-tab-advisory").unwrap();
     cx.simulate_click(tab.center(), Modifiers::default());
     draw(cx);
     assert!(cx.debug_bounds("security-references").is_some());

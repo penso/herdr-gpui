@@ -9,6 +9,7 @@ use std::{
 };
 
 mod accounts;
+mod en_xa;
 mod filter;
 mod page;
 mod pane;

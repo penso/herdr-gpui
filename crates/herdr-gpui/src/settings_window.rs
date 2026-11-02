@@ -44,7 +44,7 @@ use crate::{
     config::{Config, Theme, corners, mix},
     fonts::StyledFont,
     herdr_settings,
-    i18n::fl,
+    i18n::{Localize, fl},
 };
 use gpui::{prelude::*, *};
 
@@ -506,7 +506,7 @@ impl SettingsWindow {
                 Err(error) => {
                     self.error = Some(fl!(
                         "settings-error-system-appearance",
-                        error = error.to_string()
+                        error = error.localize()
                     ));
                 }
             }

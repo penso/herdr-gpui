@@ -62,6 +62,7 @@ fn kind(tab: &Tab) -> TabKind {
         Some(Location::Orchestrator { .. }) => TabKind::Orchestrator,
         Some(Location::Code { .. }) => TabKind::Code,
         Some(Location::Devices) => TabKind::Devices,
+        Some(Location::CoreTerminal { .. }) => TabKind::CoreTerminal,
     }
 }
 
@@ -80,6 +81,13 @@ fn location(tab: &Tab) -> Option<String> {
             .or_else(|| checkout.repo_key.clone())?,
         Location::Orchestrator { repo } => repo.checkout.clone(),
         Location::Code { file } => file.path.clone(),
+        // Every pane's terminal, for `herdr-core attach` and the like.
+        Location::CoreTerminal { panes, .. } => panes
+            .terminals()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(","),
         Location::Devices => return None,
     })
 }

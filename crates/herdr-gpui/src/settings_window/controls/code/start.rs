@@ -8,6 +8,7 @@ use crate::code_server::{
     launcher::{self, Cli, LICENSE_URL, PRIVACY_URL},
 };
 use crate::direction::Logical;
+use crate::i18n::Localize;
 
 impl SettingsWindow {
     /// The mode in effect, or `None` while VS Code is still being looked for.
@@ -110,7 +111,7 @@ impl SettingsWindow {
             Startup::Failed { error, .. } => card.child(self.render_code_state(
                 "icons/error.svg",
                 self.theme.palette[1],
-                fl!("settings-code-failed", error = error.to_string()).into(),
+                fl!("settings-code-failed", error = error.localize()).into(),
             )),
             // The mode card says why.
             Startup::Address | Startup::Finding | Startup::Missing => card,

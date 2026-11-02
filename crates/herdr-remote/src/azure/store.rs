@@ -3,6 +3,7 @@
 //! `HERDR_AZURE_CLIENT_SECRET` takes precedence.
 
 use super::{Error, Result, Settings};
+use crate::cloud::Value;
 use crate::credentials::{Entry, Store, read_entry, save_entry};
 use secrecy::{ExposeSecret, SecretString};
 
@@ -24,7 +25,7 @@ const ENTRY: Entry = Entry {
         if valid(value.expose_secret()) {
             Ok(())
         } else {
-            Err(Error::Field("Azure client secret").into())
+            Err(Error::Field(Value::AzureClientSecret).into())
         }
     },
 };
@@ -37,9 +38,11 @@ fn from_environment() -> Result<Option<SecretString>> {
     let Some(value) = std::env::var_os(VARIABLE) else {
         return Ok(None);
     };
-    let value = value.into_string().map_err(|_| Error::Encoding(VARIABLE))?;
+    let value = value
+        .into_string()
+        .map_err(|_| Error::Encoding(Value::Key(VARIABLE)))?;
     if !valid(value.trim()) {
-        return Err(Error::Field(VARIABLE));
+        return Err(Error::Field(Value::Key(VARIABLE)));
     }
     Ok(Some(value.trim().to_owned().into()))
 }
@@ -57,7 +60,7 @@ pub fn saved(store: Store) -> Result<Option<SecretString>> {
 
 pub fn save(store: Store, secret: Option<&SecretString>) -> Result<()> {
     if secret.is_some_and(|s| !valid(s.expose_secret())) {
-        return Err(Error::Field("Azure client secret"));
+        return Err(Error::Field(Value::AzureClientSecret));
     }
     save_entry(store, &ENTRY, secret).map_err(storage)
 }

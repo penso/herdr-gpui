@@ -3,7 +3,7 @@
 //! list item whose name says what the row shows, most telling part first.
 
 pub(super) use crate::accessibility::expandable;
-use crate::{HerdrWindow, window::chrome_focus::Region};
+use crate::{HerdrWindow, i18n::fl, window::chrome_focus::Region};
 use gpui::{Context, Role, StatefulInteractiveElement};
 use herdr_client::protocol::AgentStatus;
 
@@ -12,7 +12,7 @@ impl HerdrWindow {
     pub(super) fn sidebar_button<E: StatefulInteractiveElement>(
         &self,
         button: E,
-        label: &'static str,
+        label: impl Into<gpui::SharedString>,
     ) -> E {
         self.chrome_stop(Region::Sidebar, button.role(Role::Button).aria_label(label))
     }
@@ -58,11 +58,13 @@ pub(super) fn workspace_name(
     muted: bool,
     host: Option<&str>,
 ) -> String {
+    let linked = linked.then(|| fl!("sidebar-spoken-linked-worktree"));
+    let status = status_word(status);
     join([
         Some(label),
-        linked.then_some("linked worktree"),
-        status_word(status),
-        muted.then_some("notifications muted"),
+        linked.as_deref(),
+        status.as_deref(),
+        muted.then(|| fl!("sidebar-spoken-muted")).as_deref(),
         host,
     ])
 }
@@ -91,20 +93,17 @@ pub(super) fn agent_name(
 /// A device's header: its name, whether it is connected, and, in the Devices
 /// layout, how many of its agents work.
 pub(super) fn device_name(label: &str, connected: bool, working: Option<&str>) -> String {
-    let working = working.map(|count| format!("{count} working"));
-    join([
-        Some(label),
-        Some(if connected {
-            "connected"
-        } else {
-            "disconnected"
-        }),
-        working.as_deref(),
-    ])
+    let working = working.map(|count| fl!("sidebar-spoken-working", count = count));
+    let connection = if connected {
+        fl!("sidebar-spoken-connected")
+    } else {
+        fl!("sidebar-spoken-disconnected")
+    };
+    join([Some(label), Some(&connection), working.as_deref()])
 }
 
 /// `Unknown` says nothing a listener could use.
-fn status_word(status: AgentStatus) -> Option<&'static str> {
+fn status_word(status: AgentStatus) -> Option<String> {
     (status != AgentStatus::Unknown).then(|| super::agents::status_text(status))
 }
 
@@ -115,73 +114,8 @@ fn join<'a>(parts: impl IntoIterator<Item = Option<&'a str>>) -> String {
         .map(str::trim)
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
-        .join(", ")
+        .join(&fl!("sidebar-spoken-separator"))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_workspace_names_its_status_and_a_remote_device() {
-        assert_eq!(
-            workspace_name("herdr", false, AgentStatus::Blocked, false, None),
-            "herdr, blocked"
-        );
-        assert_eq!(
-            workspace_name("herdr", false, AgentStatus::Unknown, false, Some("devbox")),
-            "herdr, devbox"
-        );
-        assert_eq!(
-            workspace_name("fix/rounding", true, AgentStatus::Working, false, None),
-            "fix/rounding, linked worktree, working"
-        );
-        assert_eq!(
-            workspace_name("herdr", false, AgentStatus::Done, true, Some("devbox")),
-            "herdr, done, notifications muted, devbox"
-        );
-    }
-
-    #[test]
-    fn an_agent_names_its_state_and_place() {
-        assert_eq!(
-            agent_name(
-                "claude",
-                None,
-                "working",
-                Some(("herdr", Some("tests"))),
-                None
-            ),
-            "claude, working, herdr, tests"
-        );
-        assert_eq!(
-            agent_name("codex", None, "needs input", None, Some("devbox")),
-            "codex, needs input, devbox"
-        );
-    }
-
-    #[test]
-    fn a_pane_name_tells_same_named_agents_apart() {
-        assert_eq!(
-            agent_name("grok", Some("api"), "working", Some(("herdr", None)), None),
-            "grok, api, working, herdr"
-        );
-    }
-
-    #[test]
-    fn a_device_names_its_connection_and_working_agents() {
-        assert_eq!(device_name("Local", true, None), "Local, connected");
-        assert_eq!(
-            device_name("devbox", false, Some("2/5")),
-            "devbox, disconnected, 2/5 working"
-        );
-    }
-
-    #[test]
-    fn blank_parts_leave_no_empty_commas() {
-        assert_eq!(
-            agent_name("claude", Some(" "), " ", Some(("", None)), None),
-            "claude"
-        );
-    }
-}
+mod tests;

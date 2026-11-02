@@ -34,6 +34,10 @@ const END: f32 = 16.;
 pub(super) struct Pills;
 
 impl TabLayout for Pills {
+    fn panes(&self) -> &'static dyn super::panes::PaneChrome {
+        &super::panes::Pills
+    }
+
     fn width(&self, title: f32, shape: TabShape, _: &FontConfig, _: Indicators) -> f32 {
         // Every pill has a chip and an end slot, whatever leads it.
         let zoom = shape.marks_width();

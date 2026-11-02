@@ -32,6 +32,7 @@ async fn desktop_pr_changes_update_an_open_mobile_list_and_stale_identities_are_
             label: "Remote control".into(),
             cwd: "/code/app".into(),
             branch: Some("topic".into()),
+            worktree: None,
             chats: Vec::new(),
             terminals: vec![crate::hub::layout_terminal("t1", "Shell")],
         }],

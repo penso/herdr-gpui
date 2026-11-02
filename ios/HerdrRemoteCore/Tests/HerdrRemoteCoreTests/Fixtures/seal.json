@@ -1,0 +1,8 @@
+{
+  "device_private_key" : "KioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio",
+  "device_public_key" : "BAyQHUI8gxyoXifHPCY7oTJyG7nXqExPA4CypnVv1gEzHIhwI03sh4UEwXQUT6SxS2amUWkWBtgXPlW9N-OBVp4",
+  "ephemeral_private_key" : "XFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFw",
+  "nonce" : "AQIDBAUGBwgJCgsM",
+  "plaintext" : "{\"title\":\"herdr-gpui · Fix mise discovery\",\"body\":\"Run git push origin fix/mise?\",\"pane\":\"w1-p3\",\"kind\":\"permission\"}",
+  "sealed" : "BK924BslSJy3FVC6ADzKuoqIC5JtFvpbp9vZpuTnY7JBHSlfA4a2-DfIY9MtuFZ-OkgsmuUKMeKyt98ijOKRVoQBAgMEBQYHCAkKCwxCDcSVHbkbs6S3aq1UQTwaXiOQZSytEFL89JyX6sebwlGmle2LnGmzavu9SiUSnR3t2DQOxWqyq3lMGTFM1PNlIClNRgiNyThaoDWQNbHLD7rtflbRjqMGFksoJnUyYiuVB_huV8TiWH7nNDEA9UYB57M-D_APjxeIx15rey7EJPizRlK76A"
+}

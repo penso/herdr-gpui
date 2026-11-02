@@ -9,6 +9,20 @@ pub enum Error {
     Adding,
     #[error("This host and session are already saved as \u{201c}{0}\u{201d}.")]
     Exists(String),
+    #[error("Device names are at most 128 bytes, without control characters.")]
+    InvalidLabel,
+    #[error(
+        "Session names use letters, digits, dots, underscores, or hyphens (at most 64 bytes), excluding '.' and '..'."
+    )]
+    InvalidSession,
+    #[error("Enter an SSH target such as user@hostname or an SSH alias.")]
+    InvalidTarget,
+    #[error("The setup paths must be UTF-8.")]
+    NonUtf8SetupPath,
+    #[error("This device has no saved profile.")]
+    NoProfile,
+    #[error("Herdr UI has no state directory.")]
+    NoStateDirectory,
     #[error("Removing the device failed ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
     Remove {
         status: std::process::ExitStatus,
@@ -30,13 +44,13 @@ pub enum Error {
         status: std::process::ExitStatus,
         detail: String,
     },
-    #[error("{0}")]
-    SetupInput(&'static str),
     #[error("Saving the device timed out")]
     SetupTimeout,
     #[error("Tailscale returned an unreadable status: {0}")]
     TailscaleJson(#[source] serde_json::Error),
     #[error("Tailscale did not answer in time")]
     TailscaleTimeout,
+    #[error("Setting up a device in a terminal is unavailable on Windows.")]
+    TerminalSetupUnavailable,
     // keep-sorted end
 }

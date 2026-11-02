@@ -1,13 +1,13 @@
-# XcodeGen spec for Herdr Remote, the iOS companion that adds Live
-# Activities to Herdr's remote control web app. Generate the project with
-# `xcodegen` in this directory; the .xcodeproj, Info.plists, and
-# entitlements it writes are not committed. See README.md.
+# XcodeGen spec for Herdr Remote, the native iOS app for Herdr's remote
+# control (docs/ios-app-plan.md). Generate the project with `xcodegen` in
+# this directory; the .xcodeproj, Info.plists, and entitlements it writes
+# are not committed. See README.md.
 name: HerdrRemote
 
 options:
   bundleIdPrefix: so.pen
   deploymentTarget:
-    iOS: "17.2"
+    iOS: "26.0"
   createIntermediateGroups: true
 
 settings:
@@ -16,9 +16,9 @@ settings:
     # Set your own team here or in Xcode (Signing & Capabilities).
     DEVELOPMENT_TEAM: ""
     MARKETING_VERSION: 0.1.0
-    SWIFT_STRICT_CONCURRENCY: targeted
-    SWIFT_VERSION: "5.0"
-    TARGETED_DEVICE_FAMILY: "1"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
 
 packages:
   HerdrRemoteCore:
@@ -34,28 +34,150 @@ targets:
     dependencies:
       - package: HerdrRemoteCore
       - target: HerdrRemoteWidgets
+      - target: HerdrRemoteNotifications
+      - target: HerdrRemoteShare
+      - target: HerdrRemoteWatch
     info:
       path: HerdrRemote/Info.plist
       properties:
+        # From the build settings, which the TestFlight upload sets.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Herdr Remote
+        # Only standard algorithms (TLS, AES-GCM, ECDH, the system's
+        # signatures), which is exempt: builds skip the export compliance
+        # question in App Store Connect.
+        ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
-          - CFBundleURLName: so.pen.herdr-remote
+          - CFBundleURLName: so.pen.herdr.remote
             CFBundleURLSchemes: [herdr-remote]
-        NSCameraUsageDescription: Herdr Remote reads the pairing QR code Herdr shows on your computer.
+        NSCameraUsageDescription: Herdr Remote reads the pairing QR code Herdr shows on your computer, and takes photos you send to a chat.
+        NSFaceIDUsageDescription: Herdr Remote asks for Face ID before a chat allows every tool call without asking.
+        NSMicrophoneUsageDescription: Herdr Remote listens while you dictate a prompt, transcribing it on your phone.
+        NSSpeechRecognitionUsageDescription: Herdr Remote transcribes your dictated prompts on your phone.
         NSLocalNetworkUsageDescription: Herdr Remote talks to Herdr on your computers over your local network.
+        NSBonjourServices: [_herdr-remote._tcp]
+        NSBluetoothAlwaysUsageDescription: Herdr Remote finds your computers nearby over Bluetooth when you pair one, and, when you turn it on, tells them you are near so they hold alerts while you are at the desk.
+        # Presence reconnects to computers in the background, and an answer
+        # given elsewhere clears notifications through a background push.
+        UIBackgroundModes: [bluetooth-central, remote-notification]
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: true
         UILaunchScreen: {}
+        # A chat or terminal can open in a window of its own on iPad.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     entitlements:
       path: HerdrRemote/HerdrRemote.entitlements
       properties:
         # Live Activity push tokens need the push capability. Use
         # `production` for TestFlight and App Store builds.
         aps-environment: development
+        # The cache lives in the App Group, which the widgets will read.
+        com.apple.security.application-groups: [group.so.pen.herdr.remote]
+        # Questions interrupt Focus, as a waiting agent should.
+        com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-remote
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr.remote
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  HerdrRemoteWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "26.0"
+    sources:
+      - HerdrRemoteWatch
+      - path: Shared/WidgetSummary.swift
+      - path: Shared/WatchMessages.swift
+    dependencies:
+      - package: HerdrRemoteCore
+    info:
+      path: HerdrRemoteWatch/Info.plist
+      properties:
+        # From the build settings, which the TestFlight upload sets.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: Herdr
+        CFBundleIconName: AppIcon
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: so.pen.herdr.remote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr.remote.watchkitapp
+        # App Store Connect refuses the upload without the Watch app's icon.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  HerdrRemoteShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - HerdrRemoteShare
+      - path: Shared/WidgetSummary.swift
+      - path: HerdrRemote/BackgroundCommands.swift
+      - path: HerdrRemote/DeviceKey.swift
+      - path: HerdrRemote/Keychain.swift
+      - path: HerdrRemote/PreparedImage.swift
+      - path: HerdrRemote/RemoteClient.swift
+    dependencies:
+      - package: HerdrRemoteCore
+    info:
+      path: HerdrRemoteShare/Info.plist
+      properties:
+        # From the build settings, which the TestFlight upload sets.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: Herdr
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsImageWithMaxCount: 4
+    entitlements:
+      path: HerdrRemoteShare/HerdrRemoteShare.entitlements
+      properties:
+        # The paired computers' keychain item and the summary live here.
+        com.apple.security.application-groups: [group.so.pen.herdr.remote]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr.remote.share
+
+  HerdrRemoteNotifications:
+    type: app-extension
+    platform: iOS
+    sources:
+      - HerdrRemoteNotifications
+      - path: Shared/NotifyKey.swift
+      - path: Shared/NotificationCategories.swift
+    dependencies:
+      - package: HerdrRemoteCore
+    info:
+      path: HerdrRemoteNotifications/Info.plist
+      properties:
+        # From the build settings, which the TestFlight upload sets.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: Herdr Remote
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: HerdrRemoteNotifications/HerdrRemoteNotifications.entitlements
+      properties:
+        # The App Group is also the keychain group the alert key is in.
+        com.apple.security.application-groups: [group.so.pen.herdr.remote]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr.remote.notifications
 
   HerdrRemoteWidgets:
     type: app-extension
@@ -70,12 +192,23 @@ targets:
     info:
       path: HerdrRemoteWidgets/Info.plist
       properties:
+        # From the build settings, which the TestFlight upload sets.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Herdr Remote
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: HerdrRemoteWidgets/HerdrRemoteWidgets.entitlements
+      properties:
+        # The summary the widgets and Controls draw lives here.
+        com.apple.security.application-groups: [group.so.pen.herdr.remote]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-remote.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr.remote.widgets
+        # The answer intent's perform runs in the app; the widget only
+        # draws its button.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
 
 schemes:
   HerdrRemote:

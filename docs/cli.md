@@ -134,7 +134,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `fan-out PROMPT [--agent KIND[:N]]...` | Open the fan-out dialog prefilled; you start it there |
 | `chat [status]` | The `herdr-acp` chat panes of the window's host, this machine or an SSH host: agent, status, model, context window use, and whether the chat view or the terminal shows |
 | `chat show\|hide\|toggle [--pane ID]` | Show the native chat view over your pane (or ID, else the focused one), or its terminal |
-| `chat new AGENT [--pane ID]` | Open a tab running a `herdr-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). On an SSH host the tab runs that host's `herdr-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). Exits 8 when `herdr-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`herdr-acp agents` lists those that are) |
+| `chat new AGENT [--pane ID]` | Open a tab running a `herdr-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). On an SSH host the tab runs that host's `herdr-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). With no Herdr pane to go by, as when called from a Herdr 2 pane, a Herdr 2 tab in the active group splits its pane in use with the chat instead (see [Chats in Herdr 2 panes](rich-chat.md#chats-in-herdr-2-panes)); its pane id in `chat` is `core:` and the terminal's. Exits 8 when `herdr-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`herdr-acp agents` lists those that are) |
 
 ### Hosts
 
@@ -280,7 +280,7 @@ The change applies live; `config get focus_follows_mouse` reads it back.
 | Command | What it does |
 | --- | --- |
 | `remote [status]` | Whether remote control is on and its daemon runs: its port, version, the addresses it serves with network labels and daemon-host interface names, its certificate authority fingerprint, and paired and connected devices. JSON includes optional `status.address_details` keyed by origin; older daemons omit it |
-| `remote devices` | The paired devices with their IDs, when each was last seen, and whether it gets notifications. Exits 4 when there are none |
+| `remote devices` | The paired devices with their IDs, when each was last seen, whether it gets notifications, and the other machines it was paired with from here or is being paired with. JSON includes each device's optional `via` (the computer that vouched for it) and `hosts`, each with a `state` of `offered`, `allowed`, `asking`, `pending`, `paired`, or `failed`. Exits 4 when there are none |
 | `remote pair [--address HTTPS_ORIGIN]` | Open the pairing dialog, preferring Tailscale by default. Choose an address in the dialog, or pass an exact origin from `remote status` (for example `https://100.101.102.103:7443`). The QR and its token show only there, and the user approves the phone there. An unavailable address is reported in the dialog |
 | `remote restart` | Restart the daemon from the binary beside the app, as after a rebuild or update; phones reconnect on their own. Exits 6 while the service is already changing |
 | `remote revoke DEVICE` | Ask in the window to revoke a paired device, named by its ID from `remote devices` or its name (a name two devices share is refused); the user confirms there |
@@ -297,6 +297,28 @@ for `status`, where `status` is the daemon's own report, and
 ```sh
 herdr-gpui remote status --json
 herdr-gpui remote revoke d_6f1c
+```
+
+### Mods
+
+| Command | What it does |
+| --- | --- |
+| `mod [list]` | The mods the window runs: where each draws, its palette commands, and its last error. Exits 4 when there are none |
+| `mod reload NAME` | Read a mod's files again now, starting it over. Exits 5 when no mod of that name runs |
+| `mod open NAME` | Show a mod's activity bar app in the window's body. Exits 5 when no running mod of that name has one, 8 while the activity bar is off |
+| `mod panel [show\|hide\|toggle]` | The panel of mod sections on the window's right: whether it shows and which mods have a section, or show, hide, or toggle it (also the `toggle_mod_panel` command) |
+| `mod logs NAME [--lines N]` | The last lines (default 50, at most 200) the mod wrote with `herdr.log`. Exits 4 when there are none |
+| `mod check DIR` | Load a mod folder, run its `init` and `view` once against an empty state, and report what it draws. Runs here; Herdr UI need not run. Exits 1 with the error and its line when the mod is invalid |
+
+Mods are folders of sandboxed Luau in `<config>/herdr/gpui-mods/` that add
+status bar items, sidebar sections, and palette commands; saving a file
+reloads its mod. See [Mods](mods.md). `--json` gives `{"dir", "mods": [...]}`
+for `list`, each with `name`, `places`, `commands`, `drawn`, and `error`, and
+`{"name", "valid", "elements", "places", "hash", "log"}` for `check`.
+
+```sh
+herdr-gpui mod check ~/.config/herdr/gpui-mods/agents
+herdr-gpui mod logs agents --lines 20
 ```
 
 ### Events

@@ -13,6 +13,7 @@ use crate::{
         model::{Account, Balance, Provider, Report, Section, Unit, group},
         probe::{Probe, Request},
         service::{Meta, Service, Setting, json},
+        text::Text,
     },
 };
 use serde::{Deserialize, de::IgnoredAny};
@@ -29,9 +30,7 @@ pub(crate) struct Wayfinder;
 static META: Meta = Meta::new("wayfinder", "Wayfinder").settings(&[Setting::new(
     "base_url",
     &["WAYFINDER_GATEWAY_URL"],
-    "The Wayfinder gateway, started with `wayfinder-router serve`. Defaults to \
-         http://127.0.0.1:8088; another URL must be HTTPS, or plain HTTP on a loopback \
-         address.",
+    "usage-wayfinder-setting-base-url",
 )]);
 
 impl Service for Wayfinder {
@@ -90,42 +89,42 @@ fn parse(health: &str, models: &str, savings: &str, metrics: Option<&str>) -> Re
     let savings: Savings = json(savings)?;
     let missing = health.missing_keys.map_or(0, |keys| keys.len());
     let status = if health.offline {
-        "Offline mode".to_owned()
+        Text::message("usage-wayfinder-offline")
     } else if models.dry_run {
-        "Dry run".to_owned()
+        Text::message("usage-wayfinder-dry-run")
     } else if health.status == "degraded" {
-        match missing {
-            0 => "Degraded".to_owned(),
-            1 => "Degraded, 1 key missing".to_owned(),
-            count => format!("Degraded, {count} keys missing"),
-        }
+        Text::message("usage-wayfinder-degraded").arg("missing", missing)
     } else {
-        "Local gateway".to_owned()
+        Text::message("usage-wayfinder-local-gateway")
     };
-    let model_count = match models.models.len() {
-        1 => "1 model".to_owned(),
-        count => format!("{count} models"),
+    let model_count = models.models.len();
+    // The gateway's own health word, such as `ok` or `degraded`.
+    let mode = match (health.offline, models.dry_run) {
+        (false, false) => "live",
+        (true, false) => "offline",
+        (false, true) => "dry-run",
+        (true, true) => "both",
     };
-    let mut gateway = format!("{} · {model_count}", health.status);
-    if health.offline {
-        gateway.push_str(" · offline");
-    }
-    if models.dry_run {
-        gateway.push_str(" · dry run");
-    }
+    let gateway = Text::message("usage-wayfinder-gateway-state")
+        .arg("status", health.status.as_str())
+        .arg("models", model_count)
+        .arg("mode", mode);
 
     let mut routes: Vec<(String, Route)> = savings.by_route.into_iter().collect();
     routes.sort_by(|a, b| b.1.requests.cmp(&a.1.requests).then_with(|| a.0.cmp(&b.0)));
-    let mut facts = vec![("Gateway".to_owned(), gateway)];
+    let mut facts = vec![(Text::message("usage-wayfinder-gateway"), gateway)];
     if savings.requests > 0 && !routes.is_empty() {
+        // Route names are the gateway's, as are the separators between them.
         facts.push((
-            "Routed".into(),
-            routes
-                .iter()
-                .take(5)
-                .map(|(name, route)| format!("{name}: {}", group(route.requests)))
-                .collect::<Vec<_>>()
-                .join(" · "),
+            Text::message("usage-wayfinder-routed"),
+            Text::service(
+                routes
+                    .iter()
+                    .take(5)
+                    .map(|(name, route)| format!("{name}: {}", group(route.requests)))
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+            ),
         ));
     }
     let saved = savings.requests > 0 && savings.saved > 0.;
@@ -135,26 +134,32 @@ fn parse(health: &str, models: &str, savings: &str, metrics: Option<&str>) -> Re
         } else {
             format!("{:.1}", savings.saved_pct)
         };
-        let relative = format!("{percent}% vs highest-cost route");
         // Unpriced gateways save in relative units, never dollars.
-        let text = match (savings.priced, savings.saved < 0.01) {
-            (false, _) => relative,
-            (true, true) => format!("<$0.01 · {relative}"),
-            (true, false) => format!("${:.2} · {relative}", savings.saved),
+        let value = match (savings.priced, savings.saved < 0.01) {
+            (false, _) => Text::message("usage-wayfinder-saved-relative").arg("percent", percent),
+            (true, true) => Text::message("usage-wayfinder-saved-value")
+                .arg("amount", "<$0.01")
+                .arg("percent", percent),
+            (true, false) => Text::message("usage-wayfinder-saved-value")
+                .arg("amount", format!("${:.2}", savings.saved))
+                .arg("percent", percent),
         };
-        facts.push(("Saved, last 30 days".into(), text));
+        facts.push((Text::message("usage-wayfinder-saved"), value));
     }
     if let Some(latency) = metrics.and_then(average_decision_ms) {
-        facts.push(("Avg decision".into(), format!("{latency:.1} ms")));
+        facts.push((
+            Text::message("usage-wayfinder-decision"),
+            Text::message("usage-wayfinder-milliseconds").arg("time", format!("{latency:.1}")),
+        ));
     }
     let shares = (savings.requests > 0).then(|| Section::Shares {
-        title: "Requests by route, last 30 days".into(),
+        title: Text::message("usage-wayfinder-requests-by-route"),
         shares: routes
             .iter()
             .take(5)
             .map(|(name, route)| {
                 (
-                    name.clone(),
+                    Text::service(name),
                     (route.requests.max(0) as f64 / savings.requests as f64 * 100.) as f32,
                 )
             })
@@ -163,21 +168,21 @@ fn parse(health: &str, models: &str, savings: &str, metrics: Option<&str>) -> Re
     Ok(Report::new(
         Provider(&Wayfinder),
         Account {
-            email: Some(format!("{model_count} · local gateway")),
+            email: Some(Text::message("usage-wayfinder-account").arg("models", model_count)),
             plan: Some(status),
         },
         Vec::new(),
     )
     .with_balances((saved && savings.priced).then(|| {
         Balance::new(
-            "Saved, last 30 days",
+            Text::message("usage-wayfinder-saved"),
             savings.saved,
             Unit::Currency("USD".into()),
         )
     }))
     .with_sections(
         [Section::Facts {
-            title: "Usage".into(),
+            title: Text::message("usage-report-usage"),
             facts,
         }]
         .into_iter()
@@ -257,12 +262,12 @@ mod tests {
         let report = parse(HEALTH, MODELS, SAVINGS, Some(METRICS)).unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(
-            report.account.email.as_deref(),
-            Some("2 models · local gateway")
+            report.account.email,
+            Some(Text::message("usage-wayfinder-account").arg("models", 2))
         );
         assert_eq!(
-            report.account.plan.as_deref(),
-            Some("Degraded, 1 key missing")
+            report.account.plan,
+            Some(Text::message("usage-wayfinder-degraded").arg("missing", 1))
         );
         assert_eq!(report.balances[0].text(), "$4.12");
         let Section::Facts { facts, .. } = &report.sections[0] else {
@@ -271,13 +276,27 @@ mod tests {
         assert_eq!(
             facts,
             &[
-                ("Gateway".into(), "degraded · 2 models".into()),
-                ("Routed".into(), "local: 10 · cloud: 4".into()),
                 (
-                    "Saved, last 30 days".into(),
-                    "$4.12 · 73.3% vs highest-cost route".into()
+                    Text::message("usage-wayfinder-gateway"),
+                    Text::message("usage-wayfinder-gateway-state")
+                        .arg("status", "degraded")
+                        .arg("models", 2)
+                        .arg("mode", "live")
                 ),
-                ("Avg decision".into(), "0.2 ms".into()),
+                (
+                    Text::message("usage-wayfinder-routed"),
+                    Text::service("local: 10 · cloud: 4")
+                ),
+                (
+                    Text::message("usage-wayfinder-saved"),
+                    Text::message("usage-wayfinder-saved-value")
+                        .arg("amount", "$4.12")
+                        .arg("percent", "73.3")
+                ),
+                (
+                    Text::message("usage-wayfinder-decision"),
+                    Text::message("usage-wayfinder-milliseconds").arg("time", "0.2")
+                ),
             ]
         );
         let Section::Shares { shares, .. } = &report.sections[1] else {
@@ -298,12 +317,24 @@ mod tests {
         )
         .unwrap();
         assert!(report.balances.is_empty());
-        assert_eq!(report.account.plan.as_deref(), Some("Offline mode"));
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-wayfinder-offline"))
+        );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0].1, "ok · 1 model · offline · dry run");
-        assert_eq!(facts[2].1, "50% vs highest-cost route");
+        assert_eq!(
+            facts[0].1,
+            Text::message("usage-wayfinder-gateway-state")
+                .arg("status", "ok")
+                .arg("models", 1)
+                .arg("mode", "both")
+        );
+        assert_eq!(
+            facts[2].1,
+            Text::message("usage-wayfinder-saved-relative").arg("percent", "50")
+        );
     }
 
     #[test]

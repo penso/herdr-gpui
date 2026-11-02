@@ -45,3 +45,19 @@ fn code_keeps_its_html_and_prose_decodes_entities() {
     // An unclosed span is a lone backtick.
     assert_eq!(without_html("a ` b <b>c</b>"), "a ` b c");
 }
+
+#[test]
+fn media_placeholders_follow_a_language_switch() {
+    use herdr_i18n::{Locale, Pseudo};
+    let body = "See <img src=\"https://x/y.png\">";
+    let markdown = Markdown::default();
+    crate::i18n::show(&Locale::FALLBACK);
+    let english = markdown.lines(body);
+    assert_eq!(english[0].text, "See [image]");
+    crate::i18n::show(&Pseudo::Accented.locale());
+    let accented = markdown.lines(body);
+    let image = crate::i18n::fl!("orchestrator-markdown-image");
+    crate::i18n::show(&Locale::FALLBACK);
+    assert!(herdr_i18n::pseudo::is_marked(&image), "{image}");
+    assert_eq!(accented[0].text, format!("See {image}"));
+}

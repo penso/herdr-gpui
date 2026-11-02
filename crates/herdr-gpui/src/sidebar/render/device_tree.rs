@@ -3,6 +3,7 @@
 //! list. The headers are the spaces list's own, so folding, menus, and the
 //! pinned header work as in every other layout.
 
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     sidebar::{Indicators, agents::sorted_agents, cell::RowContext, layout::SidebarLook, wash},
@@ -102,7 +103,7 @@ impl HerdrWindow {
                 div()
                     .pl(px(look.content_x() + look.nest_indent()))
                     .text_color(rgb(theme.muted))
-                    .child(crate::sidebar::label_text("no agents")),
+                    .child(crate::sidebar::label_text(&fl!("sidebar-no-agents"))),
             );
             count = 1;
         }

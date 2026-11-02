@@ -33,6 +33,10 @@ const STATUS_LEFT: f32 = PAD + ICON - 5.;
 pub(super) struct Compact;
 
 impl TabLayout for Compact {
+    fn panes(&self) -> &'static dyn super::panes::PaneChrome {
+        &super::panes::Underline
+    }
+
     fn width(&self, title: f32, shape: TabShape, _: &FontConfig, _: Indicators) -> f32 {
         let icon = 2. * MARGIN_X + PAD + ICON + PAD;
         if !shape.selected {

@@ -269,14 +269,17 @@ impl SearchInput {
         }
     }
 
-    /// Shows what `placeholder` formats now, and formats it again whenever
-    /// the locale changes.
+    /// Shows what `placeholder` formats now, laid out again only when its text
+    /// changed (callers set it every poll), and formats it again per locale.
     pub(crate) fn set_placeholder_with(
         &mut self,
         placeholder: impl Fn() -> String + 'static,
         cx: &mut Context<Self>,
     ) {
-        self.show_placeholder(placeholder(), cx);
+        let shown = placeholder();
+        if self.placeholder != shown {
+            self.show_placeholder(shown, cx);
+        }
         self.localized = Some(Box::new(placeholder));
     }
 
@@ -295,11 +298,11 @@ impl SearchInput {
 
     /// The field's accessible name, which the placeholder otherwise stands
     /// in for. Unchanged is a no-op, so the owner may set it from its render.
-    pub(crate) fn set_label(&mut self, label: &'static str, cx: &mut Context<Self>) {
+    pub(crate) fn set_label(&mut self, label: &str, cx: &mut Context<Self>) {
         if self.label.as_deref() == Some(label) {
             return;
         }
-        self.label = Some(label.into());
+        self.label = Some(label.to_owned().into());
         cx.notify();
     }
 

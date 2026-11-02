@@ -41,6 +41,9 @@ mod embedded;
 #[cfg(any(target_os = "macos", windows))]
 mod favicon;
 
+/// The pill on a divider between groups, under real pointer events.
+mod divider_grip;
+
 /// Editor groups. Blank browser tabs need no native page, so none is
 /// created, and a split alone needs no page at all.
 mod groups;
@@ -118,6 +121,16 @@ mod workspace_close;
 /// pages open a browser tab.
 #[cfg(any(target_os = "macos", windows))]
 mod zoom;
+
+/// The toolbar under `en-XB`. A blank tab opens nothing where builds show
+/// no pages.
+#[cfg(any(target_os = "macos", windows))]
+mod rtl;
+
+/// The `en-XA` leak test. A blank tab opens nothing where builds show no
+/// pages.
+#[cfg(any(target_os = "macos", windows))]
+mod en_xa;
 
 /// Terminal padding beside a page; only builds that show pages open one.
 #[cfg(any(target_os = "macos", windows))]

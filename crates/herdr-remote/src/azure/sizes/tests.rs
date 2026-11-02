@@ -84,8 +84,7 @@ fn only_the_linux_pay_as_you_go_price_is_kept() {
     ]);
     assert_eq!(prices.len(), 1);
     assert_eq!(prices["Standard_B2pts_v2"], Price(0.00949));
-    assert_eq!(Price(0.00949).text(true), "$0.0095/hr · ~$7/mo");
-    assert_eq!(Price(1.5).text(false), "$1.50/hr");
+    assert!((Price(0.00949).monthly() - 6.9277).abs() < 1e-9);
 }
 
 #[test]
@@ -95,7 +94,7 @@ fn sandbox_sizes_get_the_most_memory_the_service_allows() {
         (size.cpu(), size.memory()),
         ("2000m".into(), "4096Mi".into())
     );
-    assert_eq!(size.summary(), "2 vCPU · 4 GiB · 40 GiB disk");
+    assert_eq!((size.cores(), size.disk_gib()), ("2".into(), 40));
     let half = SandboxSize::parse("0.5").unwrap();
     assert_eq!(
         (half.cores(), half.memory()),

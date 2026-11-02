@@ -3,6 +3,7 @@
 //! the header then keeps the plan's progress at hand.
 
 use super::{super::chats::ChatPane, Hues};
+use crate::i18n::fl;
 use crate::{HerdrWindow, config::corners, notifications::safe_text};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::PlanStatus;
@@ -76,7 +77,7 @@ impl HerdrWindow {
                             .size(px(9.))
                             .text_color(rgb(if working { hues.yellow } else { hues.green })),
                     )
-                    .child(format!("Plan {done}/{}", plan.len()))
+                    .child(fl!("chat-plan-progress", done = done, total = plan.len()))
                     .into_any_element(),
             );
         }
@@ -126,7 +127,7 @@ impl HerdrWindow {
         let theme = &self.theme;
         let hues = Hues::of(theme);
         let small = self.chat_small_text();
-        let section = |title: &'static str, count: String| {
+        let section = |title: String, count: String| {
             div()
                 .flex()
                 .text_size(px((self.chat_text_size() - 2.).max(10.)))
@@ -141,7 +142,7 @@ impl HerdrWindow {
                 div()
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(format!("and {} more", count - ROWS))
+                    .child(fl!("chat-more", count = count - ROWS))
             })
         };
         let plan = &chat.session.transcript().plan;
@@ -155,7 +156,10 @@ impl HerdrWindow {
                 .flex()
                 .flex_col()
                 .gap(px(6.))
-                .child(section("PLAN", format!("{done}/{}", plan.len())))
+                .child(section(
+                    fl!("chat-rail-plan"),
+                    format!("{done}/{}", plan.len()),
+                ))
                 .children(plan.iter().take(ROWS).map(|step| {
                     let (icon, color) = match step.status {
                         PlanStatus::Completed => ("icons/status-solid-done.svg", hues.green),
@@ -190,16 +194,13 @@ impl HerdrWindow {
         });
         let changed = chat.prepared.changed();
         let files = (!changed.is_empty()).then(|| {
-            let count = match changed.len() {
-                1 => "1 file".to_owned(),
-                count => format!("{count} files"),
-            };
+            let count = fl!("chat-rail-files", count = changed.len());
             div()
                 .debug_selector(|| "chat-changed".into())
                 .flex()
                 .flex_col()
                 .gap(px(6.))
-                .child(section("CHANGED", count))
+                .child(section(fl!("chat-rail-changed"), count))
                 .children(changed.iter().take(ROWS).map(|diff| {
                     div()
                         .flex()

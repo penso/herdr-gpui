@@ -159,5 +159,5 @@ fn a_corrupt_catalog_is_an_error_not_an_empty_one() {
     fs::write(catalog.file(), "{").unwrap();
     assert!(matches!(load(), Err(Error::Json(_))));
     fs::write(catalog.file(), r#"{"version": 9, "projects": []}"#).unwrap();
-    assert!(matches!(load(), Err(Error::Field(_))));
+    assert!(matches!(load(), Err(Error::Field(Field::Catalog))));
 }
