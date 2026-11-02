@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+// i18n: migrated
 
 mod error;
 #[cfg(any(target_os = "macos", target_os = "linux"))]

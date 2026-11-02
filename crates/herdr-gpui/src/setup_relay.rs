@@ -16,6 +16,7 @@
 //! over a private socket to [`host`]; the setup itself starts through
 //! [`SESSION`]. The setup ends with this app: quitting it hangs the setup up
 //! as closing a terminal would.
+// i18n: migrated
 
 mod attach;
 mod error;
@@ -53,7 +54,7 @@ pub(crate) fn run_helper(args: &[OsString]) -> Option<ExitCode> {
 }
 
 fn usage(helper: &str, arguments: &str) -> ExitCode {
-    eprintln!("Usage: herdr-gpui {helper} {arguments}");
+    eprintln!("Usage: herdr-gpui {helper} {arguments}"); // i18n: data
     ExitCode::from(2)
 }
 

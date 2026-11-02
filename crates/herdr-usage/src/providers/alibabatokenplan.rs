@@ -18,6 +18,8 @@ use super::oneconsole::{
     DOMAINS, check, cornerstone, date, encode, expand, find_object, find_value, first, form_body,
     gateway_request, sec_token, string,
 };
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -52,25 +54,17 @@ static META: Meta = Meta::new("alibabatokenplan", "Alibaba Token Plan")
         Setting::new(
             "region",
             &[],
-            "Which Token Plan to read: \"intl\" (International Team, the default), \"cn\" \
-             (China mainland Team), \"intl-personal\" or \"cn-personal\" (Personal/Solo).",
+            "usage-alibabatokenplan-setting-region",
         ),
         Setting::new(
             "cookie",
             &["ALIBABA_TOKEN_PLAN_COOKIE"],
-            "Only needed without a signed-in Bailian CLI (bl). Sign in to the Token Plan page \
-             (https://modelstudio.console.alibabacloud.com, or https://bailian.console.aliyun.com \
-             in China), open Developer Tools > Application > Cookies for that site, and copy \
-             at least login_aliyunid_ticket, login_aliyunid_pk, login_aliyunid_csrf and cna. \
-             Paste them as \"name=value; name2=value2\", or copy the whole Cookie header of the \
-             data/api.json request from the Network tab.",
+            "usage-alibabatokenplan-setting-cookie",
         ),
         Setting::new(
             "sec_token",
             &[],
-            "Optional. The console's sec_token, when it cannot be read from \
-             /tool/user/info.json: in Developer Tools > Network, the sec_token form field of \
-             any data/api.json request on the Token Plan page.",
+            "usage-alibabatokenplan-setting-sec-token",
         ),
     ]);
 
@@ -500,30 +494,50 @@ pub(super) fn report_with(provider: Provider, team: Team) -> Report {
         .map(|used| Window::new(Kind::Monthly, used, team.resets_at, Some(MONTH)))
         .into_iter()
         .collect();
-    let credits = || Unit::Count("credits".into());
+    let credits = || Unit::Count(Count::Credits);
     let balance = match (
         team.total.filter(|total| *total > 0.),
         team.remaining,
         team.used,
     ) {
-        (Some(total), Some(left), _) => {
-            Some(Balance::new("Credits left", left.max(0.), credits()).out_of(total))
-        }
-        (Some(total), None, Some(used)) => {
-            Some(Balance::new("Credits left", (total - used).max(0.), credits()).out_of(total))
-        }
-        (None, Some(left), _) => Some(Balance::new("Credits left", left.max(0.), credits())),
+        (Some(total), Some(left), _) => Some(
+            Balance::new(
+                Text::message("usage-alibabatokenplan-credits-left"),
+                left.max(0.),
+                credits(),
+            )
+            .out_of(total),
+        ),
+        (Some(total), None, Some(used)) => Some(
+            Balance::new(
+                Text::message("usage-alibabatokenplan-credits-left"),
+                (total - used).max(0.),
+                credits(),
+            )
+            .out_of(total),
+        ),
+        (None, Some(left), _) => Some(Balance::new(
+            Text::message("usage-alibabatokenplan-credits-left"),
+            left.max(0.),
+            credits(),
+        )),
         _ => None,
     };
     let account = Account {
         email: None,
-        plan: team.plan.filter(|plan| !plan.trim().is_empty()),
+        plan: team
+            .plan
+            .filter(|plan| !plan.trim().is_empty())
+            .map(Text::service),
     };
     let mut report = Report::new(provider, account, windows).with_balances(balance);
     if percent.is_none() && report.balances.is_empty() {
         report = report.with_sections([Section::Facts {
-            title: "Subscription".into(),
-            facts: vec![("Active token plans".into(), "None".into())],
+            title: Text::message("usage-alibabatokenplan-subscription"),
+            facts: vec![(
+                Text::message("usage-alibabatokenplan-active-plans"),
+                Text::message("usage-alibabatokenplan-none"),
+            )],
         }]);
     }
     report
@@ -539,7 +553,7 @@ pub(super) struct Personal {
 
 impl Personal {
     pub(super) fn report(self, provider: Provider) -> Report {
-        let facts: Vec<(String, String)> = self
+        let facts: Vec<(Text, Text)> = self
             .windows
             .iter()
             .zip(self.totals)
@@ -547,12 +561,10 @@ impl Personal {
                 let total = total.filter(|total| *total > 0.)?;
                 let used = total * f64::from(window.used) / 100.;
                 Some((
-                    window.kind.title().to_owned(),
-                    format!(
-                        "{} / {} credits",
-                        group(used.round() as i64),
-                        group(total.round() as i64)
-                    ),
+                    Text::message("usage-alibabatokenplan-window").arg("kind", kind(&window.kind)),
+                    Text::message("usage-alibabatokenplan-credits-of")
+                        .arg("used", group(used.round() as i64))
+                        .arg("total", group(total.round() as i64)),
                 ))
             })
             .collect();
@@ -560,7 +572,7 @@ impl Personal {
             provider,
             Account {
                 email: None,
-                plan: self.plan,
+                plan: self.plan.map(Text::service),
             },
             self.windows,
         );
@@ -568,10 +580,19 @@ impl Personal {
             report
         } else {
             report.with_sections([Section::Facts {
-                title: "Credits used".into(),
+                title: Text::message("usage-alibabatokenplan-credits-used"),
                 facts,
             }])
         }
+    }
+}
+
+/// A window's kind as the word `usage-alibabatokenplan-window` selects by.
+fn kind(kind: &Kind) -> &'static str {
+    match kind {
+        Kind::Session => "session",
+        Kind::Weekly => "weekly",
+        _ => "monthly",
     }
 }
 

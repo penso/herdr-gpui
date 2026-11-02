@@ -146,6 +146,7 @@ impl Job {
         then: Then,
     ) -> crate::Result<Self> {
         let provision = crate::cloud::provision(provider).ok_or(
+            // i18n: data
             crate::cloud::Error::Unavailable("This provider cannot make a machine for a dispatch."),
         )?;
         let host = super::sandbox_words(provider);
@@ -224,7 +225,7 @@ impl Job {
                         true,
                         Some(result.map_err(|error| {
                             tracing::warn!(%error, host = %self.host, "dispatch");
-                            error.to_string()
+                            crate::i18n::Localize::localize(&error)
                         })),
                     );
                 }
@@ -237,11 +238,19 @@ impl Job {
     pub(crate) fn status(&self) -> String {
         #[cfg(feature = "cloud")]
         if let (None, Some(step)) = (self.step, &self.provision) {
-            return format!("Making {}: {}", self.host, crate::cloud::status::step(step));
+            return crate::i18n::fl!(
+                "dispatch-making",
+                host = self.host.as_str(),
+                step = crate::cloud::status::step(step)
+            );
         }
         match self.step {
-            None => format!("Starting on {}...", self.host),
-            Some(step) => format!("On {}: {}...", self.host, step.label()),
+            None => crate::i18n::fl!("dispatch-starting", host = self.host.as_str()),
+            Some(step) => crate::i18n::fl!(
+                "dispatch-step",
+                host = self.host.as_str(),
+                step = teleport::text::step(Some(step))
+            ),
         }
     }
 }

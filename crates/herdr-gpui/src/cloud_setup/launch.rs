@@ -4,7 +4,11 @@
 //! directory of its own, so the shell starts where the device's does: home.
 
 use super::Pending;
-use crate::{HerdrWindow, NavigationTarget, worktree_scripts};
+use crate::{
+    HerdrWindow, NavigationTarget,
+    i18n::{Localize, fl},
+    worktree_scripts,
+};
 use gpui::Context;
 use herdr_client::{CloudProvider, Method};
 use serde_json::{Value, json};
@@ -126,8 +130,10 @@ impl HerdrWindow {
             "A new cloud device's setup script did not start"
         );
         // Kept on screen rather than flashed, as a worktree script's is.
-        self.local_error = Some(format!(
-            "The setup script for {label} did not start: {error}"
+        self.local_error = Some(fl!(
+            "cloud-setup-not-started",
+            device = label,
+            error = error.localize()
         ));
         cx.notify();
     }

@@ -116,7 +116,7 @@ fn details_name_the_target_and_the_loss() {
     let mut reading = Reading::default();
     reading.apply(start(), reply(31));
     reading.apply(start(), Outcome::Lost(ErrorKind::TimedOut));
-    let text = super::render::details(&reading);
+    let text = super::render::details(&reading).replace(['\u{2068}', '\u{2069}'], "");
     assert!(text.contains("1.1.1.1:443"), "{text}");
     assert!(text.contains("no connection"), "{text}");
     assert!(text.contains("Median 31 ms"), "{text}");
@@ -203,3 +203,5 @@ fn a_clock_set_back_drops_probes_from_the_future() {
     assert!(reading.expire(start() - seconds(60)));
     assert_eq!(reading.probes(), 0);
 }
+
+mod en_xa;

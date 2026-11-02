@@ -171,3 +171,9 @@ pub(crate) fn uncut(shown: Vec<String>) -> Vec<String> {
         .cloned()
         .collect()
 }
+
+/// `text` without the isolation marks Fluent puts around each placeable,
+/// for tests that compare a message with its English.
+pub(crate) fn unmarked(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}

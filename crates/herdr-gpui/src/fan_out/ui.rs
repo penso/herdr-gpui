@@ -13,6 +13,7 @@ use super::{
 };
 use crate::{
     HerdrWindow,
+    i18n::fl,
     icons::AgentIcon,
     menu::Page,
     progress::{self, Progress as Bar},
@@ -22,9 +23,6 @@ use crate::{
 use gpui::{prelude::*, *};
 use herdr_client::protocol::ClientShellSnapshot;
 use std::time::Instant;
-
-/// Why a restored lane was not scripted; see `fan_out_lanes_found`.
-const LANE_NOT_FOUND: &str = "A lane's workspace is not shown on its host on its branch; it may be gone or reused. Wait for the host to connect, or Forget.";
 
 impl HerdrWindow {
     /// The snapshot of the host a fan-out runs on, if it is still connected.
@@ -86,10 +84,8 @@ impl HerdrWindow {
             return;
         };
         let text = match fan_out.interrupted() {
-            0 => "Fan-out restored. Compare it from the workspace menu.".to_owned(),
-            lanes => format!(
-                "A fan-out was interrupted: {lanes} lane(s) need you. Review it from the workspace menu."
-            ),
+            0 => fl!("fan-out-restored"),
+            lanes => fl!("fan-out-interrupted", lanes = lanes),
         };
         self.fan_out = Some(fan_out);
         self.show_flash(Flash::warning(text), cx);
@@ -124,9 +120,7 @@ impl HerdrWindow {
                 .filter(|lane| lane.state == LaneState::Running)
                 .count();
             let total = fan_out.lanes.len();
-            let text = format!(
-                "Fan-out: {running} of {total} agent(s) prompted. Compare them from the workspace menu."
-            );
+            let text = fl!("fan-out-prompted", running = running, total = total);
             let flash = if running == total {
                 Flash::success(text)
             } else {
@@ -140,7 +134,7 @@ impl HerdrWindow {
             if open {
                 self.dismiss_menu(window, cx);
             }
-            self.show_flash(Flash::success("Kept one lane; removed the others"), cx);
+            self.show_flash(Flash::success(fl!("fan-out-kept")), cx);
             self.teleport_follow = Some(Follow::new(endpoint, workspace));
             return;
         }
@@ -211,12 +205,10 @@ impl HerdrWindow {
             return;
         };
         match fan_out.stage {
-            Stage::Confirm(_) if !found => fan_out.error = Some(LANE_NOT_FOUND.to_owned()),
+            // Why a restored lane was not scripted; see `fan_out_lanes_found`.
+            Stage::Confirm(_) if !found => fan_out.error = Some(fl!("fan-out-lane-not-found")),
             Stage::Compose(_) if !current => {
-                fan_out.error = Some(
-                    "This workspace has moved to another repository since the fan-out opened"
-                        .to_owned(),
-                );
+                fan_out.error = Some(fl!("fan-out-moved"));
             }
             Stage::Compose(_) => {
                 let destination = |endpoint: &str| {
@@ -293,9 +285,9 @@ impl HerdrWindow {
         let (primary, armed) = match &fan_out.stage {
             Stage::Compose(installed) => {
                 body = body.child(
-                    line(format!(
-                        "Each agent gets its own new worktree from {}, then the same prompt.",
-                        fan_out
+                    line(fl!(
+                        "fan-out-intro",
+                        base = fan_out
                             .origin
                             .base
                             .strip_prefix("refs/heads/")
@@ -315,9 +307,7 @@ impl HerdrWindow {
                                 crate::menu::accent(theme).into(),
                                 rgb(theme.active).into(),
                             ))
-                            .child(
-                                line("Looking for installed agents...".into()).text_color(muted),
-                            );
+                            .child(line(fl!("fan-out-looking")).text_color(muted));
                     }
                     Some(Err(error)) => {
                         body = body.child(
@@ -328,17 +318,18 @@ impl HerdrWindow {
                     }
                     Some(Ok(kinds)) if kinds.is_empty() => {
                         body = body.child(
-                            line(format!(
-                                "No supported agent is installed on {}.",
-                                fan_out.origin.endpoint_label
+                            line(fl!(
+                                "fan-out-no-agents",
+                                host = fan_out.origin.endpoint_label.as_str()
                             ))
                             .text_color(danger),
                         );
                     }
                     Some(Ok(kinds)) => {
-                        body = body.child(line(format!(
-                            "Agents · {} of {MAX_LANES}",
-                            fan_out.picks.total()
+                        body = body.child(line(fl!(
+                            "fan-out-agents",
+                            picked = fan_out.picks.total(),
+                            max = MAX_LANES
                         )));
                         for (index, kind) in kinds.iter().copied().enumerate() {
                             let count = fan_out.picks.count(kind);
@@ -397,18 +388,23 @@ impl HerdrWindow {
                 body = body.children(self.render_fan_out_spread(fan_out, cx));
                 let lanes = fan_out.picks.total();
                 let label = match (lanes, fan_out.host_count()) {
-                    (0 | 1, _) => "Start agent".to_owned(),
-                    (lanes, 0 | 1) => format!("Start {lanes} agents"),
-                    (lanes, hosts) => format!("Start {lanes} agents on {hosts} hosts"),
+                    (0 | 1, _) => fl!("fan-out-start-agent"),
+                    (lanes, 0 | 1) => fl!("fan-out-start-agents", lanes = lanes),
+                    (lanes, hosts) => {
+                        fl!("fan-out-start-agents-hosts", lanes = lanes, hosts = hosts)
+                    }
                 };
                 (label, fan_out.not_ready(prompt).is_none())
             }
             Stage::Launching | Stage::Compare | Stage::Confirm(_) | Stage::Removing(_) => {
                 let comparing = !matches!(fan_out.stage, Stage::Launching);
                 body = body.child(
-                    line(format!("“{}”", fan_out.prompt))
-                        .debug_selector(|| "fan-out-prompt".into())
-                        .text_color(muted),
+                    line(fl!(
+                        "fan-out-quoted-prompt",
+                        prompt = fan_out.prompt.as_str()
+                    ))
+                    .debug_selector(|| "fan-out-prompt".into())
+                    .text_color(muted),
                 );
                 if !comparing {
                     let settled = fan_out.lanes.iter().filter(|l| l.state.settled()).count();
@@ -427,9 +423,8 @@ impl HerdrWindow {
                         (LaneState::Running, Some(checkout)) if comparing => agent_status(
                             self.fan_out_snapshot(&checkout.endpoint_id),
                             &checkout.workspace_id,
-                        )
-                        .to_owned(),
-                        (state, _) => state.label().to_owned(),
+                        ),
+                        (state, _) => state.label(),
                     };
                     // A lane elsewhere says where it runs.
                     if let Some(checkout) = lane
@@ -442,12 +437,12 @@ impl HerdrWindow {
                             .iter()
                             .find(|endpoint| endpoint.id == checkout.endpoint_id)
                             .map_or(checkout.endpoint_id.as_str(), |e| e.label.as_str());
-                        status = format!("{status} · {host}");
+                        status = fl!("fan-out-lane-elsewhere", status = status, host = host);
                     }
                     let mut changes = match (&lane.checkout, lane.stats) {
                         (None, _) => None,
                         (Some(_), Some(stats)) => Some(stats.summary()),
-                        (Some(_), None) if comparing => Some("Reading changes...".to_owned()),
+                        (Some(_), None) if comparing => Some(fl!("fan-out-reading-changes")),
                         (Some(_), None) => None,
                     };
                     // A host that could not be read says so; any changes
@@ -455,8 +450,12 @@ impl HerdrWindow {
                     let unread = lane.unread.as_ref().filter(|_| lane.checkout.is_some());
                     if let Some(unread) = unread {
                         changes = Some(match lane.stats {
-                            Some(stats) => format!("{} · not updated: {unread}", stats.summary()),
-                            None => format!("Changes not read: {unread}"),
+                            Some(stats) => fl!(
+                                "fan-out-changes-stale",
+                                changes = stats.summary(),
+                                reason = unread.as_str()
+                            ),
+                            None => fl!("fan-out-changes-unread", reason = unread.as_str()),
                         });
                     }
                     let winner = matches!(
@@ -468,8 +467,8 @@ impl HerdrWindow {
                     // No lane is kept while another is still being finished.
                     let keepable = actionable && settled;
                     let resume = fan_out.resumable(index).map(|from| match from {
-                        Resume::Start => "Start agent",
-                        Resume::Prompt => "Send prompt",
+                        Resume::Start => fl!("fan-out-start-agent"),
+                        Resume::Prompt => fl!("fan-out-send-prompt"),
                     });
                     body = body.child(
                         div()
@@ -530,7 +529,7 @@ impl HerdrWindow {
                                             return;
                                         };
                                         if !found {
-                                            fan_out.error = Some(LANE_NOT_FOUND.to_owned());
+                                            fan_out.error = Some(fl!("fan-out-lane-not-found"));
                                             cx.notify();
                                         } else if fan_out.resume(index) {
                                             cx.notify();
@@ -539,55 +538,49 @@ impl HerdrWindow {
                                 ))
                             })
                             .when(actionable, |row| {
-                                row.child(small("fan-out-open", index).child("Open").on_click(
-                                    cx.listener(move |this, _, window, cx| {
-                                        cx.stop_propagation();
-                                        this.open_fan_out_lane(index, window, cx);
-                                    }),
-                                ))
+                                row.child(
+                                    small("fan-out-open", index)
+                                        .child(fl!("fan-out-open"))
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            cx.stop_propagation();
+                                            this.open_fan_out_lane(index, window, cx);
+                                        })),
+                                )
                             })
                             .when(keepable, |row| {
-                                row.child(small("fan-out-keep", index).child("Keep").on_click(
-                                    cx.listener(move |this, _, _, cx| {
-                                        cx.stop_propagation();
-                                        if let Some(fan_out) = &mut this.fan_out {
-                                            fan_out.stage = Stage::Confirm(index);
-                                            fan_out.error = None;
-                                            cx.notify();
-                                        }
-                                    }),
-                                ))
+                                row.child(
+                                    small("fan-out-keep", index)
+                                        .child(fl!("fan-out-keep"))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            if let Some(fan_out) = &mut this.fan_out {
+                                                fan_out.stage = Stage::Confirm(index);
+                                                fan_out.error = None;
+                                                cx.notify();
+                                            }
+                                        })),
+                                )
                             }),
                     );
                 }
                 match fan_out.stage {
                     Stage::Launching => {
-                        body = body.child(
-                            line("Closing this dialog does not stop the launch.".into())
-                                .text_color(muted),
-                        );
-                        ("Starting...".to_owned(), false)
+                        body =
+                            body.child(line(fl!("fan-out-closing-keeps-going")).text_color(muted));
+                        (fl!("fan-out-starting"), false)
                     }
                     Stage::Compare => {
-                        body = body.child(
-                            line(
-                                "Keep the lane you prefer to remove the others, or forget the fan-out to leave every worktree as it is."
-                                    .into(),
-                            )
-                            .text_color(muted),
-                        );
-                        ("Keep...".to_owned(), false)
+                        body = body.child(line(fl!("fan-out-compare-hint")).text_color(muted));
+                        (fl!("fan-out-keep-ellipsis"), false)
                     }
                     Stage::Confirm(winner) => {
                         let others = fan_out.doomed(winner).len();
                         body = body.child(
-                            line(format!(
-                                "Removes the other {others} worktree(s) and their uncommitted changes. Their branches stay, with any commits."
-                            ))
-                            .debug_selector(|| "fan-out-confirm".into())
-                            .text_color(danger),
+                            line(fl!("fan-out-confirm", others = others))
+                                .debug_selector(|| "fan-out-confirm".into())
+                                .text_color(danger),
                         );
-                        (format!("Remove {others} other(s)"), true)
+                        (fl!("fan-out-remove-others", others = others), true)
                     }
                     _ => {
                         body = body.child(progress::bar(
@@ -596,7 +589,7 @@ impl HerdrWindow {
                             crate::menu::accent(theme).into(),
                             rgb(theme.active).into(),
                         ));
-                        ("Removing...".to_owned(), false)
+                        (fl!("fan-out-removing"), false)
                     }
                 }
             }
@@ -621,11 +614,11 @@ impl HerdrWindow {
         let forgettable = matches!(fan_out.stage, Stage::Compare)
             && fan_out.lanes.iter().all(|lane| lane.state.settled());
         let dismiss = match fan_out.stage {
-            Stage::Compose(_) => "Cancel",
-            Stage::Confirm(_) => "Back",
+            Stage::Compose(_) => fl!("fan-out-cancel"),
+            Stage::Confirm(_) => fl!("fan-out-back"),
             // Work under way carries on; closing only hides it.
-            _ if fan_out.busy() => "Hide",
-            _ => "Close",
+            _ if fan_out.busy() => fl!("fan-out-hide"),
+            _ => fl!("fan-out-close"),
         };
         div()
             .flex()
@@ -656,11 +649,12 @@ impl HerdrWindow {
                                 div()
                                     .text_size(px(font.size * 1.35))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Fan out prompt"),
+                                    .child(fl!("fan-out-title")),
                             )
-                            .child(div().truncate().text_color(muted).child(format!(
-                                "{} on {}",
-                                fan_out.origin.repo_label, fan_out.origin.endpoint_label
+                            .child(div().truncate().text_color(muted).child(fl!(
+                                "fan-out-subtitle",
+                                repo = fan_out.origin.repo_label.as_str(),
+                                host = fan_out.origin.endpoint_label.as_str()
                             ))),
                     ),
             )
@@ -685,7 +679,7 @@ impl HerdrWindow {
                             button("fan-out-forget")
                                 .border_color(rgb(theme.active))
                                 .hover(|button| button.bg(rgb(theme.active)))
-                                .child("Forget")
+                                .child(fl!("fan-out-forget"))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.forget_fan_out(window, cx);

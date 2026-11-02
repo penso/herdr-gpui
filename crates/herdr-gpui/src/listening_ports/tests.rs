@@ -9,6 +9,7 @@ use crate::{Error, usage::Host};
 use herdr_client::ConnectTarget;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+mod en_xa;
 #[cfg(unix)]
 mod repeated_scans;
 mod ssh_links;

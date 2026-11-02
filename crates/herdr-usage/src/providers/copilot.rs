@@ -10,6 +10,7 @@
 //! and its optional budget bars, scraped from github.com's web billing page
 //! with browser cookies and a page nonce.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -33,16 +34,12 @@ static META: Meta = Meta::new("copilot", "Copilot")
         Setting::new(
             "token",
             &["COPILOT_API_TOKEN"],
-            "A GitHub token of the account with Copilot, e.g. a fine-grained personal \
-             access token from https://github.com/settings/personal-access-tokens with no \
-             extra permissions, or the output of `gh auth token`. Not needed when a \
-             Copilot editor plugin is signed in on the host.",
+            "usage-copilot-setting-token",
         ),
         Setting::new(
             "enterprise_host",
             &[],
-            "For GitHub Enterprise Cloud with data residency: the host, such as \
-             octocorp.ghe.com. Usage is then read from api.<host>.",
+            "usage-copilot-setting-enterprise-host",
         ),
     ]);
 
@@ -145,17 +142,13 @@ pub(crate) fn parse(body: &str, login: Option<String>) -> Result<Report> {
         .as_ref()
         .and_then(Snapshot::used)
         .or_else(|| fallback(monthly.chat, limited.chat));
-    let windows: Vec<Window> = [("Premium", premium), ("Chat", chat)]
-        .into_iter()
-        .filter_map(|(name, used)| {
-            Some(Window::new(
-                Kind::Named(name.into()),
-                used?,
-                resets,
-                Some(MONTH),
-            ))
-        })
-        .collect();
+    let windows: Vec<Window> = [
+        (Text::message("usage-copilot-premium"), premium),
+        (Text::message("usage-copilot-chat"), chat),
+    ]
+    .into_iter()
+    .filter_map(|(name, used)| Some(Window::new(Kind::Named(name), used?, resets, Some(MONTH))))
+    .collect();
     let credits = snapshots
         .premium_interactions
         .as_ref()
@@ -179,19 +172,29 @@ pub(crate) fn parse(body: &str, login: Option<String>) -> Result<Report> {
         .filter(|plan| !plan.is_empty());
     let mut facts = Vec::new();
     if let Some(used) = credits {
-        facts.push(("Credits used".into(), group(used.round() as i64)));
+        facts.push((
+            Text::message("usage-copilot-credits-used"),
+            Text::service(group(used.round() as i64)),
+        ));
     }
     if unlimited && windows.is_empty() {
-        facts.push(("Quota".into(), "Unlimited".into()));
+        facts.push((
+            Text::message("usage-copilot-quota"),
+            Text::message("usage-copilot-unlimited"),
+        ));
     }
-    Ok(
-        Report::new(Provider(&Copilot), Account { email: login, plan }, windows).with_sections(
-            (!facts.is_empty()).then(|| Section::Facts {
-                title: "Credits".into(),
-                facts,
-            }),
-        ),
+    Ok(Report::new(
+        Provider(&Copilot),
+        Account {
+            email: login.map(Text::service),
+            plan: plan.map(Text::service),
+        },
+        windows,
     )
+    .with_sections((!facts.is_empty()).then(|| Section::Facts {
+        title: Text::message("usage-copilot-credits"),
+        facts,
+    })))
 }
 
 /// `2025-02-01` or a full timestamp, taken as UTC.
@@ -291,13 +294,19 @@ mod tests {
           }
         }"#;
         let report = parse(body, Some("octocat".into())).unwrap();
-        assert_eq!(report.account.email.as_deref(), Some("octocat"));
-        assert_eq!(report.account.plan.as_deref(), Some("Individual pro"));
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("octocat")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Individual pro")
+        );
         assert_eq!(report.windows.len(), 2);
         let premium = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Premium".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-premium")))
             .unwrap();
         assert_eq!(premium.percent(), 10);
         assert_eq!(premium.length, Some(MONTH));
@@ -308,7 +317,7 @@ mod tests {
         let chat = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Chat".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-chat")))
             .unwrap();
         assert_eq!(chat.percent(), 50);
         assert!(report.sections.is_empty());
@@ -330,10 +339,16 @@ mod tests {
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Credits".into(),
+                title: Text::message("usage-copilot-credits"),
                 facts: vec![
-                    ("Credits used".into(), "31".into()),
-                    ("Quota".into(), "Unlimited".into()),
+                    (
+                        Text::message("usage-copilot-credits-used"),
+                        Text::service("31")
+                    ),
+                    (
+                        Text::message("usage-copilot-quota"),
+                        Text::message("usage-copilot-unlimited")
+                    ),
                 ],
             }]
         );
@@ -348,13 +363,13 @@ mod tests {
         let chat = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Chat".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-chat")))
             .unwrap();
         assert_eq!(chat.percent(), 20);
         let premium = report
             .windows
             .iter()
-            .find(|w| w.kind == Kind::Named("Premium".into()))
+            .find(|w| w.kind == Kind::Named(Text::message("usage-copilot-premium")))
             .unwrap();
         assert_eq!(premium.percent(), 75);
     }

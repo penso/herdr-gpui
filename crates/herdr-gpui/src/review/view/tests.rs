@@ -226,7 +226,7 @@ fn notes_go_to_the_focused_agent_or_the_workspace_s_first() {
         focused,
         Agent {
             pane_id: "w1:p2".into(),
-            label: "Pi".into()
+            label: Some("Pi".into())
         }
     );
     // A focused shell falls back to the workspace's agent, never
@@ -234,7 +234,7 @@ fn notes_go_to_the_focused_agent_or_the_workspace_s_first() {
     let fallback = pick_agent(&snapshot(base(Some("w1:p9"), agents))).unwrap();
     assert_eq!(fallback.pane_id, "w1:p1");
     let unnamed = pick_agent(&snapshot(base(None, vec![agent("w1:p3", "w1", None)])));
-    assert_eq!(unnamed.unwrap().label, "the agent");
+    assert_eq!(unnamed.unwrap().label, None);
     assert!(pick_agent(&snapshot(base(None, vec![agent("w0:p1", "w0", None)]))).is_none());
 }
 
@@ -242,6 +242,7 @@ mod any_repository;
 mod base;
 mod colours;
 mod editor;
+mod en_xa;
 mod files;
 mod find_again;
 mod keys;

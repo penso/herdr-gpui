@@ -2,7 +2,9 @@
 use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
 
 /// Where DWM keeps the accent it draws accented title bars and borders with.
+// i18n: data
 const KEY: &str = r"Software\Microsoft\Windows\DWM";
+// i18n: data
 const VALUE: &str = "AccentColor";
 
 /// The accent as packed RGB, or `None` when the value is missing, as it is

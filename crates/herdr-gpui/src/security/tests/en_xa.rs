@@ -100,7 +100,8 @@ fn repos() -> Vec<Repo> {
 }
 
 /// What GitHub and the repositories hold: names, packages, advisories,
-/// summaries, versions, links, the upgrade command, and errors' English.
+/// summaries, versions, links, and the upgrade command. Errors are
+/// messages of their own, so none is passed.
 fn data() -> Vec<String> {
     let alert = alert(1, Severity::Critical);
     let mut data: Vec<String> = [
@@ -140,7 +141,6 @@ fn data() -> Vec<String> {
         alert.vulnerable,
         alert.manifest,
         alert.advisory,
-        Error::Output.to_string(),
     ]);
     data
 }

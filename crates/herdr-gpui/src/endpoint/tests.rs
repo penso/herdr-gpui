@@ -4,6 +4,7 @@ use herdr_client::{ClientEvent, SavedHost};
 
 #[cfg(feature = "container")]
 mod container_stop;
+mod en_xa;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 mod local_peer_warning;
