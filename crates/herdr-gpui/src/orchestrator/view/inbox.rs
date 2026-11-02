@@ -632,22 +632,22 @@ impl OrchestratorView {
             };
             let snapshot = &repo.snapshot;
             if let Some(Access::ReadOnly { found }) = snapshot.access {
-                banners.push((banner(
-                    look,
-                    RED,
-                    "icons/lock.svg",
-                    of(fl!(
-                        "orchestrator-newer-schema",
-                        found = found,
-                        known = crate::orchestrator::SCHEMA_VERSION
-                    )),
-                ), None));
-            }
-            if let Some(error) = &snapshot.error {
                 banners.push((
-                    banner(look, RED, "icons/x.svg", of(error.localize())),
+                    banner(
+                        look,
+                        RED,
+                        "icons/lock.svg",
+                        of(fl!(
+                            "orchestrator-newer-schema",
+                            found = found,
+                            known = crate::orchestrator::SCHEMA_VERSION
+                        )),
+                    ),
                     None,
                 ));
+            }
+            if let Some(error) = &snapshot.error {
+                banners.push((banner(look, RED, "icons/x.svg", of(error.localize())), None));
             }
             for status in &snapshot.sources {
                 // Azure DevOps has no sign-in of its own in the title bar
