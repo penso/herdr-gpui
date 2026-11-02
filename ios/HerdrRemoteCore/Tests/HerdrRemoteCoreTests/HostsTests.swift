@@ -73,6 +73,15 @@ struct HostsTests {
         #expect(computer.via == Self.laptop)
     }
 
+    @Test func keepsOnlyHTTPSOriginsOfAHost() {
+        let enrolled = HostState.Enrolled(
+            device: "d-devbox", computer: "devbox", fingerprint: Self.devbox,
+            origins: ["http://b:7443", "https://c:7443", "https://c:7443"]
+        )
+        let computer = Computer(host: enrolled, key: Self.key, via: Self.laptop)
+        #expect(computer.origins == ["https://c:7443"])
+    }
+
     @Test func readsRecordsSavedBeforeVia() throws {
         let old = Data("""
         {"device":"d1","name":"studio","origins":["https://a:7443"],"fingerprint":"\(Self.laptop.hex)",\
