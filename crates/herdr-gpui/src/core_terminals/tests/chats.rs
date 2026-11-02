@@ -8,6 +8,8 @@ use crate::{
 use herdr_backend::{RunState, TerminalId, TerminalInfo};
 use herdr_client::protocol::AgentStatus;
 
+mod visibility;
+
 fn id(name: &str) -> TerminalId {
     TerminalId::new(name).unwrap()
 }

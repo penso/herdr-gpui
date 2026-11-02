@@ -13,6 +13,8 @@ use std::rc::Rc;
 
 type Pending = (Target, Rc<()>, visual::Job);
 
+mod core;
+
 fn targets() -> Vec<Target> {
     [
         ("w1:p1", "0123456789abcdef0123456789abcdef"),
@@ -24,6 +26,7 @@ fn targets() -> Vec<Target> {
         existing: None,
         pane_id: pane.into(),
         route: Route::Local,
+        surface: Surface::Herdr,
     })
     .collect()
 }
@@ -202,6 +205,7 @@ fn a_third_visible_split_gets_the_next_slot_before_the_first_panes_second_job(
             existing: None,
             pane_id: "w1:p3".into(),
             route: Route::Local,
+            surface: Surface::Herdr,
         });
         install(view, targets);
         let surface = Arc::make_mut(view.live.surface.as_mut().unwrap());

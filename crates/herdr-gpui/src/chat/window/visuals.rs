@@ -48,31 +48,45 @@ impl HerdrWindow {
         &mut self,
         cx: &App,
     ) -> Vec<(Target, Rc<()>, Job)> {
-        if !self.config.features.acp_chats || !self.live.surface_ready() {
+        if !self.config.features.acp_chats {
             return Vec::new();
         }
         let primary = self.primary_group();
-        if !self.drawn_group_slots().iter().any(|slot| {
-            primary.is_none_or(|group| group == slot.id)
-                && self.group_shown(slot.id, cx) == Shown::Terminal
-        }) {
-            return Vec::new();
-        }
-        let Some(surface) = self.live.surface.as_ref().filter(|s| s.popup.is_none()) else {
-            return Vec::new();
-        };
-        let visible: Vec<_> = surface
-            .panes
-            .iter()
-            .filter(|pane| self.chats.shown(&pane.pane_id))
-            .filter(|pane| {
+        let groups = self.drawn_group_slots();
+        let herdr_visible = self.live.surface_ready()
+            && groups.iter().any(|slot| {
+                primary.is_none_or(|group| group == slot.id)
+                    && self.group_shown(slot.id, cx) == Shown::Terminal
+            });
+        let mut visible: Vec<_> = self
+            .live
+            .surface
+            .as_ref()
+            .filter(|surface| herdr_visible && surface.popup.is_none())
+            .into_iter()
+            .flat_map(|surface| surface.panes.iter().map(move |pane| (pane, surface)))
+            .filter(|(pane, surface)| {
                 let rect = self
                     .chat_terminal_layout(pane, surface)
                     .map_or(pane.inner_rect, |layout| layout.conversation);
                 rect.width > 0 && rect.height > 0
             })
-            .map(|pane| pane.pane_id.clone())
+            .map(|(pane, _)| pane.pane_id.clone())
             .collect();
+        // Core chats are pages with their own split panes. They need no
+        // Herdr 1 surface, and a hidden or mirrored tab must not admit work.
+        for slot in groups {
+            let Shown::Page(tab) = self.group_shown(slot.id, cx) else {
+                continue;
+            };
+            for terminal in self.core_terminals.visible_chat_panes(tab) {
+                let key = crate::chat::core_pane::key(terminal);
+                if !visible.contains(&key) {
+                    visible.push(key);
+                }
+            }
+        }
+        visible.retain(|pane| self.chats.shown(pane));
         let mut font = self.config.ui.clone();
         font.size = self.chat_text_size();
         let style = DiagramStyle::of(&self.theme, &font);

@@ -191,6 +191,24 @@ impl CoreTerminals {
         self.tabs.get(&tab).is_some_and(|shown| !shown.observe)
     }
 
+    /// The panes a driving tab draws, including both sides during a zoom's
+    /// transition, but only the zoomed pane once it covers the split.
+    pub(crate) fn visible_chat_panes(&self, tab: TabId) -> Vec<&TerminalId> {
+        let Some(shown) = self.tabs.get(&tab).filter(|shown| !shown.observe) else {
+            return Vec::new();
+        };
+        let zoomed = shown
+            .zoom_at(crate::motion::now())
+            .filter(|(_, amount)| *amount >= 1.)
+            .map(|(terminal, _)| terminal);
+        shown
+            .panes
+            .terminals()
+            .into_iter()
+            .filter(|terminal| zoomed.is_none_or(|zoomed| zoomed == *terminal))
+            .collect()
+    }
+
     /// Makes `terminal` the pane in use in `tab`; whether that changed.
     pub(crate) fn set_active(&mut self, tab: TabId, terminal: TerminalId) -> bool {
         let Some(shown) = self.tabs.get_mut(&tab) else {
