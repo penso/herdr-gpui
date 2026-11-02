@@ -606,12 +606,7 @@ impl Bridge {
         };
         if let Some(text) = message.get("content").and_then(Value::as_str) {
             if let Some((task, call, status, summary)) = background::task_notification(text) {
-                return self
-                    .background
-                    .notified(task, call, status, summary)
-                    .map(|elsewhere| self.reported(elsewhere))
-                    .into_iter()
-                    .collect();
+                return self.task_notified(task, call, status, summary);
             }
             return local_output(text)
                 .map(|output| {

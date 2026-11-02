@@ -21,6 +21,7 @@ pub(super) struct Progress {
 struct Task {
     notified: bool,
     origin: String,
+    resumed: bool,
     row: String,
     run: Option<String>,
     terminal: bool,
@@ -212,6 +213,7 @@ impl Bridge {
         let Some(description) = message.get("description").and_then(Value::as_str) else {
             return Vec::new();
         };
+        let resumed = self.progress.tasks.contains_key(id);
         if let Some(previous) = self.progress.tasks.get(id) {
             // A task can resume under its existing ID only after completion,
             // and only with a strictly newer, explicitly reported run ID.
@@ -230,6 +232,7 @@ impl Bridge {
             Task {
                 notified: false,
                 origin: origin.to_owned(),
+                resumed,
                 row: row.clone(),
                 run: run.map(str::to_owned),
                 terminal: false,
@@ -243,6 +246,31 @@ impl Bridge {
                     .status(wire::ToolCallStatus::InProgress),
             )),
         ]
+    }
+
+    /// Model-visible notifications have no run ID. They can finish the first
+    /// observed run, but cannot distinguish a resumed task from its late past.
+    pub(super) fn task_notified(
+        &mut self,
+        id: &str,
+        call: Option<&str>,
+        status: &str,
+        summary: Option<&str>,
+    ) -> Vec<Out> {
+        let mut outs = Vec::new();
+        if let Some(task) = self.progress.tasks.get(id) {
+            if task.resumed || task.notified || call.is_some_and(|call| call != task.origin) {
+                return outs;
+            }
+            let Some(terminal) = terminal(Some(status)) else {
+                return outs;
+            };
+            outs.extend(self.finish_task(id, terminal, summary.map(text), true));
+        }
+        if let Some(elsewhere) = self.background.notified(id, call, status, summary) {
+            outs.push(self.reported(elsewhere));
+        }
+        outs
     }
 
     fn finish_task(

@@ -1,5 +1,7 @@
 use super::*;
 
+mod notifications;
+
 fn start(bridge: &mut Bridge, id: &str, name: &str) -> Vec<Out> {
     bridge.on_harness(&json!({
         "type": "assistant", "session_id": SESSION, "parent_tool_use_id": null,
