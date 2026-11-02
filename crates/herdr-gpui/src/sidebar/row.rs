@@ -664,18 +664,6 @@ pub(super) fn row(
                             let detail_x =
                                 agent_detail.map_or(0., |_| agent_reserve.min(detail_limit));
                             let room = (detail_limit - detail_x).max(0.);
-                            // The counts follow the branch and win the room it would
-                            // take, so a long branch ellipsizes before they do.
-                            let (detail_width, upstream_x) = match upstream_inline {
-                                None => (room, room),
-                                Some(_) if detail.is_empty() => (0., 0.),
-                                Some(upstream) => {
-                                    let natural = (detail.chars().count() as f32 * glyph).ceil();
-                                    let width =
-                                        natural.min((room - upstream.width(glyph) - glyph).max(0.));
-                                    (width, width + glyph)
-                                }
-                            };
                             column.child(
                                 div()
                                     .relative()
@@ -690,24 +678,38 @@ pub(super) fn row(
                                             font,
                                         ))
                                     })
-                                    .child(
-                                        div()
-                                            .debug_selector(|| format!("detail-{key}"))
-                                            .ms(px(detail_x))
-                                            .w(px(detail_width))
-                                            .truncate()
-                                            .text_color(rgb(detail_color))
-                                            .child(label_text(detail)),
-                                    )
+                                    .when(upstream_inline.is_none(), |line| {
+                                        line.child(
+                                            div()
+                                                .debug_selector(|| format!("detail-{key}"))
+                                                .ms(px(detail_x))
+                                                .w(px(room))
+                                                .truncate()
+                                                .text_color(rgb(detail_color))
+                                                .child(label_text(detail)),
+                                        )
+                                    })
                                     .when_some(upstream_inline, |line, upstream| {
                                         line.child(
                                             div()
-                                                .absolute()
-                                                .top_0()
-                                                .inset_s(px(detail_x + upstream_x))
-                                                .w(px((room - upstream_x).max(0.)))
+                                                .ms(px(detail_x))
+                                                .w(px(room))
+                                                .flex()
+                                                .items_center()
                                                 .overflow_hidden()
-                                                .child(upstream.element(key, glyph, theme)),
+                                                .child(
+                                                    div()
+                                                        .debug_selector(|| format!("detail-{key}"))
+                                                        .min_w_0()
+                                                        .flex_shrink(1.)
+                                                        .truncate()
+                                                        .text_color(rgb(detail_color))
+                                                        .child(label_text(detail)),
+                                                )
+                                                .when(!detail.is_empty(), |line| {
+                                                    line.gap(px(glyph))
+                                                })
+                                                .child(upstream.inline_element(key, glyph, theme)),
                                         )
                                     }),
                             )
