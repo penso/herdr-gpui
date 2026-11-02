@@ -288,6 +288,11 @@ impl Prepared {
         self.text.set_expanded(expanded);
     }
 
+    /// Folded tool locations are selectable only in layouts that draw them.
+    pub(crate) fn set_tool_preview(&mut self, visible: bool) -> bool {
+        self.text.set_tool_preview(visible)
+    }
+
     /// The entries that draw `visual`, to measure again once it lands.
     pub(crate) fn drawing(&self, visual: VisualId) -> impl Iterator<Item = EntryId> + '_ {
         self.bodies

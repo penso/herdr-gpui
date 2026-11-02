@@ -233,13 +233,14 @@ impl ChatPane {
             .is_some_and(|focus| focus.is_focused(window))
     }
 
-    fn new(target: Target) -> Self {
+    fn new(target: Target, tool_preview: bool) -> Self {
         // `glide` follows the end rather than the list's own tail mode,
         // which jumps there with each chunk.
         let list = ListState::new(0, ListAlignment::Top, px(OVERDRAW));
         let glide = super::glide::Glide::new(&list);
         let mut prepared = Prepared::default();
         prepared.set_remote_links(!target.is_local());
+        prepared.set_tool_preview(tool_preview);
         Self {
             attachments: Vec::new(),
             completion: 0,
@@ -545,7 +546,7 @@ impl Chats {
         target: Target,
         transcript: herdr_chat_protocol::Transcript,
     ) -> Result<()> {
-        let mut pane = ChatPane::new(target);
+        let mut pane = ChatPane::new(target, super::view::tool_preview(self.measured));
         pane.preview = true;
         pane.session.begin();
         pane.session
@@ -578,7 +579,11 @@ impl Chats {
             return false;
         }
         self.measured = layout;
-        for pane in &self.panes {
+        let tool_preview = super::view::tool_preview(layout);
+        for pane in &mut self.panes {
+            if pane.prepared.set_tool_preview(tool_preview) {
+                pane.refresh_text();
+            }
             pane.list.remeasure();
         }
         true
@@ -662,7 +667,7 @@ impl Chats {
                 Some(index) => self.panes.swap_remove(index),
                 None => {
                     changed = true;
-                    ChatPane::new(target)
+                    ChatPane::new(target, super::view::tool_preview(self.measured))
                 }
             });
         }

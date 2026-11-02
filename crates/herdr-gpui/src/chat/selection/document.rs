@@ -124,6 +124,7 @@ pub(crate) struct Document {
     pub(super) entries: Vec<Rc<EntryText>>,
     positions: HashMap<EntryId, usize>,
     epoch: u64,
+    hide_tool_locations: bool,
     remote_links: bool,
     expanded: HashSet<EntryId>,
     version: u64,
@@ -206,6 +207,16 @@ impl Document {
         self.expanded.clone_from(expanded);
     }
 
+    pub(in crate::chat) fn set_tool_preview(&mut self, visible: bool) -> bool {
+        let hidden = !visible;
+        if self.hide_tool_locations == hidden {
+            return false;
+        }
+        self.hide_tool_locations = hidden;
+        self.clear();
+        true
+    }
+
     pub(in crate::chat) fn update(
         &mut self,
         transcript: &Transcript,
@@ -238,6 +249,7 @@ impl Document {
                         bodies.get(&id).map(|(_, body)| body.as_ref()),
                         self.remote_links,
                         expanded,
+                        !self.hide_tool_locations,
                     ))
                 }
             };
@@ -254,6 +266,7 @@ fn project(
     body: Option<&Body>,
     remote: bool,
     expanded: bool,
+    tool_preview: bool,
 ) -> EntryText {
     let mut builder = Builder {
         segments: Vec::new(),
@@ -288,8 +301,10 @@ fn project(
                     .iter()
                     .take(if expanded {
                         usize::MAX
-                    } else {
+                    } else if tool_preview {
                         COMPACT_LOCATIONS
+                    } else {
+                        0
                     })
                     .enumerate()
                 {

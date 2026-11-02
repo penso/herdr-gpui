@@ -39,6 +39,10 @@ use gpui::{prelude::*, *};
 use herdr_chat_protocol::Status;
 use herdr_client::protocol::{PaneSurfaceFrame, SurfaceRect};
 
+pub(super) fn tool_preview(mode: crate::config::ChatLayoutMode) -> bool {
+    layout::layout_for(mode).tool_preview()
+}
+
 /// Where a chat view goes: over a Herdr pane's cells, at their place on the
 /// terminal canvas, or filling a herdr-core pane of the given size.
 #[derive(Clone, Copy, Debug, PartialEq)]
