@@ -241,11 +241,15 @@ fails instead of falling back to unsigned. When signing is on:
 1. `windows-signing.py unpack` extracts the tested zip without running anything.
 2. `azure/login` signs in to Azure with the job's OIDC token, and
    `azure/artifact-signing-action` signs `herdr-gpui.exe`,
-   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, `herdr-remote-control.exe`, `herdr-automate.exe`, and `herdr-nearby.exe` with SHA-256 and an RFC 3161 timestamp from
+   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, `herdr-remote-control.exe`,
+   `herdr-automate.exe`, `herdr-nearby.exe`, and `herdr-core.exe` with SHA-256 and an RFC 3161 timestamp from
    `http://timestamp.acs.microsoft.com`.
 3. `windows-signing.py repack` refuses unless the tree holds exactly the zip's
    files and each executable differs from the tested one only by its appended
-   signature (checksum, certificate table entry, alignment padding), then writes
+   or replaced trailing signature (checksum, certificate table entry, alignment
+   padding). The pinned upstream `herdr-core.exe` already carries a signature;
+   replacing it must preserve the certificate table offset and every preceding
+   byte except the checksum and certificate table entry. The script then writes
    the zip again with the same entry order and timestamps.
 4. `windows-installer.py build --sign` compiles the installer from the signed
    zip. ISCC calls `windows-sign-file.ps1` as its `SignTool`, with
