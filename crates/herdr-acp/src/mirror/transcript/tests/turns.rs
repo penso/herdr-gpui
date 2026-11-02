@@ -62,6 +62,7 @@ fn matching_completion_is_final_and_replays_cannot_reopen_or_duplicate_it() {
         summaries(&transcript),
         [&TurnSummary {
             duration_ms: 1250,
+            ended_ms: None,
             end: TurnEnd::Done,
             tokens: None,
         }]
@@ -238,6 +239,7 @@ fn claude_duration_is_reported_without_inventing_success_counts_or_a_live_start(
         summaries(&transcript),
         [&TurnSummary {
             duration_ms: 12000,
+            ended_ms: None,
             end: TurnEnd::Other,
             tokens: None
         }]
@@ -252,5 +254,52 @@ fn claude_duration_is_reported_without_inventing_success_counts_or_a_live_start(
         let mut invalid = record.clone();
         invalid[field] = value;
         assert!(summaries(&parse(TranscriptAgent::Claude, &lines(&[invalid]), 0)).is_empty());
+    }
+}
+
+#[test]
+fn codex_completion_retains_reported_time_without_deriving_it_from_duration() {
+    for (completed_at, timestamp, expected) in [
+        (
+            json!(1700000002),
+            json!("2023-11-14T22:13:21.125Z"),
+            Some(1700000002000),
+        ),
+        (
+            Value::Null,
+            json!("2023-11-14T22:13:21.125Z"),
+            Some(1700000001125),
+        ),
+        (Value::Null, Value::Null, None),
+        (Value::Null, json!("invalid"), None),
+        (json!(-1), json!("2023-11-14T22:13:21.125Z"), None),
+        (json!(u64::MAX), Value::Null, None),
+    ] {
+        let mut complete = end("one");
+        complete["payload"]["completed_at"] = completed_at;
+        complete["timestamp"] = timestamp;
+        let transcript = parse(TranscriptAgent::Codex, &lines(&[start("one"), complete]), 0);
+        let summary = summaries(&transcript)[0];
+        assert_eq!(summary.duration_ms, 1250);
+        assert_eq!(summary.ended_ms, expected);
+    }
+}
+
+#[test]
+fn claude_duration_retains_only_a_valid_reported_timestamp() {
+    for (timestamp, expected) in [
+        (json!("2023-11-14T22:13:21.125Z"), Some(1700000001125)),
+        (Value::Null, None),
+        (json!("invalid"), None),
+        (json!(1700000001), None),
+    ] {
+        let record = json!({
+            "type":"system", "subtype":"turn_duration", "durationMs":12000,
+            "uuid":"duration-one", "timestamp":timestamp,
+        });
+        let transcript = parse(TranscriptAgent::Claude, &lines(&[record]), 0);
+        let summary = summaries(&transcript)[0];
+        assert_eq!(summary.duration_ms, 12000);
+        assert_eq!(summary.ended_ms, expected);
     }
 }

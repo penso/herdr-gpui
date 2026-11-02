@@ -99,10 +99,10 @@ impl Turns {
                         return None;
                     }
                     let open = self.open.take()?;
+                    let ended_ms = timestamp(payload.get("completed_at"), record);
                     let duration_ms = match payload.get("duration_ms") {
                         Some(value) if !value.is_null() => count(value)?,
-                        _ => timestamp(payload.get("completed_at"), record)?
-                            .checked_sub(open.started_ms)?,
+                        _ => ended_ms?.checked_sub(open.started_ms)?,
                     };
                     let end = if payload.get("error").is_some_and(|error| !error.is_null()) {
                         TurnEnd::Failed
@@ -122,6 +122,7 @@ impl Turns {
                         .filter(|tokens| tokens.total > 0);
                     return Some(TurnSummary {
                         duration_ms,
+                        ended_ms,
                         end,
                         tokens,
                     });
@@ -149,6 +150,7 @@ impl Turns {
             // this turn succeeded, was cancelled, or used a complete token set.
             return Some(TurnSummary {
                 duration_ms: count(record.get("durationMs")?)?,
+                ended_ms: timestamp(None, record),
                 end: TurnEnd::Other,
                 tokens: None,
             });
