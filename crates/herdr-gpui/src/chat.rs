@@ -13,16 +13,18 @@
 //! ([`link`]) that does the blocking I/O, a [`session`] that applies what it
 //! reads, and a view drawn from prepared state. A pane whose endpoint cannot
 //! be reached shows its terminal cells as before.
+// i18n: migrated
 
 mod chats;
+mod core_pane;
 mod discovery;
 mod existing;
 mod glide;
 mod harnesses;
 mod link;
 mod list;
-mod page;
-mod pasted;
+pub(crate) mod page;
+pub(crate) mod pasted;
 mod prepared;
 #[cfg(feature = "integration-test")]
 pub(crate) mod preview;
@@ -33,9 +35,10 @@ mod session;
 mod start;
 mod summary;
 mod terminal;
+mod text;
 mod view;
-mod visual;
-mod widgets;
+pub(crate) mod visual;
+pub(crate) mod widgets;
 mod window;
 
 pub(crate) use chats::{ChatInput, Chats, LauncherDeck, Toward};
@@ -142,8 +145,22 @@ impl Error {
 pub(crate) struct Target {
     pub(crate) endpoint: EndpointId,
     pub(crate) existing: Option<existing::Binding>,
+    /// The chat's key in the window: a Herdr pane's id, or for a herdr-core
+    /// terminal the key [`core_pane::key`] makes. Code that acts on the pane
+    /// itself matches [`Self::surface`] instead.
     pub(crate) pane_id: String,
     pub(crate) route: Route,
+    pub(crate) surface: Surface,
+}
+
+/// Which daemon's pane a chat is drawn over.
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub(crate) enum Surface {
+    /// A pane of the selected Herdr, drawn over its surface frame.
+    #[default]
+    Herdr,
+    /// A herdr-core terminal, drawn over its pane in a herdr-core tab.
+    Core(herdr_backend::TerminalId),
 }
 
 impl Target {
@@ -178,6 +195,7 @@ pub(crate) fn remote_program_script(args: &str) -> String {
         .map(|dir| format!("\"{dir}/herdr-acp\" "))
         .collect();
     format!(
+        // i18n: data
         "for p in {candidates}\"$(command -v herdr-acp)\"; do [ -x \"$p\" ] && exec \"$p\" {args}; done; \
          echo \"herdr-acp is not installed here: install it in ~/.herdr/bin\" >&2; exit 127"
     )

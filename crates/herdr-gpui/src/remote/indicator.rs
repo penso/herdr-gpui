@@ -4,7 +4,7 @@
 //! be disconnected (revoked, after asking), and another paired.
 
 use super::supervisor::{Health, Supervisor};
-use crate::{HerdrWindow, menu::Page};
+use crate::{HerdrWindow, i18n::fl, menu::Page};
 use gpui::{prelude::*, *};
 use herdr_remote_control::control::Device;
 
@@ -20,11 +20,9 @@ impl HerdrWindow {
         let theme = &self.theme;
         let paired = Supervisor::devices(cx).is_none_or(|devices| !devices.is_empty());
         let connected = Supervisor::connected(cx);
-        let label: SharedString = match (paired, connected) {
-            (false, _) => "Pair a phone for remote control".into(),
-            (true, 0) => "Remote control phones, none connected".into(),
-            (true, 1) => "Remote control phones, 1 connected".into(),
-            (true, count) => format!("Remote control phones, {count} connected").into(),
+        let label: SharedString = match paired {
+            false => fl!("remote-menu-pair-label").into(),
+            true => fl!("remote-menu-phones-label", count = connected).into(),
         };
         let background = rgb(theme.surface).blend(rgba(0xffffff1a));
         // Where the button painted, so its list hangs under it wherever the
@@ -102,7 +100,7 @@ impl HerdrWindow {
                 .border_color(rgb(theme.active))
                 .text_color(rgb(theme.subtext()))
                 .child(phone)
-                .child("Pair phone")
+                .child(fl!("remote-menu-pair-phone"))
         })
     }
 
@@ -147,7 +145,7 @@ impl HerdrWindow {
                     .text_size(px(self.config.ui.size - 1.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(theme.muted))
-                    .child("PHONES"),
+                    .child(fl!("remote-menu-phones")),
             )
             .children(
                 devices
@@ -164,7 +162,7 @@ impl HerdrWindow {
                     .px(px(6.))
                     .py(px(2.))
                     .child(
-                        self.remote_menu_button("remote-menu-pair", "Pair a phone\u{2026}", true)
+                        self.remote_menu_button("remote-menu-pair", fl!("remote-menu-pair"), true)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.dismiss_menu(window, cx);
                                 this.open_remote_pairing(window, cx);
@@ -172,11 +170,15 @@ impl HerdrWindow {
                     )
                     .child(div().flex_1())
                     .child(
-                        self.remote_menu_button("remote-menu-settings", "Settings", false)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.dismiss_menu(window, cx);
-                                crate::settings_window::open_remote(cx.entity().downgrade(), cx);
-                            })),
+                        self.remote_menu_button(
+                            "remote-menu-settings",
+                            fl!("remote-menu-settings"),
+                            false,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.dismiss_menu(window, cx);
+                            crate::settings_window::open_remote(cx.entity().downgrade(), cx);
+                        })),
                     ),
             )
     }
@@ -245,9 +247,9 @@ impl HerdrWindow {
                     .id(("remote-menu-disconnect", index))
                     .debug_selector(move || format!("remote-menu-device-{index}-disconnect"))
                     .role(Role::Button)
-                    .aria_label(format!(
-                        "Disconnect {}",
-                        crate::notifications::safe_text(&device.name, 64)
+                    .aria_label(fl!(
+                        "remote-menu-disconnect-device",
+                        device = crate::notifications::safe_text(&device.name, 64)
                     ))
                     .flex_none()
                     .px(px(8.))
@@ -263,16 +265,12 @@ impl HerdrWindow {
                         this.dismiss_menu(window, cx);
                         this.ask_to_revoke(target.clone(), window, cx);
                     }))
-                    .child("Disconnect"),
+                    .child(fl!("remote-menu-disconnect")),
             )
     }
 
-    fn remote_menu_button(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        primary: bool,
-    ) -> Stateful<Div> {
+    fn remote_menu_button(&self, id: &'static str, label: String, primary: bool) -> Stateful<Div> {
+        let label = SharedString::from(label);
         let theme = &self.theme;
         let fill = if primary {
             theme.primary()
@@ -283,7 +281,7 @@ impl HerdrWindow {
             .id(id)
             .debug_selector(move || id.into())
             .role(Role::Button)
-            .aria_label(label)
+            .aria_label(label.clone())
             .flex_none()
             .px(px(10.))
             .py(px(4.))

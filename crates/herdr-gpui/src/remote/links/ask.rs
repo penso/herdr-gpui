@@ -6,6 +6,7 @@
 use super::Job;
 use crate::{
     HerdrWindow,
+    i18n::fl,
     menu::Page,
     notifications::safe_text,
     remote::{
@@ -107,14 +108,15 @@ impl HerdrWindow {
             .flex_col()
             .p(px(8.))
             .gap(px(12.))
-            .child(
-                div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("Pair {phone} with {host} too?")),
-            )
-            .child(div().text_color(rgb(theme.subtext())).child(format!(
-                "{phone} asks to reach {host} directly, so it keeps it while this computer \
-                 sleeps. Herdr UI starts remote control on {host} if it is not running there."
+            .child(div().font_weight(FontWeight::SEMIBOLD).child(fl!(
+                "remote-links-ask-title",
+                phone = phone.clone(),
+                host = host.clone()
+            )))
+            .child(div().text_color(rgb(theme.subtext())).child(fl!(
+                "remote-links-ask-detail",
+                phone = phone,
+                host = host
             )))
             .child(
                 div()
@@ -122,18 +124,30 @@ impl HerdrWindow {
                     .justify_end()
                     .gap(px(8.))
                     .child(
-                        button(theme, "remote-host-ask-deny", "Not now", Tone::Plain, true)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.answer_host_ask(false, window, cx);
-                            })),
+                        button(
+                            theme,
+                            "remote-host-ask-deny",
+                            fl!("remote-links-ask-deny"),
+                            Tone::Plain,
+                            true,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.answer_host_ask(false, window, cx);
+                        })),
                     )
                     .child(
-                        button(theme, "remote-host-ask-allow", "Pair", Tone::Primary, true)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.answer_host_ask(true, window, cx);
-                            })),
+                        button(
+                            theme,
+                            "remote-host-ask-allow",
+                            fl!("remote-links-ask-allow"),
+                            Tone::Primary,
+                            true,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.answer_host_ask(true, window, cx);
+                        })),
                     ),
             )
     }

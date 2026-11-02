@@ -38,7 +38,7 @@ fn the_sessions_popup_and_its_dialogs_show_only_messages_under_en_xa() {
         });
         draw(cx);
         recorder.take();
-        click(cx, "device-sessions");
+        open_sessions(&view, cx);
         draw(cx);
         assert_translated("Sessions", &recorder.take(), &names());
 

@@ -17,23 +17,20 @@ devices-hosts = { $count ->
         [one] { $count } host
        *[other] { $count } hosts
     }
-devices-sessions = Sessions
 # The picker's heading.
-devices-heading = DEVICES
+devices-heading = DEVICES & SESSIONS
 devices-multi-select-macos = ⌘-click or Space for several
 devices-multi-select = Ctrl-click or Space for several
 devices-all-detail = { $count ->
         [one] { $count } device · { $connected } connected
        *[other] { $count } devices · { $connected } connected
     }
-# A row's detail for this computer. $session is the Herdr session's name.
-devices-this-device-session = This device · { $session }
 devices-this-device = This device
 # A device row's detail: where it is, then its state, such as online.
 devices-row-detail = { $place } · { $state }
 devices-add = Add Device…
-devices-sessions-row = Sessions…
-devices-sessions-detail = Switch, add, or delete this device's sessions
+# The chip on a device row that unfolds its sessions. $device is the device's name.
+devices-sessions-toggle = Sessions on { $device }
 # The heading over cloud machines still being created.
 devices-adding = ADDING
 

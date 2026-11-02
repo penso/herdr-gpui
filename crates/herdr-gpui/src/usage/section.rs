@@ -4,7 +4,10 @@
 //! host shows what was read while it was selected.
 
 use super::{Host, text, ui::Ui};
-use crate::{HerdrWindow, i18n::fl};
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+};
 use gpui::{prelude::*, *};
 use std::time::{Instant, SystemTime};
 
@@ -174,10 +177,10 @@ impl HerdrWindow {
                             div()
                                 .text_size(small)
                                 .text_color(rgb(theme.muted))
-                                .child(plan)
+                                .child(text::words(&plan))
                         })),
                 );
-            if let Some(error) = reading.error.clone() {
+            if let Some(error) = reading.error.as_deref().map(Localize::localize) {
                 card = card.child(
                     div()
                         .px(px(8.))
@@ -218,14 +221,19 @@ impl HerdrWindow {
                             .text_color(rgb(theme.muted))
                             .child(updated),
                     )
-                    .when_some(entry.and_then(|entry| entry.error.clone()), |row, error| {
-                        row.child(
-                            div()
-                                .text_size(small)
-                                .text_color(rgb(theme.ink(theme.palette[3])))
-                                .child(error),
-                        )
-                    }),
+                    .when_some(
+                        entry
+                            .and_then(|entry| entry.error.as_deref())
+                            .map(Localize::localize),
+                        |row, error| {
+                            row.child(
+                                div()
+                                    .text_size(small)
+                                    .text_color(rgb(theme.ink(theme.palette[3])))
+                                    .child(error),
+                            )
+                        },
+                    ),
             )
             .child(cards)
     }

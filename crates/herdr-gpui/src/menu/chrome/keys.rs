@@ -182,6 +182,10 @@ impl HerdrWindow {
             self.remove_wsl_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::Devices) && self.menu.session_edit.is_some() {
+            self.sessions_key(event, window, cx);
+            return;
+        }
         if matches!(self.menu.page, Some(Page::Devices | Page::AddDevice)) {
             self.devices_key(event, window, cx);
             return;
@@ -202,10 +206,6 @@ impl HerdrWindow {
                 cx.stop_propagation();
                 window.prevent_default();
             }
-            return;
-        }
-        if self.menu.page == Some(Page::Sessions) {
-            self.sessions_key(event, window, cx);
             return;
         }
         if self.menu.page == Some(Page::Palette) {

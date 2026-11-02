@@ -262,14 +262,14 @@ fn a_pane_carries_its_branch_and_changes_and_closes_at_the_source() {
     )
     .unwrap();
     assert_eq!(
-        carried,
-        Carried {
-            endpoint_id: "ssh:there".into(),
-            workspace_id: "w9".into(),
-            pane_id: "w9:p1".into(),
-            warnings: Vec::new(),
-        }
+        (
+            carried.endpoint_id.as_str(),
+            carried.workspace_id.as_str(),
+            carried.pane_id.as_str()
+        ),
+        ("ssh:there", "w9", "w9:p1")
     );
+    assert!(carried.warnings.is_empty(), "{:?}", carried.warnings);
     assert_eq!(steps.first(), Some(&Step::Capture));
     assert_eq!(steps.last(), Some(&Step::Retire));
 

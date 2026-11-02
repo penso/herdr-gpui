@@ -6,6 +6,7 @@ use super::super::{
     selection::Region,
     visual::{Shown, VisualId, Visuals},
 };
+use crate::i18n::{Localize, fl};
 use crate::{HerdrWindow, config::corners, release_notes};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{Author, EntryId};
@@ -118,7 +119,7 @@ impl HerdrWindow {
                     div()
                         .text_size(px((self.chat_text_size() - 2.).max(10.)))
                         .text_color(rgb(self.theme.muted))
-                        .child(format!("Not drawn: {error}")),
+                        .child(fl!("chat-visual-not-drawn", error = error.localize())),
                 )
                 .into_any_element();
         }
@@ -189,15 +190,15 @@ impl HerdrWindow {
                 .text_size(self.chat_small_text())
                 .text_color(rgb(theme.muted))
                 .child(match frame {
-                    Frame::Diagram => "Drawing diagram\u{2026}",
-                    Frame::Image | Frame::ToolImage => "Loading image\u{2026}",
+                    Frame::Diagram => fl!("chat-visual-drawing"),
+                    Frame::Image | Frame::ToolImage => fl!("chat-visual-loading"),
                 }),
             Shown::Failed(error) => boxed
                 .px(px(8.))
                 .py(px(4.))
                 .text_size(self.chat_small_text())
                 .text_color(rgb(theme.muted))
-                .child(format!("[image] {error}")),
+                .child(fl!("chat-visual-image-failed", error = error.localize())),
         }
     }
 }

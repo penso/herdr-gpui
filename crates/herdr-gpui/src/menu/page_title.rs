@@ -89,7 +89,6 @@ impl Page {
             Self::RenamePane => fl!("menu-page-rename-pane"),
             Self::RenameTab => fl!("menu-page-rename-tab"),
             Self::RevokeDevice => fl!("menu-page-revoke-device"),
-            Self::Sessions => fl!("menu-page-sessions"),
             Self::Tab => fl!("menu-page-tab"),
             Self::Teleport => fl!("menu-page-teleport"),
             Self::Themes => fl!("menu-page-themes"),

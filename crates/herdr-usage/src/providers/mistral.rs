@@ -9,6 +9,7 @@
 //! allowance still shows when the subscription page reports it. Daily usage
 //! buckets for CodexBar's cost chart are left out.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -30,15 +31,7 @@ pub(crate) struct Mistral;
 static META: Meta = Meta::new("mistral", "Mistral")
     .dashboard("https://admin.mistral.ai/organization/usage")
     .status_page("https://status.mistral.ai")
-    .settings(&[Setting::new(
-        "cookie",
-        &[],
-        "Sign in to https://admin.mistral.ai/organization/usage, open Developer Tools > \
-         Application > Cookies for https://admin.mistral.ai, and copy the ory_session_… \
-         cookie (its name ends in a per-project suffix) and csrftoken. Paste them as \
-         \"name=value; name2=value2\"; the Cookie header of any admin.mistral.ai request \
-         also works.",
-    )]);
+    .settings(&[Setting::new("cookie", &[], "usage-mistral-setting-cookie")]);
 
 impl Service for Mistral {
     fn meta(&self) -> &'static Meta {
@@ -146,7 +139,7 @@ pub(crate) fn parse(
         .unwrap_or_else(|| "EUR".into());
     // A negative total is a refund adjustment, shown as nothing spent.
     let mut balances = vec![Balance::new(
-        "API spend this month",
+        Text::message("usage-mistral-api-spend"),
         totals.cost.max(0.),
         Unit::Currency(currency),
     )];
@@ -156,57 +149,88 @@ pub(crate) fn parse(
             - credits.ongoing_usage_balance.unwrap_or(0.);
         if available.is_finite() {
             let unit = Unit::Currency(credits.currency.trim().to_uppercase());
-            balances.push(Balance::new("Credits", available.max(0.), unit));
+            balances.push(Balance::new(
+                Text::message("usage-mistral-credits"),
+                available.max(0.),
+                unit,
+            ));
         }
     }
 
     let budgets = subscription.map(budgets).unwrap_or_default();
     let mut windows = Vec::new();
     let mut allowances = Vec::new();
-    for (title, budget) in [("Included API", budgets.api), ("Vibe", budgets.vibe)] {
+    // Vibe is the product's name.
+    let lanes = [
+        (Text::message("usage-mistral-included-api"), budgets.api),
+        (Text::service("Vibe"), budgets.vibe),
+    ];
+    for (title, budget) in lanes {
         let Some(budget) = budget else { continue };
         windows.push(Window::new(
-            Kind::Named(title.into()),
+            Kind::Named(title.clone()),
             budget.usage_percentage,
             budget.resets_at,
             Some(MONTH),
         ));
         let used = budget.limit * budget.usage_percentage / 100.;
-        let text = Balance::new(title, used, Unit::Currency(budget.currency))
-            .out_of(budget.limit)
-            .text();
-        allowances.push((title.to_owned(), format!("{text} used")));
+        let money = |amount: f64| {
+            Balance::new(
+                Text::service(""),
+                amount,
+                Unit::Currency(budget.currency.clone()),
+            )
+            .amount_text()
+        };
+        allowances.push((
+            title,
+            Text::message("usage-mistral-allowance-used")
+                .arg("used", money(used))
+                .arg("limit", money(budget.limit)),
+        ));
     }
 
     let mut sections = Vec::new();
     if !allowances.is_empty() {
         sections.push(Section::Facts {
-            title: "Allowances".into(),
+            title: Text::message("usage-mistral-allowances"),
             facts: allowances,
         });
     }
     let tokens = |value: f64| group(value.round() as i64);
     sections.push(Section::Facts {
-        title: "Tokens this month".into(),
+        title: Text::message("usage-mistral-tokens-this-month"),
         facts: vec![
-            ("Input".into(), tokens(totals.input)),
-            ("Output".into(), tokens(totals.output)),
-            ("Cached".into(), tokens(totals.cached)),
-            ("Models".into(), totals.models.to_string()),
+            (
+                Text::message("usage-mistral-input"),
+                Text::service(tokens(totals.input)),
+            ),
+            (
+                Text::message("usage-mistral-output"),
+                Text::service(tokens(totals.output)),
+            ),
+            (
+                Text::message("usage-mistral-cached"),
+                Text::service(tokens(totals.cached)),
+            ),
+            (
+                Text::message("usage-mistral-models"),
+                Text::service(totals.models.to_string()),
+            ),
         ],
     });
     if totals.cost > 0. {
-        let mut shares: Vec<(String, f32)> = totals
+        let mut shares: Vec<(Text, f32)> = totals
             .by_model
             .into_iter()
             .filter(|(_, cost)| *cost > 0.)
-            .map(|(name, cost)| (name, (cost / totals.cost * 100.) as f32))
+            .map(|(name, cost)| (Text::service(name), (cost / totals.cost * 100.) as f32))
             .collect();
         shares.sort_by(|a, b| b.1.total_cmp(&a.1));
         shares.truncate(5);
         if !shares.is_empty() {
             sections.push(Section::Shares {
-                title: "Spend by model".into(),
+                title: Text::message("usage-mistral-spend-by-model"),
                 shares,
             });
         }
@@ -476,20 +500,34 @@ mod tests {
     fn billing_usage_prices_tokens() {
         let report = parse(NOVEMBER, None, None).unwrap();
         let expected = 0.0189057 + 0.0056865 + 0.0000102 + 0.00076041;
-        assert_eq!(report.balances[0].label, "API spend this month");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-mistral-api-spend")
+        );
         assert!((report.balances[0].amount - expected).abs() < 1e-9);
         assert_eq!(report.balances[0].unit, Unit::Currency("EUR".into()));
         let Some(Section::Facts { facts, .. }) = report.sections.first() else {
             panic!("expected token facts");
         };
-        assert_eq!(facts[0], ("Input".to_owned(), "11,241".to_owned()));
-        assert_eq!(facts[1], ("Output".to_owned(), "4,097".to_owned()));
-        assert_eq!(facts[2], ("Cached".to_owned(), "0".to_owned()));
-        assert_eq!(facts[3], ("Models".to_owned(), "2".to_owned()));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-mistral-input"),
+                    Text::service("11,241")
+                ),
+                (
+                    Text::message("usage-mistral-output"),
+                    Text::service("4,097")
+                ),
+                (Text::message("usage-mistral-cached"), Text::service("0")),
+                (Text::message("usage-mistral-models"), Text::service("2")),
+            ]
+        );
         let Some(Section::Shares { shares, .. }) = report.sections.get(1) else {
             panic!("expected model shares");
         };
-        assert_eq!(shares[0].0, "mistral-large-latest");
+        assert_eq!(shares[0].0, Text::service("mistral-large-latest"));
         assert!(report.windows.is_empty());
     }
 
@@ -501,20 +539,36 @@ mod tests {
             "ongoing_usage_balance": 2.5, "currency": "eur"}"#;
         let report = parse(NOVEMBER, Some(credits), Some(&html)).unwrap();
         let api = &report.windows[0];
-        assert_eq!(api.kind, Kind::Named("Included API".into()));
+        assert_eq!(
+            api.kind,
+            Kind::Named(Text::message("usage-mistral-included-api"))
+        );
         assert!((api.used - 2.).abs() < 1e-4);
         assert!(api.resets_at.is_some());
         assert_eq!(api.length, Some(MONTH));
-        assert_eq!(report.windows[1].kind, Kind::Named("Vibe".into()));
+        assert_eq!(report.windows[1].kind, Kind::Named(Text::service("Vibe")));
         assert_eq!(
             report.balances[1],
-            Balance::new("Credits", 12.5, Unit::Currency("EUR".into()))
+            Balance::new(
+                Text::message("usage-mistral-credits"),
+                12.5,
+                Unit::Currency("EUR".into())
+            )
         );
         let Some(Section::Facts { title, facts }) = report.sections.first() else {
             panic!("expected allowance facts");
         };
-        assert_eq!(title, "Allowances");
-        assert_eq!(facts[0].1, "0.51 EUR of 25.50 EUR used");
+        assert_eq!(title, &Text::message("usage-mistral-allowances"));
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-mistral-included-api"),
+                Text::message("usage-mistral-allowance-used")
+                    .arg("used", "0.51 EUR")
+                    .arg("limit", "25.50 EUR")
+            )
+        );
+        assert_eq!(facts[1].0, Text::service("Vibe"));
     }
 
     #[test]

@@ -3,6 +3,8 @@ use crate::sidebar::layout_tests::fixture_window;
 use gpui::{TestAppContext, VisualTestContext};
 use herdr_client::protocol::CellData;
 
+mod relocale;
+
 fn cell(symbol: &str) -> CellData {
     CellData {
         symbol: symbol.into(),
@@ -69,7 +71,7 @@ fn appears_only_when_an_icon_font_is_missing_and_an_icon_is_shown() {
     assert!(notice.observe(true, Some(&frame(3, &["\u{f179}"]))));
     assert_eq!(
         notice.visible().map(|lines| lines.len()),
-        Some(TEXT.lines().count())
+        Some(text().lines().count())
     );
     // The prompt scrolling away keeps the explanation.
     assert!(!notice.observe(true, Some(&frame(4, &["a"]))));

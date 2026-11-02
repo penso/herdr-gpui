@@ -492,6 +492,8 @@ pub(crate) struct Chats {
     pub(crate) launcher_deck: Option<LauncherDeck>,
     /// The layout the lists' rows were last measured in.
     measured: crate::config::ChatLayoutMode,
+    /// The locale the panes' prepared text was last drawn in.
+    measured_locale: Option<herdr_i18n::Locale>,
     measured_width: u16,
     /// Chat pages opened so far, which numbers the next one.
     #[cfg(any(target_os = "macos", windows))]
@@ -559,6 +561,28 @@ impl Chats {
         }
         self.measured = layout;
         for pane in &self.panes {
+            pane.list.remeasure();
+        }
+        true
+    }
+
+    /// Prepares every pane's text again once the shown language changed:
+    /// labels such as a question's heading or a cut answer's note are
+    /// written into the prepared bodies and their selectable text. Says
+    /// whether it did.
+    pub(crate) fn relocale(&mut self, locale: Option<herdr_i18n::Locale>) -> bool {
+        if self.measured_locale == locale {
+            return false;
+        }
+        // The first locale seen prepared nothing yet in another language.
+        let first = self.measured_locale.is_none();
+        self.measured_locale = locale;
+        if first {
+            return false;
+        }
+        for pane in &mut self.panes {
+            pane.prepared.forget_text();
+            pane.refresh_text();
             pane.list.remeasure();
         }
         true

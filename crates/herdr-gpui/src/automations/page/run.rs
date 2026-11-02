@@ -4,7 +4,10 @@
 //! opens and again with every status read while the run goes on.
 
 use super::super::{Action, HostState, Loaded, LogKey, Opened, format, model};
-use crate::HerdrWindow;
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+};
 use gpui::{prelude::*, *};
 use herdr_automation::report::{RunDetail, RunState, RunSummary, ScriptStatus, StepRecord, Usage};
 
@@ -64,14 +67,16 @@ impl HerdrWindow {
         }
         page = match loaded {
             Some(Loaded::Read(detail)) => self.automation_steps(host, detail, page, cx),
-            Some(Loaded::Reading { .. }) | None => {
-                page.child(div().text_color(rgb(theme.muted)).child("Reading the run…"))
-            }
+            Some(Loaded::Reading { .. }) | None => page.child(
+                div()
+                    .text_color(rgb(theme.muted))
+                    .child(fl!("automations-reading-run")),
+            ),
             Some(Loaded::Failed(error)) => page.child(
                 div()
                     .debug_selector(|| "automations-run-failed".into())
                     .text_color(rgb(theme.ink(theme.palette[3])))
-                    .child(error.to_string()),
+                    .child(error.localize()),
             ),
         };
         let key = LogKey {
@@ -118,11 +123,7 @@ impl HerdrWindow {
                 self.automation_button(
                     "automations-full-log",
                     "icons/terminal.svg",
-                    if self.automations.logs.contains_key(&key) {
-                        "Hide log"
-                    } else {
-                        "Full log"
-                    },
+                    log_label(self.automations.logs.contains_key(&key)),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.toggle_automation_log(key.clone(), cx);
@@ -132,7 +133,7 @@ impl HerdrWindow {
                 heading.child(self.automation_action_button(
                     "automations-stop-run",
                     "icons/x.svg",
-                    "Stop run",
+                    fl!("automations-stop-run"),
                     host,
                     Action::Stop { run },
                     cx,
@@ -153,23 +154,23 @@ impl HerdrWindow {
             page = page.child(
                 div()
                     .text_color(rgb(theme.muted))
-                    .child("No step has started."),
+                    .child(fl!("automations-no-step")),
             );
         }
         for step in &detail.steps {
             page = page.child(self.automation_step(host, detail.run.id, step, now, cx));
         }
         let usage = total_usage(&detail.steps);
-        let stat = |label: &'static str, value: String| {
+        let stat = |label: String, value: String| {
             div()
                 .flex()
                 .flex_col()
                 .child(div().text_color(rgb(theme.muted)).child(label))
                 .child(div().font_weight(FontWeight::SEMIBOLD).child(value))
         };
-        let unknown = || "unknown".to_owned();
+        let unknown = || fl!("automations-unknown");
         page.child(div().h(px(8.)))
-            .child(self.automation_title("Usage"))
+            .child(self.automation_title(fl!("automations-usage")))
             .child(
                 div()
                     .debug_selector(|| "automations-usage".into())
@@ -178,17 +179,23 @@ impl HerdrWindow {
                     .gap_5()
                     .text_size(self.automation_small())
                     .child(stat(
-                        "Tokens",
+                        fl!("automations-usage-tokens"),
                         usage
                             .tokens
                             .map_or_else(unknown, |tokens| format::tokens(tokens.total())),
                     ))
-                    .child(stat("CPU", usage.cpu_ms.map_or_else(unknown, format::cpu)))
                     .child(stat(
-                        "Peak memory",
+                        fl!("automations-usage-cpu"),
+                        usage.cpu_ms.map_or_else(unknown, format::cpu),
+                    ))
+                    .child(stat(
+                        fl!("automations-usage-memory"),
                         usage.peak_memory.map_or_else(unknown, format::bytes),
                     ))
-                    .child(stat("Agents", detail.run.agents.to_string())),
+                    .child(stat(
+                        fl!("automations-usage-agents"),
+                        detail.run.agents.to_string(),
+                    )),
             )
     }
 
@@ -203,11 +210,19 @@ impl HerdrWindow {
         let theme = &self.theme;
         let small = self.automation_small();
         let took = format::span(step.finished_at.unwrap_or(now) - step.started_at);
-        let exit = step
-            .exit
-            .filter(|code| *code != 0)
-            .map(|code| format!(" · exit {code}"))
-            .unwrap_or_default();
+        let line = match step.exit.filter(|code| *code != 0) {
+            Some(code) => fl!(
+                "automations-step-exit",
+                summary = step.summary.as_str(),
+                took = took,
+                code = code
+            ),
+            None => fl!(
+                "automations-step",
+                summary = step.summary.as_str(),
+                took = took
+            ),
+        };
         let key = LogKey {
             machine: host.machine.clone(),
             run,
@@ -245,13 +260,13 @@ impl HerdrWindow {
                             .truncate()
                             .text_size(small)
                             .text_color(rgb(theme.subtext()))
-                            .child(format!("{} · {took}{exit}", step.summary)),
+                            .child(line),
                     )
                     .children(pane.clone().map(|(endpoint, pane)| {
                         self.automation_button(
                             format!("automations-pane-{}", step.position),
                             "icons/terminal.svg",
-                            "Open pane",
+                            fl!("automations-open-pane"),
                         )
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
@@ -263,11 +278,7 @@ impl HerdrWindow {
                         self.automation_button(
                             format!("automations-step-log-{}", step.position),
                             "icons/terminal.svg",
-                            if self.automations.logs.contains_key(&key) {
-                                "Hide log"
-                            } else {
-                                "Full log"
-                            },
+                            log_label(self.automations.logs.contains_key(&key)),
                         )
                         .on_click(cx.listener({
                             let key = key.clone();
@@ -281,7 +292,7 @@ impl HerdrWindow {
                     .ml(px(26.))
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(format!("Worktree {worktree}")),
+                    .child(fl!("automations-worktree", worktree = worktree.as_str())),
             );
         }
         let full = self.automation_full_log(&key, "automations-step-full-log");
@@ -299,10 +310,12 @@ impl HerdrWindow {
     fn automation_full_log(&self, key: &LogKey, selector: &'static str) -> Option<Div> {
         let theme = &self.theme;
         Some(match self.automations.logs.get(key)? {
-            Loaded::Reading { .. } => div().text_color(rgb(theme.muted)).child("Reading the log…"),
+            Loaded::Reading { .. } => div()
+                .text_color(rgb(theme.muted))
+                .child(fl!("automations-reading-log")),
             Loaded::Failed(error) => div()
                 .text_color(rgb(theme.ink(theme.palette[3])))
-                .child(error.to_string()),
+                .child(error.localize()),
             Loaded::Read(log) => div()
                 .flex()
                 .flex_col()
@@ -312,7 +325,7 @@ impl HerdrWindow {
                         div()
                             .text_size(self.automation_small())
                             .text_color(rgb(theme.muted))
-                            .child("The end of a longer log; the host keeps the rest."),
+                            .child(fl!("automations-log-truncated")),
                     )
                 })
                 .child(self.automation_output(&log.text, LOG_LINES, selector.into())),
@@ -357,27 +370,43 @@ impl HerdrWindow {
     }
 }
 
-/// When the run started and why, and how long it took.
+/// The log button's label: Hide log while it is open.
+fn log_label(open: bool) -> String {
+    if open {
+        fl!("automations-hide-log")
+    } else {
+        fl!("automations-full-log")
+    }
+}
+
+/// When the run started and why, its trigger, and how long it took, each
+/// a fact of its own.
 fn run_line(run: &RunSummary, now: i64) -> String {
     use herdr_automation::report::Reason;
     let why = match run.reason {
-        Reason::Schedule => "on schedule",
-        Reason::Late => "late, after the daemon was down",
-        Reason::Manual => "by hand",
+        Reason::Schedule => "schedule",
+        Reason::Late => "late",
+        Reason::Manual => "manual",
     };
-    let trigger = run
-        .trigger_name
-        .as_ref()
-        .map(|name| format!(" · trigger {name}"))
-        .unwrap_or_default();
-    let took = match run.finished_at {
-        Some(end) => format!(" · took {}", format::span(end - run.started_at)),
-        None => format!(" · running for {}", format::span(now - run.started_at)),
-    };
-    format!(
-        "Started {} {why}{trigger}{took}",
-        format::when(run.started_at, now)
-    )
+    let mut facts = vec![fl!(
+        "automations-run-started",
+        when = format::when(run.started_at, now),
+        why = why
+    )];
+    if let Some(name) = &run.trigger_name {
+        facts.push(fl!("automations-run-trigger", name = name.as_str()));
+    }
+    facts.push(match run.finished_at {
+        Some(end) => fl!(
+            "automations-run-took",
+            duration = format::span(end - run.started_at)
+        ),
+        None => fl!(
+            "automations-run-running",
+            duration = format::span(now - run.started_at)
+        ),
+    });
+    facts.join(" · ")
 }
 
 /// What the run's steps used together: tokens and CPU summed, memory at its

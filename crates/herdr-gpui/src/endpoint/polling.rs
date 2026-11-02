@@ -4,13 +4,26 @@ use super::{ACTIVATION_TIMEOUT, LOCAL, Redraw};
 use crate::{
     HerdrWindow,
     avatars::Checkout,
+    i18n::{Localize, fl},
     notification_mutes::{Daemon, Mutes},
+    state::{Answer, DialogResponse},
 };
 use gpui::{ClipboardItem, Context};
 use herdr_client::{ConnectTarget, RemoteHost};
 use std::time::Instant;
 
 impl HerdrWindow {
+    /// `request`'s answer in `answer`'s slot once it has arrived, cleared
+    /// from the selected connection's mailbox too so later updates do not
+    /// keep copying it.
+    pub(crate) fn take_answer(&mut self, answer: Answer, request: &str) -> Option<DialogResponse> {
+        let result = self.live.take_answer(answer, request)?;
+        self.endpoints[self.selected_endpoint]
+            .connection
+            .retire_answer(answer, request);
+        Some(result)
+    }
+
     /// Writes daemon-forwarded OSC 52 payloads to the pasteboard and reports
     /// the copy the way a local selection does. Returns whether anything was
     /// written, so the window repaints for the flash.
@@ -27,7 +40,7 @@ impl HerdrWindow {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         if self.config.clipboard_toast.enabled {
-            self.show_flash(crate::window::Flash::success("copied to clipboard"), cx);
+            self.show_flash(crate::window::Flash::success(fl!("endpoint-copied")), cx);
         }
         true
     }
@@ -42,8 +55,11 @@ impl HerdrWindow {
         // can replace it; input held across a gap may only go there.
         self.flush_pending_input(cx);
         if let Some(error) = self.catalog.poll_write() {
-            crate::storage_warning::warn_storage_failure("Save host selection", &error);
-            self.local_error = Some(format!("Save host selection: {error}"));
+            crate::storage_warning::warn_storage_failure("Save host selection", &error); // i18n: data
+            self.local_error = Some(fl!(
+                "endpoint-save-selection-failed",
+                error = error.localize()
+            ));
             cx.notify();
         }
         if let Some(result) = self.catalog.poll() {
@@ -56,7 +72,8 @@ impl HerdrWindow {
                     self.reconcile_devices(update.hosts, update.wsl, cx);
                 }
                 Err(error) => {
-                    self.local_error = Some(format!("Host catalog: {error}"));
+                    self.local_error =
+                        Some(fl!("endpoint-catalog-failed", error = error.localize()));
                     cx.notify();
                 }
             }
@@ -171,7 +188,10 @@ impl HerdrWindow {
             if let Err(error) = endpoint.flush_config_reload()
                 && index == self.selected_endpoint
             {
-                self.local_error = Some(format!("Reload config: {error}"));
+                self.local_error = Some(fl!(
+                    "endpoint-reload-config-failed",
+                    error = error.localize()
+                ));
             }
         }
         crate::palette::LastSeen::trim(
@@ -255,7 +275,8 @@ impl HerdrWindow {
                     self.sent_focus = None;
                 }
                 Err(error) => {
-                    self.local_error = Some(format!("Activate: {error}"));
+                    self.local_error =
+                        Some(fl!("endpoint-activate-failed", error = error.localize()));
                     self.activation_deadline = Some(Instant::now());
                 }
             }
@@ -275,13 +296,15 @@ impl HerdrWindow {
             .is_some_and(|deadline| Instant::now() >= deadline)
             || self.live.activation.as_ref().is_some_and(|a| a.failed)
         {
-            let mut error = format!(
-                "{}: surface activation failed or timed out",
-                self.endpoints[self.selected_endpoint].label
-            );
-            if let Some(reason) = &self.live.error {
-                error.push_str(&format!(": {reason}"));
-            }
+            let device = self.endpoints[self.selected_endpoint].label.clone();
+            let error = match &self.live.error {
+                Some(reason) => fl!(
+                    "endpoint-activation-failed-because",
+                    device = device,
+                    reason = reason.clone()
+                ),
+                None => fl!("endpoint-activation-failed", device = device),
+            };
             if self.selected_endpoint != 0 {
                 self.switch_endpoint(LOCAL, cx);
             } else {
@@ -306,7 +329,8 @@ impl HerdrWindow {
     /// page starts one; results are cached between opens.
     pub(crate) fn poll_sessions(&mut self, cx: &mut Context<Self>) {
         let development = self.local_development();
-        let open = self.menu.page == Some(crate::menu::Page::Sessions);
+        let open = self.menu.page == Some(crate::menu::Page::Devices)
+            && self.menu.unfolded_device.is_some();
         let now = Instant::now();
         let targets = self.probe_targets();
         self.sessions.devices.forget_replaced(&targets);
@@ -318,10 +342,16 @@ impl HerdrWindow {
             }
             return;
         }
-        let mut changed = self.sessions.poll(development, open, now);
-        if self.sessions.devices.poll(&targets, open, now) {
-            changed = true;
-        }
+        // New answers add or take away rows under the unfolded device; the
+        // keys stay on the row they were on, not on its old place.
+        // Only the unfolded device shows its sessions, so only it is asked.
+        let unfolded = self.menu.unfolded_device.clone().filter(|_| open);
+        let local = unfolded.as_deref() == Some(self.endpoints[0].id.as_str());
+        let changed = self.keep_picker_selection(|this| {
+            let scanned = this.sessions.poll(development, local, now);
+            let wanted = unfolded.as_deref().filter(|_| !local);
+            this.sessions.devices.poll(&targets, wanted, now) || scanned
+        });
         if changed {
             cx.notify();
         }

@@ -12,3 +12,8 @@ cloud-setup-summary-installs-runs = { $lines ->
         [one] Installs { $agents }, then runs { $lines } line of your own.
        *[other] Installs { $agents }, then runs { $lines } lines of your own.
     }
+
+# A new cloud device's setup script, which runs in a tab once the device
+# connects. $device is the device's name; $error says why.
+cloud-setup-not-started = The setup script for { $device } did not start: { $error }
+cloud-setup-gave-up = The setup script for { $device } did not run: the device was not opened. Run it from the device's menu.

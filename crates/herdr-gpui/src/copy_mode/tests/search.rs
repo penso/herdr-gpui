@@ -128,7 +128,7 @@ fn a_match_moves_the_cursor_and_n_repeats_the_way_it_was_entered() {
         matches(&[(40, 2, 4), (52, 6, 8)], Some(1), 4)
     ));
     assert_eq!(mode.cursor, point(52, 6));
-    assert_eq!(mode.search_label().as_deref(), Some("?err 5 of 9"));
+    assert_eq!(search_label(&mode).as_deref(), Some("?err 5 of 9"));
     // Matches on screen (rows 50..60) are tinted, the current one more.
     let highlights = mode.highlights(&shown);
     assert_eq!(highlights[0].tint, Tint::CurrentMatch);
@@ -163,7 +163,7 @@ fn a_match_moves_the_cursor_and_n_repeats_the_way_it_was_entered() {
         "3",
         matches(&[(40, 2, 4), (52, 6, 8)], Some(1), 4)
     ));
-    assert_eq!(mode.search_label().as_deref(), Some("?err 5 of 9"));
+    assert_eq!(search_label(&mode).as_deref(), Some("?err 5 of 9"));
     // Off the match, a repeat searches from the cursor itself.
     mode.command(Command::Step { rows: 0, cols: 1 }, &shown);
     let (params, _) = search(&mut mode, Command::Repeat { reverse: false }, &shown, "4");
@@ -189,7 +189,7 @@ fn search_answers_for_a_moved_cursor_or_of_the_wrong_kind_are_dropped() {
     search(&mut mode, forward.clone(), &shown, "2");
     assert!(!found(&mut mode, "2", matches(&[], None, 0)));
     assert_eq!(mode.cursor, point(3, 3), "no match leaves the cursor");
-    assert_eq!(mode.search_label().as_deref(), Some("/x 9 found"));
+    assert_eq!(search_label(&mode).as_deref(), Some("/x 9 found"));
 
     search(&mut mode, forward, &shown, "3");
     let motion = CopyMotionResult {
@@ -321,7 +321,7 @@ fn yank_after_the_pane_changed_refreshes_the_match_first() {
         }
     );
     // The search is still the one entered, toward older output.
-    assert_eq!(mode.search_label().as_deref(), Some("?x 1 of 9"));
+    assert_eq!(search_label(&mode).as_deref(), Some("?x 1 of 9"));
     assert_eq!(mode.next_queued(), Some(step));
 }
 
@@ -342,7 +342,7 @@ fn yank_stays_in_copy_mode_when_the_refresh_lost_the_match() {
     found(&mut mode, "2", gone);
     let copy = mode.next_queued().unwrap();
     assert_eq!(mode.command(copy, &shown), Outcome::Moved);
-    assert_eq!(mode.search_label().as_deref(), Some("/x 9 found"));
+    assert_eq!(search_label(&mode).as_deref(), Some("/x 9 found"));
 }
 
 /// A refresh is not retried behind output that keeps changing: refused as
@@ -406,7 +406,7 @@ fn a_refresh_keeps_a_match_in_the_first_cell() {
     refreshed.content_revision = 6;
     found(&mut mode, "2", refreshed);
     // `n` still goes the way the query was entered.
-    assert_eq!(mode.search_label().as_deref(), Some("/x 1 of 9"));
+    assert_eq!(search_label(&mode).as_deref(), Some("/x 1 of 9"));
     let copy = mode.next_queued().unwrap();
     assert!(matches!(
         mode.command(copy, &shown),

@@ -3,6 +3,7 @@ use crate::chat::{
     rich::{Block, Inline, Kind, Style},
     visual::{Shown, VisualId, Visuals},
 };
+use crate::i18n::fl;
 use crate::{HerdrWindow, config::ChatLayoutMode, fonts::StyledFont};
 use gpui::{prelude::*, *};
 use pulldown_cmark::{Alignment, HeadingLevel};
@@ -323,7 +324,7 @@ impl HerdrWindow {
                         div()
                             .text_size(px((self.chat_text_size() - 2.).max(10.)))
                             .text_color(rgb(self.theme.subtext()))
-                            .child("Equation preview unavailable; original LaTeX is shown below."),
+                            .child(fl!("chat-math-unavailable")),
                     )
                     .child(fallback)
             } else {

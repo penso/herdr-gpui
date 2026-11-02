@@ -79,7 +79,10 @@ fn summaries_read_naturally() {
         untracked: 0,
         commits: 1,
     };
-    assert_eq!(one.summary(), "+4 −0 · 1 file · 1 commit");
+    assert_eq!(
+        one.summary().replace(['\u{2068}', '\u{2069}'], ""),
+        "+4 −0 · 1 file · 1 commit"
+    );
     let many = DiffStat {
         files: 3,
         additions: 10,
@@ -87,7 +90,10 @@ fn summaries_read_naturally() {
         untracked: 5,
         commits: 0,
     };
-    assert_eq!(many.summary(), "+10 −2 · 3 files · 5 untracked");
+    assert_eq!(
+        many.summary().replace(['\u{2068}', '\u{2069}'], ""),
+        "+10 −2 · 3 files · 5 untracked"
+    );
 }
 
 #[test]

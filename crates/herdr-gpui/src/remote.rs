@@ -8,6 +8,7 @@
 //! in `herdr_remote_control::app`, with no GPUI. Here, [`supervisor`] keeps
 //! the service in line with `[remote]` and polls its status, and
 //! [`dialog`], [`revoke`], and [`indicator`] put them in the window.
+// i18n: migrated
 
 mod dialog;
 mod indicator;
@@ -80,21 +81,21 @@ pub(crate) fn hosts_line(device: &Device) -> Option<String> {
     };
     let parts: Vec<String> = [
         (
-            "Also on ",
+            "paired",
             names(|state| matches!(state, HostState::Paired(_))),
         ),
         (
-            "pairing ",
+            "pairing",
             names(|state| matches!(state, HostState::Pending | HostState::Asking)),
         ),
         (
-            "failed on ",
+            "failed",
             names(|state| matches!(state, HostState::Failed { .. })),
         ),
     ]
     .into_iter()
     .filter(|(_, names)| !names.is_empty())
-    .map(|(label, names)| format!("{label}{names}"))
+    .map(|(state, names)| fl!("remote-hosts", state = state, names = names))
     .collect();
     (!parts.is_empty()).then(|| parts.join(" \u{b7} "))
 }

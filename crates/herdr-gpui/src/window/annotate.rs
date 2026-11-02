@@ -4,8 +4,10 @@
 //!
 //! As with the find field, typing in the note field never reaches the
 //! terminal: its key handler steps aside while the field has focus.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow};
+use crate::i18n::{Localize, fl};
 use crate::{
     Error,
     agent_notes::Origin,
@@ -92,7 +94,7 @@ impl HerdrWindow {
             if self.terminal_notes.offer.is_some() {
                 self.open_terminal_annotation_offer(window, cx);
             } else {
-                self.show_flash(Flash::warning("Select terminal text to annotate it"), cx);
+                self.show_flash(Flash::warning(fl!("window-annotate-select")), cx);
             }
             return;
         };
@@ -109,36 +111,36 @@ impl HerdrWindow {
             return;
         };
         let Some(surface) = &self.live.surface else {
-            self.show_flash(Flash::warning("Select terminal text to annotate it"), cx);
+            self.show_flash(Flash::warning(fl!("window-annotate-select")), cx);
             return;
         };
         let Some(pane_id) = selection.pane_id().map(str::to_owned) else {
-            self.show_flash(Flash::warning("Only text in a pane can be annotated"), cx);
+            self.show_flash(Flash::warning(fl!("window-annotate-pane-only")), cx);
             return;
         };
         let quote =
             match selection.text(surface, self.cell_width, self.config.terminal.line_height()) {
                 Ok(quote) if !quote.trim().is_empty() => quote,
                 Ok(_) => {
-                    self.show_flash(Flash::warning("Select terminal text to annotate it"), cx);
+                    self.show_flash(Flash::warning(fl!("window-annotate-select")), cx);
                     return;
                 }
                 Err(Error::SelectionOffscreen) => {
-                    self.show_flash(
-                        Flash::warning("Scroll so the whole selection shows, then annotate it"),
-                        cx,
-                    );
+                    self.show_flash(Flash::warning(fl!("window-annotate-offscreen")), cx);
                     return;
                 }
                 Err(error) => {
-                    self.show_flash(Flash::warning(format!("Cannot annotate: {error}")), cx);
+                    self.show_flash(
+                        Flash::warning(fl!("window-annotate-failed", error = error.localize())),
+                        cx,
+                    );
                     return;
                 }
             };
         let (target, place) = destination(&snapshot, &pane_id);
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
-            input.set_placeholder("Message to agent\u{2026}", cx);
+            input.set_placeholder_with(|| fl!("window-annotate-placeholder"), cx);
             input.set_frameless(cx);
             let mut font = self.config.ui.clone();
             font.size = font.size.max(14.);
@@ -231,9 +233,7 @@ impl HerdrWindow {
             Some(note) => {
                 if self.terminal_notes.queued.len() >= MAX_NOTES {
                     self.show_flash(
-                        Flash::warning(format!(
-                            "{MAX_NOTES} notes are queued; clear the field and press Enter to send them"
-                        )),
+                        Flash::warning(fl!("window-annotate-full", count = MAX_NOTES)),
                         cx,
                     );
                     return;
@@ -243,7 +243,7 @@ impl HerdrWindow {
             }
             None if send && !self.terminal_notes.queued.is_empty() => {}
             None => {
-                self.show_flash(Flash::warning("Write a note before adding it"), cx);
+                self.show_flash(Flash::warning(fl!("window-annotate-empty")), cx);
                 return;
             }
         }
@@ -254,10 +254,7 @@ impl HerdrWindow {
         } else {
             let count = self.terminal_notes.queued.len();
             self.show_flash(
-                Flash::success(format!(
-                    "{count} note{} queued; Enter on the next one sends them",
-                    if count == 1 { "" } else { "s" }
-                )),
+                Flash::success(fl!("window-annotate-queued", count = count)),
                 cx,
             );
         }
@@ -298,10 +295,7 @@ impl HerdrWindow {
                     .copy(),
             );
             if stale {
-                self.show_flash(
-                    Flash::warning("Notes whose original daemon is not selected were copied"),
-                    cx,
-                );
+                self.show_flash(Flash::warning(fl!("window-annotate-stale-copied")), cx);
             }
         }
         if let Some(text) = clipboard.text() {

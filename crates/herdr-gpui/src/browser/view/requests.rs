@@ -217,6 +217,7 @@ impl HerdrWindow {
 /// loaded, then its visible text, bounded before it leaves the page. The
 /// app's own script; nothing a caller sends is ever run.
 #[cfg(any(target_os = "macos", windows))]
+// i18n: data
 const PAGE_TEXT_SCRIPT: &str = "(function () {\
   if (document.readyState !== 'complete') { return null; }\
   var body = document.body;\

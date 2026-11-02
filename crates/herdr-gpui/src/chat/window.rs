@@ -7,7 +7,11 @@ use super::{
     discovery,
     visual::{DiagramStyle, Output, VisualId},
 };
-use crate::{HerdrWindow, search_input::SearchInput};
+use crate::{
+    HerdrWindow,
+    i18n::{Localize, fl},
+    search_input::SearchInput,
+};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{Attachment, Command, MAX_ATTACHMENTS, MAX_PROMPT_SIZE, Status, assist};
 use std::time::Instant;
@@ -95,6 +99,8 @@ impl HerdrWindow {
                 )
             })
             .unwrap_or_default();
+        let core = enabled.then(|| self.core_chat_targets());
+        let targets = super::core_pane::with_core(targets, core.unwrap_or_default());
         if enabled {
             self.locate_chat_program(cx);
             self.probe_chat_agents(cx);
@@ -104,6 +110,7 @@ impl HerdrWindow {
         // A layout saved from Settings or the command line arrives here.
         changed |= self.chats.relayout(self.config.chat.layout);
         changed |= self.chats.rewidth(self.config.chat.max_width);
+        changed |= self.chats.relocale(crate::i18n::shown_locale());
         changed |= self.chats.poll(now);
         // Observed panes, whether a discovered agent or a `[chat.mirrors]`
         // entry, take their status from the daemon; live chats ignore it.
@@ -174,11 +181,13 @@ impl HerdrWindow {
             composer.update(cx, |input, cx| {
                 input.set_completion(ghost, cx);
                 input.set_appearance(font.clone(), theme.clone(), cx);
-                input.set_placeholder(
-                    if accepts {
-                        "Message the agent \u{2014} / for commands, Shift-Enter for a new line"
-                    } else {
-                        "The agent cannot take prompts"
+                input.set_placeholder_with(
+                    move || {
+                        if accepts {
+                            fl!("chat-composer-placeholder")
+                        } else {
+                            fl!("chat-composer-closed")
+                        }
                     },
                     cx,
                 );
@@ -196,6 +205,7 @@ impl HerdrWindow {
             changed = true;
         }
         self.follow_chat_focus(window, cx);
+        self.follow_core_chat_focus(window, cx);
         // The views are drawn with the terminal, so a surface redraw shows
         // them without rebuilding the cached sidebar.
         if changed {
@@ -281,10 +291,16 @@ impl HerdrWindow {
     /// focus. Give it back once Herdr's focus moves on or a popup covers it.
     fn follow_chat_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let target = self.focused_chat_handle(window, cx);
-        let holding = self.chats.panes().find_map(|pane| {
-            pane.focus_handles(cx)
-                .find(|focus| focus.is_focused(window))
-        });
+        // A herdr-core pane's chat keeps the keyboard as its terminal view
+        // would; Herdr's focused pane has no say over it.
+        let holding = self
+            .chats
+            .panes()
+            .filter(|pane| pane.target.surface == super::Surface::Herdr)
+            .find_map(|pane| {
+                pane.focus_handles(cx)
+                    .find(|focus| focus.is_focused(window))
+            });
         match (holding, target) {
             (Some(holding), target) if target.as_ref() != Some(&holding) => {
                 let focus = target.unwrap_or_else(|| self.focus.clone());
@@ -427,7 +443,7 @@ impl HerdrWindow {
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             return;
         };
-        pane.error = pane.send(command).err().map(|error| error.to_string());
+        pane.error = pane.send(command).err().map(|error| error.localize());
         cx.notify();
     }
 
@@ -798,7 +814,7 @@ impl HerdrWindow {
                         this.add_chat_files(&pane_id, remote, window, cx);
                     }
                     Err(error) => {
-                        pane.error = Some(format!("Files not attached: {error}"));
+                        pane.error = Some(fl!("chat-files-not-attached", error = error.localize()));
                         this.redraw_terminal(cx);
                     }
                 }
@@ -826,7 +842,7 @@ impl HerdrWindow {
         }
         for path in paths {
             if pane.attachments.len() >= MAX_ATTACHMENTS {
-                pane.error = Some(format!("A prompt takes at most {MAX_ATTACHMENTS} files"));
+                pane.error = Some(fl!("chat-files-too-many", count = MAX_ATTACHMENTS));
                 break;
             }
             if !pane.attachments.contains(&path) {
@@ -852,7 +868,7 @@ impl HerdrWindow {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Attach".into()),
+            prompt: Some(fl!("chat-files-attach").into()),
         });
         let pane_id = pane_id.to_owned();
         cx.spawn_in(window, async move |this, cx| {
@@ -906,11 +922,11 @@ impl HerdrWindow {
         // Files still copying to an SSH host belong to this prompt; sending
         // now would leave them for the next one.
         if pane.uploading > 0 {
-            pane.error = Some("Files are still being copied; send once they are attached".into());
+            pane.error = Some(fl!("chat-files-copying"));
             return;
         }
         if text.len() > MAX_PROMPT_SIZE {
-            pane.error = Some("The prompt is longer than the agent accepts".into());
+            pane.error = Some(fl!("chat-prompt-too-long"));
             return;
         }
         if !text.trim().is_empty() {
@@ -930,7 +946,7 @@ impl HerdrWindow {
                 pane.attachments.clear();
                 input.update(cx, |input, cx| input.clear(cx));
             }
-            Err(error) => pane.error = Some(error.to_string()),
+            Err(error) => pane.error = Some(error.localize()),
         }
     }
 
@@ -946,7 +962,10 @@ impl HerdrWindow {
         if !self.chats.set_raw(pane_id, raw) {
             return false;
         }
-        if raw && self.chat_focused(window, cx) {
+        // A herdr-core pane gives the keyboard to whichever it shows now.
+        if let Some(tab) = self.core_chat_tab(pane_id) {
+            self.focus_core_terminal(tab, window, cx);
+        } else if raw && self.chat_focused(window, cx) {
             window.focus(&self.focus, cx);
         }
         self.follow_chat_focus(window, cx);

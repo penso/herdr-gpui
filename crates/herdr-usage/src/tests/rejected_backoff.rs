@@ -47,7 +47,7 @@ fn a_rejected_sign_in_is_asked_less_often_while_others_keep_their_pace() {
         .iter()
         .find(|reading| reading.provider == claude)
         .unwrap();
-    assert_eq!(held.error, Some(Error::Rejected.to_string()));
+    assert!(matches!(held.error.as_deref(), Some(Error::Rejected)));
     assert_eq!(again(&usage, claude), Some((1, start + REFRESH * 2)));
 
     // Once due it is asked again, and a second rejection waits twice as long.

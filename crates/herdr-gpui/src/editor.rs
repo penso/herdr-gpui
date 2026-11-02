@@ -415,25 +415,9 @@ impl HerdrWindow {
             self.editor_open = None;
             return;
         }
-        let Some((id, Some(result))) = &self.live.editor_response else {
+        let Some(result) = self.take_answer(crate::state::Answer::Editor, &request) else {
             return;
         };
-        if *id != request {
-            return;
-        }
-        let result = result.clone();
-        self.live.editor_response = None;
-        if let Ok(mut inbox) = self.endpoints[self.selected_endpoint]
-            .connection
-            .inbox
-            .try_lock()
-            && inbox
-                .editor_response
-                .as_ref()
-                .is_some_and(|(id, _)| *id == request)
-        {
-            inbox.editor_response = None;
-        }
         let Some(job) = self.editor_open.take() else {
             return;
         };

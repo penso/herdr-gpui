@@ -64,12 +64,13 @@ fn the_row_opens_a_table_and_clears_once_everything_ended(cx: &mut TestAppContex
     assert!(cx.debug_bounds("chat-running-table").is_none());
     let row = cx.debug_bounds("chat-running").unwrap();
     cx.simulate_click(row.center(), Modifiers::default());
-    // Once it has grown all the way in.
+    // Once it has grown all the way in: the time is read before the frame
+    // is drawn, so the frame checked is one drawn after the growth ended.
     let opened = Instant::now();
     wait_until(|| {
+        let grown = opened.elapsed() > crate::motion::ENTER * 2;
         poll(&view, &program, cx);
-        opened.elapsed() > crate::motion::ENTER * 2
-            && cx.debug_bounds("chat-running-row-0").is_some()
+        grown && cx.debug_bounds("chat-running-row-0").is_some()
     });
     // The table pushes the row up rather than covering the conversation.
     let row = cx.debug_bounds("chat-running").unwrap();

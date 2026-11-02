@@ -10,6 +10,7 @@ use super::{
     Location, Pick, Scope, Store, Tab, TabId,
     view::{scope, store},
 };
+use crate::i18n::fl;
 use crate::{HerdrWindow, window::Flash};
 use gpui::{Context, Window};
 use herdr_client::{
@@ -388,7 +389,7 @@ impl HerdrWindow {
                 };
                 let Some(id) = Store::update(cx, |store| store.reopen_page(page.clone())) else {
                     Store::update(cx, |store| store.record_closed_page(page));
-                    self.show_flash(Flash::warning("Too many browser tabs are open"), cx);
+                    self.show_flash(Flash::warning(fl!("browser-too-many-tabs")), cx);
                     return;
                 };
                 self.poll_reviews(cx);

@@ -15,6 +15,7 @@
 //! `LLMMAN_HOST` is read on the probed host, which is this app's environment
 //! when the host is this machine, as in CodexBar.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -36,18 +37,11 @@ const MODELS: usize = 24;
 pub(crate) struct Llmman;
 
 static META: Meta = Meta::new("llmman", "llmman").settings(&[
-    Setting::new(
-        "base_url",
-        &[],
-        "The llmman serve address, when not http://127.0.0.1:17434. A host without a \
-             scheme uses HTTP on port 17434, e.g. localhost:18000. Plain HTTP is allowed \
-             only for loopback, private-network, and .local hosts; others need HTTPS. \
-             Without it, LLMMAN_HOST on the probed host is used when set.",
-    ),
+    Setting::new("base_url", &[], "usage-llmman-setting-base-url"),
     Setting::new(
         "api_key",
         &["LLMMAN_API_KEY"],
-        "Only when the daemon was started with LLMMAN_API_KEYS: one of those keys.",
+        "usage-llmman-setting-api-key",
     ),
 ]);
 
@@ -207,12 +201,14 @@ pub(crate) fn parse(body: &str, keyed: bool, version: Option<String>) -> Result<
     let node: Node = json(body)?;
     let total = |models: &BTreeMap<String, u64>| models.values().sum::<u64>();
     let in_use = total(&node.loaded);
-    let count =
-        |models: &BTreeMap<String, u64>| format!("{} · {}", models.len(), size(total(models)));
+    // A count and a size, such as `2 · 10.0 GB`: figures only.
+    let count = |models: &BTreeMap<String, u64>| {
+        Text::service(format!("{} · {}", models.len(), size(total(models))))
+    };
 
     let windows = if node.memory > 0 {
         vec![Window::new(
-            Kind::Named("Memory".into()),
+            Kind::Named(Text::message("usage-llmman-memory")),
             in_use as f64 / node.memory as f64 * 100.,
             None,
             None,
@@ -222,33 +218,44 @@ pub(crate) fn parse(body: &str, keyed: bool, version: Option<String>) -> Result<
     };
 
     let mut summary = vec![
-        ("Loaded".to_owned(), count(&node.loaded)),
-        ("Stored".to_owned(), count(&node.stored)),
+        (Text::message("usage-llmman-loaded"), count(&node.loaded)),
+        (Text::message("usage-llmman-stored"), count(&node.stored)),
     ];
     if node.memory > 0 {
         summary.push((
-            "Memory".to_owned(),
-            format!("{} of {}", size(in_use), size(node.memory)),
+            Text::message("usage-llmman-memory"),
+            Text::message("usage-llmman-memory-used")
+                .arg("used", size(in_use))
+                .arg("total", size(node.memory)),
         ));
     }
-    summary.extend(version.map(|version| ("Version".to_owned(), version)));
+    summary.extend(version.map(|version| {
+        (
+            Text::message("usage-llmman-version"),
+            Text::service(version),
+        )
+    }));
 
     let mut loaded: Vec<_> = node.loaded.iter().filter(|(name, _)| label(name)).collect();
     loaded.sort_by(|(a, a_size), (b, b_size)| b_size.cmp(a_size).then_with(|| a.cmp(b)));
     let models: Vec<_> = loaded
         .into_iter()
         .take(MODELS)
-        .map(|(name, weight)| (name.clone(), size(*weight)))
+        .map(|(name, weight)| (Text::service(name), Text::service(size(*weight))))
         .collect();
 
-    let plan = if keyed { "API key" } else { "Local daemon" };
+    let plan = if keyed {
+        Text::message("usage-llmman-api-key")
+    } else {
+        Text::message("usage-llmman-local-daemon")
+    };
     let mut sections = vec![Section::Facts {
-        title: "Daemon".into(),
+        title: Text::message("usage-llmman-daemon"),
         facts: summary,
     }];
     if !models.is_empty() {
         sections.push(Section::Facts {
-            title: "Loaded models".into(),
+            title: Text::message("usage-llmman-loaded-models"),
             facts: models,
         });
     }
@@ -256,7 +263,7 @@ pub(crate) fn parse(body: &str, keyed: bool, version: Option<String>) -> Result<
         Provider(&Llmman),
         Account {
             email: None,
-            plan: Some(plan.to_owned()),
+            plan: Some(plan),
         },
         windows,
     )

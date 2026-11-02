@@ -228,11 +228,18 @@ pub(crate) struct HerdrWindow {
     pub(crate) key_layout: fn(u16) -> Option<prefix::KeyChars>,
     /// The key code and Shift of the key being handled, from AppKit's event.
     pub(crate) key_press: fn() -> Option<(u16, bool)>,
+    /// What a new worktree whose creation is in flight opens in, kept
+    /// apart from the dialog so closing it does not drop the launch.
+    pub(crate) landing_launch: Option<crate::worktree_landing::Launch>,
     /// When this window last forwarded user input; gates re-claiming a frame another client sized.
     pub(crate) last_input: Option<std::time::Instant>,
     /// The last pointer position over the panes, so a move event that did not move is not use.
     pub(crate) last_pointer: Option<Point<Pixels>>,
     pub(crate) last_queued_options: Option<ConnectOptions>,
+    /// The status line text the last link this window failed to follow
+    /// left, so following the next one can clear it without touching an
+    /// unrelated error.
+    pub(crate) link_complaint: Option<String>,
     pub(crate) links: links::DaemonLinks,
     pub(crate) listening_ports: crate::listening_ports::ListeningPorts,
     pub(crate) live: LiveState,
@@ -323,8 +330,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) server_keys: Option<server_keys::ServerKeymap>,
     /// Local sessions on this machine, scanned on a worker while the popup is open.
     pub(crate) sessions: sessions::Sessions,
-    /// Where the footer's sessions button last painted. The window owns it so a
-    /// shortcut and a click anchor the list at the same place.
+    /// Where the footer's device picker last painted, so the Sessions shortcut
+    /// opens the list where the picker opens.
     pub(crate) sessions_anchor: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
     pub(crate) settings: crate::settings_panel::SettingsPanel,
     pub(super) shift_taps: double_shift::ShiftTaps,
@@ -548,6 +555,7 @@ impl HerdrWindow {
                     return;
                 }
                 Ok(false) => {}
+                // i18n: data
                 Err(error) => eprintln!("App update restart failed: {error}"),
             }
             cx.notify();
@@ -579,6 +587,12 @@ impl HerdrWindow {
             .icon_font_notice
             .observe(self.config.icon_font_missing, self.live.surface.as_deref())
         {
+            cx.notify();
+        }
+        // A config reload rebuilds the GUI config card; a language switch,
+        // which only redraws the windows, writes it again here.
+        let config = &self.config;
+        if self.gui_config_diagnostic.relocale(|| config.diagnostic()) {
             cx.notify();
         }
         self.post_system_notifications(window, cx);

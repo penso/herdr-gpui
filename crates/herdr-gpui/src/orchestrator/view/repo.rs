@@ -68,12 +68,7 @@ impl Repo {
             .map(|remote| remote.source.repository.as_str())
             .or_else(|| info.map(|info| info.main_root.as_str()))
             .unwrap_or(self.request.checkout.as_str());
-        named
-            .trim_end_matches('/')
-            .rsplit('/')
-            .next()
-            .unwrap_or(named)
-            .to_owned()
+        last_part(named).to_owned()
     }
 
     /// The login GitHub is read as for this repository: the account that
@@ -116,4 +111,12 @@ impl Repo {
             .chain(&self.stand_ins)
             .find(|item| item.key.canonical() == key)
     }
+}
+
+/// The last part of a repository's name or path. A checkout on Windows
+/// separates its folders with `\`, as `C:\code\app` does; a remote's
+/// repository and a Unix path with `/`.
+pub(super) fn last_part(named: &str) -> &str {
+    let trimmed = named.trim_end_matches(['/', '\\']);
+    trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed)
 }

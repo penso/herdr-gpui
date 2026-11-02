@@ -198,7 +198,10 @@ fn run_fixture(fixture: &Fixture) -> Option<(ExitStatus, String)> {
     }
     isolated.gui = Some(command.arg("--sidebar-test").spawn().unwrap());
     let gui = isolated.gui.as_mut().unwrap();
-    let deadline = Instant::now() + Duration::from_secs(20);
+    // A bound on a hung fixture, not a performance budget (`just test-perf`
+    // measures that): the debug build's startup, catalog loading, and every
+    // layout already take about 17 seconds on a shared Windows runner.
+    let deadline = Instant::now() + Duration::from_secs(40);
     while gui.try_wait().unwrap().is_none() {
         if Instant::now() >= deadline {
             let _ = gui.kill();

@@ -45,19 +45,19 @@ fn a_spent_quota_is_told_apart_from_other_refusals() {
 }
 
 #[test]
-fn says_how_long_ago_to_the_minute() {
+fn says_how_long_ago_with_the_shared_relative_time() {
+    let now = SystemTime::now();
+    let since = |seconds| {
+        crate::security::section::since(now, now - Duration::from_secs(seconds))
+            .replace(['\u{2068}', '\u{2069}'], "")
+    };
+    assert_eq!(since(30), "just now");
+    assert_eq!(since(5 * 60 + 10), "5 min ago");
+    assert_eq!(since(3 * 3600), "3 h ago");
+    assert_eq!(since(30 * 3600), "yesterday");
+    // A time ahead of the clock reads as now.
     assert_eq!(
-        crate::security::section::ago(Duration::from_secs(30)),
+        crate::security::section::since(now, now + Duration::from_secs(60)),
         "just now"
-    );
-    assert_eq!(
-        crate::security::section::ago(Duration::from_secs(5 * 60 + 10))
-            .replace(['\u{2068}', '\u{2069}'], ""),
-        "5 min ago"
-    );
-    assert_eq!(
-        crate::security::section::ago(Duration::from_secs(3 * 3600))
-            .replace(['\u{2068}', '\u{2069}'], ""),
-        "3 h ago"
     );
 }

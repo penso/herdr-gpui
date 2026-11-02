@@ -1,27 +1,40 @@
 //! The picker paints ranked rows; ranking and input live elsewhere.
 
 use super::{CodeSearch, Mode, Status, rank};
-use crate::{HerdrWindow, code_index::Change, config::Theme};
+use crate::{
+    HerdrWindow,
+    code_index::{Change, Kind},
+    config::Theme,
+    i18n::fl,
+};
 use gpui::{prelude::*, *};
 use std::time::SystemTime;
 
-/// How long ago a change was last written, as `5m` or `3h`.
-fn age(modified: Option<SystemTime>) -> Option<String> {
-    let seconds = SystemTime::now().duration_since(modified?).ok()?.as_secs();
-    Some(match seconds {
-        0..60 => "just now".into(),
-        60..3600 => format!("{}m ago", seconds / 60),
-        3600..86_400 => format!("{}h ago", seconds / 3600),
-        _ => format!("{}d ago", seconds / 86_400),
-    })
+/// What a changed file's row says under its path: whether Git tracks it,
+/// and how long ago it was last written.
+pub(super) fn changed_detail(change: &Change) -> String {
+    let ago = change
+        .modified
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        .map(|elapsed| crate::ago::text(elapsed.as_secs()));
+    match (change.new, ago) {
+        (true, Some(ago)) => fl!("code-search-new-ago", ago = ago),
+        (false, Some(ago)) => fl!("code-search-changed-ago", ago = ago),
+        (true, None) => fl!("code-search-new"),
+        (false, None) => fl!("code-search-changed"),
+    }
 }
 
-/// What a changed file's row says under its path.
-fn changed_detail(change: &Change) -> String {
-    let what = if change.new { "New" } else { "Changed" };
-    match age(change.modified) {
-        Some(age) => format!("{what} {age}"),
-        None => what.into(),
+/// What kind of definition a symbol is, from the index's typed kind.
+fn kind_label(kind: Kind) -> String {
+    match kind {
+        Kind::Function => fl!("code-search-kind-function"),
+        Kind::Method => fl!("code-search-kind-method"),
+        Kind::Type => fl!("code-search-kind-type"),
+        Kind::Module => fl!("code-search-kind-module"),
+        Kind::Constant => fl!("code-search-kind-constant"),
+        Kind::Implementation => fl!("code-search-kind-implementation"),
+        Kind::Macro => fl!("code-search-kind-macro"),
     }
 }
 
@@ -31,7 +44,7 @@ fn change_badge(theme: &Theme, change: &Change) -> Div {
     match change.counts {
         _ if change.new => badge
             .text_color(rgb(crate::menu::online(theme)))
-            .child("new"),
+            .child(fl!("code-search-badge-new")),
         Some((added, removed)) => badge
             .child(
                 div()
@@ -43,7 +56,9 @@ fn change_badge(theme: &Theme, change: &Change) -> Div {
                     .text_color(crate::menu::danger(theme))
                     .child(format!("\u{2212}{removed}")),
             ),
-        None => badge.text_color(rgb(theme.muted)).child("binary"),
+        None => badge
+            .text_color(rgb(theme.muted))
+            .child(fl!("code-search-badge-binary")),
     }
 }
 
@@ -56,16 +71,19 @@ impl HerdrWindow {
         });
         let summary = match (&code.status, counted) {
             (Status::Failed(_), _) => String::new(),
-            (Status::Locating, _) | (Status::Indexing, None) => "Reading the checkout...".into(),
+            (Status::Locating, _) | (Status::Indexing, None) => fl!("code-search-reading"),
             (_, Some(count)) => {
                 let shown = code.hits.len();
-                let more = if shown == rank::MAX_HITS { "+" } else { "" };
-                let partial = code
-                    .index
-                    .as_ref()
-                    .filter(|index| index.truncated())
-                    .map_or("", |_| " (checkout too large, some left out)");
-                format!("{shown}{more} of {count}{partial}")
+                let more = if shown == rank::MAX_HITS { "yes" } else { "no" };
+                let partial = code.index.as_ref().is_some_and(|index| index.truncated());
+                let partial = if partial { "yes" } else { "no" };
+                fl!(
+                    "code-search-count",
+                    shown = shown,
+                    more = more,
+                    total = count,
+                    partial = partial
+                )
             }
             (Status::Ready, None) => String::new(),
         };
@@ -90,8 +108,8 @@ impl HerdrWindow {
                             .text_size(px(self.config.ui.size * 1.35))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(match code.mode {
-                                Mode::Symbols => "Go to Symbol",
-                                Mode::Files => "Go to File",
+                                Mode::Symbols => fl!("code-search-title-symbols"),
+                                Mode::Files => fl!("code-search-title-files"),
                             }),
                     )
                     .child(
@@ -113,9 +131,7 @@ impl HerdrWindow {
                     .children(Mode::ALL.into_iter().map(|mode| {
                         div()
                             .id(("code-search-mode", mode as usize))
-                            .debug_selector(move || {
-                                format!("code-search-mode-{}", mode.label().to_lowercase())
-                            })
+                            .debug_selector(move || format!("code-search-mode-{}", mode.key()))
                             .px_2()
                             .py_1()
                             .rounded(px(crate::config::corners::CONTROL))
@@ -153,13 +169,15 @@ impl HerdrWindow {
             Mode::Symbols => {
                 let symbol = index.symbols().get(hit.item)?;
                 let file = index.files().get(symbol.file)?;
-                let changed = index
-                    .change(symbol.file)
-                    .map_or("", |_| "  \u{00b7} changed");
+                let place = format!("{file}:{}", symbol.line);
+                let detail = match index.change(symbol.file) {
+                    Some(_) => fl!("code-search-symbol-changed", place = place),
+                    None => place,
+                };
                 let badge = div()
                     .text_color(rgb(theme.muted))
-                    .child(symbol.kind.label());
-                (format!("{file}:{}{changed}", symbol.line), badge)
+                    .child(kind_label(symbol.kind));
+                (detail, badge)
             }
             Mode::Files => match index.change(hit.item) {
                 Some(change) => (changed_detail(change), change_badge(theme, change)),
@@ -219,8 +237,8 @@ impl HerdrWindow {
             Status::Failed(error) => Some(error.clone()),
             Status::Locating | Status::Indexing if code.index.is_none() => None,
             _ if code.hits.is_empty() && code.rank_task.is_none() => Some(match code.mode {
-                Mode::Symbols => "No matching symbols.".into(),
-                Mode::Files => "No matching files.".into(),
+                Mode::Symbols => fl!("code-search-no-symbols"),
+                Mode::Files => fl!("code-search-no-files"),
             }),
             _ => None,
         };
@@ -267,11 +285,14 @@ impl HerdrWindow {
                     .border_t_1()
                     .border_color(rgb(theme.active))
                     .text_color(rgb(theme.muted))
-                    .child(if cfg!(target_os = "macos") {
-                        "↑ / ↓ navigate · Tab symbols/files · Enter editor · ⌘Enter viewer · Esc cancel"
-                    } else {
-                        "↑ / ↓ navigate · Tab symbols/files · Enter editor · Ctrl-Enter viewer · Esc cancel"
-                    }),
+                    .child(fl!(
+                        "code-search-hints",
+                        viewer = if cfg!(target_os = "macos") {
+                            "⌘Enter" // i18n: data
+                        } else {
+                            "Ctrl-Enter" // i18n: data
+                        }
+                    )),
             )
     }
 }

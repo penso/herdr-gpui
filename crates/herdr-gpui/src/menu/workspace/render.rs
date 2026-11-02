@@ -167,9 +167,8 @@ impl HerdrWindow {
                         .child(fl!("workspace-dialog-new-workspace-note")),
                 )
                 .children(self.menu.dispatch.as_ref().map(|picker| {
-                    // The picker's own captions, in English until dispatch's
-                    // text is messages.
-                    let caption = |caption: &'static str, field: AnyElement| {
+                    // The picker's own captions, laid out like the form's.
+                    let caption = |caption: String, field: AnyElement| {
                         div()
                             .flex()
                             .items_center()
@@ -247,6 +246,20 @@ impl HerdrWindow {
                     // text is messages.
                     self.render_host_picker(picker, |caption, field| row(caption.into(), field), cx)
                 }))
+                // Agents start through this host's CLI, so only a checkout
+                // made here can land in one.
+                .children(
+                    self.menu
+                        .landing
+                        .as_ref()
+                        .filter(|_| destination == crate::dispatch::Destination::Here)
+                        .map(|picker| {
+                            row(
+                                fl!("workspace-dialog-lands-in").into(),
+                                self.render_landing(picker, cx),
+                            )
+                        }),
+                )
                 .child(match (dispatched, &sandbox) {
                     (Some(host), _) if clones(host) => fl!(
                         "workspace-dialog-creates-on-clone",

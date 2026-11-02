@@ -122,6 +122,16 @@ mod workspace_close;
 #[cfg(any(target_os = "macos", windows))]
 mod zoom;
 
+/// The toolbar under `en-XB`. A blank tab opens nothing where builds show
+/// no pages.
+#[cfg(any(target_os = "macos", windows))]
+mod rtl;
+
+/// The `en-XA` leak test. A blank tab opens nothing where builds show no
+/// pages.
+#[cfg(any(target_os = "macos", windows))]
+mod en_xa;
+
 /// Terminal padding beside a page; only builds that show pages open one.
 #[cfg(any(target_os = "macos", windows))]
 mod terminal_padding;

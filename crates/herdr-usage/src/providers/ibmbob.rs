@@ -7,6 +7,8 @@
 //! be under `bob.ibm.com` before the key is sent there. Bob has no local
 //! sign-in that CodexBar reads.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -31,15 +33,9 @@ static META: Meta = Meta::new("ibmbob", "IBM Bob")
         Setting::new(
             "api_key",
             &["BOBSHELL_API_KEY"],
-            "An IBM Bob API key that can read subscription usage, created at \
-             https://bob.ibm.com (the same key Bob Shell uses as BOBSHELL_API_KEY).",
+            "usage-ibmbob-setting-api-key",
         ),
-        Setting::new(
-            "token",
-            &[],
-            "Instead of an API key, an IBM Cloud bearer token (a JWT) for your Bob account. \
-             It is sent as \"Authorization: Bearer <token>\".",
-        ),
+        Setting::new("token", &[], "usage-ibmbob-setting-token"),
     ]);
 
 impl Service for Ibmbob {
@@ -212,7 +208,11 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
         .map(|limit| Window::new(Kind::Monthly, used / limit * 100., resets_at, Some(MONTH)))
         .into_iter()
         .collect();
-    let mut balance = Balance::new("Bobcoins used", used, Unit::Count("Bobcoins".into()));
+    let mut balance = Balance::new(
+        Text::message("usage-ibmbob-bobcoins-used"),
+        used,
+        Unit::Count(Count::Named("Bobcoins".into())),
+    );
     if let Some(limit) = limit {
         balance = balance.out_of(limit);
     }
@@ -225,14 +225,20 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
     let facts = teams
         .iter()
         .map(|team| {
+            // The instance's and team's names, as Bob names them.
             let label = if team.team == team.instance {
-                team.team.clone()
+                Text::service(&team.team)
             } else {
-                format!("{} · {}", team.instance, team.team)
+                Text::service(format!("{} · {}", team.instance, team.team))
             };
             let value = match team.limit {
-                Some(limit) => format!("{} / {} Bobcoins", plain(team.used), plain(limit)),
-                None => format!("{} Bobcoins used", plain(team.used)),
+                Some(limit) => Text::message("usage-ibmbob-used-of")
+                    .arg("used", plain(team.used))
+                    .arg("limit", plain(limit))
+                    .arg("count", limit),
+                None => Text::message("usage-ibmbob-used")
+                    .arg("used", plain(team.used))
+                    .arg("count", team.used),
             };
             (label, value)
         })
@@ -241,13 +247,15 @@ pub(crate) fn report(teams: &[Team]) -> Result<Report> {
         Provider(&Ibmbob),
         Account {
             email: None,
-            plan: (!plans.is_empty()).then(|| plans.join(", ")),
+            plan: (!plans.is_empty())
+                .then(|| plans.join(", "))
+                .map(Text::service),
         },
         windows,
     )
     .with_balances([balance])
     .with_sections([Section::Facts {
-        title: "Bobcoin usage".into(),
+        title: Text::message("usage-ibmbob-bobcoin-usage"),
         facts,
     }]))
 }
@@ -334,7 +342,10 @@ mod tests {
             targets.next().unwrap().usage(r#"{"usage":25}"#).unwrap(),
         ];
         let report = report(&teams).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Enterprise, Pro+"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Enterprise, Pro+")
+        );
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].kind, Kind::Monthly);
         assert!((report.windows[0].used - 17.5).abs() < 0.001);
@@ -349,7 +360,13 @@ mod tests {
         };
         assert_eq!(
             facts[0],
-            ("Personal · Solo".into(), "10 / 40 Bobcoins".into())
+            (
+                Text::service("Personal · Solo"),
+                Text::message("usage-ibmbob-used-of")
+                    .arg("used", "10")
+                    .arg("limit", "40")
+                    .arg("count", 40)
+            )
         );
     }
 

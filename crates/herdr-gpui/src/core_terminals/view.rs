@@ -125,6 +125,11 @@ impl CoreTerminalView {
     }
 
     /// The size the terminal was last given, in cells.
+    /// Where the terminal's cells were last laid out, in the window.
+    pub(crate) fn bounds(&self) -> Option<Bounds<Pixels>> {
+        self.bounds
+    }
+
     pub(crate) fn size(&self) -> Option<Size> {
         self.sent_size
     }

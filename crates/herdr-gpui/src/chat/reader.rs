@@ -104,9 +104,7 @@ impl HerdrWindow {
         window.focus(&focus, cx);
         cx.stop_propagation();
         self.note_input();
-        if self.input_ready() {
-            self.focus_clicked_pane(pane_id, cx);
-        }
+        self.focus_chat_surface(pane_id, cx);
         self.redraw_terminal(cx);
         cx.notify();
     }
@@ -175,7 +173,7 @@ impl HerdrWindow {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
             } else if !pane.selection.is_empty() {
                 self.show_flash(
-                    crate::window::Flash::warning("Select less text to copy"),
+                    crate::window::Flash::warning(crate::i18n::fl!("chat-select-less")),
                     cx,
                 );
             }

@@ -1,4 +1,6 @@
-use crate::i18n::fl;
+//! A connection's live state, as the window reads it.
+// i18n: migrated
+use crate::i18n::{Localize, fl};
 use herdr_client::{
     ClientEvent, Method, SurfaceImages,
     protocol::{ClientShellSnapshot, PaneSurfaceFrame, ServerMessage},
@@ -41,14 +43,15 @@ impl ConnectionStatus {
 }
 
 impl std::fmt::Display for ConnectionStatus {
+    // The log's words; the status bar shows `label`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Connecting => "Connecting...",
-            Self::StartingDaemon => "Starting Herdr server...",
-            Self::AwaitingSnapshot => "Connected; waiting for snapshot",
-            Self::Connected => "Connected",
-            Self::Disconnected => "Disconnected",
-            Self::Detached => "Detached (daemon still running)",
+            Self::Connecting => "Connecting...",                // i18n: data
+            Self::StartingDaemon => "Starting Herdr server...", // i18n: data
+            Self::AwaitingSnapshot => "Connected; waiting for snapshot", // i18n: data
+            Self::Connected => "Connected",                     // i18n: data
+            Self::Disconnected => "Disconnected",               // i18n: data
+            Self::Detached => "Detached (daemon still running)", // i18n: data
         })
     }
 }
@@ -135,6 +138,9 @@ pub struct LiveState {
     /// The `worktree.remove` a merged worktree cleanup is waiting on, in its
     /// own slot so it and an open dialog cannot take each other's answer.
     pub(crate) cleanup_response: Option<(String, Option<DialogResponse>)>,
+    /// The `worktree.create` a chosen landing waits on, also in its own slot:
+    /// the dialog's may be taken by a newer dialog once this one has closed.
+    pub(crate) landing_response: Option<(String, Option<DialogResponse>)>,
     pub(crate) notifications: std::collections::VecDeque<crate::notifications::Notice>,
     pub(crate) notifications_lost: bool,
     outer_focused: Option<bool>,
@@ -236,6 +242,7 @@ impl Default for LiveState {
             script_response: None,
             editor_response: None,
             cleanup_response: None,
+            landing_response: None,
             notifications: Default::default(),
             notifications_lost: false,
             keyboard_report_all: false,
@@ -252,7 +259,49 @@ impl Default for LiveState {
     }
 }
 
+/// A request slot a job outside the open dialog waits on, read once by the
+/// window and then cleared from the mailbox too.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Answer {
+    // keep-sorted start
+    Cleanup,
+    Editor,
+    Landing,
+    Script,
+    // keep-sorted end
+}
+
 impl LiveState {
+    fn answer_slot(&mut self, answer: Answer) -> &mut Option<(String, Option<DialogResponse>)> {
+        match answer {
+            Answer::Cleanup => &mut self.cleanup_response,
+            Answer::Editor => &mut self.editor_response,
+            Answer::Landing => &mut self.landing_response,
+            Answer::Script => &mut self.script_response,
+        }
+    }
+
+    /// `request`'s answer once it has arrived, emptying its slot. A newer
+    /// request's slot, or one still waiting, is left alone.
+    pub(crate) fn take_answer(&mut self, answer: Answer, request: &str) -> Option<DialogResponse> {
+        let slot = self.answer_slot(answer);
+        if !slot
+            .as_ref()
+            .is_some_and(|(id, result)| id == request && result.is_some())
+        {
+            return None;
+        }
+        slot.take().and_then(|(_, result)| result)
+    }
+
+    /// Empty `answer`'s slot if it still belongs to `request`.
+    pub(crate) fn clear_answer(&mut self, answer: Answer, request: &str) {
+        let slot = self.answer_slot(answer);
+        if slot.as_ref().is_some_and(|(id, _)| id == request) {
+            *slot = None;
+        }
+    }
+
     /// Whether `next` repaints only the terminal: everything else the window
     /// draws from, the sidebar above all, reads as it did in `self`. Every
     /// field is named so a new one must decide whether it can change quietly.
@@ -297,6 +346,7 @@ impl LiveState {
             script_response,
             editor_response,
             cleanup_response,
+            landing_response,
             notifications,
             notifications_lost,
             outer_focused,
@@ -367,6 +417,10 @@ impl LiveState {
                 (Some((a, None)), Some((b, None))) => a == b,
                 (a, b) => a.is_none() && b.is_none(),
             }
+            && match (landing_response, &self.landing_response) {
+                (Some((a, None)), Some((b, None))) => a == b,
+                (a, b) => a.is_none() && b.is_none(),
+            }
             && notifications.is_empty()
             && !notifications_lost
             && *outer_focused == self.outer_focused
@@ -396,6 +450,7 @@ impl LiveState {
             &self.script_response,
             &self.editor_response,
             &self.cleanup_response,
+            &self.landing_response,
         ]
         .into_iter()
         .flatten()
@@ -591,7 +646,7 @@ impl LiveState {
                     .as_deref()
                     .is_some_and(|id| self.has_operation_result(id))
                 {
-                    self.error = Some(reason.to_string());
+                    self.error = Some(reason.localize());
                 }
                 let reason = Arc::new(crate::Error::Client(reason));
                 for (id, result) in [
@@ -599,6 +654,7 @@ impl LiveState {
                     &mut self.script_response,
                     &mut self.editor_response,
                     &mut self.cleanup_response,
+                    &mut self.landing_response,
                 ]
                 .into_iter()
                 .flatten()
@@ -660,14 +716,14 @@ impl LiveState {
                         .flatten();
                     activation.failed = activation.revision.is_none();
                     if activation.failed {
-                        self.error = Some("Invalid surface activation acknowledgement".into());
+                        self.error = Some(fl!("state-activation-invalid"));
                     }
                 }
                 if let Some(error) = response.get("error")
                     && !error.is_null()
                     && !self.has_operation_result(&request_id)
                 {
-                    self.error = Some(crate::daemon::Error::Response(error.clone()).to_string());
+                    self.error = Some(crate::daemon::Error::Response(error.clone()).localize());
                 }
                 if self.dismissal_request(&request_id)
                     && response.get("error").is_some_and(|error| !error.is_null())
@@ -678,6 +734,7 @@ impl LiveState {
                     &mut self.script_response,
                     &mut self.editor_response,
                     &mut self.cleanup_response,
+                    &mut self.landing_response,
                 ]
                 .into_iter()
                     .flatten()

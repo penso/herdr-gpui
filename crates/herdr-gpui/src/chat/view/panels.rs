@@ -2,6 +2,7 @@
 //! queued prompts, and slash-command completions.
 
 use super::{super::chats::ChatPane, Hues};
+use crate::i18n::fl;
 use crate::{HerdrWindow, config::corners, notifications::safe_text};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{Command, PermissionKind, assist};
@@ -112,7 +113,7 @@ impl HerdrWindow {
                         div()
                             .flex_none()
                             .text_color(rgb(theme.muted))
-                            .child("Queued"),
+                            .child(fl!("chat-queued")),
                     )
                     .child(
                         div()

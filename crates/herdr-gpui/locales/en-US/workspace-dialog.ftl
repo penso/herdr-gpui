@@ -43,6 +43,8 @@ workspace-dialog-close-note = { $count ->
 # New worktree. $base is the branch or commit it starts from, such as HEAD.
 workspace-dialog-name = Name
 workspace-dialog-branch = Branch
+# Caption of the row choosing what the new worktree's first pane shows.
+workspace-dialog-lands-in = Opens in
 workspace-dialog-creates-on = Creates a worktree from { $base } on { $host }, without granting repository trust:
 workspace-dialog-creates-on-clone = Creates a worktree from { $base } on { $host }, cloning the repository there first, without granting repository trust:
 workspace-dialog-creates-in = Makes { $machine } and creates a worktree from { $base } there, cloning the repository first, without granting repository trust:

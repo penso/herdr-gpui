@@ -9,6 +9,7 @@ use super::{
 };
 use crate::{
     fonts::StyledFont,
+    i18n::fl,
     orchestrator::{Access, CheckState, PrStatus, Provider, Review, SyncState},
 };
 use gpui::{prelude::*, *};
@@ -68,7 +69,11 @@ impl OrchestratorView {
         let repo = &self.repos[row.repo];
         match self.twins(&self.row_item(row).key.canonical()) {
             0 => self.project_label(repo),
-            twins => format!("{} \u{00b7} {} hosts", repo.name(), twins + 1),
+            twins => fl!(
+                "orchestrator-project-hosts",
+                project = repo.name(),
+                count = twins + 1
+            ),
         }
     }
 
@@ -94,44 +99,47 @@ impl OrchestratorView {
         let compact = self.compact();
         let sources = self.mixed_sources;
         let projects = self.listing_projects();
-        let mut head: Vec<(&str, Option<f32>)> = Vec::new();
+        let mut head: Vec<(String, Option<f32>)> = Vec::new();
         match self.tab {
             Tab::Issues => {
-                head.push(("AGE", Some(32.)));
+                head.push((fl!("orchestrator-column-age"), Some(32.)));
                 if sources {
-                    head.push(("SRC", Some(SOURCE_WIDTH)));
+                    head.push((fl!("orchestrator-column-source"), Some(SOURCE_WIDTH)));
                 }
-                head.push(("RUN", Some(30.)));
+                head.push((fl!("orchestrator-column-run"), Some(30.)));
                 if projects {
-                    head.push(("PROJECT", Some(PROJECT_WIDTH)));
+                    head.push((fl!("orchestrator-column-project"), Some(PROJECT_WIDTH)));
                 }
-                head.push(("TITLE", None));
+                head.push((fl!("orchestrator-column-title"), None));
                 if !compact {
-                    head.extend([("AUTHOR", Some(110.)), ("\u{1f4ac}", Some(34.))]);
-                }
-                head.push(("", Some(ACTION_WIDTH)));
-            }
-            Tab::PullRequests => {
-                head.push(("PR", Some(48.)));
-                if sources {
-                    head.push(("SRC", Some(SOURCE_WIDTH)));
-                }
-                if projects {
-                    head.push(("PROJECT", Some(PROJECT_WIDTH)));
-                }
-                head.push(("TITLE \u{00b7} BRANCH", None));
-                if compact {
-                    head.extend([("", Some(12.)), ("", Some(12.))]);
-                } else {
                     head.extend([
-                        ("AUTHOR", Some(100.)),
-                        ("REVIEW", Some(124.)),
-                        ("CHECKS", Some(150.)),
-                        ("SIZE", Some(70.)),
-                        ("RUN", Some(30.)),
+                        (fl!("orchestrator-column-author"), Some(110.)),
+                        ("\u{1f4ac}".into(), Some(34.)),
                     ]);
                 }
-                head.push(("AGE", Some(32.)));
+                head.push((String::new(), Some(ACTION_WIDTH)));
+            }
+            Tab::PullRequests => {
+                head.push((fl!("orchestrator-column-pull-request"), Some(48.)));
+                if sources {
+                    head.push((fl!("orchestrator-column-source"), Some(SOURCE_WIDTH)));
+                }
+                if projects {
+                    head.push((fl!("orchestrator-column-project"), Some(PROJECT_WIDTH)));
+                }
+                head.push((fl!("orchestrator-column-title-branch"), None));
+                if compact {
+                    head.extend([(String::new(), Some(12.)), (String::new(), Some(12.))]);
+                } else {
+                    head.extend([
+                        (fl!("orchestrator-column-author"), Some(100.)),
+                        (fl!("orchestrator-column-review"), Some(124.)),
+                        (fl!("orchestrator-column-checks"), Some(150.)),
+                        (fl!("orchestrator-column-size"), Some(70.)),
+                        (fl!("orchestrator-column-run"), Some(30.)),
+                    ]);
+                }
+                head.push((fl!("orchestrator-column-age"), Some(32.)));
             }
         }
         let count = self.lines.len();
@@ -196,48 +204,46 @@ impl OrchestratorView {
 
     fn render_empty(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let look = &self.look;
-        let what = match self.tab {
-            Tab::Issues => "open issues",
-            Tab::PullRequests => "pull requests",
-        };
+        let issues = self.tab == Tab::Issues;
         let query = self.query.trim();
         // With nothing listed at all, the section says what it is for.
         let (icon, text, about) = match self.empty() {
             Empty::NoRepositories => (
                 "icons/git-branch.svg",
-                "No repositories".to_owned(),
-                Some(
-                    "Pull requests and issues come from the Git checkouts your workspaces \
-                     are in, on this machine or an SSH host. Open a workspace in one to list \
-                     them here.",
-                ),
+                fl!("orchestrator-no-repositories"),
+                Some(fl!("orchestrator-no-repositories-about")),
             ),
-            Empty::Loading => ("icons/refresh.svg", "Loading\u{2026}".to_owned(), None),
+            Empty::Loading => ("icons/refresh.svg", fl!("orchestrator-loading"), None),
+            Empty::Search if issues => (
+                "icons/search.svg",
+                fl!("orchestrator-no-issues-match", query = query),
+                None,
+            ),
             Empty::Search => (
                 "icons/search.svg",
-                format!("No {what} match \u{201c}{query}\u{201d}"),
+                fl!("orchestrator-no-pull-requests-match", query = query),
+                None,
+            ),
+            Empty::Filtered if issues => (
+                "icons/search.svg",
+                fl!("orchestrator-no-issues-filtered"),
                 None,
             ),
             Empty::Filtered => (
                 "icons/search.svg",
-                format!("No {what} match the filters"),
+                fl!("orchestrator-no-pull-requests-filtered"),
                 None,
             ),
-            Empty::Nothing => {
-                let about = match self.tab {
-                    Tab::Issues => {
-                        "This lists the open issues of every repository your workspaces \
-                         hold, from GitHub, GitLab, and Beads. Pick one to read it or to \
-                         start an agent on it."
-                    }
-                    Tab::PullRequests => {
-                        "This lists the pull requests of every repository your workspaces \
-                         hold, with their reviews and checks. Pick one to read it or to \
-                         start an agent on it."
-                    }
-                };
-                ("icons/check.svg", format!("No {what}"), Some(about))
-            }
+            Empty::Nothing if issues => (
+                "icons/check.svg",
+                fl!("orchestrator-no-issues"),
+                Some(fl!("orchestrator-no-issues-about")),
+            ),
+            Empty::Nothing => (
+                "icons/check.svg",
+                fl!("orchestrator-no-pull-requests"),
+                Some(fl!("orchestrator-no-pull-requests-about")),
+            ),
         };
         div()
             .debug_selector(|| "orchestrator-empty".into())
@@ -259,10 +265,14 @@ impl OrchestratorView {
             }))
             .when(!query.is_empty(), |el| {
                 el.child(
-                    look.button("orchestrator-clear", "Clear filter", false)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.search.update(cx, |search, cx| search.clear(cx));
-                        })),
+                    look.button(
+                        "orchestrator-clear",
+                        fl!("orchestrator-clear-filter"),
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.search.update(cx, |search, cx| search.clear(cx));
+                    })),
                 )
             })
     }
@@ -283,17 +293,17 @@ impl OrchestratorView {
         let theme = &look.theme;
         let (label, hue): (String, u32) = match heading {
             Heading::Next(next) => match next {
-                Next::Review => ("Review requested".into(), look.hue(MAGENTA)),
-                Next::Fix => ("Fix".into(), look.hue(RED)),
-                Next::Merge => ("Ready to merge".into(), look.hue(GREEN)),
-                Next::Wait => ("Waiting".into(), theme.muted),
-                Next::Closed => ("Closed and merged".into(), theme.muted),
+                Next::Review => (fl!("orchestrator-next-review"), look.hue(MAGENTA)),
+                Next::Fix => (fl!("orchestrator-next-fix"), look.hue(RED)),
+                Next::Merge => (fl!("orchestrator-next-merge"), look.hue(GREEN)),
+                Next::Wait => (fl!("orchestrator-next-wait"), theme.muted),
+                Next::Closed => (fl!("orchestrator-next-closed"), theme.muted),
             },
             Heading::Priority(Some(priority)) => (
-                format!("P{priority} \u{00b7} {}", priority_name(priority)),
+                priority_name(priority),
                 look.hue(look.priority_hue(priority)),
             ),
-            Heading::Priority(None) => ("No priority".into(), theme.muted),
+            Heading::Priority(None) => (fl!("orchestrator-no-priority"), theme.muted),
         };
         div()
             .w_full()
@@ -333,9 +343,11 @@ impl OrchestratorView {
         div()
             .id(id)
             .role(Role::ListItem)
-            .aria_label(format!(
-                "{} {}, {}",
-                item.identifier, item.title, item.state
+            .aria_label(fl!(
+                "orchestrator-row-label",
+                identifier = item.identifier.as_str(),
+                title = item.title.as_str(),
+                state = item.state.as_str()
             ))
             .aria_selected(selected)
             .w_full()
@@ -393,12 +405,15 @@ impl OrchestratorView {
         let blocked = !item.blocked_by.is_empty() || item.state == "blocked";
         let start = (writable && row.run.is_none() && !blocked).then(|| {
             let key = key.clone();
-            look.compact_button(("orchestrator-start", index), "Start agent")
-                .debug_selector(|| "orchestrator-start".into())
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.open_dispatch(key.clone(), window, cx);
-                }))
+            look.compact_button(
+                ("orchestrator-start", index),
+                fl!("orchestrator-start-agent"),
+            )
+            .debug_selector(|| "orchestrator-start".into())
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.open_dispatch(key.clone(), window, cx);
+            }))
         });
         self.row_shell(("orchestrator-issue", index), item, cx)
             .debug_selector(move || format!("orchestrator-row-{key}"))
@@ -472,7 +487,9 @@ impl OrchestratorView {
                     .flex()
                     .justify_end()
                     .children(start)
-                    .when(blocked, |el| el.child(look.badge("blocked", YELLOW))),
+                    .when(blocked, |el| {
+                        el.child(look.badge(fl!("orchestrator-badge-blocked"), YELLOW))
+                    }),
             )
             .into_any_element()
     }
@@ -530,7 +547,9 @@ impl OrchestratorView {
                             .items_center()
                             .gap_2()
                             .child(div().min_w_0().truncate().child(item.title.clone()))
-                            .when(draft, |el| el.child(look.badge("draft", BLUE))),
+                            .when(draft, |el| {
+                                el.child(look.badge(fl!("orchestrator-badge-draft"), BLUE))
+                            }),
                     )
                     .child(
                         div()
@@ -547,7 +566,9 @@ impl OrchestratorView {
                                     .text_font(&look.mono)
                                     .child(pr.head_ref.clone()),
                             )
-                            .when(fork, |el| el.child(look.badge("fork", CYAN))),
+                            .when(fork, |el| {
+                                el.child(look.badge(fl!("orchestrator-badge-fork"), CYAN))
+                            }),
                     ),
             )
             .map(|el| {
@@ -635,7 +656,7 @@ pub(super) fn source_icon(provider: Provider) -> &'static str {
 }
 
 /// A button small enough to sit in a row with room above and below.
-fn column_head(look: &Look, cells: &[(&str, Option<f32>)]) -> Div {
+fn column_head(look: &Look, cells: &[(String, Option<f32>)]) -> Div {
     let theme = &look.theme;
     div()
         .flex_none()
@@ -654,8 +675,8 @@ fn column_head(look: &Look, cells: &[(&str, Option<f32>)]) -> Div {
                     .flex_none()
                     .w(px(*width))
                     .whitespace_nowrap()
-                    .child(SharedString::from(text.to_string())),
-                None => div().flex_1().child(SharedString::from(text.to_string())),
+                    .child(SharedString::from(text.clone())),
+                None => div().flex_1().child(SharedString::from(text.clone())),
             }
         }))
 }
@@ -686,14 +707,9 @@ pub(super) fn diff_squares(look: &Look, additions: Option<u64>, deletions: Optio
         }))
 }
 
-fn priority_name(priority: i64) -> &'static str {
-    match priority {
-        0 => "urgent",
-        1 => "high",
-        2 => "normal",
-        3 => "low",
-        _ => "backlog",
-    }
+/// A priority's heading: `P1 · high`.
+fn priority_name(priority: i64) -> String {
+    fl!("orchestrator-priority", priority = priority)
 }
 
 fn check_hue(look: &Look, state: CheckState) -> u32 {
@@ -709,12 +725,12 @@ fn check_hue(look: &Look, state: CheckState) -> u32 {
 fn review_badge(look: &Look, status: Option<&PrStatus>, login: Option<&str>) -> Option<Div> {
     let status = status?;
     if login.is_some_and(|login| status.requests(login)) {
-        return Some(look.badge("your review", MAGENTA));
+        return Some(look.badge(fl!("orchestrator-review-yours"), MAGENTA));
     }
     Some(match status.review? {
-        Review::Approved => look.badge("approved", GREEN),
-        Review::ChangesRequested => look.badge("changes requested", RED),
-        Review::Required => look.badge("review required", BLUE),
+        Review::Approved => look.badge(fl!("orchestrator-review-approved"), GREEN),
+        Review::ChangesRequested => look.badge(fl!("orchestrator-review-changes"), RED),
+        Review::Required => look.badge(fl!("orchestrator-review-required"), BLUE),
     })
 }
 

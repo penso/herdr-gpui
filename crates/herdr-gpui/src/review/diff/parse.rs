@@ -3,6 +3,14 @@
 use super::{Body, Kind, Lines, Status};
 use std::sync::Arc;
 
+// The header lines Git writes, which are its words, never shown.
+const NEW_FILE: &str = "new file mode"; // i18n: data
+const COPY_FROM: &str = "copy from"; // i18n: data
+const DELETED_FILE: &str = "deleted file mode"; // i18n: data
+const RENAME_FROM: &str = "rename from "; // i18n: data
+const BINARY_FILES: &str = "Binary files"; // i18n: data
+const BINARY_PATCH: &str = "GIT binary patch"; // i18n: data
+
 /// One file as the diff gave it. Its names are Git's, decoded but not
 /// cleaned: they match the listing's, and are cleaned where they are shown.
 #[derive(Debug)]
@@ -149,14 +157,14 @@ impl Open {
             if name != "/dev/null" {
                 parsed.path = path(name, "b/");
             }
-        } else if raw.starts_with("new file mode") || raw.starts_with("copy from") {
+        } else if raw.starts_with(NEW_FILE) || raw.starts_with(COPY_FROM) {
             parsed.status = Status::Added;
-        } else if raw.starts_with("deleted file mode") {
+        } else if raw.starts_with(DELETED_FILE) {
             parsed.status = Status::Deleted;
-        } else if let Some(from) = raw.strip_prefix("rename from ") {
+        } else if let Some(from) = raw.strip_prefix(RENAME_FROM) {
             parsed.status = Status::Renamed;
             parsed.old_path = Some(path(from, ""));
-        } else if raw.starts_with("Binary files") || raw == "GIT binary patch" {
+        } else if raw.starts_with(BINARY_FILES) || raw == BINARY_PATCH {
             self.binary = true;
         }
     }

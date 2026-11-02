@@ -4,6 +4,7 @@
 //! top-level window instead carries an explicit AppUserModelID and relaunch
 //! properties that point a pin at the launcher. Other platforms set nothing.
 //! The button's badge and progress bar live in [`button`].
+// i18n: migrated
 
 use gpui::{App, Global, Window};
 
@@ -19,7 +20,7 @@ const LAUNCHER_EXE: &str = "herdr-gpui-launcher.exe";
 
 /// The name a pinned Herdr shows on the taskbar and in its Jump List.
 #[cfg(any(windows, test))]
-const DISPLAY_NAME: &str = "Herdr UI";
+const DISPLAY_NAME: &str = "Herdr UI"; // i18n: data
 
 /// What a window sets so that pinning it pins the launcher.
 #[cfg(any(windows, test))]

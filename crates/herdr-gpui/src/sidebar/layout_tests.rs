@@ -37,7 +37,7 @@ mod device_multi_select;
 #[cfg(all(test, feature = "azure"))]
 mod device_removing;
 #[cfg(test)]
-mod device_sessions_row;
+mod device_sessions_unfold;
 #[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
@@ -724,6 +724,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         cell_width: 9.,
         hovered_terminal_link: false,
         pressed_terminal_link: None,
+        link_complaint: None,
         links: Default::default(),
         terminal_mouse: None,
         #[cfg(feature = "cloud")]
@@ -739,6 +740,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         held_keys: Default::default(),
         // No AppKit event to read; a test that needs one supplies its own.
         key_press: || None,
+        landing_launch: None,
         key_layout: |_| None,
         file_transfer: None,
         presentation: Default::default(),

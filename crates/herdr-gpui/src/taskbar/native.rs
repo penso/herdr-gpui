@@ -45,17 +45,17 @@ impl Hwnd {
 const KEYS: [(PROPERTYKEY, &str); 4] = [
     (
         PKEY_AppUserModel_RelaunchCommand,
-        "System.AppUserModel.RelaunchCommand",
+        "System.AppUserModel.RelaunchCommand", // i18n: data
     ),
     (
         PKEY_AppUserModel_RelaunchDisplayNameResource,
-        "System.AppUserModel.RelaunchDisplayNameResource",
+        "System.AppUserModel.RelaunchDisplayNameResource", // i18n: data
     ),
     (
         PKEY_AppUserModel_RelaunchIconResource,
-        "System.AppUserModel.RelaunchIconResource",
+        "System.AppUserModel.RelaunchIconResource", // i18n: data
     ),
-    (PKEY_AppUserModel_ID, "System.AppUserModel.ID"),
+    (PKEY_AppUserModel_ID, "System.AppUserModel.ID"), // i18n: data
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -83,7 +83,7 @@ pub(super) fn apply(window: &Window, relaunch: &Relaunch) -> Option<Hwnd> {
         Err(error) => {
             warn(
                 &error,
-                "Unable to find the window's Win32 handle; pinning it pins herdr-gpui.exe",
+                "Unable to find the window's Win32 handle; pinning it pins herdr-gpui.exe", // i18n: data
             );
             return None;
         }
@@ -91,7 +91,7 @@ pub(super) fn apply(window: &Window, relaunch: &Relaunch) -> Option<Hwnd> {
     if let Err(error) = set(hwnd, relaunch) {
         warn(
             &error,
-            "Unable to set the window's taskbar relaunch properties; pinning it pins herdr-gpui.exe",
+            "Unable to set the window's taskbar relaunch properties; pinning it pins herdr-gpui.exe", // i18n: data
         );
     }
     Some(hwnd)
@@ -108,7 +108,7 @@ pub(super) fn clear(hwnd: Hwnd) {
         Err(error) => {
             warn(
                 &error,
-                "Unable to clear the closing window's taskbar properties",
+                "Unable to clear the closing window's taskbar properties", // i18n: data
             );
             return;
         }
@@ -121,7 +121,7 @@ pub(super) fn clear(hwnd: Hwnd) {
             let error = Error::Property { property, source };
             warn(
                 &error,
-                "Unable to clear the closing window's taskbar properties",
+                "Unable to clear the closing window's taskbar properties", // i18n: data
             );
         }
     }

@@ -162,7 +162,9 @@ fn connected_image_paste_native_text_during_blocked_image_and_second_image_busy(
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         assert_eq!(
-            view.local_error,
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked),
             Some(format!(
                 "Paste not sent: {}",
                 herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
@@ -233,7 +235,9 @@ fn connected_image_paste_native_preparations_stay_bounded_across_reset(
             view.paste_native_clipboard(false, None, cx);
             assert_eq!(view.pending_images.len(), 4);
             assert_eq!(
-                view.local_error,
+                view.local_error
+                    .as_deref()
+                    .map(crate::i18n::leak_tests::unmarked),
                 Some(format!(
                     "Paste not sent: {}",
                     herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)
@@ -317,7 +321,9 @@ fn connected_image_paste_queued_upload_remains_cancellable_after_preparation(
             // No preparation is running now, but the unsent frame still occupies the guard.
             assert!(view.paste_terminal_clipboard(clipboard_image(&[99]), false, cx));
             assert_eq!(
-                view.local_error,
+                view.local_error
+                    .as_deref()
+                    .map(crate::i18n::leak_tests::unmarked),
                 Some(format!(
                     "Image not sent: {}",
                     herdr_client::Error::Clipboard(herdr_client::clipboard::Error::Busy)

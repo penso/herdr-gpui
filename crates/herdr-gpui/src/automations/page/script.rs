@@ -3,7 +3,7 @@
 //! and what can be done to it.
 
 use super::super::{Action, HostState, Opened, format, model};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use chrono::TimeZone;
 use gpui::{prelude::*, *};
 use herdr_automation::report::{RunSummary, ScriptState, ScriptStatus};
@@ -60,37 +60,32 @@ impl HerdrWindow {
                         None => script.path.clone(),
                     }),
             )
-            .child(self.automation_title("Plan"))
+            .child(self.automation_title(fl!("automations-plan")))
             .child(match &script.plan {
                 Some(plan) => self.automation_plan(plan, "automations-plan"),
                 None => div()
                     .text_color(rgb(theme.muted))
-                    .child("The host could not plan this script."),
+                    .child(fl!("automations-no-plan")),
             });
         if let Some(caps) = script.caps {
             page = page.child(
                 div()
                     .text_size(self.automation_small())
                     .text_color(rgb(theme.subtext()))
-                    .child(format!(
-                        "Caps: {} agent{} per run · {} tokens a day · {} per run",
-                        caps.agents_per_run,
-                        if caps.agents_per_run == 1 { "" } else { "s" },
-                        format::tokens(caps.tokens_per_day),
-                        format::span(i64::try_from(caps.wall_time_seconds).unwrap_or(i64::MAX)),
-                    )),
+                    .child(model::caps(caps)),
             );
         }
         page = page
-            .child(self.automation_title("Recent runs"))
+            .child(self.automation_title(fl!("automations-recent-runs")))
             .child(self.automation_script_runs(host, script, &runs, cx));
         let days = daily_tokens(&runs, format::now(), &chrono::Local);
         if days.iter().any(|(_, tokens)| *tokens > 0) {
             let total: u64 = days.iter().map(|(_, tokens)| tokens).sum();
             page = page
-                .child(self.automation_title(format!(
-                    "Tokens, last {DAYS} days · {}",
-                    format::tokens(total)
+                .child(self.automation_title(fl!(
+                    "automations-tokens-days",
+                    days = DAYS,
+                    tokens = format::tokens(total)
                 )))
                 .child(self.automation_token_bars(&days));
         }
@@ -128,7 +123,7 @@ impl HerdrWindow {
                 self.automation_button(
                     "automations-review",
                     "icons/check.svg",
-                    "Review and approve",
+                    fl!("automations-review-approve"),
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.review_automation(&machine, &path, window, cx);
@@ -139,7 +134,7 @@ impl HerdrWindow {
             heading = heading.child(self.automation_action_button(
                 "automations-run-now",
                 "icons/play.svg",
-                "Run now",
+                fl!("automations-run-now"),
                 host,
                 Action::RunNow { path: path.clone() },
                 cx,
@@ -149,7 +144,7 @@ impl HerdrWindow {
             heading = heading.child(self.automation_action_button(
                 "automations-stop",
                 "icons/x.svg",
-                "Stop run",
+                fl!("automations-stop-run"),
                 host,
                 Action::Stop { run },
                 cx,
@@ -160,7 +155,7 @@ impl HerdrWindow {
                 heading = heading.child(self.automation_action_button(
                     "automations-pause",
                     "icons/status-outline-unknown.svg",
-                    "Pause",
+                    fl!("automations-pause"),
                     host,
                     Action::Pause { path },
                     cx,
@@ -170,7 +165,7 @@ impl HerdrWindow {
                 heading = heading.child(self.automation_action_button(
                     "automations-resume",
                     "icons/play.svg",
-                    "Resume",
+                    fl!("automations-resume"),
                     host,
                     Action::Resume { path },
                     cx,
@@ -194,7 +189,7 @@ impl HerdrWindow {
             return div()
                 .text_size(small)
                 .text_color(rgb(theme.muted))
-                .child("No run among the host's recent runs.");
+                .child(fl!("automations-no-runs"));
         }
         let now = format::now();
         let mut list = div().flex().flex_col();

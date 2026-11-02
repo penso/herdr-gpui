@@ -12,6 +12,7 @@ use crate::{
     tab_layout::{Mark, Probe, TabContext, TabFace},
     window::Flash,
 };
+use crate::{direction::Logical as _, i18n::fl};
 use gpui::{prelude::*, *};
 
 /// What a page's tab shows until the page reports an icon of its own.
@@ -64,7 +65,7 @@ impl HerdrWindow {
                     .id(SharedString::from(format!("browser-tab-{id}")))
                     .debug_selector(move || slot.selector(&format!("browser-tab-{id}")));
                 let face = TabFace {
-                    label: tab_label(&tab.title),
+                    label: tab_label(&tab.label()),
                     mark,
                     zoomed: false,
                     muted: false,
@@ -188,7 +189,7 @@ impl HerdrWindow {
                             .size(px(13.))
                             .text_color(rgb(color)),
                     )
-                    .child("Annotate")
+                    .child(fl!("browser-annotate"))
                     .when(enabled, |button| {
                         button
                             .cursor_pointer()
@@ -209,16 +210,15 @@ impl HerdrWindow {
         let page: Option<AnyView> = None;
         let failure = self.browser.failed.get(&id).cloned();
         let placeholder: SharedString = match (&failure, loaded) {
-            (Some(message), _) => format!("Could not show this page: {message}").into(),
-            (None, false) => "Type an address above and press Return.".into(),
-            (None, true) if !crate::browser::EMBEDDED => {
-                "This build cannot show pages in the window; open it in the system browser.".into()
-            }
-            (None, true) => "Loading\u{2026}".into(),
+            (Some(message), _) => fl!("browser-page-failed", error = message.to_string()).into(),
+            (None, false) => fl!("browser-page-empty").into(),
+            (None, true) if !crate::browser::EMBEDDED => fl!("browser-page-unsupported").into(),
+            (None, true) => fl!("browser-page-loading").into(),
         };
         let toolbar = div()
             .debug_selector(move || slot.selector("browser-toolbar"))
             .flex()
+            .row()
             .flex_none()
             .items_center()
             .gap(px(4.))
@@ -230,7 +230,7 @@ impl HerdrWindow {
             .child(self.toolbar_button(
                 slot,
                 "browser-back",
-                "icons/arrow-left.svg",
+                crate::direction::icon("icons/arrow-left.svg"),
                 loaded,
                 cx,
                 move |this, _, _| {
@@ -243,7 +243,7 @@ impl HerdrWindow {
             .child(self.toolbar_button(
                 slot,
                 "browser-forward",
-                "icons/arrow-right.svg",
+                crate::direction::icon("icons/arrow-right.svg"),
                 loaded,
                 cx,
                 move |this, _, _| {
@@ -446,7 +446,7 @@ impl HerdrWindow {
     ) {
         let text = self.group_address(group, cx).read(cx).text().to_owned();
         let Ok(url) = WebUrl::from_typed(&text) else {
-            self.show_flash(Flash::warning("Not an http or https address"), cx);
+            self.show_flash(Flash::warning(fl!("browser-address-invalid")), cx);
             return;
         };
         self.visit(group, id, Location::Web { url }, window, cx);
