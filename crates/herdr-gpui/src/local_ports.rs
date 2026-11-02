@@ -508,8 +508,9 @@ impl LocalPorts {
         self.listing = Some(listing);
     }
 
-    /// Shows `error` as if the latest scan had failed with it.
-    #[cfg(test)]
+    /// Shows `error` as if the latest scan had failed with it; Windows
+    /// shows no scan's failure.
+    #[cfg(all(test, unix))]
     pub(crate) fn seed_error(&mut self, error: crate::Error) {
         self.apply(Update::Listing(Instant::now(), Err(error)));
     }
