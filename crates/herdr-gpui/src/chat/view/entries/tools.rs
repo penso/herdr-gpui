@@ -70,7 +70,7 @@ impl HerdrWindow {
                     .id(("chat-tool", entry.0))
                     .debug_selector(move || format!("chat-tool-{}", entry.0))
                     .role(Role::Button)
-                    .aria_label(format!("Tool details: {label}"))
+                    .aria_label(fl!("rich-reading-tool-details", label = label.clone()))
                     .flex()
                     .items_center()
                     .gap(px(6.))
@@ -124,7 +124,11 @@ impl HerdrWindow {
                             .flex_none()
                             .text_size(small)
                             .text_color(rgb(theme.subtext()))
-                            .child(if expanded { "Collapse" } else { "Expand" }),
+                            .child(if expanded {
+                                fl!("rich-reading-collapse")
+                            } else {
+                                fl!("rich-reading-expand")
+                            }),
                     )
                     .map(|header| {
                         self.chat_disclosure(
@@ -235,8 +239,9 @@ impl HerdrWindow {
                                     )),
                             )
                             .when(expanded, |card| match &preview.before {
-                                Some(before) => {
-                                    card.child(div().text_size(small).child("Before")).child(
+                                Some(before) => card
+                                    .child(div().text_size(small).child(fl!("rich-reading-before")))
+                                    .child(
                                         div().id("before").child(
                                             self.render_chat_tool_code(
                                                 before,
@@ -251,12 +256,11 @@ impl HerdrWindow {
                                                 cx,
                                             ),
                                         ),
-                                    )
-                                }
+                                    ),
                                 None => card,
                             })
                             .when(preview.before.is_some(), |card| {
-                                card.child(div().text_size(small).child("After"))
+                                card.child(div().text_size(small).child(fl!("rich-reading-after")))
                             })
                             .child(div().id("after").child(self.render_chat_tool_code(
                                 &preview.code,
@@ -276,7 +280,7 @@ impl HerdrWindow {
                         div()
                             .text_size(small)
                             .text_color(rgb(theme.muted))
-                            .child("Additional retained output: ")
+                            .child(fl!("rich-reading-remaining-output"))
                             .child(self.rich_copy(copy::REMAINING, source.clone(), cx))
                     }),
             )
@@ -354,7 +358,7 @@ impl HerdrWindow {
                 div()
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(format!("and {more_files} more changed files"))
+                    .child(fl!("rich-reading-more-files", count = more_files))
                     .into_any_element(),
             );
         }
@@ -363,7 +367,10 @@ impl HerdrWindow {
                 div()
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(format!("{} attached images", summary.images.len()))
+                    .child(fl!(
+                        "rich-reading-attached-images",
+                        count = summary.images.len()
+                    ))
                     .into_any_element(),
             );
         }

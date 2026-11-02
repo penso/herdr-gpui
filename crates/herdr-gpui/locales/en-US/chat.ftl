@@ -118,17 +118,12 @@ chat-tool-steps = { $count ->
 }
 # A tool that asks the user questions.
 chat-tool-ask-user = Ask user
-chat-tool-more-lines = { $count ->
-    [one] { $count } more line
-   *[other] { $count } more lines
-}
 chat-tool-terminal-elsewhere = Terminal output shows in the program's own view
 # $id is the terminal's identifier.
 chat-tool-terminal = Terminal { $id }: output is available in the program's terminal view.
 # Labels on their own lines around a file's text before and after a change.
 chat-diff-before = Before:
 chat-diff-after = After:
-chat-diff-new-file = New file:
 # Items past the ones listed.
 chat-more = and { $count } more
 

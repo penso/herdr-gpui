@@ -4,6 +4,10 @@ use super::*;
 use core::prelude::v1::test;
 use herdr_chat_protocol::{Entry, EntryId, Tokens, Tool, ToolKind, Turn, Usage};
 
+fn plain(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}
+
 fn working() -> Transcript {
     Transcript {
         agent: "Custom ACP".into(),
@@ -84,13 +88,16 @@ fn observed_turn_start_does_not_promote_old_thoughts_or_tools_to_current_activit
     let observed = project(&transcript, true, false, 3000);
     assert_eq!(observed.phase, Phase::Working);
     assert_eq!(
-        observed.detail.as_deref(),
-        Some("Last reported tool: Earlier tool")
+        observed.detail.as_deref().map(plain),
+        Some("Last reported tool: Earlier tool".into())
     );
     transcript.read_only = false;
     let native = project(&transcript, true, false, 3000);
     assert_eq!(native.phase, Phase::Running);
-    assert_eq!(native.detail.as_deref(), Some("Current tool: Earlier tool"));
+    assert_eq!(
+        native.detail.as_deref().map(plain),
+        Some("Current tool: Earlier tool".into())
+    );
     if let EntryKind::Tool(tool) = &mut transcript.entries.last_mut().unwrap().kind {
         tool.kind = ToolKind::Think;
     }
@@ -102,8 +109,8 @@ fn observed_turn_start_does_not_promote_old_thoughts_or_tools_to_current_activit
     let unknown_turn = project(&transcript, true, false, 3000);
     assert_eq!(unknown_turn.phase, Phase::Working);
     assert_eq!(
-        unknown_turn.detail.as_deref(),
-        Some("Last reported tool: Earlier tool")
+        unknown_turn.detail.as_deref().map(plain),
+        Some("Last reported tool: Earlier tool".into())
     );
 }
 
@@ -163,10 +170,10 @@ fn counters_distinguish_elapsed_context_and_completed_usage() {
         },
     );
     let metrics = project(&transcript, true, false, 12000).metrics;
-    assert_eq!(metrics[0], "Elapsed 11s");
-    assert_eq!(metrics[1], "Context 50k / 200k");
+    assert_eq!(plain(&metrics[0]), "Elapsed 11s");
+    assert_eq!(plain(&metrics[1]), "Context 50k / 200k");
     assert_eq!(
-        metrics[2],
+        plain(&metrics[2]),
         "Last turn: 12s · 350 output tokens · 50 thinking"
     );
     assert!(
@@ -204,7 +211,14 @@ fn a_duration_record_without_an_outcome_does_not_claim_success_or_failure() {
     });
     let activity = project(&transcript, true, false, 30000);
     assert_eq!(activity.phase, Phase::Idle);
-    assert_eq!(activity.metrics, ["Last turn: 23s"]);
+    assert_eq!(
+        activity
+            .metrics
+            .iter()
+            .map(|text| plain(text))
+            .collect::<Vec<_>>(),
+        ["Last turn: 23s"]
+    );
 }
 
 #[test]

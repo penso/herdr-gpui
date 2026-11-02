@@ -2,7 +2,7 @@
 //! the live connection/daemon; transcript entries only describe reported work.
 
 use super::{ChatInput, ChatPane, Hues, text_ink};
-use crate::{HerdrWindow, config::Theme};
+use crate::{HerdrWindow, config::Theme, i18n::fl};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{
     EntryKind, Status, ToolKind, ToolStatus, Transcript, TurnEnd, TurnSummary, display,
@@ -26,18 +26,18 @@ pub(super) enum Phase {
 }
 
 impl Phase {
-    pub(super) fn label(self) -> &'static str {
+    pub(super) fn label(self) -> String {
         match self {
-            Self::Starting => "Starting",
-            Self::Idle => "Ready",
-            Self::Working => "Working",
-            Self::Thinking => "Thinking",
-            Self::Running => "Running",
-            Self::Waiting => "Needs input",
-            Self::Completed => "Completed",
-            Self::Stopped => "Stopped",
-            Self::Failed => "Failed",
-            Self::Reconnecting => "Reconnecting",
+            Self::Starting => fl!("rich-activity-starting"),
+            Self::Idle => fl!("rich-activity-ready"),
+            Self::Working => fl!("rich-activity-working"),
+            Self::Thinking => fl!("rich-activity-thinking"),
+            Self::Running => fl!("rich-activity-running"),
+            Self::Waiting => fl!("rich-activity-needs-input"),
+            Self::Completed => fl!("rich-activity-completed"),
+            Self::Stopped => fl!("rich-activity-stopped"),
+            Self::Failed => fl!("rich-activity-failed"),
+            Self::Reconnecting => fl!("rich-activity-reconnecting"),
         }
     }
 
@@ -131,9 +131,9 @@ pub(super) fn project(
     };
     let detail = match phase {
         Phase::Waiting => Some(if transcript.read_only {
-            "Answer in the terminal below".into()
+            fl!("rich-activity-answer-terminal")
         } else {
-            "Review the request below".into()
+            fl!("rich-activity-review-request")
         }),
         Phase::Failed | Phase::Stopped => match &transcript.status {
             Status::Failed { message } | Status::Exited { message } if !message.is_empty() => {
@@ -141,21 +141,20 @@ pub(super) fn project(
             }
             _ => None,
         },
-        Phase::Reconnecting => Some("Waiting for live updates".into()),
+        Phase::Reconnecting => Some(fl!("rich-activity-waiting-updates")),
         _ if phase.moving() => recent()
             .take_while(|entry| !matches!(entry.kind, EntryKind::User { .. } | EntryKind::Turn(_)))
             .find_map(|entry| match &entry.kind {
-                EntryKind::Tool(tool) => Some(format!(
-                    "{}: {}",
-                    if transcript.read_only || transcript.turn.is_none() {
-                        "Last reported tool"
+                EntryKind::Tool(tool) => {
+                    let tool = crate::notifications::safe_text(&tool.title, 140);
+                    Some(if transcript.read_only || transcript.turn.is_none() {
+                        fl!("rich-activity-reported-tool", tool = tool)
                     } else if phase == Phase::Running {
-                        "Current tool"
+                        fl!("rich-activity-current-tool", tool = tool)
                     } else {
-                        "Last tool"
-                    },
-                    crate::notifications::safe_text(&tool.title, 140)
-                )),
+                        fl!("rich-activity-last-tool", tool = tool)
+                    })
+                }
                 _ => None,
             }),
         _ => None,
@@ -167,15 +166,18 @@ pub(super) fn project(
             .and_then(|turn| now_ms.checked_sub(turn.started_ms))
         && elapsed >= 1000
     {
-        metrics.push(format!("Elapsed {}", display::duration(elapsed)));
+        metrics.push(fl!(
+            "rich-activity-elapsed",
+            duration = display::duration(elapsed)
+        ));
     }
     if let Some(usage) = &transcript.usage
         && usage.size > 0
     {
-        metrics.push(format!(
-            "Context {} / {}",
-            display::tokens(usage.used),
-            display::tokens(usage.size)
+        metrics.push(fl!(
+            "rich-activity-context",
+            used = display::tokens(usage.used),
+            size = display::tokens(usage.size)
         ));
     }
     if let Some(summary) = last_turn {
@@ -189,17 +191,21 @@ pub(super) fn project(
 }
 
 fn completed_metrics(summary: &TurnSummary) -> String {
-    let mut text = format!("Last turn: {}", display::duration(summary.duration_ms));
-    if let Some(tokens) = &summary.tokens {
-        text.push_str(&format!(
-            " · {} output tokens",
-            display::tokens(tokens.output)
-        ));
-        if tokens.thought > 0 {
-            text.push_str(&format!(" · {} thinking", display::tokens(tokens.thought)));
-        }
+    let duration = display::duration(summary.duration_ms);
+    match &summary.tokens {
+        Some(tokens) if tokens.thought > 0 => fl!(
+            "rich-activity-last-turn-thinking",
+            duration = duration,
+            output = display::tokens(tokens.output),
+            thought = display::tokens(tokens.thought)
+        ),
+        Some(tokens) => fl!(
+            "rich-activity-last-turn-output",
+            duration = duration,
+            output = display::tokens(tokens.output)
+        ),
+        None => fl!("rich-activity-last-turn", duration = duration),
     }
-    text
 }
 
 impl HerdrWindow {

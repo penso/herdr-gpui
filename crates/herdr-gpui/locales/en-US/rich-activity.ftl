@@ -1,0 +1,22 @@
+# Shared live activity strip. Tool titles and formatted counts are provider data.
+rich-activity-starting = Starting
+rich-activity-ready = Ready
+rich-activity-working = Working
+rich-activity-thinking = Thinking
+rich-activity-running = Running
+rich-activity-needs-input = Needs input
+rich-activity-completed = Completed
+rich-activity-stopped = Stopped
+rich-activity-failed = Failed
+rich-activity-reconnecting = Reconnecting
+rich-activity-answer-terminal = Answer in the terminal below
+rich-activity-review-request = Review the request below
+rich-activity-waiting-updates = Waiting for live updates
+rich-activity-reported-tool = Last reported tool: { $tool }
+rich-activity-current-tool = Current tool: { $tool }
+rich-activity-last-tool = Last tool: { $tool }
+rich-activity-elapsed = Elapsed { $duration }
+rich-activity-context = Context { $used } / { $size }
+rich-activity-last-turn = Last turn: { $duration }
+rich-activity-last-turn-output = Last turn: { $duration } · { $output } output tokens
+rich-activity-last-turn-thinking = Last turn: { $duration } · { $output } output tokens · { $thought } thinking

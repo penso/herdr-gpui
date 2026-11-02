@@ -687,7 +687,7 @@ impl HerdrWindow {
                             } else if activity.phase == activity::Phase::Working {
                                 status_text(transcript)
                             } else {
-                                activity.phase.label().to_owned()
+                                activity.phase.label()
                             }),
                     )
                     .child(div().flex_1())

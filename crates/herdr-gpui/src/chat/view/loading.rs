@@ -70,18 +70,18 @@ impl HerdrWindow {
                     }),
                 )
                 .child(if discovering {
-                    "Finding conversation…"
+                    fl!("rich-reading-finding")
                 } else {
-                    "Loading conversation…"
+                    fl!("rich-reading-loading")
                 })
                 .child(
                     div()
                         .text_color(rgb(theme.subtext()))
                         .text_size(px(self.chat_text_size().min(13.)))
                         .child(if layout.state == InputState::AwaitingFit {
-                            "Your agent keeps running. Activate this pane to fit its input."
+                            fl!("rich-reading-activate-input")
                         } else {
-                            "Your agent and its input remain available below."
+                            fl!("rich-reading-input-available")
                         }),
                 )
                 .child(
@@ -94,7 +94,7 @@ impl HerdrWindow {
                         .rounded(px(corners::CONTROL))
                         .bg(rgb(theme.surface))
                         .hover(|button| button.bg(rgb(theme.active)))
-                        .child("Use terminal")
+                        .child(fl!("rich-reading-use-terminal"))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                             cx.stop_propagation();

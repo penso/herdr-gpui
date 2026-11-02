@@ -1,7 +1,7 @@
 //! An explicit way back to following after reading earlier transcript output.
 
 use super::ChatPane;
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -44,7 +44,7 @@ impl HerdrWindow {
                         .id(SharedString::from(format!("chat-jump-latest-{pane}")))
                         .debug_selector(|| "chat-jump-latest".into())
                         .role(Role::Button)
-                        .aria_label("Jump to latest messages")
+                        .aria_label(fl!("rich-reading-jump-description"))
                         .occlude()
                         .flex()
                         .flex_col()
@@ -63,7 +63,7 @@ impl HerdrWindow {
                         .child(
                             div()
                                 .debug_selector(|| "chat-jump-label".into())
-                                .child("Jump to latest"),
+                                .child(fl!("rich-reading-jump")),
                         )
                         .child(
                             svg()

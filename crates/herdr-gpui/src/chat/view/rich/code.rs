@@ -206,7 +206,7 @@ impl HerdrWindow {
                         .pb(px(6.))
                         .text_color(rgb(self.theme.muted))
                         .child(if limit < MAX_CODE_LINES {
-                            "Expand for more lines; Copy includes the full source.".to_owned()
+                            fl!("rich-reading-expand-source")
                         } else {
                             truncation_note()
                         }),
