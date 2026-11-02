@@ -34,7 +34,7 @@ set -euo pipefail
 # Capture before matching: with pipefail, grep -q exiting early would fail the
 # writer with SIGPIPE and turn a present library into a false failure.
 # herdr-core is a static-pie binary with no libraries to find, so it is left
-# out: ldd's answer for those differs between glibc releases.
+# out: the ldd output for those differs between glibc releases.
 for program in herdr-gpui herdr-acp herdr-remote-control herdr-automate herdr-nearby; do
     linked=$(ldd "/usr/bin/$program")
     if grep "not found" <<<"$linked"; then exit 1; fi
