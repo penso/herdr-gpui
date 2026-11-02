@@ -118,7 +118,7 @@ fn paths_for_a_covered_pane_are_not_pasted(cx: &mut TestAppContext) {
         }));
         finish(view, &["/mnt/c/a"], cx);
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error.as_deref().map(crate::i18n::leak_tests::unmarked).as_deref(),
             Some(
                 "Files not pasted: The pane the files were dropped on changed before their paths were ready."
             )
@@ -221,7 +221,7 @@ fn paths_waiting_in_a_gap_are_refused_once_the_connection_drops(cx: &mut TestApp
         assert!(!view.flush_pending_input(cx));
         assert!(view.wsl_paste.is_none());
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error.as_deref().map(crate::i18n::leak_tests::unmarked).as_deref(),
             Some(
                 "Files not pasted: The pane the files were dropped on changed before their paths were ready."
             )

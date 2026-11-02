@@ -1,4 +1,5 @@
 //! Live layout choice, committed through Settings' serial save path on close.
+// i18n: migrated
 use super::SettingsWindow;
 use crate::config::{Config, LayoutMode};
 use gpui::{App, Context, Global};

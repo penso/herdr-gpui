@@ -6,6 +6,8 @@
 //! Until a pane or `browser feedback` takes a tab's batch, the tab can
 //! withdraw it. Nothing joins a running turn: the daemon offers this client
 //! no method to prompt an agent mid-run, only the pane input it types into.
+// i18n: migrated
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::{Feedback, FeedbackKey},
@@ -76,10 +78,10 @@ pub(crate) enum Queued {
 }
 
 impl Queued {
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> String {
         match self {
-            Self::UntilIdle => "Queued until the agent is idle",
-            Self::ForFeedback => "Kept for `browser feedback`",
+            Self::UntilIdle => fl!("agent-notes-queued-until-idle"),
+            Self::ForFeedback => fl!("agent-notes-kept-for-feedback"),
         }
     }
 }
@@ -254,9 +256,9 @@ pub(crate) fn round(sent: impl IntoIterator<Item = bool>) -> Vec<usize> {
 /// What the Send button says for `total` notes, `unsent` of them not sent.
 pub(crate) fn send_label(total: usize, unsent: usize) -> String {
     match unsent {
-        0 => "Resend all".into(),
-        _ if unsent == total => "Send to agent".into(),
-        _ => format!("Send {unsent} new"),
+        0 => fl!("agent-notes-resend-all"),
+        _ if unsent == total => fl!("agent-notes-send"),
+        _ => fl!("agent-notes-send-new", count = unsent),
     }
 }
 
@@ -284,16 +286,41 @@ fn enter() -> ClientPaneInputEvent {
     }
 }
 
+/// Why notes were kept for `browser feedback` rather than given to an agent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Kept {
+    /// A shell, not an agent, runs in the pane.
+    NoAgent,
+    /// The agent is not ready for its notes.
+    NotReady,
+    /// The agent's pane is not in this window's session.
+    PaneGone,
+    /// Typing the notes into its pane failed.
+    Unreachable,
+}
+
+impl Kept {
+    /// The selector agent-notes-kept takes.
+    fn selector(self) -> &'static str {
+        match self {
+            Self::NoAgent => "no-agent",
+            Self::NotReady => "not-ready",
+            Self::PaneGone => "pane-gone",
+            Self::Unreachable => "unreachable",
+        }
+    }
+}
+
 /// Keeps notes no agent took for the agent to collect with `browser feedback`.
 fn keep_for_feedback(
     batch: crate::browser::Batch,
     pending: Option<Arc<()>>,
-    reason: &str,
+    reason: Kept,
     cx: &mut App,
 ) -> (Flash, Delivered) {
     cx.default_global::<Feedback>().keep(batch, pending);
     (
-        Flash::warning(format!("{reason}; notes kept for `browser feedback`")),
+        Flash::warning(fl!("agent-notes-kept", reason = reason.selector())),
         Delivered::Kept,
     )
 }
@@ -313,10 +340,7 @@ impl HerdrWindow {
     ) -> Delivered {
         let text = typable(&text);
         let Some(target) = target else {
-            self.show_flash(
-                Flash::success("No agent to send to, so the notes were copied"),
-                cx,
-            );
+            self.show_flash(Flash::success(fl!("agent-notes-copied-no-agent")), cx);
             return Delivered::Copy(text);
         };
         let waiting = cx
@@ -337,7 +361,7 @@ impl HerdrWindow {
             cx.default_global::<Feedback>()
                 .keep(crate::browser::Batch { target, text }, pending);
             (
-                Flash::success("Notes sent to the waiting agent"),
+                Flash::success(fl!("agent-notes-sent-waiting")),
                 Delivered::Agent,
             )
         } else if let Some((snapshot, found)) =
@@ -359,9 +383,9 @@ impl HerdrWindow {
                 copies,
             });
             let flash = if busy {
-                Flash::success("Notes will go to the agent once it is idle")
+                Flash::success(fl!("agent-notes-will-send"))
             } else {
-                Flash::success("Notes sent to the agent")
+                Flash::success(fl!("agent-notes-sent"))
             };
             (flash, Delivered::Agent)
         } else if shown.is_some() {
@@ -369,7 +393,7 @@ impl HerdrWindow {
             keep_for_feedback(
                 crate::browser::Batch { target, text },
                 pending,
-                "No agent runs in that pane",
+                Kept::NoAgent,
                 cx,
             )
         } else {
@@ -378,7 +402,7 @@ impl HerdrWindow {
             keep_for_feedback(
                 crate::browser::Batch { target, text },
                 pending,
-                "The agent's pane is not here",
+                Kept::PaneGone,
                 cx,
             )
         };
@@ -401,10 +425,7 @@ impl HerdrWindow {
             return self.deliver_notes(None, text, pending, None, cx);
         };
         if !origin.is_some_and(|origin| origin.current(self)) {
-            self.show_flash(
-                Flash::warning("The agent's session is not shown here; notes copied"),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("agent-notes-session-not-shown")), cx);
             return Delivered::Copy(typable(&text));
         }
         let scope = crate::browser::scope(&self.endpoints[self.selected_endpoint]);
@@ -514,7 +535,7 @@ impl HerdrWindow {
                         text: delivery.text,
                     },
                     delivery.pending,
-                    "The agent is not ready",
+                    Kept::NotReady,
                     cx,
                 );
                 collect_copy(&mut copied, delivery.copies, delivered.copy());
@@ -535,10 +556,7 @@ impl HerdrWindow {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         if stale {
-            self.show_flash(
-                Flash::warning("The original daemon is not selected; pending notes copied"),
-                cx,
-            );
+            self.show_flash(Flash::warning(fl!("agent-notes-daemon-not-selected")), cx);
         }
         // A tab shows its batch as queued until it leaves.
         if self.deliveries.queue.len() < queued {
@@ -570,7 +588,7 @@ impl HerdrWindow {
                     text: delivery.text,
                 },
                 delivery.pending,
-                "Could not reach the agent",
+                Kept::Unreachable,
                 cx,
             );
             self.show_flash(flash, cx);

@@ -149,7 +149,7 @@ impl SettingsWindow {
                     .text_color(rgb(theme.text_on(on_accent)))
                     .text_size(px(11.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("{percent}%")),
+                    .child(fl!("settings-theme-backdrop-percent", percent = percent)),
             );
         let recorded = self.controls.ruler.track.clone();
         let track = div()
@@ -210,7 +210,7 @@ impl SettingsWindow {
             .flex_col()
             .gap(px(4.))
             .py(px(8.))
-            .child("Background opacity")
+            .child(fl!("settings-theme-backdrop-opacity"))
             .child(
                 div()
                     // Room for the knob and the end labels to overhang.

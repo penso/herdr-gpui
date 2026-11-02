@@ -66,7 +66,7 @@ fn the_picker_lists_hosts_with_a_daemon_log(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("log-source-1").is_some());
     assert_eq!(
         Source::Automations(ssh_source()).label(),
-        "Automations on buildbox"
+        fl!("log-window-source-automations", host = "buildbox")
     );
     view.read_with(cx, |view, _| {
         assert_eq!(view.source, Source::App);
@@ -88,7 +88,10 @@ fn a_host_log_is_not_read_while_automations_are_off(cx: &mut TestAppContext) {
     view.read_with(cx, |view, _| {
         assert_eq!(
             view.status,
-            "Automations on buildbox · not read while automations are turned off"
+            fl!(
+                "log-window-automations-off",
+                source = fl!("log-window-source-automations", host = "buildbox")
+            )
         );
     });
 }

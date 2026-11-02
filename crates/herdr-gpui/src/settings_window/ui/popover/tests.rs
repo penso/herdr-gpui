@@ -203,3 +203,11 @@ fn dropdown_opens_picks_and_dismisses(cx: &mut TestAppContext) {
     draw(cx);
     assert!(cx.debug_bounds("notif-position-control-option-0").is_none());
 }
+
+#[test]
+fn follow_herdr_value_finds_the_value_in_the_message() {
+    let label = crate::i18n::fl!("settings-use-herdr", value = "Top left");
+    let value = follow_herdr_value(&label).unwrap();
+    assert_eq!(&label[value], "Top left");
+    assert_eq!(follow_herdr_value("Top left"), None);
+}

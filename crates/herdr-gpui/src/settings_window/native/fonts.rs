@@ -85,7 +85,7 @@ pub(super) async fn verify_fonts(
             view.accept_theme_choice(
                 themes::Choice {
                     scope: themes::Scope::App,
-                    name: "Catppuccin Latte".into(),
+                    name: "Catppuccin Latte".into(), // i18n: data
                 },
                 cx,
             )
@@ -354,6 +354,7 @@ pub(super) async fn verify_fonts(
         "native font browsing/cancellation wrote config"
     );
     eprintln!(
+        // i18n: data
         "SIDEBAR native compact fonts PASS at {expected:?}: four inline roles, live specimen selection, installed Menlo search, scoped/default and All picker, Escape/outside dismissal, cancelled size 18; no source input or config writes"
     );
     Ok(())

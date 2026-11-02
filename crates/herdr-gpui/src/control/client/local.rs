@@ -15,11 +15,11 @@ pub(super) use search::search;
 pub(super) fn commands() -> crate::Result<Output> {
     let commands: Vec<_> = crate::controls::COMMANDS
         .iter()
-        .map(|info| serde_json::json!({ "name": info.name, "label": info.label }))
+        .map(|info| serde_json::json!({ "name": info.name, "label": crate::i18n::command_english(info) }))
         .collect();
     let text = crate::controls::COMMANDS
         .iter()
-        .map(|info| format!("{:<28}{}", info.name, info.label))
+        .map(|info| format!("{:<28}{}", info.name, crate::i18n::command_english(info)))
         .collect::<Vec<_>>()
         .join("\n");
     Output::data(text, &commands)

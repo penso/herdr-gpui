@@ -1,5 +1,6 @@
 //! What a menu popup is currently showing, and the workspace actions a row
 //! can trigger. Closed sets, so a page is never a string tag.
+// i18n: migrated
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Page {
@@ -85,6 +86,8 @@ pub(crate) enum Page {
     /// The title bar's list of paired phones, to disconnect one or pair
     /// another.
     RemoteDevices,
+    /// Confirming a phone may be paired with another machine it asked for.
+    RemoteHostAsk,
     RemoveDevice,
     /// Confirming a saved WSL distribution should be forgotten.
     RemoveWsl,
@@ -93,8 +96,6 @@ pub(crate) enum Page {
     RenameTab,
     /// Confirming a paired remote control device should be revoked.
     RevokeDevice,
-    /// Local sessions and remote devices, with the state of each.
-    Sessions,
     Tab,
     /// Moving a linked worktree to another host.
     Teleport,
@@ -151,6 +152,11 @@ pub(crate) enum WorkspaceMenuAction {
     /// Build the repository's sandbox images ahead of a dispatch.
     #[cfg(feature = "cloud")]
     SandboxImages,
+    /// Silence the workspace's notifications, or let them through again.
+    /// Drawn as the toggle in the popover's header rather than as a row, and
+    /// applied at once: the mute belongs to this client, never the daemon.
+    Mute,
+    Unmute,
 }
 
 impl Page {
@@ -197,6 +203,12 @@ impl Page {
 }
 
 impl WorkspaceMenuAction {
+    /// Whether the popover draws the action in its header, not with the
+    /// tiles and rows.
+    pub(crate) fn in_header(self) -> bool {
+        matches!(self, Self::Mute | Self::Unmute)
+    }
+
     /// Embedded icon for the row, so each action is recognizable before reading.
     /// The pull request section draws its own header rather than a menu row.
     pub(crate) fn icon(self) -> Option<&'static str> {
@@ -222,6 +234,8 @@ impl WorkspaceMenuAction {
             Self::SandboxImages => "icons/cloud/container.svg",
             Self::Script(crate::worktree_scripts::ScriptKind::Setup) => "icons/refresh.svg",
             Self::Script(_) => "icons/play.svg",
+            Self::Mute => crate::icons::MUTED,
+            Self::Unmute => "icons/bell.svg",
             Self::PullRequest => return None,
         })
     }

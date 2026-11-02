@@ -1,6 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Herdr
+# A translation adds Comment[TAG]= under Comment, TAG being the app's
+# language tag with an underscore (Comment[pt_BR]=), as the Desktop Entry
+# Specification spells locales. Name is the product's and stays as it is.
 Comment=Native client for an existing local Herdr daemon
 Exec=herdr-gpui
 Icon=herdr-gpui

@@ -3,6 +3,7 @@
 //! private file. `HERDR_DAYTONA_API_KEY` takes precedence when set.
 
 use super::{Error, Result, Settings};
+use crate::cloud::Value;
 use crate::credentials::{Entry, Store, read_entry, save_entry};
 use secrecy::{ExposeSecret, SecretString};
 
@@ -22,7 +23,7 @@ const ENTRY: Entry = Entry {
         if valid(value.expose_secret()) {
             Ok(())
         } else {
-            Err(Error::Field("Daytona API key").into())
+            Err(Error::Field(Value::DaytonaApiKey).into())
         }
     },
 };
@@ -36,9 +37,11 @@ fn from_environment() -> Result<Option<SecretString>> {
     let Some(value) = std::env::var_os(VARIABLE) else {
         return Ok(None);
     };
-    let value = value.into_string().map_err(|_| Error::Encoding(VARIABLE))?;
+    let value = value
+        .into_string()
+        .map_err(|_| Error::Encoding(Value::Key(VARIABLE)))?;
     if !valid(value.trim()) {
-        return Err(Error::Field(VARIABLE));
+        return Err(Error::Field(Value::Key(VARIABLE)));
     }
     Ok(Some(value.trim().to_owned().into()))
 }
@@ -59,7 +62,7 @@ pub fn saved(store: Store) -> Result<Option<SecretString>> {
 /// Save or, with `None`, forget the key. Blocks; call from a worker.
 pub fn save(store: Store, key: Option<&SecretString>) -> Result<()> {
     if key.is_some_and(|key| !valid(key.expose_secret())) {
-        return Err(Error::Field("Daytona API key"));
+        return Err(Error::Field(Value::DaytonaApiKey));
     }
     save_entry(store, &ENTRY, key).map_err(storage)
 }

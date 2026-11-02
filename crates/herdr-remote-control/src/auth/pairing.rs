@@ -16,6 +16,10 @@ use std::collections::VecDeque;
 pub(crate) const TOKEN_TTL_MS: u64 = 60_000;
 /// How long a claimed pairing waits for the desktop's answer.
 pub(crate) const APPROVAL_TTL_MS: u64 = 120_000;
+/// Nearby tokens one pairing seals before the dialog must be opened again.
+/// Each one is a fresh guess at the code for a man in the middle, and
+/// keeps the pairing open a little longer, so both stay bounded.
+pub(crate) const MAX_NEARBY_REVEALS: u8 = 3;
 /// Finished claims whose outcome a phone can still poll.
 const REMEMBERED_OUTCOMES: usize = 8;
 
@@ -58,7 +62,27 @@ struct Open {
     id: PairingId,
     token_digest: [u8; 32],
     token_expires_ms: u64,
+    /// The token a nearby phone was sealed, kept beside the QR's.
+    nearby: Option<NearbyToken>,
+    /// Nearby tokens sealed so far, kept when the QR rotates.
+    nearby_reveals: u8,
     phase: Phase,
+}
+
+/// A token sealed to a nearby phone after it agreed on `code` with the
+/// daemon: single use, and its claim carries that code rather than one
+/// derived from the token.
+#[derive(Debug)]
+struct NearbyToken {
+    digest: [u8; 32],
+    code: String,
+    expires_ms: u64,
+}
+
+impl NearbyToken {
+    fn live(&self, now_ms: u64) -> bool {
+        now_ms < self.expires_ms
+    }
 }
 
 #[derive(Debug)]
@@ -79,6 +103,15 @@ enum Phase {
 }
 
 impl Open {
+    /// When the last token that may still be claimed expires.
+    fn claimable_until(&self) -> u64 {
+        self.nearby
+            .as_ref()
+            .map_or(self.token_expires_ms, |nearby| {
+                nearby.expires_ms.max(self.token_expires_ms)
+            })
+    }
+
     /// Whether minting again keeps this pairing's id: nobody claimed it.
     fn unclaimed(&self) -> bool {
         matches!(
@@ -90,7 +123,7 @@ impl Open {
     fn view(&self, now_ms: u64) -> PairingState {
         match &self.phase {
             Phase::Waiting => PairingState::Waiting {
-                expires_in_ms: self.token_expires_ms.saturating_sub(now_ms),
+                expires_in_ms: self.claimable_until().saturating_sub(now_ms),
             },
             Phase::Claimed { device, code, .. } => PairingState::Claimed {
                 device_name: device.name.clone(),
@@ -113,9 +146,13 @@ impl Pairings {
     ) -> Result<Offer> {
         let origin = origins.first().ok_or(Error::NoAddress)?;
         let token = random_bytes::<SECRET_LEN>()?;
-        let id = match &self.open {
-            Some(open) if open.unclaimed() => open.id.clone(),
-            _ => PairingId(random_id()?),
+        // Rotating the QR keeps a token already sealed to a nearby phone,
+        // which claims it moments later.
+        let (id, nearby, nearby_reveals) = match self.open.as_mut() {
+            Some(open) if open.unclaimed() => {
+                (open.id.clone(), open.nearby.take(), open.nearby_reveals)
+            }
+            _ => (PairingId(random_id()?), None, 0),
         };
         self.close();
         let token_expires_ms = now_ms.saturating_add(TOKEN_TTL_MS);
@@ -123,6 +160,8 @@ impl Pairings {
             id: id.clone(),
             token_digest: sha256(&[&token]),
             token_expires_ms,
+            nearby,
+            nearby_reveals,
             phase: Phase::Waiting,
         });
         Ok(Offer {
@@ -154,7 +193,11 @@ impl Pairings {
         let Some(open) = self.open.as_mut() else {
             return Err(Error::InvalidToken);
         };
-        if !constant_time_eq(&open.token_digest, &digest) {
+        let nearby = open
+            .nearby
+            .as_ref()
+            .is_some_and(|nearby| constant_time_eq(&nearby.digest, &digest));
+        if !nearby && !constant_time_eq(&open.token_digest, &digest) {
             return Err(Error::InvalidToken);
         }
         refresh(open, &mut self.outcomes, now_ms);
@@ -167,6 +210,15 @@ impl Pairings {
                 return Err(Error::AlreadyClaimed);
             }
         }
+        // The pairing outlives one token while the other may be claimed.
+        let expired = if nearby {
+            !open.nearby.as_ref().is_some_and(|token| token.live(now_ms))
+        } else {
+            now_ms >= open.token_expires_ms
+        };
+        if expired {
+            return Err(Error::ExpiredToken);
+        }
         let name = device_name(device_name_input)?;
         let public_key = PublicKey::parse(public_key)?;
         let nonce = random_bytes::<SECRET_LEN>()?;
@@ -177,7 +229,14 @@ impl Pairings {
             name,
             public_key,
         };
-        let code = matching_code(&token, device.public_key.as_bytes(), &nonce);
+        // Single use: a nearby token's code is the one both screens agreed on.
+        let code = match open.nearby.take() {
+            Some(token) if nearby => token.code,
+            other => {
+                open.nearby = other;
+                matching_code(&token, device.public_key.as_bytes(), &nonce)
+            }
+        };
         let deadline_ms = now_ms.saturating_add(APPROVAL_TTL_MS);
         open.phase = Phase::Claimed {
             claim: claim.clone(),
@@ -190,6 +249,41 @@ impl Pairings {
             code,
             expires_ms: deadline_ms,
         })
+    }
+
+    /// Whether a pairing dialog is open and nobody claimed it: what nearby
+    /// pairing needs before it starts.
+    pub(crate) fn waiting(&mut self, now_ms: u64) -> bool {
+        let Some(open) = self.open.as_mut() else {
+            return false;
+        };
+        refresh(open, &mut self.outcomes, now_ms);
+        matches!(open.phase, Phase::Waiting)
+    }
+
+    /// Keeps `token` as the open pairing's nearby token, claimable for
+    /// [`TOKEN_TTL_MS`] with `code`; a newer one replaces it, at most
+    /// [`MAX_NEARBY_REVEALS`] times for one pairing.
+    pub(crate) fn set_nearby(
+        &mut self,
+        token: &[u8; SECRET_LEN],
+        code: String,
+        now_ms: u64,
+    ) -> Result<()> {
+        if !self.waiting(now_ms) {
+            return Err(Error::NoPairing);
+        }
+        let open = self.open.as_mut().ok_or(Error::NoPairing)?;
+        if open.nearby_reveals >= MAX_NEARBY_REVEALS {
+            return Err(Error::NearbyExhausted);
+        }
+        open.nearby_reveals += 1;
+        open.nearby = Some(NearbyToken {
+            digest: sha256(&[token]),
+            code,
+            expires_ms: now_ms.saturating_add(TOKEN_TTL_MS),
+        });
+        Ok(())
     }
 
     /// Notes that `claim` came from an app installed from another computer,
@@ -286,7 +380,7 @@ fn find<'a>(open: &'a mut Option<Open>, id: &PairingId) -> Result<&'a mut Open> 
 /// Expires a token nobody claimed in time, or a claim nobody answered.
 fn refresh(open: &mut Open, outcomes: &mut VecDeque<(ClaimId, PairingState)>, now_ms: u64) {
     match open.phase {
-        Phase::Waiting if now_ms >= open.token_expires_ms => {
+        Phase::Waiting if now_ms >= open.claimable_until() => {
             open.phase = Phase::Finished {
                 claim: None,
                 state: PairingState::Expired,

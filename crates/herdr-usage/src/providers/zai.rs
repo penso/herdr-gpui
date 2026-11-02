@@ -13,6 +13,7 @@
 //! a file back whole, so the file must hold only the key; and the hourly
 //! token chart, which the panel has no chart for.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -51,50 +52,29 @@ pub(crate) struct Zai;
 static META: Meta = Meta::new("zai", "z.ai / GLM")
     .dashboard("https://z.ai/manage-apikey/coding-plan/personal/my-plan")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["Z_AI_API_KEY"],
-            "A z.ai API key from https://z.ai/manage-apikey/apikey-list, or for BigModel \
-             China one from https://bigmodel.cn/usercenter/proj-mgmt/apikeys.",
-        ),
-        Setting::new(
-            "region",
-            &[],
-            "\"global\" for api.z.ai (the default) or \"bigmodel-cn\" for \
-             open.bigmodel.cn, the China mainland GLM Coding Plan.",
-        ),
-        Setting::new(
-            "api_host",
-            &["Z_AI_API_HOST"],
-            "An HTTPS host that replaces the region's API host, e.g. a proxy.",
-        ),
+        Setting::new("api_key", &["Z_AI_API_KEY"], "usage-zai-setting-api-key"),
+        Setting::new("region", &[], "usage-zai-setting-region"),
+        Setting::new("api_host", &["Z_AI_API_HOST"], "usage-zai-setting-api-host"),
         Setting::new(
             "quota_url",
             &["Z_AI_QUOTA_URL"],
-            "A full HTTPS URL that replaces the quota endpoint.",
+            "usage-zai-setting-quota-url",
         ),
         Setting::new(
             "balance_url",
             &["Z_AI_BALANCE_URL"],
-            "A full HTTPS URL that replaces the BigModel China balance endpoint.",
+            "usage-zai-setting-balance-url",
         ),
-        Setting::new(
-            "usage_scope",
-            &[],
-            "\"personal\" (the default) or \"team\" for BigModel team usage, which also \
-             needs organization and project.",
-        ),
+        Setting::new("usage_scope", &[], "usage-zai-setting-usage-scope"),
         Setting::new(
             "organization",
             &["Z_AI_BIGMODEL_ORGANIZATION"],
-            "For team usage: open https://bigmodel.cn/coding-plan/team/usage-stats, pick \
-             the team, and in Developer Tools > Network copy the Bigmodel-Organization \
-             request header of the quota/limit request.",
+            "usage-zai-setting-organization",
         ),
         Setting::new(
             "project",
             &["Z_AI_BIGMODEL_PROJECT"],
-            "For team usage: the Bigmodel-Project request header of the same request.",
+            "usage-zai-setting-project",
         ),
     ]);
 
@@ -291,7 +271,7 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     let mcp = limits.iter().rfind(|limit| limit.kind == "TIME_LIMIT");
 
     let mut windows: Vec<Window> = Vec::new();
-    let mut facts: Vec<(String, String)> = Vec::new();
+    let mut facts: Vec<(Text, Text)> = Vec::new();
     let credits = plan_limits.iter().any(|limit| limit.kind == "CREDIT_LIMIT");
     let chosen: Vec<&Limit> = match plan_limits.as_slice() {
         [] => Vec::new(),
@@ -303,45 +283,51 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     }
     if let Some(last) = chosen.last() {
         let label = if credits {
-            "Credit quota"
+            Text::message("usage-zai-credit-quota")
         } else {
-            "Token quota"
+            Text::message("usage-zai-token-quota")
         };
-        facts.push((label.into(), last.detail()));
+        facts.push((label, last.detail()));
     }
     if let [first, _] = chosen.as_slice() {
         let label = if credits {
-            "Session credit quota"
+            Text::message("usage-zai-session-credit-quota")
         } else {
-            "Session token quota"
+            Text::message("usage-zai-session-token-quota")
         };
-        facts.push((label.into(), first.detail()));
+        facts.push((label, first.detail()));
     }
     if credits {
-        facts.push(("Quota rate".into(), quota_rate(now)));
+        facts.push((Text::message("usage-zai-quota-rate"), quota_rate(now)));
     }
     let mut sections = Vec::new();
     if let Some(mcp) = mcp {
-        let window = mcp.window(now, Some("MCP"));
+        // MCP is the protocol's name, the same in every language.
+        let window = mcp.window(now, Some(Text::service("MCP")));
         if windows.is_empty() {
             windows.push(window);
         } else {
             sections.push(Section::Limit(window));
         }
-        facts.push(("MCP quota".into(), mcp.detail()));
+        facts.push((Text::message("usage-zai-mcp-quota"), mcp.detail()));
         facts.extend(
             mcp.usage_details
                 .iter()
                 .flatten()
                 .take(20)
-                .filter_map(|detail| Some((detail.model_code.clone()?, detail.usage?.to_string()))),
+                .filter_map(|detail| {
+                    Some((
+                        Text::service(detail.model_code.clone()?),
+                        Text::service(detail.usage?.to_string()),
+                    ))
+                }),
         );
     }
     if !facts.is_empty() {
         sections.insert(
             0,
             Section::Facts {
-                title: "Quota details".into(),
+                title: Text::message("usage-zai-quota-details"),
                 facts,
             },
         );
@@ -357,17 +343,25 @@ pub(crate) fn parse(body: &str, now: SystemTime) -> Result<Report> {
     .flatten()
     .map(|plan| plan.trim().to_owned())
     .find(|plan| !plan.is_empty());
-    Ok(Report::new(Provider(&Zai), Account { email: None, plan }, windows).with_sections(sections))
+    Ok(Report::new(
+        Provider(&Zai),
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
+        windows,
+    )
+    .with_sections(sections))
 }
 
 /// Credit plans cost double on weekdays 06:00–10:00 UTC; no endpoint says so.
-fn quota_rate(now: SystemTime) -> String {
+fn quota_rate(now: SystemTime) -> Text {
     let now = chrono::DateTime::<Utc>::from(now);
     let weekday = !matches!(now.weekday(), Weekday::Sat | Weekday::Sun);
     if weekday && (6..10).contains(&now.hour()) {
-        "Peak".into()
+        Text::message("usage-zai-peak")
     } else {
-        "Off-peak".into()
+        Text::message("usage-zai-off-peak")
     }
 }
 
@@ -383,7 +377,7 @@ pub(crate) fn parse_balance(body: &str) -> Option<Balance> {
         .or(data.balance)
         .filter(|value| value.is_finite())?;
     Some(Balance::new(
-        "Account balance",
+        Text::message("usage-zai-account-balance"),
         amount,
         Unit::Currency("CNY".into()),
     ))
@@ -395,7 +389,7 @@ pub(crate) fn parse_tokens(body: &str) -> Option<Section> {
     if usage.success != Some(true) || usage.code != Some(200) {
         return None;
     }
-    let mut totals: Vec<(String, u64)> = usage
+    let mut totals: Vec<(Option<String>, u64)> = usage
         .data?
         .model_data_list
         .unwrap_or_default()
@@ -409,20 +403,29 @@ pub(crate) fn parse_tokens(body: &str) -> Option<Section> {
                 .filter(|value| *value > 0.)
                 .map(|value| value as u64)
                 .fold(0_u64, u64::saturating_add);
-            (model.model_name.unwrap_or_else(|| "Unknown".into()), tokens)
+            (model.model_name, tokens)
         })
         .filter(|(_, tokens)| *tokens > 0)
         .collect();
     if totals.is_empty() {
         return None;
     }
-    totals.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    // A model without a name sorts where its English name did.
+    fn name(model: &Option<String>) -> &str {
+        model.as_deref().unwrap_or("Unknown")
+    }
+    totals.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| name(&a.0).cmp(name(&b.0))));
     Some(Section::Facts {
-        title: "Tokens, last 30 days".into(),
+        title: Text::message("usage-zai-tokens-last-30-days"),
         facts: totals
             .into_iter()
             .take(20)
-            .map(|(name, tokens)| (name, compact(tokens)))
+            .map(|(model, tokens)| {
+                (
+                    model.map_or_else(|| Text::message("usage-zai-unknown-model"), Text::service),
+                    Text::service(compact(tokens)),
+                )
+            })
             .collect(),
     })
 }
@@ -517,7 +520,7 @@ impl Limit {
         used.clamp(0, total) as f64 / total as f64 * 100.
     }
 
-    fn window(&self, now: SystemTime, name: Option<&str>) -> Window {
+    fn window(&self, now: SystemTime, name: Option<Text>) -> Window {
         // A single minute unit marks the monthly MCP allowance.
         let length = if self.kind == "TIME_LIMIT" && self.unit == 5 && self.number == 1 {
             Some(MONTH)
@@ -535,30 +538,38 @@ impl Limit {
                         <= SESSION + Duration::from_secs(60)
             });
         let kind = match (name, length) {
-            (Some(name), _) => Kind::Named(name.into()),
+            (Some(name), _) => Kind::Named(name),
             (None, Some(length)) if length == SESSION => Kind::Session,
             (None, Some(length)) if length == WEEK => Kind::Weekly,
             (None, Some(length)) if length == DAY => Kind::Daily,
-            (None, Some(length)) => Kind::Named(format!("{}-hour", length.as_secs() / 3600)),
-            (None, None) => Kind::Named("Quota".into()),
+            (None, Some(length)) => {
+                Kind::Named(Text::message("usage-zai-hours").arg("hours", length.as_secs() / 3600))
+            }
+            (None, None) => Kind::Named(Text::message("usage-zai-quota")),
         };
         Window::new(kind, self.used(), reset, length)
     }
 
-    fn detail(&self) -> String {
+    fn detail(&self) -> Text {
         let used = self.used();
-        let mut text = if used.fract() == 0. {
-            format!("{used:.0}% used")
+        let percent = if used.fract() == 0. {
+            format!("{used:.0}")
         } else {
-            format!("{used:.1}% used")
+            format!("{used:.1}")
         };
-        if let Some(total) = self.usage {
-            text.push_str(&format!(" · {total} limit"));
-        }
-        if let Some(remaining) = self.remaining {
-            text.push_str(&format!(" · {remaining} remaining"));
-        }
-        text
+        // Which of the limit and the remaining count the service sent.
+        let counts = match (self.usage, self.remaining) {
+            (Some(_), Some(_)) => "both",
+            (Some(_), None) => "limit",
+            (None, Some(_)) => "remaining",
+            (None, None) => "none",
+        };
+        let count = |value: Option<i64>| value.map(|value| value.to_string()).unwrap_or_default();
+        Text::message("usage-zai-detail")
+            .arg("percent", percent)
+            .arg("counts", counts)
+            .arg("limit", count(self.usage))
+            .arg("remaining", count(self.remaining))
     }
 }
 
@@ -621,10 +632,18 @@ mod tests {
         SystemTime::UNIX_EPOCH + Duration::from_secs(seconds)
     }
 
+    fn detail(percent: &str, counts: &str, limit: &str, remaining: &str) -> Text {
+        Text::message("usage-zai-detail")
+            .arg("percent", percent)
+            .arg("counts", counts)
+            .arg("limit", limit)
+            .arg("remaining", remaining)
+    }
+
     #[test]
     fn coding_plan_limits_become_session_weekly_and_mcp() {
         let report = parse(QUOTA, at(1_785_812_400)).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Pro"));
+        assert_eq!(report.account.plan.as_ref().map(Text::as_str), Some("Pro"));
         assert_eq!(report.windows.len(), 2);
         let session = &report.windows[0];
         assert_eq!(session.kind, Kind::Session);
@@ -643,15 +662,32 @@ mod tests {
                 _ => None,
             })
             .unwrap();
-        assert_eq!(mcp.kind, Kind::Named("MCP".into()));
+        assert_eq!(mcp.kind, Kind::Named(Text::service("MCP")));
         assert_eq!(mcp.length, Some(MONTH));
         // 224 of 1000 used, from the counts rather than the rounded percentage.
         assert!((mcp.used - 22.4).abs() < 0.01);
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("quota details first");
         };
-        assert!(facts.contains(&("search-prime".into(), "210".into())));
-        assert!(facts.contains(&("Token quota".into(), "9% used".into())));
+        assert_eq!(
+            facts,
+            &[
+                (
+                    Text::message("usage-zai-token-quota"),
+                    detail("9", "none", "", "")
+                ),
+                (
+                    Text::message("usage-zai-session-token-quota"),
+                    detail("25", "none", "", "")
+                ),
+                (
+                    Text::message("usage-zai-mcp-quota"),
+                    detail("22.4", "both", "1000", "776")
+                ),
+                (Text::service("search-prime"), Text::service("210")),
+                (Text::service("web-reader"), Text::service("14")),
+            ]
+        );
     }
 
     #[test]
@@ -660,6 +696,23 @@ mod tests {
           {"type":"CREDIT_LIMIT","unit":3,"number":5,"usage":2000,"currentValue":100,"remaining":1900,
            "percentage":5,"nextResetTime":1786073946574}]}}"#;
         let report = parse(body, at(1_785_816_000)).unwrap();
+        let Section::Facts { facts, .. } = &report.sections[0] else {
+            panic!("expected facts");
+        };
+        assert_eq!(
+            facts[0],
+            (
+                Text::message("usage-zai-credit-quota"),
+                detail("5", "both", "2000", "1900")
+            )
+        );
+        assert_eq!(
+            facts[1],
+            (
+                Text::message("usage-zai-quota-rate"),
+                Text::message("usage-zai-off-peak")
+            )
+        );
         assert_eq!(report.windows.len(), 1);
         assert_eq!(report.windows[0].kind, Kind::Session);
         assert_eq!(report.windows[0].resets_at, None);
@@ -696,9 +749,9 @@ mod tests {
         assert_eq!(
             facts,
             vec![
-                ("glm-big".into(), "1.25M".into()),
-                ("glm-4.6".into(), "100".into()),
-                ("glm-4.5".into(), "75".into()),
+                (Text::service("glm-big"), Text::service("1.25M")),
+                (Text::service("glm-4.6"), Text::service("100")),
+                (Text::service("glm-4.5"), Text::service("75")),
             ]
         );
     }

@@ -9,7 +9,8 @@ environment once on the connection worker so daemon plugins can find tools such 
 `node`. Terminal launches skip the shell probe. Failed probes fall back to standard
 per-user and Homebrew bin directories; the probe has a five-second timeout.
 It does not link or install Herdr, stop
-daemons, spawn a local PTY, or emulate a terminal. Herdr's remote bridge may start
+daemons, or spawn a local PTY. It emulates terminals only for
+[Herdr 2](#herdr-2-terminals), whose daemon streams raw output. Herdr's remote bridge may start
 the named remote session. SSH requires an installed POSIX Herdr, noninteractive authentication,
 and an already trusted host key. For hosts that need MFA or a password, configure
 `ControlMaster auto` with a `ControlPath` in `~/.ssh/config` and authenticate once
@@ -280,7 +281,17 @@ its own form, so switching between them keeps what was typed. **Ctrl-Tab** and
 rail shows only the logos.
 
 The SSH form accepts an SSH target, label, and optional remote session (default:
-`default`). Herdr's `machine add` saves a new profile every time and takes no
+`default`). **Skip host key verification (dangerous)**, off by default,
+connects without checking the host's key, now and on every later connection:
+the app passes `StrictHostKeyChecking=no` and reads no known hosts file for
+that target. It is for hosts that keep no key to check, such as the `*.coder`
+aliases `coder config-ssh` writes with `UserKnownHostsFile=/dev/null`, which
+otherwise fail the app's strict check. The choice is saved before the device,
+under `[ssh] skip_host_key_verification` in the local config, by target.
+Removing the device keeps it there. To verify the host again, delete the
+target from that list (connections opened without checking take no new
+commands once it is gone), or remove the device and add it again with the
+box clear. Herdr's `machine add` saves a new profile every time and takes no
 lock, so the dialog keeps a host from being saved twice itself. A host counts as
 already saved when a profile with the same session reaches the same user, host
 name, and port as `ssh -G` resolves them, so an SSH alias, `user@address`, and
@@ -1255,6 +1266,39 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
+To quiet one workspace or tab instead of every notification, right-click it:
+the workspace menu's header has **Mute** (**Unmute** while it is muted), and
+the tab menu has **Mute Notifications**. Muting a workspace silences every tab
+in it, including tabs opened later; a tab can also be muted on its own, and
+while its workspace's mute covers it, its menu offers **Unmute Workspace**
+instead. Nothing from a muted workspace or tab asks for you: no toast, no OS
+notification, no notification sound, and its agents leave the Dock badge,
+the Windows taskbar overlay, and the Overview's count in the activity bar.
+Status dots and the Overview's rows still show what its agents do. A struck
+through bell marks the muted workspace's sidebar row and its place in the
+compact rail, each tab it silences, and its agents' Overview rows. Muting
+takes away a toast already showing, and notifications dropped while muted are
+not replayed on unmuting. An OS notification posted before the mute stays, and
+clicking it still opens its pane. Three things a mute does not hold back:
+notifications posted with `herdr notification show` and terminal bells
+(`[bell]`), which Herdr sends without the workspace or pane they came from,
+and the phone notifications of
+[remote control](../herdr-remote-control/README.md), which its own daemon
+sends.
+
+Mutes stay in this client, in `notification-mutes.json` in its state
+directory, and every window shows the same ones. A mute follows its workspace
+or tab by ID, so it survives a rename, and it is forgotten when the workspace
+or tab closes. A tab moved to another workspace, or reopened after closing,
+gets a new ID from Herdr and starts unmuted. Restarting the app keeps every
+mute. Restarting Herdr's daemon keeps the mutes of workspaces and tabs you
+named, which Herdr restores under the same ID and name; a new one you give
+the same name under the same ID takes the mute too, and shows the
+struck-through bell. The others are dropped: a daemon started afresh numbers
+its workspaces from the start again and names them after their folder, and
+tabs after their position, so the same ID and name can come back on new
+work.
+
 The sidebar button at the left of the titlebar hides or shows the sidebar.
 On Linux and Windows it stays in the same position when the sidebar collapses
 to a rail. The leftmost tab strip takes the button when the sidebar is hidden
@@ -1706,6 +1750,41 @@ tests check the client-decorated frame (inset, handles kept out of the content,
 tiled edges, and button order and support) with forced decorations. Native QA
 on GNOME Wayland remains required for dragging, resizing, the window menu,
 maximize/restore, and the shadow.
+
+## Herdr 2 Terminals
+
+Herdr 2 (herdr-core) runs terminals that stay alive like Herdr's, but streams
+their raw output, so Herdr UI emulates each one itself and draws it with the
+same painter as a Herdr pane. That lets a tab split into native panes. Herdr 1
+and Herdr 2 run side by side: Herdr 2 tabs open in the same workspaces as
+Herdr 1 tabs, and nothing moves from one to the other.
+
+- **Opening one:** **New Herdr 2 Terminal** in the command palette, or
+  `herdr-gpui run new_core_terminal`. With `herdr_2_terminals = true`
+  (**Settings > Tabs > New terminals use Herdr 2**), every new tab is one.
+- **Starting herdr-core:** the app joins a core that already runs. Otherwise
+  it starts the user's own `herdr-core`, or the pinned one every release
+  bundles beside the app, and only when a Herdr 2 terminal is asked for.
+  Restored tabs only rejoin. Closing the app leaves herdr-core and its
+  terminals running; `herdr-core ls` lists them.
+- **Splits:** **Split Right** and **Split Down** split the focused pane, the
+  focus and resize commands move between panes and their dividers, **Zoom**
+  grows a pane over the tab, and **Close Pane** ends that pane's terminal.
+  Drag the line between two panes to resize them. The layout is saved with
+  the tab. A pane whose program exits closes.
+- **Look:** a split takes the style of the tab layout: Classic gives each
+  pane a header row, Curved draws panes as rounded cards, Pills floats a label
+  in each pane's corner, and Underline ends each pane in a status line. Cards,
+  Outline, and Compact use the closest of these.
+- **Mouse:** the wheel scrolls history; a program that reads the mouse gets
+  its clicks, drags, and wheel instead, unless Shift is held. Drag to select,
+  double-click for a word, triple-click for a line, and Cmd-C copies.
+- **Mirror Herdr 2 Pane** opens a watch-only view of the focused pane in a new
+  tab: it follows the terminal's size and never types into it.
+- **Sidebar:** under the agents, a Herdr 2 list shows each pane of the
+  workspace's Herdr 2 tabs with its status; click one to show it.
+- **Without Herdr 1 installed,** the window shows a herdr-core shell instead
+  of asking to install Herdr.
 
 ## Terminal Selection And Copy
 
@@ -2180,6 +2259,23 @@ each host. Remote hosts use the terminal's SSH trust and authentication policy,
 and the UI thread never blocks. The GUI connection's API does not expose layouts,
 process details or agent sessions, which is why Teleport uses the CLI.
 
+## Where A New Worktree Opens
+
+The New worktree dialog's **Opens in** row of icons chooses what the checkout's
+first pane shows: **Terminal**, the shell Herdr opens there, or one of the
+agents installed on the host, such as `claude` or `codex`, which the window
+starts in that shell with `herdr agent start` once the checkout exists, even if
+the dialog was closed while the daemon was still creating it. While the new
+shell is still starting, a busy refusal is retried for up to ten seconds, and
+only while the pane still holds the terminal the creation returned, as the
+orchestrator's dispatch does. The agents are looked up on the host when the
+dialog opens. The choice you create with is offered first in the next dialog,
+in every window and after a restart; one the host lacks falls back to Terminal.
+The row shows only for a checkout made on the shown host whose `herdr` CLI the
+window can script, so not for a bare socket, WSL, or a Windows client, and not
+when the dialog sends the checkout to another host. A failed start is reported
+in the window and leaves the shell running in the new checkout.
+
 ## Smart Dispatch
 
 When more than one host is connected, the New worktree dialog (its branch form)
@@ -2587,7 +2683,12 @@ its dashes turn solid once its target is verified:
 
 A plain URL is read from its row. One that reaches the pane's right edge may
 wrap onto the next row; a daemon that offers `pane.link.resolve` reads it
-whole, and otherwise it needs explicit terminal hyperlink metadata. Paths are
+whole, and otherwise it needs explicit terminal hyperlink metadata. A file
+path or `file://` address that fills a row to the right edge and goes on in
+the next is read across those rows, up to 16 of them. The rest may start the
+next row, where the terminal wraps it, or follow an indent, where an agent
+wraps its own output under a list item. Once the whole path is found on disk,
+every row of it is underlined, and a click on any of them opens it. Paths are
 not links in panes on SSH hosts, whose files live on that host.
 
 A file opens in your terminal editor at the printed line, in a new pane split
@@ -3725,7 +3826,10 @@ Ctrl+Shift+U is left unbound for
   across launches and retained while Agents is hidden.
   Local workspace titles show repository owner avatars; remote
   workspaces use the GitHub fallback mark without resolving remote paths locally.
-  `show_repository_icons = false` leaves both out.
+  `show_repository_icons = false` leaves both out. An owner's avatar is read
+  from `github.com/OWNER.png`, following its one redirect only to an account's
+  picture by ID on `avatars.githubusercontent.com`, so an organization whose
+  by-login picture is GitHub's default octocat shows its own.
   Profile and owner avatars share a bounded public-image disk cache with 24-hour
   stale-while-refresh behavior; see [avatar caching](../../README.md#native-github-sign-in)
   for limits, location, and the startup authentication requirement. Neither cache
@@ -3743,6 +3847,12 @@ Ctrl+Shift+U is left unbound for
 - A searchable theme picker previews the available names from built-ins and
   Herdr/Ghostty theme folders. Selecting a theme applies and saves it while
   preserving other GUI config settings and comments.
+  The star at a row's end pins that theme above the rest, searches included;
+  clicking it again unpins it. Starring neither previews nor applies a theme.
+  The list is saved as `favorite_themes` in `config-gpui.local.toml`, without
+  reloading the window, so the theme being previewed stays on screen. Each
+  star is applied to the list the file holds when it is written, so stars
+  made in another window's picker stay.
 - Right-click spaces for Rename, Close (Close group on a repository's only
   non-linked parent while linked worktrees sharing its `worktree.key` are open;
   a parent beside another parent closes alone), and New worktree /
@@ -4158,8 +4268,9 @@ Ctrl+Shift+U is left unbound for
   **Projects**, or cycle filters with Ctrl-Tab / Ctrl-Shift-Tab (or Alt-] /
   Alt-[) without clearing the search. Search is fzf's: every space-separated
   term must match, and `'exact`, `^prefix`, `suffix$`, and `!negate` apply per
-  term; host, workspace, path, status, command ID, and an agent's titles and
-  pane name are searchable context.
+  term; host, workspace, path, status, command ID, and an agent's titles are
+  searchable context. An agent's row is titled with its pane name, as in the
+  sidebar.
   Rows chosen often and recently rise among the matches for a typed query, and
   the Projects filter lists the most frecent projects first before anything is
   typed; that history stays on this machine in `palette-frecency.json`.

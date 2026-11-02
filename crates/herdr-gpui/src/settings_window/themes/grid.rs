@@ -1,5 +1,6 @@
 //! Virtual row geometry and bounded, single-flight thumbnail preparation.
 use super::*;
+use crate::direction::Logical;
 use std::{collections::VecDeque, ops::Range};
 
 const CACHE_LIMIT: usize = 64;
@@ -180,10 +181,11 @@ impl SettingsWindow {
                 .bg(rgb(theme.background))
                 .text_color(rgb(theme.foreground))
                 .px(px(4.))
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(3.))
-                .child(div().text_size(px(10.)).child("Aa"))
+                // A glyph sample, the same in every language.
+                .child(div().text_size(px(10.)).child("Aa")) // i18n: data
                 .children(
                     theme.palette[..8]
                         .iter()
@@ -194,9 +196,9 @@ impl SettingsWindow {
                 .text_color(rgb(self.theme.subtext()))
                 .text_size(px(10.))
                 .child(if palette.is_some() {
-                    "Unavailable"
+                    fl!("settings-theme-thumbnail-unavailable")
                 } else {
-                    "Loading..."
+                    fl!("settings-theme-thumbnail-loading")
                 }),
         }
     }

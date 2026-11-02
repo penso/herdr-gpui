@@ -110,6 +110,7 @@ fn each_layout_marks_the_conversation_its_own_way(cx: &mut TestAppContext) {
         (ChatLayoutMode::Document, "chat-heading-1"),
         (ChatLayoutMode::Cards, "chat-card-1"),
         (ChatLayoutMode::IMessage, "chat-imessage-1"),
+        (ChatLayoutMode::IA, "chat-ia-1"),
     ];
     assert_eq!(marks.len(), ChatLayoutMode::ALL.len());
     for (mode, mark) in marks {

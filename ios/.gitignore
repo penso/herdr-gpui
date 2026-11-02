@@ -3,9 +3,16 @@ HerdrRemote.xcodeproj/
 HerdrRemote/Info.plist
 HerdrRemote/HerdrRemote.entitlements
 HerdrRemoteWidgets/Info.plist
+HerdrRemoteWidgets/HerdrRemoteWidgets.entitlements
+HerdrRemoteNotifications/Info.plist
+HerdrRemoteNotifications/HerdrRemoteNotifications.entitlements
+HerdrRemoteShare/Info.plist
+HerdrRemoteShare/HerdrRemoteShare.entitlements
+HerdrRemoteWatch/Info.plist
 
 # Xcode and SwiftPM build output.
 build/
+build-device/
 DerivedData/
 HerdrRemoteCore/.build/
 HerdrRemoteCore/.swiftpm/

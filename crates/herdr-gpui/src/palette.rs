@@ -1,6 +1,8 @@
+// i18n: migrated
 use crate::{
     HerdrWindow, OwnedNavigationTarget, Result,
     controls::{COMMANDS, Command},
+    i18n::fl,
     keymap::Reach,
     menu::Page,
     search_input::{Changed, SearchInput},
@@ -89,13 +91,24 @@ impl Filter {
         Self::Notes,
     ];
 
-    fn label(self) -> &'static str {
+    /// The English name its selectors use.
+    fn name(self) -> &'static str {
         match self {
-            Self::All => "All",
-            Self::Navigation => "Navigation",
-            Self::Commands => "Commands",
-            Self::Projects => "Projects",
-            Self::Notes => "Notes",
+            Self::All => "all",
+            Self::Navigation => "navigation",
+            Self::Commands => "commands",
+            Self::Projects => "projects",
+            Self::Notes => "notes",
+        }
+    }
+
+    fn label(self) -> String {
+        match self {
+            Self::All => fl!("palette-filter-all"),
+            Self::Navigation => fl!("palette-filter-navigation"),
+            Self::Commands => fl!("palette-filter-commands"),
+            Self::Projects => fl!("palette-filter-projects"),
+            Self::Notes => fl!("palette-filter-notes"),
         }
     }
 
@@ -103,7 +116,9 @@ impl Filter {
         self == Self::All
             || self
                 == match action {
-                    Action::Native(_) | Action::Configured(..) => Self::Commands,
+                    Action::Native(_) | Action::Configured(..) | Action::Mod { .. } => {
+                        Self::Commands
+                    }
                     Action::Go { .. } => Self::Navigation,
                     Action::Project(_) | Action::NewProject(_) => Self::Projects,
                     Action::Note { .. } => Self::Notes,
@@ -129,6 +144,11 @@ enum Action {
         endpoint: String,
         boot: String,
         workspace: String,
+    },
+    /// A command a mod declares; choosing it sends the mod `command:<id>`.
+    Mod {
+        name: String,
+        id: String,
     },
 }
 
@@ -199,6 +219,31 @@ enum Identity {
     Project(std::path::PathBuf),
     NewProject(std::path::PathBuf),
     Note(String, String),
+    Mod(String, String),
+}
+
+impl HerdrWindow {
+    /// One row per command each running mod declares, named `mod: title`.
+    fn mod_palette_entries(&self) -> Vec<Entry> {
+        self.mods
+            .entries()
+            .filter_map(|(name, entry)| Some((name, entry.manifest.as_ref()?)))
+            .flat_map(|(name, manifest)| {
+                manifest.commands.iter().map(move |command| {
+                    Entry::new(
+                        format!("{name}: {}", command.title),
+                        String::new(),
+                        fl!("palette-badge-mod"),
+                        Action::Mod {
+                            name: name.to_owned(),
+                            id: command.id.clone(),
+                        },
+                        None,
+                    )
+                })
+            })
+            .collect()
+    }
 }
 
 impl Action {
@@ -216,6 +261,7 @@ impl Action {
                 workspace,
                 ..
             } => Identity::Note(endpoint.clone(), workspace.clone()),
+            Self::Mod { name, id } => Identity::Mod(name.clone(), id.clone()),
         }
     }
 }
@@ -581,7 +627,7 @@ impl HerdrWindow {
                 })
             });
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search workspaces, commands, agents, and projects...", cx);
+            input.set_placeholder(&fl!("palette-placeholder"), cx);
             input.set_frameless(cx);
             input.set_appearance(render::search_font(&self.config.ui), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
@@ -679,12 +725,16 @@ impl HerdrWindow {
                     _ => true,
                 })
                 .map(|info| {
-                    Entry::new(
-                        info.label.into(),
+                    // A translated name still answers to its English one.
+                    let label = crate::i18n::command(info);
+                    let english = crate::i18n::command_english(info);
+                    Entry::with_keywords(
+                        label.clone(),
                         self.keymap().primary(info.command).into(),
-                        "GUI action",
+                        fl!("palette-badge-command"),
                         Action::Native(info.command),
                         None,
+                        if english == label { "" } else { &english },
                     )
                 }),
         );
@@ -736,18 +786,22 @@ impl HerdrWindow {
                                 .unwrap_or(&command.command_id)
                                 .clone(),
                             detail,
-                            "Herdr command",
+                            fl!("palette-badge-herdr-command"),
                             Action::Configured(command.command_id.clone(), command.action),
                             None,
                         )
                     }),
             );
         }
+        entries.extend(self.mod_palette_entries());
         entries.extend(palette.projects.projects.iter().map(|project| {
             let mut entry = Entry::new(
                 project.label.clone(),
-                format!("Local  {}", project.path.display()),
-                "Project",
+                fl!(
+                    "palette-projects-local",
+                    path = project.path.display().to_string()
+                ),
+                fl!("palette-badge-project"),
                 Action::Project(project.clone()),
                 None,
             );
@@ -821,7 +875,7 @@ impl HerdrWindow {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
-fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
+pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
     let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
     view.live.snapshot = Some(Arc::new(
         serde_json::from_str(include_str!(

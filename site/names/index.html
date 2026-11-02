@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Name the Herdr client</title>
+<meta name="description" content="Fourteen names and thirteen icon sketches for the native Herdr client. Vote in the polls on X.">
+<link rel="canonical" href="https://herdrui.dev/names/">
+<link rel="icon" type="image/png" href="../assets/herdr-ui-icon-badge.png">
+<meta name="theme-color" content="#eef0ec">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Herdr UI">
+<meta property="og:title" content="Name the Herdr client">
+<meta property="og:description" content="Shep, Kelpie, Puli, Drover, Bellwether… Fourteen new names for the Herdr client. See them, then vote.">
+<meta property="og:url" content="https://herdrui.dev/names/">
+<meta property="og:image" content="https://herdrui.dev/assets/names-card.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Fourteen name ideas for the Herdr client beside six of the thirteen app icon sketches.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Name the Herdr client">
+<meta name="twitter:description" content="Shep, Kelpie, Puli, Drover, Bellwether… Fourteen new names for the Herdr client. See them, then vote.">
+<meta name="twitter:image" content="https://herdrui.dev/assets/names-card.png">
+<meta name="twitter:image:alt" content="Fourteen name ideas for the Herdr client beside six of the thirteen app icon sketches.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Two ballots on one sheet: the names (poll now) and the icons (poll later).
+   Each is a grid of cards; the icons show their Dock sizes beside them. */
+:root {
+  --bg: #eef0ec;          /* pasture-grey paper */
+  --card: #fbfbf8;
+  --ink: #1f2427;
+  --muted: #5d6662;
+  --line: #d5d9d3;
+  --raddle: #2f5bd3;      /* the blue marking paint shepherds use */
+  --raddle-ink: #ffffff;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151a1b; --card: #1d2325; --ink: #e9ece7; --muted: #9aa49f; --line: #2e3739;
+    --raddle: #6f92ff; --raddle-ink: #0d1430;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body);
+  font-size: 15px; line-height: 1.55;
+}
+a { color: var(--raddle); }
+.wrap {
+  max-width: 1080px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 56px;
+  display: grid; gap: 44px;
+}
+header { display: grid; gap: 14px; max-width: 68ch; }
+.eyebrow {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.eyebrow a { color: inherit; text-decoration: none; }
+.eyebrow a:hover { text-decoration: underline; }
+h1 {
+  font-family: var(--display); font-weight: 700; font-size: clamp(32px, 6vw, 52px);
+  line-height: 1.04; margin: 0; text-wrap: balance; letter-spacing: -0.01em;
+}
+header p, .section-head p { margin: 0; color: var(--muted); }
+.vote {
+  justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+  font: 600 15px var(--body); text-decoration: none; border-radius: 8px; padding: 10px 16px;
+  background: var(--raddle); color: var(--raddle-ink);
+}
+.vote[hidden] { display: none; }
+.vote:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+section.ballot { display: grid; gap: 18px; }
+#names { display: grid; gap: 32px; }
+.section-head { display: grid; gap: 6px; max-width: 68ch; }
+.section-head h2 {
+  font-family: var(--display); font-weight: 700; font-size: 26px; line-height: 1.1; margin: 0;
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+}
+.when { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--raddle); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px; display: grid; gap: 14px; min-width: 0; align-content: start;
+}
+
+/* Name cards: the name set as a lockup, the way it would sit in a header. */
+.lockup { display: grid; gap: 4px; }
+.lockup .name { font-family: var(--display); font-weight: 700; font-size: 44px; line-height: 0.95; letter-spacing: -0.015em; margin: 0; }
+.lockup .for { font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.meaning { margin: 0; color: var(--muted); max-width: 60ch; }
+.meaning em { color: var(--ink); font-style: normal; font-weight: 500; }
+.context {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  border-top: 1px dashed var(--line); padding-top: 12px;
+}
+.lights { display: inline-flex; gap: 5px; }
+.lights i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: block; }
+.context strong { color: var(--ink); font-weight: 500; }
+
+/* The names split into four X polls by theme; each winner goes to a final. */
+.group { display: grid; gap: 14px; }
+.group-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.group-head h3 { font-family: var(--display); font-weight: 700; font-size: 19px; margin: 0; }
+.group-head span { color: var(--muted); font-size: 14px; }
+
+/* Icon cards: large tile, then the sizes it shrinks to. */
+.icon-card { grid-template-columns: auto 1fr; align-items: center; column-gap: 20px; }
+.icon-card .big svg { display: block; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.18)); }
+.icon-card .text { display: grid; gap: 8px; min-width: 0; }
+.icon-card h3 { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.1; margin: 0; }
+.style { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.icon-card p { margin: 0; color: var(--muted); font-size: 14px; }
+.dock { display: flex; align-items: flex-end; gap: 10px; }
+.dock svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.18)); }
+@media (max-width: 460px) {
+  .icon-card { grid-template-columns: 1fr; row-gap: 14px; }
+}
+
+footer { color: var(--muted); font-size: 13px; max-width: 70ch; display: grid; gap: 6px; }
+footer p { margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow"><a href="../">herdrui.dev</a> · community vote</span>
+    <h1>Help name the Herdr client</h1>
+    <p>The native window for the Herdr daemon is called Herdr UI for now, and it is getting a real name. Your agents are the flock, so the names come from the dogs that keep one and the work they do. An X poll holds four options, so the names are split into four polls by theme; the winner of each goes to a final. The icons get a poll of their own once the name is settled.</p>
+    <!-- Set the href to the poll's post URL; the button stays hidden until then. -->
+    <a class="vote" id="vote" href="" hidden>Vote in the polls on X</a>
+  </header>
+
+  <section class="ballot" aria-labelledby="names-title">
+    <div class="section-head">
+      <h2 id="names-title">Names <span class="when">Polls open now</span></h2>
+      <p>Wherever the app needs to say what it works with, it would read as “Shep for Herdr”, “Drover for Herdr”, and so on.</p>
+    </div>
+    <div id="names"></div>
+  </section>
+
+  <section class="ballot" aria-labelledby="icons-title">
+    <div class="section-head">
+      <h2 id="icons-title">Icons <span class="when">Poll comes next</span></h2>
+      <p>Each sketch is shown large, then at 48, 32 and 16 px, the sizes it shrinks to in the Dock, menus and Finder lists. Any of them can go with any name. There are thirteen, so they'll go to four polls of three or four, then a final.</p>
+    </div>
+    <div class="grid" id="icons"></div>
+  </section>
+
+  <footer>
+    <p>The icons are early sketches; the winner gets a proper design pass.</p>
+    <p>Whatever the name, the app stays an independent client. Herdr itself, its daemon and its terminal UI, are a separate project at <a href="https://herdr.dev/">herdr.dev</a>.</p>
+  </footer>
+</div>
+
+<script>
+const POLLS = [
+  { title: "Poll 1 · The dog", note: "What you'd call the one that keeps the flock.", names: [
+    { name: "Shep", meaning: "The everyday nickname for a shepherd's dog. Short, friendly, and easy to pair with a mascot: <em>Shep for Herdr</em>." },
+    { name: "Sheepdog", meaning: "The most literal choice. Your agents are the flock; the app is the dog that keeps them together and brings strays back." },
+    { name: "Sheltie", meaning: "The Shetland sheepdog: small, quick, and alert to everything around it. A light, friendly name for a light, quick window." },
+    { name: "Beardie", meaning: "The bearded collie's nickname: a shaggy, cheerful working dog with a lot of energy. Playful, and hard to forget." },
+  ] },
+  { title: "Poll 2 · The breeds", note: "Herding breeds with short, distinct names.", names: [
+    { name: "Kelpie", meaning: "The Australian working dog that runs across the sheep's backs to reach the front. Tireless, and rare in software names." },
+    { name: "Briard", meaning: "The French herding dog that guards the flock as well as moving it. Calm, protective, and a little unusual." },
+    { name: "Puli", meaning: "The Hungarian herder with a corded coat. Four letters, fun to say, and an icon that draws itself." },
+    { name: "Mudi", meaning: "A rare Hungarian herding dog, quick and versatile. Short and unclaimed, though few people know the breed." },
+  ] },
+  { title: "Poll 3 · The work", note: "Names from how the flock is moved.", names: [
+    { name: "Outrun", meaning: "The sheepdog's wide run out around the flock to get behind it. The app reaches out to every machine and brings the work back to you." },
+    { name: "Drover", meaning: "Someone who moves herds over long distances. Fits an app that moves work between your machines and hosts." },
+    { name: "Whistle", meaning: "How a shepherd sends the dog across the field with one signal. One prompt, and the work happens far away." },
+  ] },
+  { title: "Poll 4 · The flock and the field", note: "Names from the sheep and where they're kept.", names: [
+    { name: "Bellwether", meaning: "The lead sheep that wears the bell: the flock follows it, and you always hear where it is. The app tells you which agent needs you." },
+    { name: "Fold", meaning: "The pen where the flock is gathered and kept safe at night. Every agent, on every machine, brought into one place." },
+    { name: "Paddock", meaning: "The fenced field next to the farmhouse. Your agents roam free inside it, and you can see all of them from the window." },
+  ] },
+];
+
+// Icons are drawn on a 100×100 tile; tile() adds the rounded square, rim and shared gradients.
+let uid = 0;
+function tile(bg, body, rim) {
+  return (size) => {
+    // Every rendered copy gets its own IDs, so no copy's gradients or clip depend on another's.
+    const id = "t" + (uid++);
+    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
+    <defs>
+      <clipPath id="${id}c"><rect width="100" height="100" rx="22.5"/></clipPath>
+      ${bg.defs ? bg.defs(id) : ""}
+    </defs>
+    <rect width="100" height="100" rx="22.5" fill="${bg.fill(id)}"/>
+    <g clip-path="url(#${id}c)">${typeof body === "function" ? body(id) : body}</g>
+    <rect x="0.5" y="0.5" width="99" height="99" rx="22" fill="none" stroke="${rim}"/>
+  </svg>`;
+  };
+}
+const flat = (color) => ({ fill: () => color });
+const grad = (top, bottom) => ({
+  defs: (id) => `<linearGradient id="${id}g" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/></linearGradient>`,
+  fill: (id) => `url(#${id}g)`,
+});
+
+// A border collie's face, soft and shaded.
+const CLAY_DOG = (id) => `
+  <defs>
+    <radialGradient id="${id}h" cx="0.45" cy="0.35" r="0.75"><stop offset="0" stop-color="#5a504c"/><stop offset="1" stop-color="#2f2927"/></radialGradient>
+    <radialGradient id="${id}m" cx="0.45" cy="0.3" r="0.8"><stop offset="0" stop-color="#fbf6ee"/><stop offset="1" stop-color="#e3d8c8"/></radialGradient>
+  </defs>
+  <ellipse cx="50" cy="86" rx="24" ry="4" fill="#8c6f4e" opacity="0.25"/>
+  <path d="M24 46 C20 32 22 20 29 15 C35 19 40 28 42 36Z" fill="#3a3330"/>
+  <path d="M76 46 C80 32 78 20 71 15 C65 19 60 28 58 36Z" fill="#3a3330"/>
+  <path d="M28 40 C26 31 27 24 30 21 C34 25 37 30 38 35Z" fill="#b98a7c"/>
+  <path d="M72 40 C74 31 73 24 70 21 C66 25 63 30 62 35Z" fill="#b98a7c"/>
+  <ellipse cx="50" cy="56" rx="28" ry="27" fill="url(#${id}h)"/>
+  <path d="M50 28 C45 38 43 48 42 56 C35 60 31 67 33 73 C38 82 62 82 67 73 C69 67 65 60 58 56 C57 48 55 38 50 28Z" fill="url(#${id}m)"/>
+  <circle cx="38" cy="53" r="3.6" fill="#141110"/><circle cx="62" cy="53" r="3.6" fill="#141110"/>
+  <circle cx="39.2" cy="51.8" r="1.1" fill="#fff"/><circle cx="63.2" cy="51.8" r="1.1" fill="#fff"/>
+  <path d="M44 63 C44 60 56 60 56 63 C56 66 52 68 50 68 C48 68 44 66 44 63Z" fill="#1d1918"/>
+  <path d="M50 68 V71 M44 71 C46 74 49 74 50 71 C51 74 54 74 56 71" fill="none" stroke="#5b4a40" stroke-width="1.6" stroke-linecap="round"/>`;
+
+// The same dog in thick ink lines, winking.
+const INK_DOG = `
+  <path d="M86 16 L80 26 M92 30 L82 32" stroke="#1d1d1b" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M30 36 C18 34 13 48 18 60 C22 54 26 48 30 44Z" fill="#232321" stroke="#1d1d1b" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M70 36 C82 34 87 48 82 60 C78 54 74 48 70 44Z" fill="#232321" stroke="#1d1d1b" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M50 30 C67 30 76 42 76 56 C76 72 65 82 50 82 C35 82 24 72 24 56 C24 42 33 30 50 30Z" fill="#fbf5e6" stroke="#1d1d1b" stroke-width="4.5"/>
+  <path d="M27 50 C28 40 36 34 44 36 C47 42 46 52 40 58 C34 60 28 57 27 50Z" fill="#232321"/>
+  <circle cx="38" cy="49" r="2.6" fill="#fbf5e6"/>
+  <path d="M58 48 C61 46 65 46 68 48" fill="none" stroke="#1d1d1b" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M44 62 C44 58 56 58 56 62 C56 66 52 68 50 68 C48 68 44 66 44 62Z" fill="#1d1d1b"/>
+  <path d="M50 68 C50 72 54 75 59 72" fill="none" stroke="#1d1d1b" stroke-width="3.2" stroke-linecap="round"/>`;
+
+// A whistle on a lanyard ring, sounding; `m` sets the metal and its surroundings.
+const WHISTLE = (m) => (id) => `
+  <defs>
+    <linearGradient id="${id}b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${m.light}"/><stop offset="0.5" stop-color="${m.mid}"/><stop offset="1" stop-color="${m.dark}"/></linearGradient>
+  </defs>
+  <path d="M18 30 C21 23 27 18 34 16" fill="none" stroke="${m.ring}" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+  <path d="M78 14 L83 6 M86 26 L95 22" stroke="${m.sound}" stroke-width="3.5" stroke-linecap="round"/>
+  <ellipse cx="46" cy="80" rx="26" ry="6" fill="${m.shadow}" opacity="0.4"/>
+  <circle cx="22" cy="78" r="9" fill="none" stroke="${m.ring}" stroke-width="5"/>
+  <path d="M30 50 L72 22 C75 20 79 21 80 24 L86 36 C87 39 86 41 83 42 L52 70 Z" fill="url(#${id}b)"/>
+  <circle cx="40" cy="62" r="21" fill="url(#${id}b)"/>
+  <circle cx="40" cy="62" r="13" fill="${m.face}" stroke="${m.light}" stroke-width="2.5"/>
+  <path d="M68 28 L76 23 L80 31 L72 36 Z" fill="${m.slot}"/>`;
+const BRASS = { light: "#f9e7b0", mid: "#e6b85e", dark: "#b27b2c", face: "#d29b40", slot: "#5a3b25", ring: "#eadfc4", sound: "#f3e2b1", shadow: "#132a22" };
+
+// The bellwether's bell, swinging.
+const BELL = (id) => `
+  <defs>
+    <linearGradient id="${id}b" x1="0" y1="0" x2="1" y2="0.6"><stop offset="0" stop-color="#fbe7ad"/><stop offset="0.55" stop-color="#e2ad4f"/><stop offset="1" stop-color="#a86f22"/></linearGradient>
+  </defs>
+  <ellipse cx="50" cy="86" rx="24" ry="4" fill="#4a120d" opacity="0.4"/>
+  <path d="M18 40 C14 48 14 56 18 64 M82 40 C86 48 86 56 82 64" fill="none" stroke="#f6d3c9" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="50" cy="18" r="6" fill="none" stroke="#f4d58a" stroke-width="4"/>
+  <circle cx="50" cy="76" r="7" fill="#7a4d16"/>
+  <path d="M50 22 C36 22 31 33 31 46 L31 58 C31 63 25 65 23 72 L77 72 C75 65 69 63 69 58 L69 46 C69 33 64 22 50 22Z" fill="url(#${id}b)"/>
+  <path d="M40 32 C37 38 37 46 37 56" fill="none" stroke="#fff6dc" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+  <rect x="22" y="68" width="56" height="6" rx="3" fill="#c8913b"/>`;
+
+// The outrun: the dog's wide arc around the flock, in flat shapes.
+const OUTRUN = `
+  <path d="M22 80 C10 46 34 18 62 22 C80 25 90 40 84 58" fill="none" stroke="#f2c94c" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="40" cy="58" r="7.5" fill="#fbf7ec"/><circle cx="53" cy="52" r="7.5" fill="#fbf7ec"/>
+  <circle cx="47" cy="66" r="7.5" fill="#fbf7ec"/><circle cx="61" cy="63" r="7.5" fill="#fbf7ec"/>
+  <circle cx="33" cy="70" r="6.5" fill="#fbf7ec"/>
+  <circle cx="83" cy="62" r="8" fill="#1f2427" stroke="#f2c94c" stroke-width="3.5"/>`;
+
+// A paw print, as plain as a mark gets.
+const PAW_SHAPE = `
+    <path d="M50 50 C60 50 70 60 72 68 C74 76 68 80 61 79 C56 78 54 76 50 76 C46 76 44 78 39 79 C32 80 26 76 28 68 C30 60 40 50 50 50Z"/>
+    <ellipse cx="27" cy="45" rx="7" ry="9" transform="rotate(-25 27 45)"/>
+    <ellipse cx="41" cy="31" rx="7" ry="10" transform="rotate(-8 41 31)"/>
+    <ellipse cx="59" cy="31" rx="7" ry="10" transform="rotate(8 59 31)"/>
+    <ellipse cx="73" cy="45" rx="7" ry="9" transform="rotate(25 73 45)"/>`;
+const PAW = `<g fill="#fff8f0">${PAW_SHAPE}</g>`;
+// One paw of `size` (1 = full tile) centred on x, y, turned by `turn` degrees.
+const paw = (x, y, size, turn, fill) =>
+  `<g fill="${fill}" transform="translate(${x} ${y}) rotate(${turn}) scale(${size}) translate(-50 -55)">${PAW_SHAPE}</g>`;
+
+// Tracks across the tile: a dog that has been everywhere.
+const PAW_TRAIL = [[28, 78, -15], [52, 64, 25], [44, 38, -15], [70, 22, 25]]
+  .map(([x, y, turn]) => paw(x, y, 0.3, turn + 20, "#2b2622")).join("");
+
+// The paw inside a dark app window.
+const PAW_WINDOW = `
+  <rect x="14" y="20" width="72" height="62" rx="9" fill="#1f2427"/>
+  <circle cx="24" cy="29" r="2.8" fill="#ff6159"/><circle cx="32" cy="29" r="2.8" fill="#ffbd2e"/><circle cx="40" cy="29" r="2.8" fill="#28c941"/>
+  ${paw(50, 58, 0.58, 0, "#f39a5a")}`;
+
+// One of the flock instead of the dog.
+const SHEEP = `
+  <g fill="#fbf8f1">
+    <circle cx="33" cy="38" r="13"/><circle cx="50" cy="30" r="14"/><circle cx="67" cy="38" r="13"/>
+    <circle cx="27" cy="55" r="12"/><circle cx="73" cy="55" r="12"/><circle cx="36" cy="70" r="11"/><circle cx="64" cy="70" r="11"/>
+  </g>
+  <ellipse cx="29" cy="55" rx="11" ry="5.5" transform="rotate(-18 29 55)" fill="#2b2a2e"/>
+  <ellipse cx="71" cy="55" rx="11" ry="5.5" transform="rotate(18 71 55)" fill="#2b2a2e"/>
+  <ellipse cx="50" cy="60" rx="16" ry="21" fill="#2b2a2e"/>
+  <circle cx="44" cy="42" r="8" fill="#fbf8f1"/><circle cx="56" cy="42" r="8" fill="#fbf8f1"/>
+  <circle cx="43.5" cy="57" r="3.4" fill="#fff"/><circle cx="56.5" cy="57" r="3.4" fill="#fff"/>
+  <circle cx="44" cy="57.6" r="1.9" fill="#111"/><circle cx="57" cy="57.6" r="1.9" fill="#111"/>
+  <path d="M46 71 C48 73 52 73 54 71" fill="none" stroke="#6d6a70" stroke-width="2" stroke-linecap="round"/>`;
+
+// A drover's wide-brimmed hat, dusty from the road.
+const DROVER_HAT = `
+  <ellipse cx="50" cy="73" rx="34" ry="4" fill="#6b4320" opacity="0.22"/>
+  <path d="M29 60 C28 37 35 20 50 20 C65 20 72 37 71 60 Z" fill="#6a4529"/>
+  <path d="M43 22 C47 30 53 30 57 22" fill="none" stroke="#4d301b" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="29.5" y="47" width="41" height="8" fill="#2c1b10"/>
+  <path d="M12 64 C12 56 30 54 50 54 C70 54 88 56 88 64 C88 70 72 66 50 66 C28 66 12 70 12 64Z" fill="#7a5132"/>
+  <path d="M18 62 C26 58 74 58 82 62" fill="none" stroke="#9a6c46" stroke-width="2" stroke-linecap="round"/>`;
+
+// A round dry-stone sheepfold from above, gate open, the flock inside.
+const FOLD = `
+  <path d="M59.6 78.3 A28 28 0 1 0 40.4 78.3" fill="none" stroke="#5b6b4c" stroke-width="12" stroke-linecap="round" opacity="0.35"/>
+  <path d="M59.6 78.3 A28 28 0 1 0 40.4 78.3" fill="none" stroke="#d8cfbb" stroke-width="9" stroke-dasharray="7 2.2" stroke-linecap="round"/>
+  <g fill="#fbf8f1"><circle cx="42" cy="45" r="6.5"/><circle cx="57" cy="43" r="6.5"/><circle cx="48" cy="58" r="6.5"/><circle cx="62" cy="57" r="6.5"/></g>`;
+
+// A post-and-rail fence across a green field under the sky.
+const PADDOCK = `
+  <rect width="100" height="58" fill="#bfe2f0"/>
+  <path d="M0 58 C30 52 70 54 100 58 V100 H0Z" fill="#7cbd68"/>
+  <path d="M0 74 C30 70 70 72 100 76 V100 H0Z" fill="#69a957"/>
+  <circle cx="76" cy="24" r="8" fill="#fff3c4"/>
+  <g fill="#8a5a33">
+    <rect x="18" y="44" width="8" height="38" rx="1.5"/><rect x="46" y="44" width="8" height="38" rx="1.5"/><rect x="74" y="44" width="8" height="38" rx="1.5"/>
+  </g>
+  <g fill="#a8744a"><rect x="4" y="50" width="92" height="6" rx="2"/><rect x="4" y="64" width="92" height="6" rx="2"/></g>`;
+
+// A shepherd's crook beside a terminal cursor.
+const CROOK = `
+  <path d="M42 84 L42 38 C42 23 55 16 64 22 C71 27 69 37 61 39" fill="none" stroke="#efe7d2" stroke-width="7.5" stroke-linecap="round"/>
+  <rect x="56" y="70" width="20" height="11" rx="1.5" fill="#7ee0a1"/>`;
+
+const ICONS = [
+  { title: "Clay companion", style: "Soft 3D", body: "A border collie's face, rounded and warm. Unmistakably a mascot.", draw: tile(grad("#f4e3c6", "#d9bc95"), CLAY_DOG, "rgba(120,90,50,0.25)") },
+  { title: "Good dog, bold lines", style: "Hand-drawn", body: "The same dog in thick ink on yellow, mid-wink. Reads well at 16 px.", draw: tile(grad("#f1d877", "#e5c457"), INK_DOG, "rgba(0,0,0,0.12)") },
+  { title: "Paw print", style: "Bold mark", body: "Just the dog's mark, white on orange. The simplest shape here, and the clearest in a menu bar.", draw: tile(grad("#f39a5a", "#d65f2a"), PAW, "rgba(0,0,0,0.12)") },
+  { title: "Paw in a window", style: "App window", body: "The orange paw inside a dark window with its three title-bar dots: a dog that lives on your desktop.", draw: tile(grad("#f0f2f5", "#c9d0d9"), PAW_WINDOW, "rgba(0,0,0,0.14)") },
+  { title: "Paw trail", style: "Tracks", body: "Four prints crossing a cream tile, like the dog's been out to every machine and back.", draw: tile(grad("#f6efe2", "#e2d5bd"), PAW_TRAIL, "rgba(120,90,50,0.22)") },
+  { title: "The outrun", style: "Flat geometric", body: "The flock as five dots and the dog's wide arc around them: your agents, and the app keeping them together.", draw: tile(grad("#3f6b4a", "#24402c"), OUTRUN, "rgba(255,255,255,0.08)") },
+  { title: "Pocket whistle", style: "Enamel object", body: "The shepherd's whistle instead of a dog: how you call the flock in.", draw: tile(grad("#46796a", "#27463d"), WHISTLE(BRASS), "rgba(255,255,255,0.08)") },
+  { title: "Bellwether's bell", style: "Enamel object", body: "The bell the lead sheep wears, so you always hear where the flock is. Like a notification, but older.", draw: tile(grad("#cf4b3d", "#8f2a22"), BELL, "rgba(0,0,0,0.15)") },
+  { title: "One of the flock", style: "Soft flat", body: "A woolly sheep instead of the dog: the app as one of your agents, looking back at you.", draw: tile(grad("#9bd0ae", "#5e9c78"), SHEEP, "rgba(0,0,0,0.12)") },
+  { title: "Drover's hat", style: "Object", body: "The wide-brimmed hat of someone who walks herds across the country. For <em>Drover</em>.", draw: tile(grad("#ecc993", "#c98f4f"), DROVER_HAT, "rgba(90,50,20,0.22)") },
+  { title: "The fold", style: "Flat, from above", body: "A round stone sheepfold with its gate open and the flock inside. For <em>Fold</em>.", draw: tile(grad("#a9d18e", "#6fa35a"), FOLD, "rgba(0,0,0,0.12)") },
+  { title: "Paddock fence", style: "Little scene", body: "A post-and-rail fence across a green field on a sunny day. For <em>Paddock</em>.", draw: tile(flat("#bfe2f0"), PADDOCK, "rgba(0,0,0,0.12)") },
+  { title: "Crook and cursor", style: "Terminal", body: "A shepherd's crook beside a blinking block cursor: herding, in a terminal.", draw: tile(grad("#2d3238", "#15181c"), CROOK, "rgba(255,255,255,0.1)") },
+];
+
+document.getElementById("names").innerHTML = POLLS.map((poll) => `
+  <div class="group">
+    <div class="group-head"><h3>${poll.title}</h3><span>${poll.note}</span></div>
+    <div class="grid">${poll.names.map((n) => `
+      <article class="card">
+        <div class="lockup"><h4 class="name">${n.name}</h4><span class="for">for Herdr</span></div>
+        <p class="meaning">${n.meaning}</p>
+        <div class="context"><span class="lights"><i></i><i></i><i></i></span><strong>${n.name}</strong><span>— connected to your Herdr daemon</span></div>
+      </article>`).join("")}</div>
+  </div>`).join("");
+
+document.getElementById("icons").innerHTML = ICONS.map((ic) => `
+  <article class="card icon-card">
+    <div class="big">${ic.draw(120)}</div>
+    <div class="text">
+      <span class="style">${ic.style}</span>
+      <h3>${ic.title}</h3>
+      <p>${ic.body}</p>
+      <div class="dock" aria-label="${ic.title} at 48, 32 and 16 pixels">${ic.draw(48)}${ic.draw(32)}${ic.draw(16)}</div>
+    </div>
+  </article>`).join("");
+
+const vote = document.getElementById("vote");
+if (vote.getAttribute("href")) vote.hidden = false;
+</script>
+</body>
+</html>

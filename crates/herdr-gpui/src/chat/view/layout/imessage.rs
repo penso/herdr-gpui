@@ -8,6 +8,7 @@
 
 use super::{ChatLayout, ComposerParts, CopyPlacement, Look, Row, Side, summary_row};
 use crate::config::mix;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::EntryKind;
 use unicode_width::UnicodeWidthStr;
@@ -105,7 +106,7 @@ impl ChatLayout for IMessage {
                         .text_size(small)
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(rgb(theme.muted))
-                        .child("Delivered")
+                        .child(fl!("chat-delivered"))
                 })),
         )
         .into_any_element()
@@ -149,17 +150,27 @@ impl ChatLayout for IMessage {
 
     /// Muted under the last bubble, where Messages shows that the other
     /// side is typing; its row stays, empty, between turns.
-    fn working(&self, working: bool, look: &Look<'_>) -> Option<Div> {
+    fn working(
+        &self,
+        working: Option<&super::super::working::Working>,
+        look: &Look<'_>,
+    ) -> Option<Div> {
         Some(
             div()
-                .when(working, |row| row.debug_selector(|| "chat-typing".into()))
-                .when(!working, |row| row.invisible())
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .when(working.is_some(), |row| {
+                    row.debug_selector(|| "chat-typing".into())
+                        .child(super::super::working::pulse(look))
+                })
+                .when(working.is_none(), |row| row.invisible())
                 .px(px(16. + 12. * look.text / TEXT))
                 .pb(px(4.))
                 .text_size(px((look.text - 2.).max(10.)))
                 .italic()
                 .text_color(rgb(look.theme.muted))
-                .child("typing\u{2026}"),
+                .child(fl!("chat-typing")),
         )
     }
 

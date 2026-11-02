@@ -2,8 +2,10 @@
 //! edge of a pane whose content runs past it, showing where the pane sits
 //! and how much of it shows, and dragging it. The size and travel are the
 //! tab strip's thumb math, turned on its side.
+// i18n: migrated
 use super::SettingsWindow;
 use crate::browser::Thumb;
+use crate::direction::Logical;
 use gpui::{prelude::*, *};
 
 /// How wide the thumb draws, and its margin from the pane's edge.
@@ -94,7 +96,7 @@ impl SettingsWindow {
                 .id(pane.selector())
                 .debug_selector(move || pane.selector().into())
                 .absolute()
-                .right(px(INSET))
+                .inset_e(px(INSET))
                 .top(px(thumb.left))
                 .w(px(WIDTH))
                 .h(px(thumb.width))

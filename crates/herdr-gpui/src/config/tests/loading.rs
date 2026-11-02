@@ -225,7 +225,7 @@ fn unknown_keys_are_ignored_and_reported() -> anyhow::Result<()> {
         ]
     );
     assert_eq!(
-        config.diagnostic().as_deref(),
+        plain(config.diagnostic()).as_deref(),
         Some(
             "config-gpui.local.toml: ignoring unknown keys clipboard_toast.duration, \
                  features.new_flag, future, future_table, github.enterprise and 4 more\n\
@@ -234,9 +234,7 @@ fn unknown_keys_are_ignored_and_reported() -> anyhow::Result<()> {
     );
     assert_eq!(Config::parse("")?.diagnostic(), None);
     assert_eq!(
-        Config::parse("[sidebar]\nnope = 1")?
-            .diagnostic()
-            .as_deref(),
+        plain(Config::parse("[sidebar]\nnope = 1")?.diagnostic()).as_deref(),
         Some("config-gpui.local.toml: ignoring unknown keys sidebar.nope")
     );
     // The managed defaults layered underneath name no unknown keys.

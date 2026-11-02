@@ -5,6 +5,8 @@
 //! Everywhere else the platform reports server decorations and nothing here
 //! draws.
 
+use crate::direction::Logical;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 
 /// The transparent band around a client-decorated window that holds its
@@ -160,8 +162,9 @@ impl Buttons {
     }
 }
 
-/// Minimize, maximize or restore, and close, at the right end of the title
-/// bar of a client-decorated window. `close` runs the window's own close
+/// Minimize, maximize or restore, and close, at the end of the title bar of
+/// a client-decorated window: the right, or the left right to left, as
+/// Windows puts its own. `close` runs the window's own close
 /// path, so a window that asks before closing still asks.
 pub(crate) fn controls(
     enabled: bool,
@@ -179,7 +182,7 @@ fn render_controls(
 ) -> AnyElement {
     let (active, foreground) = (theme.active, theme.foreground);
     // `label` is what a screen reader calls the button.
-    let button = |id: &'static str, icon: &'static str, label: &'static str| {
+    let button = |id: &'static str, icon: &'static str, label: String| {
         div()
             .id(id)
             .debug_selector(move || id.into())
@@ -200,29 +203,32 @@ fn render_controls(
     };
     div()
         .debug_selector(|| "window-controls".into())
-        .flex()
+        .row()
         .flex_none()
         .items_center()
         .gap(px(4.))
-        .ml_auto()
-        .pl(px(4.))
-        .pr(px(6.))
+        .ms(auto())
+        .ps(px(4.))
+        .pe(px(6.))
         .h_full()
         .when(buttons.minimize, |bar| {
             bar.child(
-                button("window-minimize", "icons/window-minimize.svg", "Minimize").on_click(
-                    |_, window, cx| {
-                        cx.stop_propagation();
-                        window.minimize_window();
-                    },
-                ),
+                button(
+                    "window-minimize",
+                    "icons/window-minimize.svg",
+                    fl!("titlebar-minimize"),
+                )
+                .on_click(|_, window, cx| {
+                    cx.stop_propagation();
+                    window.minimize_window();
+                }),
             )
         })
         .when(buttons.maximize, |bar| {
             let (icon, label) = if buttons.maximized {
-                ("icons/window-restore.svg", "Restore")
+                ("icons/window-restore.svg", fl!("titlebar-restore"))
             } else {
-                ("icons/window-maximize.svg", "Maximize")
+                ("icons/window-maximize.svg", fl!("titlebar-maximize"))
             };
             bar.child(
                 button("window-maximize", icon, label).on_click(|_, window, cx| {
@@ -232,10 +238,12 @@ fn render_controls(
             )
         })
         .child(
-            button("window-close", "icons/close.svg", "Close").on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                close(window, cx);
-            }),
+            button("window-close", "icons/close.svg", fl!("titlebar-close")).on_click(
+                move |_, window, cx| {
+                    cx.stop_propagation();
+                    close(window, cx);
+                },
+            ),
         )
         .into_any_element()
 }

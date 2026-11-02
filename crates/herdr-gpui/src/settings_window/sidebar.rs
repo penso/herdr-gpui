@@ -1,5 +1,6 @@
 //! Live sidebar spacing, selection and host colours: previews reach every main
 //! window at once, and commits write through Settings' serial save path.
+// i18n: migrated
 use super::{SettingsWindow, ui};
 use crate::{
     config::{Config, SidebarStyle, preferences::Preference},
@@ -394,7 +395,8 @@ impl SettingsWindow {
     }
 
     /// One row per host: connected endpoints first in window order, then
-    /// configured hosts that are not connected, alphabetically.
+    /// configured hosts that are not connected, alphabetically. Each names
+    /// the message hinting at its state, or is empty.
     pub(super) fn host_rows(&self, cx: &App) -> Vec<(String, Option<u32>, &'static str)> {
         let hosts = &self.config.sidebar_style.hosts;
         let mut rows: Vec<(String, Option<u32>, &'static str)> = Vec::new();
@@ -409,7 +411,7 @@ impl SettingsWindow {
                 let hint = if color.is_some() {
                     ""
                 } else {
-                    "Connected, no colour set."
+                    "settings-sidebar-host-uncoloured"
                 };
                 rows.push((endpoint.label.clone(), color, hint));
             }
@@ -417,7 +419,7 @@ impl SettingsWindow {
         // The map is sorted, so configured-only hosts come alphabetically.
         for (host, color) in hosts {
             if !rows.iter().any(|(label, ..)| label == host) {
-                rows.push((host.clone(), Some(*color), "Not connected."));
+                rows.push((host.clone(), Some(*color), "settings-sidebar-host-offline"));
             }
         }
         rows

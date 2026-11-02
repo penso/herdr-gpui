@@ -18,7 +18,7 @@ pub mod recipe;
 pub use key::Project;
 pub use progress::Progress;
 
-use std::{io, path::PathBuf, sync::atomic::AtomicBool};
+use std::{fmt, io, path::PathBuf, sync::atomic::AtomicBool};
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -40,8 +40,8 @@ pub enum Error {
     Context(&'static str),
     #[error("The dev container definition is not valid JSON.")]
     Devcontainer(#[source] serde_json::Error),
-    #[error("{0} is not valid.")]
-    Field(&'static str),
+    #[error("{0}")]
+    Field(Field),
     #[error("Could not read the project's recipe from its host.")]
     Host(#[source] herdr_client::Error),
     #[error("Invalid sandbox image records.")]
@@ -57,7 +57,61 @@ pub enum Error {
     #[error("This app has no record of that project's image.")]
     Unknown,
     #[error("This project's recipe uses {0}, which sandbox images do not support.")]
-    Unsupported(&'static str),
+    Unsupported(Unsupported),
+}
+
+/// What a recipe or the image records hold that is refused, each a whole
+/// sentence so the app can translate it as one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Field {
+    // keep-sorted start
+    /// The image records file is too large or not this version's.
+    Catalog,
+    /// A build context file's path leaves the context.
+    ContextPath,
+    /// The dev container's `image` is not an image reference.
+    DevcontainerImage,
+    /// A build context file's name is not UTF-8.
+    FileName,
+    /// A recipe's path leaves the project.
+    ProjectPath,
+    /// The image records already hold as many projects as they take.
+    Projects,
+    // keep-sorted end
+}
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Catalog => write!(f, "{} is not valid.", catalog::FILE),
+            Self::ContextPath => f.write_str("A file path outside the build context is not valid."),
+            Self::DevcontainerImage => f.write_str("The dev container's image is not valid."),
+            Self::FileName => f.write_str("A file name that is not UTF-8 is not valid."),
+            Self::Projects => f.write_str("Sandbox images are kept for too many projects."),
+            Self::ProjectPath => f.write_str("A path outside the project is not valid."),
+        }
+    }
+}
+
+/// A recipe this app cannot build an image from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unsupported {
+    /// A dev container defined by Docker Compose.
+    Compose,
+    /// A dev container with neither an image nor a Dockerfile.
+    NoBuild,
+    /// A provider that cannot hold images, asked to build one.
+    Provider,
+}
+
+impl fmt::Display for Unsupported {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Compose => "a dev container defined by Docker Compose",
+            Self::NoBuild => "a dev container with neither an image nor a Dockerfile",
+            Self::Provider => "a provider that does not hold images",
+        })
+    }
 }
 
 /// A project's recipe, read from its host, ready to build.

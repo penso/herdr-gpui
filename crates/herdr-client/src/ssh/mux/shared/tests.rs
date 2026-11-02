@@ -409,3 +409,27 @@ fn repeated_failures_back_off_longer_up_to_a_ceiling() {
         };
     }
 }
+
+#[test]
+fn a_master_for_a_skipped_host_reads_no_known_hosts_ahead_of_the_default() {
+    let socket = Path::new("/tmp/herdr-mux-1-1/c");
+    crate::ssh::set_host_keys("skipped-master.test", crate::ssh::HostKeys::Skip);
+    let args = master_args("skipped-master.test", Lane::Quick, socket);
+    crate::ssh::set_host_keys("skipped-master.test", crate::ssh::HostKeys::Verify);
+    let at = |option: &str| args.iter().position(|arg| arg == option);
+    let strict = at("StrictHostKeyChecking=yes").unwrap();
+    for option in [
+        "StrictHostKeyChecking=no",
+        "UserKnownHostsFile=/dev/null",
+        "GlobalKnownHostsFile=/dev/null",
+    ] {
+        assert!(at(option).is_some_and(|at| at < strict), "{option}");
+    }
+    // A verified host gets none of it.
+    let verified = master_args("verified-master.test", Lane::Quick, socket);
+    assert!(
+        !verified
+            .iter()
+            .any(|arg| arg == "UserKnownHostsFile=/dev/null")
+    );
+}

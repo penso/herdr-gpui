@@ -327,13 +327,13 @@ fn stale_or_intermediate_versions_refresh_and_retry_once() -> anyhow::Result<()>
         assert_eq!(
             progress,
             [
-                "Asking Homebrew to upgrade the cask...",
-                "upgrade output",
-                "Checking the installed Homebrew cask version...",
-                "Refreshing Homebrew metadata with brew update...",
-                "Retrying Homebrew cask upgrade after refresh...",
-                "upgrade output",
-                "Checking the installed Homebrew cask version...",
+                Progress::Asking,
+                Progress::Homebrew("upgrade output".into()),
+                Progress::Checking,
+                Progress::Refreshing,
+                Progress::Retrying,
+                Progress::Homebrew("upgrade output".into()),
+                Progress::Checking,
             ]
         );
     }
@@ -407,7 +407,7 @@ fn cancellation_before_spawn_runs_nothing_but_mutation_is_not_interrupted() -> a
     let cancel = AtomicBool::new(false);
     assert_eq!(
         upgrade(&cask, "20260921.1", "20260921.3", &cancel, |line| {
-            if line == "upgrade output" {
+            if line == Progress::Homebrew("upgrade output".into()) {
                 cancel.store(true, Ordering::Release);
             }
         })?,

@@ -1,7 +1,9 @@
+// i18n: migrated
 use crate::{
     config::{Config, FontConfig, Theme},
     diagnostics::{self, Record},
     fonts::StyledFont,
+    i18n::fl,
     search_input::{Changed, SearchInput},
 };
 use gpui::{prelude::*, *};
@@ -92,7 +94,7 @@ fn open_deferred(cx: &mut App) {
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             window_min_size: Some(size(px(620.), px(360.))),
-            titlebar: Some(crate::titlebar::options("Logs")),
+            titlebar: Some(crate::titlebar::options(&fl!("log-window-title"))),
             app_owns_titlebar_drag: cfg!(target_os = "macos"),
             ..Default::default()
         },
@@ -212,7 +214,7 @@ impl LogWindow {
         let appearance = cx.default_global::<Appearance>().clone();
         search.update(cx, |input, cx| {
             input.set_appearance(appearance.config.ui.clone(), appearance.theme.clone(), cx);
-            input.set_placeholder("Search, namespace:herdr_gpui target:terminal_painter", cx);
+            input.set_placeholder_with(|| fl!("log-window-search-placeholder"), cx);
             window.focus(&input.focus, cx);
         });
         let appearance_subscription = cx.observe_global::<Appearance>(|this, cx| {
@@ -317,7 +319,10 @@ impl LogWindow {
                                 }
                                 // Not logged: a failing read would log on every change.
                                 Err(error) => {
-                                    this.status = format!("Unable to read logs: {}", error.kind())
+                                    this.status = fl!(
+                                        "log-window-unreadable",
+                                        error = error.kind().to_string()
+                                    )
                                 }
                             }
                             cx.notify();
@@ -333,8 +338,8 @@ impl LogWindow {
             }
         });
         let app_status = match diagnostics::path() {
-            Some(path) => format!("Saved to {}. Review before sharing.", path.display()),
-            None => "Not saved: no state directory. Review before sharing.".into(),
+            Some(path) => fl!("log-window-saved", path = path.display().to_string()),
+            None => fl!("log-window-not-saved"),
         };
         Self {
             appearance,
@@ -369,11 +374,10 @@ impl LogWindow {
         }
         self.exporting = true;
         self.status = if save {
-            "Choose an export destination..."
+            fl!("log-window-choose-destination")
         } else {
-            "Preparing clipboard..."
-        }
-        .into();
+            fl!("log-window-preparing-clipboard")
+        };
         let records = self.retained.clone();
         let query = self.search.read(cx).text().to_owned();
         let minimum = self.minimum;
@@ -389,11 +393,10 @@ impl LogWindow {
                         let _ = this.update(cx, |this, cx| {
                             this.exporting = false;
                             this.status = if cancelled {
-                                "Export cancelled."
+                                fl!("log-window-export-cancelled")
                             } else {
-                                "Unable to open save dialog."
-                            }
-                            .into();
+                                fl!("log-window-no-save-dialog")
+                            };
                             cx.notify();
                         });
                         return;
@@ -418,14 +421,13 @@ impl LogWindow {
                 match result {
                     Ok(Some(text)) => {
                         cx.write_to_clipboard(ClipboardItem::new_string(text));
-                        this.status = "Filtered logs copied. Review before sharing.".into();
+                        this.status = fl!("log-window-copied");
                     }
-                    Ok(None) => {
-                        this.status = "Filtered logs exported. Review before sharing.".into()
-                    }
+                    Ok(None) => this.status = fl!("log-window-exported"),
                     Err(error) => {
                         tracing::warn!(kind = ?error.kind(), "Log export failed");
-                        this.status = format!("Export failed: {}", error.kind());
+                        this.status =
+                            fl!("log-window-export-failed", error = error.kind().to_string());
                     }
                 }
                 cx.notify();
@@ -556,7 +558,7 @@ impl Render for LogWindow {
                     .child(
                         div()
                             .text_size(px(config.ui.size + 4.))
-                            .child("Logs"),
+                            .child(fl!("log-window-title")),
                     )
                     .children(self.render_sources(cx))
                     .child(self.search.clone())
@@ -567,7 +569,7 @@ impl Render for LogWindow {
                             .items_center()
                             .gap_2()
                             .child(
-                                button("minimum-level", format!("Minimum: {} v", self.minimum), theme)
+                                button("minimum-level", fl!("log-window-minimum", level = self.minimum.to_string()), theme)
                                     .track_focus(&self.level_focus)
                                     .border_1()
                                     .border_color(if self.level_focus.is_focused(window) { palette_color(theme, 4) } else { rgb(theme.active) })
@@ -583,7 +585,7 @@ impl Render for LogWindow {
                                         deferred(
                                             anchored().child(crate::motion::pop_in(
                                                 div().id("level-menu").debug_selector(|| "level-menu".into())
-                                                    .role(Role::Menu).aria_label("Minimum level")
+                                                    .role(Role::Menu).aria_label(fl!("log-window-minimum-menu"))
                                                     .absolute().top_full().left_0().w(px(180.))
                                                     .p_1().bg(rgb(theme.surface)).border_1().border_color(rgb(theme.active))
                                                     .occlude().track_focus(&self.menu_focus)
@@ -618,9 +620,9 @@ impl Render for LogWindow {
                                 button(
                                     "follow",
                                     if self.following {
-                                        "Pause"
+                                        fl!("log-window-pause")
                                     } else {
-                                        "Resume tail"
+                                        fl!("log-window-resume")
                                     },
                                     theme,
                                 )
@@ -633,16 +635,16 @@ impl Render for LogWindow {
                                 )),
                             )
                             .child(
-                                button("copy", "Copy", theme)
+                                button("copy", fl!("log-window-copy"), theme)
                                     .on_click(cx.listener(|this, _, _, cx| this.share(false, cx))),
                             )
                             .child(
                                 button(
                                     "export",
                                     if self.exporting {
-                                        "Working..."
+                                        fl!("log-window-working")
                                     } else {
-                                        "Export..."
+                                        fl!("log-window-export")
                                     },
                                     theme,
                                 )
@@ -654,7 +656,7 @@ impl Render for LogWindow {
                 div()
                     .id("log-rows")
                     .role(Role::List)
-                    .aria_label("Log entries")
+                    .aria_label(fl!("log-window-entries"))
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
@@ -663,7 +665,7 @@ impl Render for LogWindow {
                         cx.notify();
                     }))
                     .when(self.rows.is_empty(), |el| {
-                        el.child(div().p_3().child("No matching logs."))
+                        el.child(div().p_3().child(fl!("log-window-empty")))
                     })
                     .when(!self.rows.is_empty(), |el| {
                         el.child(
@@ -751,13 +753,12 @@ impl Render for LogWindow {
                 )
             })
             .child({
-                let summary = format!(
-                    "{} shown | {} dropped | {} | {}",
-                    self.rows.len(),
-                    self.dropped,
-                    if self.following { "LIVE" } else { "PAUSED" },
-                    self.status
-                );
+                let (shown, dropped) = (self.rows.len(), self.dropped);
+                let summary = if self.following {
+                    fl!("log-window-summary-live", shown = shown, dropped = dropped, status = self.status.as_str())
+                } else {
+                    fl!("log-window-summary-paused", shown = shown, dropped = dropped, status = self.status.as_str())
+                };
                 div()
                     .id("log-status")
                     .role(Role::Status)

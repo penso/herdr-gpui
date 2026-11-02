@@ -7,6 +7,7 @@
 //! a visible, focused tab (see `launch`), never in the background. A device
 //! that finishes setting up queues its script app-wide (see `pending`), since
 //! the window that connects to it may not be the one that created it.
+// i18n: migrated
 
 mod agents;
 #[cfg(feature = "cloud")]
@@ -51,7 +52,7 @@ pub(crate) fn compose(
         .map(|agent| agent.script())
         .collect();
     if !parts.is_empty() {
-        parts.push("echo '==> Agents installed; open a new tab to pick up PATH changes'");
+        parts.push("echo '==> Agents installed; open a new tab to pick up PATH changes'"); // i18n: data
     }
     parts.extend(custom.map(str::trim).filter(|custom| !custom.is_empty()));
     if parts.is_empty() {
@@ -79,18 +80,20 @@ pub(crate) fn summary(
         .into_iter()
         .map(Agent::label)
         .collect();
-    let count = cloud
+    let lines = cloud
         .custom(provider)
         .map_or(0, |script| script.trim().lines().count());
-    let custom = match count {
-        1 => "1 line of your own".to_owned(),
-        count => format!("{count} lines of your own"),
-    };
-    match (agents.is_empty(), count) {
-        (true, 0) => "Nothing to run.".into(),
-        (true, _) => format!("Runs {custom}."),
-        (false, 0) => format!("Installs {}.", agents.join(", ")),
-        (false, _) => format!("Installs {}, then runs {custom}.", agents.join(", ")),
+    // Agent names are product names, listed as they are.
+    let agents = agents.join(", ");
+    match (agents.is_empty(), lines) {
+        (true, 0) => crate::i18n::fl!("cloud-setup-summary-nothing"),
+        (true, _) => crate::i18n::fl!("cloud-setup-summary-runs", lines = lines),
+        (false, 0) => crate::i18n::fl!("cloud-setup-summary-installs", agents = agents),
+        (false, _) => crate::i18n::fl!(
+            "cloud-setup-summary-installs-runs",
+            agents = agents,
+            lines = lines
+        ),
     }
 }
 

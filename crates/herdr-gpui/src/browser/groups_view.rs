@@ -10,6 +10,7 @@ use super::{
     groups::{GroupId, Layout, Pick, Shown, Slot},
     view::store,
 };
+use crate::i18n::fl;
 use crate::{HerdrWindow, NavigationTarget, controls::Command, search_input::SearchInput};
 use gpui::{prelude::*, *};
 use std::{collections::hash_map::Entry, time::Instant};
@@ -236,7 +237,7 @@ impl HerdrWindow {
         };
         store
             .in_workspace(&scope, &workspace)
-            .map(|tab| (Pick::Page(tab.id), super::view::tab_label(&tab.title)))
+            .map(|tab| (Pick::Page(tab.id), super::view::tab_label(&tab.label())))
             .collect()
     }
 
@@ -782,7 +783,9 @@ impl HerdrWindow {
                 }
                 Err(error) => {
                     tracing::warn!(%error, "Cannot create a browser page");
-                    self.browser.failed.insert(id, error.to_string().into());
+                    self.browser
+                        .failed
+                        .insert(id, crate::i18n::Localize::localize(&error).into());
                 }
             }
         }
@@ -790,6 +793,9 @@ impl HerdrWindow {
         if tab.location.is_none() && !tab.place.is_editor() {
             let focus = self.group_address(group, cx).read(cx).focus.clone();
             window.focus(&focus, cx);
+        }
+        if let Some(Location::CoreTerminal { .. }) = &tab.location {
+            self.focus_core_terminal(id, window, cx);
         }
         cx.notify();
     }
@@ -935,7 +941,7 @@ impl HerdrWindow {
             .or_insert_with(|| {
                 let input = cx.new(|cx| {
                     let mut input = SearchInput::new(cx);
-                    input.set_placeholder("Enter an address", cx);
+                    input.set_placeholder_with(|| fl!("browser-address-placeholder"), cx);
                     input
                 });
                 (input, None)

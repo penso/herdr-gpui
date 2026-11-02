@@ -3,7 +3,7 @@
 //! state directory, one list for every provider. Reads and writes are bounded
 //! filesystem I/O for background workers only.
 
-use super::{Error, Result};
+use super::{Error, Invalid, Result};
 use herdr_client::{CloudProvider, ConnectTarget};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,7 +12,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const FILE: &str = "cloud-devices.json";
+/// The saved cloud devices file under the state directory.
+pub const FILE: &str = "cloud-devices.json";
 const LIMIT: u64 = 256 * 1024;
 const MAX_DEVICES: usize = 64;
 const LABEL_LIMIT: usize = 128;
@@ -155,14 +156,14 @@ fn read_entries(path: &Path) -> Result<Vec<Entry>> {
         .read_to_end(&mut bytes)
         .map_err(io(path))?;
     if bytes.len() as u64 > LIMIT {
-        return Err(Error::Invalid(FILE));
+        return Err(Error::Invalid(Invalid::Catalog));
     }
     let document: Document = serde_json::from_slice(&bytes).map_err(Error::Json)?;
     if document.version != 1
         || document.devices.len() > MAX_DEVICES
         || !document.devices.iter().all(Entry::valid)
     {
-        return Err(Error::Invalid(FILE));
+        return Err(Error::Invalid(Invalid::Catalog));
     }
     Ok(document.devices)
 }
@@ -180,7 +181,7 @@ fn read(path: &Path) -> Result<Vec<SavedDevice>> {
 
 fn write(path: &Path, devices: Vec<Entry>) -> Result<()> {
     if devices.len() > MAX_DEVICES || !devices.iter().all(Entry::valid) {
-        return Err(Error::Invalid("cloud device"));
+        return Err(Error::Invalid(Invalid::Device));
     }
     let parent = path.parent().ok_or(Error::StateDirectory)?;
     fs::create_dir_all(parent).map_err(io(parent))?;

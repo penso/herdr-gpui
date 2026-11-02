@@ -6,6 +6,7 @@ use super::{
     http::{self, Auth},
     settings::sandbox_id,
 };
+use crate::cloud::Value;
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -62,7 +63,7 @@ pub struct Api<'a> {
 
 fn path(id: &str) -> Result<String> {
     if !sandbox_id(id) {
-        return Err(Error::Field("sandbox ID"));
+        return Err(Error::Field(Value::SandboxId));
     }
     Ok(format!("/sandboxes/{id}"))
 }
@@ -186,7 +187,7 @@ impl Api<'_> {
             endpoint.endpoint.trim_end_matches('/')
         );
         if !execd_root(&root) {
-            return Err(Error::Field("execd endpoint"));
+            return Err(Error::Field(Value::ExecdEndpoint));
         }
         Ok(Execd {
             root,

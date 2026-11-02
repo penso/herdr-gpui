@@ -1,7 +1,8 @@
 //! Explains missing-glyph boxes in a prompt. Fonts are never bundled, so a
 //! machine without a Nerd Font draws every Private Use Area icon as a box;
 //! this names the fix once a pane actually shows one.
-use crate::{config_diagnostic::ConfigDiagnostic, terminal_painter::CellSeparator};
+// i18n: migrated
+use crate::{config_diagnostic::ConfigDiagnostic, i18n::fl, terminal_painter::CellSeparator};
 use herdr_client::protocol::{FrameData, PaneSurfaceFrame};
 use std::sync::Arc;
 
@@ -9,19 +10,21 @@ use std::sync::Arc;
 mod tests;
 
 /// Names the fix without running it: installing fonts is the user's call.
-const TEXT: &str = if cfg!(target_os = "macos") {
-    "Prompt icons need a Nerd Font, and none is installed.\n\
-     Install one with Homebrew, then restart Herdr UI:"
-} else {
-    "Prompt icons need a Nerd Font, and none is installed.\n\
-     Install Symbols Nerd Font Mono from nerdfonts.com,\n\
-     then restart Herdr UI."
-};
+/// One line per message, so each reads as a whole line of the card.
+fn text() -> String {
+    let fix = if cfg!(target_os = "macos") {
+        fl!("config-diagnostic-icon-font-homebrew")
+    } else {
+        fl!("config-diagnostic-icon-font-download")
+    };
+    format!("{}\n{fix}", fl!("config-diagnostic-icon-font"))
+}
 
 /// The command that installs one, where a single command does. The card
-/// draws it apart from [`TEXT`] and copies it on a click: card text cannot be
+/// draws it apart from [`text`] and copies it on a click: card text cannot be
 /// selected, and a command retyped from a notice is a command mistyped.
 pub(crate) const COMMAND: Option<&str> = if cfg!(target_os = "macos") {
+    // i18n: data
     Some("brew install --cask font-symbols-only-nerd-font")
 } else {
     None
@@ -44,7 +47,7 @@ pub(crate) struct IconFontNotice {
 impl IconFontNotice {
     /// Follows the resolved config and the frame on screen. Frames are scanned
     /// only while the terminal has no icon font and no icon was seen yet.
-    /// Returns whether the card's visibility changed.
+    /// Returns whether the card appeared, went, or changed its language.
     pub(crate) fn observe(&mut self, missing: bool, surface: Option<&PaneSurfaceFrame>) -> bool {
         let before = self.visible().is_some();
         if missing
@@ -68,8 +71,18 @@ impl IconFontNotice {
                 self.shown_icon = shows_icon(&surface.frame);
             }
         }
-        self.card.sync((missing && self.shown_icon).then_some(TEXT));
-        before != self.visible().is_some()
+        // The text is written once, and again only after a language switch:
+        // this runs on every tick, dismissed or not.
+        let rewritten = if !(missing && self.shown_icon) {
+            self.card.sync_own(None);
+            false
+        } else if self.card.has_text() {
+            self.card.relocale(|| Some(text()))
+        } else {
+            self.card.sync_own(Some(&text()));
+            false
+        };
+        rewritten || before != self.visible().is_some()
     }
 
     pub(crate) fn visible(&self) -> Option<&Arc<[String]>> {

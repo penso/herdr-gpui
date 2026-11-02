@@ -34,7 +34,10 @@ pub(crate) use repo::RepoSpec;
 pub(crate) use rows::{LiveAgent, Tab as List, key_label};
 
 use super::{Notice, Provider, Request, Service, Snapshot, SyncState};
-use crate::search_input::{self, SearchInput};
+use crate::{
+    i18n::fl,
+    search_input::{self, SearchInput},
+};
 use gpui::{prelude::*, *};
 use repo::Repo;
 pub(crate) use rows::Tab;
@@ -117,13 +120,13 @@ impl DetailTab {
         }
     }
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> String {
         match self {
-            Self::Conversation => "Conversation",
-            Self::Checks => "Checks",
-            Self::Description => "Description",
-            Self::Agent => "Agent",
-            Self::Details => "Details",
+            Self::Conversation => fl!("orchestrator-tab-conversation"),
+            Self::Checks => fl!("orchestrator-tab-checks"),
+            Self::Description => fl!("orchestrator-tab-description"),
+            Self::Agent => fl!("orchestrator-tab-agent"),
+            Self::Details => fl!("orchestrator-tab-details"),
         }
     }
 }
@@ -210,7 +213,7 @@ impl OrchestratorView {
     pub(crate) fn new(look: Look, cx: &mut Context<Self>) -> Self {
         let search = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder("Filter: title, id, author, label, body\u{2026}", cx);
+            input.set_placeholder_with(|| fl!("orchestrator-filter-placeholder"), cx);
             input.set_frameless(cx);
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
@@ -222,13 +225,13 @@ impl OrchestratorView {
         });
         let message = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder("Send a message to the agent\u{2026}", cx);
+            input.set_placeholder_with(|| fl!("orchestrator-message-placeholder"), cx);
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
         });
         let comment = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder("Leave a comment\u{2026}", cx);
+            input.set_placeholder_with(|| fl!("orchestrator-comment-placeholder"), cx);
             input.set_appearance(look.ui.clone(), look.theme.clone(), cx);
             input
         });
@@ -369,7 +372,7 @@ impl OrchestratorView {
             .detail
             .as_ref()
             .and_then(|detail| self.item(&detail.key))
-            .and_then(|item| item.pull_request.as_ref())
+            .and_then(|item| item.github_pull_request())
             .map(|pr| pr.number);
         if let (Some(number), Some(service)) = (number, self.service()) {
             service.load_pull_request(number);
@@ -440,9 +443,10 @@ impl OrchestratorView {
     #[cfg(test)]
     pub(crate) fn notice_text(&self) -> Option<String> {
         let notice = self.notice.as_ref()?;
+        use crate::i18n::Localize;
         Some(match &notice.outcome {
-            Ok(text) => (*text).to_owned(),
-            Err(error) => error.to_string(),
+            Ok(done) => dispatch::done(*done),
+            Err(error) => error.localize(),
         })
     }
 
@@ -658,7 +662,7 @@ impl OrchestratorView {
         let Some(item) = self.item(&key) else {
             return;
         };
-        let pull_request = item.pull_request.is_some();
+        let pull_request = item.github_pull_request().is_some();
         self.detail = Some(Detail {
             key,
             tab: if pull_request {
@@ -805,7 +809,7 @@ impl OrchestratorView {
                 let index = event.keystroke.key.parse::<usize>().unwrap_or(1) - 1;
                 let pull_request = self
                     .item(&detail.key)
-                    .is_some_and(|item| item.pull_request.is_some());
+                    .is_some_and(|item| item.github_pull_request().is_some());
                 let tabs = DetailTab::tabs(pull_request);
                 let mut detail = detail.clone();
                 detail.tab = tabs[index.min(tabs.len() - 1)];
@@ -837,7 +841,7 @@ impl Render for OrchestratorView {
         div()
             .id("orchestrator")
             .role(Role::Group)
-            .aria_label("Orchestrator")
+            .aria_label(fl!("orchestrator-label"))
             .relative()
             .key_context("Orchestrator")
             .track_focus(&self.focus)

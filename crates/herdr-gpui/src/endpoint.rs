@@ -1,9 +1,11 @@
 //! GUI-owned endpoint catalog and connection lifetimes. Each attempt has its own
 //! inbox, so retired workers can never publish into a replacement connection.
+// i18n: migrated
 use super::{
     HerdrWindow, LiveState, NavigationTarget, WheelAccumulator, connection::ConnectionBridge,
     state::ConnectionStatus,
 };
+use crate::i18n::{Localize, fl};
 use gpui::Context;
 use herdr_client::{ClientHandle, ConnectOptions, ConnectTarget, SshFailure, VersionMismatch};
 use std::{
@@ -376,7 +378,7 @@ impl Endpoint {
                 self.live
                     .error
                     .clone()
-                    .unwrap_or_else(|| "connection lost".into()),
+                    .unwrap_or_else(|| fl!("endpoint-connection-lost")),
             );
             changed = Redraw::Window;
         }
@@ -471,7 +473,22 @@ impl Endpoint {
         false
     }
 
+    /// The endpoint's state as `herdr-gpui` commands report it, in English.
     pub fn status(&self) -> &'static str {
+        match self.state() {
+            "daemon-outdated" => "Herdr update needed", // i18n: data
+            "client-outdated" => "app update needed",   // i18n: data
+            state => state,
+        }
+    }
+
+    /// The endpoint's state as the device picker shows it.
+    pub fn status_label(&self) -> String {
+        fl!("endpoint-status", state = self.state())
+    }
+
+    /// Which of `endpoint-status`'s cases the endpoint is in.
+    fn state(&self) -> &'static str {
         if !self.enabled {
             "disabled"
         } else if self.suspended() {
@@ -481,8 +498,8 @@ impl Endpoint {
         } else if let Some(mismatch) = &self.version_mismatch {
             // A refused handshake is an outage too, but says what fixes it.
             match mismatch {
-                VersionMismatch::DaemonOutdated { .. } => "Herdr update needed",
-                VersionMismatch::ClientOutdated { .. } => "app update needed",
+                VersionMismatch::DaemonOutdated { .. } => "daemon-outdated",
+                VersionMismatch::ClientOutdated { .. } => "client-outdated",
             }
         } else if self.outage.is_some() {
             // Before `live`: a stopped handle can precede its disconnect state.
@@ -611,7 +628,10 @@ impl HerdrWindow {
         }
         self.catalog.choose(id);
         if let Some(error) = self.catalog.poll_write() {
-            self.local_error = Some(format!("Save host selection: {error}"));
+            self.local_error = Some(fl!(
+                "endpoint-save-selection-failed",
+                error = error.localize()
+            ));
             cx.notify();
         }
         true
@@ -654,7 +674,10 @@ impl HerdrWindow {
         self.reconnect(cx);
         // After the reconnect: resetting the connection clears the error slot.
         if let Some(error) = self.catalog.poll_write() {
-            self.local_error = Some(format!("Save host selection: {error}"));
+            self.local_error = Some(fl!(
+                "endpoint-save-selection-failed",
+                error = error.localize()
+            ));
         }
         cx.notify();
     }
@@ -703,7 +726,10 @@ impl HerdrWindow {
         }
         // After the reconnect: resetting the connection clears the error slot.
         if let Some(error) = self.catalog.poll_write() {
-            self.local_error = Some(format!("Save host selection: {error}"));
+            self.local_error = Some(fl!(
+                "endpoint-save-selection-failed",
+                error = error.localize()
+            ));
         }
         cx.notify();
     }
@@ -722,7 +748,7 @@ impl HerdrWindow {
                 .is_connected()
             && !self.endpoints[self.selected_endpoint].live.supports_surface
         {
-            self.local_error = Some("Current endpoint does not support surface switching".into());
+            self.local_error = Some(fl!("endpoint-surface-switching-unsupported"));
             cx.notify();
             return false;
         }

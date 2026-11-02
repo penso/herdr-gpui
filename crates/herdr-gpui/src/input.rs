@@ -231,13 +231,13 @@ impl EntityInputHandler for HerdrWindow {
 /// The terminal's platform input handler. A terminal repeats a held key, so
 /// it opts out of macOS press-and-hold, which would otherwise swallow the
 /// repeats and open the accent picker. Menu text fields keep the picker.
-pub(crate) struct TerminalInputHandler {
-    inner: ViewInputHandler<HerdrWindow>,
+pub(crate) struct TerminalInputHandler<V: EntityInputHandler = HerdrWindow> {
+    inner: ViewInputHandler<V>,
     press_and_hold: bool,
 }
 
-impl TerminalInputHandler {
-    pub(crate) fn new(bounds: Bounds<Pixels>, view: Entity<HerdrWindow>, menu_open: bool) -> Self {
+impl<V: EntityInputHandler> TerminalInputHandler<V> {
+    pub(crate) fn new(bounds: Bounds<Pixels>, view: Entity<V>, menu_open: bool) -> Self {
         Self {
             inner: ViewInputHandler::new(bounds, view),
             press_and_hold: menu_open,
@@ -245,7 +245,7 @@ impl TerminalInputHandler {
     }
 }
 
-impl InputHandler for TerminalInputHandler {
+impl<V: EntityInputHandler> InputHandler for TerminalInputHandler<V> {
     fn selected_text_range(
         &mut self,
         ignore_disabled_input: bool,

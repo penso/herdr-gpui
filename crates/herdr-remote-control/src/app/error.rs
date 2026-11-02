@@ -9,6 +9,8 @@ pub enum Error {
     CertificatePath { which: &'static str },
     #[error(transparent)]
     Control(#[from] crate::control::Error),
+    #[error(transparent)]
+    Enroll(#[from] super::enroll::Error),
     #[error("remote.device_idle_days must be between 0 (never) and 365")]
     IdleDays,
     #[error("Could not {operation} {}", path.display())]

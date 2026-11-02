@@ -26,6 +26,9 @@ Closing or detaching the GUI must leave the daemon and its terminals running.
 | `crates/herdr-acp` | `herdr-acp` binary run inside a Herdr pane: the only ACP client of an agent, its in-pane chat view, the attach socket Herdr UI connects to, and Herdr status reports |
 | `crates/herdr-chat-protocol` | Attach wire between `herdr-acp` and its clients: transcript model, the shared change reducer, framing, and endpoint discovery; no ACP or GPUI types |
 | `crates/herdr-client` | Discovery, socket worker, session transitions, ordered commands, and client-local activity projection |
+| `crates/herdr-backend` | The `Backend` and `Terminal` traits both Herdr generations implement: terminals listed, watched, attached, started, and ended, as `herdr-protocol` cells and semantic input; no GPUI or transport |
+| `crates/herdr-core-client` | herdr-core (`hc`, Herdr 2): endpoint discovery, the framed JSON-RPC connection worker, credit-flowed terminal and event streams, starting a core, and its `herdr-backend` implementation; no GPUI |
+| `crates/herdr-terminal` | The terminal emulator for herdr-core's raw byte streams (alacritty_terminal): bytes in, `herdr-protocol` cells and damage out, and semantic input encoded for the program's modes; no GPUI or I/O |
 | `crates/herdr-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
 | `crates/herdr-control-protocol` | The control socket between `herdr-gpui <command>` and the running app: request and response types, bounds, and the Unix socket or named pipe; no GPUI |
 | `crates/herdr-commands` | The command catalog: each command's name, default shortcuts per platform, and the daemon request it becomes against a snapshot; no GPUI (the app binds the keys and runs window commands) |
@@ -36,10 +39,14 @@ Closing or detaching the GUI must leave the daemon and its terminals running.
 | `crates/herdr-orchestrator` | The orchestrator's backend: issue and pull request records, the per-repository SQLite database, the GitHub, GitLab, and Beads readers, agent dispatch, and the worker; also the app's cache database and private-file setup; no GPUI (the app draws the sections and pages) |
 | `crates/herdr-remote` | Machines beyond this computer's daemon: the cloud providers (one feature each), their config tables and saved devices, running scripts on any host, and Teleport's core; no GPUI (the app runs its jobs and draws its views) |
 | `crates/herdr-remote-control` | Remote control from a phone. With the `server` feature, the `herdr-remote-control` daemon: HTTPS with its own CA, dual-approval pairing, Web Push, and chats and terminal tabs through Herdr's API socket. Without it, what Herdr UI uses: the daemon's control protocol, the `[remote]` config table, the user service install, and the pairing state; no GPUI, and no Tokio without `server` |
+| `crates/herdr-nearby` | `herdr-nearby` on Linux and Windows: Herdr UI's Bluetooth helper for nearby pairing and presence, BlueZ over `zbus` or WinRT's GATT server, speaking the macOS Swift helper's stdio protocol (`macos/herdr-nearby`); no GPUI or Tokio |
 | `crates/herdr-updater` | The in-app update service: release checks, signed manifests, staging, the install helpers, and the release identity (`APP_ID`, `APP_VERSION`); no GPUI |
 | `crates/herdr-diagnostics` | The app's log file and crash reports: the bounded capture of the crates the app names, the writer thread and rotation, the reader the log window tails, the panic hook, and Windows minidumps; no GPUI |
+| `crates/herdr-i18n` | The languages the app shows (`docs/i18n.md`): `Locale`, `Direction`, the `language` setting and its negotiation with an `en-US` fallback, the Fluent catalog, and the `en-XA`/`en-XB` pseudo-locales; no GPUI (the app embeds `crates/herdr-gpui/locales`, keeps the current locale, and checks `fl!`) |
 | `crates/herdr-gpui-launcher` | Windows-only windowed launcher that starts `herdr-gpui.exe` without a console window; std plus `MessageBoxW` for start failures |
 | `crates/herdr-automation` | Automation scripts (`docs/automations.md`): the sandboxed Luau state, the step catalog, schedules, caps, and the plan a person approves; no GPUI or runtime |
+| `crates/herdr-luau` | The sandboxed Luau state automations and mods share: safe libraries, memory and interrupt budgets, sealed globals, and the `Policy` each user removes beyond them; no GPUI |
+| `crates/herdr-mods` | Mods (`docs/mods-plan.md`): the `mod.toml` manifest, a mod's sources and the hash approval pins, the element tree a view returns, the state mods read, effects, and the sandboxed runtime; no GPUI (the app runs mods on worker threads and draws their trees) |
 | `crates/herdr-automate` | The automation daemon and its command line: schedules approved scripts per host, runs their steps through the `herdr` CLI, keeps state in SQLite, and answers `--json` reports for Herdr UI |
 | `crates/embed-resource` | No-op stand-in for GPUI's `embed-resource` build dependency, patched in so GPUI embeds no Windows manifest beside `crates/herdr-gpui/windows.manifest`; not a production crate |
 | `crates/test-support/sandbox.rs` | Shared isolated process setup for opt-in integration tests; not a production crate |
@@ -182,7 +189,7 @@ agents in Herdr panes can use what only this client shows or keeps
 - Cancellation must not flush queued work, replay commands, or join a worker on the UI thread. Do not add automatic reconnect/replay as an incidental refactor.
 - Crossbeam receiver clones compete for events; they are not broadcast subscribers.
 - Treat terminal content and daemon messages as untrusted data. Do not execute terminal escapes, follow graphics file paths, or run displayed update commands automatically. The one exception is the daemon's OSC 52 `ServerMessage::Clipboard`: decode it and put only its bounded UTF-8 text on the pasteboard, never arbitrary bytes, files, or images.
-- The normal app never installs, starts, stops, or upgrades a personal daemon. Explicit sockets refer to the binary client socket, not the JSON API socket.
+- The normal app never installs, stops, migrates, or upgrades a personal daemon. It starts one only to connect: `herdr server` when Herdr 1 is installed, and herdr-core for Herdr 2 terminals (or when no Herdr 1 is installed), the user's own or else the pinned one every release bundles beside the app as a companion like `herdr-acp` (`scripts/release/herdr-core.json`, licenses in `herdr-core-licenses.txt`), never when a core already answers. Herdr 1 sessions stay where they are: moving users to Herdr 2 is their choice, never an automatic switch. Explicit sockets refer to the binary client socket, not the JSON API socket.
 - Never commit secrets, credentials, private terminal output, or machine-local configuration.
 
 ## Dependencies And Features
@@ -266,6 +273,7 @@ just ci
 
 ```sh
 just test-live /absolute/path/to/herdr
+just test-core /absolute/path/to/herdr-core
 just test-gui /absolute/path/to/herdr
 just test-sidebar
 just test-perf
@@ -273,7 +281,7 @@ just test-perf
 
 - Live tests require an explicitly selected `HERDR_TEST_BINARY`; never fall back to discovering a user's daemon.
 - Reuse the shared sandbox: private unique short directory, cleared environment, isolated HOME/XDG/config/socket paths, and explicit desktop-variable allowlist for GUI children only.
-- Kill and wait only for exact children created by the test, before removing their sandbox. Never use `server stop`, process-name matching, or process-group kills.
+- Kill and wait only for exact children created by the test, before removing their sandbox. Never use `server stop`, process-name matching, or process-group kills. The one exception is herdr-core: its terminals live in holder processes the core starts, so `just test-core` ends them with `herdr-core server stop` against the sandbox's private `HC_SOCKET`, then reaps its own `serve` child.
 - `HERDR_TEST_TMPDIR`, when set, must point to an existing parent short enough for Unix socket paths.
 - Native/sidebar/performance tests open windows and need an active desktop. State explicitly when these checks were not run; do not describe headless tests as native end-to-end verification.
 

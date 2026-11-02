@@ -93,18 +93,16 @@ fn prepare(
     };
     if !installed {
         if !approved {
-            return Err(cloud::Error::Install(format!(
-                "Herdr is not installed in {sprite}; allow installing it and try again"
-            ))
+            return Err(cloud::Error::Install(install::Failure::NotInstalled {
+                machine: Some(sprite.to_string()),
+                retry: install::Retry::Allow,
+            })
             .into());
         }
         report(cloud::Step::InstallingHerdr);
         install::install(relay_command(settings, sprite)?, &cancelled)?;
         if !install::installed(relay_command(settings, sprite)?, &cancelled)? {
-            return Err(cloud::Error::Install(
-                "the installer finished but Herdr is not on the expected paths".into(),
-            )
-            .into());
+            return Err(cloud::Error::Install(install::Failure::Missing).into());
         }
     }
     report(cloud::Step::Starting);

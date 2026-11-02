@@ -2,6 +2,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,7 +32,8 @@ import pathlib, sys
 defines = dict(arg[2:].split("=", 1) for arg in sys.argv[1:] if arg.startswith("/D"))
 source = pathlib.Path(defines["SourceDir"])
 assert all((source / name).is_file() for name in ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe",
-                                              "herdr-remote-control.exe", "herdr-automate.exe"))
+                                              "herdr-remote-control.exe", "herdr-automate.exe",
+                                              "herdr-nearby.exe", "herdr-core.exe"))
 assert sys.argv[-1].endswith("herdr-gpui.iss")
 name = f"Herdr-{defines['Version']}-{defines['Target']}-setup.exe"
 (pathlib.Path(defines["OutputDir"]) / name).write_bytes(b"setup " + defines["Architecture"].encode())
@@ -66,7 +68,8 @@ class InstallerTests(unittest.TestCase):
         root = f"Herdr-{VERSION}-{TARGET}/"
         archive = self.release_zip([root + "herdr-gpui.exe", root + "herdr-gpui-launcher.exe",
                                     root + "herdr-acp.exe", root + "herdr-remote-control.exe",
-                                    root + "herdr-automate.exe", root + "licenses/LICENSE"])
+                                    root + "herdr-automate.exe", root + "herdr-nearby.exe",
+                                    root + "herdr-core.exe", root + "licenses/LICENSE"])
         output = Path(self.build(archive).stdout.strip())
         self.assertEqual(output, self.work.resolve() / f"Herdr-{VERSION}-{TARGET}-setup.exe")
         self.assertEqual(output.read_bytes(), b"setup x64compatible")
@@ -76,12 +79,15 @@ class InstallerTests(unittest.TestCase):
     def test_rejects_a_zip_without_the_layout(self):
         root = f"Herdr-{VERSION}-{TARGET}/"
         executables = [root + name for name in ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe",
-                                                "herdr-remote-control.exe", "herdr-automate.exe")]
+                                                "herdr-remote-control.exe", "herdr-automate.exe",
+                                                "herdr-nearby.exe", "herdr-core.exe")]
         cases = {
             "no launcher": [e for e in executables if not e.endswith("launcher.exe")],
             "no herdr-acp": [e for e in executables if not e.endswith("herdr-acp.exe")],
             "no herdr-remote-control": [e for e in executables if not e.endswith("herdr-remote-control.exe")],
             "no herdr-automate": [e for e in executables if not e.endswith("herdr-automate.exe")],
+            "no herdr-nearby": [e for e in executables if not e.endswith("herdr-nearby.exe")],
+            "no herdr-core": [e for e in executables if not e.endswith("herdr-core.exe")],
             "outside the root": [*executables, "other/x"],
             "escaping the root": [*executables, root + "../x"],
         }
@@ -113,6 +119,22 @@ class InstallerTests(unittest.TestCase):
             with self.subTest(entry=entry), mock.patch.object(INSTALLER, "uninstall_entry", return_value=entry), \
                     self.assertRaises(ValueError):
                 INSTALLER.check_uninstall_entry(app)
+
+    def test_every_language_defines_the_installers_messages(self):
+        script = INSTALLER.SCRIPT.read_text()
+        used = set(re.findall(r"\{cm:(\w+)", script)) | set(re.findall(r"CustomMessage\('(\w+)'\)", script))
+        # Inno Setup's own messages, which compiler:Default.isl and its translations define.
+        used -= {"AdditionalIcons", "CreateDesktopIcon", "LaunchProgram"}
+        self.assertIn("AddToPath", used)
+        listed = re.findall(r'^Name: "\w+"; MessagesFile: "compiler:[^,"]+,(installer\\[^"]+\.isl)"$',
+                            script, re.MULTILINE)
+        files = sorted(INSTALLER.SCRIPT.parent.glob("installer/*.isl"))
+        self.assertEqual(sorted(name.replace("\\", "/") for name in listed),
+                         [f"installer/{path.name}" for path in files])
+        for path in files:
+            with self.subTest(path.name):
+                defined = set(re.findall(r"^(\w+)=", path.read_text(), re.MULTILINE))
+                self.assertEqual(defined, used)
 
     def test_the_inno_setup_pin_is_one_exact_release(self):
         self.assertRegex(INSTALLER.INNO_SHA256, r"^[0-9a-f]{64}$")

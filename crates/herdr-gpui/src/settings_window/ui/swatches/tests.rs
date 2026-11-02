@@ -32,7 +32,7 @@ impl Render for Harness {
             0,
             self.current,
             &Config::default().terminal,
-            "",
+            SharedString::default(),
             None,
             move |change, _, _| seen.borrow_mut().push(change),
             |_, _| {},

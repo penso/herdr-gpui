@@ -1,0 +1,33 @@
+[package]
+description            = "Herdr UI's Bluetooth helper on Linux and Windows: nearby pairing and presence for Herdr Remote"
+edition.workspace      = true
+license.workspace      = true
+name                   = "herdr-nearby"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64     = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+
+# BlueZ over D-Bus, on zbus's own executor: no Tokio.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { default-features = false, features = ["async-io", "blocking-api"], workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { features = [
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_GenericAttributeProfile",
+    "Devices_Radios",
+    "Foundation",
+    "Foundation_Collections",
+    "Storage_Streams",
+    "Win32_System_SystemInformation",
+    "Win32_UI_Input_KeyboardAndMouse",
+], workspace = true }

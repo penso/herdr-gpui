@@ -1,17 +1,17 @@
 //! Optional behaviors under `[features]`. Each flag is declared once below,
-//! which generates its config field, its `Feature` variant, and the label and
-//! description Settings > General lists it with.
+//! which generates its config field, its `Feature` variant, and the messages
+//! (`features.ftl`) Settings > General lists it with.
 use serde::Deserialize;
 
 macro_rules! features {
-    ($($field:ident: $variant:ident, $label:literal, $description:literal;)+) => {
+    ($($field:ident: $variant:ident, $message:literal, $description:literal;)+) => {
         /// Optional behaviors the config file turns on. Every flag is off by
         /// default, so a missing or empty `[features]` table is the shipped
         /// experience.
         #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
         #[serde(default)]
         pub struct Features {
-            $(#[doc = $description] pub $field: bool,)+
+            $(#[doc = concat!("Described by the `", $description, "` message.")] pub $field: bool,)+
         }
 
         /// One `[features]` flag, for code that lists or edits them all.
@@ -39,13 +39,15 @@ macro_rules! features {
                 }
             }
 
-            pub const fn label(self) -> &'static str {
+            /// The message naming the flag.
+            pub const fn message(self) -> &'static str {
                 match self {
-                    $(Self::$variant => $label,)+
+                    $(Self::$variant => $message,)+
                 }
             }
 
-            pub const fn description(self) -> &'static str {
+            /// The message describing the flag.
+            pub const fn description_message(self) -> &'static str {
                 match self {
                     $(Self::$variant => $description,)+
                 }
@@ -66,11 +68,11 @@ macro_rules! features {
 // from parallel branches land on different lines.
 features! {
     // keep-sorted start
-    acp_chats: AcpChats, "ACP chats",
-        "Show herdr-acp chats as native chat views and offer new chats with the agents installed on the host. Off, chat panes keep their terminal and nothing looks for herdr-acp or agents.";
-    qa_menu: QaMenu, "QA menu",
-        "Add a QA menu for checking the app by hand: sample toasts and dialogs, update progress, sounds, a test notification, the badge, and slowed animations.";
-    sidebar_hover_menu: SidebarHoverMenu, "Open space menus on hover",
-        "Open a space's menu when the pointer rests on its sidebar row, without a right click. Moving the pointer anywhere but into that menu closes it again.";
+    acp_chats: AcpChats, "features-acp-chats",
+        "features-acp-chats-description";
+    qa_menu: QaMenu, "features-qa-menu",
+        "features-qa-menu-description";
+    sidebar_hover_menu: SidebarHoverMenu, "features-sidebar-hover-menu",
+        "features-sidebar-hover-menu-description";
     // keep-sorted end
 }

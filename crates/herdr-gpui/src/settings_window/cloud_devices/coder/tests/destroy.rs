@@ -175,7 +175,7 @@ fn a_failed_destroy_keeps_the_device_and_says_why(cx: &mut TestAppContext) {
     view.read_with(cx, |view, _| {
         let card = view.coder_card.as_ref().unwrap();
         assert!(
-            matches!(&card.outcome, Some(Outcome::Failed(text)) if text.starts_with("Could not destroy Box 1"))
+            matches!(&card.outcome, Some(Outcome::Failed(text)) if text.starts_with("Could not destroy \u{2068}Box 1\u{2069}"))
         );
         assert!(card.can_destroy(), "Destroy can run again");
     });

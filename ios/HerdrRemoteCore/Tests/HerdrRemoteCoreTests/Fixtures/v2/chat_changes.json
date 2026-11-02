@@ -1,0 +1,39 @@
+{
+  "type": "chat_changes",
+  "pane": "p1",
+  "changes": [
+    {
+      "cursor": {
+        "epoch": "01234567-89ab-cdef-0123-456789abcdef",
+        "seq": 42
+      },
+      "change": {
+        "change": "append",
+        "id": 2,
+        "text": " Tests cover nested splits."
+      }
+    },
+    {
+      "cursor": {
+        "epoch": "01234567-89ab-cdef-0123-456789abcdef",
+        "seq": 43
+      },
+      "change": {
+        "change": "permission_resolved",
+        "id": 3
+      }
+    },
+    {
+      "cursor": {
+        "epoch": "01234567-89ab-cdef-0123-456789abcdef",
+        "seq": 44
+      },
+      "change": {
+        "change": "status",
+        "status": {
+          "state": "idle"
+        }
+      }
+    }
+  ]
+}

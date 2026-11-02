@@ -33,6 +33,7 @@ fn document_prompt_body_keeps_normal_text_below_its_speaker_label(cx: &mut TestA
                     next: Some(Side::Agent),
                     agent: "Codex",
                     live: false,
+                    current: true,
                     content,
                 },
                 &view.chat_look(),

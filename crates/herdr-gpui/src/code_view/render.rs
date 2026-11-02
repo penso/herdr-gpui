@@ -1,11 +1,11 @@
 //! A code tab paints the read file and its outline; reading lives elsewhere.
 
-use super::{CodeView, State, Text};
-use crate::fonts::StyledFont;
+use super::{CodeView, State, Text, kind_label};
 use crate::{
     HerdrWindow,
     browser::{Slot, Tab, TabId},
 };
+use crate::{fonts::StyledFont, i18n::fl};
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
 
@@ -97,7 +97,7 @@ impl HerdrWindow {
                     .px(px(10.))
                     .py(px(6.))
                     .text_color(rgb(theme.muted))
-                    .child(format!("Outline \u{00b7} {}", text.outline.len())),
+                    .child(fl!("code-view-outline-count", count = text.outline.len())),
             )
             .child(
                 uniform_list(
@@ -133,7 +133,7 @@ impl HerdrWindow {
                                             div()
                                                 .flex_none()
                                                 .text_color(rgb(this.theme.muted))
-                                                .child(entry.kind.label()),
+                                                .child(kind_label(entry.kind)),
                                         )
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             if let Some(view) = this.code_views.get_mut(&id) {
@@ -158,7 +158,7 @@ impl HerdrWindow {
             .as_ref()
             .map(crate::browser::Location::display)
             .unwrap_or_default();
-        let button = |label: &'static str, selector: &'static str| {
+        let button = |label: String, selector: &'static str| {
             div()
                 .id(selector)
                 .debug_selector(move || selector.into())
@@ -190,9 +190,9 @@ impl HerdrWindow {
             .child(
                 button(
                     if view.outline {
-                        "Hide Outline"
+                        fl!("code-view-hide-outline")
                     } else {
-                        "Outline"
+                        fl!("code-view-outline")
                     },
                     "code-outline-toggle",
                 )
@@ -204,7 +204,7 @@ impl HerdrWindow {
                 })),
             )
             .child(
-                button("Open in Editor", "code-open-editor").on_click(
+                button(fl!("code-view-open-in-editor"), "code-open-editor").on_click(
                     cx.listener(move |this, _, _, cx| this.open_code_view_in_editor(id, cx)),
                 ),
             )
@@ -219,7 +219,7 @@ impl HerdrWindow {
             State::Loading => div()
                 .p_3()
                 .text_color(rgb(theme.muted))
-                .child("Reading file\u{2026}")
+                .child(fl!("code-view-reading"))
                 .into_any_element(),
             State::Failed(error) => div()
                 .debug_selector(|| "code-error".into())

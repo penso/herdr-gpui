@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-gpui", "crates/herdr-github", "crates/herdr-gpui-launcher", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-github", "crates/herdr-gpui", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-nearby", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-terminal", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -21,6 +21,9 @@ expect_used = "deny"
 unwrap_used = "deny"
 
 [workspace.dependencies]
+# The terminal emulator behind herdr-core terminals, which arrive as raw bytes;
+# Zed's fork, the revision Arbor runs.
+alacritty_terminal   = "0.25.1"
 url = "2"
 # ACP wire types for herdr-acp; its own transport, so no async runtime.
 acp                  = { default-features = false, package = "agent-client-protocol-schema", version = "1.12" }
@@ -30,7 +33,7 @@ ammonia              = "4.2.1"
 cbc                  = { features = ["block-padding"], version = "0.2.1" }
 percent-encoding     = "2"
 pbkdf2               = { default-features = false, features = ["hmac"], version = "0.13.0" }
-pulldown-cmark       = { default-features = false, features = ["html"], version = "0.13.4" }
+pulldown-cmark       = { default-features = false, features = ["html"], version = "0.13.5" }
 # The remote control pairing QR, drawn as quads; no image or SVG renderer.
 qrcode               = { default-features = false, version = "0.14.1" }
 # Native chat math: the engine exposes baseline metrics and bounds before rasterization.
@@ -51,12 +54,25 @@ ed25519-dalek        = { default-features = false, features = ["std"], version =
 flate2               = "1"
 # Use the same strict macOS family lookup as GPUI, including legacy aliases.
 font-kit             = { package = "zed-font-kit", version = "=0.14.1-zed" }
+# Fluent messages (docs/i18n.md): `herdr-i18n` loads them through
+# i18n-embed's loader and negotiates the locale; `herdr-gpui`'s build script
+# parses them to check `fl!` calls. i18n-embed 0.16 does not build without
+# its default `rust-embed` feature, though the app embeds files itself.
+fluent               = "0.17"
+fluent-langneg       = "0.14"
+fluent-syntax        = "0.12"
+i18n-embed           = { features = ["fluent-system"], version = "0.16" }
+# The user's preferred languages, as the OS lists them.
+sys-locale           = "0.3"
+unic-langid          = { features = ["macros"], version = "0.9" }
 # Time zone names in automation schedules; the version the lockfile already has.
 jiff                 = "0.2.38"
 # Locates installed font files on Linux, as GPUI's own text system does.
 fontdb               = "0.24"
 foreign-types        = "0.5"
 futures-lite         = "2"
+# Sends frames on herdr-remote-control's WebSocket test client; axum already links it.
+futures-util         = { default-features = false, features = ["sink"], version = "0.3" }
 getrandom            = "0.4.3"
 gpui                 = { package = "gpui-pre", version = "=0.3.6" }
 gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
@@ -67,17 +83,23 @@ gix                  = { default-features = false, features = ["sha1"], version 
 wry                  = { package = "lb-wry", version = "=0.53.3" }
 # Reports only by default; the daemon turns on the Luau engine.
 herdr-automation     = { default-features = false, path = "crates/herdr-automation" }
+herdr-backend        = { path = "crates/herdr-backend" }
 herdr-chat-protocol  = { path = "crates/herdr-chat-protocol" }
 herdr-client         = { path = "crates/herdr-client" }
 herdr-commands       = { path = "crates/herdr-commands" }
 herdr-control-protocol = { path = "crates/herdr-control-protocol" }
+herdr-core-client    = { path = "crates/herdr-core-client" }
 herdr-credentials    = { path = "crates/herdr-credentials" }
 herdr-diagnostics    = { path = "crates/herdr-diagnostics" }
 herdr-github         = { path = "crates/herdr-github" }
+herdr-i18n           = { path = "crates/herdr-i18n" }
+herdr-luau           = { path = "crates/herdr-luau" }
+herdr-mods           = { path = "crates/herdr-mods" }
 herdr-orchestrator   = { path = "crates/herdr-orchestrator" }
 herdr-protocol       = { path = "crates/herdr-protocol" }
 herdr-remote         = { default-features = false, path = "crates/herdr-remote" }
 herdr-remote-control         = { default-features = false, path = "crates/herdr-remote-control" }
+herdr-terminal       = { path = "crates/herdr-terminal" }
 herdr-updater        = { path = "crates/herdr-updater" }
 herdr-usage          = { path = "crates/herdr-usage" }
 herdr-vcs            = { path = "crates/herdr-vcs" }
@@ -147,7 +169,7 @@ hkdf                 = "0.13"
 p256                 = { default-features = false, features = ["ecdh", "ecdsa", "pem", "std"], version = "0.14" }
 sha2                 = "0.11.0"
 # Reads embedded bitmap strikes to spot fonts GPUI's Linux rasterizer panics on.
-skrifa               = { default-features = false, features = ["std"], version = "0.48" }
+skrifa               = { default-features = false, features = ["std"], version = "0.49" }
 # Tests hold a port with a socket that is bound but never listens; mdns-sd
 # already locks this version.
 socket2              = "0.6.5"
@@ -164,9 +186,12 @@ thiserror            = "2"
 tokio                = { features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"], version = "1" }
 # Server-rendered HTML for the remote control web app, escaped by default.
 maud                 = "0.27"
-axum                 = { default-features = false, features = ["http1", "json", "matched-path", "query", "tokio"], version = "0.8" }
+axum                 = { default-features = false, features = ["http1", "json", "matched-path", "query", "tokio", "ws"], version = "0.8" }
 # Drives herdr-remote-control's router in tests without a socket; axum already links it.
 tower                = { default-features = false, features = ["util"], version = "0.5" }
+# A WebSocket client for herdr-remote-control's live socket tests; axum's
+# `ws` feature already links this version.
+tokio-tungstenite    = { default-features = false, features = ["handshake"], version = "0.29" }
 tokio-rustls         = { default-features = false, features = ["ring", "tls12"], version = "0.26" }
 # herdr-remote-control's APNs sender for iOS Live Activities: APNs speaks only
 # HTTP/2, which ureq lacks. hyper's own HTTP/2 client (plus h2) over the
@@ -186,6 +211,7 @@ tracing              = "0.1"
 tungstenite          = { default-features = false, features = ["handshake"], version = "0.30" }
 tracing-subscriber   = { default-features = false, features = ["registry", "std"], version = "0.3" }
 unicode-normalization = "0.1.26"
+unicode-bidi         = "0.3.18"
 unicode-properties   = { version = "0.1.4", default-features = false, features = ["emoji"] }
 unicode-segmentation = "1"
 unicode-width        = "0.2.2"
@@ -202,6 +228,7 @@ windows-sys          = { features = ["Win32_Foundation", "Win32_System_Pipes"], 
 # Embeds the Windows executable's icon and version information; a build
 # dependency, so it runs on the host.
 winresource          = "0.1.34"
+zbus                 = { default-features = false, version = "5.19" }
 zeroize              = "=1.9.1"
 
 # Line tables keep file:line in backtraces and crash reports while cutting most

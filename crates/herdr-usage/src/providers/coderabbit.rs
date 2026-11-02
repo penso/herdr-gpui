@@ -6,6 +6,8 @@
 //! CLI owns its credentials; nothing else is read. Self-hosted logins are not
 //! supported by the upstream command.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -29,8 +31,7 @@ static META: Meta = Meta::new("coderabbit", "CodeRabbit")
     .settings(&[Setting::new(
         "cli_path",
         &["CODERABBIT_CLI_PATH"],
-        "The path of the coderabbit executable on the probed host, when it is not on the \
-         usual PATH (~/.local/bin, Homebrew). Sign in once with `coderabbit auth login`.",
+        "usage-coderabbit-setting-cli-path",
     )]);
 
 impl Service for Coderabbit {
@@ -76,32 +77,42 @@ pub(crate) fn parse(text: &str) -> Option<Report> {
         return None;
     }
     let mut facts = Vec::new();
+    // The values are the CLI's own, such as `inactive` for billing.
     let named = [
-        ("Organization", fields.get("organization")),
-        ("User", fields.get("user")),
-        ("Usage billing", billing.as_ref()),
-        ("Period resets", resets.as_ref()),
+        (
+            Text::message("usage-coderabbit-organization"),
+            fields.get("organization"),
+        ),
+        (Text::message("usage-coderabbit-user"), fields.get("user")),
+        (
+            Text::message("usage-coderabbit-usage-billing"),
+            billing.as_ref(),
+        ),
+        (
+            Text::message("usage-coderabbit-period-resets"),
+            resets.as_ref(),
+        ),
     ];
     for (label, value) in named {
         if let Some(value) = value {
-            facts.push((label.to_owned(), value.clone()));
+            facts.push((label, Text::service(value)));
         }
     }
     let account = Account {
         email: None,
-        plan: fields.get("plan").cloned(),
+        plan: fields.get("plan").map(Text::service),
     };
     Some(
         Report::new(Provider(&Coderabbit), account, Vec::new())
             .with_balances(reviews.map(|reviews| {
                 Balance::new(
-                    "Your reviews this period",
+                    Text::message("usage-coderabbit-your-reviews"),
                     reviews as f64,
-                    Unit::Count("reviews".into()),
+                    Unit::Count(Count::Reviews),
                 )
             }))
             .with_sections((!facts.is_empty()).then(|| Section::Facts {
-                title: "Billing period".into(),
+                title: Text::message("usage-coderabbit-billing-period"),
                 facts,
             })),
     )
@@ -157,17 +168,29 @@ mod tests {
         let report = parse(USAGE).unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(report.balances[0].amount, 25.);
-        assert_eq!(report.balances[0].unit, Unit::Count("reviews".into()));
+        assert_eq!(report.balances[0].unit, Unit::Count(Count::Reviews));
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
         assert_eq!(
             facts,
             &[
-                ("Organization".to_owned(), "Example Org".to_owned()),
-                ("User".to_owned(), "example-user".to_owned()),
-                ("Usage billing".to_owned(), "inactive".to_owned()),
-                ("Period resets".to_owned(), "2026-09-30".to_owned()),
+                (
+                    Text::message("usage-coderabbit-organization"),
+                    Text::service("Example Org")
+                ),
+                (
+                    Text::message("usage-coderabbit-user"),
+                    Text::service("example-user")
+                ),
+                (
+                    Text::message("usage-coderabbit-usage-billing"),
+                    Text::service("inactive")
+                ),
+                (
+                    Text::message("usage-coderabbit-period-resets"),
+                    Text::service("2026-09-30")
+                ),
             ]
         );
     }

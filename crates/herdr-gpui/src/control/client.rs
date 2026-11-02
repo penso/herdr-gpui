@@ -8,6 +8,7 @@ mod events;
 mod help;
 mod hosts;
 mod local;
+mod mods;
 mod open;
 mod remote;
 mod settings;
@@ -461,6 +462,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         ControlCommand::Security(command) => hosts::security(command, &context),
         ControlCommand::Automation(command) => hosts::automation(command, &context),
         ControlCommand::Remote(command) => remote::remote(command, &context),
+        ControlCommand::Mod(command) => mods::run(command, &context),
         ControlCommand::Search {
             files,
             query,
@@ -468,6 +470,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         } => local::search(files, &query, limit),
         ControlCommand::Config(command) => settings::config(command, &context),
         ControlCommand::Theme(command) => settings::theme(command, &context),
+        ControlCommand::Language(command) => settings::language(command, &context),
         ControlCommand::Font(command) => settings::font(command, &context),
         ControlCommand::Keybinds(command) => settings::keybinds(command, &context),
         ControlCommand::Caffeine(command) => settings::caffeine(command, &context),

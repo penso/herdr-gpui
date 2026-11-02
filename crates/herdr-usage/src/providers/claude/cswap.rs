@@ -4,6 +4,7 @@
 //! risks a stored refresh token nor adds calls to the usage endpoint.
 //! Without cswap on the probed host there are no further accounts.
 
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -160,7 +161,11 @@ impl Usage {
             self.scoped
                 .into_iter()
                 .filter(|scoped| !scoped.name.trim().is_empty())
-                .map(|scoped| scoped.reading.window(Kind::Named(scoped.name), WEEK)),
+                .map(|scoped| {
+                    scoped
+                        .reading
+                        .window(Kind::Named(Text::service(scoped.name)), WEEK)
+                }),
         )
         .collect();
         windows.sort_by(|a, b| a.kind.cmp(&b.kind));

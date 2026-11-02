@@ -65,7 +65,9 @@ fn a_homebrew_upgrade_in_progress_offers_nothing_to_interrupt(cx: &mut gpui::Tes
     // Homebrew output is arbitrary length; a long line must not burst the panel.
     let states = [
         State::Upgrading {
-            detail: "==> Downloading ".to_owned() + &"herdr".repeat(24),
+            detail: crate::updater::Progress::Homebrew(
+                "==> Downloading ".to_owned() + &"herdr".repeat(24),
+            ),
         },
         State::Restarting,
     ];

@@ -3,6 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key><string>Herdr</string>
+    <key>CFBundleDevelopmentRegion</key><string>en-US</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en-US</string>
+    </array>
     <key>CFBundleDisplayName</key><string>Herdr</string>
     <key>CFBundleIdentifier</key><string>so.pen.herdr-gpui</string>
     <key>CFBundleExecutable</key><string>Herdr</string>
@@ -16,7 +21,7 @@
     <key>NSAppDataUsageDescription</key><string>Programs running in Herdr terminals are allowed to request access to data from other apps.</string>
     <key>NSAppleEventsUsageDescription</key><string>Programs running in Herdr terminals are allowed to request permission to control other apps.</string>
     <key>NSAppleMusicUsageDescription</key><string>Programs running in Herdr terminals are allowed to request access to your music and media library.</string>
-    <key>NSBluetoothAlwaysUsageDescription</key><string>Programs running in Herdr terminals are allowed to request access to Bluetooth.</string>
+    <key>NSBluetoothAlwaysUsageDescription</key><string>Herdr pairs your iPhone nearby over Bluetooth while Remote control's pairing dialog is open, and programs running in Herdr terminals may also request access to Bluetooth.</string>
     <key>NSCalendarsFullAccessUsageDescription</key><string>Programs running in Herdr terminals are allowed to request access to view and edit your calendars.</string>
     <key>NSCalendarsUsageDescription</key><string>Programs running in Herdr terminals are allowed to request access to view and edit your calendars.</string>
     <key>NSCalendarsWriteOnlyAccessUsageDescription</key><string>Programs running in Herdr terminals are allowed to request permission to add events to your calendars.</string>

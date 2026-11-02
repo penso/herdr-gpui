@@ -106,7 +106,8 @@ fn times_read_as_how_long_ago() {
     let now = chrono::DateTime::parse_from_rfc3339("2026-09-20T14:00:00Z")
         .unwrap()
         .with_timezone(&chrono::Utc);
-    assert_eq!(ago("2026-09-20T12:00:00Z", now), "2h ago");
-    assert_eq!(ago("2026-09-20T13:59:30Z", now), "now");
+    let plain = |text: String| text.replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(plain(ago("2026-09-20T12:00:00Z", now)), "2 h ago");
+    assert_eq!(ago("2026-09-20T13:59:30Z", now), "just now");
     assert_eq!(ago("yesterday", now), "");
 }

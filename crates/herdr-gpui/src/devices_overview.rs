@@ -7,6 +7,7 @@
 //! Everything it shows is already in the window: the endpoints' snapshots,
 //! the system load samples, and the activity history the tick keeps. Drawing
 //! reads that prepared state only.
+// i18n: migrated
 
 mod chart;
 pub(crate) mod history;
@@ -21,6 +22,7 @@ pub(crate) use chart::sparkline;
 pub(crate) use model::{Device, Link, Tally, online_tally};
 pub(crate) use view::Look;
 
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::{Location, Store, TabId},
@@ -63,7 +65,7 @@ impl HerdrWindow {
     /// brings back the one already open there.
     pub(crate) fn open_devices_overview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((scope, workspace)) = self.browser_key() else {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            self.show_flash(Flash::warning(fl!("devices-overview-no-workspace")), cx);
             return;
         };
         let existing = cx.try_global::<Store>().and_then(|store| {
@@ -78,7 +80,7 @@ impl HerdrWindow {
             })
         });
         let Some(id) = opened else {
-            self.show_flash(Flash::warning("Too many tabs are open"), cx);
+            self.show_flash(Flash::warning(fl!("devices-overview-too-many-tabs")), cx);
             return;
         };
         self.dismiss_menu(window, cx);
@@ -93,13 +95,14 @@ impl HerdrWindow {
     fn device_search(
         &self,
         font: crate::config::FontConfig,
-        placeholder: &str,
+        // Formatted again when the language changes.
+        placeholder: impl Fn() -> String + 'static,
         cx: &mut Context<Self>,
     ) -> (Entity<SearchInput>, Subscription) {
         let theme = self.theme.clone();
         let search = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder(placeholder, cx);
+            input.set_placeholder_with(placeholder, cx);
             input.set_appearance(font, theme, cx);
             input
         });
@@ -113,7 +116,7 @@ impl HerdrWindow {
         }
         let (search, changed) = self.device_search(
             self.config.ui.clone(),
-            "Search devices, agents, workspaces",
+            || fl!("devices-overview-search"),
             cx,
         );
         self.devices_overview.pages.insert(
@@ -199,7 +202,8 @@ impl HerdrWindow {
                 });
             }
             None => {
-                let (input, changed) = self.device_search(font, "Search devices and agents", cx);
+                let (input, changed) =
+                    self.device_search(font, || fl!("devices-overview-tree-search"), cx);
                 // The sidebar's heading frames it.
                 input.update(cx, |input, cx| input.set_frameless(cx));
                 self.devices_overview.tree_search = Some(TreeSearch {

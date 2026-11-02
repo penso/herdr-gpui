@@ -1,5 +1,6 @@
 use super::*;
 
+mod en_xa;
 mod repair_command;
 
 #[test]

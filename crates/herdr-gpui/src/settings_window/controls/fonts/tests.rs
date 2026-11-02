@@ -369,3 +369,14 @@ fn family_commits_capture_target_and_only_change_families(cx: &mut TestAppContex
     }
     assert_eq!(writes.lock().unwrap().len(), 10);
 }
+
+/// The specimens name a message per line, which `fl!` cannot check.
+#[test]
+fn specimen_lines_name_messages() {
+    let none: &[&str] = &[];
+    for (face, _) in FACES {
+        for line in sample_messages(face) {
+            assert_eq!(i18n::takes(line), Some(none), "{line}");
+        }
+    }
+}

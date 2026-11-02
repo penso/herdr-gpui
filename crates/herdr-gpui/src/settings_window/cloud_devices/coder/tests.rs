@@ -6,6 +6,7 @@ use super::{
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 
 mod destroy;
+mod messages;
 
 pub(super) fn open(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestContext) {
     let main = cx.add_window(crate::sidebar::layout_tests::fixture_window);

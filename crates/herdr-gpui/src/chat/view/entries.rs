@@ -16,26 +16,66 @@ use super::{
     layout::{Row, layout_for, side},
     visuals::Frame,
 };
-use crate::{HerdrWindow, config::corners, fonts::StyledFont, notifications::safe_text};
+use crate::{HerdrWindow, config::corners, fonts::StyledFont, i18n::fl, notifications::safe_text};
 use gpui::{prelude::*, *};
-use herdr_chat_protocol::{Entry, EntryKind, NoticeLevel, Tool, ToolKind, ToolStatus};
+use herdr_chat_protocol::{
+    ActivityState, Entry, EntryKind, NoticeLevel, Tool, ToolKind, ToolStatus,
+};
 
 mod questions;
+mod steps;
+use steps::steps_label;
 
 /// Locations listed under a folded tool call.
 const LOCATIONS: usize = 3;
-fn tool_kind(kind: ToolKind) -> &'static str {
+fn tool_kind(kind: ToolKind) -> String {
     match kind {
-        ToolKind::Read => "Read",
-        ToolKind::Edit => "Edit",
-        ToolKind::Delete => "Delete",
-        ToolKind::Move => "Move",
-        ToolKind::Search => "Search",
-        ToolKind::Execute => "Run",
-        ToolKind::Think => "Think",
-        ToolKind::Fetch => "Fetch",
-        ToolKind::SwitchMode => "Mode",
-        ToolKind::Other => "Tool",
+        ToolKind::Read => fl!("chat-tool-read"),
+        ToolKind::Edit => fl!("chat-tool-edit"),
+        ToolKind::Delete => fl!("chat-tool-delete"),
+        ToolKind::Move => fl!("chat-tool-move"),
+        ToolKind::Search => fl!("chat-tool-search"),
+        ToolKind::Execute => fl!("chat-tool-run"),
+        ToolKind::Think => fl!("chat-tool-think"),
+        ToolKind::Subagent => fl!("chat-tool-subagent"),
+        ToolKind::Fetch => fl!("chat-tool-fetch"),
+        ToolKind::SwitchMode => fl!("chat-tool-mode"),
+        ToolKind::Other => fl!("chat-tool-other"),
+    }
+}
+
+/// Where a tool call's card says it stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ToolState {
+    Done,
+    Failed,
+    Pending,
+    Running,
+    Stopped,
+}
+
+impl ToolState {
+    /// The word the card shows.
+    fn label(self) -> String {
+        match self {
+            Self::Done => fl!("chat-tool-state-done"),
+            Self::Failed => fl!("chat-tool-state-failed"),
+            Self::Pending => fl!("chat-tool-state-pending"),
+            Self::Running => fl!("chat-tool-state-running"),
+            Self::Stopped => fl!("chat-tool-state-stopped"),
+        }
+    }
+}
+
+/// Where a tool call's card says it stands: what it started when it
+/// started something, which can outlive the call, else the call.
+fn tool_state(activity: Option<ActivityState>, status: ToolStatus) -> ToolState {
+    match (activity, status) {
+        (Some(ActivityState::Running), _) | (None, ToolStatus::InProgress) => ToolState::Running,
+        (Some(ActivityState::Finished), _) | (None, ToolStatus::Completed) => ToolState::Done,
+        (Some(ActivityState::Failed), _) | (None, ToolStatus::Failed) => ToolState::Failed,
+        (Some(ActivityState::Killed), _) => ToolState::Stopped,
+        (None, ToolStatus::Pending) => ToolState::Pending,
     }
 }
 
@@ -78,15 +118,29 @@ impl HerdrWindow {
         let Some(entry) = entries.get(index) else {
             return div().into_any_element();
         };
+        // A sub-agent's own steps are listed in its call's card.
+        if let EntryKind::Tool(tool) = &entry.kind
+            && tool.parent.is_some()
+        {
+            return div().into_any_element();
+        }
         let body = chat.prepared.body(entry.id);
         let content = match &entry.kind {
             EntryKind::User { text, .. } | EntryKind::Agent { text } => {
+                // A layout may set the user's prompts in a quieter voice.
+                let size = match &entry.kind {
+                    EntryKind::User { .. } => {
+                        layout_for(self.config.chat.layout).prompt_text(&self.chat_look())
+                    }
+                    _ => self.chat_text_size(),
+                };
                 let message = match body.as_deref() {
                     Some(Body::Message(parts)) => self.render_chat_message(
                         pane_id,
                         entry.id,
                         parts,
                         &chat.prepared.visuals,
+                        size,
                         cx,
                     ),
                     Some(Body::Summary(summary)) => {
@@ -133,7 +187,7 @@ impl HerdrWindow {
                     entry.id,
                     Region::Body(0),
                     Cell::default(),
-                    summary.describe(),
+                    crate::chat::text::turn(summary),
                     cx,
                 );
                 layout_for(self.config.chat.layout).turn(text.into_any_element(), &self.chat_look())
@@ -147,7 +201,7 @@ impl HerdrWindow {
             ),
             EntryKind::Image { author, .. } => match body.as_deref() {
                 Some(Body::Image(id)) => {
-                    self.render_chat_image(*author, *id, &chat.prepared.visuals)
+                    self.render_chat_image(pane_id, *author, *id, &chat.prepared.visuals, cx)
                 }
                 _ => div(),
             },
@@ -176,6 +230,11 @@ impl HerdrWindow {
                 .and_then(|entry| side(&entry.kind))
         };
         let transcript = chat.session.transcript();
+        // The current turn starts at the user's latest prompt.
+        let current = entries
+            .iter()
+            .rposition(|entry| matches!(entry.kind, EntryKind::User { .. }))
+            .is_none_or(|start| index >= start);
         let row = Row {
             entry,
             previous: near(index.checked_sub(1)),
@@ -183,6 +242,7 @@ impl HerdrWindow {
             agent: chat.session.agent(),
             live: index + 1 == entries.len()
                 && transcript.status == herdr_chat_protocol::Status::Working,
+            current,
             content,
         };
         layout_for(self.config.chat.layout).row(row, &self.chat_look())
@@ -240,12 +300,18 @@ impl HerdrWindow {
     ) -> Div {
         let theme = &self.theme;
         let hues = Hues::of(theme);
-        let (status, color) = match tool.status {
-            ToolStatus::Pending => ("pending", theme.muted),
-            ToolStatus::InProgress => ("running", hues.yellow),
-            ToolStatus::Completed => ("done", hues.green),
-            ToolStatus::Failed => ("failed", hues.red),
+        let chat = self.chats.pane(pane_id);
+        let activity = chat.and_then(|chat| chat.session.transcript().activity(&tool.call_id));
+        // What a call started outlives it: a background shell runs on after
+        // its call is done, and its card says so until it ends.
+        let status = tool_state(activity.map(|activity| activity.state), tool.status);
+        let color = match status {
+            ToolState::Running => hues.yellow,
+            ToolState::Done => hues.green,
+            ToolState::Failed => hues.red,
+            ToolState::Pending | ToolState::Stopped => theme.muted,
         };
+        let steps = chat.map_or(&[][..], |chat| chat.prepared.steps(&tool.call_id));
         let small = self.chat_small_text();
         let summary = match body {
             Some(Body::Tool(summary)) => Some(summary),
@@ -276,8 +342,8 @@ impl HerdrWindow {
                     .min_w_0()
                     .truncate()
                     .text_font(&self.config.terminal)
-                    .text_size(px(self.config.terminal.size - 1.))
-                    .text_color(rgb(theme.subtext()))
+                    .text_size(self.chat_tool_text())
+                    .text_color(rgb(theme.muted))
                     .child(self.render_chat_text(
                         pane_id,
                         entry,
@@ -287,22 +353,36 @@ impl HerdrWindow {
                         cx,
                     )),
             )
+            .when(!steps.is_empty(), |header| {
+                header.child(
+                    div()
+                        .flex_none()
+                        .text_size(small)
+                        .text_color(rgb(theme.muted))
+                        .child(steps_label(steps.len())),
+                )
+            })
             .child(
                 div()
                     .flex_none()
                     .text_size(small)
                     .text_color(rgb(color))
-                    .child(status),
+                    .child(status.label()),
             );
         div()
             .flex()
             .flex_col()
             .gap(px(2.))
             .child(self.chat_disclosure(header, pane_id, entry, expanded, HeaderText::Label, cx))
+            .when(expanded && !steps.is_empty(), |card| {
+                card.children(chat.map(|chat| self.render_chat_steps(chat, entry, steps)))
+            })
             .children(
                 page_written(tool).map(|path| self.render_chat_file_page(pane_id, entry, path, cx)),
             )
-            .children(self.render_chat_tool_glance(entry, tool, summary, expanded, visuals))
+            .children(
+                self.render_chat_tool_glance(pane_id, entry, tool, summary, expanded, visuals, cx),
+            )
             .when(expanded, |card| {
                 card.child(
                     div()
@@ -311,9 +391,9 @@ impl HerdrWindow {
                         .min_w_0()
                         .w_full()
                         .overflow_x_scroll()
-                        .text_size(small)
+                        .text_size(self.chat_tool_text())
                         .text_font(&self.config.terminal)
-                        .text_color(rgb(theme.subtext()))
+                        .text_color(rgb(theme.muted))
                         .child(self.render_chat_text(
                             pane_id,
                             entry,
@@ -364,17 +444,20 @@ impl HerdrWindow {
     /// What a tool call shows without being opened: each file's changed line
     /// counts and its pictures always, and while folded, its first locations
     /// and output lines. Opening it shows the full text in their place.
+    #[allow(clippy::too_many_arguments)]
     fn render_chat_tool_glance(
         &self,
+        pane_id: &str,
         entry: herdr_chat_protocol::EntryId,
         tool: &Tool,
         summary: Option<&ToolSummary>,
         expanded: bool,
         visuals: &Visuals,
+        cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let theme = &self.theme;
         let hues = Hues::of(theme);
-        let small = self.chat_small_text();
+        let small = self.chat_tool_text();
         let note = |text: String| {
             div()
                 .text_size(small)
@@ -392,6 +475,7 @@ impl HerdrWindow {
                 .flex()
                 .gap(px(6.))
                 .text_size(small)
+                .text_color(rgb(theme.muted))
                 .child(div().min_w_0().truncate().child(safe_text(&diff.path, 300)))
                 .child(
                     div()
@@ -414,48 +498,45 @@ impl HerdrWindow {
                     .flex_wrap()
                     .gap(px(6.))
                     .py(px(2.))
-                    .children(
-                        summary
-                            .images
-                            .iter()
-                            .map(|id| self.render_chat_visual(*id, visuals, Frame::ToolImage)),
-                    )
+                    .children(summary.images.iter().map(|id| {
+                        self.render_chat_visual(pane_id, *id, visuals, Frame::ToolImage, cx)
+                    }))
                     .into_any_element(),
             );
         }
-        if expanded {
+        // Opened, the details show it all; some layouts keep a folded call
+        // to its one line.
+        if expanded || !layout_for(self.config.chat.layout).tool_preview() {
             return glance;
         }
         glance.extend(tool.locations.iter().take(LOCATIONS).map(|location| {
             div()
                 .text_size(small)
-                .text_color(rgb(theme.subtext()))
+                .text_color(rgb(theme.muted))
                 .truncate()
                 .child(safe_text(location, 300))
                 .into_any_element()
         }));
         let more_locations = tool.locations.len().saturating_sub(LOCATIONS);
         if more_locations > 0 {
-            glance.push(note(format!("and {more_locations} more")));
+            glance.push(note(fl!("chat-more", count = more_locations)));
         }
         glance.extend(summary.lines.iter().map(|line| {
             div()
                 .debug_selector(move || format!("chat-tool-preview-{}", entry.0))
                 .text_size(small)
                 .text_font(&self.config.terminal)
-                .text_color(rgb(theme.subtext()))
+                .text_color(rgb(theme.muted))
                 .whitespace_nowrap()
                 .overflow_hidden()
                 .child(line.clone())
                 .into_any_element()
         }));
         if summary.more > 0 {
-            glance.push(note(format!("{} more lines", summary.more)));
+            glance.push(note(fl!("chat-tool-more-lines", count = summary.more)));
         }
         if summary.terminals > 0 {
-            glance.push(note(
-                "Terminal output shows in the program's own view".to_owned(),
-            ));
+            glance.push(note(fl!("chat-tool-terminal-elsewhere")));
         }
         glance
     }

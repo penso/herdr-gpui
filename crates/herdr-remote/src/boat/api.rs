@@ -3,6 +3,7 @@
 //! adding or connecting needs to know.
 
 use super::{Error, Result, http::Request};
+use crate::cloud::Value;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
@@ -108,7 +109,7 @@ fn segment(id: &str) -> Result<&str> {
     {
         Ok(id)
     } else {
-        Err(Error::Field("Boat sandbox ID"))
+        Err(Error::Field(Value::BoatSandboxId))
     }
 }
 
@@ -127,7 +128,7 @@ impl Request<'_> {
         self.get::<One>("sandbox", &format!("/sandboxes/{}", segment(id)?))
             .and_then(|reply| {
                 if reply.sandbox.id != id {
-                    return Err(Error::Field("Boat sandbox ID"));
+                    return Err(Error::Field(Value::BoatSandboxId));
                 }
                 Ok(reply.sandbox)
             })

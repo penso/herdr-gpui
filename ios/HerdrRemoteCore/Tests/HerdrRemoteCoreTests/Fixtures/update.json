@@ -5,10 +5,26 @@
       "title": "Claude needs an answer"
     },
     "content-state": {
-      "cost": "$0.34",
+      "options": [
+        {
+          "id": "allow",
+          "kind": "allow_once",
+          "name": "Allow once"
+        },
+        {
+          "id": "reject",
+          "kind": "reject_once",
+          "name": "Deny"
+        }
+      ],
+      "permission": 7,
       "phase": "question",
       "planDone": 2,
       "planTotal": 4,
+      "previous": [
+        "Read lib.rs",
+        "Edit lib.rs"
+      ],
       "question": "Run just ci",
       "startedAt": 1799999990,
       "step": "Run the tests",

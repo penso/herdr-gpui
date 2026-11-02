@@ -1,11 +1,14 @@
 //! The Code page: where VS Code tabs' `code serve-web` server comes
 //! from. The app starts one itself (see [`start`]), or the user gives the
 //! address of their own, which a check asks whether it answers.
+// i18n: migrated
 use super::*;
+use crate::direction::Logical;
 use crate::{
     browser::WebUrl,
     code_server::{self, Server},
     config::{CodeEdit, CodeMode},
+    i18n::fl,
 };
 
 mod start;
@@ -68,6 +71,9 @@ impl UrlField {
     }
 }
 
+/// An address of the shape `code serve-web` prints, shown as an example.
+const EXAMPLE: &str = "http://127.0.0.1:8000/?tkn=\u{2026}";
+
 #[derive(Clone, Debug, PartialEq)]
 enum Test {
     Idle,
@@ -104,7 +110,7 @@ impl SettingsWindow {
         let saved = self.saved_code_url().to_owned();
         input.update(cx, |input, cx| {
             input.set_text_selected(&saved, cx);
-            input.set_placeholder("http://127.0.0.1:8000/?tkn=\u{2026}", cx);
+            input.set_placeholder(EXAMPLE, cx);
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
         let focus = input.read(cx).focus.clone();
@@ -374,9 +380,9 @@ impl SettingsWindow {
             .control_choice(
                 "settings-code-test",
                 if testing {
-                    "Testing\u{2026}"
+                    fl!("settings-code-testing")
                 } else {
-                    "Test connection"
+                    fl!("settings-code-test")
                 },
                 false,
                 can_test,
@@ -386,20 +392,17 @@ impl SettingsWindow {
             .when(can_test, |button| {
                 button.on_click(cx.listener(|this, _, _, cx| this.test_code_connection(cx)))
             });
-        self.control_card("Server")
-            .child(self.control_note(
-                "Start a server with `code serve-web`, then paste the address it prints, with \
-                 its ?tkn= token.",
-            ))
+        self.control_card(&fl!("settings-code-server"))
+            .child(self.control_note(fl!("settings-code-address-note")))
             .child(field)
             .when(invalid, |card| {
-                card.child(self.control_note(
-                    "Enter an http or https address, such as http://127.0.0.1:8000/?tkn=\u{2026}",
-                ))
+                card.child(
+                    self.control_note(fl!("settings-code-address-invalid", example = EXAMPLE)),
+                )
             })
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .items_center()
                     .gap(px(12.))
@@ -420,15 +423,21 @@ impl SettingsWindow {
             Test::Passed(server) => (
                 "icons/pass.svg",
                 theme.palette[2],
-                "Connected to VS Code".into(),
-                Some(format!("commit {}", server.short_commit()).into()),
+                fl!("settings-code-connected").into(),
+                Some(
+                    fl!(
+                        "settings-code-commit",
+                        commit = server.short_commit().to_string()
+                    )
+                    .into(),
+                ),
             ),
             Test::Failed(message) => ("icons/error.svg", theme.palette[1], message.clone(), None),
         };
         Some(
             div()
                 .debug_selector(|| "settings-code-result".into())
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(8.))
                 .min_w_0()

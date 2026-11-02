@@ -642,14 +642,3 @@ pub fn describe(error: &dyn std::error::Error) -> String {
     }
     text
 }
-
-/// How long ago `created` was, coarsely, from `now` (both Unix seconds).
-pub fn age(created: i64, now: i64) -> String {
-    let seconds = now.saturating_sub(created).max(0);
-    match seconds {
-        0..60 => "just now".to_owned(),
-        60..3600 => format!("{} min ago", seconds / 60),
-        3600..86400 => format!("{} h ago", seconds / 3600),
-        _ => format!("{} d ago", seconds / 86400),
-    }
-}

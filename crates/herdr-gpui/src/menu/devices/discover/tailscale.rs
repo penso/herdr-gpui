@@ -26,7 +26,7 @@ const MAX_PEERS: usize = 64;
 const LOCATIONS: [&str; 4] = [
     "/opt/homebrew/bin/tailscale",
     "/usr/local/bin/tailscale",
-    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+    "/Applications/Tailscale.app/Contents/MacOS/Tailscale", // i18n: data
     "/usr/bin/tailscale",
 ];
 
@@ -115,10 +115,13 @@ pub(super) fn executable(path: &OsStr, exists: impl Fn(&Path) -> bool) -> Option
 /// serve SSH, by its MagicDNS name. This machine is not a peer.
 pub(super) fn parse(json: &[u8]) -> Result<Vec<Candidate>> {
     let status: Status = serde_json::from_slice(json).map_err(Error::TailscaleJson)?;
+    // Tailscale's own state name.
+    // i18n: data
+    let running = "Running";
     if status
         .backend_state
         .as_deref()
-        .is_some_and(|state| state != "Running")
+        .is_some_and(|state| state != running)
     {
         return Ok(Vec::new());
     }

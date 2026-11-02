@@ -1,6 +1,11 @@
 //! Shared row and control builders for the Settings pages. Pure rendering:
 //! they take the theme and return elements; state and saves stay on the view.
-use crate::config::{Theme, corners};
+// i18n: migrated
+use crate::direction::Logical;
+use crate::{
+    config::{Theme, corners},
+    i18n::fl,
+};
 use gpui::{prelude::*, *};
 use std::rc::Rc;
 
@@ -8,7 +13,7 @@ mod number;
 mod popover;
 mod swatches;
 pub(in crate::settings_window) use number::{
-    Look, Number, NumberChange, NumberEdit, number, parse_number,
+    Look, Number, NumberChange, NumberEdit, Unit, number, parse_number,
 };
 pub(in crate::settings_window) use popover::{Dropdown, dropdown};
 pub(in crate::settings_window) use swatches::{HostColorChange, parse_hex_input, swatch_row};
@@ -26,8 +31,8 @@ pub(in crate::settings_window) enum Source {
 
 pub(in crate::settings_window) fn tag(theme: &Theme, source: Source) -> Div {
     let (label, color) = match source {
-        Source::Herdr => ("Herdr", theme.ink(0x8fb8d9)),
-        Source::HerdrUi => ("Herdr UI", theme.ink(0xc9b26f)),
+        Source::Herdr => (fl!("settings-source-herdr"), theme.ink(0x8fb8d9)),
+        Source::HerdrUi => (fl!("settings-source-herdr-ui"), theme.ink(0xc9b26f)),
     };
     div()
         .text_size(px(9.))
@@ -43,11 +48,11 @@ pub(in crate::settings_window) fn tag(theme: &Theme, source: Source) -> Div {
 
 pub(in crate::settings_window) fn section(
     theme: &Theme,
-    title: &'static str,
+    title: &str,
     tag_source: Option<Source>,
 ) -> Div {
     div()
-        .flex()
+        .row()
         .items_center()
         .gap(px(6.))
         .mt(px(22.))
@@ -149,7 +154,7 @@ impl Row {
         div()
             .debug_selector(move || id.to_string())
             .relative()
-            .flex()
+            .row()
             .items_center()
             .gap(px(16.))
             .min_h(px(ROW_HEIGHT))
@@ -168,7 +173,7 @@ impl Row {
                     .child(
                         div()
                             .debug_selector(move || title_id.clone())
-                            .flex()
+                            .row()
                             .items_center()
                             .gap(px(6.))
                             .text_size(px(12.))
@@ -189,7 +194,7 @@ impl Row {
             )
             .child(
                 div()
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(8.))
                     .flex_none()
@@ -255,15 +260,18 @@ pub(in crate::settings_window) fn button(
 pub(in crate::settings_window) fn segmented<T: Copy + PartialEq + 'static>(
     theme: &Theme,
     id: &'static str,
-    options: &[(T, &'static str)],
+    options: &[(T, impl Clone + Into<SharedString>)],
     selected: Option<T>,
     enabled: bool,
     on_pick: impl Fn(T, &mut Window, &mut App) + 'static,
 ) -> Div {
-    let names = options.iter().map(|(_, label)| Some(*label)).collect();
+    let names = options
+        .iter()
+        .map(|(_, label)| Some(label.clone().into()))
+        .collect();
     let options = options
         .iter()
-        .map(|(value, label)| (*value, (*label).into_any_element()))
+        .map(|(value, label)| (*value, label.clone().into().into_any_element()))
         .collect();
     segments(
         theme,
@@ -306,7 +314,7 @@ pub(in crate::settings_window) fn segmented_elements<T: Copy + PartialEq + 'stat
 fn segments<T: Copy + PartialEq + 'static>(
     theme: &Theme,
     id: &'static str,
-    (options, names): (Vec<(T, AnyElement)>, Vec<Option<&'static str>>),
+    (options, names): (Vec<(T, AnyElement)>, Vec<Option<SharedString>>),
     selected: Option<T>,
     enabled: bool,
     live: impl Fn(T) -> bool,
@@ -314,7 +322,7 @@ fn segments<T: Copy + PartialEq + 'static>(
 ) -> Div {
     let on_pick = Rc::new(on_pick);
     div()
-        .flex()
+        .row()
         .flex_none()
         .p(px(2.))
         .rounded(px(corners::CONTROL))

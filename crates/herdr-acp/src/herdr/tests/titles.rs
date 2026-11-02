@@ -104,6 +104,7 @@ fn a_prompt_titles_the_pane_and_names_the_tab() {
         .unwrap();
     assert_eq!(title["method"], "pane.report_metadata");
     assert_eq!(title["params"]["title"], "fix the tab title");
+    assert_eq!(title["params"]["display_agent"], "Claude");
     assert_eq!(fake.label(), "Claude: fix the tab title");
 
     reporter.handle().prompt("now the phone".to_owned());

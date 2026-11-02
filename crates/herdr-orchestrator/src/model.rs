@@ -73,7 +73,8 @@ impl SourceKey {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ItemKey {
     pub source: SourceKey,
-    /// A GitHub issue's number, `pr/<number>` for a pull request, or a Beads id.
+    /// An issue's number, `pr/<number>` for a GitHub pull request or GitLab
+    /// merge request, or a Beads id.
     pub native_id: String,
 }
 
@@ -126,6 +127,8 @@ impl Item {
         let number = key.native_id.strip_prefix("pr/").unwrap_or(&key.native_id);
         let identifier = match key.source.provider {
             Provider::Beads => key.native_id.clone(),
+            // GitLab calls a merge request `!iid`; its issues stay `#iid`.
+            Provider::Gitlab if key.native_id.starts_with("pr/") => format!("!{number}"),
             _ => format!("#{number}"),
         };
         Self {
@@ -145,6 +148,17 @@ impl Item {
             pull_request: None,
             activity: None,
         }
+    }
+}
+
+impl Item {
+    /// The pull request, when it is GitHub's: the only kind whose status,
+    /// conversation, and merge the app reads and acts on, and whose review
+    /// prompt `gh` serves.
+    pub fn github_pull_request(&self) -> Option<&PullRequest> {
+        self.pull_request
+            .as_ref()
+            .filter(|_| self.key.source.provider == Provider::Github)
     }
 }
 

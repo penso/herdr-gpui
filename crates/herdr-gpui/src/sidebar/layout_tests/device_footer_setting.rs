@@ -36,7 +36,7 @@ fn device_footer_setting_hides_it_and_gives_agents_the_room(cx: &mut gpui::TestA
     let menu = cx.debug_bounds("menu-panel").unwrap();
     assert_eq!(
         view.read_with(cx, |view, _| view.menu.page),
-        Some(crate::menu::Page::Sessions)
+        Some(crate::menu::Page::Devices)
     );
     assert!(menu.bottom() < sidebar.bottom());
     assert!(menu.top() > sidebar.top());

@@ -8,6 +8,7 @@ fn host_card_leaves_out_counts_of_none() {
         idle,
         ..Tally::default()
     };
+    let agents_line = |tally| agents_line(tally).replace(['\u{2068}', '\u{2069}'], "");
     assert_eq!(agents_line(Tally::default()), "No agents");
     assert_eq!(agents_line(tally(0, 1)), "1 agent");
     assert_eq!(agents_line(tally(0, 3)), "3 agents");

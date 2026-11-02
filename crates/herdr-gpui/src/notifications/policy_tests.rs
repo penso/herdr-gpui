@@ -8,7 +8,7 @@ fn tick(
     hidden: bool,
     now: Instant,
 ) -> bool {
-    super::tick(endpoints, selected, config, hidden, true, None, now)
+    super::tick(endpoints, selected, config, None, hidden, true, None, now)
 }
 use crate::{config::NotificationConfig, endpoint::Endpoint};
 use herdr_client::{
@@ -18,6 +18,7 @@ use herdr_client::{
 use std::sync::Arc;
 
 mod finished;
+mod mutes;
 
 fn endpoints() -> [Endpoint; 2] {
     ["local", "remote"].map(|id| {
@@ -532,6 +533,7 @@ fn system_delivery_is_suppressed_for_the_active_tab_only_while_focused() {
             &mut endpoints,
             selected,
             system(0),
+            None,
             false,
             focused,
             None,

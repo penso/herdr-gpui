@@ -13,10 +13,13 @@ mod read;
 
 #[cfg(test)]
 pub(crate) use read::{AdvisoryNode, CommentNode, body, comments, parse_alert};
+#[cfg(test)]
+pub(crate) use read::{Affected, Comment, Credit, Cvss, Weakness};
 pub(crate) use read::{AlertPage, Comments, MAX_COMMENTS, Relationship, ReportPage, Scope};
 
 use super::{Alert, Error, Repo, Report, Security};
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use std::sync::{Arc, atomic::Ordering};
 
@@ -74,14 +77,26 @@ pub(crate) enum Tab {
 }
 
 impl Tab {
-    pub(crate) fn label(self) -> &'static str {
+    /// Its name in element IDs and selectors, the same in every language.
+    pub(crate) fn id(self) -> &'static str {
         match self {
-            Self::Overview => "Overview",
-            Self::Advisory => "Advisory",
-            Self::Dependency => "Dependency path",
-            Self::Report => "Report",
-            Self::Draft => "Advisory draft",
-            Self::Conversation => "Conversation",
+            Self::Overview => "overview",
+            Self::Advisory => "advisory",
+            Self::Dependency => "dependency",
+            Self::Report => "report",
+            Self::Draft => "draft",
+            Self::Conversation => "conversation",
+        }
+    }
+
+    pub(crate) fn label(self) -> String {
+        match self {
+            Self::Overview => fl!("security-tab-overview"),
+            Self::Advisory => fl!("security-tab-advisory"),
+            Self::Dependency => fl!("security-tab-dependency"),
+            Self::Report => fl!("security-tab-report"),
+            Self::Draft => fl!("security-tab-draft"),
+            Self::Conversation => fl!("security-tab-conversation"),
         }
     }
 }

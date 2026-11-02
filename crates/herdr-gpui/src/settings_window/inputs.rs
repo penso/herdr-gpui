@@ -1,5 +1,6 @@
 //! Transient input state the pages share: the open dropdown, the number field
 //! being typed into, and the root key routing for both.
+// i18n: migrated
 use super::{
     SettingsWindow,
     pages::{Spacing, padding_ids, size_control},
@@ -70,6 +71,7 @@ pub(in crate::settings_window) enum DropdownField {
     Layout,
     ClipboardEnabled,
     ClipboardPosition,
+    Language,
     ToastEnabled,
     ToastPosition,
     RemoteBind,
@@ -81,6 +83,7 @@ impl DropdownField {
             Self::Layout => "sidebar-layout-control",
             Self::ClipboardEnabled => "general-copied-toast-control",
             Self::ClipboardPosition => "general-clipboard-position-control",
+            Self::Language => "general-language-control",
             Self::ToastEnabled => "notif-show-control",
             Self::ToastPosition => "notif-position-control",
             Self::RemoteBind => "remote-bind-control",
@@ -142,6 +145,16 @@ impl SettingsWindow {
                 self.pick_remote_bind(index, cx);
                 cx.notify();
                 return;
+            }
+            DropdownField::Language => {
+                let Some(language) = super::pages::language_choices(&self.config.language)
+                    .into_iter()
+                    .nth(index)
+                else {
+                    cx.notify();
+                    return;
+                };
+                Preference::Language(language)
             }
             DropdownField::ClipboardEnabled => Preference::ClipboardEnabled(flag),
             DropdownField::ClipboardPosition => Preference::ClipboardPosition(

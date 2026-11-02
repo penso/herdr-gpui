@@ -44,7 +44,7 @@ pub(crate) fn bases(input: &Input) -> crate::Result<Vec<BaseChoice>> {
                 "refs/heads",
                 "refs/remotes",
             ],
-            "list branches",
+            "list branches", // i18n: data
             deadline,
             &never,
             LIST_OUTPUT,

@@ -2,7 +2,7 @@
 //! for a large checkout. Scoring is nucleo's fzf algorithm, as the palette
 //! uses; only the best hits are kept, and only they get highlights.
 
-use crate::code_index::Index;
+use crate::{code_index::Index, i18n::fl};
 use nucleo_matcher::{
     Config, Matcher, Utf32Str,
     pattern::{CaseMatching, Normalization, Pattern},
@@ -24,10 +24,19 @@ pub(crate) enum Mode {
 impl Mode {
     pub(super) const ALL: [Self; 2] = [Self::Symbols, Self::Files];
 
-    pub(super) fn label(self) -> &'static str {
+    pub(super) fn label(self) -> String {
         match self {
-            Self::Symbols => "Symbols",
-            Self::Files => "Files",
+            Self::Symbols => fl!("code-search-symbols"),
+            Self::Files => fl!("code-search-files"),
+        }
+    }
+
+    /// The name tests and automation find its tab by, the same in every
+    /// language.
+    pub(super) fn key(self) -> &'static str {
+        match self {
+            Self::Symbols => "symbols",
+            Self::Files => "files",
         }
     }
 }

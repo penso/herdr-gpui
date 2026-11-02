@@ -6,6 +6,8 @@ use super::{
 use crate::config::OpenSandboxConfig;
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 
+mod messages;
+
 fn open(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestContext) {
     let main = cx.add_window(crate::sidebar::layout_tests::fixture_window);
     let weak = cx.update(|cx| main.update(cx, |_, _, cx| cx.weak_entity()).unwrap());

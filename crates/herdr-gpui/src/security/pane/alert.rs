@@ -5,6 +5,7 @@
 use super::{
     Read, arrange, body, callout, date, facts_list, heading, link, mono, plain, severity_text,
 };
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     orchestrator::Look,
@@ -42,7 +43,7 @@ impl HerdrWindow {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(heading("What happened"))
+                    .child(heading(fl!("security-what-happened")))
                     .child(body(
                         look,
                         "security-alert-description",
@@ -73,7 +74,7 @@ impl HerdrWindow {
                     .flex_wrap()
                     .items_center()
                     .gap_2()
-                    .child(heading("Upgrade to fix"))
+                    .child(heading(fl!("security-upgrade-to-fix")))
                     .child(
                         look.mono(alert.vulnerable.clone())
                             .text_color(rgb(theme.muted)),
@@ -84,7 +85,7 @@ impl HerdrWindow {
             None => (
                 look.hue(3),
                 "icons/error.svg",
-                heading("No fixed version yet"),
+                heading(fl!("security-no-fixed-version")),
             ),
         };
         let command = upgrade_command(alert).map(|command| {
@@ -104,21 +105,19 @@ impl HerdrWindow {
                 .child(look.icon("icons/copy.svg", 12., theme.muted))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(copied.clone()));
-                    this.show_flash(Flash::success("Copied the command"), cx);
+                    this.show_flash(Flash::success(fl!("security-copied")), cx);
                 }))
         });
         let explain = match alert.patched {
-            Some(_) => format!("{} pulls in an affected version.", alert.manifest),
-            None => {
-                "GitHub knows no fixed version: remove the dependency or mitigate it.".to_owned()
-            }
+            Some(_) => fl!("security-pulls-in", manifest = alert.manifest.as_str()),
+            None => fl!("security-no-fix-known"),
         };
         let fix = item.clone();
         let open = item.clone();
         let url = repo.alert_url(alert);
         let actions = div()
             .child(
-                look.button("security-alert-agent", "Fix with agent", true)
+                look.button("security-alert-agent", fl!("security-fix-with-agent"), true)
                     .debug_selector(|| "security-alert-agent".into())
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.security_agent(&fix, window, cx);
@@ -128,7 +127,7 @@ impl HerdrWindow {
                 el.child(
                     look.button(
                         "security-alert-manifest",
-                        format!("Open {}", file_name(&alert.manifest)),
+                        fl!("security-open-file", file = file_name(&alert.manifest)),
                         false,
                     )
                     .debug_selector(|| "security-alert-manifest".into())
@@ -139,7 +138,7 @@ impl HerdrWindow {
             })
             .child(div().flex_1())
             .child(
-                look.button("security-alert-dismiss", "Dismiss on GitHub", false)
+                look.button("security-alert-dismiss", fl!("security-dismiss"), false)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.open_security_page(&url, window, cx);
                     })),
@@ -172,28 +171,37 @@ impl HerdrWindow {
             return page.waiting(look);
         };
         let relationship = match page.relationship {
-            Relationship::Direct => "Direct: the manifest names it",
-            Relationship::Transitive => "Transitive: another dependency pulls it in",
-            Relationship::Unknown => "GitHub could not tell",
+            Relationship::Direct => fl!("security-direct"),
+            Relationship::Transitive => fl!("security-transitive"),
+            Relationship::Unknown => fl!("security-unknown"),
         };
         let scope = match page.scope {
-            Scope::Runtime => "Runtime: it ships with the project",
-            Scope::Development => "Development: it only builds or tests the project",
-            Scope::Unknown => "GitHub could not tell",
+            Scope::Runtime => fl!("security-runtime"),
+            Scope::Development => fl!("security-development"),
+            Scope::Unknown => fl!("security-unknown"),
         };
         let mut rows = vec![
             (
-                "Package",
+                fl!("security-fact-package"),
                 mono(look, format!("{} ({})", alert.package, alert.ecosystem)),
             ),
-            ("Relationship", plain(relationship)),
-            ("Scope", plain(scope)),
-            ("Manifest", mono(look, alert.manifest.clone())),
+            (fl!("security-fact-relationship"), plain(relationship)),
+            (fl!("security-fact-scope"), plain(scope)),
+            (
+                fl!("security-fact-manifest"),
+                mono(look, alert.manifest.clone()),
+            ),
         ];
         if let Some(requirement) = &page.requirement {
-            rows.push(("Requirement", mono(look, requirement.clone())));
+            rows.push((
+                fl!("security-fact-requirement"),
+                mono(look, requirement.clone()),
+            ));
         }
-        rows.push(("Affected versions", mono(look, alert.vulnerable.clone())));
+        rows.push((
+            fl!("security-fact-affected-versions"),
+            mono(look, alert.vulnerable.clone()),
+        ));
         let mut column = div()
             .flex()
             .flex_col()
@@ -206,7 +214,7 @@ impl HerdrWindow {
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(heading("Dependabot's fix"))
+                    .child(heading(fl!("security-dependabot-fix")))
                     .child(link(look, "security-alert-update", &url, cx)),
             );
         }
@@ -218,15 +226,19 @@ impl HerdrWindow {
                     .flex_wrap()
                     .items_center()
                     .gap_2()
-                    .child(look.muted(
-                        "GitHub does not say which dependency pulls it in; the lockfile does.",
-                    ))
+                    .child(look.muted(fl!("security-lockfile-note")))
                     .when(manifest_path(repo, alert).is_some(), |el| {
                         el.child(
-                            look.button("security-dependency-manifest", "Open the lockfile", false)
-                                .on_click(cx.listener(move |this, _, window, cx| {
+                            look.button(
+                                "security-dependency-manifest",
+                                fl!("security-open-lockfile"),
+                                false,
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
                                     this.open_security_manifest(&open, window, cx);
-                                })),
+                                },
+                            )),
                         )
                     }),
             );
@@ -235,16 +247,25 @@ impl HerdrWindow {
     }
 }
 
-fn facts(look: &Look, alert: &Alert, page: Option<&AlertPage>) -> Vec<(&'static str, AnyElement)> {
+fn facts(look: &Look, alert: &Alert, page: Option<&AlertPage>) -> Vec<(String, AnyElement)> {
     let cvss = page
         .and_then(|page| page.cvss.as_ref())
         .map(|cvss| cvss.score);
-    let mut rows = vec![("Severity", severity_text(look, alert.severity, cvss))];
-    rows.push(("Affected versions", mono(look, alert.vulnerable.clone())));
+    let mut rows = vec![(
+        fl!("security-fact-severity"),
+        severity_text(look, alert.severity, cvss),
+    )];
+    rows.push((
+        fl!("security-fact-affected-versions"),
+        mono(look, alert.vulnerable.clone()),
+    ));
     if let Some(requirement) = page.and_then(|page| page.requirement.clone()) {
-        rows.push(("Installed", mono(look, requirement)));
+        rows.push((fl!("security-fact-installed"), mono(look, requirement)));
     }
-    rows.push(("Manifest", mono(look, alert.manifest.clone())));
+    rows.push((
+        fl!("security-fact-manifest"),
+        mono(look, alert.manifest.clone()),
+    ));
     let mut identifiers = vec![alert.advisory.clone()];
     if let Some(page) = page {
         identifiers.extend(
@@ -255,7 +276,7 @@ fn facts(look: &Look, alert: &Alert, page: Option<&AlertPage>) -> Vec<(&'static 
         );
     }
     rows.push((
-        "Identifiers",
+        fl!("security-fact-identifiers"),
         div()
             .flex()
             .flex_col()
@@ -264,12 +285,12 @@ fn facts(look: &Look, alert: &Alert, page: Option<&AlertPage>) -> Vec<(&'static 
     ));
     if let Some(weakness) = page.and_then(|page| page.weaknesses.first()) {
         rows.push((
-            "Weakness",
+            fl!("security-fact-weakness"),
             plain(format!("{} {}", weakness.id, weakness.name)),
         ));
     }
     if let Some(at) = alert.created_at {
-        rows.push(("Opened", plain(date(at))));
+        rows.push((fl!("security-fact-opened"), plain(date(at))));
     }
     rows
 }
@@ -287,22 +308,25 @@ fn advisory(
     match &page.cvss {
         Some(cvss) => {
             rows.push((
-                "Score",
+                fl!("security-fact-score"),
                 severity_text(look, alert.severity, Some(cvss.score)),
             ));
             rows.push((
-                "Vector",
+                fl!("security-fact-vector"),
                 mono(look, format!("CVSS {} {}", cvss.version, cvss.vector)),
             ));
         }
-        None => rows.push(("Score", severity_text(look, alert.severity, None))),
+        None => rows.push((
+            fl!("security-fact-score"),
+            severity_text(look, alert.severity, None),
+        )),
     }
     if let Some(at) = page.published_at {
-        rows.push(("Published", plain(date(at))));
+        rows.push((fl!("security-fact-published"), plain(date(at))));
     }
     for weakness in &page.weaknesses {
         rows.push((
-            "Weakness",
+            fl!("security-fact-weakness"),
             plain(format!("{} {}", weakness.id, weakness.name)),
         ));
     }
@@ -318,7 +342,7 @@ fn advisory(
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(heading("References"))
+                .child(heading(fl!("security-references")))
                 .children(
                     page.references
                         .iter()

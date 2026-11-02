@@ -129,6 +129,23 @@ pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
             }
         };
         eprintln!("SIDEBAR native symbol cascade: {cascade}");
+        match handle.update(cx, |_, window, _| bidi::check(window)) {
+            // CoreText draws right-to-left runs in visual order; another
+            // platform's answer is reported for docs/i18n.md.
+            Ok(Ok(report)) if cfg!(target_os = "macos") && !report.visual_order => {
+                eprintln!("SIDEBAR native bidi FAIL: Hebrew drawn in logical order");
+                std::process::exit(1);
+            }
+            Ok(Ok(report)) => eprintln!(
+                "SIDEBAR native bidi: isolation marks take no room; Hebrew in {} order; en-XB {:?}",
+                if report.visual_order { "visual" } else { "logical" },
+                report.pseudo,
+            ),
+            other => {
+                eprintln!("SIDEBAR native bidi FAIL: {other:?}");
+                std::process::exit(1);
+            }
+        }
         #[cfg(target_os = "macos")]
         if let Err(error) = sidebar_preferences(handle, cx).await {
             eprintln!("SIDEBAR native preferences FAIL: {error:#}");

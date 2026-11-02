@@ -7,8 +7,12 @@ use std::sync::{
 };
 
 mod activity_bar_windows;
+mod appearance_messages;
 mod config_watch;
+mod en_xa;
 mod gpu_settings;
+mod language_picker;
+mod language_reload;
 #[cfg(windows)]
 mod launch_at_login;
 mod layout_drafts;
@@ -16,10 +20,12 @@ mod load_save;
 mod navigation_groups;
 mod navigation_resize;
 mod navigation_scroll;
+mod page_messages;
 mod pages_behaviour;
 mod quit_saves;
 mod remote_control;
 mod remote_history_reload;
+mod rtl;
 mod save_now;
 mod scrollbars;
 mod search;

@@ -8,6 +8,7 @@ mod browser;
 mod chat;
 mod exec;
 mod hosts;
+mod mods;
 mod remote;
 mod settings;
 mod tabs;
@@ -24,10 +25,11 @@ pub use exec::ExecCommand;
 pub use hosts::{
     AutomationCommand, CloudCommand, HostCommand, PortsCommand, PrCommand, SecurityCommand,
 };
+pub use mods::ModCommand;
 pub use remote::RemoteCommand;
 pub use settings::{
-    CaffeineCommand, ConfigCommand, IntegrationsCommand, KeybindsCommand, SoundCommand,
-    ThemeCommand, UpdateCommand,
+    CaffeineCommand, ConfigCommand, IntegrationsCommand, KeybindsCommand, LanguageCommand,
+    SoundCommand, ThemeCommand, UpdateCommand,
 };
 use std::ffi::OsString;
 pub use tabs::{CodeCommand, FileAt, Items, OrchestratorCommand, TabCommand};
@@ -93,6 +95,8 @@ pub enum ControlCommand {
     Security(SecurityCommand),
     Automation(AutomationCommand),
     Remote(RemoteCommand),
+    /// The mods the window runs; `check` runs here.
+    Mod(ModCommand),
     Search {
         files: bool,
         query: String,
@@ -101,6 +105,7 @@ pub enum ControlCommand {
     Config(ConfigCommand),
     Theme(ThemeCommand),
     Font(ThemeCommand),
+    Language(LanguageCommand),
     Keybinds(KeybindsCommand),
     Caffeine(CaffeineCommand),
     Sound(SoundCommand),
@@ -212,10 +217,15 @@ pub const FAMILIES: &[(&str, &str)] = &[
         "remote",
         "Remote control from a phone: status, pairing, and paired devices",
     ),
+    (
+        "mod",
+        "Mods: list, reload, read logs, or check a mod folder",
+    ),
     ("search", "Find a symbol or a file in the focused checkout"),
     ("config", "Herdr UI settings: path, get, set, reload, check"),
     ("theme", "List or choose a color theme"),
     ("font", "List or choose the terminal font"),
+    ("language", "The language Herdr UI shows, or choose one"),
     ("keybinds", "List shortcuts and check them for conflicts"),
     ("caffeine", "Keep the machine awake"),
     ("sound", "List or play notification sounds"),
@@ -365,6 +375,7 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
         "security" => ControlCommand::Security(hosts::security(args)?),
         "automation" => ControlCommand::Automation(hosts::automation(args)?),
         "remote" => ControlCommand::Remote(remote::remote(args)?),
+        "mod" => ControlCommand::Mod(mods::command(args)?),
         "search" => {
             let files = match args.verb().as_ref().and_then(|verb| verb.to_str()) {
                 Some("symbol" | "symbols") => false,
@@ -383,6 +394,7 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
         "config" => ControlCommand::Config(settings::config(args)?),
         "theme" => ControlCommand::Theme(settings::theme(args)?),
         "font" => ControlCommand::Font(settings::theme(args)?),
+        "language" => ControlCommand::Language(settings::language(args)?),
         "keybinds" => ControlCommand::Keybinds(settings::keybinds(args)?),
         "caffeine" => ControlCommand::Caffeine(settings::caffeine(args)?),
         "sound" => ControlCommand::Sound(settings::sound(args)?),

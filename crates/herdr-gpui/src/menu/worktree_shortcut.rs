@@ -2,8 +2,9 @@
 //! focused workspace, as in the TUI, by opening the dialog that workspace's
 //! menu row would open, confirmation included.
 
+// i18n: migrated
 use super::{Page, WorkspaceAction, workspace::WorkspaceTarget};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, i18n::fl};
 use gpui::{Context, Point, Window};
 use herdr_client::protocol::ClientShellSnapshot;
 
@@ -30,13 +31,13 @@ pub(super) enum Unavailable {
 }
 
 impl Unavailable {
-    pub(super) fn message(self) -> &'static str {
+    pub(super) fn message(self) -> String {
         match self {
-            Self::Disconnected => "Not connected, so no worktree can be changed",
-            Self::NoWorkspace => "No workspace is focused",
-            Self::NotGit => "This workspace is not a Git repository",
-            Self::MainCheckoutClosed => "Open this repository's main checkout to open a worktree",
-            Self::MainCheckout => "Only a linked worktree can be removed, not a main checkout",
+            Self::Disconnected => fl!("worktree-popover-change-disconnected"),
+            Self::NoWorkspace => fl!("worktree-popover-no-workspace"),
+            Self::NotGit => fl!("worktree-popover-not-git"),
+            Self::MainCheckoutClosed => fl!("worktree-popover-open-main-closed"),
+            Self::MainCheckout => fl!("worktree-popover-main-checkout"),
         }
     }
 }

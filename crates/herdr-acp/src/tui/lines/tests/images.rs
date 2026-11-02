@@ -30,6 +30,7 @@ fn the_terminal_names_a_picture_instead_of_drawing_it() {
             content: vec![ToolContent::Image { image: png() }],
             kind: ToolKind::Read,
             locations: Vec::new(),
+            parent: None,
             status: ToolStatus::Completed,
             title: "Read shot.png".to_owned(),
         }),

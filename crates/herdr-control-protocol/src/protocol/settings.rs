@@ -50,6 +50,9 @@ pub enum SettingsOp {
     Update,
     /// The integrations Herdr offers the selected host.
     Integrations,
+    /// The locale the windows show, and what chose it. Changing the
+    /// `language` setting is a file edit the command line makes itself.
+    Language,
 }
 
 impl SettingsOp {
@@ -151,6 +154,20 @@ pub enum Reply {
     Integrations {
         integrations: Vec<IntegrationInfo>,
     },
+    Language(LanguageInfo),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageInfo {
+    /// The `language` setting: "system" or a BCP 47 tag.
+    pub configured: String,
+    /// The pseudo-locale QA shows over the setting, when one is on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pseudo: Option<String>,
+    /// The BCP 47 tag of the locale the windows show.
+    pub locale: String,
+    /// "ltr" or "rtl".
+    pub direction: String,
 }
 
 #[cfg(test)]

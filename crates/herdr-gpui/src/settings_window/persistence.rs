@@ -1,9 +1,11 @@
 //! Loading and saving preferences off the UI thread, then reconciling the result,
 //! including the config watcher and the saves that finish when the app quits.
+// i18n: migrated
 use super::{Section, SettingsWindow, layouts, themes};
 use crate::{
     config::{Config, FontFace, Theme},
     herdr_settings::{self, Edit},
+    i18n::{Localize, fl},
 };
 use gpui::*;
 
@@ -214,6 +216,7 @@ impl SettingsWindow {
             let (shared, error, theme) = match herdr_settings::Settings::load() {
                 Ok(shared) => {
                     config.apply_shared_notifications(&shared);
+                    // i18n: data
                     let theme = if config.theme == "Follow Herdr" {
                         shared.theme(light)?.styled_for(&config)
                     } else {
@@ -221,10 +224,11 @@ impl SettingsWindow {
                     };
                     (Some(shared), None, theme)
                 }
+                // i18n: data
                 Err(error) if config.theme == "Follow Herdr" => return Err(error),
                 Err(error) => (
                     None,
-                    Some(format!("Load Herdr settings: {error}")),
+                    Some(fl!("settings-error-load-herdr", error = error.localize())),
                     config.theme(light)?,
                 ),
             };
@@ -251,6 +255,19 @@ impl SettingsWindow {
                     .as_ref()
                     .map(|_| (self.config.theme.clone(), self.theme.clone()));
                 crate::caffeine::set_scope(loaded.config.status_bar.keep_awake_scope, cx);
+                // Settings may outlive every main window, whose reload also follows it.
+                crate::i18n::follow_config(&loaded.config.language, cx);
+                // The language list's choices follow the setting (a tag
+                // without messages is listed), so a list opened before the
+                // setting changed would pick by stale positions.
+                if loaded.config.language != self.config.language
+                    && self
+                        .dropdown
+                        .as_ref()
+                        .is_some_and(|open| open.field == super::inputs::DropdownField::Language)
+                {
+                    self.dropdown = None;
+                }
                 self.config = loaded.config;
                 if let Some(mode) = self.layout_intent {
                     self.config.layout.mode = mode;
@@ -273,11 +290,7 @@ impl SettingsWindow {
                     source.read(cx).sound.set_volume(self.config.sound.volume);
                 }
             }
-            Err(error) => {
-                self.error = Some(format!(
-                    "Could not reload settings; keeping current preferences: {error}"
-                ))
-            }
+            Err(error) => self.error = Some(fl!("settings-error-reload", error = error.localize())),
         }
         // Appearance may have changed while the loader was running. Resolve
         // Follow Herdr from the prepared snapshot against the current OS mode.
@@ -461,13 +474,13 @@ impl SettingsWindow {
                 if !this.saving {
                     this.status = match (saved.is_ok(), reloaded) {
                         (true, true) => None,
-                        (true, false) => Some("Saved; could not reload current preferences".into()),
-                        (false, true) => Some("Save failed; reloaded current preferences".into()),
-                        (false, false) => Some("Save failed; reload before editing again".into()),
+                        (true, false) => Some(fl!("settings-saved-unreloaded")),
+                        (false, true) => Some(fl!("settings-save-failed-reloaded")),
+                        (false, false) => Some(fl!("settings-save-failed")),
                     };
                 }
                 if let Err(error) = &saved {
-                    this.error = Some(format!("Save settings: {error}"));
+                    this.error = Some(fl!("settings-error-save", error = error.localize()));
                 }
                 let _ = this.source.update(cx, |source, _| {
                     // The source's guarded file watcher owns applying changes.
@@ -483,7 +496,10 @@ impl SettingsWindow {
                             && let Err(error) = endpoint.reload_config()
                             && !this.saving
                         {
-                            this.status = Some(format!("Saved; daemon reload not queued: {error}"));
+                            this.status = Some(fl!(
+                                "settings-saved-daemon-unqueued",
+                                error = error.localize()
+                            ));
                         }
                     }
                 });

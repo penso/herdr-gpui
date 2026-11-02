@@ -4,7 +4,8 @@
 ; also the command line terminals and agents run, herdr-gpui-launcher.exe,
 ; which starts it without a console window, herdr-acp.exe, which the app starts
 ; chats with, herdr-remote-control.exe, the remote control daemon the app runs as
-; a scheduled task, herdr-automate.exe, the automation daemon, and the licenses.
+; a scheduled task, herdr-automate.exe, the automation daemon, herdr-nearby.exe,
+; the Bluetooth helper for nearby pairing and presence, and the licenses.
 ; Closing applications before replacing files also ends running chats, whose
 ; agents' sessions can be resumed, and Remote control, which the app starts
 ; again. It never installs, starts, or stops the Herdr daemon, and uninstalling
@@ -81,9 +82,18 @@ SetupLogging=yes
 SignTool={#SignTool}
 SignedUninstaller=yes
 #endif
+; Asks only when no language below matches Windows' display language.
+ShowLanguageDialog=auto
+
+; Each language takes Inno Setup's own translation of the wizard, then this
+; installer's text from installer\<tag>.isl, named for the app's language tag
+; (docs/i18n.md). Text the installer writes into the registry is in the
+; language Setup ran in.
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl,installer\en-US.isl"
 
 [Tasks]
-Name: "addtopath"; Description: "Add herdr-gpui to PATH, for terminals and agents"
+Name: "addtopath"; Description: "{cm:AddToPath}"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
@@ -92,6 +102,10 @@ Source: "{#SourceDir}\{#Launcher}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\herdr-acp.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\herdr-remote-control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#Automate}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\herdr-nearby.exe"; DestDir: "{app}"; Flags: ignoreversion
+; herdr-core keeps running Herdr 2 terminals after the app closes, and Setup
+; never stops it: a running one is replaced when Windows next restarts.
+Source: "{#SourceDir}\herdr-core.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
 Source: "{#SourceDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
 
 ; Uninstall removes only directories Setup created. Over an install.ps1 copy
@@ -106,7 +120,7 @@ Type: dirifempty; Name: "{app}"
 ; running app. Removed on uninstall. The app also registers its
 ; AppUserModelID for notifications on first use; that key goes too.
 [Registry]
-Root: HKCU; Subkey: "Software\Classes\herdr-gpui"; ValueType: string; ValueName: ""; ValueData: "URL:Herdr UI link"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\herdr-gpui"; ValueType: string; ValueName: ""; ValueData: "URL:{cm:LinkName,{#AppName}}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\herdr-gpui"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCU; Subkey: "Software\Classes\herdr-gpui\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"
 Root: HKCU; Subkey: "Software\Classes\herdr-gpui\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Launcher}"" ""%1"""
@@ -123,10 +137,10 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupA
 ; herdr-gpui.exe directly would flash a console window on every click.
 ; Windows 11 lists these under "Show more options": its compact menu only shows
 ; commands of packaged apps. Removed on uninstall.
-Root: HKCU; Subkey: "Software\Classes\Directory\shell\HerdrUI"; ValueType: string; ValueName: ""; ValueData: "Open in {#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\HerdrUI"; ValueType: string; ValueName: ""; ValueData: "{cm:OpenIn,{#AppName}}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\HerdrUI"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExe}"",0"
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\HerdrUI\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Launcher}"" open ""%V"""
-Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\HerdrUI"; ValueType: string; ValueName: ""; ValueData: "Open in {#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\HerdrUI"; ValueType: string; ValueName: ""; ValueData: "{cm:OpenIn,{#AppName}}"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\HerdrUI"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\{#AppExe}"",0"
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\HerdrUI\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#Launcher}"" open ""%V"""
 
@@ -256,7 +270,7 @@ begin
     exit;
   if not Exec(Exe, 'shutdown', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
   begin
-    Result := 'The automation daemon at ' + Exe + ' did not stop. Stop its runs with herdr-automate stop, then run Setup again.';
+    Result := FmtMessage(CustomMessage('AutomateDidNotStop'), [Exe]);
     exit;
   end;
   Waited := 0;
@@ -264,7 +278,7 @@ begin
   begin
     if Waited >= 30000 then
     begin
-      Result := 'The automation daemon at ' + Exe + ' is still running. Quit it, then run Setup again.';
+      Result := FmtMessage(CustomMessage('AutomateStillRunning'), [Exe]);
       exit;
     end;
     Sleep(200);

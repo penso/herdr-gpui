@@ -94,3 +94,5 @@ fn the_selected_theme_is_marked() {
         "  Default\n* Nord"
     );
 }
+
+mod language;

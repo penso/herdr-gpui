@@ -21,11 +21,14 @@ mod chats;
 mod code;
 mod composer;
 mod controls;
+mod core_panes;
 mod discovery;
 mod embeds;
+mod en_xa;
 mod feature;
 mod file_links;
 mod glide;
+mod ia;
 mod imessage;
 mod layouts;
 mod link;
@@ -35,21 +38,28 @@ mod notices;
 mod observed_status;
 mod observer_program;
 mod overlay;
+mod pasted;
 mod prepared;
 mod questions;
 mod recall;
+mod relocale;
+mod running;
 mod selection;
 mod session;
 mod start;
+mod stop;
+mod subagents;
 mod terminal_input;
 mod timeline;
 mod tool_glance;
 mod typography;
 mod user_messages;
+mod viewer;
 mod visual;
 mod widget_toggle;
 mod widgets;
 mod width;
+mod working;
 mod zoom;
 
 /// How long a test waits on a worker or a socket before failing.
@@ -228,6 +238,7 @@ fn send(stream: &mut Peer, message: &ServerMessage) {
 fn hello(since: Option<Cursor>) -> ClientMessage {
     ClientMessage::Hello {
         client: herdr_chat_protocol::ClientKind::Gui,
+        revision: herdr_chat_protocol::REVISION,
         since,
         version: VERSION,
     }

@@ -6,6 +6,7 @@
 //! on Windows they lie above it, so the window hides a page that one of its
 //! overlays reaches. Each workspace may also show VS Code in a panel to the
 //! right of its groups, or as a tab in its groups.
+// i18n: migrated
 
 #[cfg(any(target_os = "macos", windows, test))]
 mod annotate;

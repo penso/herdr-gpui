@@ -3,6 +3,7 @@
 //! keeps no record of how a host was added, so an SSH host is recognized by
 //! the names Coder's and Tailscale's own setups give it.
 
+use crate::i18n::fl;
 use herdr_client::ConnectTarget;
 use std::net::IpAddr;
 
@@ -67,19 +68,31 @@ impl Origin {
         }
     }
 
-    /// What the mark stands for, as its tooltip says it.
+    /// What the mark stands for, as its tooltip says it. A cloud provider's
+    /// noun is a key the message selects its translated word by.
     pub(crate) fn describe(self) -> String {
         match self {
-            Self::Local => "This machine".into(),
-            Self::Ssh => "SSH host".into(),
-            Self::Tailscale => "Tailscale host over SSH".into(),
-            Self::Wsl => "WSL distribution".into(),
+            Self::Local => fl!("sidebar-origin-local"),
+            Self::Ssh => fl!("sidebar-origin-ssh"),
+            Self::Tailscale => fl!("sidebar-origin-tailscale"),
+            Self::Wsl => fl!("sidebar-origin-wsl"),
             #[cfg(feature = "cloud")]
-            Self::Cloud { provider, ssh } => format!(
-                "{} {}{}",
-                crate::cloud::name(provider),
-                crate::cloud::noun(provider),
-                if ssh { " over SSH" } else { "" }
+            Self::Cloud {
+                provider,
+                ssh: false,
+            } => fl!(
+                "sidebar-origin-cloud",
+                provider = crate::cloud::name(provider),
+                noun = crate::cloud::noun(provider)
+            ),
+            #[cfg(feature = "cloud")]
+            Self::Cloud {
+                provider,
+                ssh: true,
+            } => fl!(
+                "sidebar-origin-cloud-ssh",
+                provider = crate::cloud::name(provider),
+                noun = crate::cloud::noun(provider)
             ),
         }
     }

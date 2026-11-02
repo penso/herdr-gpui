@@ -1,8 +1,10 @@
 //! The theme search box, result count and card grid on the Theme page.
 use super::{ROW_HEIGHT, Scope, SettingsWindow, grid};
+use crate::direction::Logical;
 use crate::{
     config::{Theme, ThemeName, corners},
     herdr_settings,
+    i18n::fl,
     settings_window::ui,
 };
 use gpui::{Context, Div, ScrollStrategy, Window, div, prelude::*, px, rgb, uniform_list};
@@ -46,16 +48,19 @@ impl SettingsWindow {
                     .debug_selector(|| "settings-theme-count".into())
                     .text_size(px(11.))
                     .text_color(rgb(theme.subtext()))
-                    .child(format!(
-                        "{} of {} themes{}",
-                        browser.filtered.len(),
-                        count,
-                        if browser.discovering {
-                            " / discovering installed themes..."
-                        } else {
-                            ""
-                        }
-                    )),
+                    .child(if browser.discovering {
+                        fl!(
+                            "settings-theme-count-discovering",
+                            shown = browser.filtered.len(),
+                            total = count,
+                        )
+                    } else {
+                        fl!(
+                            "settings-theme-count",
+                            shown = browser.filtered.len(),
+                            total = count,
+                        )
+                    }),
             )
             .child(
                 div()
@@ -80,7 +85,7 @@ impl SettingsWindow {
                             div()
                                 .debug_selector(|| "settings-theme-empty".into())
                                 .p(px(12.))
-                                .child("No matching themes. Try a shorter search."),
+                                .child(fl!("settings-theme-empty")),
                         )
                     })
                     .when(!browser.filtered.is_empty(), |el| {
@@ -91,7 +96,7 @@ impl SettingsWindow {
                                 cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
                                     this.schedule_grid_palettes(range.clone(), cx);
                                     range
-                                        .map(|row| div().h(px(ROW_HEIGHT)).w_full().flex().gap(px(6.)).children((0..this.themes.grid.columns).map(|column| {
+                                        .map(|row| div().h(px(ROW_HEIGHT)).w_full().row().gap(px(6.)).children((0..this.themes.grid.columns).map(|column| {
                                             let index = row * this.themes.grid.columns + column;
                                             if index >= this.themes.filtered.len() {
                                                 return div().flex_1().min_w_0().into_any_element();
@@ -117,21 +122,21 @@ impl SettingsWindow {
                                                 }
                                             };
                                              let source = match choice.scope {
-                                                Scope::Herdr => "Herdr",
+                                                Scope::Herdr => fl!("settings-theme-kind-herdr"),
                                                 Scope::App
                                                     if Theme::BUILTIN_NAMES
                                                         .contains(&name.as_str()) =>
                                                 {
-                                                    "Built-in"
+                                                    fl!("settings-theme-kind-built-in")
                                                 }
                                                 Scope::App
                                                      if std::path::Path::new(name)
                                                         .is_absolute()
                                                         || name.starts_with("~/") =>
                                                 {
-                                                    "File"
+                                                    fl!("settings-theme-kind-file")
                                                 }
-                                                Scope::App => "Ghostty",
+                                                Scope::App => fl!("settings-theme-kind-ghostty"),
                                             };
                                             div()
                                                 .id(index)
@@ -182,7 +187,7 @@ impl SettingsWindow {
                                                         .text_size(px(10.))
                                                         .text_color(rgb(this.theme.subtext()))
                                                         .truncate()
-                                                        .child(format!("{source}{}", if draft { " / Draft" } else if saved { " / Saved" } else { "" })),
+                                                        .child(if draft { fl!("settings-theme-card-draft", source = source) } else if saved { fl!("settings-theme-card-saved", source = source) } else { source }),
                                                 )
                                                 .on_click(cx.listener(
                                                     move |this, _, window, cx| {
@@ -210,11 +215,9 @@ impl SettingsWindow {
                 el.child(
                     div()
                         .debug_selector(|| "settings-theme-catalog-error".into())
-                        .child(format!(
-                            "Catalog discovery failed: {error}. Built-ins remain available."
-                        ))
+                        .child(fl!("settings-theme-catalog-error", error = error.as_str()))
                         .child(
-                            button("theme-retry-catalog", "Retry discovery".into())
+                            button("theme-retry-catalog", fl!("settings-theme-retry-catalog"))
                                 .on_click(
                                     cx.listener(|this, _, _, cx| this.discover_settings_themes(cx)),
                                 ),
@@ -225,11 +228,9 @@ impl SettingsWindow {
                 el.child(
                     div()
                         .debug_selector(|| "settings-theme-preview-error".into())
-                        .child(format!(
-                            "Preview unavailable: {error}. Keeping the last valid preview."
-                        ))
+                        .child(fl!("settings-theme-preview-error", error = error.as_str()))
                         .child(
-                            button("theme-retry-preview", "Retry preview".into()).on_click(
+                            button("theme-retry-preview", fl!("settings-theme-retry-preview")).on_click(
                                 cx.listener(|this, _, _, cx| this.request_theme_preview(cx)),
                             ),
                         ),

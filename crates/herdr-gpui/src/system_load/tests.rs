@@ -123,7 +123,10 @@ fn memory_share_is_bounded() {
     assert_eq!(Memory { used: 1, total: 0 }.percent(), 0.);
     assert_eq!(Memory { used: 3, total: 2 }.percent(), 100.);
     assert_eq!(Memory { used: 1, total: 4 }.percent(), 25.);
-    assert_eq!(gigabytes(3 << 29), "1.5 GB");
+    assert_eq!(
+        gigabytes(3 << 29).replace(['\u{2068}', '\u{2069}'], ""),
+        "1.5 GB"
+    );
 }
 
 #[test]
@@ -244,6 +247,7 @@ fn a_remote_shell_is_sampled_with_the_host_command() {
 }
 
 mod disk_uptime;
+mod en_xa;
 mod gpu;
 #[cfg(unix)]
 mod gpu_tool;

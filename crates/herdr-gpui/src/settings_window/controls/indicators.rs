@@ -1,32 +1,44 @@
 //! Agent status indicators: which of this client's sets draws status, and
 //! the edge rail. The Indicators page renders the choice; this keeps how a
 //! pick is saved.
+// i18n: migrated
 use super::*;
 use crate::config::{StatusIcons, preferences::Preference};
 
-/// The name the Indicators page gives a set.
-pub(in crate::settings_window) fn set_label(icons: StatusIcons) -> &'static str {
+/// The messages naming a set on the Indicators page, and saying in one
+/// line what sets it apart, under its preview.
+pub(in crate::settings_window) const fn set_messages(
+    icons: StatusIcons,
+) -> (&'static str, &'static str) {
     match icons {
-        StatusIcons::Dots => "Dots",
-        StatusIcons::Solid => "Solid",
-        StatusIcons::Outline => "Outline",
-        StatusIcons::Tiles => "Tiles",
-        StatusIcons::Wave => "Wave",
-        StatusIcons::Braille => "Braille",
-        StatusIcons::Orca => "Orca",
-    }
-}
-
-/// One line on what sets a set apart, under its preview.
-pub(in crate::settings_window) fn set_description(icons: StatusIcons) -> &'static str {
-    match icons {
-        StatusIcons::Dots => "Small dots; a ring with a turning arc while working.",
-        StatusIcons::Solid => "Filled discs with a cut-out mark; a crescent when idle.",
-        StatusIcons::Outline => "The same marks in outline, with an open arc spinning.",
-        StatusIcons::Tiles => "Each mark on a tile tinted with its status color.",
-        StatusIcons::Wave => "Superset's wave grid; every status drawn in its cells.",
-        StatusIcons::Braille => "Braille cells; blocked fills and empties dot by dot.",
-        StatusIcons::Orca => "Orca's stepping ring, question bubble, and ringed check.",
+        StatusIcons::Dots => (
+            "settings-indicators-set-dots",
+            "settings-indicators-set-dots-description",
+        ),
+        StatusIcons::Solid => (
+            "settings-indicators-set-solid",
+            "settings-indicators-set-solid-description",
+        ),
+        StatusIcons::Outline => (
+            "settings-indicators-set-outline",
+            "settings-indicators-set-outline-description",
+        ),
+        StatusIcons::Tiles => (
+            "settings-indicators-set-tiles",
+            "settings-indicators-set-tiles-description",
+        ),
+        StatusIcons::Wave => (
+            "settings-indicators-set-wave",
+            "settings-indicators-set-wave-description",
+        ),
+        StatusIcons::Braille => (
+            "settings-indicators-set-braille",
+            "settings-indicators-set-braille-description",
+        ),
+        StatusIcons::Orca => (
+            "settings-indicators-set-orca",
+            "settings-indicators-set-orca-description",
+        ),
     }
 }
 

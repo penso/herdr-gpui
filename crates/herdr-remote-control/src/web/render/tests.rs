@@ -20,6 +20,7 @@ mod picker;
 mod preview;
 mod search;
 mod settings;
+mod steps;
 mod terminal_paste;
 mod terminal_view;
 mod turn_patch;
@@ -41,6 +42,7 @@ pub(super) fn workspace(chats: Vec<ChatRow>) -> Workspace {
         label: "herdr-gpui".into(),
         branch: Some("main".into()),
         cwd: "/code/herdr-gpui".into(),
+        worktree: None,
         chats,
         terminals: vec![crate::hub::layout_terminal("t2", "zsh")],
     }

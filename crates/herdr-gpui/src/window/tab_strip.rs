@@ -1,12 +1,14 @@
 //! Each editor group's tab strip and frame, and the row of groups. Every
 //! group lists the same tabs, as an editor's groups do; which one a group
 //! shows is its own choice.
+// i18n: migrated
 
 mod curved;
 mod dividers;
 mod launcher;
 
 use super::{HerdrWindow, tab_drag::StripDrag};
+use crate::i18n::fl;
 #[cfg(test)]
 use crate::tab_layout::{DOT_GAP, ZOOM_ICON};
 use crate::{
@@ -35,10 +37,6 @@ const LIFT_GROW: f32 = 5.;
 /// How opaque the thumb draws over the strip's muted color, and while held.
 const THUMB_ALPHA: u32 = 0x80;
 const THUMB_HELD_ALPHA: u32 = 0xc0;
-
-/// What a group without tabs says, where its tab would show.
-const NO_TABS: &str =
-    "Open a terminal tab with \"+\", or another kind of tab from the \"\u{22ef}\" menu.";
 
 impl HerdrWindow {
     /// The layout View > Tab Layout picked.
@@ -152,10 +150,20 @@ impl HerdrWindow {
             ),
             &self.theme,
         );
+        // The tabs the user muted, or whose workspace they muted, read from
+        // a handle of their own so the strip can change below.
+        let shown = self.live.snapshot.clone();
+        let silenced = shown
+            .as_deref()
+            .map(|snapshot| {
+                let endpoint = &self.endpoints[self.selected_endpoint];
+                crate::notification_mutes::Mutes::silenced_in(cx, endpoint, snapshot)
+            })
+            .unwrap_or_default();
         // What the strip lists, measured, so the ones that just opened grow
         // in and the ones that just closed shrink out where they stood.
         let now = crate::motion::now();
-        let herdr: Vec<((Pick, SharedString), Lead, bool)> = self
+        let herdr: Vec<((Pick, SharedString), Lead, bool, bool)> = self
             .live
             .snapshot
             .as_ref()
@@ -174,6 +182,7 @@ impl HerdrWindow {
                             ),
                             herdr_mark(snapshot, t).lead(),
                             t.zoomed,
+                            silenced.tab(&t.tab_id),
                         )
                     })
                     .collect()
@@ -184,13 +193,14 @@ impl HerdrWindow {
             .chain(
                 self.browser_tab_labels(cx)
                     .into_iter()
-                    .map(|entry| (entry, Lead::Icon, false)),
+                    .map(|entry| (entry, Lead::Icon, false, false)),
             )
-            .filter(|((pick, _), _, _)| self.group_lists(slot.id, pick))
-            .map(|((tab, label), lead, zoomed)| {
+            .filter(|((pick, _), _, _, _)| self.group_lists(slot.id, pick))
+            .map(|((tab, label), lead, zoomed, muted)| {
                 let shape = TabShape {
                     lead,
                     zoomed,
+                    muted,
                     selected: pick.as_ref() == Some(&tab),
                 };
                 Listed {
@@ -219,7 +229,7 @@ impl HerdrWindow {
         let mut tabs = div()
             .id(SharedString::from(slot.selector("tabs")))
             .role(Role::TabList)
-            .aria_label("Tabs")
+            .aria_label(fl!("tab-strip-tabs"))
             .flex()
             .flex_none()
             .h(px(self.tab_strip_height()))
@@ -238,6 +248,8 @@ impl HerdrWindow {
                 let context_id = id.clone();
                 let close_id = id.clone();
                 let selected = matches!(&pick, Some(Pick::Herdr(picked)) if *picked == id);
+                let muted = silenced.tab(&id);
+                let label = herdr_client::text::tab_label(snapshot, tab);
                 let base = div()
                     .id(SharedString::from(format!("tab-{id}")))
                     .debug_selector({
@@ -245,7 +257,11 @@ impl HerdrWindow {
                         move || slot.selector(&format!("tab-{id}"))
                     })
                     .role(Role::Tab)
-                    .aria_label(herdr_client::text::tab_label(snapshot, tab).to_owned())
+                    .aria_label(if muted {
+                        fl!("tab-strip-muted", label = label)
+                    } else {
+                        label.to_owned()
+                    })
                     .aria_selected(selected)
                     .map(|control| faces.stop(control));
                 let face = TabFace {
@@ -254,6 +270,7 @@ impl HerdrWindow {
                         .into(),
                     mark: herdr_mark(snapshot, tab),
                     zoomed: tab.zoomed,
+                    muted,
                     probe: Probe::Herdr(id.clone()),
                     close: Box::new(cx.listener(move |this, _, window, cx| {
                         this.close_strip_tab(Pick::Herdr(close_id.clone()), window, cx);
@@ -405,7 +422,7 @@ impl HerdrWindow {
                         .id(SharedString::from(slot.selector("new-tab")))
                         .debug_selector(move || slot.selector("new-tab"))
                         .role(Role::Button)
-                        .aria_label("New tab")
+                        .aria_label(fl!("tab-strip-new-tab"))
                         .map(|control| {
                             self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control)
                         })
@@ -436,14 +453,14 @@ impl HerdrWindow {
             .children(self.strip_launcher(slot, launcher::Spot::Trailing, cx))
             .child(self.strip_button(
                 slot,
-                ("split-editor", "Split"),
+                ("split-editor", fl!("tab-strip-split")),
                 "icons/split.svg",
                 cx,
                 move |this, _, window, cx| this.split_group(slot.id, window, cx),
             ))
             .child(self.strip_button(
                 slot,
-                ("tab-actions", "Tab actions"),
+                ("tab-actions", fl!("tab-strip-actions")),
                 "icons/more.svg",
                 cx,
                 move |this, event, window, cx| {
@@ -588,7 +605,7 @@ impl HerdrWindow {
     fn strip_button(
         &self,
         slot: Slot,
-        (id, label): (&'static str, &'static str),
+        (id, label): (&'static str, String),
         icon: &'static str,
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &ClickEvent, &mut Window, &mut Context<Self>) + 'static,
@@ -630,7 +647,7 @@ impl HerdrWindow {
         keyboard: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let (title, note): (SharedString, &str) = match shown {
+        let (title, note): (SharedString, String) = match shown {
             Shown::Elsewhere(tab) => {
                 let label = self
                     .live
@@ -644,14 +661,16 @@ impl HerdrWindow {
                             .map(|tab| herdr_client::text::tab_label(snapshot, tab).to_owned())
                     })
                     .unwrap_or_else(|| tab.clone());
-                (label.into(), "Opening\u{2026}")
+                (label.into(), fl!("tab-strip-opening"))
             }
             // A terminal group whose connection has not shown its tab yet.
-            Shown::Terminal => ("".into(), "Opening\u{2026}"),
-            Shown::Empty if self.is_split() && self.group_tabs(slot.id, cx).is_empty() => {
-                ("No tabs".into(), NO_TABS)
-            }
-            Shown::Page(_) | Shown::Empty => ("".into(), "Nothing to show."),
+            Shown::Terminal => ("".into(), fl!("tab-strip-opening")),
+            // What a group without tabs says, where its tab would show.
+            Shown::Empty if self.is_split() && self.group_tabs(slot.id, cx).is_empty() => (
+                fl!("tab-strip-no-tabs").into(),
+                fl!("tab-strip-no-tabs-hint"),
+            ),
+            Shown::Page(_) | Shown::Empty => ("".into(), fl!("tab-strip-nothing")),
         };
         let elsewhere = matches!(shown, Shown::Elsewhere(_));
         self.config
@@ -708,7 +727,7 @@ impl HerdrWindow {
                         .text_color(rgb(self.theme.foreground))
                         .cursor_pointer()
                         .hover(|s| s.bg(rgb(self.theme.active)))
-                        .child("Show Here")
+                        .child(fl!("tab-strip-show-here"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.activate_group(slot.id, window, cx);
                         })),
@@ -858,7 +877,7 @@ impl HerdrWindow {
             })
             .child(column)
             // Last, so the grips lie over what the group shows.
-            .children(reach.grips(slot.index))
+            .children(reach.grips(slot.index, window, cx))
             .into_any_element()
     }
 

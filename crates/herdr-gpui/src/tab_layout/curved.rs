@@ -5,7 +5,7 @@
 
 use super::{
     Connected, DOT_GAP, FLOATING_NEW_TAB_WIDTH, TabContext, TabFace, TabLayout, TabShape, TabState,
-    ZOOM_ICON, close_button, floating_new_tab, kind_icon, status_mark, status_width, zoom_mark,
+    close_button, floating_new_tab, kind_icon, mute_mark, status_mark, status_width, zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme, mix},
@@ -41,13 +41,13 @@ const PILL_FOOT: f32 = 3.;
 pub(super) struct Curved;
 
 impl TabLayout for Curved {
+    fn panes(&self) -> &'static dyn super::panes::PaneChrome {
+        &super::panes::Curved
+    }
+
     fn width(&self, title: f32, shape: TabShape, font: &FontConfig, indicators: Indicators) -> f32 {
         let status = status_width(shape.lead, font, indicators).map_or(0., |dot| dot + GAP);
-        let zoom = if shape.zoomed {
-            DOT_GAP + ZOOM_ICON
-        } else {
-            0.
-        };
+        let zoom = shape.marks_width();
         (PAD_LEFT + ICON + GAP + title + zoom + GAP + status + CLOSE + PAD_RIGHT)
             .max(crate::TAB_WIDTH)
     }
@@ -71,6 +71,7 @@ impl TabLayout for Curved {
             label,
             mark,
             zoomed,
+            muted,
             probe,
             close,
         } = face;
@@ -109,7 +110,8 @@ impl TabLayout for Curved {
                     .items_center()
                     .gap(px(DOT_GAP))
                     .child(label)
-                    .children(zoom_mark(zoomed, &probe, text, cx)),
+                    .children(zoom_mark(zoomed, &probe, text, cx))
+                    .children(mute_mark(muted, &probe, text, cx)),
             )
             .children(status_mark(&mark, &probe, cx))
             .child(

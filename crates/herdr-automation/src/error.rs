@@ -12,6 +12,10 @@ pub enum Error {
     #[cfg(feature = "engine")]
     #[error("{0}")]
     Lua(#[from] mlua::Error),
+    /// The sandbox could not be set up or sealed.
+    #[cfg(feature = "engine")]
+    #[error(transparent)]
+    Luau(#[from] herdr_luau::Error),
     #[error("the script declares no caps; call herdr.caps {{ ... }} at its top level")]
     MissingCaps,
     #[error("the script declares no trigger; add herdr.at, herdr.every or herdr.cron")]
@@ -45,6 +49,13 @@ impl Error {
         match self {
             Self::Lua(mlua::Error::MemoryError(_)) => Some(Budget::Memory),
             Self::Lua(error) if error.chain().any(is_memory_error) => Some(Budget::Memory),
+            Self::Lua(error)
+                if error
+                    .downcast_ref::<herdr_luau::OutOfInstructions>()
+                    .is_some() =>
+            {
+                Some(Budget::Interrupts)
+            }
             _ => match self.refusal() {
                 Some(Refusal::Budget(budget)) => Some(*budget),
                 _ => None,

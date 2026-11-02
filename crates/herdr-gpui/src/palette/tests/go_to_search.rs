@@ -59,3 +59,31 @@ fn go_to_finds_agents_by_the_titles_and_label_the_sidebar_shows() {
         assert_eq!(found(query), agent_pane, "{query}");
     }
 }
+
+#[test]
+fn go_to_titles_agents_with_the_pane_name_the_sidebar_shows() {
+    let agent_row_title = |label: Option<&str>, title: Option<&str>| {
+        let mut snapshot = go_to_fixture();
+        snapshot.panes[0].label = label.map(str::to_owned);
+        snapshot.agents[0].title = title.map(str::to_owned);
+        let mut entries = Vec::new();
+        go_to_entries(crate::endpoint::LOCAL, None, &snapshot, &mut entries);
+        let agent_pane = Identity::Go(
+            crate::endpoint::LOCAL.into(),
+            NavigationTarget::Pane("w1:p1".into()),
+        );
+        entries
+            .into_iter()
+            .find(|entry| entry.action.identity() == agent_pane)
+            .map(|entry| entry.label.to_string())
+    };
+    assert_eq!(
+        agent_row_title(Some("shop-cash-eng question"), Some("Review")).as_deref(),
+        Some("Claude · shop-cash-eng question")
+    );
+    assert_eq!(
+        agent_row_title(None, Some("Review")).as_deref(),
+        Some("Claude · Review")
+    );
+    assert_eq!(agent_row_title(None, None).as_deref(), Some("Claude"));
+}

@@ -1,6 +1,15 @@
 //! Compact per-role controls and a root-level, transient family chooser.
+// i18n: migrated
 use super::*;
-use crate::{config::FontConfig, fonts::StyledFont};
+use crate::direction::Logical;
+use crate::{
+    config::FontConfig,
+    fonts::StyledFont,
+    i18n::{self, fl},
+};
+
+/// The terminal face's specimen: code, the same in every language.
+const TERMINAL_SAMPLE: &str = "let answer = 42;\nif answer != 0 {\n    println!(\"ready\");\n}"; // i18n: data
 
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
 #[derive(Default)]
@@ -21,7 +30,7 @@ pub(in crate::settings_window) fn native_probe(id: impl Into<String>) -> impl In
     )
     .absolute()
     .top_0()
-    .left_0()
+    .inset_s(px(0.))
     .size_full()
 }
 
@@ -91,20 +100,50 @@ pub(in crate::settings_window) fn face_font(config: &Config, face: FontFace) -> 
     }
 }
 
-pub(in crate::settings_window) fn family_label(family: &str) -> &str {
+/// How a family is shown: its name, which is data, except the platform's
+/// interface font.
+pub(in crate::settings_window) fn family_label(family: &str) -> String {
+    // i18n: data
     if family == ".SystemUIFont" {
-        "System font"
+        fl!("settings-fonts-system-font")
     } else {
-        family
+        family.to_owned()
     }
 }
 
-fn role_label(face: FontFace) -> &'static str {
+/// The message titling a face, its Settings row's.
+pub(in crate::settings_window) const fn face_message(face: FontFace) -> &'static str {
     match face {
-        FontFace::Terminal => "Terminal",
-        FontFace::Sidebar => "Sidebar",
-        FontFace::Tabs => "Tabs",
-        FontFace::Ui => "Interface",
+        FontFace::Terminal => "settings-fonts-terminal",
+        FontFace::Sidebar => "settings-fonts-sidebar",
+        FontFace::Tabs => "settings-fonts-tabs",
+        FontFace::Ui => "settings-fonts-ui",
+    }
+}
+
+/// The messages of the specimen's lines for a face. The terminal's is code,
+/// the same in every language.
+pub(in crate::settings_window) const fn sample_messages(face: FontFace) -> &'static [&'static str] {
+    match face {
+        FontFace::Terminal => &[],
+        FontFace::Sidebar => &[
+            "settings-fonts-sample-sidebar-1",
+            "settings-fonts-sample-sidebar-2",
+            "settings-fonts-sample-sidebar-3",
+        ],
+        FontFace::Tabs => &[
+            "settings-fonts-sample-tabs-1",
+            "settings-fonts-sample-tabs-2",
+        ],
+        FontFace::Ui => &["settings-fonts-sample-ui-1", "settings-fonts-sample-ui-2"],
+    }
+}
+
+/// Which face the picker sets, as its messages select it.
+fn role(target: FontTarget) -> &'static str {
+    match target {
+        FontTarget::All => "all",
+        FontTarget::Face(face) => face.name(),
     }
 }
 
@@ -227,7 +266,7 @@ impl SettingsWindow {
         div()
             .id(id)
             .debug_selector(move || selector.clone())
-            .flex()
+            .row()
             .items_center()
             .justify_center()
             .h(px(28.))
@@ -270,12 +309,12 @@ impl SettingsWindow {
     pub(in crate::settings_window) fn render_font_specimen(&self) -> Div {
         let font = self.control_specimen_font();
         let sample = match self.controls.active_face {
-            FontFace::Terminal => "let answer = 42;\nif answer != 0 {\n    println!(\"ready\");\n}",
-            FontFace::Sidebar => {
-                "herdr-gpui / workspace\n  claude  Working\n  codex   Ready for review"
-            }
-            FontFace::Tabs => "main.rs   agent / review\nChanges   Terminal   Preview",
-            FontFace::Ui => "Make room for focused work.\nYour preferences, your workspace.",
+            FontFace::Terminal => TERMINAL_SAMPLE.to_owned(),
+            face => sample_messages(face)
+                .iter()
+                .map(|line| i18n::message(line, &[]))
+                .collect::<Vec<_>>()
+                .join("\n"),
         };
         div()
             .debug_selector(|| "settings-font-specimen".into())
@@ -293,7 +332,7 @@ impl SettingsWindow {
             .p(px(20.))
             .rounded(px(corners::CONTROL))
             .bg(rgb(self.theme.surface))
-            .child(self.control_note(format!("{} px", font.size)))
+            .child(self.control_note(fl!("settings-fonts-size", size = font.size)))
             .child(
                 div()
                     .text_font(&font)
@@ -319,18 +358,15 @@ impl SettingsWindow {
             return None;
         }
         let target = self.controls.picker?;
-        let label = match target {
-            FontTarget::All => "All roles",
-            FontTarget::Face(face) => role_label(face),
-        };
+        let role = role(target);
         let list_height = (f32::from(window.viewport_size().height) - 340.).clamp(84., 336.);
         Some(
             div()
                 .absolute()
                 .top(px(36.))
                 .bottom(px(36.))
-                .left(px(184.))
-                .right_0()
+                .inset_s(px(184.))
+                .inset_e(px(0.))
                 .occlude()
                 .bg(rgb(self.theme.background).opacity(0.75))
                 .child(
@@ -350,8 +386,8 @@ impl SettingsWindow {
                     div()
                         .absolute()
                         .top(px(64.))
-                        .left(px(20.))
-                        .right(px(20.))
+                        .inset_s(px(20.))
+                        .inset_e(px(20.))
                         .occlude()
                         .id("settings-font-picker")
                         .debug_selector(|| "settings-font-picker".into())
@@ -374,15 +410,20 @@ impl SettingsWindow {
                         .shadow_lg()
                         .child(
                             div()
-                                .flex()
+                                .row()
                                 .items_center()
                                 .justify_between()
-                                .child(format!("Font family / {label}"))
+                                .child(fl!("settings-fonts-picker-title", role = role))
                                 .child(
-                                    self.font_button("settings-font-picker-close".into(), "Close")
-                                        .on_click(cx.listener(|this, _, window, cx| {
+                                    self.font_button(
+                                        "settings-font-picker-close".into(),
+                                        fl!("settings-fonts-picker-close"),
+                                    )
+                                    .on_click(cx.listener(
+                                        |this, _, window, cx| {
                                             this.dismiss_control_font_picker(window, cx)
-                                        })),
+                                        },
+                                    )),
                                 ),
                         )
                         .child(
@@ -396,12 +437,12 @@ impl SettingsWindow {
                                 .child(self.controls.search.clone()),
                         )
                         .child(self.control_note(if self.controls.discovering {
-                            "Loading installed fonts...".into()
+                            fl!("settings-fonts-loading")
                         } else {
-                            format!(
-                                "{} of {} installed families",
-                                self.controls.filtered.len(),
-                                self.controls.names.len()
+                            fl!(
+                                "settings-fonts-count",
+                                shown = self.controls.filtered.len(),
+                                total = self.controls.names.len(),
                             )
                         }))
                         .child(
@@ -429,7 +470,7 @@ impl SettingsWindow {
                                                 div()
                                                     .min_w_0()
                                                     .truncate()
-                                                    .child(family_label(&family).to_owned()),
+                                                    .child(family_label(&family)),
                                             )
                                             .on_click(
                                                 cx.listener(move |this, _, window, cx| {
@@ -459,12 +500,12 @@ impl SettingsWindow {
                         )
                         .when(
                             !self.controls.discovering && self.controls.filtered.is_empty(),
-                            |panel| panel.child(self.control_note("No matching fonts.")),
+                            |panel| panel.child(self.control_note(fl!("settings-fonts-no-match"))),
                         )
                         .child(
                             self.font_button(
                                 "settings-font-default".into(),
-                                format!("Use platform default family / {label}"),
+                                fl!("settings-fonts-picker-default", role = role),
                             )
                             .on_click(cx.listener(
                                 move |this, _, window, cx| {

@@ -6,8 +6,9 @@ use crate::{
     Caps, Error, Refusal, Result,
     step::{Call, Kind, Verdict},
     tokens,
-    vm::{self, Limits, Meter},
+    vm::{self, Limits},
 };
+use herdr_luau::Meter;
 use mlua::{Function, Lua, MultiValue, Value};
 use std::{cell::RefCell, fmt, rc::Rc};
 
@@ -64,7 +65,7 @@ impl Script {
         install_steps(&lua)?;
         vm::seal(&lua)?;
         meter.reset();
-        lua.load(source).set_name(format!("={name}")).exec()?;
+        herdr_luau::text(&lua, source, &name).exec()?;
         let declared = declared.replace(declare::Declared::closed());
         let caps = declared.caps.ok_or(Error::MissingCaps)?;
         if declared.triggers.is_empty() {

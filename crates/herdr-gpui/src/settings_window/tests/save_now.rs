@@ -105,7 +105,8 @@ fn footer_shows_pending_drafts_until_they_are_saved(cx: &mut TestAppContext) {
     fixture.view.read_with(cx, |view, _| {
         assert_eq!(
             view.footer_text(),
-            "Unsaved: layout \u{2014} saved when this window closes"
+            // The window isolates the list, as every placeable.
+            "Unsaved: \u{2068}layout\u{2069} \u{2014} saved when this window closes"
         );
     });
     let save = cx.debug_bounds("settings-footer-save").unwrap();

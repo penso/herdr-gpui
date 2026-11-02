@@ -76,3 +76,17 @@ fn status_bar_controls_save_typed_edits(cx: &mut TestAppContext) {
         Some(Preference::StatusBar(Edit::Theme(Button::Label)))
     );
 }
+
+/// The choices name messages, which `fl!` cannot check.
+#[test]
+fn choices_name_messages() {
+    let none: &[&str] = &[];
+    let messages = DETAILS
+        .iter()
+        .map(|(_, message)| *message)
+        .chain(SCOPES.iter().map(|(_, message)| *message))
+        .chain(STYLES.iter().map(|(_, message)| *message));
+    for message in messages {
+        assert_eq!(i18n::takes(message), Some(none), "{message}");
+    }
+}

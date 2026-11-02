@@ -1,6 +1,7 @@
 use super::*;
 
 mod complete;
+mod en_xa;
 mod form;
 mod local_network;
 mod sources;
@@ -233,7 +234,8 @@ fn only_plain_host_names_become_targets() {
 
 #[test]
 fn source_lists_read_as_prose() {
-    use super::render::sources;
+    // Without Fluent's isolation marks around each name.
+    let sources = |list: &[Source]| render::sources(list).replace(['\u{2068}', '\u{2069}'], "");
     assert_eq!(sources(&[Source::Bonjour]), "Bonjour");
     assert_eq!(
         sources(&[Source::Tailscale, Source::Bonjour]),

@@ -94,13 +94,31 @@ fn describe(item: &Value) -> Option<(String, wire::ToolKind, Vec<wire::ToolCallC
             wire::ToolKind::Read,
             Vec::new(),
         ),
-        "collabAgentToolCall" | "subAgentActivity" => (
-            field("prompt").unwrap_or("Subagent").to_owned(),
-            wire::ToolKind::Think,
-            Vec::new(),
-        ),
+        "collabAgentToolCall" => (collab_title(item), wire::ToolKind::Think, Vec::new()),
         _ => return None,
     })
+}
+
+/// A collab call's title: a sub-agent's task, or what the call does to one.
+/// (`subAgentActivity` items are not calls: they only report how a
+/// sub-agent stands.)
+fn collab_title(item: &Value) -> String {
+    let field = |key: &str| item.get(key).and_then(Value::as_str);
+    let prompt = field("prompt")
+        .and_then(|prompt| prompt.lines().find(|line| !line.trim().is_empty()))
+        .map(str::trim);
+    match (field("tool"), prompt) {
+        (Some("spawnAgent"), Some(prompt)) => prompt.to_owned(),
+        (Some("spawnAgent"), None) => "Start a sub-agent".to_owned(),
+        (Some("wait"), _) => "Wait for sub-agents".to_owned(),
+        (Some("sendInput" | "sendMessage" | "followupTask"), _) => "Message a sub-agent".to_owned(),
+        (Some("closeAgent"), _) => "Close a sub-agent".to_owned(),
+        (Some("interruptAgent"), _) => "Interrupt a sub-agent".to_owned(),
+        (Some("resumeAgent"), _) => "Resume a sub-agent".to_owned(),
+        (Some("listAgents"), _) => "List sub-agents".to_owned(),
+        (_, Some(prompt)) => prompt.to_owned(),
+        _ => "Sub-agent".to_owned(),
+    }
 }
 
 /// What a finished item printed or returned.

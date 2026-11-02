@@ -6,6 +6,7 @@ use super::super::{
     http::{Audience, Client},
     settings::is_segment,
 };
+use crate::cloud::Value;
 use serde::Deserialize;
 use std::{
     collections::HashMap,
@@ -94,7 +95,7 @@ fn group_path(settings: &Settings) -> String {
 
 fn sandbox_path(settings: &Settings, id: &str) -> Result<String> {
     if !is_segment(id) {
-        return Err(Error::Field("Azure sandbox ID"));
+        return Err(Error::Field(Value::AzureSandboxId));
     }
     Ok(format!("{}/sandboxes/{id}", group_path(settings)))
 }
@@ -104,7 +105,7 @@ pub(super) fn exec_stream_url(settings: &Settings, id: &str) -> Result<String> {
     let path = sandbox_path(settings, id)?;
     let path = path
         .strip_prefix("https://")
-        .ok_or(Error::Field("Azure sandbox endpoint"))?;
+        .ok_or(Error::Field(Value::AzureSandboxEndpoint))?;
     Ok(format!("wss://{path}/exec/stream"))
 }
 

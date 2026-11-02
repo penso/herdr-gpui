@@ -89,6 +89,7 @@ pub(super) async fn verify_themes(
         })
         .await?;
     let source_config = source.update(cx, |view, _, _| view.config.clone())?;
+    // i18n: data
     for (selection, name) in ["Nord", "Dracula", "Nord"].into_iter().enumerate() {
         if selection == 0 {
             let deadline = Instant::now() + Duration::from_secs(3);
@@ -275,6 +276,7 @@ pub(super) async fn verify_themes(
                 anyhow::Ok(())
             })
             .await?;
+        // i18n: data
         eprintln!("SIDEBAR Settings GPU capture: {}", printed_path.display());
     }
 
@@ -354,7 +356,7 @@ pub(super) async fn verify_themes(
                 actual.get("theme").and_then(toml::Value::as_str) == Some("Nord"),
                 "closing Settings did not persist the final Nord choice"
             );
-            expected.insert("theme".into(), toml::Value::String("Nord".into()));
+            expected.insert("theme".into(), toml::Value::String("Nord".into())); // i18n: data
             ensure!(
                 actual == expected,
                 "theme close changed unrelated sandbox config fields"

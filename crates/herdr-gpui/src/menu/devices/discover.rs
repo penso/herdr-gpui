@@ -5,6 +5,8 @@
 //! host or probes ports: only hosts that announce themselves, or that the
 //! user's own configuration names, are listed.
 
+use crate::i18n::fl;
+
 mod bonjour;
 mod complete;
 mod render;
@@ -48,11 +50,12 @@ pub(super) enum Source {
 impl Source {
     const ALL: [Self; 3] = [Self::SshConfig, Self::Tailscale, Self::Bonjour];
 
-    fn name(self) -> &'static str {
+    fn name(self) -> String {
         match self {
-            Self::SshConfig => "SSH config",
-            Self::Tailscale => "Tailscale",
-            Self::Bonjour => "Bonjour",
+            Self::SshConfig => fl!("devices-discover-ssh-config"),
+            // Products' names.
+            Self::Tailscale => "Tailscale".to_owned(), // i18n: data
+            Self::Bonjour => "Bonjour".to_owned(),     // i18n: data
         }
     }
 }

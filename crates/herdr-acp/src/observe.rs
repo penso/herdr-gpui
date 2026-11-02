@@ -10,6 +10,7 @@ mod tests;
 pub use error::{Error, Result};
 
 use crate::{
+    attach::Downgrade,
     cli::ObserveOptions,
     mirror::{Mirror, POLL, transcript::Source},
     session::{Attach, ConnId, Input},
@@ -52,7 +53,7 @@ fn inputs() -> io::Result<Receiver<ClientMessage>> {
 
 pub(crate) fn run(options: ObserveOptions) -> anyhow::Result<()> {
     let receiver = inputs()?;
-    handshake(&receiver)?;
+    let mut downgrade = Downgrade::new(handshake(&receiver)?);
     let mut observer = Observer::open(options)?;
     let (outbox, outgoing) = bounded(OUTBOX);
     observer.mirror.input(Input::Attach(Attach {
@@ -65,6 +66,9 @@ pub(crate) fn run(options: ObserveOptions) -> anyhow::Result<()> {
     let mut next_poll = Instant::now() + POLL;
     loop {
         for message in outgoing.try_iter() {
+            let message = downgrade
+                .message(message)
+                .context("the observer could not tell an older client a change")?;
             write_frame(&mut stdout, &message)?;
         }
         match receiver.recv_timeout(next_poll.saturating_duration_since(Instant::now())) {
@@ -96,18 +100,16 @@ pub(crate) fn run(options: ObserveOptions) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn handshake(receiver: &Receiver<ClientMessage>) -> anyhow::Result<()> {
-    let greeting = receiver.recv_timeout(GREETING)?;
-    if !matches!(
-        greeting,
+/// The protocol revision the client reads.
+fn handshake(receiver: &Receiver<ClientMessage>) -> anyhow::Result<u32> {
+    match receiver.recv_timeout(GREETING)? {
         ClientMessage::Hello {
+            revision,
             version: VERSION,
             ..
-        }
-    ) {
-        bail!("the observer requires a compatible chat greeting");
+        } => Ok(revision),
+        _ => bail!("the observer requires a compatible chat greeting"),
     }
-    Ok(())
 }
 
 /// The verified agent, its pinned transcript, and the view projected from it.

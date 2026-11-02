@@ -6,8 +6,11 @@
 //! Render reads [`HerdrWindow::zen_layout`] instead of zen mode rewriting the
 //! sidebar or status bar flags, so leaving it shows exactly what was there
 //! before, including toggles made while the chrome was hidden.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow};
+use crate::direction::Logical;
+use crate::i18n::fl;
 use crate::{
     browser::{Pick, Slot},
     config::ZenWidth,
@@ -76,8 +79,9 @@ impl ZenState {
 }
 
 /// `element`, `width` wide, in a box its own size that clips it, drawn
-/// further left as `shown` falls from 1 to 0.
-pub(crate) fn slide_left(element: impl IntoElement, width: f32, shown: f32) -> Div {
+/// further toward the start, the left or in a right-to-left language the
+/// right, as `shown` falls from 1 to 0.
+pub(crate) fn slide_start(element: impl IntoElement, width: f32, shown: f32) -> Div {
     div()
         .relative()
         .flex_none()
@@ -89,7 +93,7 @@ pub(crate) fn slide_left(element: impl IntoElement, width: f32, shown: f32) -> D
                 .absolute()
                 .top_0()
                 .bottom_0()
-                .left(px(-(1. - shown) * width))
+                .inset_s(px(-(1. - shown) * width))
                 .w(px(width))
                 .flex()
                 .child(element),
@@ -158,7 +162,7 @@ impl HerdrWindow {
             .sidebar_slide_shown()
             .filter(|_| !self.activity_bar_leads());
         match self.chrome_slide().map(|shown| shown.sidebar).or(toggled) {
-            Some(shown) => slide_left(column, width, shown).into_any_element(),
+            Some(shown) => slide_start(column, width, shown).into_any_element(),
             None => column,
         }
     }
@@ -218,8 +222,8 @@ impl HerdrWindow {
                 let key = self.keymap().primary(Command::ToggleZenMode);
                 self.show_flash(
                     Flash::success(match key {
-                        "" => "Zen mode: run Toggle Zen Mode to leave".to_owned(),
-                        key => format!("Zen mode: {key} to leave"),
+                        "" => fl!("window-notices-zen-command"),
+                        key => fl!("window-notices-zen-key", key = key),
                     }),
                     cx,
                 );

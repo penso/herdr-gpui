@@ -3,7 +3,7 @@
 
 use super::{Message, Urgency};
 use herdr_chat_protocol::{
-    Change, EntryKind, NoticeLevel, Status, Transcript, TurnEnd, TurnSummary, display,
+    Change, EntryKind, NoticeLevel, Permission, Status, Transcript, TurnEnd, TurnSummary,
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +52,9 @@ pub(crate) struct Notification {
     pub clear: bool,
     pub kind: Kind,
     pub pane: String,
+    /// The permission request a question is, for the native app's answer
+    /// buttons; the Web Push message leaves it out.
+    pub permission: Option<Permission>,
     /// One per chat, so a newer push replaces the older one.
     pub tag: String,
     pub title: String,
@@ -65,6 +68,7 @@ impl Notification {
             clear: false,
             kind,
             pane: chat.pane.to_owned(),
+            permission: None,
             tag: tag(chat.pane),
             title,
             urgency: if kind == Kind::Question {
@@ -131,12 +135,15 @@ pub(crate) fn decide(
                 return None;
             }
             let title = format!("{} needs an answer", chat.agent);
-            Some(Notification::new(
-                chat,
-                Kind::Question,
-                title,
-                body(chat, excerpt(&permission.title), None),
-            ))
+            Some(Notification {
+                permission: Some(permission.clone()),
+                ..Notification::new(
+                    chat,
+                    Kind::Question,
+                    title,
+                    body(chat, excerpt(&permission.title), None),
+                )
+            })
         }
         Change::PermissionResolved { id } => {
             let last = matches!(before.permissions.as_slice(), [only] if only.id == *id);
@@ -190,11 +197,7 @@ fn turn_ended(
     if summary.end == TurnEnd::Cancelled {
         return None;
     }
-    let mut facts = summary.describe();
-    if let Some(cost) = before.usage.as_ref().and_then(|usage| usage.cost.as_ref()) {
-        facts.push_str(" \u{b7} ");
-        facts.push_str(&display::cost(cost));
-    }
+    let facts = summary.describe();
     let answer = (privacy == Privacy::Excerpt)
         .then(|| last_answer(before))
         .flatten()

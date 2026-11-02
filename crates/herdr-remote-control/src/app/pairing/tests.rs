@@ -157,6 +157,7 @@ fn a_claim_asks_the_user_and_allow_waits_for_approval() {
             id: PairingId("p1".into()),
             allow: true,
             code: "428913".into(),
+            hosts: Vec::new(),
         }
     );
     assert!(matches!(
@@ -211,6 +212,7 @@ fn deny_ends_the_pairing() {
             id: PairingId("p1".into()),
             allow: false,
             code: "000111".into(),
+            hosts: Vec::new(),
         }
     );
     assert_eq!(pairing.phase(), &Phase::Denied);

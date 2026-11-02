@@ -4,6 +4,7 @@
 //! window code can raise one with [`HerdrWindow::show_flash`]; nothing here
 //! names individual messages. It fades in where it shows and fades back out
 //! when its time is up.
+// i18n: migrated
 
 use super::HerdrWindow;
 use crate::{

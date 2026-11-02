@@ -5,7 +5,7 @@
 
 use super::{
     DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, TabContext, TabFace, TabLayout, TabShape,
-    TabState, ZOOM_ICON, close_button, floating_new_tab, kind_icon, status_mark, zoom_mark,
+    TabState, close_button, floating_new_tab, kind_icon, mute_mark, status_mark, zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme, corners, mix},
@@ -34,13 +34,13 @@ const END: f32 = 16.;
 pub(super) struct Pills;
 
 impl TabLayout for Pills {
+    fn panes(&self) -> &'static dyn super::panes::PaneChrome {
+        &super::panes::Pills
+    }
+
     fn width(&self, title: f32, shape: TabShape, _: &FontConfig, _: Indicators) -> f32 {
         // Every pill has a chip and an end slot, whatever leads it.
-        let zoom = if shape.zoomed {
-            DOT_GAP + ZOOM_ICON
-        } else {
-            0.
-        };
+        let zoom = shape.marks_width();
         (2. * MARGIN_X + PAD_LEFT + CHIP + GAP + title + zoom + GAP + END + PAD_RIGHT)
             .max(crate::TAB_WIDTH)
     }
@@ -64,6 +64,7 @@ impl TabLayout for Pills {
             label,
             mark,
             zoomed,
+            muted,
             probe,
             close,
         } = face;
@@ -129,7 +130,8 @@ impl TabLayout for Pills {
                     .items_center()
                     .gap(px(DOT_GAP))
                     .child(label)
-                    .children(zoom_mark(zoomed, &probe, text, cx)),
+                    .children(zoom_mark(zoomed, &probe, text, cx))
+                    .children(mute_mark(muted, &probe, text, cx)),
             )
             .child(end);
         base.px(px(MARGIN_X))

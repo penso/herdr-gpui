@@ -35,6 +35,8 @@ fn approving_stores_the_device_privately_and_it_reloads() {
             last_seen_ms: None,
             push: false,
             connected: true,
+            via: None,
+            hosts: Vec::new(),
         }]
     );
     // No temporary file is left beside the store.

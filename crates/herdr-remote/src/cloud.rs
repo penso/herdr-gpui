@@ -18,8 +18,10 @@ mod providers;
 #[cfg(any(feature = "opensandbox", feature = "sprites"))]
 pub mod socket;
 pub mod unsynced;
+mod value;
+mod worker;
 
-pub use catalog::{SavedDevice, load, remove, rename, save};
+pub use catalog::{FILE as CATALOG_FILE, SavedDevice, load, remove, rename, save};
 pub use command::with_command;
 pub use herdr_client::CloudProvider;
 pub use providers::ProviderError;
@@ -27,6 +29,8 @@ pub use providers::{
     Deletion, Shape, Spec, connect, deletion, icon, image as image_support, name, noun, offer,
     provision,
 };
+pub use value::Value;
+pub use worker::Worker;
 
 use std::{io, path::PathBuf};
 
@@ -42,24 +46,47 @@ pub enum Error {
     },
     #[error("Invalid saved cloud devices.")]
     Json(#[source] serde_json::Error),
-    #[error("{0} is not valid.")]
-    Invalid(&'static str),
+    #[error("{0}")]
+    Invalid(Invalid),
     #[error("The cloud device is no longer saved.")]
     Missing,
     #[error("No state directory for saved cloud devices.")]
     StateDirectory,
     #[error("The cloud {0} worker stopped.")]
-    Worker(&'static str),
+    Worker(Worker),
     #[error("Could not run the command that reaches the machine.")]
     Process(#[source] io::Error),
     #[error("Cancelled.")]
     Cancelled,
     #[error("Installing Herdr failed: {0}")]
-    Install(String),
+    Install(install::Failure),
     #[error("Installing Herdr did not finish within 5 minutes.")]
     InstallTimeout,
     #[error("{0}")]
     Unavailable(&'static str),
+}
+
+/// What a cloud operation refused, each a whole sentence so the app can
+/// translate it as one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Invalid {
+    /// The saved cloud devices file is too large, not this version's, or
+    /// holds a device that fails its checks.
+    Catalog,
+    /// A device about to be saved fails its checks, or there are too many.
+    Device,
+    /// A connection meant for a cloud machine names another kind of host.
+    Target,
+}
+
+impl std::fmt::Display for Invalid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Catalog => write!(f, "{} is not valid.", catalog::FILE),
+            Self::Device => f.write_str("The cloud device is not valid."),
+            Self::Target => f.write_str("The cloud target is not valid."),
+        }
+    }
 }
 
 /// Why cloud machines cannot be used on this system, if they cannot. Each is
@@ -109,18 +136,6 @@ impl Step {
             // The build is most of a dispatch that needs one.
             Self::Image(progress) => 0.05 + 0.5 * progress.fraction().unwrap_or(0.0),
             Self::InstallingHerdr => 0.85,
-        }
-    }
-
-    pub fn text(&self) -> String {
-        match self {
-            Self::Creating => "Creating…".into(),
-            Self::Connecting => "Connecting…".into(),
-            Self::Starting => "Starting…".into(),
-            Self::Building(status) => format!("Building ({status})…"),
-            Self::CheckingHerdr => "Checking for Herdr…".into(),
-            Self::Image(progress) => format!("Building the image: {}", progress.text()),
-            Self::InstallingHerdr => "Installing Herdr…".into(),
         }
     }
 }

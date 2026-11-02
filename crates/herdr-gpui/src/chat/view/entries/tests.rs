@@ -1,6 +1,8 @@
 use super::*;
 use herdr_chat_protocol::ToolContent;
 
+mod states;
+
 #[core::prelude::v1::test]
 fn question_tool_labels_do_not_change_unknown_tools() {
     assert_eq!(tool_header("request_user_input"), "Ask user");

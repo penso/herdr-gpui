@@ -3,8 +3,10 @@
 
 use super::UpdateChannel;
 mod format;
+mod host;
 use super::error::{Error, Result};
 pub(super) use format::Format;
+pub use host::{HOST_TARGETS, download_host_build};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
@@ -33,8 +35,8 @@ const RELEASES_URL: &str = "https://api.github.com/repos/penso/herdr-gpui/releas
 /// The listing the grouped notes are read from. One page, sized to the cap, so
 /// a full page can be held under its own budget below.
 const HISTORY_URL: &str = "https://api.github.com/repos/penso/herdr-gpui/releases?per_page=20";
-/// A published release carries up to 116 assets, each about 2 KiB of metadata, so
-/// a page of twenty runs to roughly 5 MiB before any release bodies. The beta
+/// A published release carries up to 136 assets, each about 2 KiB of metadata, so
+/// a page of twenty runs to roughly 5.5 MiB before any release bodies. The beta
 /// channel's 4 MiB budget would truncate that request, which fails closed: the
 /// update would fall back to the target's notes with nothing said.
 const HISTORY_LIMIT: usize = 12 * 1024 * 1024;
@@ -166,6 +168,7 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
         1 => (&[Format::Archive], 3),
         2 => (&[Format::Deb, Format::Rpm, Format::Arch], 6),
         3 => (&[Format::Installer], format::WINDOWS_TARGETS.len()),
+        host::SCHEMA => (&[], HOST_TARGETS.len()),
         _ => return Err(Error::ManifestSchema),
     };
     if parse_version(&manifest.version).is_none() {
@@ -175,14 +178,16 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
         return Err(Error::ManifestAssetCount);
     }
     for (index, asset) in manifest.assets.iter().enumerate() {
-        let valid_name = if manifest.schema == 1 {
-            asset.name == asset_name(&manifest.version, &asset.target)?
-        } else {
-            formats.iter().any(|format| {
+        let valid_name = match manifest.schema {
+            1 => asset.name == asset_name(&manifest.version, &asset.target)?,
+            host::SCHEMA => {
+                host::name(&manifest.version, &asset.target).is_ok_and(|name| name == asset.name)
+            }
+            _ => formats.iter().any(|format| {
                 format
                     .name(&manifest.version, &asset.target)
                     .is_ok_and(|name| name == asset.name)
-            })
+            }),
         };
         if !valid_name
             || manifest.assets[..index].iter().any(|other| {

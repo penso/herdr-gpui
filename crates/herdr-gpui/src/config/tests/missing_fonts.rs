@@ -16,7 +16,7 @@ fn configured_families_that_are_not_installed_are_reported() -> anyhow::Result<(
     // Sorted and deduplicated; names match without regard to case.
     assert_eq!(config.missing_fonts, ["Gone Icons", "Nope Mono"]);
     assert_eq!(
-        config.diagnostic().as_deref(),
+        plain(config.diagnostic()).as_deref(),
         Some("Configured fonts not installed: \"Gone Icons\", \"Nope Mono\"")
     );
     Ok(())

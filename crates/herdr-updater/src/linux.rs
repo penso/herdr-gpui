@@ -1,6 +1,7 @@
 //! Native Linux packages are installed by their owning package manager. All
 //! queries, downloads, authentication prompts and process waits run on the worker.
 use super::{
+    Progress,
     error::{Error, Result},
     install,
     release::{self, Format},
@@ -281,7 +282,7 @@ fn installed_version(format: Format, cancel: &AtomicBool) -> Result<String> {
 pub(super) fn install(
     mut prepared: Prepared,
     cancel: &AtomicBool,
-    progress: impl FnMut(String),
+    mut progress: impl FnMut(Progress),
 ) -> Result<PathBuf> {
     if cancel.load(Ordering::Acquire) {
         return Err(Error::Cancelled);
@@ -299,7 +300,8 @@ pub(super) fn install(
         .arg(helper::FLAG)
         .arg(prepared.stage.path())
         .stdin(Stdio::null());
-    if let Err(error) = transact(command, progress) {
+    // The helper prints its progress, so its own steps come back as lines.
+    if let Err(error) = transact(command, |line| progress(Progress::from_helper(line))) {
         if matches!(error, Error::PackageCommand { .. }) {
             prepared.stage.disable_cleanup(false);
         }
@@ -314,7 +316,7 @@ fn apply(
     stage: &Path,
     key: &str,
     cancel: &AtomicBool,
-    mut progress: impl FnMut(String),
+    mut progress: impl FnMut(Progress),
 ) -> Result<()> {
     if locate(&package.executable, |command| {
         install::output(command, cancel)
@@ -336,8 +338,10 @@ fn apply(
     if !Path::new("/usr/bin/pkexec").is_file() {
         return Err(Error::MissingPolicyKit);
     }
-    progress("Approve the system authentication prompt to install the package...".into());
-    transact(helper::elevated_command(stage)?, &mut progress)?;
+    progress(Progress::Approve);
+    transact(helper::elevated_command(stage)?, |line| {
+        progress(Progress::Package(line));
+    })?;
     // Ignore cancellation after the transaction starts, including GUI teardown.
     let uncancelled = AtomicBool::new(false);
     let version = installed_version(package.format, &uncancelled)?;

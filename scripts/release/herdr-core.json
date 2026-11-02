@@ -1,0 +1,25 @@
+{
+  "version": "0.1.13",
+  "targets": {
+    "linux-aarch64": {
+      "url": "https://releases.herdr.dev/core/0.1.13/herdr-core-linux-aarch64.tar.gz",
+      "sha256": "82abc30deaf6e7daeca3c60eefc12708f0210f945c28062674be71fcfde17bd5"
+    },
+    "linux-x86_64": {
+      "url": "https://releases.herdr.dev/core/0.1.13/herdr-core-linux-x86_64.tar.gz",
+      "sha256": "d0dbfdd6e060832c629a6aed03687165479baceab5a5545a103490d0e4adab8c"
+    },
+    "macos-aarch64": {
+      "url": "https://releases.herdr.dev/core/0.1.13/herdr-core-macos-aarch64.tar.gz",
+      "sha256": "fc1ffba3820b93b0e2faa5394a64b9ff5528f135611b6034469d81c0fa1c37aa"
+    },
+    "macos-x86_64": {
+      "url": "https://releases.herdr.dev/core/0.1.13/herdr-core-macos-x86_64.tar.gz",
+      "sha256": "bfb8671d7d40517f8736ec32eb72b823429117db148012a69625afcec582b31d"
+    },
+    "windows-x86_64": {
+      "url": "https://releases.herdr.dev/core/0.1.13/herdr-core-windows-x86_64.zip",
+      "sha256": "1b2998c72d6f36a600ca1d0d00be0389bac66b7f900e5e2e6dc6209c2abd5551"
+    }
+  }
+}

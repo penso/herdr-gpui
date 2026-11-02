@@ -191,7 +191,9 @@ impl<R: FnMut(Update)> Session<R> {
         if self.acp_session.as_ref() != Some(&notification.session_id) {
             return;
         }
-        let changes = self.projector.update(&self.transcript, notification.update);
+        let changes = self
+            .projector
+            .update(&self.transcript, notification.update, now_ms());
         self.emit_all(changes);
     }
 
@@ -330,8 +332,10 @@ impl<R: FnMut(Update)> Session<R> {
             .transcript
             .turn
             .map_or_else(now_ms, |turn| turn.started_ms);
+        let ended = now_ms();
         let summary = self.projector.turn(TurnSummary {
-            duration_ms: now_ms().saturating_sub(started),
+            duration_ms: ended.saturating_sub(started),
+            ended_ms: Some(ended),
             end,
             tokens,
         });
@@ -365,6 +369,8 @@ impl<R: FnMut(Update)> Session<R> {
             self.emit(Change::Turn { turn: None });
         }
         self.clear_queue();
+        let gone = project::kill_all(&self.transcript, now_ms());
+        self.emit_all(gone);
         let level = if code == Some(0) {
             NoticeLevel::Info
         } else {

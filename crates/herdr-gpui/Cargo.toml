@@ -27,12 +27,16 @@ gix.workspace                  = true
 # default features off, so no Luau is built here.
 herdr-automation.workspace     = true
 herdr-chat-protocol.workspace  = true
+herdr-backend.workspace        = true
 herdr-client.workspace         = true
 herdr-commands.workspace       = true
 herdr-control-protocol.workspace = true
+herdr-core-client.workspace    = true
 herdr-credentials.workspace    = true
 herdr-diagnostics.workspace    = true
 herdr-github.workspace         = true
+herdr-i18n.workspace           = true
+herdr-mods.workspace           = true
 herdr-orchestrator.workspace   = true
 herdr-remote.workspace         = true
 # Remote control without its server: the control protocol and `app`.
@@ -67,6 +71,7 @@ toml.workspace                 = true
 toml_edit.workspace            = true
 tracing.workspace              = true
 tracing-subscriber.workspace   = true
+unicode-bidi.workspace = true
 unicode-properties.workspace = true
 unicode-segmentation.workspace = true
 unicode-width.workspace        = true
@@ -74,6 +79,8 @@ ureq.workspace                 = true
 uuid.workspace                 = true
 
 [build-dependencies]
+# Parses the `.ftl` files so `fl!` calls are checked against them.
+fluent-syntax.workspace = true
 winresource.workspace = true
 
 [dev-dependencies]
@@ -128,7 +135,8 @@ integration-test = [
 ]
 
 [target.'cfg(unix)'.dependencies]
-rustix.workspace = true
+# `system`: the host name nearby pairing advertises over Bluetooth.
+rustix = { features = ["system"], workspace = true }
 
 # wry has no working GPUI child-view backend on Linux yet; browser tabs there
 # open in the system browser instead.

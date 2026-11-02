@@ -64,6 +64,7 @@ impl Links {
                     target: link,
                     row: 0,
                     columns: 0..0,
+                    continued: Vec::new(),
                 },
             }) else {
                 return;

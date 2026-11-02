@@ -1,5 +1,6 @@
 use super::*;
 use crate::model::{Balance, Severity, Unit, countdown, group};
+use crate::text::Text;
 
 #[test]
 fn labels_count_down_in_the_two_coarsest_units() {
@@ -22,7 +23,7 @@ fn labels_count_down_in_the_two_coarsest_units() {
         session.label(now + Duration::from_secs(20_000)),
         "2% used 0m"
     );
-    let named = Window::new(Kind::Named("Fable".into()), 0., Some(now), None);
+    let named = Window::new(Kind::Named(Text::service("Fable")), 0., Some(now), None);
     assert_eq!(named.label(now), "0% used Fable");
     for (kind, suffix) in [
         (Kind::Session, "5h"),
@@ -57,15 +58,20 @@ fn pace_compares_use_with_an_even_spend() {
 
 #[test]
 fn balances_read_in_their_own_unit() {
-    let usd = Balance::new("Credits", 12.3, Unit::Currency("USD".into()));
+    let usd = Balance::new(Text::service("Credits"), 12.3, Unit::Currency("USD".into()));
     assert_eq!(usd.text(), "$12.30");
     assert_eq!(usd.clone().out_of(50.).text(), "$12.30 of $50.00");
     assert_eq!(
-        Balance::new("Left", 4.5, Unit::Currency("EUR".into())).text(),
+        Balance::new(Text::service("Left"), 4.5, Unit::Currency("EUR".into())).text(),
         "4.50 EUR"
     );
     assert_eq!(
-        Balance::new("Points", 1_250_000., Unit::Count("points".into())).text(),
+        Balance::new(
+            Text::service("Points"),
+            1_250_000.,
+            Unit::Count(crate::model::Count::Points)
+        )
+        .text(),
         "1,250,000 points"
     );
     assert_eq!(group(-1234), "-1,234");

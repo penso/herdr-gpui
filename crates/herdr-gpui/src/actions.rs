@@ -83,6 +83,14 @@ pub(crate) struct ShowToastPreview {
     pub(crate) kind: herdr_client::protocol::SemanticNotificationKind,
 }
 
+/// QA > Pseudo-Locale: shows every translated message in `pseudo`, or the
+/// `language` setting's locale again when it is already on.
+#[derive(Clone, PartialEq, serde::Deserialize, Action)]
+#[action(no_json)]
+pub(crate) struct TogglePseudoLocale {
+    pub(crate) pseudo: herdr_i18n::Pseudo,
+}
+
 /// QA: posts an OS notification for the focused pane after a short delay.
 #[derive(Clone, PartialEq, serde::Deserialize, Action)]
 #[action(no_json)]

@@ -28,7 +28,7 @@ fn a_running_server_is_saved_with_a_warning_after_the_cli_refuses_a_restart() ->
     assert!(
         outcome
             .warning()
-            .is_some_and(|text| text.starts_with("Device added"))
+            .is_some_and(|id| crate::i18n::message(id, &[]).starts_with("Device added"))
     );
     Ok(())
 }

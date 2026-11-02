@@ -97,6 +97,8 @@ pub(crate) fn terminal(
                 }
             }
             (terminal_screen(screen))
+            // What was typed but is not on the screen yet (app.js).
+            div id="term-echo" class="term-echo" hidden aria-label="Typed, not on the screen yet" { span {} }
             // Taps on the screen bring up the keyboard through this field;
             // what is typed goes to the pane key by key.
             textarea id="term-input" class="term-input" autocapitalize="off" autocomplete="off"

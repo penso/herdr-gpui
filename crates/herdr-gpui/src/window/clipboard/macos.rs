@@ -13,6 +13,7 @@ use std::{
     ffi::OsString,
     io::{self, Read},
     os::{fd::OwnedFd, unix::net::UnixStream},
+    path::{Path, PathBuf},
     process::{Child, Command, ExitCode, ExitStatus, Stdio},
     thread,
     time::{Duration, Instant},
@@ -35,6 +36,10 @@ pub enum Error {
     // keep-sorted start
     #[error("The macOS clipboard reader exited unsuccessfully ({0}). Try pasting again.")]
     Exited(ExitStatus),
+    #[error(
+        "Herdr's app was removed or replaced since it started, so it cannot read the clipboard. Restart Herdr to paste."
+    )]
+    Missing(PathBuf),
     #[error("Could not run the macOS clipboard reader")]
     Process(#[source] io::Error),
     #[error("The macOS clipboard reader returned an invalid response")]
@@ -54,9 +59,20 @@ impl From<Error> for crate::Error {
 /// reservation still owns ordering, target validation, and cancellation.
 pub(super) fn read(image_only: bool) -> crate::Result<Option<ClipboardItem>> {
     let executable = std::env::current_exe().map_err(Error::Process)?;
+    let mut command = reader_command(&executable, image_only)?;
+    acquire(&mut command, Instant::now() + TIMEOUT, OUTPUT_LIMIT)
+}
+
+/// The reader is this executable run again, so it needs the file the app
+/// started from. A rebuilt or deleted bundle leaves the running app
+/// without one; saying so beats a bare spawn failure.
+fn reader_command(executable: &Path, image_only: bool) -> Result<Command, Error> {
+    if !executable.is_file() {
+        return Err(Error::Missing(executable.to_owned()));
+    }
     let mut command = herdr_client::new_command(executable);
     command.args([HELPER, if image_only { "image" } else { "normal" }]);
-    acquire(&mut command, Instant::now() + TIMEOUT, OUTPUT_LIMIT)
+    Ok(command)
 }
 
 /// Private subprocess entry point. Invalid arguments exit without reading the

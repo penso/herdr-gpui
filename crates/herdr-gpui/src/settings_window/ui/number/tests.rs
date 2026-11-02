@@ -76,7 +76,7 @@ impl Render for Harness {
             id,
             value: 14.,
             range: 0.0..=48.0,
-            unit: "px",
+            unit: Unit::Pixels,
             look,
             enabled,
         };

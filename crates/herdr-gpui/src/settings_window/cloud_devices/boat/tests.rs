@@ -10,6 +10,7 @@ mod counts;
 mod credential_ordering;
 mod keychain;
 mod lifecycle;
+mod messages;
 mod recovery;
 mod setup_script;
 

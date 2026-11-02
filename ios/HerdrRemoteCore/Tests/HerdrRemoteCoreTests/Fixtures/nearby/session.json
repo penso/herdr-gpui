@@ -1,0 +1,15 @@
+{
+  "aes_nonce": "AQIDBAUGBwgJCgsM",
+  "code": "595503",
+  "commit": "pAm21o2EEo_baHsd3sfOqyUTVMLFJphsz1Jo7RVWrXQ",
+  "daemon_nonce": "UlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlJSUlI",
+  "daemon_private_key": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI",
+  "daemon_public_key": "BDrThhqVYhOSUWu1k-8FWD7S5YZvXLYmCjAXI3_Ym5Cv0JYcfjcHWmeRo5xh9WKVsCttJlZ7YV5gqkHuHI6DOI0",
+  "fingerprint": "9E92A0DF1CE0967EC34C0C0146005FBC51654330E7D26EC9B5805055755E24F6",
+  "key": "_SPZYoZlmwsHrUnHgAAWYoh6sosjMSWjpj3jUtr6VBA",
+  "phone_nonce": "MTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE",
+  "phone_private_key": "ISEhISEhISEhISEhISEhISEhISEhISEhISEhISEhISE",
+  "phone_public_key": "BEYtuhrk_BqWi02s8gzdbb4frjSqlxUUpj00BcPRz9ODtYu7CMEzg0KMWFPHHEyFHhNLBWgh5Gj-Cpd6v0MT3eE",
+  "plaintext": "{\"token\":\"enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6eno\",\"origins\":[\"https://192.168.1.20:7443\",\"https://100.64.0.3:7443\"]}",
+  "sealed": "AQIDBAUGBwgJCgsMyGVfrGaHP-htdmFn0MaFV87ORC2p_h8nf7vStMl-OSVmLk95ix8yShk1LuLUBP1OQE6sH3T1VdnOnobQuP0fIZtlBYis2N5ri_kx6rfvPcGk4o0pDZrJZIYLyuJFRcOBa7MrQ9naninec8q2vPbIX1EI2or7Muq3iorKWSXzIA5cfIgMggz3RB4"
+}

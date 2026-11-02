@@ -1,8 +1,17 @@
 name: Nix
 
-# The flake builds from source with the pinned toolchain, so it can only break
-# when its inputs, the lockfile, or the toolchain pin change.
+# The flake builds from source with the pinned toolchain. Pushes and pull
+# requests run it when its inputs, the lockfile, or the toolchain pin change;
+# the release workflow calls it for every release, because one cargo build of
+# all five packages unifies their features and can fail where CI's per-crate
+# builds pass.
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Full commit SHA to build
+        required: true
+        type: string
   pull_request:
     paths:
       - flake.nix
@@ -22,12 +31,16 @@ on:
 
 permissions: {}
 
+# A called workflow sees its caller's github context, so the workflow name
+# keeps a release's build out of the push builds' group, where a push to main
+# would cancel it.
 concurrency:
-  group: nix-${{ github.ref }}
+  group: nix-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
+    # Called from the release workflow, event_name is its workflow_dispatch.
     if: >-
       github.repository == 'penso/herdr-gpui' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
@@ -48,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
       - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
       - name: Check the flake and build the package in the Nix sandbox

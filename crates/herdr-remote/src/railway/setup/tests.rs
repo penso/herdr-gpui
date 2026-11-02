@@ -43,7 +43,12 @@ fn herdr_is_installed_before_a_session_only_when_approved_and_only_if_it_took() 
     let declined = ensure_herdr(vm(home.path(), true), false, &|| false, &report);
     assert!(matches!(
         declined,
-        Err(Error::Cloud(cloud::Error::Install(text))) if text.contains("allow installing")
+        Err(Error::Cloud(cloud::Error::Install(
+            install::Failure::NotInstalled {
+                machine: None,
+                retry: install::Retry::Allow,
+            }
+        )))
     ));
     assert!(!installed() && steps.borrow().is_empty());
 
@@ -51,7 +56,9 @@ fn herdr_is_installed_before_a_session_only_when_approved_and_only_if_it_took() 
     let failed = ensure_herdr(vm(home.path(), false), true, &|| false, &|_| {});
     assert!(matches!(
         failed,
-        Err(Error::Cloud(cloud::Error::Install(text))) if text.contains("expected paths")
+        Err(Error::Cloud(cloud::Error::Install(
+            install::Failure::Missing
+        )))
     ));
 
     ensure_herdr(vm(home.path(), true), true, &|| false, &report).unwrap();

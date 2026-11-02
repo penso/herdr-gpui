@@ -13,6 +13,7 @@
 //! protocol survives the trip.
 
 use super::{Error, Result, http::authorization, store};
+use crate::cloud::Value;
 use crate::cloud::socket::{self, Header, pending};
 use std::{
     ffi::OsString,
@@ -63,12 +64,12 @@ pub fn run_helper(args: &[OsString]) -> Option<ExitCode> {
 }
 
 fn run(account: &OsString, sprite: &OsString, remote: &[OsString]) -> Result<u8> {
-    let account = account.to_str().ok_or(Error::Encoding("account"))?;
-    let sprite = sprite.to_str().ok_or(Error::Encoding("sprite name"))?;
+    let account = account.to_str().ok_or(Error::Encoding(Value::Account))?;
+    let sprite = sprite.to_str().ok_or(Error::Encoding(Value::SpriteName))?;
     // Like `ssh`, the remote command is its arguments joined by spaces.
     let command = remote
         .iter()
-        .map(|part| part.to_str().ok_or(Error::Encoding("remote command")))
+        .map(|part| part.to_str().ok_or(Error::Encoding(Value::RemoteCommand)))
         .collect::<Result<Vec<_>>>()?
         .join(" ");
     let settings = super::connect::settings(account)?;

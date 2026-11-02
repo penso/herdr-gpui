@@ -3,7 +3,7 @@
 //! not the truth: before reusing an image the provider is asked whether it
 //! still holds it. One image per project and provider is kept.
 
-use super::{Error, Result, key::Project};
+use super::{Error, Field, Result, key::Project};
 use crate::cloud::CloudProvider;
 use std::{
     fs,
@@ -11,7 +11,8 @@ use std::{
     path::Path,
 };
 
-const FILE: &str = "sandbox-images.json";
+/// The image records file under the state directory.
+pub const FILE: &str = "sandbox-images.json";
 /// Room for every project's failed build log at its longest.
 const LIMIT: u64 = 16 * 1024 * 1024;
 const MAX_PROJECTS: usize = 500;
@@ -107,11 +108,11 @@ fn read(path: &Path) -> Result<Vec<Entry>> {
         .read_to_end(&mut bytes)
         .map_err(io(path))?;
     if bytes.len() as u64 > LIMIT {
-        return Err(Error::Field(FILE));
+        return Err(Error::Field(Field::Catalog));
     }
     let document: Document = serde_json::from_slice(&bytes).map_err(Error::Json)?;
     if document.version != 1 || document.projects.len() > MAX_PROJECTS {
-        return Err(Error::Field(FILE));
+        return Err(Error::Field(Field::Catalog));
     }
     Ok(document.projects)
 }
@@ -172,7 +173,7 @@ pub fn record(project: &Project, origin: Origin, mut image: Image) -> Result<Vec
             Some(index) => index,
             None => {
                 if projects.len() >= MAX_PROJECTS {
-                    return Err(Error::Field("the number of projects with images"));
+                    return Err(Error::Field(Field::Projects));
                 }
                 projects.push(Entry {
                     project: project.clone(),

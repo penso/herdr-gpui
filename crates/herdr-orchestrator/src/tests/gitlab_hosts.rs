@@ -245,27 +245,32 @@ fn glabs_config_is_found_where_glab_looks() {
     assert_eq!(path(&[("LOCALAPPDATA", "C:/Local")], false), platform);
 }
 
-/// The listing reaches the mapped API over the wire, not the SSH host.
+/// The listing reaches the mapped API over the wire, not the SSH host: both
+/// the issues and the merge requests.
 #[test]
 fn a_sync_requests_the_mapped_api_host() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let server = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut head = Vec::new();
-        loop {
-            let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
-            if line.trim_end().is_empty() {
-                break;
-            }
-            head.push(line.trim_end().to_owned());
-        }
-        (&stream)
-            .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]")
-            .unwrap();
-        head
+        (0..2)
+            .map(|_| {
+                let (stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut head = Vec::new();
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line.trim_end().is_empty() {
+                        break;
+                    }
+                    head.push(line.trim_end().to_owned());
+                }
+                (&stream)
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]")
+                    .unwrap();
+                head
+            })
+            .collect::<Vec<_>>()
     });
     let config = format!(
         "hosts:\n    gitlab.example.com:\n        api_host: {address}\n        api_protocol: http\n        ssh_host: gitlab-ssh.example.com\n"
@@ -273,16 +278,20 @@ fn a_sync_requests_the_mapped_api_host() {
     let (key, api) = api_for("git@gitlab-ssh.example.com:group/project.git", &config);
     let listing = gitlab::sync((&key, &api), None, None, &|| false, &mut None).unwrap();
     assert!(listing.complete && listing.items.is_empty());
-    let head = server.join().unwrap();
-    assert!(
-        head[0].starts_with("GET /api/v4/projects/group%2Fproject/issues?"),
-        "{head:?}"
-    );
-    assert!(
-        head.iter()
-            .any(|line| line.eq_ignore_ascii_case(&format!("host: {address}"))),
-        "{head:?}"
-    );
+    let heads = server.join().unwrap();
+    for (head, collection) in heads.iter().zip(["issues", "merge_requests"]) {
+        assert!(
+            head[0].starts_with(&format!(
+                "GET /api/v4/projects/group%2Fproject/{collection}?"
+            )),
+            "{head:?}"
+        );
+        assert!(
+            head.iter()
+                .any(|line| line.eq_ignore_ascii_case(&format!("host: {address}"))),
+            "{head:?}"
+        );
+    }
 }
 
 /// A host that cannot be reached is named, so a wrong one is visible.

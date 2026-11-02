@@ -12,7 +12,13 @@ use uuid::Uuid;
 use crate::Error;
 
 /// The Herdr pane metadata token whose value is the program's `EndpointId`.
+/// A herdr-core terminal carries it as a label of the same name, set by the
+/// client that started the program there.
 pub const TOKEN: &str = "acp";
+
+/// The environment variable that gives a program the `EndpointId` to listen
+/// on, so the client that starts it knows the endpoint before it runs.
+pub const ENDPOINT_ENV: &str = "HERDR_ACP_ENDPOINT";
 
 /// A program's socket name: 32 lowercase hexadecimal digits.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

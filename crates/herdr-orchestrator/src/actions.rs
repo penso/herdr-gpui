@@ -85,15 +85,27 @@ pub enum Action {
 
 impl Action {
     /// What the user reads once it succeeded.
-    fn done(&self) -> &'static str {
+    fn done(&self) -> Done {
         match self {
-            Self::Dispatch(_) => "Agent started",
-            Self::Stop { .. } => "Agent stopped",
-            Self::Send { .. } => "Message sent",
-            Self::Remove { .. } => "Run removed",
-            Self::DeleteBead { .. } => "Bead deleted",
+            Self::Dispatch(_) => Done::Started,
+            Self::Stop { .. } => Done::Stopped,
+            Self::Send { .. } => Done::Sent,
+            Self::Remove { .. } => Done::Removed,
+            Self::DeleteBead { .. } => Done::BeadDeleted,
         }
     }
+}
+
+/// What an action did, for the app to say in its own words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Done {
+    // keep-sorted start
+    BeadDeleted,
+    Removed,
+    Sent,
+    Started,
+    Stopped,
+    // keep-sorted end
 }
 
 /// Whether `model` is a name an agent's `--model` could take: no spaces,
@@ -107,8 +119,8 @@ pub fn valid_model(model: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '@'))
 }
 
-/// Runs `action` to completion; the success text, or why it failed.
-pub fn perform(site: &Site, action: &Action, cancelled: &AtomicBool) -> Result<&'static str> {
+/// Runs `action` to completion; what it did, or why it failed.
+pub fn perform(site: &Site, action: &Action, cancelled: &AtomicBool) -> Result<Done> {
     match action {
         Action::Dispatch(request) => dispatch(site, request, cancelled)?,
         Action::Stop { run } => {
@@ -297,6 +309,33 @@ pub fn agent_name() -> String {
     // A UUID's simple form is 32 hex digits, so the slice stays in range.
     let hex = uuid::Uuid::new_v4().simple().to_string();
     format!("{PREFIX}{}", &hex[..MAX_AGENT_NAME_LEN - PREFIX.len()])
+}
+
+/// Start `kind` as `name` in `pane`, the root pane of a worktree just
+/// created on `host`, as a dispatch does. While the new shell is still
+/// starting, a busy rejection is retried for a bounded time, and only while
+/// the pane still holds `terminal`, the one creation returned; without it,
+/// the first answer stands. Blocks, so callers run it on a worker.
+pub fn start_agent(
+    host: &Host,
+    kind: AgentKind,
+    name: &str,
+    pane: &str,
+    terminal: Option<&str>,
+    cancelled: &AtomicBool,
+) -> Result<()> {
+    let args = [
+        "agent",
+        "start",
+        name,
+        "--kind",
+        kind.name(),
+        "--pane",
+        pane,
+        "--timeout",
+        AGENT_START_TIMEOUT_MS,
+    ];
+    start::agent(host, &args, pane, terminal, cancelled)
 }
 
 /// Where the new worktree goes: the host, its target, the workspace whose

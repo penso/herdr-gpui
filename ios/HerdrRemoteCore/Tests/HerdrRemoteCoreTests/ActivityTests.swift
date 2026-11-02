@@ -46,11 +46,15 @@ final class ActivityTests: XCTestCase {
         let state = try decode(ChatActivityState.self, aps("update")["content-state"])
         XCTAssertEqual(state.phase, .question)
         XCTAssertEqual(state.question, "Run just ci")
-        XCTAssertEqual(state.cost, "$0.34")
         XCTAssertEqual(state.planFraction, 0.5)
         XCTAssertEqual(state.planLabel, "Step 3 of 4")
         XCTAssertEqual(state.waiting, 1)
         XCTAssertEqual(state.headline, "Needs an answer")
+        // What the lock screen's answer buttons and step stack need.
+        XCTAssertEqual(state.permission, 7)
+        XCTAssertEqual(state.options.map(\.id), ["allow", "reject"])
+        XCTAssertEqual(state.options.map(\.kind), [.allowOnce, .rejectOnce])
+        XCTAssertEqual(state.previous, ["Read lib.rs", "Edit lib.rs"])
     }
 
     func testEndDecodes() throws {
@@ -58,7 +62,7 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(aps["dismissal-date"] as? Int, 1_800_001_262)
         let state = try decode(ChatActivityState.self, aps["content-state"])
         XCTAssertEqual(state.phase, .finished)
-        XCTAssertEqual(state.summary, "Worked 6m 2s \u{b7} $0.48")
+        XCTAssertEqual(state.summary, "Worked 6m 2s")
         XCTAssertEqual(state.headline, "Finished")
     }
 
@@ -83,6 +87,17 @@ final class ActivityTests: XCTestCase {
         )
         XCTAssertEqual(state.working, 0)
         XCTAssertEqual(state.waiting, 0)
+    }
+
+    func testAnOlderDaemonsCostIsIgnored() throws {
+        let state = try JSONDecoder().decode(
+            ChatActivityState.self,
+            from: Data(#"{"phase":"working","step":"x","startedAt":1,"cost":"$0.34"}"#.utf8)
+        )
+        XCTAssertEqual(state.step, "x")
+        let data = try JSONEncoder().encode(state)
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertNil(object?["cost"])
     }
 
     func testChatLinkRoundTripsAndEscapesThePane() throws {

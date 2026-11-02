@@ -12,6 +12,7 @@ mod backdrop;
 mod bitmap_fonts;
 mod bold_color;
 mod change_counts;
+mod cjk_fonts;
 mod cloud_setup;
 mod code;
 mod code_navigation;
@@ -20,8 +21,10 @@ mod default_fonts;
 mod device_footer;
 mod device_icons;
 mod device_theme;
+mod diagnostic_text;
 mod discovery;
 mod edit;
+mod favorite_themes;
 mod features;
 mod finished_notifications;
 mod focus_follows_mouse;
@@ -30,8 +33,10 @@ mod font_weight;
 mod fonts;
 mod github;
 mod github_accounts;
+mod herdr_2_terminals;
 mod icon_font;
 mod keybindings;
+mod language;
 mod line_height;
 mod loading;
 mod lock_access;
@@ -47,6 +52,7 @@ mod sidebar_search;
 mod sidebar_settings;
 mod sidebar_style;
 mod sound_volume;
+mod ssh_hosts;
 mod status_bar;
 mod status_bar_awake_scope;
 mod status_bar_gpu;
@@ -60,6 +66,12 @@ mod update_channel;
 mod usage_inline;
 mod worktrees;
 mod zen;
+
+/// The diagnostic as English reads it, without the isolation marks Fluent
+/// puts around each placeable.
+fn plain(diagnostic: Option<String>) -> Option<String> {
+    diagnostic.map(|text| text.replace(['\u{2068}', '\u{2069}'], ""))
+}
 
 struct TempDirectory(PathBuf);
 

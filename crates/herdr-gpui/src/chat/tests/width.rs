@@ -132,8 +132,9 @@ fn changing_reading_width_reflows_text_and_preserves_its_selection(cx: &mut Test
         );
         widths.push(cx.debug_bounds("chat-prose").unwrap().size.width);
     }
-    assert!(
-        widths[0] < widths[1] && widths[1] < widths[2] && widths[3] < widths[0],
-        "{widths:?}"
-    );
+    // At the default width, prose keeps to its measure inside the column;
+    // a width the user chose is followed as set.
+    let measure = view.read_with(cx, |view, _| view.chat_text_size()) * 34.;
+    assert!(widths[0] <= px(measure + 1.), "{widths:?}");
+    assert!(widths[3] < widths[1] && widths[1] < widths[2], "{widths:?}");
 }

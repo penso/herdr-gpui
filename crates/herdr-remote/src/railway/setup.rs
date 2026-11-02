@@ -159,7 +159,9 @@ fn create_vm(mut session: Command, cancelled: &dyn Fn() -> bool) -> Result<()> {
 /// toast.
 fn hidden<T>(result: cloud::Result<T>) -> Result<T> {
     result.map_err(|error| match error {
-        cloud::Error::Install(text) => cloud::Error::Install(refusal::hide_links(&text)).into(),
+        cloud::Error::Install(install::Failure::Output(text)) => {
+            cloud::Error::Install(install::Failure::Output(refusal::hide_links(&text))).into()
+        }
         error => error.into(),
     })
 }
@@ -177,19 +179,17 @@ fn ensure_herdr(
         return Ok(());
     }
     if !install {
-        return Err(cloud::Error::Install(
-            "Herdr is not installed on the Railway VM; allow installing it and try again".into(),
-        )
+        return Err(cloud::Error::Install(install::Failure::NotInstalled {
+            machine: None,
+            retry: install::Retry::Allow,
+        })
         .into());
     }
     report(cloud::Step::InstallingHerdr);
     hidden(install::install(session()?, &cancelled))?;
     // The installer's own success is not proof the bridge will find it.
     if !hidden(install::installed(session()?, &cancelled))? {
-        return Err(cloud::Error::Install(
-            "the installer finished but Herdr is not on the expected paths".into(),
-        )
-        .into());
+        return Err(cloud::Error::Install(install::Failure::Missing).into());
     }
     Ok(())
 }

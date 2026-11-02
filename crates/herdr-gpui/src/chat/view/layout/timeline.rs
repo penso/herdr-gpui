@@ -8,6 +8,7 @@ use super::{
     super::{Hues, agent_icon},
     ChatLayout, ComposerParts, Look, Row, Side, side, summary_row,
 };
+use crate::i18n::fl;
 use crate::{config::corners, notifications::safe_text};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::{Entry, EntryKind, NoticeLevel, ToolStatus};
@@ -48,7 +49,7 @@ impl ChatLayout for Timeline {
             );
         let label = speaker.then(|| {
             let name = match this_side {
-                Side::User => "You".to_owned(),
+                Side::User => fl!("chat-you"),
                 Side::Agent => safe_text(row.agent, 80),
             };
             div()

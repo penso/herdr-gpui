@@ -135,7 +135,8 @@ impl HerdrWindow {
         let name = agent_name(agent);
         let pane = pane_name(agent, snapshot, name);
         let place = (!nested).then(|| agent_place(agent, snapshot)).flatten();
-        let state = state_label(agent, status_text(agent.agent_status));
+        let status = status_text(agent.agent_status);
+        let state = state_label(agent, &status);
         let spoken = crate::sidebar::accessibility::agent_name(
             name,
             pane.as_deref(),

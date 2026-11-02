@@ -4,6 +4,8 @@ use super::*;
 use crate::session::Attach;
 use herdr_chat_protocol::{Command, CommandId, Entry, EntryId, EntryKind, PermissionId, Status};
 
+mod activities;
+
 fn transcript(lines: &[&str]) -> Transcript {
     Transcript {
         agent: "Codex".into(),

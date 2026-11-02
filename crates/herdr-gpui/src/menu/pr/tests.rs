@@ -2,6 +2,8 @@
 use crate::pull_request::{Origin, repository_input};
 use herdr_client::protocol::ClientShellWorktree;
 
+mod en_xa;
+
 #[test]
 fn metadata_priority_alternates_with_round_robin_and_skips_ineligible_workspaces() {
     let mut snapshot = crate::sidebar::layout_tests::ssh_snapshot(6);
@@ -158,8 +160,13 @@ fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
     });
     let title = cx.debug_bounds("workspace-pr-title").unwrap().center();
     // Debug selectors are static; leaking one test label is fine.
-    let first: &'static str = cx
-        .update(|_, cx| format!("workspace-menu-{}", view.read(cx).workspace_items()[0].1).leak());
+    let first: &'static str = cx.update(|_, cx| {
+        format!(
+            "workspace-menu-{}",
+            view.read(cx).workspace_items()[0].1.english()
+        )
+        .leak()
+    });
     let first = cx.debug_bounds(first).unwrap().center();
     cx.simulate_mouse_move(title, None, Default::default());
     cx.update(|_, cx| {
@@ -168,7 +175,7 @@ fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
             Some(WorkspaceMenuAction::PullRequest)
         )
     });
-    // Past the PR card, the arrows wrap to the first tile.
+    // Past the PR card, the arrows wrap to the top: the header's toggle.
     cx.simulate_keystrokes("down");
     cx.update(|_, cx| {
         let view = view.read(cx);
@@ -203,8 +210,13 @@ fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
     });
     // GPUI retains removed debug selectors; measure the remaining action panel.
     // Seven actions, in the tile grid and the rows below it, and the target
-    // header: no PR section or stale metadata.
-    let rows = cx.update(|_, cx| view.read(cx).workspace_menu_actions().len());
+    // header with its mute toggle: no PR section or stale metadata.
+    let rows = cx.update(|_, cx| {
+        let view = view.read(cx);
+        let actions = view.workspace_menu_actions();
+        assert!(actions[0].in_header());
+        actions.len() - 1
+    });
     assert_eq!(rows, 7);
     let panel = cx.debug_bounds("menu-panel").unwrap().size.height;
     let header = cx

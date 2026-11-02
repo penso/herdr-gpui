@@ -7,8 +7,8 @@
 
 use super::{Error, Result};
 use herdr_chat_protocol::{
-    ClientKind, ClientMessage, Command, CommandId, Cursor, ServerMessage, Transcript, VERSION,
-    read_frame, write_frame,
+    ClientKind, ClientMessage, Command, CommandId, Cursor, REVISION, ServerMessage, Transcript,
+    VERSION, read_frame, write_frame,
 };
 use herdr_client::private_endpoint::{Closer, Connection};
 use std::{
@@ -73,8 +73,24 @@ pub(crate) struct Summary {
     /// The start of the agent's latest answer, on one line.
     pub(crate) last_text: Option<String>,
     pub(crate) turn_started_ms: Option<u64>,
+    /// When the latest turn ended, for "5m ago" on an idle row.
+    pub(crate) last_turn_ended_ms: Option<u64>,
     pub(crate) agent: String,
     pub(crate) usage_percent: Option<u8>,
+}
+
+/// When the latest turn ended: `None` when none has, or the program that
+/// ended it predates the time stamp, rather than an older turn's time.
+pub(crate) fn last_turn_ended_ms(transcript: &Transcript) -> Option<u64> {
+    transcript
+        .entries
+        .iter()
+        .rev()
+        .find_map(|entry| match &entry.kind {
+            herdr_chat_protocol::EntryKind::Turn(turn) => Some(turn.ended_ms),
+            _ => None,
+        })
+        .flatten()
 }
 
 /// The first `limit` characters of `text` on one line.
@@ -157,6 +173,11 @@ impl Chat {
         (state.transcript.clone(), state.cursor)
     }
 
+    /// Reads the transcript in place, for work that must not copy it.
+    pub(crate) fn read<R>(&self, read: impl FnOnce(&Transcript) -> R) -> R {
+        read(&lock(&self.state).transcript)
+    }
+
     /// What a list row shows, without copying the transcript.
     pub(crate) fn summary(&self) -> Summary {
         let state = lock(&self.state);
@@ -175,6 +196,7 @@ impl Chat {
                     _ => None,
                 }),
             turn_started_ms: transcript.turn.map(|turn| turn.started_ms),
+            last_turn_ended_ms: last_turn_ended_ms(transcript),
             agent: transcript.agent.clone(),
             usage_percent: transcript
                 .usage
@@ -261,6 +283,7 @@ impl Chat {
         let (sender, queued) = mpsc::sync_channel(MAX_COMMANDS);
         let hello = ClientMessage::Hello {
             client: ClientKind::Remote,
+            revision: REVISION,
             since,
             version: VERSION,
         };

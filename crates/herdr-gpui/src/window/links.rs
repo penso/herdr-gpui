@@ -11,8 +11,10 @@
 //! claim it, `file://` links included; otherwise, or when nothing claims it,
 //! this client opens the address or file itself. A handler that fails spends
 //! the click. Daemons without these methods keep the row-local detector.
+// i18n: migrated
 
 use super::{HerdrWindow, file_links::FileLink};
+use crate::i18n::{Localize, fl};
 use crate::terminal::PaneLink;
 use crate::{
     browser::WebUrl,
@@ -545,7 +547,7 @@ impl HerdrWindow {
         match activation {
             Activation::Handled => {}
             Activation::HandlerFailed(error) => {
-                self.local_error = Some(format!("Link handler failed: {error}"));
+                self.local_error = Some(fl!("window-input-link-failed", error = error.localize()));
                 cx.notify();
             }
             Activation::Declined(url) => {

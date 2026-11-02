@@ -176,6 +176,7 @@ fn an_html_file_a_tool_wrote_offers_a_preview(cx: &mut TestAppContext) {
             content: Vec::new(),
             kind: ToolKind::Edit,
             locations: vec![page.into()],
+            parent: None,
             status: ToolStatus::Completed,
             title: "Write index.html".into(),
         }),

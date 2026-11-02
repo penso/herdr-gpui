@@ -10,6 +10,7 @@
 //! Everything it shows is already in the window: the endpoints' snapshots,
 //! the orchestrator views' runs, the pull request prefetch, and the system
 //! load and port monitors. Drawing reads that prepared state only.
+// i18n: migrated
 
 mod closed;
 mod hosts;
@@ -25,7 +26,7 @@ mod tests;
 pub(crate) use marks::Marks;
 pub(crate) use model::{Key, Open, Row, Sections, State};
 
-use crate::{HerdrWindow, orchestrator::RunState, sidebar::ActivityPanel};
+use crate::{HerdrWindow, i18n::fl, orchestrator::RunState, sidebar::ActivityPanel};
 use gpui::{prelude::*, *};
 use std::{
     collections::{HashMap, HashSet},
@@ -116,7 +117,13 @@ impl HerdrWindow {
                         checks: pr.checks_outcome(),
                     })
             };
-            rows.extend(model::agent_rows(endpoint, live, &self.overview.since, pr));
+            rows.extend(model::agent_rows(
+                endpoint,
+                live,
+                &self.overview.since,
+                pr,
+                crate::notification_mutes::Mutes::any(cx),
+            ));
         }
         let mut runs = HashSet::new();
         for (tab, view) in self.orchestrator_views() {
@@ -141,7 +148,7 @@ impl HerdrWindow {
                     rows.push(Row {
                         key: Key::Run { id: run.id.clone() },
                         state: State::Failed,
-                        title: format!("Run failed: {title}"),
+                        title: fl!("overview-run-failed", title = title),
                         detail: run
                             .message
                             .as_deref()
@@ -164,6 +171,7 @@ impl HerdrWindow {
                         since: Some(run.updated_at.into()),
                         pr: None,
                         open: Open::Run(tab),
+                        muted: false,
                     });
                 }
             }
@@ -347,9 +355,7 @@ impl HerdrWindow {
         });
         if !current {
             self.show_flash(
-                crate::window::Flash::warning(
-                    "The agent's original session is no longer connected",
-                ),
+                crate::window::Flash::warning(fl!("overview-session-gone")),
                 cx,
             );
             return;

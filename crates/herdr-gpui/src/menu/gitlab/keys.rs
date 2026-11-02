@@ -4,6 +4,7 @@
 //! between its fields, Enter saves, and Escape returns to the instances.
 
 use super::{GitLabMenu, HostStatus, Token};
+use crate::i18n::fl;
 use crate::{HerdrWindow, menu::Page};
 use gpui::{prelude::*, *};
 use herdr_orchestrator::gitlab::account::Source;
@@ -77,7 +78,7 @@ pub(crate) enum Action {
 /// where an application can sign in and no account is, or Connect again
 /// where GitLab refused the connected one; Disconnect or Forget for what is
 /// saved here.
-pub(super) fn card_buttons(status: &HostStatus) -> (Option<&'static str>, Option<&'static str>) {
+pub(super) fn card_buttons(status: &HostStatus) -> (Option<String>, Option<String>) {
     let signed_in = matches!(
         status.token,
         Token::Found {
@@ -102,15 +103,19 @@ pub(super) fn card_buttons(status: &HostStatus) -> (Option<&'static str>, Option
         }
     );
     let connect = (status.can_connect && (!status.connected || refused) && !signed_in && !shadowed)
-        .then_some(if status.connected {
-            "Connect again"
-        } else {
-            "Connect"
+        .then(|| {
+            if status.connected {
+                fl!("gitlab-menu-connect-again")
+            } else {
+                fl!("gitlab-menu-connect")
+            }
         });
-    let remove = status.saved.then_some(if status.connected {
-        "Disconnect"
-    } else {
-        "Forget"
+    let remove = status.saved.then(|| {
+        if status.connected {
+            fl!("gitlab-menu-disconnect")
+        } else {
+            fl!("gitlab-menu-forget")
+        }
     });
     (connect, remove)
 }

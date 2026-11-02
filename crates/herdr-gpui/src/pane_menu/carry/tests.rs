@@ -80,4 +80,5 @@ fn an_agent_that_starts_working_during_the_review_is_not_moved(cx: &mut TestAppC
     });
 }
 
+mod en_xa;
 mod session_only;

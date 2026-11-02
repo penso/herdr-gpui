@@ -1,12 +1,14 @@
 //! The setup script new cloud devices run (see `crate::cloud_setup`): a card
 //! choosing the agents every provider installs, with a preview of the user's
 //! own lines, and the switch each provider's card shows to skip it once.
+// i18n: migrated
 
 use super::super::SettingsWindow;
 use crate::{
     cloud::CloudProvider,
     cloud_setup::Agent,
     config::{Config, corners},
+    i18n::fl,
 };
 use gpui::{prelude::*, *};
 
@@ -39,7 +41,7 @@ impl SettingsWindow {
                 .flex_col()
                 .gap(px(4.))
                 .child(
-                    self.control_switch(id, "Run the setup script when it connects", on, enabled)
+                    self.control_switch(id, fl!("settings-cloud-setup-run"), on, enabled)
                         .when(enabled, |row| {
                             row.on_click(cx.listener(move |this, _, _, cx| {
                                 toggle(this);
@@ -59,21 +61,17 @@ impl SettingsWindow {
         // A click while a save runs would be dropped, so the switches wait.
         let ready = !self.busy();
         let mut card = self
-            .control_card("New device setup")
+            .cloud_card(fl!("settings-cloud-setup"))
             .relative()
             .debug_selector(|| "cloud-setup".into())
             .child(super::super::search::track_bounds("cloud-setup".into()))
-            .child(self.control_note(
-                "Runs once, in a setup tab, the first time a new cloud device connects: \
-                 the agents switched on here, then the setup script from [cloud] in the \
-                 config file. A provider's table, such as [cloud.coder], replaces either.",
-            ));
+            .child(self.control_note(fl!("settings-cloud-setup-note")));
         for agent in Agent::ALL.iter().copied() {
             let on = picked.contains(&agent);
             card = card.child(
                 self.control_switch(
                     format!("cloud-setup-agent-{}", agent.key()),
-                    format!("Install {}", agent.label()),
+                    fl!("settings-cloud-setup-install", agent = agent.label()),
                     on,
                     ready,
                 )
@@ -103,7 +101,7 @@ impl SettingsWindow {
 
     fn cloud_setup_preview(&self) -> Div {
         let Some(script) = self.config.cloud.shared_setup().map(str::trim) else {
-            return self.control_note("No setup script of your own.");
+            return self.control_note(fl!("settings-cloud-setup-none"));
         };
         let lines: Vec<&str> = script.lines().collect();
         let more = lines.len().saturating_sub(PREVIEW_LINES);
@@ -123,7 +121,7 @@ impl SettingsWindow {
                     .map(|line| div().child(if line.is_empty() { " " } else { line }.to_owned())),
             )
             .when(more > 0, |preview| {
-                preview.child(div().child(format!("… {more} more lines")))
+                preview.child(div().child(fl!("settings-cloud-setup-more", count = more)))
             })
     }
 
@@ -132,7 +130,7 @@ impl SettingsWindow {
         let path = Config::local_path().ok()?;
         Some(
             div().flex().child(
-                self.cloud_button("cloud-setup-edit", "Edit setup script in config file", true)
+                self.cloud_button("cloud-setup-edit", fl!("settings-cloud-setup-edit"), true)
                     .on_click(move |_, _, cx| {
                         super::super::pages::open_path(false, path.clone(), cx)
                     }),

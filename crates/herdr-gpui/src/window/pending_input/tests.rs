@@ -123,7 +123,13 @@ fn a_key_held_after_a_refused_drop_is_not_sent(cx: &mut TestAppContext) {
             "Files not pasted: {} (1 held input discarded)",
             crate::window::file_drop::Error::Control
         );
-        assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(expected.as_str())
+        );
     });
     sentinel_is_next(&mut peer);
 }
@@ -142,13 +148,25 @@ fn a_key_held_after_a_remote_copy_does_not_overtake_its_paths(cx: &mut TestAppCo
         view.send(crate::menu::enter_key(), cx);
         frame_returns(view, cx);
         assert!(view.file_transfer.is_some(), "the copy started");
-        assert_eq!(view.local_error.as_deref(), Some(COPYING));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(COPYING)
+        );
         view.file_transfer.as_ref().unwrap().cancel();
     });
     sentinel_is_next(&mut peer);
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
-        assert_eq!(view.local_error.as_deref(), Some(COPYING));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(COPYING)
+        );
     });
 }
 
@@ -170,7 +188,13 @@ fn a_held_key_that_cannot_be_sent_reports_the_input_discarded_after_it(cx: &mut 
         assert_eq!(view.pending_input.len(), 3);
         frame_returns(view, cx);
         let expected = format!("Input not sent: {error} (2 held inputs discarded)");
-        assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(expected.as_str())
+        );
     });
     sentinel_is_next(&mut peer);
 }
@@ -202,7 +226,13 @@ fn a_key_held_after_a_paste_that_cannot_be_sent_is_not_sent(cx: &mut TestAppCont
             "Input"
         };
         let expected = format!("{kind} not sent: {error} (1 held input discarded)");
-        assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(expected.as_str())
+        );
         if cfg!(any(target_os = "macos", target_os = "linux")) {
             let (_, notice) = view.endpoints[0].toasts.entries.back().unwrap();
             assert_eq!(notice.title, "Paste discarded");
@@ -224,7 +254,10 @@ fn a_key_held_after_a_paste_refused_by_an_open_menu_is_not_sent(cx: &mut TestApp
         view.menu.page = Some(Page::About);
         frame_returns(view, cx);
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
             Some("Paste not sent: a menu is open (1 held input discarded)")
         );
     });
@@ -245,7 +278,13 @@ fn a_key_held_after_a_refused_fifth_paste_is_not_sent(cx: &mut TestAppContext) {
         }
         assert!(view.local_error.is_none());
         view.paste(cx);
-        assert_eq!(view.local_error.as_deref(), Some(STOPPED));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(STOPPED)
+        );
         view.send(crate::menu::enter_key(), cx);
         frame_returns(view, cx);
     });
@@ -261,7 +300,13 @@ fn a_key_held_after_a_refused_fifth_paste_is_not_sent(cx: &mut TestAppContext) {
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         let expected = format!("{STOPPED} (1 held input discarded)");
-        assert_eq!(view.local_error.as_deref(), Some(expected.as_str()));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(expected.as_str())
+        );
     });
     for _ in 0..4 {
         assert_eq!(next_pane_input(&mut peer), typed(paste("pasted")));
@@ -279,7 +324,13 @@ fn a_full_hold_queue_refuses_a_key(cx: &mut TestAppContext) {
             assert!(view.send(text("a"), cx));
         }
         assert!(!view.send(text("a"), cx));
-        assert_eq!(view.local_error.as_deref(), Some(STOPPED));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some(STOPPED)
+        );
     });
 }
 
@@ -294,7 +345,13 @@ fn an_older_error_survives_a_held_paste_that_is_sent(cx: &mut TestAppContext) {
         view.paste(cx);
         view.local_error = Some("older".into());
         frame_returns(view, cx);
-        assert_eq!(view.local_error.as_deref(), Some("older"));
+        assert_eq!(
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
+            Some("older")
+        );
     });
 }
 
@@ -315,7 +372,10 @@ fn an_older_error_does_not_take_the_discard_note(cx: &mut TestAppContext) {
         view.local_error = Some("older".into());
         frame_returns(view, cx);
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
             Some("Files not pasted: another copy is running (1 held input discarded)")
         );
         view.file_transfer.as_ref().unwrap().cancel();
@@ -403,7 +463,11 @@ fn a_remote_image_drop_the_bridge_refuses_still_takes_focus(cx: &mut TestAppCont
             live_drop(view, &[image], window, cx);
             view.local_error = None;
             assert!(live_drop(view, &[image], window, cx));
-            let error = view.local_error.as_deref().unwrap_or_default();
+            let error = view
+                .local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .unwrap_or_default();
             assert!(error.starts_with("Image not sent: "), "{error:?}");
         });
     });

@@ -58,6 +58,7 @@ fn transcript_with_answer(text: &str) -> Transcript {
 
 fn turn(end: TurnEnd) -> Change {
     push(EntryKind::Turn(TurnSummary {
+        ended_ms: None,
         duration_ms: 12_000,
         end,
         tokens: None,
@@ -120,16 +121,13 @@ fn a_finished_turn_reports_its_summary() {
     assert_eq!(generic.kind, Kind::TurnEnded);
     assert_eq!(generic.urgency, Urgency::Normal);
     assert_eq!(generic.title, "Claude finished");
-    assert_eq!(
-        generic.body,
-        "herdr-gpui \u{b7} remote plan\nWorked 12s \u{b7} $0.42"
-    );
+    assert_eq!(generic.body, "herdr-gpui \u{b7} remote plan\nWorked 12s");
     assert!(!generic.body.contains("tests"));
 
     let excerpt = decide(&CHAT, &before, &turn(TurnEnd::Done), Privacy::Excerpt).unwrap();
     assert_eq!(
         excerpt.body,
-        "All tests pass.\nherdr-gpui \u{b7} remote plan\nWorked 12s \u{b7} $0.42"
+        "All tests pass.\nherdr-gpui \u{b7} remote plan\nWorked 12s"
     );
 }
 

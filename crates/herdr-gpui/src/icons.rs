@@ -186,6 +186,53 @@ pub(super) fn note(theme: &crate::config::Theme, size: f32) -> gpui::Div {
         )
 }
 
+/// A theme the user starred, and the outline offering to star one.
+pub(crate) const STARRED: &str = "icons/star-full.svg";
+pub(crate) const UNSTARRED: &str = "icons/star.svg";
+
+/// The mark of a workspace or tab whose notifications the user muted.
+pub(crate) const MUTED: &str = "icons/bell-off.svg";
+
+/// `mark` named "Notifications muted" for screen readers, which hear nothing
+/// of an icon: for a muted mark in a row that carries no accessible name of
+/// its own.
+pub(crate) fn spoken_muted(
+    id: impl Into<gpui::ElementId>,
+    mark: impl gpui::IntoElement,
+) -> gpui::Stateful<gpui::Div> {
+    use gpui::{Role, div, prelude::*};
+    div()
+        .id(id)
+        .role(Role::Image)
+        .aria_label("Notifications muted")
+        .flex_none()
+        .child(mark)
+}
+
+/// A workspace whose notifications the user muted: the bell struck through,
+/// in the theme's quiet greys rather than a hue, so it reads as silence
+/// beside the other marks. The glyph fills more of its box than theirs do,
+/// since a slash through a bell blurs sooner than a pencil.
+pub(crate) fn muted(theme: &crate::config::Theme, size: f32) -> gpui::Div {
+    use gpui::{div, prelude::*, px, rgb, rgba, svg};
+    div()
+        .size(px(size))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(crate::config::corners::SMALL))
+        .bg(rgba((theme.muted << 8) | 0x24))
+        .border_1()
+        .border_color(rgba((theme.muted << 8) | 0x70))
+        .child(
+            svg()
+                .path(MUTED)
+                .size(px(size - 2.))
+                .text_color(rgb(theme.subtext())),
+        )
+}
+
 /// A checkout whose work was teleported to another host.
 pub(super) fn teleported(theme: &crate::config::Theme, size: f32) -> gpui::Div {
     use gpui::{Rgba, div, prelude::*, px, svg};
@@ -226,12 +273,15 @@ embedded_icons! {
     // keep-sorted start
     "arrow-left.svg",
     "arrow-right.svg",
+    "arrow-up.svg",
     "automations.svg",
     "beads.svg",
+    "bell-off.svg",
     "bell.svg",
     "chart.svg",
     "check.svg",
     "chevron-down.svg",
+    "chevron-left.svg",
     "chevron-right.svg",
     "chevron-up.svg",
     "close.svg",
@@ -280,6 +330,8 @@ embedded_icons! {
     "settings.svg",
     "shield.svg",
     "split.svg",
+    "star-full.svg",
+    "star.svg",
     "status-bar.svg",
     "status-orbit.svg",
     "status-orca-blocked.svg",

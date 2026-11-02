@@ -5,6 +5,8 @@
 //! Not ported from CodexBar: parsing a pasted cURL or HTTP request capture to
 //! pick the site. The `site` setting chooses qoder.com.cn instead.
 
+use crate::model::Count;
+use crate::text::Text;
 use crate::{
     Result,
     {
@@ -27,20 +29,8 @@ pub(crate) struct Qoder;
 static META: Meta = Meta::new("qoder", "Qoder")
     .dashboard("https://qoder.com/account/usage")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "Your Qoder browser session. Sign in at https://qoder.com/account/usage (or \
-             https://qoder.com.cn/account/usage), open Developer Tools > Application > \
-             Cookies for qoder.com (or qoder.com.cn), and copy every cookie of the site as \
-             one header: \"name=value; name2=value2\".",
-        ),
-        Setting::new(
-            "site",
-            &[],
-            "Which Qoder site the account belongs to: \"global\" for qoder.com (the \
-             default) or \"china\" for qoder.com.cn.",
-        ),
+        Setting::new("cookie", &[], "usage-qoder-setting-cookie"),
+        Setting::new("site", &[], "usage-qoder-setting-site"),
     ]);
 
 impl Service for Qoder {
@@ -105,16 +95,22 @@ pub(crate) fn parse(body: &str, china: bool) -> Result<Report> {
         _ => 100.,
     };
     let resets_at = usage.next_reset_at.as_ref().and_then(Timestamp::time);
-    let window = Window::new(Kind::Named("Credits".into()), percent, resets_at, None);
+    let window = Window::new(
+        Kind::Named(Text::message("usage-qoder-credits")),
+        percent,
+        resets_at,
+        None,
+    );
     let account = Account {
         email: None,
-        plan: china.then(|| "qoder.com.cn".to_owned()),
+        // The China site's domain, a name rather than words.
+        plan: china.then(|| Text::service("qoder.com.cn")),
     };
     Ok(
         Report::new(Provider(&Qoder), account, vec![window]).with_balances([Balance::new(
-            "Credits left",
+            Text::message("usage-qoder-credits-left"),
             remaining,
-            Unit::Count("credits".into()),
+            Unit::Count(Count::Credits),
         )
         .out_of(total)]),
     )
@@ -225,7 +221,10 @@ mod tests {
         assert_eq!(report.windows[0].percent(), 68);
         assert_eq!(report.balances[0].amount, 800.);
         assert_eq!(report.balances[0].total, Some(2500.));
-        assert_eq!(report.account.plan.as_deref(), Some("qoder.com.cn"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("qoder.com.cn")
+        );
     }
 
     #[test]

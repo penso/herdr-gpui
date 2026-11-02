@@ -1,0 +1,8 @@
+# An example mod panel section: copy this folder to <config>/herdr/gpui-mods/workspace.
+name = "workspace"
+api = 1
+places = ["panel"]
+
+[panel]
+title = "This workspace"
+order = 100

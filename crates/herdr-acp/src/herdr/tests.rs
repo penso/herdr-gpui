@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod claims;
 mod naming;
 mod titles;
 
@@ -51,6 +52,8 @@ fn reports_announce_the_agent_and_token_then_withdraw_them() {
     assert_eq!(report["method"], "pane.report_agent");
     assert_eq!(report["params"]["state"], "working");
     assert_eq!(report["params"]["pane_id"], "p_1");
+    let check = receiver.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(check["method"], "pane.get");
     let metadata = receiver.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(metadata["method"], "pane.report_metadata");
     assert_eq!(metadata["params"]["display_agent"], "Claude");
@@ -145,7 +148,7 @@ fn a_failed_announcement_is_sent_again() {
     .unwrap();
     reporter.handle().report(Activity::Working);
     let wait = Duration::from_secs(10);
-    let methods: Vec<_> = (0..3)
+    let methods: Vec<_> = (0..4)
         .map(|_| receiver.recv_timeout(wait).unwrap()["method"].clone())
         .collect();
     // No further activity: the retry alone sends the token again.
@@ -153,6 +156,7 @@ fn a_failed_announcement_is_sent_again() {
         methods,
         [
             json!("pane.report_agent"),
+            json!("pane.get"),
             json!("pane.report_metadata"),
             json!("pane.report_metadata")
         ]

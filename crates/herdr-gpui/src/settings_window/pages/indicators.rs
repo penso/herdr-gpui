@@ -1,22 +1,26 @@
 //! Indicators: the set agent status is drawn with, as cards to click, and the
 //! edge rail. Each card's preview is the sidebar's own marks, so a mark that
 //! moves there moves here too.
+// i18n: migrated
 use super::{SettingsWindow, ui};
+use crate::direction::Logical;
 use crate::{
     config::{StatusIcons, corners, preferences::Preference},
-    settings_window::controls::indicators::{set_description, set_label},
+    i18n::{self, fl},
+    settings_window::controls::indicators::set_messages,
     sidebar::{Indicators, status_indicator},
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
-/// The statuses each card previews, most urgent first, with their names.
+/// The statuses each card previews, most urgent first, with the messages
+/// naming them.
 const PREVIEW: [(AgentStatus, &str); 5] = [
-    (AgentStatus::Working, "working"),
-    (AgentStatus::Blocked, "blocked"),
-    (AgentStatus::Done, "done"),
-    (AgentStatus::Idle, "idle"),
-    (AgentStatus::Unknown, "unknown"),
+    (AgentStatus::Working, "settings-indicators-status-working"),
+    (AgentStatus::Blocked, "settings-indicators-status-blocked"),
+    (AgentStatus::Done, "settings-indicators-status-done"),
+    (AgentStatus::Idle, "settings-indicators-status-idle"),
+    (AgentStatus::Unknown, "settings-indicators-status-unknown"),
 ];
 const CARD_WIDTH: f32 = 212.;
 
@@ -39,20 +43,25 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .child(
-                ui::row(theme, "indicators-edge-rail", "Edge rail")
-                    .tag(ui::Source::HerdrUi)
-                    .description(
-                        "A bar on the leading edge of each working, blocked, or done row, \
-                         whichever icons you pick.",
-                    )
-                    .switch(self.preference_toggle(
-                        "indicators-edge-rail-toggle",
-                        rail,
-                        Preference::EdgeRail(!rail),
-                        cx,
-                    )),
+                ui::row(
+                    theme,
+                    "indicators-edge-rail",
+                    fl!("settings-indicators-edge-rail"),
+                )
+                .tag(ui::Source::HerdrUi)
+                .description(fl!("settings-indicators-edge-rail-description"))
+                .switch(self.preference_toggle(
+                    "indicators-edge-rail-toggle",
+                    rail,
+                    Preference::EdgeRail(!rail),
+                    cx,
+                )),
             )
-            .child(ui::section(theme, "Icons", Some(ui::Source::HerdrUi)))
+            .child(ui::section(
+                theme,
+                &fl!("settings-indicators-sets"),
+                Some(ui::Source::HerdrUi),
+            ))
             .child(
                 div()
                     .relative()
@@ -61,7 +70,7 @@ impl SettingsWindow {
                     .child(crate::settings_window::search::track_bounds(
                         "indicators-sets".into(),
                     ))
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(10.))
                     .pt(px(4.))
@@ -84,6 +93,7 @@ impl SettingsWindow {
         let theme = &self.theme;
         let on = self.config.status_icons == set;
         let font = &self.config.sidebar;
+        let (name, description) = set_messages(set);
         div()
             .id(("indicator-set", set as usize))
             .debug_selector(move || format!("indicator-set-{}", set.as_str()))
@@ -103,23 +113,23 @@ impl SettingsWindow {
             })
             .child(
                 div()
-                    .flex()
+                    .row()
                     .items_center()
                     .justify_between()
                     .text_color(rgb(theme.foreground))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(set_label(set))
+                    .child(i18n::message(name, &[]))
                     .child(radio(theme, on)),
             )
             .child(
                 div()
-                    .flex()
+                    .row()
                     .justify_between()
                     .px(px(4.))
                     .py(px(6.))
                     .rounded(px(corners::SMALL))
                     .bg(rgb(theme.background))
-                    .children(PREVIEW.map(|(status, name)| {
+                    .children(PREVIEW.map(|(status, message)| {
                         div()
                             .flex()
                             .flex_col()
@@ -130,7 +140,7 @@ impl SettingsWindow {
                                 div()
                                     .text_size(px(9.5))
                                     .text_color(rgb(theme.muted))
-                                    .child(name),
+                                    .child(i18n::message(message, &[])),
                             )
                     })),
             )
@@ -138,7 +148,7 @@ impl SettingsWindow {
                 div()
                     .text_size(px(11.5))
                     .text_color(rgb(theme.subtext()))
-                    .child(set_description(set)),
+                    .child(i18n::message(description, &[])),
             )
     }
 }
@@ -146,7 +156,7 @@ impl SettingsWindow {
 fn radio(theme: &crate::config::Theme, on: bool) -> Div {
     div()
         .size(px(14.))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .rounded_full()
@@ -156,3 +166,6 @@ fn radio(theme: &crate::config::Theme, on: bool) -> Div {
             radio.child(div().size(px(6.)).rounded_full().bg(rgb(theme.primary())))
         })
 }
+
+#[cfg(test)]
+mod tests;

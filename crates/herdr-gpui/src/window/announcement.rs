@@ -1,8 +1,13 @@
 //! The daemon's product announcement, drawn as a dismissible card among the
 //! notices over the top-right of the terminal area. Dismissing asks the daemon to mark it seen,
 //! so every client of that daemon stops showing it.
+// i18n: migrated
 use super::{HerdrWindow, render::Notice};
-use crate::{notifications::safe_text, state::AnnouncementDismissal};
+use crate::{
+    i18n::{Localize, fl},
+    notifications::safe_text,
+    state::AnnouncementDismissal,
+};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 
@@ -17,10 +22,11 @@ impl HerdrWindow {
         let theme = &self.theme;
         let accent = theme.ink(theme.palette[4]);
         let (version, id) = (announcement.version.clone(), announcement.id.clone());
+        let version_text = safe_text(&announcement.version, 64);
         let caption = if announcement.preview {
-            format!("Herdr {} · preview", safe_text(&announcement.version, 64))
+            fl!("window-announcement-preview", version = version_text)
         } else {
-            format!("Herdr {}", safe_text(&announcement.version, 64))
+            fl!("window-announcement", version = version_text)
         };
         let card = div()
             .id("announcement")
@@ -84,7 +90,7 @@ impl HerdrWindow {
                     .id("announcement-dismiss")
                     .debug_selector(|| "announcement-dismiss".into())
                     .role(Role::Button)
-                    .aria_label("Dismiss")
+                    .aria_label(fl!("window-dismiss"))
                     .map(|control| self.chrome_stop(super::chrome_focus::Region::Notices, control))
                     .flex_none()
                     .size(px(24.))
@@ -117,9 +123,9 @@ impl HerdrWindow {
     pub(crate) fn dismiss_announcement(&mut self, version: &str, id: &str, cx: &mut Context<Self>) {
         let endpoint = &self.endpoints[self.selected_endpoint];
         let Ok(mut inbox) = endpoint.connection.inbox.try_lock() else {
-            self.local_error = Some(format!(
-                "Dismiss announcement: {}",
-                crate::Error::ConnectionBusy
+            self.local_error = Some(fl!(
+                "window-dismiss-announcement-failed",
+                error = crate::Error::ConnectionBusy.localize()
             ));
             cx.notify();
             return;
@@ -152,7 +158,10 @@ impl HerdrWindow {
                 Ok(request) => Some(request),
                 Err(error) => {
                     drop(inbox);
-                    self.local_error = Some(format!("Dismiss announcement: {error}"));
+                    self.local_error = Some(fl!(
+                        "window-dismiss-announcement-failed",
+                        error = error.localize()
+                    ));
                     cx.notify();
                     return;
                 }

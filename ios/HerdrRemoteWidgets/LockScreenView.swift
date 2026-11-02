@@ -4,7 +4,7 @@ import SwiftUI
 import WidgetKit
 
 /// The lock screen banner (mockup 5): the agent and `workspace · chat` on
-/// top, then the phase with its step, elapsed time, and cost, and a bar
+/// top, then the phase with its step and elapsed time, and a bar
 /// while the turn works. Amber with an Open button when a question waits;
 /// a check and the summary when the turn finished.
 struct LockScreenView: View {
@@ -23,6 +23,7 @@ struct LockScreenView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            StepStack(state: state)
             HStack(alignment: .center, spacing: 10) {
                 PhaseMark(phase: state.phase)
                 VStack(alignment: .leading, spacing: 2) {
@@ -40,6 +41,7 @@ struct LockScreenView: View {
             if state.phase == .working || state.phase == .finished {
                 TurnProgress(state: state)
             }
+            AnswerButtons(attributes: attributes, state: state)
         }
         .padding(14)
         .background(state.phase == .question ? Palette.question.opacity(0.18) : Color.clear)
@@ -55,10 +57,6 @@ struct LockScreenView: View {
                     Text("\u{b7}")
                 }
                 Elapsed(since: state.startedAt)
-                if let cost = state.cost {
-                    Text("\u{b7}")
-                    Text(cost)
-                }
             }
         case .question:
             Text(state.question ?? state.step)

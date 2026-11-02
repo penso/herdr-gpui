@@ -4,8 +4,9 @@
 //! the background executor; the waits between polls are timers, so nothing
 //! blocks the UI thread.
 
-use super::NO_STORE;
+use super::no_store;
 use crate::HerdrWindow;
+use crate::i18n::fl;
 use gpui::{prelude::*, *};
 use herdr_orchestrator::gitlab::{
     self, Api, account, cli_hosts,
@@ -50,7 +51,7 @@ impl HerdrWindow {
     /// Starts connecting an account on `host` with its OAuth application.
     pub(super) fn connect_gitlab(&mut self, host: String, cx: &mut Context<Self>) {
         let Some(store) = self.gitlab_store() else {
-            self.menu.gitlab.message = Some(NO_STORE.to_owned());
+            self.menu.gitlab.message = Some(no_store());
             cx.notify();
             return;
         };
@@ -67,7 +68,11 @@ impl HerdrWindow {
                 let _ = this.update(cx, |this, cx| {
                     this.menu.gitlab.connecting = None;
                     this.menu.gitlab.message = Some(match &result {
-                        Ok(user) => format!("Connected. GitLab at {host} signs in as {user}."),
+                        Ok(user) => fl!(
+                            "gitlab-menu-connected",
+                            host = host.as_str(),
+                            user = user.to_string()
+                        ),
                         Err(error) => error.to_string(),
                     });
                     cx.notify();

@@ -312,9 +312,11 @@ fn project(
                     MESSAGE.clip(text).to_owned(),
                 );
             }
-            EntryKind::Turn(turn) => {
-                builder.plain(Region::Body(0), Cell::default(), turn.describe())
-            }
+            EntryKind::Turn(turn) => builder.plain(
+                Region::Body(0),
+                Cell::default(),
+                crate::chat::text::turn(turn),
+            ),
             EntryKind::Tool(_) | EntryKind::Image { .. } => {}
         },
     }

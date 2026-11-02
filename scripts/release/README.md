@@ -148,7 +148,8 @@ the Windows target graphs, each the app's joined with those of the programs ship
 The caller must supply the matching release binary; packaging does not cross-build
 or resolve shared libraries. Output is `Herdr-VERSION-TARGET.tar.gz`, with a
 same-named root containing `bin/herdr-gpui`, `bin/herdr-acp`,
-`bin/herdr-remote-control`, and `bin/herdr-automate` (all taken from beside the binary), a scalable SVG icon, desktop entry, license and
+`bin/herdr-remote-control`, `bin/herdr-automate`, and `bin/herdr-nearby`, the
+Bluetooth helper for nearby pairing and presence (all taken from beside the binary), a scalable SVG icon, desktop entry, license and
 notice under `share/`. Install that tree into a chosen prefix with its `bin` on
 PATH. Archives are not promised to be bit-for-bit reproducible.
 
@@ -189,8 +190,9 @@ zip tool) writes one `Herdr-VERSION-TARGET.zip` per target with a same-named roo
 containing `herdr-gpui.exe`, the windowed `herdr-gpui-launcher.exe` that the
 installer's Start menu shortcut opens, `herdr-acp.exe`, which the app starts
 chats with, `herdr-remote-control.exe`, the remote control daemon it runs as a
-scheduled task, and `herdr-automate.exe`, the automation daemon (all taken from
-beside `BINARY`), and `licenses/` holding the same license
+scheduled task, `herdr-automate.exe`, the automation daemon, and
+`herdr-nearby.exe`, the Bluetooth helper for nearby pairing and presence (all
+taken from beside `BINARY`), and `licenses/` holding the same license
 and notice files as the Linux tree. Entries carry a fixed timestamp.
 
 `scripts/release/windows-installer.py` then installs the pinned Inno Setup
@@ -239,11 +241,15 @@ fails instead of falling back to unsigned. When signing is on:
 1. `windows-signing.py unpack` extracts the tested zip without running anything.
 2. `azure/login` signs in to Azure with the job's OIDC token, and
    `azure/artifact-signing-action` signs `herdr-gpui.exe`,
-   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, `herdr-remote-control.exe`, and `herdr-automate.exe` with SHA-256 and an RFC 3161 timestamp from
+   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, `herdr-remote-control.exe`,
+   `herdr-automate.exe`, `herdr-nearby.exe`, and `herdr-core.exe` with SHA-256 and an RFC 3161 timestamp from
    `http://timestamp.acs.microsoft.com`.
 3. `windows-signing.py repack` refuses unless the tree holds exactly the zip's
    files and each executable differs from the tested one only by its appended
-   signature (checksum, certificate table entry, alignment padding), then writes
+   or replaced trailing signature (checksum, certificate table entry, alignment
+   padding). The pinned upstream `herdr-core.exe` already carries a signature;
+   replacing it must preserve the certificate table offset and every preceding
+   byte except the checksum and certificate table entry. The script then writes
    the zip again with the same entry order and timestamps.
 4. `windows-installer.py build --sign` compiles the installer from the signed
    zip. ISCC calls `windows-sign-file.ps1` as its `SignTool`, with
@@ -337,16 +343,27 @@ signing step of `sign` receives it; builds, tests, metadata, OIDC and publicatio
 never do. The public key is validated before builds and matched against the
 private key before signing exact JSON bytes. See [updater setup](../../docs/updating.md).
 
-The exact release base set is twenty-three files: the DMG, two manual Linux archives,
+The exact release base set is twenty-seven files: the DMG, two manual Linux archives,
 their `.deb`, `.rpm` and Arch packages, two Windows zips and two Windows installers, SBOM, three updater archives, `update-manifest.json`, and its
 raw 64-byte Ed25519 `update-manifest.sig`, plus `package-manifest.json` and
-`package-manifest.sig` for the six Linux packages and `windows-manifest.json` and
-`windows-manifest.sig` for the two signed Windows installers. All twenty-three receive checksum and Sigstore sidecars and GitHub
+`package-manifest.sig` for the six Linux packages, `windows-manifest.json` and
+`windows-manifest.sig` for the two signed Windows installers, and
+`host-manifest.json` and `host-manifest.sig` (schema 4) for the two static
+`herdr-remote-control-VERSION-ARCH-unknown-linux-musl` host builds. Each Linux
+job builds its host build with `build-host.sh`; Herdr UI copies it onto SSH and
+cloud machines of that architecture to pair a phone with them
+(`docs/remote-control-plan.md`, "Other machines"). All base files receive SHA-256 and Sigstore sidecars and GitHub
 provenance in the separate protected OIDC job. The raw signature is not overwritten:
 its Sigstore sidecar is `update-manifest.sig.sig`; the JSON's is
-`update-manifest.json.sig` (and likewise for the package and Windows manifests). `SHA256SUMS` covers all 115 base/sidecar files; the
-immutable release has exactly 116 assets. Missing or additional files fail closed.
-`artifact-manifest.py base-names VERSION DIRECTORY` lists the twenty-three base names.
+`update-manifest.json.sig` (and likewise for the package, Windows, and host manifests).
+Starting with `20261102.2`, `artifact-manifest.py create` validates and combines
+the signer's SHA-512 sidecars into one `SHA512SUMS` file. `SHA256SUMS` covers
+every other published file, including `SHA512SUMS`. This keeps the current set
+at 110 assets, below the 128-asset limit in installed updaters, without dropping
+any platform, signature, or checksum algorithm. Creation refuses sets of 128 or
+more assets. Older immutable releases retain their per-file SHA-512 contract
+and remain verifiable. Missing or additional files fail closed.
+`artifact-manifest.py base-names VERSION DIRECTORY` lists the twenty-seven base names.
 The publication job verifies downloaded draft bytes and the complete exact asset
 set before making it public; Homebrew still verifies and uses only the final DMG.
 

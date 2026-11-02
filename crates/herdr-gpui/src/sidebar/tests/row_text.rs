@@ -15,6 +15,7 @@ fn section_headings_use_the_configured_sidebar_font_size() {
         for label in ["spaces", "agents"] {
             let mut heading = header(
                 label,
+                label,
                 &font,
                 &Theme::default(),
                 super::super::layout::for_mode(Default::default()),

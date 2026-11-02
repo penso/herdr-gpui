@@ -1,7 +1,8 @@
 //! `config`, `theme`, `font`, `keybinds`, `caffeine`, `sound`, `bell`,
-//! `update`, and `integrations`. What only reads or writes files is done
+//! `update`, `integrations`, and `language`. What only reads or writes files is done
 //! here, whether or not Herdr UI runs; the rest asks the app.
 mod config;
+mod language;
 #[cfg(test)]
 mod tests;
 mod text;
@@ -22,6 +23,7 @@ use crate::{
     },
 };
 pub(super) use config::config;
+pub(super) use language::language;
 use serde_json::json;
 
 /// No app to ask: it is not running.

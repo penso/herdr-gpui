@@ -38,13 +38,15 @@ pub(crate) struct Shell {
 pub(crate) fn prepare() -> Shell {
     let user = windows_registry::CURRENT_USER;
     let links = user
-        .open(r"Software\Classes\herdr-gpui\shell\open\command")
+        .open(r"Software\Classes\herdr-gpui\shell\open\command") // i18n: data
         .and_then(|key| key.get_string(""))
         .is_ok_and(|command| !command.trim().is_empty());
     // Without this key, or a Start menu shortcut carrying the ID, an
     // unpackaged app's toasts are dropped.
     if let Err(error) = user
+        // i18n: data
         .create(format!(r"Software\Classes\AppUserModelId\{APP_ID}"))
+        // i18n: data
         .and_then(|key| key.set_string("DisplayName", crate::constants::WINDOW_TITLE))
     {
         tracing::warn!(%error, "Notifications may not show: the app's name is not registered");
@@ -92,7 +94,7 @@ fn document(notification: &SystemNotification) -> windows::core::Result<XmlDocum
     let visual = document.CreateElement(h!("visual"))?;
     toast.AppendChild(&visual)?;
     let binding = document.CreateElement(h!("binding"))?;
-    binding.SetAttribute(h!("template"), h!("ToastGeneric"))?;
+    binding.SetAttribute(h!("template"), h!("ToastGeneric"))?; // i18n: data
     visual.AppendChild(&binding)?;
     for text in [&notification.title, &notification.body] {
         let element = document.CreateElement(h!("text"))?;

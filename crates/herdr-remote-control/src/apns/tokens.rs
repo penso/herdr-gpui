@@ -1,15 +1,19 @@
 //! The push tokens one device registers: its app's push-to-start token,
-//! which starts an activity while the app is closed, and one token per
-//! activity it shows, which updates and ends it. The device store keeps a
+//! which starts an activity while the app is closed, one token per
+//! activity it shows, which updates and ends it, and its alert token with
+//! the key sealed alerts are opened with. The device store keeps a
 //! [`Registration`] as opaque JSON, as it keeps a Web Push subscription.
 //!
 //! `POST /api/apns` takes the same shape:
 //!
 //! ```json
-//! { "push_to_start": "80a1…", "activities": [{ "pane": "w1-p3", "token": "5c3e…" }] }
+//! { "push_to_start": "80a1…", "activities": [{ "pane": "w1-p3", "token": "5c3e…" }],
+//!   "alert": "9f02…", "notify_key": "BHk3…" }
 //! ```
 
 use super::{Error, Result};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use p256::PublicKey;
 use serde::{Deserialize, Serialize};
 
 /// The most activities one device registers; iOS shows only a few at once.
@@ -57,6 +61,49 @@ impl From<DeviceToken> for String {
     }
 }
 
+/// The P-256 key-agreement key alerts are sealed to (`seal`), as the app
+/// sends it: base64url without padding of the 65-byte uncompressed point.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub(crate) struct NotifyKey {
+    encoded: String,
+    key: PublicKey,
+}
+
+impl NotifyKey {
+    pub(crate) fn parse(encoded: &str) -> Result<Self> {
+        let bytes = URL_SAFE_NO_PAD
+            .decode(encoded.trim())
+            .map_err(|_| Error::NotifyKey)?;
+        if bytes.len() != 65 {
+            return Err(Error::NotifyKey);
+        }
+        let key = PublicKey::from_sec1_bytes(&bytes).map_err(|_| Error::NotifyKey)?;
+        Ok(Self {
+            encoded: URL_SAFE_NO_PAD.encode(&bytes),
+            key,
+        })
+    }
+
+    pub(crate) fn key(&self) -> &PublicKey {
+        &self.key
+    }
+}
+
+impl TryFrom<String> for NotifyKey {
+    type Error = Error;
+
+    fn try_from(encoded: String) -> Result<Self> {
+        Self::parse(&encoded)
+    }
+}
+
+impl From<NotifyKey> for String {
+    fn from(key: NotifyKey) -> Self {
+        key.encoded
+    }
+}
+
 /// The token that updates the activity for the chat in `pane`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,6 +118,12 @@ pub(crate) struct ActivityToken {
 pub(crate) struct Registration {
     #[serde(default)]
     pub(crate) activities: Vec<ActivityToken>,
+    /// The app's own device token, for alerts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) alert: Option<DeviceToken>,
+    /// The key alerts to `alert` are sealed to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) notify_key: Option<NotifyKey>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) push_to_start: Option<DeviceToken>,
 }
@@ -100,7 +153,16 @@ impl Registration {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.push_to_start.is_none() && self.activities.is_empty()
+        self.push_to_start.is_none()
+            && self.activities.is_empty()
+            && self.alert.is_none()
+            && self.notify_key.is_none()
+    }
+
+    /// Where sealed alerts go: the alert token and the key to seal to,
+    /// once the device registered both.
+    pub(crate) fn alerts(&self) -> Option<(&DeviceToken, &PublicKey)> {
+        Some((self.alert.as_ref()?, self.notify_key.as_ref()?.key()))
     }
 
     fn check(&self) -> Result<()> {
@@ -122,13 +184,19 @@ impl Registration {
         Ok(())
     }
 
-    /// Applies what the app sent: a push-to-start token replaces the old one
-    /// when present, and the activity list replaces the old list, since the
-    /// app sends every activity it still shows. A later token for one pane
-    /// wins over an earlier one.
+    /// Applies what the app sent: a push-to-start token, an alert token,
+    /// or a notify key replaces the old one when present, and the activity
+    /// list replaces the old list, since the app sends every activity it
+    /// still shows. A later token for one pane wins over an earlier one.
     pub(crate) fn merge(&mut self, update: Self) {
         if update.push_to_start.is_some() {
             self.push_to_start = update.push_to_start;
+        }
+        if update.alert.is_some() {
+            self.alert = update.alert;
+        }
+        if update.notify_key.is_some() {
+            self.notify_key = update.notify_key;
         }
         self.activities.clear();
         for activity in update.activities.into_iter().rev() {
@@ -159,6 +227,10 @@ impl Registration {
         let mut forgot = self.activities.len() != before;
         if self.push_to_start.as_ref() == Some(token) {
             self.push_to_start = None;
+            forgot = true;
+        }
+        if self.alert.as_ref() == Some(token) {
+            self.alert = None;
             forgot = true;
         }
         forgot
