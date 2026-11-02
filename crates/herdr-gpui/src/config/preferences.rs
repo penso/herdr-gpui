@@ -70,6 +70,9 @@ pub(crate) enum Preference {
     SidebarActivityBar(bool),
     /// `[sidebar] automations`: whether the bar shows Automations.
     SidebarAutomations(bool),
+    /// `[sidebar] ports_count`: whether the bar counts the servers this
+    /// computer's user runs on the Ports icon.
+    SidebarPortsCount(bool),
     /// `[sidebar] device_footer`: when the sidebar draws its device footer.
     SidebarDeviceFooter(DeviceFooter),
     /// `[sidebar] change_counts`: whose line counts a worktree row shows.
@@ -248,6 +251,9 @@ impl Config {
                 }
                 Preference::SidebarAutomations(value) => {
                     (Some("sidebar"), "automations", Some(value.into()))
+                }
+                Preference::SidebarPortsCount(value) => {
+                    (Some("sidebar"), "ports_count", Some(value.into()))
                 }
                 Preference::SidebarDeviceFooter(footer) => (
                     Some("sidebar"),

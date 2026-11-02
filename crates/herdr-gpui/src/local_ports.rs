@@ -241,6 +241,8 @@ pub(crate) struct Worker {
     commands: mpsc::SyncSender<Command>,
     updates: mpsc::Receiver<Update>,
     cancelled: Arc<AtomicBool>,
+    /// Scan at the slower background pace: only the bar's count wants it.
+    background: Arc<AtomicBool>,
 }
 
 impl Drop for Worker {
@@ -281,6 +283,9 @@ pub(crate) struct LocalPorts {
     demand: Option<Instant>,
     /// How the section orders its rows.
     pub(crate) sort: Sort,
+    /// Whether the bar counts the user's servers, which keeps a slower
+    /// scan running while the section is closed.
+    pub(crate) counted: bool,
 }
 
 /// Why the port list failed: in the app's language for the section, and in
@@ -316,8 +321,8 @@ impl LocalPorts {
     /// Starts or drops the worker as `shown` (or a recent request) wants,
     /// and takes its answers. Whether anything shown changed.
     pub(crate) fn poll(&mut self, shown: bool, now: Instant) -> bool {
-        let wanted =
-            SUPPORTED && (shown || self.acting || self.demand.is_some_and(|until| now < until));
+        let demanded = self.demand.is_some_and(|until| now < until);
+        let wanted = SUPPORTED && (shown || self.acting || demanded || self.counted);
         if !wanted {
             self.demand = None;
             self.start_failed = false;
@@ -338,6 +343,14 @@ impl LocalPorts {
                     self.start_failed = true;
                     return true;
                 }
+            }
+        }
+        if let Some(worker) = &self.worker {
+            let background = !shown && !demanded;
+            // Opening the section lists at once rather than at the next
+            // background scan.
+            if worker.background.swap(background, Ordering::Relaxed) && !background {
+                let _ = worker.commands.try_send(Command::Refresh);
             }
         }
         let mut changed = false;
@@ -386,6 +399,20 @@ impl LocalPorts {
     /// The latest listing; `None` before the first scan.
     pub(crate) fn listing(&self) -> Option<&[Listener]> {
         self.listing.as_deref()
+    }
+
+    /// How many of the user's own servers listen, leaving out the system's,
+    /// each process once; `None` before the first scan.
+    pub(crate) fn serving(&self) -> Option<usize> {
+        let mut processes: Vec<Identity> = self
+            .listing()?
+            .iter()
+            .filter(|listener| !listener.system)
+            .map(|listener| listener.identity)
+            .collect();
+        processes.sort_unstable();
+        processes.dedup();
+        Some(processes.len())
     }
 
     /// Why the latest scan failed, in the app's language.
@@ -496,6 +523,7 @@ impl LocalPorts {
             commands,
             updates,
             cancelled: Arc::new(AtomicBool::new(false)),
+            background: Arc::new(AtomicBool::new(false)),
         };
         (
             Self {

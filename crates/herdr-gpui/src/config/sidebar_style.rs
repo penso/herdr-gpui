@@ -138,6 +138,10 @@ pub struct SidebarStyle {
     /// A colour per host, keyed by the host's display name, as `0xRRGGBB`.
     pub hosts: BTreeMap<String, u32>,
     pub overrides: SidebarOverrides,
+    /// `ports_count`: the number of the user's servers on the bar's Ports
+    /// icon, which keeps a light scan of this computer's ports running.
+    /// On unless turned off.
+    pub ports_count: bool,
     pub select: SelectMode,
 }
 
@@ -146,6 +150,7 @@ impl Default for SidebarStyle {
         Self {
             activity_bar: true,
             automations: true,
+            ports_count: true,
             change_counts: ChangeCounts::default(),
             device_footer: DeviceFooter::default(),
             hosts: BTreeMap::new(),
@@ -182,6 +187,7 @@ pub(super) struct SidebarSettings {
     pub(super) hosts: BTreeMap<String, String>,
     pub(super) activity_bar: Option<bool>,
     pub(super) automations: Option<bool>,
+    pub(super) ports_count: Option<bool>,
 }
 
 impl SidebarSettings {
@@ -203,6 +209,7 @@ impl SidebarSettings {
         Ok(SidebarStyle {
             activity_bar: self.activity_bar.unwrap_or(true),
             automations: self.automations.unwrap_or(true),
+            ports_count: self.ports_count.unwrap_or(true),
             change_counts: self.change_counts,
             device_footer: self.device_footer,
             hosts,
@@ -245,6 +252,7 @@ impl<'de> Deserialize<'de> for SidebarSettings {
                         "change_counts" => settings.change_counts = map.next_value()?,
                         "activity_bar" => settings.activity_bar = Some(map.next_value()?),
                         "automations" => settings.automations = Some(map.next_value()?),
+                        "ports_count" => settings.ports_count = Some(map.next_value()?),
                         "hosts" => settings.hosts = map.next_value()?,
                         _ => {
                             map.next_value::<serde::de::IgnoredAny>()?;

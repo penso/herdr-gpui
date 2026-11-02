@@ -73,6 +73,10 @@ impl HerdrWindow {
     /// or a command line request asked for them recently.
     pub(super) fn update_local_ports(&mut self) -> bool {
         let shown = self.activity_section() == Some(crate::sidebar::ActivityPanel::Ports);
+        // The bar's count needs a scan only while the bar shows Ports.
+        self.local_ports.counted = self.config.sidebar_style.ports_count
+            && self.activity_bar_shown()
+            && self.activity_panel_listed(crate::sidebar::ActivityPanel::Ports);
         self.local_ports.poll(shown, std::time::Instant::now())
     }
 

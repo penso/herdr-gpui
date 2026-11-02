@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod badge;
 mod en_xa;
 #[cfg(unix)]
 mod naming;

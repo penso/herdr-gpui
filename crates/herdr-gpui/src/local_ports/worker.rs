@@ -6,7 +6,11 @@ use super::{Command, Error, Listener, Update, Worker, process, scan};
 use crate::Result;
 use herdr_client::{ScriptHost, ScriptLimits, run_script};
 use std::{
-    sync::{Arc, atomic::AtomicBool, mpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -14,6 +18,8 @@ use sysinfo::System;
 
 /// Ports open and close at human pace, as the workspace chips are scanned.
 const INTERVAL: Duration = Duration::from_secs(5);
+/// While only the bar's count wants the ports, they are listed this often.
+const BACKGROUND: Duration = Duration::from_secs(30);
 /// A failed scan is tried again after this long.
 const RETRY: Duration = Duration::from_secs(30);
 /// After a signal the next listing comes sooner, to show what it did.
@@ -31,14 +37,17 @@ pub(super) fn start() -> Result<Worker> {
     let (sender, updates) = mpsc::sync_channel(4);
     let cancelled = Arc::new(AtomicBool::new(false));
     let shared = cancelled.clone();
+    let background = Arc::new(AtomicBool::new(false));
+    let pace = background.clone();
     thread::Builder::new()
         .name("herdr-local-ports".into())
-        .spawn(move || run(&received, &sender, &shared))
+        .spawn(move || run(&received, &sender, &shared, &pace))
         .map_err(Error::Worker)?;
     Ok(Worker {
         commands,
         updates,
         cancelled,
+        background,
     })
 }
 
@@ -46,6 +55,7 @@ fn run(
     commands: &mpsc::Receiver<Command>,
     updates: &mpsc::SyncSender<Update>,
     cancelled: &AtomicBool,
+    background: &AtomicBool,
 ) {
     // Linux `sysinfo` otherwise keeps every process's stat file open, which
     // this app's terminals need. Elsewhere a no-op.
@@ -76,7 +86,12 @@ fn run(
         }
         let started = Instant::now();
         let result = scan(&mut system, &mut sampler, user, cancelled);
-        due = Instant::now() + if result.is_ok() { INTERVAL } else { RETRY };
+        let pace = if background.load(Ordering::Relaxed) {
+            BACKGROUND
+        } else {
+            INTERVAL
+        };
+        due = Instant::now() + if result.is_ok() { pace } else { RETRY };
         if updates.send(Update::Listing(started, result)).is_err() {
             return;
         }
