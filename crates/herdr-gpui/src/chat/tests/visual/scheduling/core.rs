@@ -22,7 +22,7 @@ fn core_panes_share_the_budget_without_a_herdr_surface_and_skip_hidden_tabs(
             )
             .unwrap();
         for (target, terminal) in targets.iter_mut().zip([first, second]) {
-            target.pane_id = crate::chat::core_pane::key(&terminal);
+            target.pane_id = core_pane::key(&terminal);
             target.surface = Surface::Core(terminal);
         }
         install(view, targets);
