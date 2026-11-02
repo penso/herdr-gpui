@@ -10,6 +10,9 @@ pub enum Error {
     Cancelled,
     #[error("SSH bridge closed; check host trust, authentication, and remote Herdr installation")]
     Closed,
+    /// A remote socket name other than the app's own lowercase words.
+    #[error("invalid name for a socket on the host")]
+    InvalidSocket,
     #[error("invalid SSH target (options, controls, and passwords are forbidden)")]
     InvalidTarget,
     /// `ssh -G` named no user known hosts file a host key could be saved to.
@@ -31,7 +34,7 @@ impl Error {
     /// The transport retry/cancellation category `crate::Error::kind` reports.
     pub(crate) fn kind(&self) -> io::ErrorKind {
         match self {
-            Self::InvalidTarget => io::ErrorKind::InvalidInput,
+            Self::InvalidTarget | Self::InvalidSocket => io::ErrorKind::InvalidInput,
             Self::Unsupported => io::ErrorKind::Unsupported,
             Self::Cancelled => io::ErrorKind::Interrupted,
             Self::Closed => io::ErrorKind::UnexpectedEof,

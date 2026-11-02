@@ -42,6 +42,12 @@ impl HerdrWindow {
         if endpoint.connection.target.is_remote() {
             return None;
         }
+        self.editor_root()
+    }
+
+    /// The folder the focused workspace started in, on its own host, as its
+    /// first tab's first pane reports it.
+    pub(super) fn editor_root(&self) -> Option<&str> {
         let (_, workspace) = self.browser_key()?;
         crate::palette::launch_root(self.live.snapshot.as_deref()?, &workspace)
             .filter(|root| std::path::Path::new(root).is_absolute())
@@ -129,10 +135,20 @@ impl HerdrWindow {
     /// Retain tabs and their groups while replacing a provider's pages. Other
     /// editors keep their page state, even when they share a workspace.
     pub(super) fn close_editor_pages(&mut self, editor: Editor, cx: &App) {
+        self.close_editor_pages_in(editor, |_| true, cx);
+    }
+
+    /// Closes `editor`'s pages of the tabs whose scope is `in_scope`.
+    pub(super) fn close_editor_pages_in(
+        &mut self,
+        editor: Editor,
+        in_scope: impl Fn(&super::Scope) -> bool,
+        cx: &App,
+    ) {
         let belongs = |id: TabId| {
             store(cx)
                 .and_then(|store| store.get(id))
-                .is_some_and(|tab| tab.place.editor() == Some(editor))
+                .is_some_and(|tab| tab.place.editor() == Some(editor) && in_scope(&tab.scope))
         };
         #[cfg(any(target_os = "macos", windows))]
         {

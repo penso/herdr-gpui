@@ -6,14 +6,18 @@
 //! The submodules start such a server for VS Code tabs: [`cli`] finds VS Code's
 //! command, [`token`] keeps the connection token, [`supervisor`] runs the
 //! child process, and [`launcher`] ties them to the windows and the config.
+//! [`host`] runs one such server on each SSH host, for its workspaces.
 // i18n: migrated
 mod cli;
 mod error;
+pub(crate) mod host;
 pub(crate) mod launcher;
+mod machine;
 pub(crate) mod supervisor;
 mod token;
 
 pub use error::Error;
+pub(crate) use host::Hosts;
 pub(crate) use launcher::{Launcher, Startup};
 
 use crate::{Result, browser::WebUrl};

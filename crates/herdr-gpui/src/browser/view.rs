@@ -71,6 +71,8 @@ pub(crate) struct Browser {
     pub(super) failed: HashMap<TabId, SharedString>,
     /// Whether the VS Code server answers, asked before its pages open.
     pub(super) code_server: super::code::CodeServer,
+    /// The same for each SSH host's own VS Code server, by its target.
+    pub(super) host_code_servers: HashMap<String, super::code::CodeServer>,
     pub(super) px0: super::px0::Pages,
     /// The workspaces of the last snapshot and the boot they came from: one
     /// missing from the next snapshot of the same boot was closed.
@@ -126,6 +128,7 @@ impl Browser {
             group_motion: Default::default(),
             failed: HashMap::new(),
             code_server: Default::default(),
+            host_code_servers: HashMap::new(),
             px0: Default::default(),
             workspaces: None,
             herdr_tabs: None,
@@ -300,6 +303,11 @@ impl HerdrWindow {
     /// Applies page reports, drops tabs other windows closed, and forgets the
     /// tabs of workspaces the daemon closed. Runs on every window tick.
     pub(crate) fn poll_browser(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Also here, not only as the window draws: a window macOS does not
+        // draw, as while the screen is locked, still makes pages, and each
+        // takes the theme's light or dark as it is made. Cheap when unchanged.
+        #[cfg(any(target_os = "macos", windows))]
+        self.browser.pages.set_theme(&self.theme);
         #[cfg(any(target_os = "macos", windows))]
         self.apply_page_events(window, cx);
         #[cfg(any(target_os = "macos", windows))]

@@ -74,6 +74,11 @@ impl Scope {
         Self(format!("local:{}", client_socket.display()))
     }
 
+    /// Whether the daemon is on this computer.
+    pub(crate) fn is_local(&self) -> bool {
+        self.0.starts_with("local:")
+    }
+
     /// A saved SSH host, named by its catalog ID.
     pub(crate) fn endpoint(id: &str) -> Self {
         Self(id.to_owned())
@@ -548,12 +553,13 @@ impl Store {
     pub(crate) fn follow_code_server(
         &mut self,
         server: &WebUrl,
+        serves: impl Fn(&Scope) -> bool,
         retarget: impl Fn(&WebUrl) -> WebUrl,
     ) -> bool {
         let origin = server.origin();
         let mut changed = false;
         for tab in &mut self.tabs {
-            if !tab.place.is_code() {
+            if !tab.place.is_code() || !serves(&tab.scope) {
                 continue;
             }
             if let Some(Location::Web { url }) = &tab.location

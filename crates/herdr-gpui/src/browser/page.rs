@@ -83,6 +83,37 @@ impl Page {
         let _ = self.view.set_visible(false);
     }
 
+    /// Has the page report light, or dark, as its `prefers-color-scheme`,
+    /// as the app's theme is, whatever the system's appearance: so a page
+    /// that follows it, such as VS Code's, matches the window it sits in.
+    pub(crate) fn set_light(&self, light: bool) {
+        #[cfg(target_os = "macos")]
+        {
+            use objc2_app_kit::{NSAppearance, NSAppearanceCustomization};
+            // The values of NSAppearanceNameAqua and NSAppearanceNameDarkAqua.
+            let name = if light {
+                objc2_foundation::ns_string!("NSAppearanceNameAqua")
+            } else {
+                objc2_foundation::ns_string!("NSAppearanceNameDarkAqua")
+            };
+            let appearance = NSAppearance::appearanceNamed(name);
+            wry::WebViewExtMacOS::webview(&self.view).setAppearance(appearance.as_deref());
+        }
+        #[cfg(windows)]
+        {
+            let theme = if light {
+                wry::Theme::Light
+            } else {
+                wry::Theme::Dark
+            };
+            if let Err(error) = wry::WebViewExtWindows::set_theme(&self.view, theme) {
+                tracing::debug!(%error, "Could not set a page's color scheme");
+            }
+        }
+        #[cfg(not(any(target_os = "macos", windows)))]
+        let _ = light;
+    }
+
     /// Draws the page at `zoom`. The view keeps it as it navigates, so only a
     /// change reaches the platform. A zoom the platform refused (WebView2 can)
     /// is not taken, so the next presented frame asks again.

@@ -2,10 +2,7 @@
 //! license to accept, or that VS Code is starting.
 use super::code::Reach;
 use crate::i18n::{Localize, fl};
-use crate::{
-    HerdrWindow,
-    code_server::{Launcher, Startup},
-};
+use crate::{HerdrWindow, code_server::Startup};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -16,7 +13,8 @@ impl HerdrWindow {
         failure: Option<SharedString>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let startup = Launcher::startup(cx, &self.config.code);
+        let host = self.code_host(cx);
+        let startup = self.code_startup(&host, cx);
         let text: SharedString = if !super::EMBEDDED {
             fl!("browser-vscode-unsupported").into()
         } else if let Some(message) = failure {
@@ -33,7 +31,10 @@ impl HerdrWindow {
                 Startup::Failed { error, .. } => {
                     return self.render_code_unreachable(error.localize().into());
                 }
-                Startup::Address | Startup::Ready { .. } => match &self.browser.code_server.state {
+                Startup::Address | Startup::Ready { .. } => match self
+                    .code_server(&host)
+                    .map_or(&Reach::Unknown, |server| &server.state)
+                {
                     Reach::Failed { message, .. } => {
                         return self.render_code_unreachable(message.clone());
                     }
@@ -89,7 +90,10 @@ impl HerdrWindow {
     /// VS Code: once a server is set, or the app starts VS Code, in a build
     /// that can show pages.
     pub(crate) fn code_offered(&self, cx: &App) -> bool {
-        super::EMBEDDED && Launcher::startup(cx, &self.config.code).offered(&self.config.code)
+        super::EMBEDDED
+            && self
+                .code_startup(&self.code_host(cx), cx)
+                .offered(&self.config.code)
     }
 }
 

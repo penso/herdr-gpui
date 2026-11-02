@@ -11,8 +11,9 @@ use std::{
 };
 
 /// What `serve-web` prints once it holds its port, and only then: when the
-/// port is taken it prints an error and exits instead.
-const LISTENING: &[u8] = b"Web UI available at "; // i18n: data
+/// port is taken it prints an error and exits instead. It says "at" an
+/// address and "on" a socket, as it serves on a host.
+const LISTENING: &[u8] = b"Web UI available "; // i18n: data
 /// Longer lines are read in pieces; only their start matters.
 const MAX_LINE: u64 = 4096;
 

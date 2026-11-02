@@ -57,6 +57,23 @@ impl Localize for Error {
             Self::Watch(_) => fl!("error-code-server-watch"),
             Self::Silent(wait) => fl!("error-code-server-silent", seconds = wait.as_secs()),
             Self::Worker(_) => fl!("error-code-server-worker"),
+            Self::Host(error) => error.localize(),
+        }
+    }
+}
+
+impl Localize for crate::code_server::host::Error {
+    fn localize(&self) -> String {
+        use crate::code_server::host::Error;
+        match self {
+            // keep-sorted start
+            Error::Download => fl!("error-code-server-host-download"),
+            Error::NoDownloader => fl!("error-code-server-host-no-downloader"),
+            Error::Setup => fl!("error-code-server-host-setup"),
+            Error::Ssh => fl!("error-code-server-host-ssh"),
+            Error::Unpack => fl!("error-code-server-host-unpack"),
+            Error::Unsupported => fl!("error-code-server-host-unsupported"),
+            // keep-sorted end
         }
     }
 }

@@ -31,6 +31,8 @@ pub use failure::SshFailure;
 pub use host_key::{HostKeyFingerprint, HostKeyScan, NewHostKey, scan_host_key, trust_host_key};
 pub use unverified::{HostKeys, MAX_UNVERIFIED_HOSTS, set_host_keys, set_unverified_hosts};
 mod powershell;
+mod serve;
+pub use serve::{remote_socket, serve_command};
 
 const READY: &[u8] = b"herdr-remote-output-ready:1\n";
 
