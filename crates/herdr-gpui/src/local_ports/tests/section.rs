@@ -197,3 +197,21 @@ fn rows_wrap_inside_a_narrow_window(cx: &mut gpui::TestAppContext) {
         );
     }
 }
+
+/// Windows lists nothing and says why, with nothing to refresh.
+#[cfg(not(unix))]
+#[gpui::test]
+fn windows_says_the_section_is_unsupported(cx: &mut gpui::TestAppContext) {
+    let (_, cx, _channels) = fixture(cx, Vec::new());
+    assert!(cx.debug_bounds("local-ports-unsupported").is_some());
+    assert!(cx.debug_bounds("local-ports-refresh").is_none());
+    assert!(cx.debug_bounds("local-ports-error").is_none());
+}
+
+#[cfg(unix)]
+#[gpui::test]
+fn macos_and_linux_never_say_unsupported(cx: &mut gpui::TestAppContext) {
+    let (_, cx, _channels) = fixture(cx, Vec::new());
+    assert!(cx.debug_bounds("local-ports-unsupported").is_none());
+    assert!(cx.debug_bounds("local-ports-refresh").is_some());
+}

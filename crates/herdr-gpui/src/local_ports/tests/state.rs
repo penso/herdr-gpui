@@ -1,6 +1,8 @@
 use super::*;
 use std::path::Path;
 
+// The worker runs only on Unix; Windows never polls one.
+#[cfg(unix)]
 #[test]
 fn a_listing_from_the_worker_is_shown_and_a_failure_keeps_it() {
     let (mut ports, updates, _commands) = LocalPorts::fake();
@@ -33,6 +35,8 @@ fn closing_the_section_stops_the_scan_but_keeps_the_listing() {
     assert!(ports.listing().is_some());
 }
 
+// The worker runs only on Unix; Windows never polls one.
+#[cfg(unix)]
 #[test]
 fn a_recent_command_keeps_the_scan_wanted_until_it_expires() {
     let (mut ports, _updates, _commands) = LocalPorts::fake();
@@ -44,6 +48,8 @@ fn a_recent_command_keeps_the_scan_wanted_until_it_expires() {
     assert!(!ports.running());
 }
 
+// The worker runs only on Unix; Windows never polls one.
+#[cfg(unix)]
 #[test]
 fn a_signal_is_sent_once_and_its_outcome_reported() {
     let (mut ports, updates, commands) = LocalPorts::fake();
@@ -100,6 +106,8 @@ fn a_refresh_asks_the_worker_to_list_now() {
     assert_eq!(commands.try_recv().unwrap(), Command::Refresh);
 }
 
+// The worker runs only on Unix; Windows never polls one.
+#[cfg(unix)]
 #[test]
 fn a_stopped_worker_is_reported() {
     let (mut ports, updates, commands) = LocalPorts::fake();
@@ -163,6 +171,8 @@ fn directories_are_shown_from_the_home_folder() {
     );
 }
 
+// The worker runs only on Unix; Windows never polls one.
+#[cfg(unix)]
 #[test]
 fn a_command_never_takes_rows_cached_before_it_for_current() {
     let (mut ports, updates, _commands) = LocalPorts::fake();
@@ -190,6 +200,8 @@ fn a_command_never_takes_rows_cached_before_it_for_current() {
     assert_eq!(ports.fresh_listing(requested), Some(Ok(&fresh[..])));
 }
 
+// The worker runs only on Unix; Windows never polls one.
+#[cfg(unix)]
 #[test]
 fn a_fresh_failed_scan_refuses_rather_than_using_old_rows() {
     let (mut ports, updates, _commands) = LocalPorts::fake();
@@ -203,6 +215,8 @@ fn a_fresh_failed_scan_refuses_rather_than_using_old_rows() {
     assert!(refused.contains("lsof"), "{refused}");
 }
 
+// The worker runs only on Unix; Windows never polls one.
+#[cfg(unix)]
 #[test]
 fn a_halted_scan_answers_a_command_at_once() {
     let (mut ports, updates, commands) = LocalPorts::fake();
@@ -210,4 +224,14 @@ fn a_halted_scan_answers_a_command_at_once() {
     let requested = Instant::now();
     ports.poll(true, requested);
     assert!(ports.fresh_listing(requested).unwrap().is_err());
+}
+
+/// Windows has nothing to scan with: a shown section never keeps a worker.
+#[cfg(not(unix))]
+#[test]
+fn windows_never_runs_a_scan() {
+    let (mut ports, _updates, _commands) = LocalPorts::fake();
+    assert!(!ports.poll(true, Instant::now()));
+    assert!(!ports.running());
+    assert_eq!(ports.fresh_listing(Instant::now()), None);
 }
