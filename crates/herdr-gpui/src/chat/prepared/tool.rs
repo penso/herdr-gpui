@@ -37,6 +37,8 @@ impl Preview {
 pub(crate) fn label(title: &str, summary: Option<&ToolSummary>) -> String {
     let title = tool_label(title);
     let title = match title.as_ref() {
+        // Agent-reported tool identifiers; they are not presentation labels.
+        // i18n: data
         "exec" | "Tool exec" | "exec_command" | "functions.exec" | "Bash" | "bash" => summary
             .and_then(|summary| summary.previews.first())
             .filter(|preview| preview.code.language == "bash")
@@ -132,15 +134,15 @@ pub(crate) fn previews(
                         .and_then(|extension| extension.to_str())
                         .unwrap_or("");
                     Preview {
-                        label: {
-                            format!(
-                                "{} · {}",
-                                crate::notifications::safe_text(path, 240),
-                                if old.is_some() {
-                                    "provided text exceeds diff preview limits"
-                                } else {
-                                    "written content; previous content unavailable"
-                                }
+                        label: if old.is_some() {
+                            fl!(
+                                "rich-tools-diff-preview-limit",
+                                path = crate::notifications::safe_text(path, 240)
+                            )
+                        } else {
+                            fl!(
+                                "rich-tools-written-content",
+                                path = crate::notifications::safe_text(path, 240)
                             )
                         },
                         code: code(language, new.as_str().into(), visuals),
@@ -153,7 +155,7 @@ pub(crate) fn previews(
                 ToolContent::Terminal { id } => {
                     let source: Arc<str> = fl!("chat-tool-terminal", id = id.to_string()).into();
                     Preview {
-                        label: "Terminal".into(),
+                        label: fl!("rich-tools-terminal"),
                         code: code("", source.clone(), visuals),
                         before: None,
                         original: source,
@@ -207,13 +209,19 @@ fn text_source(text: &str) -> (String, String, Arc<str>) {
                     .and_then(serde_json::Value::as_str)
                     .filter(|description| !description.trim().is_empty())
                     .map(|description| crate::notifications::safe_text(description, 240))
-                    .unwrap_or_else(|| if field == "code" { "Source" } else { "Command" }.into());
+                    .unwrap_or_else(|| {
+                        if field == "code" {
+                            fl!("rich-tools-source")
+                        } else {
+                            fl!("rich-tools-command")
+                        }
+                    });
                 return (label, language.into(), source.into());
             }
         }
         // Structured arguments without a command remain visible JSON; do not
         // derive a guessed command from paths, arbitrary keys, or tool names.
-        return ("Arguments".into(), "json".into(), text.into());
+        return (fl!("rich-tools-arguments"), "json".into(), text.into());
     }
     if let Some((open, rest)) = text.trim().split_once('\n')
         && let Some(language) = open.strip_prefix("```")
@@ -225,12 +233,12 @@ fn text_source(text: &str) -> (String, String, Arc<str>) {
         && let Some(source) = rest.strip_suffix("```")
     {
         return (
-            "Source".into(),
+            fl!("rich-tools-source"),
             language.into(),
             source.trim_end_matches('\n').into(),
         );
     }
-    ("Output / source".into(), String::new(), text.into())
+    (fl!("rich-tools-output-source"), String::new(), text.into())
 }
 
 #[cfg(test)]

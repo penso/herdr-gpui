@@ -20,6 +20,8 @@ pub(super) fn section(script: &mut String, name: &str) {
 
 pub(super) fn snapshot(script: &mut String) {
     section(script, "snapshot");
+    // Shell input sent to the remote daemon.
+    // i18n: data
     script.push_str("herdr_cli api snapshot\n");
 }
 

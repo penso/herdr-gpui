@@ -1,5 +1,6 @@
 //! Presentation-only patch rows. Source bytes remain the selection/copy payload;
 //! paths are grammar hints, never filesystem requests. Call only for diff/patch.
+//! Recognized patch keywords and generated fragment markers are source syntax.
 
 const MAX_ROWS: usize = 512;
 const MAX_HEADER_BYTES: usize = 1_024;
@@ -108,8 +109,10 @@ impl<'a> Parser<'a> {
     }
 
     fn line(&mut self, line: &'a str) -> Row<'a> {
+        // i18n: data
         if line == "*** Begin Patch" || line == "*** End Patch" || line.starts_with("diff --git ") {
             *self = Self {
+                // i18n: data
                 apply: line == "*** Begin Patch",
                 ..Self::default()
             };
@@ -118,21 +121,25 @@ impl<'a> Parser<'a> {
         if line.starts_with("*** ") {
             self.mode = Mode::Outside;
             if self.apply {
+                // i18n: data
                 if let Some(name) = line.strip_prefix("*** Add File: ") {
                     self.old = None;
                     self.new = path(name);
                     if self.new.is_some() {
                         self.mode = Mode::AddFile;
                     }
+                // i18n: data
                 } else if let Some(name) = line.strip_prefix("*** Update File: ") {
                     self.old = path(name);
                     self.new = self.old;
                     if self.new.is_some() {
                         self.mode = Mode::Fragment;
                     }
+                // i18n: data
                 } else if let Some(name) = line.strip_prefix("*** Delete File: ") {
                     self.old = path(name);
                     self.new = None;
+                // i18n: data
                 } else if let Some(name) = line.strip_prefix("*** Move to: ") {
                     self.new = path(name);
                     if self.old.is_some() && self.new.is_some() {
@@ -143,6 +150,7 @@ impl<'a> Parser<'a> {
             return self.meta();
         }
         if line.starts_with("@@") {
+            // i18n: data
             self.mode = if line == "@@ Provided text @@"
                 || (self.apply && self.new.is_some() && (line == "@@" || line.starts_with("@@ ")))
             {

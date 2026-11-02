@@ -1,11 +1,15 @@
 //! Read-only edit previews from supplied text. No filesystem baseline is inferred.
+//! Patch keywords and generated hunk/newline sentinels stay verbatim so parsing,
+//! highlighting and copying share the same grammar in every locale.
 
 use super::{MAX_PARTS, STRUCTURED_BYTES};
+use crate::i18n::fl;
 use serde_json::Value;
 
 const LINES: usize = 2_048;
 const CELLS: usize = 65_536;
 const CONTEXT: usize = 3;
+// i18n: data
 const HEADER: &str = "@@ Provided text @@";
 
 pub(super) struct Shown {
@@ -26,9 +30,9 @@ fn bounded(text: &str) -> bool {
 
 fn shown(path: &str, source: String, counts: (usize, usize)) -> Shown {
     Shown {
-        label: format!(
-            "{} · provided text",
-            crate::notifications::safe_text(path, 240)
+        label: fl!(
+            "rich-tools-provided-text",
+            path = crate::notifications::safe_text(path, 240)
         ),
         language: "diff".into(),
         source,
@@ -48,7 +52,8 @@ pub(super) fn between(pathname: &str, old: &str, new: &str) -> Option<Shown> {
     }
     let mut source = format!("--- {pathname}\n+++ {pathname}\n");
     if old == new {
-        source.push_str("No changes in the supplied text.\n");
+        source.push_str(&fl!("rich-tools-no-changes"));
+        source.push('\n');
         return Some(shown(pathname, source, (0, 0)));
     }
     let prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
@@ -140,6 +145,7 @@ fn row(source: &mut String, kind: char, line: &str) {
     source.push(kind);
     source.push_str(line);
     if !line.ends_with('\n') {
+        // i18n: data
         source.push_str("\n\\ No newline at end of supplied text\n");
     }
 }
@@ -234,7 +240,7 @@ pub(super) fn patch(text: &str) -> Option<Shown> {
     let lines: Vec<_> = text.lines().collect();
     if apply_patch(&lines) || unified(&lines) {
         Some(Shown {
-            label: "Reported patch · supplied hunks".into(),
+            label: fl!("rich-tools-reported-patch"),
             language: "diff".into(),
             source: text.to_owned(),
             counts: None,
@@ -245,6 +251,7 @@ pub(super) fn patch(text: &str) -> Option<Shown> {
 }
 
 fn apply_patch(lines: &[&str]) -> bool {
+    // i18n: data
     if lines.first() != Some(&"*** Begin Patch") || lines.last() != Some(&"*** End Patch") {
         return false;
     }
@@ -258,10 +265,12 @@ fn apply_patch(lines: &[&str]) -> bool {
         }
         let header = lines[at];
         at += 1;
+        // i18n: data
         if let Some(name) = header.strip_prefix("*** Delete File: ") {
             if !path(name) {
                 return false;
             }
+        // i18n: data
         } else if let Some(name) = header.strip_prefix("*** Add File: ") {
             if !path(name) {
                 return false;
@@ -269,11 +278,13 @@ fn apply_patch(lines: &[&str]) -> bool {
             while at < end && lines[at].starts_with('+') {
                 at += 1;
             }
+        // i18n: data
         } else if let Some(name) = header.strip_prefix("*** Update File: ") {
             if !path(name) {
                 return false;
             }
             if at < end
+                // i18n: data
                 && let Some(target) = lines[at].strip_prefix("*** Move to: ")
             {
                 if !path(target) {
@@ -300,6 +311,7 @@ fn apply_patch(lines: &[&str]) -> bool {
                 if at == start || !changed {
                     return false;
                 }
+                // i18n: data
                 if at < end && lines[at] == "*** End of File" {
                     at += 1;
                     break;
@@ -368,14 +380,23 @@ fn unified(lines: &[&str]) -> bool {
         if metadata
             && [
                 "index ",
+                // i18n: data
                 "new file mode ",
+                // i18n: data
                 "deleted file mode ",
+                // i18n: data
                 "old mode ",
+                // i18n: data
                 "new mode ",
+                // i18n: data
                 "similarity index ",
+                // i18n: data
                 "rename from ",
+                // i18n: data
                 "rename to ",
+                // i18n: data
                 "copy from ",
+                // i18n: data
                 "copy to ",
             ]
             .iter()
@@ -418,6 +439,7 @@ fn unified(lines: &[&str]) -> bool {
         let mut changed = false;
         let mut can_note = false;
         while at < lines.len()
+            // i18n: data
             && (old > 0 || new > 0 || lines[at] == "\\ No newline at end of file")
         {
             let line = lines[at];
@@ -431,6 +453,7 @@ fn unified(lines: &[&str]) -> bool {
                     changed = true;
                     (0, 1)
                 }
+                // i18n: data
                 Some(b'\\') if line == "\\ No newline at end of file" && can_note => {
                     can_note = false;
                     at += 1;

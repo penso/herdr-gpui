@@ -7,6 +7,7 @@ use herdr_chat_protocol::{
 use herdr_client::protocol::AgentStatus;
 
 pub(super) fn install(case: &str, transcript: &mut Transcript) -> AgentStatus {
+    // i18n: data
     transcript.agent = "Custom ACP".into();
     transcript.status = Status::Working;
     transcript.turn = Some(Turn {
@@ -22,11 +23,14 @@ pub(super) fn install(case: &str, transcript: &mut Transcript) -> AgentStatus {
             duration_ms: 23000, end: TurnEnd::Done,
             tokens: Some(Tokens { input: 3200, output: 1250, thought: 700, total: 4450, cached: 0 }),
         }) },
+        // i18n: data
         Entry { id: EntryId(2), kind: EntryKind::User { text: "Check the training runs and explain the changes clearly.".into(), files: 0 } },
+        // i18n: data
         Entry { id: EntryId(3), kind: EntryKind::Agent { text: "I’ll inspect the run status and check the updated code.\n\nThe activity strip below keeps the **reported work**, elapsed time, and clearly labeled token information visible.".into() } },
         Entry { id: EntryId(4), kind: EntryKind::Tool(Tool {
             parent: None,
             call_id: "synthetic-check".into(), kind: ToolKind::Execute, status: ToolStatus::InProgress,
+            // i18n: data
             title: "Run training status checks".into(), locations: Vec::new(),
             content: vec![ToolContent::Text { text: "{\"command\":\"python scripts/check_runs.py --summary\\npython -m pytest tests/test_metrics.py\"}".into() }],
         }) },
@@ -35,6 +39,7 @@ pub(super) fn install(case: &str, transcript: &mut Transcript) -> AgentStatus {
         "live-thinking" => transcript.entries.push(Entry {
             id: EntryId(5),
             kind: EntryKind::Thought {
+                // i18n: data
                 text: "Comparing the reported run metrics with the requested validation criteria."
                     .into(),
             },

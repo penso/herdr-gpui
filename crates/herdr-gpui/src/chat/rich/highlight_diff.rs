@@ -17,6 +17,8 @@ pub(super) fn highlight(source: &str) -> Vec<Vec<Span>> {
             continue;
         }
         let end = (start + 1..rows.len())
+            // The patch's newline marker is source syntax, not a UI message.
+            // i18n: data
             .find(|&index| rows[index].prefix != 1 && !text[index].starts_with("\\ No newline"))
             .unwrap_or(rows.len());
         // A metadata/hunk boundary resets the grammar: omitted context must not

@@ -1,4 +1,5 @@
 //! Real chevron coordinates and state for the isolated native disclosure probe.
+//! Source checks match the synthetic code fixture verbatim in every locale.
 
 use gpui::{Bounds, Div, Pixels};
 use herdr_chat_protocol::EntryId;
@@ -44,6 +45,7 @@ impl Probe {
         let viewport = pane.list.viewport_bounds();
         let state = json!({
             "expanded": pane.expanded.contains(&ENTRY),
+            // i18n: data
             "source_visible": text.contains("Hello, café 中文"),
             "arrow": [f32::from(arrow.center().x), f32::from(arrow.center().y)],
             "viewport": {

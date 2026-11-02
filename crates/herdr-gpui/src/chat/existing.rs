@@ -271,7 +271,9 @@ fn inspect_host(
     batch::snapshot(&mut script);
     for pane in &candidates {
         batch::section(&mut script, pane);
+        // Shell input sent to the remote daemon, not displayed UI text.
         script.push_str(&format!(
+            // i18n: data
             "herdr_cli pane process-info --pane {} 2>/dev/null || :\n",
             shell_quote(pane),
         ));
