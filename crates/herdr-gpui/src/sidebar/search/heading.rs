@@ -9,7 +9,7 @@ use crate::{
     config::corners,
     i18n::fl,
     search_input::SearchInput,
-    sidebar::{layout::SidebarLook, line_height},
+    sidebar::{layout::SidebarLook, line_height, scaled},
 };
 use gpui::{prelude::*, *};
 
@@ -100,10 +100,12 @@ impl HerdrWindow {
             input.set_label(&heading.name(), cx);
             input.set_placeholder(&placeholder, cx);
         });
+        // The heading's glyphs grow with its text.
+        let icon = scaled(font, 12.);
         let magnifier = || {
             svg()
                 .path("icons/search.svg")
-                .size(px(12.))
+                .size(px(icon))
                 .flex_none()
                 .text_color(rgb(theme.muted))
         };
@@ -145,7 +147,7 @@ impl HerdrWindow {
                         .role(Role::Button)
                         .aria_label(fl!("sidebar-search-clear"))
                         .flex_none()
-                        .size(px(20.))
+                        .size(px(scaled(font, 20.)))
                         .flex()
                         .items_center()
                         .justify_center()
@@ -158,7 +160,7 @@ impl HerdrWindow {
                         .child(
                             svg()
                                 .path("icons/x.svg")
-                                .size(px(12.))
+                                .size(px(icon))
                                 .text_color(rgb(theme.muted)),
                         ),
                 )

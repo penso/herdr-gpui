@@ -9,6 +9,7 @@ use super::{
         cell::{AgentRow, RowContext, RowLayout, RowState, WorkspaceRow},
         line_height,
         row::{Elbow, RowBadge, RowKind, RowTree, TokenLook, guide, left_behind, token_column},
+        scaled,
         tokens::ResolvedToken,
         wash::HostMark,
     },
@@ -25,7 +26,8 @@ pub(in super::super) struct Orca;
 /// Space between a card and the sidebar's edges.
 const MARGIN: f32 = 4.;
 const BORDER: f32 = 1.;
-/// The status column, wider than its dot so the dot has air on both sides.
+/// The status column at the default size, wider than its dot so the dot has
+/// air on both sides.
 const STATUS_COLUMN: f32 = 12.;
 const GAP: f32 = 6.;
 
@@ -106,7 +108,7 @@ fn inner(cx: &RowContext<'_>, indent: f32) -> f32 {
 }
 
 fn status_width(cx: &RowContext<'_>) -> f32 {
-    STATUS_COLUMN.max(cx.indicators.width(cx.font))
+    scaled(cx.font, STATUS_COLUMN).max(cx.indicators.width(cx.font))
 }
 
 /// A configured card's status column, offset onto its first line, and the
@@ -178,7 +180,7 @@ impl RowLayout for Orca {
         let dirty = badge.as_ref().is_some_and(|badge| badge.dirty);
         let teleported = badge.as_ref().is_some_and(|badge| badge.teleported);
         let muted = badge.as_ref().is_some_and(|badge| badge.muted);
-        let dirty_size = (line * 0.7).round().min(14.);
+        let dirty_size = (line * 0.7).round();
         let worktree = parts::worktree(label, &icon, dirty_size);
         let meta = branch.is_some()
             || cx.host.is_some()
@@ -238,8 +240,9 @@ impl RowLayout for Orca {
                     text.shrink(width, number.h(px(line)).text_size(px(small)))
                 })
                 .when_some(fold, |text, fold| {
-                    let arrow = fold.element(theme).w(px(14.)).text_size(px(14.));
-                    text.fixed(14., parts::first_line(14., arrow, cx))
+                    let size = scaled(font, 14.);
+                    let arrow = fold.element(theme).w(px(size)).text_size(px(size));
+                    text.fixed(size, parts::first_line(size, arrow, cx))
                 });
             return card(label, state, indent, 8., (theme, cx.mark))
                 .items_start()
@@ -273,7 +276,8 @@ impl RowLayout for Orca {
                 line.fixed(width, primary.w(px(width)))
             })
             .when_some(fold, |line, fold| {
-                line.fixed(14., fold.element(theme).w(px(14.)).text_size(px(14.)))
+                let size = scaled(font, 14.);
+                line.fixed(size, fold.element(theme).w(px(size)).text_size(px(size)))
             });
         let details = Line::new(width, GAP)
             .when_some(cx.host, |line, host| {

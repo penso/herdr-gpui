@@ -9,6 +9,7 @@ use super::{
         cell::{AgentRow, RowContext, RowLayout, RowState, WorkspaceRow},
         line_height,
         row::{Elbow, RowKind, RowTree, TokenLook, guide, left_behind, row_text, token_column},
+        scaled,
         tokens::ResolvedToken,
     },
     parts::{self, Line},
@@ -101,7 +102,7 @@ impl RowLayout for Minimal {
         // as a muted workspace keeps its own.
         let teleported = row.badge.as_ref().is_some_and(|badge| badge.teleported);
         let muted = row.badge.as_ref().is_some_and(|badge| badge.muted);
-        let mark = (line_height(cx.font) * 0.75).round().min(15.);
+        let mark = (line_height(cx.font) * 0.75).round();
         let worktree = parts::worktree(row.label, &row.icon, mark);
         let status = row.status();
         let line = Line::new(cx.look.content_width(cx.width) - indent, density.gap());
@@ -150,12 +151,14 @@ impl RowLayout for Minimal {
                 )
             })
             .when_some(row.fold, |line, fold| {
-                let width = ARROW_RESERVE - density.gap();
+                let width = scaled(cx.font, ARROW_RESERVE) - density.gap();
                 line.fixed(
                     width,
                     parts::first_line(
                         width,
-                        fold.element(theme).w(px(width)).text_size(px(16.)),
+                        fold.element(theme)
+                            .w(px(width))
+                            .text_size(px(scaled(cx.font, 16.))),
                         cx,
                     ),
                 )
@@ -182,10 +185,10 @@ impl RowLayout for Minimal {
         let gap = cx.look.density.gap();
         let kind = RowKind::Agent(agent.icon);
         let (color, _, _) = row_text(kind, state.selected, theme);
-        let icon = line_height(font).min(12.);
+        let size = scaled(font, 12.);
         let line = Line::new(cx.look.content_width(cx.width), gap);
         if !agent.lines.is_empty() {
-            let icon = parts::first_line(icon, parts::icon(agent.icon.path(), icon, color), cx);
+            let icon = parts::first_line(size, parts::icon(agent.icon.path(), size, color), cx);
             let lines = agent.lines.len();
             let line = configured(
                 &agent.key,
@@ -200,7 +203,7 @@ impl RowLayout for Minimal {
                     false,
                 ),
                 line,
-                |line| line.fixed(line_height(font).min(12.), icon),
+                |line| line.fixed(size, icon),
                 cx,
             );
             return shell(&agent.key, state, 0., (line, Some(lines)), cx);
@@ -210,7 +213,7 @@ impl RowLayout for Minimal {
                 cx.indicators.width(font),
                 parts::status(agent.status, false, cx),
             )
-            .fixed(icon, parts::icon(agent.icon.path(), icon, color))
+            .fixed(size, parts::icon(agent.icon.path(), size, color))
             .lead(
                 name(&agent.key, kind, state, false, theme),
                 agent.name,

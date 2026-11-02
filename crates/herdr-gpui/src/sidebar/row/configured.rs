@@ -11,7 +11,7 @@ use crate::{
         ICON_RESERVE,
         agents::status_mark,
         cell::RowContext,
-        glyph_width, line_height,
+        glyph_width, line_height, scaled,
         tokens::{ResolvedToken, TextRole, TokenKind, budgets, separator},
     },
 };
@@ -257,7 +257,7 @@ pub(super) fn configured_lines(
     let workspace_reserve = if matches!(workspace_icon, RowIcon::None) {
         0.
     } else {
-        ICON_RESERVE
+        scaled(font, ICON_RESERVE)
     };
     for (index, line) in lines.iter().enumerate() {
         // The second line sits beside the badge's counts, so it may have

@@ -59,6 +59,8 @@ mod listening_ports;
 #[cfg(test)]
 mod local_counts_chip;
 #[cfg(test)]
+mod mark_sizes;
+#[cfg(test)]
 mod mod_places;
 #[cfg(test)]
 mod mutes;
