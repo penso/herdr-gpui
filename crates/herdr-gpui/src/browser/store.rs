@@ -555,9 +555,9 @@ impl Store {
         server: &WebUrl,
         serves: impl Fn(&Scope) -> bool,
         retarget: impl Fn(&WebUrl) -> WebUrl,
-    ) -> bool {
+    ) -> Vec<TabId> {
         let origin = server.origin();
-        let mut changed = false;
+        let mut moved = Vec::new();
         for tab in &mut self.tabs {
             if !tab.place.is_code() || !serves(&tab.scope) {
                 continue;
@@ -566,13 +566,13 @@ impl Store {
                 && url.origin() != origin
             {
                 tab.location = Some(Location::Web { url: retarget(url) });
-                changed = true;
+                moved.push(tab.id);
             }
         }
-        if changed {
+        if !moved.is_empty() {
             self.save();
         }
-        changed
+        moved
     }
 
     /// Whether any tab belongs to one of `closed`, without claiming the

@@ -154,7 +154,7 @@ impl HerdrWindow {
         let Some((scope, workspace)) = self.browser_key() else {
             return;
         };
-        let moved = self.follow_code_address(&host, &url, cx);
+        self.follow_code_address(&host, &url, cx);
         // A page left on a server that stopped would show VS Code's own
         // reconnecting screen; the tab says why instead, and the page is
         // made again, where it was, once the server is back.
@@ -173,20 +173,19 @@ impl HerdrWindow {
                 store.visited(id, Some(Location::Web { url: start }), None)
             });
         }
-        // A tab that just moved to its host's server from this computer's,
-        // where it could name no folder, opens the workspace's folder there.
-        if moved
-            && matches!(host, CodeHost::Ssh(_))
+        // A tab that moved to its host's server from this computer's, where
+        // it could name no folder, opens the workspace's folder there.
+        if matches!(host, CodeHost::Ssh(_))
             && let Some(folder) = self.host_editor_root()
             && let Some((id, page)) = store(cx)
                 .and_then(|store| store.code_tab(&scope, &workspace))
+                .filter(|tab| self.browser.code_folderless.contains(&tab.id))
                 .and_then(|tab| match &tab.location {
-                    Some(Location::Web { url: page }) if !has_folder(page) => {
-                        Some((tab.id, with_folder(page, folder)))
-                    }
+                    Some(Location::Web { url: page }) => Some((tab.id, with_folder(page, folder))),
                     _ => None,
                 })
         {
+            self.browser.code_folderless.remove(&id);
             Store::update(cx, |store| {
                 store.visited(id, Some(Location::Web { url: page }), None)
             });
@@ -242,27 +241,31 @@ impl HerdrWindow {
     /// still on another server to this one, where they stay in their groups
     /// with their folders, and closes their pages, so each reopens there
     /// with its token.
-    /// Only the tabs `host` serves move. Returns whether `url` was new.
-    fn follow_code_address(
-        &mut self,
-        host: &CodeHost,
-        url: &WebUrl,
-        cx: &mut Context<Self>,
-    ) -> bool {
+    /// Only the tabs `host` serves move. A tab that moves to a host's server
+    /// without a folder is marked to get its workspace's.
+    fn follow_code_address(&mut self, host: &CodeHost, url: &WebUrl, cx: &mut Context<Self>) {
         let server = self.code_server_mut(host);
-        let new = server.url.as_ref() != Some(url);
-        if new {
+        if server.url.as_ref() != Some(url) {
             server.url = Some(url.clone());
             server.state = Reach::Unknown;
             server.generation += 1;
             let serves = self.code_scopes(host, cx);
-            Store::update(cx, |store| {
+            let moved = Store::update(cx, |store| {
                 store.follow_code_server(url, serves, |page| on_server(page, url))
             });
+            if matches!(host, CodeHost::Ssh(_))
+                && let Some(store) = store(cx)
+            {
+                let folderless = moved.into_iter().filter(|id| {
+                    store.get(*id).is_some_and(|tab| {
+                        matches!(&tab.location, Some(Location::Web { url }) if !has_folder(url))
+                    })
+                });
+                self.browser.code_folderless.extend(folderless);
+            }
             #[cfg(any(target_os = "macos", windows))]
             self.close_code_pages(host, cx);
         }
-        new
     }
 
     /// Where the focused workspace's new VS Code tab opens: `host`'s `url`,

@@ -73,6 +73,10 @@ pub(crate) struct Browser {
     pub(super) code_server: super::code::CodeServer,
     /// The same for each SSH host's own VS Code server, by its target.
     pub(super) host_code_servers: HashMap<String, super::code::CodeServer>,
+    /// VS Code tabs that moved to their host's server from this computer's,
+    /// where they could name no folder: each opens its workspace's folder
+    /// once its workspace is focused, which is when that folder is known.
+    pub(super) code_folderless: HashSet<TabId>,
     pub(super) px0: super::px0::Pages,
     /// The workspaces of the last snapshot and the boot they came from: one
     /// missing from the next snapshot of the same boot was closed.
@@ -129,6 +133,7 @@ impl Browser {
             failed: HashMap::new(),
             code_server: Default::default(),
             host_code_servers: HashMap::new(),
+            code_folderless: HashSet::new(),
             px0: Default::default(),
             workspaces: None,
             herdr_tabs: None,

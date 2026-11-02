@@ -181,6 +181,84 @@ fn with_only_an_address_a_remote_workspace_uses_it_without_a_folder(cx: &mut gpu
     });
 }
 
+/// Every remote tab that moved from this computer's server gets its own
+/// workspace's folder, not only the one focused as the host's server came.
+#[gpui::test]
+fn each_moved_remote_tab_gets_its_own_folder(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.update(|_, cx| {
+        Hosts::fixture(cx);
+        view.update(cx, |view, _| {
+            view.endpoints[0].connection.target = ConnectTarget::Ssh {
+                target: "dev@build".into(),
+                session: "default".into(),
+            };
+            let mut shown = (**view.live.snapshot.as_ref().unwrap()).clone();
+            let mut other = shown.tabs[0].clone();
+            other.tab_id = "t9".into();
+            other.workspace_id = "w1".into();
+            shown.tabs.push(other);
+            shown.panes = serde_json::from_value(serde_json::json!([
+                { "pane_id": "p0", "workspace_id": "w0", "tab_id": "t0",
+                  "label": "shell", "cwd": "/home/dev/one", "foreground_cwd": null,
+                  "focused": true, "right_click_passthrough": false },
+                { "pane_id": "p9", "workspace_id": "w1", "tab_id": "t9",
+                  "label": "shell", "cwd": "/home/dev/two", "foreground_cwd": null,
+                  "focused": false, "right_click_passthrough": false }
+            ]))
+            .unwrap();
+            view.live.snapshot = Some(Arc::new(shown));
+            view.config.code.mode = Some(CodeMode::Start);
+            view.config.code.license_accepted = true;
+            view.browser.code_server.started_probe = answers;
+        });
+        // Both saved before hosts had servers: on this computer's, no folder.
+        let host_scope = scope(&view.read(cx).endpoints[0]);
+        Store::update(cx, |store| {
+            for workspace in ["w0", "w1"] {
+                store.open_editor_tab(
+                    host_scope.clone(),
+                    workspace,
+                    Editor::VsCode,
+                    Some(url("http://127.0.0.1:8000/?tkn=local")),
+                );
+            }
+        });
+    });
+    cx.update(|window, cx| view.update(cx, |view, cx| view.command(Command::OpenCode, window, cx)));
+    cx.update(|window, cx| view.update(cx, |view, cx| view.ensure_code_page(window, cx)));
+    cx.update(|_, cx| Hosts::set_report(cx, "dev@build", Some(ready(24_000, "host"))));
+    cx.update(|window, cx| view.update(cx, |view, cx| view.ensure_code_page(window, cx)));
+    // The other workspace is focused only after its tab moved.
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            let mut shown = (**view.live.snapshot.as_ref().unwrap()).clone();
+            shown.focused_workspace_id = Some("w1".into());
+            view.live.snapshot = Some(Arc::new(shown));
+            view.ensure_code_page(window, cx);
+        })
+    });
+    cx.update(|_, cx| {
+        let host_scope = scope(&view.read(cx).endpoints[0]);
+        let store = cx.global::<Store>();
+        let folder = |workspace| {
+            store
+                .code_tab(&host_scope, workspace)
+                .unwrap()
+                .location
+                .clone()
+        };
+        assert_eq!(
+            folder("w0"),
+            Some(url("http://127.0.0.1:24000/?folder=%2Fhome%2Fdev%2Fone"))
+        );
+        assert_eq!(
+            folder("w1"),
+            Some(url("http://127.0.0.1:24000/?folder=%2Fhome%2Fdev%2Ftwo"))
+        );
+    });
+}
+
 /// A host's folder is a POSIX path on the host, checked as one whatever
 /// this computer's paths look like: Windows calls `/home/dev` relative.
 #[gpui::test]

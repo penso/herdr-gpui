@@ -32,7 +32,6 @@ if [ ! -x "$code" ]; then
     *) exit 3 ;;
   esac
   url="https://update.code.visualstudio.com/latest/$build/stable"
-  archive="$dir/cli.download"
   if command -v curl >/dev/null 2>&1; then
     fetch() { curl -fsSL --max-time 300 -o "$archive" "$url"; }
   elif command -v wget >/dev/null 2>&1; then
@@ -40,12 +39,23 @@ if [ ! -x "$code" ]; then
   else
     exit 4
   fi
-  fetch </dev/null || { rm -f "$archive"; exit 5; }
+  # Each start downloads into a folder of its own and moves the finished
+  # command into place in one rename, so starts at once (two apps, or two
+  # names for one account) never write over each other or over a running
+  # `code`.
+  download=$(mktemp -d "$dir/download.XXXXXX" 2>/dev/null) ||
+    { download="$dir/download.$$" && mkdir "$download"; } || exit 2
+  archive="$download/cli"
+  fetch </dev/null || { rm -rf "$download"; exit 5; }
   case $build in
-    cli-darwin-*) unzip -o -q "$archive" -d "$dir" ;;
-    *) tar -xzf "$archive" -C "$dir" ;;
-  esac </dev/null || { rm -f "$archive"; exit 6; }
-  rm -f "$archive"
+    cli-darwin-*) unzip -o -q "$archive" -d "$download" ;;
+    *) tar -xzf "$archive" -C "$download" ;;
+  esac </dev/null
+  if ! [ -x "$download/code" ] || ! mv -f "$download/code" "$code"; then
+    rm -rf "$download"
+    exit 6
+  fi
+  rm -rf "$download"
 fi
 rm -f "$socket"
 "$code" serve-web --socket-path "$socket" --connection-token-file "$token_file" \
@@ -72,6 +82,20 @@ stop() {
   while kill -0 "$shell" 2>/dev/null; do sleep 2; done
   stop
 ) </dev/null >/dev/null 2>&1 &
-cat >/dev/null
-stop
+shell_watch=$!
+# The end of the input, as the app goes away, stops VS Code. A job started
+# in the background reads /dev/null, so the input goes to it as fd 3.
+exec 3<&0
+(
+  cat <&3 >/dev/null
+  stop
+) </dev/null >/dev/null 2>&1 &
+input_watch=$!
+exec 3<&-
+# Either way this ends once VS Code does, also when it stops or fails on
+# its own, so the app sees the SSH end and starts it again.
 wait "$pid"
+status=$?
+stop
+kill "$shell_watch" "$input_watch" 2>/dev/null
+exit "$status"

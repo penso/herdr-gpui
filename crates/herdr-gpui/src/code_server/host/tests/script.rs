@@ -157,3 +157,107 @@ fn a_host_without_a_downloader_says_so() {
     );
     fs::remove_dir_all(home).unwrap();
 }
+
+fn install_fake_code(home: &Path, script: &str) {
+    let dir = home.join(".herdr-gpui/vscode");
+    fs::create_dir_all(&dir).unwrap();
+    let code = dir.join("code");
+    fs::write(&code, script).unwrap();
+    fs::set_permissions(&code, fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+/// A VS Code that stops on its own ends the script while the app still
+/// holds its input, so the SSH ends and the app starts it again.
+#[test]
+fn a_server_that_stops_on_its_own_ends_the_script() {
+    let home = home("stops");
+    install_fake_code(
+        &home,
+        "#!/bin/sh\necho \"Web UI available on $3\"\nsleep 1\nexit 9\n",
+    );
+    let mut child = run(&home, "/usr/bin:/bin");
+    let stdin = child.stdin.as_mut().unwrap();
+    stdin.write_all(b"secret\n").unwrap();
+    // The input stays open throughout, as the app's SSH keeps it.
+    assert!(
+        wait_for(|| matches!(child.try_wait(), Ok(Some(_)))),
+        "the script outlived VS Code"
+    );
+    assert_eq!(child.wait().unwrap().code(), Some(9));
+    assert!(!home.join(".herdr-gpui/vscode/s.sock.token").exists());
+    fs::remove_dir_all(home).unwrap();
+}
+
+/// The first start downloads VS Code's command line into a folder of its
+/// own and moves only a complete `code` into place.
+#[test]
+fn the_command_line_is_downloaded_and_put_in_place_whole() {
+    let home = home("fetch");
+    let bin = home.join("bin");
+    let payload = home.join("payload");
+    fs::create_dir_all(&bin).unwrap();
+    fs::create_dir_all(&payload).unwrap();
+    // The archive VS Code's site serves: one `code` at its root.
+    fs::write(payload.join("code"), FAKE_CODE).unwrap();
+    fs::set_permissions(payload.join("code"), fs::Permissions::from_mode(0o755)).unwrap();
+    let archive = home.join("cli.tar.gz");
+    #[allow(clippy::disallowed_methods)]
+    let packed = Command::new("tar")
+        .arg("-czf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(&payload)
+        .arg("code")
+        .status()
+        .unwrap();
+    assert!(packed.success());
+    let tool = |name: &str, body: String| {
+        let path = bin.join(name);
+        fs::write(&path, body).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    tool(
+        "uname",
+        "#!/bin/sh\ncase $1 in -s) echo Linux ;; -m) echo x86_64 ;; esac\n".into(),
+    );
+    // curl -fsSL --max-time 300 -o ARCHIVE URL
+    tool(
+        "curl",
+        format!(
+            "#!/bin/sh\necho \"$6\" > \"$HOME/url\"\nexec cp {} \"$5\"\n",
+            herdr_client::shell_quote(&archive.to_string_lossy())
+        ),
+    );
+    let path = format!("{}:/usr/bin:/bin", bin.to_string_lossy());
+    let mut child = run(&home, &path);
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"secret\n")
+        .unwrap();
+    let mut line = String::new();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    assert!(line.starts_with("Web UI available on "), "{line}");
+    let url = fs::read_to_string(home.join("url")).unwrap();
+    assert_eq!(
+        url.trim(),
+        "https://update.code.visualstudio.com/latest/cli-alpine-x64/stable"
+    );
+    let dir = home.join(".herdr-gpui/vscode");
+    assert_eq!(fs::read_to_string(dir.join("code")).unwrap(), FAKE_CODE);
+    let left: Vec<_> = fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("download"))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+    drop(child.stdin.take());
+    assert!(wait_for(|| matches!(child.try_wait(), Ok(Some(_)))));
+    if let Ok(grandchild) = fs::read_to_string(home.join("grandchild")) {
+        assert!(wait_for(|| !alive(&grandchild)));
+    }
+    fs::remove_dir_all(home).unwrap();
+}
