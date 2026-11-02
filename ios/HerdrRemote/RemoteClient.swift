@@ -7,7 +7,10 @@ import Security
 /// must contain the certificate whose SHA-256 the pairing QR carried, and
 /// the chain must then verify with that certificate as its only anchor
 /// (host name and validity included). No profile install is needed, and no
-/// other CA, public or installed, is accepted for these addresses.
+/// other CA, public or installed, is accepted for these addresses. ATS
+/// would refuse these loads before this delegate runs, as the CA is not a
+/// system root; `NSAllowsLocalNetworking` in `project.yml` lifts that for
+/// IP addresses and `.local` names only.
 final class PinnedTrust: NSObject, URLSessionDelegate {
     let fingerprint: Fingerprint
 

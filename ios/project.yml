@@ -41,6 +41,11 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: so.pen.herdr-remote
             CFBundleURLSchemes: [herdr-remote]
+        # The app reaches computers by IP address and `.local` name, which
+        # ATS blocks from iOS 17 (-1200, TLS -9802) unless they are exempt.
+        # PinnedTrust still requires the computer's own CA for every load.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSCameraUsageDescription: Herdr Remote reads the pairing QR code Herdr shows on your computer.
         NSLocalNetworkUsageDescription: Herdr Remote talks to Herdr on your computers over your local network.
         NSSupportsLiveActivities: true
