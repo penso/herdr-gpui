@@ -8,7 +8,10 @@ use super::{
         ARROW_RESERVE,
         cell::{AgentRow, RowContext, RowLayout, RowState, WorkspaceRow},
         line_height,
-        row::{Elbow, RowKind, RowTree, TokenLook, guide, left_behind, row_text, token_column},
+        row::{
+            Elbow, RowKind, RowTree, TokenLook, guide, left_behind, row_text, token_column,
+            tree_gutter,
+        },
         scaled,
         tokens::ResolvedToken,
     },
@@ -19,15 +22,6 @@ use crate::direction::Logical;
 use gpui::{prelude::*, *};
 
 pub(in super::super) struct Minimal;
-
-/// A child's guide gutter, as `(x, width)` from the sidebar's leading edge:
-/// Herdr's own, from the parent's label column, ending at the child's status
-/// dot, which these rows place without the wider indicators' extra indent.
-fn gutter(cx: &RowContext<'_>) -> (f32, f32) {
-    let (x, width) = super::super::row::tree_gutter(cx);
-    let extra = cx.indicators.width(cx.font) - super::super::STATUS_WIDTH;
-    (x, width - extra)
-}
 
 /// A row laid out by the density and style like Herdr's own: one centered
 /// line, or `Some` count of configured lines whose pieces align to the first.
@@ -91,11 +85,13 @@ impl RowLayout for Minimal {
     fn workspace(&self, row: WorkspaceRow<'_>, state: RowState, cx: &RowContext<'_>) -> Div {
         let theme = cx.theme;
         let density = cx.look.density;
+        // A wider status slot moves the parent's name along, so a child steps
+        // in as much further to keep its guide's room.
         let indent = cx.nest
             + if row.tree == RowTree::None {
                 0.
             } else {
-                density.child_indent()
+                density.child_indent() + cx.indicators.width(cx.font) - super::super::STATUS_WIDTH
             };
         // Pull requests and uncommitted work stay off these rows, but a
         // teleported checkout is a copy left behind, so it keeps its mark,
@@ -170,14 +166,14 @@ impl RowLayout for Minimal {
         shell(row.label, state, indent, (line, lines), cx).children(guide(
             row.label,
             row.tree,
-            gutter(cx),
+            tree_gutter(cx),
             elbow,
             cx,
         ))
     }
 
     fn trunk_below(&self, key: &str, tree: RowTree, cx: &RowContext<'_>) -> Option<Div> {
-        super::super::row::trunk_below(key, tree, gutter(cx), cx)
+        super::super::row::trunk_below(key, tree, tree_gutter(cx), cx)
     }
 
     fn agent(&self, agent: AgentRow<'_>, state: RowState, cx: &RowContext<'_>) -> Div {

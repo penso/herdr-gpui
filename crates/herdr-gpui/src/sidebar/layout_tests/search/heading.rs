@@ -114,3 +114,39 @@ fn focus_and_blur_redraw_the_cached_heading(cx: &mut gpui::TestAppContext) {
     assert!(renders(cx) > before, "blurring re-renders the sidebar");
     assert_eq!(placeholder(&view, cx), label);
 }
+
+/// The clear button grows with the field's text, but the heading's padding
+/// does not, so in the tighter densities the button stops at the field's
+/// border: its hover fill never reaches past the field, whatever the layout
+/// or `[sidebar] size`. With room to spare it keeps growing with the text.
+#[gpui::test]
+fn the_clear_button_stays_inside_the_field_at_large_sizes(cx: &mut gpui::TestAppContext) {
+    for mode in crate::config::LayoutMode::ALL
+        .into_iter()
+        .filter(|mode| mode.lists_workspaces())
+    {
+        for font_size in [12., 24., 48.] {
+            let (view, cx) = cx.add_window_view(|window, cx| {
+                let mut view = connected(window, cx);
+                view.config.layout.mode = mode;
+                view.config.sidebar.size = font_size;
+                view
+            });
+            cx.simulate_resize(size(px(800.), px(700.)));
+            type_query(&view, "sidebar", cx);
+            let field = cx.debug_bounds("sidebar-search").unwrap();
+            let clear = cx.debug_bounds("sidebar-search-clear").unwrap();
+            let inside = field.inset(px(1.));
+            assert!(
+                clear.top() >= inside.top() && clear.bottom() <= inside.bottom(),
+                "{mode} at {font_size}: {clear:?} outside {inside:?}"
+            );
+            assert!(clear.right() <= inside.right(), "{mode} at {font_size}");
+            let font = cx.update(|_, cx| view.read(cx).config.sidebar.clone());
+            let grown = px(crate::sidebar::scaled(&font, 20.));
+            let room = inside.size.height;
+            let expected = if grown < room { grown } else { room };
+            assert_eq!(clear.size.height, expected, "{mode} at {font_size}");
+        }
+    }
+}

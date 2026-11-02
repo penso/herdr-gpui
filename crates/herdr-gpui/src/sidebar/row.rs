@@ -213,7 +213,10 @@ pub(super) enum Elbow {
 
 /// The gutter a child of Herdr's rows reserves for its guide, as `(x,
 /// width)` from the sidebar's leading edge: from the parent's label column
-/// to the child's status dot. A configured indent or gap can leave none.
+/// to the child's status dot. A child steps in past a status slot wider than
+/// the default dot, as the parent's label does, so the width does not depend
+/// on the font or the indicator set; Minimal's rows nest the same way. A
+/// configured indent or gap can leave none.
 pub(super) fn tree_gutter(cx: &RowContext<'_>) -> (f32, f32) {
     let layout = cx.look.density;
     let extra_status_width = cx.indicators.width(cx.font) - STATUS_WIDTH;
