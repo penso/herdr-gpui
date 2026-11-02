@@ -18,9 +18,10 @@ enum TermAction: String, Encodable, CaseIterable {
 /// the chain must then verify with that certificate as its only anchor
 /// (host name and validity included). No profile install is needed, and no
 /// other CA, public or installed, is accepted for these addresses. ATS
-/// would refuse these loads before this delegate runs, as the CA is not a
-/// system root; `NSAllowsLocalNetworking` in `project.yml` lifts that for
-/// IP addresses and `.local` names only.
+/// would still fail a non-local address such as Tailscale's 100.x after
+/// this delegate accepts it, as the CA is not a system root;
+/// `NSAllowsArbitraryLoads` in `project.yml` turns that check off, which
+/// leaves this delegate as the only one.
 final class PinnedTrust: NSObject, URLSessionDelegate, Sendable {
     let fingerprint: Fingerprint
 

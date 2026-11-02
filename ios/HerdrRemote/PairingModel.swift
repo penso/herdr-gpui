@@ -123,7 +123,7 @@ final class PairingModel {
             origins = Computer.origins(pairedAt: "https://\(address.host):\(address.port)", served: result.offer.origins)
         case let .bluetooth(identifier):
             result = try await NearbySAS().exchange(bluetooth.io(for: identifier))
-            origins = result.offer.origins
+            origins = result.offer.origins.filter(Computer.isOrigin)
         }
         step = .code(result.code)
         // The claim pins the fingerprint the code vouched for.

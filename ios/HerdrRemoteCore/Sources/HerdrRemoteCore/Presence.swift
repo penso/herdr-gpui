@@ -151,8 +151,7 @@ public enum Presence {
         var seen = Set<String>()
         return (received + known)
             .filter { origin in
-                guard let url = URL(string: origin), url.scheme == "https", url.host != nil, url.path.isEmpty || url.path == "/" else { return false }
-                return seen.insert(origin).inserted
+                Computer.isOrigin(origin) && seen.insert(origin).inserted
             }
             .prefix(maxOrigins)
             .map { $0 }

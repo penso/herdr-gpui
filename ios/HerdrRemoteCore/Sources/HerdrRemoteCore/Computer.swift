@@ -69,6 +69,14 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
     /// The addresses to try, the pairing address first, without repeats.
     public static func origins(pairedAt home: String, served: [String]) -> [String] {
         var seen = Set<String>()
-        return ([home] + served).filter { seen.insert($0).inserted }
+        return ([home] + served).filter { isOrigin($0) && seen.insert($0).inserted }
+    }
+
+    /// Whether `origin` is a bare `https://HOST[:PORT]` this app may load.
+    /// ATS is off (`project.yml`), so this is what keeps a served `http`
+    /// address from carrying session tokens in the clear.
+    public static func isOrigin(_ origin: String) -> Bool {
+        guard let url = URL(string: origin) else { return false }
+        return url.scheme == "https" && url.host != nil && (url.path.isEmpty || url.path == "/")
     }
 }

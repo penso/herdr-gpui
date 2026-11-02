@@ -51,11 +51,14 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: so.pen.herdr.remote
             CFBundleURLSchemes: [herdr-remote]
-        # The app reaches computers by IP address and `.local` name, which
-        # ATS blocks from iOS 17 (-1200, TLS -9802) unless they are exempt.
-        # PinnedTrust still requires the computer's own CA for every load.
+        # ATS checks a non-local IP address, such as Tailscale's 100.x, against
+        # the system roots even after PinnedTrust accepts it, and fails it
+        # (-1200, TLS -9802). NSAllowsLocalNetworking does not cover those
+        # addresses, and its presence makes iOS ignore this key, so do not add
+        # it. PinnedTrust still requires the computer's own CA for every load,
+        # and the app only loads https origins.
         NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
         NSCameraUsageDescription: Herdr Remote reads the pairing QR code Herdr shows on your computer, and takes photos you send to a chat.
         NSFaceIDUsageDescription: Herdr Remote asks for Face ID before a chat allows every tool call without asking.
         NSMicrophoneUsageDescription: Herdr Remote listens while you dictate a prompt, transcribing it on your phone.
