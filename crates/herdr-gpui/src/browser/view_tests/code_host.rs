@@ -180,3 +180,33 @@ fn with_only_an_address_a_remote_workspace_uses_it_without_a_folder(cx: &mut gpu
         assert_eq!(tab.location, Some(url("http://127.0.0.1:8000/?tkn=x")));
     });
 }
+
+/// A host's folder is a POSIX path on the host, checked as one whatever
+/// this computer's paths look like: Windows calls `/home/dev` relative.
+#[gpui::test]
+fn only_an_absolute_posix_root_is_opened_on_a_host(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    let root = |cwd: &'static str| {
+        move |view: &mut HerdrWindow| {
+            let mut shown = (**view.live.snapshot.as_ref().unwrap()).clone();
+            shown.panes = serde_json::from_value(serde_json::json!([{
+                "pane_id": "p0", "workspace_id": "w0", "tab_id": "t0",
+                "label": "shell", "cwd": cwd, "foreground_cwd": null,
+                "focused": true, "right_click_passthrough": false
+            }]))
+            .unwrap();
+            view.live.snapshot = Some(Arc::new(shown));
+            view.host_editor_root().map(str::to_owned)
+        }
+    };
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            assert_eq!(
+                root("/home/dev/project")(view).as_deref(),
+                Some("/home/dev/project")
+            );
+            assert_eq!(root("project")(view), None);
+            assert_eq!(root(r"C:\Users\dev")(view), None);
+        })
+    });
+}

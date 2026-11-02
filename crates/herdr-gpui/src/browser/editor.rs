@@ -42,15 +42,22 @@ impl HerdrWindow {
         if endpoint.connection.target.is_remote() {
             return None;
         }
-        self.editor_root()
+        self.workspace_root()
+            .filter(|root| std::path::Path::new(root).is_absolute())
+    }
+
+    /// The folder the focused workspace started in on its SSH host, which
+    /// runs `/bin/sh`: an absolute POSIX path, whatever this computer's
+    /// paths look like.
+    pub(super) fn host_editor_root(&self) -> Option<&str> {
+        self.workspace_root().filter(|root| root.starts_with('/'))
     }
 
     /// The folder the focused workspace started in, on its own host, as its
     /// first tab's first pane reports it.
-    pub(super) fn editor_root(&self) -> Option<&str> {
+    fn workspace_root(&self) -> Option<&str> {
         let (_, workspace) = self.browser_key()?;
         crate::palette::launch_root(self.live.snapshot.as_deref()?, &workspace)
-            .filter(|root| std::path::Path::new(root).is_absolute())
     }
 
     pub(super) fn editor_tab_id(&self, editor: Editor, cx: &App) -> Option<TabId> {

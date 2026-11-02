@@ -177,7 +177,7 @@ impl HerdrWindow {
         // where it could name no folder, opens the workspace's folder there.
         if moved
             && matches!(host, CodeHost::Ssh(_))
-            && let Some(folder) = self.editor_root()
+            && let Some(folder) = self.host_editor_root()
             && let Some((id, page)) = store(cx)
                 .and_then(|store| store.code_tab(&scope, &workspace))
                 .and_then(|tab| match &tab.location {
@@ -273,7 +273,7 @@ impl HerdrWindow {
     pub(super) fn code_start(&self, url: &WebUrl, host: &CodeHost) -> WebUrl {
         match host {
             CodeHost::Local => self.local_editor_root(),
-            CodeHost::Ssh(_) => self.editor_root(),
+            CodeHost::Ssh(_) => self.host_editor_root(),
         }
         .map_or_else(|| url.clone(), |folder| with_folder(url, folder))
     }
