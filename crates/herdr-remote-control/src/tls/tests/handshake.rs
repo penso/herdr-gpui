@@ -27,3 +27,51 @@ fn a_nameless_handshake_on_an_unlisted_address_gets_the_dns_leaf() {
         &dns
     ));
 }
+
+/// Runs a full in-memory handshake between `client` and a server that
+/// resolves certificates as the listener does for local `address`, and
+/// returns the leaf the client received.
+fn leaf_presented_at(
+    resolver: &Arc<Resolver>,
+    address: IpAddr,
+    client: rustls::ClientConfig,
+    name: &str,
+) -> std::result::Result<rustls::pki_types::CertificateDer<'static>, rustls::Error> {
+    let mut server = server_config(Arc::clone(resolver)).unwrap();
+    server.cert_resolver = resolver.at(address);
+    let mut server = rustls::ServerConnection::new(Arc::new(server))?;
+    let name = ServerName::try_from(name.to_owned()).unwrap();
+    let mut client = rustls::ClientConnection::new(Arc::new(client), name)?;
+    while client.is_handshaking() || server.is_handshaking() {
+        let mut bytes = Vec::new();
+        client.write_tls(&mut bytes).unwrap();
+        server.read_tls(&mut bytes.as_slice()).unwrap();
+        server.process_new_packets()?;
+        bytes.clear();
+        server.write_tls(&mut bytes).unwrap();
+        client.read_tls(&mut bytes.as_slice()).unwrap();
+        client.process_new_packets()?;
+    }
+    Ok(client.peer_certificates().unwrap()[0].clone().into_owned())
+}
+
+#[test]
+fn a_phone_reaching_dot_local_at_link_local_completes_the_handshake() {
+    let state = tempfile::tempdir().unwrap();
+    let authority = Authority::load_or_create(state.path()).unwrap();
+    let names = Names::new([ip("192.168.1.20"), ip("fe80::1")], Some("studio"));
+    let resolver = Arc::new(Resolver::issue(&authority, names, SystemTime::now()).unwrap());
+    let mut roots = RootCertStore::empty();
+    roots.add(authority.ca_der().to_vec().into()).unwrap();
+    let mut client =
+        rustls::ClientConfig::builder_with_provider(Arc::new(ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+    // iOS checks `studio.local` but sends no SNI for it.
+    client.enable_sni = false;
+
+    let leaf = leaf_presented_at(&resolver, ip("fe80::1"), client, "studio.local").unwrap();
+    assert_eq!(leaf, resolver.current().cert[0]);
+}
