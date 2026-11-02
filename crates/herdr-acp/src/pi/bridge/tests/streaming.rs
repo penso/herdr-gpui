@@ -1,5 +1,7 @@
 use super::*;
 
+mod diffs;
+
 fn start(bridge: &mut Bridge, id: &str, name: &str, args: Value) -> Vec<Out> {
     bridge.on_harness(
         &json!({"type":"tool_execution_start","toolCallId":id,"toolName":name,"args":args}),

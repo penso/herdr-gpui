@@ -7,6 +7,7 @@ use crate::harness::out;
 
 const BLOCKS: usize = 32;
 const CUT: &str = "\n… (truncated)";
+const EDIT_NOTICE: &str = "Original edit context exceeds live preview limits.";
 
 struct TextBudget(usize);
 
@@ -40,40 +41,52 @@ pub(super) fn initial(name: &str, args: &Value, limit: usize) -> Vec<wire::ToolC
     }
     let path = field("path").unwrap_or_default();
     if path.len() > 4096 || path.chars().any(char::is_control) {
-        return vec![out::text(
-            "Original edit context exceeds live preview limits.",
-        )];
+        return vec![out::text(&budget.take(EDIT_NOTICE))];
     }
+    // A clipped diff changes its meaning: an omitted new side looks deleted.
+    // Retain both sides exactly or show a notice, with space reserved for it.
+    budget.0 = budget.0.saturating_sub(EDIT_NOTICE.len());
+    let mut omitted = false;
     let mut diff = |old: Option<&str>, new: &str| {
-        // Paths are never truncated into a different clickable target.
-        if path.len() > budget.0 {
+        let size = path
+            .len()
+            .saturating_add(old.map_or(0, str::len))
+            .saturating_add(new.len());
+        if size > budget.0 {
+            omitted = true;
             return None;
         }
-        budget.0 -= path.len();
-        let old = old.map(|text| budget.take(text));
+        budget.0 -= size;
         Some(wire::ToolCallContent::Diff(
-            wire::Diff::new(path.to_owned(), budget.take(new)).old_text(old),
+            wire::Diff::new(path.to_owned(), new.to_owned()).old_text(old.map(str::to_owned)),
         ))
     };
-    if name == "write" {
-        return diff(None, field("content").unwrap_or_default())
+    let mut content: Vec<_> = if name == "write" {
+        diff(None, field("content").unwrap_or_default())
             .into_iter()
+            .collect()
+    } else {
+        let edits = args.get("edits").and_then(Value::as_array);
+        let content = edits
+            .into_iter()
+            .flatten()
+            .take(BLOCKS)
+            .filter_map(|edit| {
+                diff(
+                    edit.get("oldText").and_then(Value::as_str),
+                    edit.get("newText")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                )
+            })
             .collect();
+        omitted |= edits.is_some_and(|edits| edits.len() > BLOCKS);
+        content
+    };
+    if omitted {
+        content.push(out::text(&TextBudget(limit).take(EDIT_NOTICE)));
     }
-    args.get("edits")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .take(BLOCKS)
-        .filter_map(|edit| {
-            diff(
-                edit.get("oldText").and_then(Value::as_str),
-                edit.get("newText")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default(),
-            )
-        })
-        .collect()
+    content
 }
 
 pub(super) fn result(
