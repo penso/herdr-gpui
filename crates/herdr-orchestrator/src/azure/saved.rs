@@ -19,6 +19,14 @@ use zeroize::Zeroizing;
 pub const MAX_ORGANIZATIONS: usize = 32;
 /// Azure DevOps organization names are at most 50 characters.
 const NAME_LIMIT: usize = 50;
+/// The longest token kept. Azure DevOps personal access tokens run to about
+/// a hundred characters; the 16 KiB a request may carry is for the Azure
+/// CLI's Entra tokens, which are never saved. At this cap the fullest
+/// record, [`MAX_ORGANIZATIONS`] lines of the longest name and token, is
+/// about 34 KiB, so it always fits the store's 64 KiB.
+pub const TOKEN_LIMIT: usize = 1024;
+const _: () =
+    assert!(MAX_ORGANIZATIONS * (NAME_LIMIT + TOKEN_LIMIT + 2) <= herdr_credentials::LIMIT);
 
 const ENTRY: Entry<Error> = Entry {
     service: "dev.herdr.gpui.azure-devops",
@@ -54,8 +62,11 @@ impl Saved {
             .ok_or_else(|| Error::Organization(organization.to_owned()))?;
         match token {
             Some(token) => {
-                let token =
-                    super::token::valid(token.expose_secret().trim()).ok_or(Error::Token)?;
+                let token = token.expose_secret().trim();
+                if token.len() > TOKEN_LIMIT {
+                    return Err(Error::TokenLength { limit: TOKEN_LIMIT });
+                }
+                let token = super::token::valid(token).ok_or(Error::Token)?;
                 if !self.0.contains_key(&organization) && self.0.len() >= MAX_ORGANIZATIONS {
                     return Err(Error::TooManyOrganizations);
                 }
@@ -83,8 +94,8 @@ impl Saved {
             };
             let organization =
                 normalize_organization(organization).filter(|normal| normal == organization);
-            let (Some(organization), Some(token)) = (organization, super::token::valid(token))
-            else {
+            let token = super::token::valid(token).filter(|_| token.len() <= TOKEN_LIMIT);
+            let (Some(organization), Some(token)) = (organization, token) else {
                 return Err(Error::Record);
             };
             saved.insert(organization, token);
@@ -144,6 +155,16 @@ pub fn normalize_organization(input: &str) -> Option<String> {
         && !name.starts_with('-')
         && !name.ends_with('-');
     valid.then_some(name)
+}
+
+/// Refuses a record the store could keep but never read back, before it
+/// replaces one that reads. [`TOKEN_LIMIT`] keeps every record within it;
+/// this holds if either bound changes.
+pub fn fits(record: &SecretString) -> Result<(), Error> {
+    if record.expose_secret().len() > herdr_credentials::LIMIT {
+        return Err(Error::RecordSize);
+    }
+    Ok(())
 }
 
 /// The folder the GUI config, and so the private credential file, lives in.
@@ -217,5 +238,8 @@ pub fn save_in(
     };
     saved.set(organization, token)?;
     let record = (!saved.0.is_empty()).then(|| saved.record());
+    if let Some(record) = &record {
+        fits(record)?;
+    }
     herdr_credentials::save_entry(store, &ENTRY, directory, record.as_ref())
 }

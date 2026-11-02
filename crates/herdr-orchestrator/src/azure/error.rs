@@ -50,6 +50,10 @@ pub enum Error {
     #[error("The saved Azure DevOps tokens are not in the expected form")]
     Record,
     #[error(
+        "The saved Azure DevOps tokens would be too large to read back; forget an organization or use a shorter token"
+    )]
+    RecordSize,
+    #[error(
         "Connect Azure DevOps from the account menu to read {repository}, set AZURE_DEVOPS_EXT_PAT, or run `az login`"
     )]
     SignIn { repository: String },
@@ -61,6 +65,10 @@ pub enum Error {
     Store(#[source] herdr_credentials::Error),
     #[error("The Azure DevOps token is not one an HTTP header can carry")]
     Token,
+    #[error(
+        "An Azure DevOps personal access token is at most {limit} characters; paste the token Azure DevOps showed"
+    )]
+    TokenLength { limit: usize },
     #[error(
         "Azure DevOps tokens are saved for at most {} organizations",
         super::saved::MAX_ORGANIZATIONS

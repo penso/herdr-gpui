@@ -235,3 +235,55 @@ fn no_credential_store_says_how_to_opt_in_for_azure_devops() {
     };
     assert_eq!(opted.store(), Store::for_policy(true));
 }
+
+#[test]
+fn the_fullest_record_the_store_accepts_reads_back() {
+    use crate::azure::saved::TOKEN_LIMIT;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+    let token = "p".repeat(TOKEN_LIMIT);
+    let name = |index: usize| format!("{index:02}{}", "o".repeat(48));
+    for index in 0..MAX_ORGANIZATIONS {
+        save_in(Store::File, path, &name(index), Some(secret(&token))).unwrap();
+    }
+    let saved = read_in(Store::File, path).unwrap();
+    assert_eq!(saved.organizations().count(), MAX_ORGANIZATIONS);
+    assert_eq!(
+        saved
+            .get(&name(MAX_ORGANIZATIONS - 1))
+            .unwrap()
+            .expose_secret(),
+        token
+    );
+    // Forget still works on the fullest record.
+    save_in(Store::File, path, &name(0), None).unwrap();
+    assert_eq!(
+        read_in(Store::File, path).unwrap().organizations().count(),
+        MAX_ORGANIZATIONS - 1
+    );
+}
+
+#[test]
+fn a_token_longer_than_a_personal_access_token_is_refused_before_it_is_saved() {
+    use crate::azure::saved::{TOKEN_LIMIT, fits};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+    save_in(Store::File, path, "contoso", Some(secret("pat-kept"))).unwrap();
+    let long = "p".repeat(TOKEN_LIMIT + 1);
+    assert!(matches!(
+        save_in(Store::File, path, "fabrikam", Some(secret(&long))),
+        Err(azure::Error::TokenLength { limit: TOKEN_LIMIT })
+    ));
+    // The record that was there still reads.
+    assert_eq!(
+        read_in(Store::File, path)
+            .unwrap()
+            .organizations()
+            .collect::<Vec<_>>(),
+        ["contoso"]
+    );
+    // A record past the store's limit is never written over one that reads.
+    let oversized = secret(&"x".repeat(herdr_credentials::LIMIT + 1));
+    assert!(matches!(fits(&oversized), Err(azure::Error::RecordSize)));
+    assert!(fits(&secret("contoso\tpat\n")).is_ok());
+}

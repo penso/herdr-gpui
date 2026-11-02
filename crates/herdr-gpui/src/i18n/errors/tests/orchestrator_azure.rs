@@ -26,6 +26,7 @@ fn every_azure_variant_has_a_message() {
         azure::Error::RateLimit,
         azure::Error::Read(std::io::Error::other("pipe closed")),
         azure::Error::Record,
+        azure::Error::RecordSize,
         azure::Error::SignIn {
             repository: repository(),
         },
@@ -33,6 +34,7 @@ fn every_azure_variant_has_a_message() {
         azure::Error::Status(500),
         azure::Error::Store(herdr_credentials::Error::Permissions),
         azure::Error::Token,
+        azure::Error::TokenLength { limit: 1024 },
         azure::Error::TooManyOrganizations,
     ]);
     #[cfg(target_os = "linux")]

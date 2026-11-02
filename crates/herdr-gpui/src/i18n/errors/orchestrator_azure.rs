@@ -47,6 +47,7 @@ impl Localize for Error {
             Self::RateLimit => fl!("error-orchestrator-azure-rate-limit"),
             Self::Read(error) => fl!("error-orchestrator-azure-read", error = error.to_string()),
             Self::Record => fl!("error-orchestrator-azure-record"),
+            Self::RecordSize => fl!("error-orchestrator-azure-record-size"),
             Self::SignIn { repository } => fl!(
                 "error-orchestrator-azure-sign-in",
                 repository = repository.as_str()
@@ -55,6 +56,12 @@ impl Localize for Error {
             Self::Status(status) => fl!("error-orchestrator-azure-status", status = *status),
             Self::Store(error) => fl!("error-orchestrator-azure-store", error = error.localize()),
             Self::Token => fl!("error-orchestrator-azure-token"),
+            Self::TokenLength { limit } => {
+                fl!(
+                    "error-orchestrator-azure-token-length",
+                    limit = limit.to_string()
+                )
+            }
             Self::TooManyOrganizations => fl!(
                 "error-orchestrator-azure-too-many-organizations",
                 limit = herdr_orchestrator::azure::saved::MAX_ORGANIZATIONS
