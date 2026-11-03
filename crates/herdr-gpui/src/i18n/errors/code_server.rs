@@ -69,6 +69,9 @@ impl Localize for crate::code_server::host::Error {
             // keep-sorted start
             Error::Download => fl!("error-code-server-host-download"),
             Error::NoDownloader => fl!("error-code-server-host-no-downloader"),
+            Error::NotLoopback { name } => {
+                fl!("error-code-server-host-not-loopback", name = name.as_str())
+            }
             Error::Setup => fl!("error-code-server-host-setup"),
             Error::Ssh => fl!("error-code-server-host-ssh"),
             Error::Unpack => fl!("error-code-server-host-unpack"),

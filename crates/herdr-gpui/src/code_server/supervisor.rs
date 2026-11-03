@@ -478,6 +478,9 @@ where
             .host
             .as_deref()
             .map_or_else(|| "127.0.0.1".to_owned(), super::host::page_host);
+        if self.plan.host.is_some() && super::host::resolves_elsewhere(&host, port) {
+            return Err(Error::from(super::host::Error::NotLoopback { name: host }).into());
+        }
         let url = WebUrl::try_from(format!("http://{host}:{port}/?tkn={}", token.as_str()))?;
         let address = Address { port, url };
         self.shared.publish(|slot| {

@@ -1,6 +1,7 @@
 //! Each host's pages load its server at a name of their own, so no server's
 //! token cookie goes to another: browsers keep cookies by name, not port.
 use super::*;
+use crate::browser::WebUrl;
 use std::{
     io::{Read, Write},
     net::TcpListener,
@@ -23,8 +24,22 @@ fn each_host_has_a_page_name_of_its_own_on_this_computer() {
     }
 }
 
+/// A page name the resolver sends to another machine is refused, so its
+/// token never goes there; loopback and unresolved names are not.
+#[test]
+fn a_page_name_that_resolves_elsewhere_is_refused() {
+    let port = NonZeroU16::new(24_567).unwrap();
+    assert!(!resolves_elsewhere(&page_host("dev@build"), port));
+    assert!(!resolves_elsewhere("127.0.0.1", port));
+    assert!(!resolves_elsewhere("::1", port));
+    // An address literal, which resolves without asking any DNS server.
+    assert!(resolves_elsewhere("192.0.2.1", port));
+    assert!(!resolves_elsewhere("vscode-test.invalid", port));
+}
+
 /// The version is asked on `127.0.0.1`, whatever this computer's resolver
-/// makes of the page's name, and never with the token.
+/// makes of the page's name, and never with the token: by the worker and by
+/// the windows, which both ask with `code_server::version`.
 #[test]
 fn a_hosts_server_is_asked_on_ipv4_loopback() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -48,7 +63,7 @@ fn a_hosts_server_is_asked_on_ipv4_loopback() {
         page_host("dev@build")
     ))
     .unwrap();
-    let server = version(&page).unwrap();
+    let server = crate::code_server::version(&page).unwrap();
     assert_eq!(server.short_commit(), &COMMIT[..7]);
     let request = asked.join().unwrap();
     assert!(request.starts_with("GET /version "), "{request}");

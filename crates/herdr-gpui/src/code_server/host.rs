@@ -25,13 +25,13 @@ use super::{
     token,
 };
 use crate::{
-    browser::{EMBEDDED, WebUrl},
+    browser::EMBEDDED,
     config::{CodeConfig, CodeMode},
 };
 use gpui::{App, Global};
 use std::{
     collections::HashMap,
-    net::{Ipv4Addr, TcpListener},
+    net::{Ipv4Addr, TcpListener, ToSocketAddrs},
     num::NonZeroU16,
     path::PathBuf,
     process::{Command, ExitStatus},
@@ -82,14 +82,15 @@ pub(super) fn page_host(target: &str) -> String {
     format!("vscode-{:016x}.localhost", fingerprint(target))
 }
 
-/// Asks a host's server for its version on `127.0.0.1`, where its port
-/// listens, rather than at its page's name: what the system's resolver
-/// makes of `.localhost` names, unlike a browser's, varies.
-fn version(url: &WebUrl) -> crate::Result<super::Server> {
-    let loopback = url
-        .loopback_port()
-        .and_then(|port| url.at_local_port(port.get()));
-    super::version(loopback.as_ref().unwrap_or(url))
+/// Whether the system's resolver sends `name` anywhere but this computer.
+/// WebKit asks it for a page's address, so a name it maps elsewhere, as a
+/// DNS server or VPN could, would carry the token there. No answer at all
+/// is fine: WebView2 resolves `.localhost` itself, and an address that does
+/// not resolve sends nothing. Blocking: the worker asks, never the UI.
+pub(super) fn resolves_elsewhere(name: &str, port: NonZeroU16) -> bool {
+    (name, port.get())
+        .to_socket_addrs()
+        .is_ok_and(|mut found| found.any(|address| !address.ip().is_loopback()))
 }
 
 /// `target`'s own port, when it is free right now; else any free one is used.
@@ -140,7 +141,7 @@ fn start(plan: Plan) -> crate::Result<Supervisor> {
         plan,
         command,
         // Never the token: the app gave the server its token itself.
-        version,
+        super::version,
         // The port is the host's own; nothing is saved.
         |_| Ok(()),
         Timing::default(),

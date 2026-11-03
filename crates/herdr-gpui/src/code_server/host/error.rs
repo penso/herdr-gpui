@@ -8,6 +8,12 @@ pub enum Error {
     Download,
     #[error("The host has neither curl nor wget to download VS Code's command line.")]
     NoDownloader,
+    /// The system's resolver sends the host's page name, which carries its
+    /// token, somewhere other than this computer.
+    #[error(
+        "This computer resolves {name} to another machine, so the host's VS Code token is not sent there."
+    )]
+    NotLoopback { name: String },
     #[error("Could not prepare VS Code's folder in the host's home folder.")]
     Setup,
     #[error("SSH could not reach the host, or could not forward VS Code's port.")]

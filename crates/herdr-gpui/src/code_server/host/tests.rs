@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
+use crate::browser::WebUrl;
 
 mod origin;
 mod script;
