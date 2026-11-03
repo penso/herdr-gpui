@@ -6,10 +6,16 @@
 set -u
 umask 077
 IFS= read -r token || exit 2
+# The socket's folder is shared /tmp's only private part: made here, so
+# mode 0700 and this account's, and never one already there, as mkdir
+# fails then. Anyone else who made it first, having read its name in this
+# command line, only stops this start; the app tries again with a new one.
+run=$(dirname "$socket")
+mkdir "$run" || exit 2
 dir="$HOME/.herdr-gpui/vscode"
+token_file="$dir/$(basename "$run").token"
+trap 'rm -f "$socket" "$token_file"; rmdir "$run" 2>/dev/null' EXIT
 mkdir -p "$dir" || exit 2
-token_file="$dir/$(basename "$socket").token"
-trap 'rm -f "$socket" "$token_file"' EXIT
 printf '%s' "$token" > "$token_file" || exit 2
 # VS Code's web build is light until told otherwise; this makes it follow the
 # page's light or dark, which the app sets from its theme. Only a host with no
@@ -76,6 +82,7 @@ stop() {
   # shellcheck disable=SC2046 # one PID per word
   kill -TERM $(tree "$pid") 2>/dev/null
   rm -f "$socket" "$token_file"
+  rmdir "$run" 2>/dev/null
 }
 # Some SSH servers kill this shell when the connection closes rather than
 # end its stdin, so a watcher stops VS Code once the shell is gone.

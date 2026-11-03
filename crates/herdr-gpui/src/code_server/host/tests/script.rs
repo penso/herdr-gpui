@@ -31,7 +31,7 @@ fn home(name: &str) -> PathBuf {
 }
 
 fn run(home: &Path, path: &str) -> Child {
-    let socket = home.join("s.sock");
+    let socket = home.join("run/socket");
     let script = format!(
         "socket={}\n{SCRIPT}",
         herdr_client::shell_quote(&socket.to_string_lossy())
@@ -90,7 +90,7 @@ fn the_script_serves_with_the_token_and_stops_its_whole_tree() {
         .read_line(&mut line)
         .unwrap();
     assert!(line.starts_with("Web UI available on "), "{line}");
-    assert!(line.trim_end().ends_with("s.sock"), "{line}");
+    assert!(line.trim_end().ends_with("run/socket"), "{line}");
 
     // The token reached VS Code through a private file, never an argument.
     assert!(wait_for(|| home.join("grandchild").exists()));
@@ -102,9 +102,13 @@ fn the_script_serves_with_the_token_and_stops_its_whole_tree() {
         fs::read_to_string(home.join("token-seen")).unwrap(),
         "secret123"
     );
-    let token_file = dir.join("s.sock.token");
+    let token_file = dir.join("run.token");
     let mode = fs::metadata(&token_file).unwrap().permissions().mode();
     assert_eq!(mode & 0o777, 0o600);
+    // The socket's folder is the script's own, which no other account enters.
+    let folder = home.join("run");
+    let mode = fs::metadata(&folder).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o700);
     // A host with no machine settings follows the page's color scheme.
     let settings = super::super::super::machine::path(&home);
     assert_eq!(
@@ -123,6 +127,39 @@ fn the_script_serves_with_the_token_and_stops_its_whole_tree() {
         "the server was left running"
     );
     assert!(!token_file.exists());
+    assert!(!folder.exists(), "the socket's folder was left");
+    fs::remove_dir_all(home).unwrap();
+}
+
+/// A socket folder someone made first, as another account on a shared
+/// host could after reading its name, is never used or removed: the start
+/// fails, and the app tries again with a new name.
+#[test]
+fn a_socket_folder_already_there_is_refused() {
+    let home = home("squat");
+    install_fake_code(&home, FAKE_CODE);
+    let folder = home.join("run");
+    fs::create_dir_all(&folder).unwrap();
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o777)).unwrap();
+    fs::write(folder.join("planted"), "").unwrap();
+    let mut child = run(&home, "/usr/bin:/bin");
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"secret\n")
+        .unwrap();
+    let status = child.wait().unwrap();
+    assert!(
+        matches!(
+            exited(status),
+            super::super::super::Error::Host(Error::Setup)
+        ),
+        "{status:?}"
+    );
+    assert!(folder.join("planted").exists());
+    assert!(!home.join("args").exists(), "VS Code started anyway");
+    assert!(!home.join(".herdr-gpui/vscode/run.token").exists());
     fs::remove_dir_all(home).unwrap();
 }
 
@@ -132,7 +169,9 @@ fn a_host_without_a_downloader_says_so() {
     // The tools the script needs before it downloads, and no curl or wget.
     let bin = home.join("bin");
     fs::create_dir_all(&bin).unwrap();
-    for tool in ["uname", "mkdir", "basename", "rm", "cat"] {
+    for tool in [
+        "uname", "mkdir", "basename", "dirname", "rm", "rmdir", "cat",
+    ] {
         let found = ["/usr/bin", "/bin"]
             .iter()
             .map(|dir| Path::new(dir).join(tool))
@@ -184,7 +223,7 @@ fn a_server_that_stops_on_its_own_ends_the_script() {
         "the script outlived VS Code"
     );
     assert_eq!(child.wait().unwrap().code(), Some(9));
-    assert!(!home.join(".herdr-gpui/vscode/s.sock.token").exists());
+    assert!(!home.join(".herdr-gpui/vscode/run.token").exists());
     fs::remove_dir_all(home).unwrap();
 }
 

@@ -6,15 +6,20 @@ use super::{HostKeys, noninteractive, quote};
 use crate::{Result, catalog::validate_target};
 use std::process::Command;
 
-/// Where a socket named `name` lies on the host.
+/// Where a socket named `name` lies on the host: alone in a folder of that
+/// name in `/tmp`, which the script makes. `/tmp` is shared, and `ssh -L`
+/// needs a path known before the script runs, so a folder only its maker
+/// can enter is what keeps another account from taking the socket's place.
 pub fn remote_socket(name: &str) -> String {
-    format!("/tmp/{name}.sock")
+    format!("/tmp/{name}/socket")
 }
 
 /// A noninteractive `ssh` child that runs `script` under the remote
 /// `/bin/sh`, with `$socket` set to [`remote_socket`]`(name)`, and forwards
 /// `127.0.0.1:<local>` on this machine to that socket. `name` is the app's
 /// own: lowercase letters, digits, and hyphens, as a random name is written.
+/// The script makes the socket's folder with `mkdir`, which fails when the
+/// folder exists, and removes it when it ends.
 ///
 /// `ExitOnForwardFailure` ends the child when it cannot bind the local port,
 /// and SSH binds it before it runs the script, so anything the script prints

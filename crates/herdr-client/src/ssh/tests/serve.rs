@@ -10,7 +10,7 @@ fn serving_forwards_loopback_to_the_scripts_socket() {
         "ControlMaster=no",
         "ControlPath=none",
         "ExitOnForwardFailure=yes",
-        "127.0.0.1:41000:/tmp/herdr-vscode-ab12.sock",
+        "127.0.0.1:41000:/tmp/herdr-vscode-ab12/socket",
     ] {
         assert!(args.contains(&option), "{option} missing from {args:?}");
     }
@@ -20,7 +20,7 @@ fn serving_forwards_loopback_to_the_scripts_socket() {
     let script = args[args.len() - 1];
     assert!(script.starts_with("/bin/sh -c "), "{script}");
     assert!(script.contains("socket="), "{script}");
-    assert!(script.contains("/tmp/herdr-vscode-ab12.sock"), "{script}");
+    assert!(script.contains("/tmp/herdr-vscode-ab12/socket"), "{script}");
     assert!(script.contains("echo hi"), "{script}");
     assert_eq!(args[args.len() - 2], "user@host");
     assert_eq!(args[args.len() - 3], "--");
