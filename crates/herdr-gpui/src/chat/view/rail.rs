@@ -65,7 +65,7 @@ impl HerdrWindow {
                     .h(px(20.))
                     .rounded_full()
                     .bg(rgb(theme.surface))
-                    .text_size(px((self.chat_text_size() - 2.).max(10.)))
+                    .text_size(px(self.config.ui.size))
                     .text_color(rgb(theme.subtext()))
                     .child(
                         svg()

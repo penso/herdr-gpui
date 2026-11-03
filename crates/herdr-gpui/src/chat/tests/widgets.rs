@@ -109,11 +109,7 @@ fn typing_and_enter_in_a_widget_preserve_the_composer_and_draft_action_appends(
     click(cx, "widget-w1:p1-1-0-1");
     view.update(cx, |view, cx| {
         let pane = view.chats.pane_mut("w1:p1").unwrap();
-        let text = format!(
-            "{}\n{}",
-            pane.draft.join("\n"),
-            pane.composer.as_ref().unwrap().read(cx).text()
-        );
+        let text = pane.composer.as_ref().unwrap().read(cx).text().to_owned();
         assert!(text.starts_with("Keep my draft\n"));
         assert!(text.contains("\"note\": \"edited note\""));
         assert!(pane.session.resend().is_empty());
@@ -166,9 +162,10 @@ fn widget_editing_does_not_capture_composer_history_or_draft_keys(cx: &mut TestA
         snapshot(cursor(1, 0), vec![agent(1, &body)]),
         cx,
     );
-    view.update(cx, |view, _| {
+    view.update(cx, |view, cx| {
         let pane = view.chats.pane_mut("w1:p1").unwrap();
-        pane.draft.push("Keep this line".into());
+        let input = pane.composer.clone().unwrap();
+        input.update(cx, |input, cx| input.set_text_at("Keep this line", 0, cx));
         pane.history
             .push("Previous prompt", pane.session.transcript());
     });
@@ -190,8 +187,10 @@ fn widget_editing_does_not_capture_composer_history_or_draft_keys(cx: &mut TestA
     poll(&view, &program, cx);
     view.update(cx, |view, cx| {
         let pane = view.chats.pane_mut("w1:p1").unwrap();
-        assert_eq!(pane.draft, ["Keep this line"]);
-        assert_eq!(pane.composer.as_ref().unwrap().read(cx).text(), "");
+        assert_eq!(
+            pane.composer.as_ref().unwrap().read(cx).text(),
+            "Keep this line"
+        );
         let body = pane.prepared.body(EntryId(1)).unwrap();
         let prepared_body::Body::Message(parts) = body.as_ref() else {
             panic!("message");

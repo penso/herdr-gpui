@@ -5,6 +5,8 @@ use super::{
 use gpui::{TestAppContext, px};
 use herdr_client::ConnectTarget;
 
+mod terminal;
+
 #[gpui::test]
 fn ordinary_and_linked_prose_wrap_inside_the_chat_column(cx: &mut TestAppContext) {
     let words = "A long paragraph must wrap inside its available column without clipping the words on the right. ".repeat(6);

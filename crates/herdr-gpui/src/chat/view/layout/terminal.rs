@@ -19,6 +19,10 @@ fn gutter(look: &Look<'_>) -> Pixels {
 }
 
 impl ChatLayout for Terminal {
+    fn compact_settings(&self) -> bool {
+        true
+    }
+
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         let Some(side) = row.side() else {
             return summary_row(row, look, 6.);
@@ -125,17 +129,35 @@ impl ChatLayout for Terminal {
                 div()
                     .debug_selector(|| "chat-settings".into())
                     .flex()
-                    .flex_wrap()
                     .items_center()
                     .gap(px(6.))
                     .px(px(2.))
                     .text_size(px((look.mono.size - 1.).max(10.)))
                     .text_color(rgb(theme.muted))
-                    .child(parts.attach)
-                    .children(parts.settings)
-                    .child(div().flex_1())
-                    .children(parts.usage)
-                    .child(parts.send),
+                    // The model yields width first. Exceptionally narrow
+                    // panes can scroll settings without displacing Stop.
+                    .child(
+                        div()
+                            .id("chat-settings-options")
+                            .debug_selector(|| "chat-settings-options".into())
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .overflow_x_scroll()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(parts.attach)
+                            .children(parts.settings),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .children(parts.usage)
+                            .child(parts.send),
+                    ),
             )
     }
 }

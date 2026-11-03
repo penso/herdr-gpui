@@ -509,10 +509,9 @@ fn install(
         let font = view.config.ui.clone();
         let theme = view.theme.clone();
         let input = cx.new(|cx| {
-            let mut input = crate::search_input::SearchInput::new(cx);
-            input.set_frameless(cx);
+            let mut input = crate::multiline_input::MultilineInput::new(cx);
             input.set_appearance(font, theme, cx);
-            input.set_placeholder("Preview only — no agent is connected", cx); // i18n: data
+            input.set_placeholder_with(|| "Preview only — no agent is connected".to_owned(), cx); // i18n: data
             if let Some(draft) = &options.draft {
                 input.set_text_at(draft, draft.len(), cx);
             }

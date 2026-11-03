@@ -161,10 +161,14 @@ fn a_shorter_list_catches_up_to_its_end_on_its_own(cx: &mut TestAppContext) {
     let _stream = attach_with(&view, &program, snapshot(cursor(1, 0), entries), cx);
     redraw(&view, cx);
     assert!(behind(&view, cx) <= 1.);
-    // A long draft takes room from the list, which keeps its top: the last
+    // A long prompt takes room from the list, which keeps its top: the last
     // lines slide under the composer until the glide brings them back.
     view.update(cx, |view, cx| {
-        view.chats.pane_mut("w1:p1").unwrap().draft = vec!["more".into(); 5];
+        let pane = view.chats.pane_mut("w1:p1").unwrap();
+        let input = pane.composer.clone().unwrap();
+        input.update(cx, |input, cx| {
+            input.set_text_at("more\nmore\nmore\nmore\nmore", 0, cx)
+        });
         cx.notify();
     });
     cx.run_until_parked();

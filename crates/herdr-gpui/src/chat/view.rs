@@ -90,10 +90,9 @@ impl HerdrWindow {
         )
     }
 
-    /// Prose reads slightly larger than terminal cells, while following the
-    /// existing zoom controls in both directions.
+    /// Messages use the terminal's configured size and follow its zoom controls.
     pub(in crate::chat) fn chat_text_size(&self) -> f32 {
-        self.config.terminal.size + 2.
+        self.config.terminal.size
     }
 
     /// Captions, hints, and labels beside the chat's prose: a step smaller,
@@ -609,7 +608,6 @@ impl HerdrWindow {
         let layout = {
             let current = self.config.chat.layout;
             button("chat-layout")
-                .text_size(self.chat_small_text())
                 .text_color(rgb(theme.subtext()))
                 .child(current.label())
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
@@ -638,12 +636,16 @@ impl HerdrWindow {
             }
             _ => None,
         };
+        // The chat container sets the prose size, so the header pins its
+        // own chrome: the tabs' mono face at the interface size.
         div()
             .flex_none()
             .flex()
             .flex_col()
             .border_b_1()
             .border_color(rgb(theme.active))
+            .text_font(&self.config.tabs)
+            .text_size(px(self.config.ui.size))
             .child(
                 div()
                     .flex()
@@ -663,7 +665,7 @@ impl HerdrWindow {
                             .debug_selector(|| "chat-agent".into())
                             .min_w_0()
                             .truncate()
-                            .font_weight(FontWeight::SEMIBOLD)
+                            .font_weight(FontWeight::MEDIUM)
                             .child(crate::notifications::safe_text(chat.session.agent(), 80)),
                     )
                     .child(div().flex_none().size(px(7.)).rounded_full().bg(rgb(dot)))

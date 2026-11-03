@@ -44,15 +44,15 @@ fn every_layout_honors_default_custom_and_full_width_and_clamps_to_a_narrow_pane
                 column.left() >= pane.left() && column.right() <= pane.right(),
                 "{layout:?}: {column:?} in {pane:?}"
             );
-            if width != 0 {
-                assert!(
-                    (f32::from(column.size.width) - f32::from(width)).abs() < 2.,
-                    "{layout:?}: requested {width}, got {column:?}"
-                );
-            } else {
+            if width == 0 {
                 assert!(
                     column.size.width > px(1400.),
                     "{layout:?}: full width must exceed the custom limit"
+                );
+            } else {
+                assert!(
+                    (f32::from(column.size.width) - f32::from(width)).abs() < 2.,
+                    "{layout:?}: requested {width}, got {column:?}"
                 );
             }
             measured.push(prose.size.width);

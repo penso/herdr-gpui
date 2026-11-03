@@ -3,7 +3,7 @@
 //! conversation. The composer is the draft alone in a box, with the
 //! settings in a quiet row under it.
 
-use super::{Bubble, ChatLayout, ComposerParts, Look, Row, bubble_row, summary_row};
+use super::{Bubble, ChatLayout, ComposerParts, Look, Row, ToolIndent, bubble_row, summary_row};
 use crate::config::{corners, mix};
 use gpui::{prelude::*, *};
 
@@ -21,6 +21,15 @@ impl ChatLayout for Bubbles {
             return summary_row(row, look, SHAPE.gap);
         }
         bubble_row(row, look, SHAPE)
+    }
+
+    fn tool_indent(&self) -> Option<ToolIndent> {
+        // The body sits past the header so the two read as one nesting
+        // level; the prose keeps the column edge.
+        Some(ToolIndent {
+            header: 10.,
+            body: 28.,
+        })
     }
 
     fn composer(&self, parts: ComposerParts, look: &Look<'_>) -> Div {

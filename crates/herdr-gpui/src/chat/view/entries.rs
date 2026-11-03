@@ -369,11 +369,14 @@ impl HerdrWindow {
                     .text_color(rgb(color))
                     .child(status.label()),
             );
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(2.))
-            .child(self.chat_disclosure(header, pane_id, entry, expanded, HeaderText::Label, cx))
+        // A layout may nest a call from the column edge; its body sits
+        // past the header so the two read as one level.
+        let indent = layout_for(self.config.chat.layout).tool_indent();
+        let mut body = div().flex().flex_col().gap(px(2.));
+        if let Some(indent) = indent {
+            body = body.pl(px(indent.body));
+        }
+        body = body
             .when(expanded && !steps.is_empty(), |card| {
                 card.children(chat.map(|chat| self.render_chat_steps(chat, entry, steps)))
             })
@@ -438,7 +441,13 @@ impl HerdrWindow {
                             })
                         })),
                 )
-            })
+            });
+        let mut row = div().flex().flex_col().gap(px(2.));
+        if let Some(indent) = indent {
+            row = row.pl(px(indent.header));
+        }
+        row.child(self.chat_disclosure(header, pane_id, entry, expanded, HeaderText::Label, cx))
+            .child(body)
     }
 
     /// What a tool call shows without being opened: each file's changed line

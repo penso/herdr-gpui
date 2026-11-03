@@ -106,13 +106,10 @@ fn composer_text(
 ) -> String {
     view.read_with(cx, |view, cx| {
         let pane = view.chats.panes().next().unwrap();
-        let draft = pane.draft.join("\n");
-        let line = pane
-            .composer
+        pane.composer
             .as_ref()
             .map(|input| input.read(cx).text().to_owned())
-            .unwrap_or_default();
-        format!("{draft}{line}")
+            .unwrap_or_default()
     })
 }
 

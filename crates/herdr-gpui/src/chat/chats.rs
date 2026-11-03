@@ -8,6 +8,7 @@ use super::{
     prepared::Prepared,
     session::Session,
 };
+use crate::multiline_input::MultilineInput;
 use crate::search_input::SearchInput;
 use gpui::{App, Entity, FocusHandle, ListAlignment, ListState, Window, px};
 use herdr_chat_protocol::{ClientMessage, Command, Cursor, EndpointId, EntryId};
@@ -120,9 +121,7 @@ pub(crate) struct ChatPane {
     pub(crate) attachments: Vec<std::path::PathBuf>,
     /// Which slash-command completion is selected.
     pub(crate) completion: usize,
-    pub(crate) composer: Option<Entity<SearchInput>>,
-    /// Lines written above the composer's own, joined into one prompt.
-    pub(crate) draft: Vec<String>,
+    pub(crate) composer: Option<Entity<MultilineInput>>,
     /// The last command this window could not send.
     pub(crate) error: Option<String>,
     /// Thoughts shown in full.
@@ -176,14 +175,11 @@ pub(crate) struct ChatPane {
 }
 
 impl ChatPane {
-    /// What the composer's round button does with `text` on its editable
-    /// line: as in the phone app, it stops a running turn while nothing is
-    /// written or attached, and sends only once something is.
+    /// What the composer's round button does with `text` in the field: as in
+    /// the phone app, it stops a running turn while nothing is written or
+    /// attached, and sends only once something is.
     pub(crate) fn send_button(&self, text: &str) -> SendButton {
-        let drafted = !text.trim().is_empty()
-            || self.draft.iter().any(|line| !line.trim().is_empty())
-            || !self.attachments.is_empty()
-            || self.uploading > 0;
+        let drafted = !text.trim().is_empty() || !self.attachments.is_empty() || self.uploading > 0;
         let status = &self.session.transcript().status;
         match (drafted, status) {
             (false, herdr_chat_protocol::Status::Working) => SendButton::Stop,
@@ -244,7 +240,6 @@ impl ChatPane {
             attachments: Vec::new(),
             completion: 0,
             composer: None,
-            draft: Vec::new(),
             error: None,
             expanded: HashSet::new(),
             failures: 0,

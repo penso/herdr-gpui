@@ -17,7 +17,7 @@ fn field<'a>(
     cx.update(|window, cx| {
         input.update(cx, |input, cx| {
             input.set_masked(masked, cx);
-            input.edit.replace(None, text, false, None);
+            input.edit.replace(None, text, false, None, Newlines::Strip);
             window.focus(&input.focus, cx);
         });
         window.draw(cx).clear(cx);

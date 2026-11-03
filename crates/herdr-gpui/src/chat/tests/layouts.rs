@@ -11,6 +11,7 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 use herdr_client::ConnectTarget;
 
 mod prompt_width;
+mod terminal_footer;
 
 fn switch(view: &Entity<HerdrWindow>, mode: ChatLayoutMode, cx: &mut VisualTestContext) {
     view.update(cx, |view, cx| {

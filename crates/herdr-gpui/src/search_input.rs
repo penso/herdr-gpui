@@ -1,6 +1,5 @@
 //! A single-line, native-IME-aware input for searchable pickers.
 use std::ops::Range;
-use unicode_segmentation::UnicodeSegmentation;
 
 use gpui::{
     App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, EntityInputHandler,
@@ -12,6 +11,9 @@ use gpui::{
 use crate::caret::Carets;
 use crate::config::{Config, FontConfig, Theme};
 use crate::fonts::StyledFont;
+#[cfg(test)]
+use crate::text_editing::from_utf16;
+use crate::text_editing::{Editing, Newlines, byte_range, normalize, to_utf16};
 use crate::{actions, input::ViewInputHandler, words};
 
 mod control_keys;
@@ -50,35 +52,6 @@ pub struct SearchInput {
     killed: String,
 }
 
-// Internal offsets are UTF-8 boundaries; only the platform input API uses UTF-16.
-#[derive(Default)]
-struct Editing {
-    text: String,
-    anchor: usize,
-    cursor: usize,
-    marked: Option<Range<usize>>,
-}
-
-fn from_utf16(text: &str, offset: usize) -> usize {
-    let mut units = 0;
-    for (byte, ch) in text.char_indices() {
-        if units >= offset {
-            return byte;
-        }
-        units += ch.len_utf16();
-    }
-    text.len()
-}
-
-fn to_utf16(text: &str, offset: usize) -> usize {
-    text[..offset].encode_utf16().count()
-}
-
-fn byte_range(text: &str, range: Range<usize>) -> Range<usize> {
-    // Clamp out-of-bounds requests and round split surrogate pairs forward.
-    from_utf16(text, range.start.min(range.end))..from_utf16(text, range.start.max(range.end))
-}
-
 /// Where byte `offset` of `text` falls in its masked rendering, which draws
 /// one single-byte `*` per character.
 fn masked_offset(text: &str, offset: usize) -> usize {
@@ -90,85 +63,6 @@ fn unmasked_offset(text: &str, offset: usize) -> usize {
     text.char_indices()
         .nth(offset)
         .map_or(text.len(), |(byte, _)| byte)
-}
-
-fn single_line(text: &str) -> String {
-    text.chars()
-        .filter(|ch| !matches!(ch, '\r' | '\n'))
-        .collect()
-}
-
-impl Editing {
-    fn selection(&self) -> Range<usize> {
-        self.anchor.min(self.cursor)..self.anchor.max(self.cursor)
-    }
-
-    fn select_to(&mut self, offset: usize, extend: bool) {
-        self.cursor = offset;
-        if !extend {
-            self.anchor = offset;
-        }
-    }
-
-    // Grapheme boundaries of the whole text, so arrows and deletion never
-    // split what reads as one character: an accented letter, an emoji
-    // sequence, a Hangul syllable. A slice would start a cluster of its own
-    // at the cursor, splitting a letter from the accent typed before it.
-    fn boundaries(&self) -> impl DoubleEndedIterator<Item = usize> + '_ {
-        self.text
-            .grapheme_indices(true)
-            .map(|(i, _)| i)
-            .chain([self.text.len()])
-    }
-
-    fn previous(&self) -> usize {
-        self.boundaries().rfind(|i| *i < self.cursor).unwrap_or(0)
-    }
-
-    fn next(&self) -> usize {
-        self.boundaries()
-            .find(|i| *i > self.cursor)
-            .unwrap_or(self.cursor)
-    }
-
-    /// The first boundary at or after `offset`, where an edit leaves the
-    /// caret when what it inserted joins the cluster after it.
-    fn boundary_from(&self, offset: usize) -> usize {
-        self.boundaries()
-            .find(|i| *i >= offset)
-            .unwrap_or(self.text.len())
-    }
-
-    fn replace(
-        &mut self,
-        range: Option<Range<usize>>,
-        text: &str,
-        composing: bool,
-        selection: Option<Range<usize>>,
-    ) -> bool {
-        let range = range
-            .map(|r| byte_range(&self.text, r))
-            .or_else(|| self.marked.clone())
-            .unwrap_or_else(|| self.selection());
-        let inserted = single_line(text);
-        let changed = self.text[range.clone()] != inserted;
-        self.text.replace_range(range.clone(), &inserted);
-        self.marked = (composing && !inserted.is_empty())
-            .then_some(range.start..range.start + inserted.len());
-        self.cursor = range.start + inserted.len();
-        if !composing {
-            self.cursor = self.boundary_from(self.cursor);
-        }
-        self.anchor = self.cursor;
-        if composing && let Some(selection) = selection {
-            // IME selection is relative to the supplied text, not the whole buffer.
-            // Map through newline removal as well as UTF-16 conversion.
-            self.anchor =
-                range.start + single_line(&text[..from_utf16(text, selection.start)]).len();
-            self.cursor = range.start + single_line(&text[..from_utf16(text, selection.end)]).len();
-        }
-        changed
-    }
 }
 
 impl SearchInput {
@@ -230,7 +124,7 @@ impl SearchInput {
     /// Replaces the text with the cursor at byte `cursor`, moved back to a
     /// character boundary, and nothing selected.
     pub(crate) fn set_text_at(&mut self, text: &str, cursor: usize, cx: &mut Context<Self>) {
-        let text = single_line(text);
+        let text = normalize(text, Newlines::Strip);
         let mut cursor = cursor.min(text.len());
         while !text.is_char_boundary(cursor) {
             cursor -= 1;
@@ -247,7 +141,7 @@ impl SearchInput {
     }
 
     pub(super) fn set_text_selected(&mut self, text: &str, cx: &mut Context<Self>) {
-        let text = single_line(text);
+        let text = normalize(text, Newlines::Strip);
         let changed = self.edit.text != text;
         self.edit = Editing {
             cursor: text.len(),
@@ -566,7 +460,7 @@ impl EntityInputHandler for SearchInput {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let changed = self.edit.replace(range, text, false, None);
+        let changed = self.edit.replace(range, text, false, None, Newlines::Strip);
         self.did_edit(changed, cx);
     }
 
@@ -578,7 +472,9 @@ impl EntityInputHandler for SearchInput {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let changed = self.edit.replace(range, text, true, selection);
+        let changed = self
+            .edit
+            .replace(range, text, true, selection, Newlines::Strip);
         self.did_edit(changed, cx);
     }
 
@@ -914,14 +810,14 @@ mod tests {
     #[test]
     fn replaces_unicode_selection_and_explicit_utf16_range() {
         let mut edit = Editing::default();
-        assert!(edit.replace(None, "a\u{1f600}\u{e9}z", false, None));
+        assert!(edit.replace(None, "a\u{1f600}\u{e9}z", false, None, Newlines::Strip));
         edit.anchor = 7;
         edit.cursor = 1;
         assert_eq!(edit.selection(), 1..7);
-        assert!(edit.replace(None, "\u{4e2d}", false, None));
+        assert!(edit.replace(None, "\u{4e2d}", false, None, Newlines::Strip));
         assert_eq!(edit.text, "a\u{4e2d}z");
         assert_eq!(edit.cursor, 4);
-        assert!(edit.replace(Some(1..2), "\u{1f600}", false, None));
+        assert!(edit.replace(Some(1..2), "\u{1f600}", false, None, Newlines::Strip));
         assert_eq!(edit.text, "a\u{1f600}z");
         assert_eq!(edit.cursor, 5);
         assert_eq!(edit.previous(), 1);
@@ -932,15 +828,21 @@ mod tests {
     #[test]
     fn composition_selection_is_relative_to_inserted_text() {
         let mut edit = Editing::default();
-        edit.replace(None, "\u{1f600}prefix", false, None);
+        edit.replace(None, "\u{1f600}prefix", false, None, Newlines::Strip);
         let start = edit.cursor;
-        edit.replace(None, "\u{4e2d}\u{1f600}a", true, Some(1..3));
+        edit.replace(
+            None,
+            "\u{4e2d}\u{1f600}a",
+            true,
+            Some(1..3),
+            Newlines::Strip,
+        );
         assert_eq!(edit.selection(), start + 3..start + 7);
         assert_eq!(edit.marked, Some(start..start + 8));
-        edit.replace(None, "\u{e9}", true, Some(0..1));
+        edit.replace(None, "\u{e9}", true, Some(0..1), Newlines::Strip);
         assert_eq!(edit.selection(), start..start + 2);
         assert_eq!(edit.marked, Some(start..start + 2));
-        assert!(!edit.replace(None, "\u{e9}", false, None));
+        assert!(!edit.replace(None, "\u{e9}", false, None, Newlines::Strip));
         assert_eq!(edit.marked, None);
         assert_eq!(edit.selection(), start + 2..start + 2);
         assert_eq!(edit.text, "\u{1f600}prefix\u{e9}");
@@ -949,14 +851,14 @@ mod tests {
     #[test]
     fn strips_newlines_and_maps_composition_selection() {
         let mut edit = Editing::default();
-        edit.replace(None, "a\r\n\u{1f600}\nz", true, Some(3..6));
+        edit.replace(None, "a\r\n\u{1f600}\nz", true, Some(3..6), Newlines::Strip);
         assert_eq!(edit.text, "a\u{1f600}z");
         assert_eq!(edit.selection(), 1..5);
-        edit.replace(None, "", true, None);
+        edit.replace(None, "", true, None, Newlines::Strip);
         assert!(edit.text.is_empty());
         assert_eq!(edit.marked, None);
         assert_eq!(edit.selection(), 0..0);
-        assert!(!edit.replace(None, "\r\n", false, None));
+        assert!(!edit.replace(None, "\r\n", false, None, Newlines::Strip));
     }
 
     #[gpui::test]
@@ -964,7 +866,9 @@ mod tests {
         let (input, cx) = cx.add_window_view(|_, cx| SearchInput::new(cx));
         cx.update(|window, cx| {
             input.update(cx, |input, cx| {
-                input.edit.replace(None, "one two", false, None);
+                input
+                    .edit
+                    .replace(None, "one two", false, None, Newlines::Strip);
                 input.edit.select_to(3, false);
                 window.focus(&input.focus, cx);
             });
@@ -988,7 +892,7 @@ mod tests {
     #[test]
     fn extending_selection_can_cross_its_anchor() {
         let mut edit = Editing::default();
-        edit.replace(None, "a\u{1f600}b", false, None);
+        edit.replace(None, "a\u{1f600}b", false, None, Newlines::Strip);
         edit.select_to(1, false);
         edit.select_to(0, true);
         assert_eq!(edit.selection(), 0..1);

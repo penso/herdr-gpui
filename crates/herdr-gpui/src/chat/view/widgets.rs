@@ -385,24 +385,21 @@ impl HerdrWindow {
         }
         let existing = composer.read(cx).text().to_owned();
         if mode == ActionMode::Send
-            && (!existing.is_empty()
-                || !pane.draft.is_empty()
-                || !pane.attachments.is_empty()
-                || pane.uploading > 0)
+            && (!existing.trim().is_empty() || !pane.attachments.is_empty() || pane.uploading > 0)
         {
             pane.error = Some(fl!("chat-form-busy"));
             cx.notify();
             return;
         }
-        if !existing.is_empty() {
-            pane.draft.push(existing);
-            pane.draft.push(String::new());
-        }
-        let mut lines: Vec<String> = prompt.lines().map(str::to_owned).collect();
-        let last = lines.pop().unwrap_or_default();
-        pane.draft.extend(lines);
+        // The single prompt field holds it all: what was typed stays above,
+        // the form's prompt below it.
+        let text = if existing.is_empty() {
+            prompt
+        } else {
+            format!("{existing}\n\n{prompt}")
+        };
         pane.error = None;
-        composer.update(cx, |input, cx| input.set_text_at(&last, last.len(), cx));
+        composer.update(cx, |input, cx| input.set_text_at(&text, text.len(), cx));
         let focus = composer.read(cx).focus.clone();
         window.focus(&focus, cx);
         if mode == ActionMode::Send {
