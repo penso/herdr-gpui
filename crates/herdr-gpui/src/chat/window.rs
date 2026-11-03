@@ -10,6 +10,7 @@ use super::{
 use crate::{
     HerdrWindow,
     i18n::{Localize, fl},
+    multiline_input::MultilineInput,
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -155,11 +156,7 @@ impl HerdrWindow {
                 .composer
                 .get_or_insert_with(|| {
                     changed = true;
-                    cx.new(|cx| {
-                        let mut input = SearchInput::new(cx);
-                        input.set_frameless(cx);
-                        input
-                    })
+                    cx.new(MultilineInput::new)
                 })
                 .clone();
             let accepts = pane.session.transcript().status.accepts_prompts();
@@ -494,9 +491,9 @@ impl HerdrWindow {
             modifiers.shift && !modifiers.control && !modifiers.alt && !modifiers.platform;
         match event.keystroke.key.as_str() {
             "enter" if shift_only => {
-                let line = input.read(cx).text().to_owned();
-                pane.draft.push(line);
-                input.update(cx, |input, cx| input.clear(cx));
+                input.update(cx, |input, cx| {
+                    input.replace_text_in_range(None, "\n", window, cx)
+                });
             }
             "enter" if !modifiers.modified() => self.submit_chat_prompt(pane_id, &input, cx),
             "escape"
@@ -512,8 +509,8 @@ impl HerdrWindow {
     }
 
     /// Keys the composer would otherwise take: Tab and Up/Down choose a
-    /// slash command while some match, Up/Down recall earlier prompts from an
-    /// empty composer, and Backspace there takes back the draft's last line.
+    /// slash command while some match, and Up/Down recall earlier prompts
+    /// from an empty composer.
     pub(super) fn chat_capture_key(
         &mut self,
         pane_id: &str,
@@ -596,15 +593,7 @@ impl HerdrWindow {
                 let Some(recalled) = recalled.map(str::to_owned) else {
                     return;
                 };
-                self.set_chat_prompt(pane_id, &input, &recalled, window, cx);
-            }
-            "backspace" if text.is_empty() => {
-                let Some(line) = pane.draft.pop() else {
-                    return;
-                };
-                input.update(cx, |input, cx| {
-                    input.replace_text_in_range(None, &line, window, cx);
-                });
+                self.set_chat_prompt(&input, &recalled, window, cx);
             }
             _ => {
                 if key != "up" && key != "down" {
@@ -619,8 +608,8 @@ impl HerdrWindow {
     }
 
     /// Pastes the clipboard's text into the composer when it holds several
-    /// lines, which the one-line composer would join: every line but the
-    /// last joins the draft above it. Whether it took the paste.
+    /// lines, which the field takes as several lines. Whether it took
+    /// the paste.
     pub(super) fn chat_paste(
         &mut self,
         pane_id: &str,
@@ -679,51 +668,29 @@ impl HerdrWindow {
             self.attach_chat_image(pane_id, image, window, cx);
             return true;
         };
-        let text = text.replace("\r\n", "\n").replace('\r', "\n");
-        if !text.contains('\n') {
+        if !text.contains(['\n', '\r']) {
             return false;
         }
-        // The composer's selection is not exposed, so a marker it keeps (it
-        // drops only line breaks) stands in for the paste and shows where
-        // the line splits around it.
+        // Newlines paste as newlines into the multi-line field.
         input.update(cx, |input, cx| {
-            input.replace_text_in_range(None, PASTE_MARK, window, cx);
+            input.replace_text_in_range(None, &text, window, cx)
         });
-        let line = input.read(cx).text().to_owned();
-        let (before, after) = line.split_once(PASTE_MARK).unwrap_or((line.as_str(), ""));
-        let joined = format!("{before}{text}{after}");
-        let (lines, last) = draft_lines(&joined);
-        let last = last.to_owned();
-        // The cursor goes right after the pasted text, before the line's tail.
-        let cursor = last.len() - after.len();
-        let Some(pane) = self.chats.pane_mut(pane_id) else {
-            return false;
-        };
-        pane.draft.extend(lines);
-        input.update(cx, |input, cx| input.set_text_at(&last, cursor, cx));
         self.redraw_terminal(cx);
         cx.notify();
         true
     }
 
-    /// Puts `text` in the composer: its last line in the editable field,
-    /// the lines before it in the draft, replacing both.
+    /// Puts `text` in the composer, replacing it; `text` may hold several lines.
     fn set_chat_prompt(
         &mut self,
-        pane_id: &str,
-        input: &Entity<SearchInput>,
+        input: &Entity<MultilineInput>,
         text: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(pane) = self.chats.pane_mut(pane_id) else {
-            return;
-        };
-        let (draft, last) = draft_lines(text);
-        pane.draft = draft;
         input.update(cx, |input, cx| {
             input.clear(cx);
-            input.replace_text_in_range(None, last, window, cx);
+            input.replace_text_in_range(None, text, window, cx);
         });
         self.redraw_terminal(cx);
         cx.notify();
@@ -909,13 +876,13 @@ impl HerdrWindow {
     fn submit_chat_prompt(
         &mut self,
         pane_id: &str,
-        input: &Entity<SearchInput>,
+        input: &Entity<MultilineInput>,
         cx: &mut Context<Self>,
     ) {
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             return;
         };
-        let text = prompt_text(&pane.draft, input.read(cx).text());
+        let text = input.read(cx).text().to_owned();
         if text.trim().is_empty() && pane.attachments.is_empty() && pane.uploading == 0 {
             return;
         }
@@ -942,7 +909,6 @@ impl HerdrWindow {
         match pane.send(Command::Prompt { text, attachments }) {
             Ok(()) => {
                 pane.error = None;
-                pane.draft.clear();
                 pane.attachments.clear();
                 input.update(cx, |input, cx| input.clear(cx));
             }
@@ -972,28 +938,4 @@ impl HerdrWindow {
         cx.notify();
         true
     }
-}
-
-/// What a paste briefly puts at the composer's cursor: private-use
-/// characters no prompt is expected to hold.
-const PASTE_MARK: &str = "\u{F8FF}\u{E000}";
-
-/// `text` as draft lines and the composer's last line, so that
-/// [`prompt_text`] rebuilds it.
-pub(crate) fn draft_lines(text: &str) -> (Vec<String>, &str) {
-    match text.rsplit_once('\n') {
-        Some((head, last)) => (head.split('\n').map(str::to_owned).collect(), last),
-        None => (Vec::new(), text),
-    }
-}
-
-/// The prompt a draft and the composer's line make.
-pub(crate) fn prompt_text(draft: &[String], line: &str) -> String {
-    if draft.is_empty() {
-        return line.to_owned();
-    }
-    let mut text = draft.join("\n");
-    text.push('\n');
-    text.push_str(line);
-    text
 }

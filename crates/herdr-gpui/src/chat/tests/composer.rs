@@ -59,15 +59,21 @@ fn a_pasted_prompt_keeps_its_lines(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_long_draft_keeps_the_editable_line_in_the_pane(cx: &mut TestAppContext) {
+fn a_long_prompt_grows_the_field_and_keeps_it_in_the_pane(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let _stream = attach_with(&view, &program, idle(), cx);
+    poll(&view, &program, cx);
+    let single = cx.debug_bounds("chat-composer").unwrap().size.height;
     let lines: Vec<String> = (0..40).map(|n| format!("line {n}")).collect();
     cx.write_to_clipboard(ClipboardItem::new_string(lines.join("\n")));
     cx.simulate_keystrokes(paste_key());
     poll(&view, &program, cx);
-    assert!(cx.debug_bounds("chat-draft-earlier").is_some());
+    let grown = cx.debug_bounds("chat-composer").unwrap().size.height;
+    assert!(
+        grown > single,
+        "the field grows with the text: {single:?} -> {grown:?}"
+    );
     let chat = cx.debug_bounds("chat-view").unwrap();
     let composer = cx.debug_bounds("chat-composer").unwrap();
     assert!(
@@ -77,7 +83,7 @@ fn a_long_draft_keeps_the_editable_line_in_the_pane(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_paste_keeps_the_draft_and_splits_at_the_cursor(cx: &mut TestAppContext) {
+fn a_paste_splits_at_the_cursor(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let mut stream = attach_with(&view, &program, idle(), cx);
@@ -152,5 +158,33 @@ fn a_long_queue_keeps_the_composer_in_the_pane(cx: &mut TestAppContext) {
     assert!(
         composer.bottom() <= chat.bottom(),
         "{composer:?} in {chat:?}"
+    );
+}
+
+#[gpui::test]
+fn shift_enter_writes_a_newline_and_enter_sends_both(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let mut stream = attach_with(&view, &program, idle(), cx);
+    cx.simulate_input("first");
+    cx.simulate_keystrokes("shift-enter");
+    cx.simulate_input("second");
+    cx.simulate_keystrokes("enter");
+    assert_eq!(prompt_text(&mut stream), "first\nsecond");
+}
+
+#[gpui::test]
+fn a_long_line_wraps_onto_more_rows_while_typing(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let _stream = attach_with(&view, &program, idle(), cx);
+    poll(&view, &program, cx);
+    let single = cx.debug_bounds("chat-composer").unwrap().size.height;
+    cx.simulate_input(&"one two three four five six seven eight nine ten ".repeat(6));
+    poll(&view, &program, cx);
+    let wrapped = cx.debug_bounds("chat-composer").unwrap().size.height;
+    assert!(
+        wrapped > single,
+        "the field grows as the text wraps: {single:?} -> {wrapped:?}"
     );
 }

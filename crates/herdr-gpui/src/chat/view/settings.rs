@@ -162,12 +162,13 @@ impl HerdrWindow {
             return;
         };
         pane.menu_search = search;
-        let focus = pane
-            .menu_search
-            .as_ref()
-            .map(|(input, _)| input)
-            .or(pane.composer.as_ref())
-            .map(|input| input.read(cx).focus.clone());
+        let focus = match &pane.menu_search {
+            Some((input, _)) => Some(input.read(cx).focus.clone()),
+            None => pane
+                .composer
+                .as_ref()
+                .map(|input| input.read(cx).focus.clone()),
+        };
         if let Some(focus) = focus {
             window.focus(&focus, cx);
         }

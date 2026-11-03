@@ -45,11 +45,6 @@ chat-preparing-pictures = { $count ->
     [one] Preparing a picture…
    *[other] Preparing { $count } pictures…
 }
-# Lines of a long draft above the ones shown.
-chat-draft-earlier = { $count ->
-    [one] { $count } earlier line
-   *[other] { $count } earlier lines
-}
 # The file picker's button.
 chat-files-attach = Attach
 # $error says why, in the system's or the app's words.

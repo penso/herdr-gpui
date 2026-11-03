@@ -37,8 +37,10 @@ The default is 800 logical pixels; custom widths range from 320 to 4,000 and
 shrink to fit narrower windows. The transcript and native composer use the
 same width. At the default, the agent's prose keeps to about 70 characters a
 line, the length that reads most easily, while code, tables, and pictures use
-the whole column; a width you choose is followed as set. The equivalent
-commands are:
+the whole column; a width you choose is followed as set. The **Terminal**
+layout reads like a terminal: at the default reading width it fills the
+conversation area instead of the book's measure; a width you configure is
+followed as set. The equivalent commands are:
 
 ```sh
 herdr-gpui config set chat.max_width 0     # full width

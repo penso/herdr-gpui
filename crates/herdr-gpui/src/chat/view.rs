@@ -29,7 +29,7 @@ use super::chats::{ChatInput, ChatPane};
 use crate::i18n::fl;
 use crate::{
     HerdrWindow,
-    config::{Theme, corners},
+    config::{ChatLayoutMode, Theme, corners},
     fonts::StyledFont,
 };
 use gpui::{prelude::*, *};
@@ -78,14 +78,21 @@ fn text_ink(color: u32, background: u32) -> u32 {
 
 impl HerdrWindow {
     /// The configured reading width, or the entire available conversation area.
+    /// The Terminal layout reads like a terminal, so at the default reading
+    /// width it fills the conversation area instead of the book's measure; a
+    /// width the user chose is followed as set.
     pub(super) fn chat_column(&self, content: impl IntoElement) -> Div {
         let width = self.config.chat.max_width;
+        let terminal_default = self.config.chat.layout == ChatLayoutMode::Terminal
+            && width == crate::config::chat::DEFAULT_MAX_WIDTH;
         div().w_full().flex().justify_center().child(
             div()
                 .debug_selector(|| "chat-reading-column".into())
                 .w_full()
                 .min_w_0()
-                .when(width != 0, |column| column.max_w(px(f32::from(width))))
+                .when(width != 0 && !terminal_default, |column| {
+                    column.max_w(px(f32::from(width)))
+                })
                 .child(content),
         )
     }

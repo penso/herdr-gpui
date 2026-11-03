@@ -44,27 +44,35 @@ fn every_layout_honors_default_custom_and_full_width_and_clamps_to_a_narrow_pane
                 column.left() >= pane.left() && column.right() <= pane.right(),
                 "{layout:?}: {column:?} in {pane:?}"
             );
-            if width != 0 {
-                assert!(
-                    (f32::from(column.size.width) - f32::from(width)).abs() < 2.,
-                    "{layout:?}: requested {width}, got {column:?}"
-                );
-            } else {
+            // The Terminal layout reads like a terminal: at the default
+            // reading width it fills the conversation area; a width the user
+            // chose is followed as set.
+            let full = width == 0
+                || (layout == ChatLayoutMode::Terminal
+                    && width == crate::config::chat::DEFAULT_MAX_WIDTH);
+            if full {
                 assert!(
                     column.size.width > px(1400.),
                     "{layout:?}: full width must exceed the custom limit"
                 );
+            } else {
+                assert!(
+                    (f32::from(column.size.width) - f32::from(width)).abs() < 2.,
+                    "{layout:?}: requested {width}, got {column:?}"
+                );
             }
             measured.push(prose.size.width);
         }
-        assert!(
-            measured[1] > measured[0] + px(200.),
-            "{layout:?}: message text must expand too: {measured:?}"
-        );
-        assert!(
-            measured[2] > measured[1],
-            "{layout:?}: full width reaches the message row"
-        );
+        if layout != ChatLayoutMode::Terminal {
+            assert!(
+                measured[1] > measured[0] + px(200.),
+                "{layout:?}: message text must expand too: {measured:?}"
+            );
+            assert!(
+                measured[2] > measured[1],
+                "{layout:?}: full width reaches the message row"
+            );
+        }
     }
     cx.simulate_resize(size(px(650.), px(860.)));
     cx.run_until_parked();

@@ -51,8 +51,11 @@ impl HerdrWindow {
             cx,
         };
         // A reading width the user chose is followed as set; at the default,
-        // prose keeps to a book's measure inside the wider column.
-        let measure = (self.config.chat.max_width == crate::config::chat::DEFAULT_MAX_WIDTH)
+        // prose keeps to a book's measure inside the wider column. The
+        // Terminal layout fills its full-width column instead.
+        let terminal = self.config.chat.layout == ChatLayoutMode::Terminal;
+        let measure = (!terminal
+            && self.config.chat.max_width == crate::config::chat::DEFAULT_MAX_WIDTH)
             .then_some(size * rhythm::MEASURE);
         div()
             .flex()

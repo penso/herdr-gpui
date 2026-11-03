@@ -12,7 +12,7 @@ fn field<'a>(
     let (input, cx) = cx.add_window_view(|_, cx| SearchInput::new(cx));
     cx.update(|window, cx| {
         input.update(cx, |input, cx| {
-            input.edit.replace(None, text, false, None);
+            input.edit.replace(None, text, false, None, Newlines::Strip);
             window.focus(&input.focus, cx);
         });
         window.draw(cx).clear(cx);

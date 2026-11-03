@@ -1,4 +1,4 @@
-//! The composer's parts: the files to send, the draft and its prompt line,
+//! The composer's parts: the files to send, the draft's prompt field,
 //! the session's settings, context use, and the send button, which the
 //! chat's layout arranges. The settings' menus open above them.
 
@@ -11,10 +11,6 @@ use crate::i18n::{Localize, fl};
 use crate::{HerdrWindow, config::corners};
 use gpui::{prelude::*, *};
 use herdr_chat_protocol::Command;
-
-/// Draft lines shown above the editable one; earlier ones are counted, so a
-/// long draft never pushes the editable line out of the pane.
-const DRAFT_LINES: usize = 6;
 
 impl HerdrWindow {
     pub(super) fn render_chat_composer(&self, chat: &ChatPane, cx: &mut Context<Self>) -> Div {
@@ -233,41 +229,11 @@ impl HerdrWindow {
             }
         };
         let draft = div()
+            .debug_selector(|| "chat-composer".into())
+            .min_h(px(self.chat_text_size() * 1.6))
             .flex()
-            .flex_col()
-            .gap(px(2.))
-            .children((chat.draft.len() > DRAFT_LINES).then(|| {
-                let earlier = chat.draft.len() - DRAFT_LINES;
-                div()
-                    .debug_selector(|| "chat-draft-earlier".into())
-                    .text_size(small)
-                    .text_color(rgb(theme.muted))
-                    .child(fl!("chat-draft-earlier", count = earlier))
-            }))
-            .children(
-                chat.draft
-                    .iter()
-                    .skip(chat.draft.len().saturating_sub(DRAFT_LINES))
-                    .map(|line| {
-                        div()
-                            .text_color(rgb(theme.subtext()))
-                            .whitespace_nowrap()
-                            .overflow_hidden()
-                            .child(if line.is_empty() {
-                                " ".to_owned()
-                            } else {
-                                line.clone()
-                            })
-                    }),
-            )
-            .child(
-                div()
-                    .debug_selector(|| "chat-composer".into())
-                    .min_h(px(self.chat_text_size() * 1.6))
-                    .flex()
-                    .items_center()
-                    .children(chat.composer.clone()),
-            );
+            .items_center()
+            .children(chat.composer.clone());
         let settings = self
             .render_chat_settings_buttons(chat, cx)
             .into_iter()
