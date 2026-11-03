@@ -9,7 +9,13 @@ mod titles;
 
 #[test]
 fn branches_are_named_as_agent_launcher_names_them() {
-    let issue = item(&github(), "377", "Prompt icons: render as tofu!");
+    // These hashes are shared historical fixtures: the repository identity is
+    // part of the hash and must not follow the application's display rename.
+    let source = SourceKey {
+        repository: "penso/herdr-gpui".into(),
+        ..github()
+    };
+    let issue = item(&source, "377", "Prompt icons: render as tofu!");
     assert_eq!(
         branch(&issue),
         "agent/377-prompt-icons-render-as-tofu-97b1caca"
@@ -20,7 +26,7 @@ fn branches_are_named_as_agent_launcher_names_them() {
         branch(&bead),
         "agent/hg-a3f2-1-shared-sqlite-store-26d1c19b"
     );
-    let mut pr = item(&github(), "pr/369", "Find bar");
+    let mut pr = item(&source, "pr/369", "Find bar");
     pr.identifier = "#369".into();
     assert_eq!(review_branch(&pr), "agent/review-369-find-bar-3af51766");
     assert_eq!(hash_of(&pr), "3af51766");
