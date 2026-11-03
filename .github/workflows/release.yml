@@ -314,6 +314,9 @@ jobs:
             dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.deb
             dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.rpm
             dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.pkg.tar.zst
+            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.deb
+            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.rpm
+            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.pkg.tar.zst
             dist/sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}-update.tar.gz
             dist/sheprd-remote-control-${{ needs.validate.outputs.version }}-${{ matrix.host }}
           if-no-files-found: error
@@ -693,7 +696,8 @@ jobs:
             -in dist/update-manifest.json -sigfile dist/update-manifest.sig
           test "$(wc -c < dist/update-manifest.sig | tr -d ' ')" = 64
           # Keep schema 1 unchanged for installed clients; package updaters use
-          # their own signed manifest with the six distribution assets.
+          # their own signed manifest with only the six legacy Herdr package
+          # names: the deployed bridge still selects those exact filenames.
           python3 scripts/update-manifest.py create dist "$VERSION" --packages
           "$OPENSSL" pkeyutl -sign -rawin -inkey "$KEY_DIR/private.pem" -passin pass: \
             -in dist/package-manifest.json -out dist/package-manifest.sig

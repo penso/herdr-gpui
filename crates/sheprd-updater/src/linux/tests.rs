@@ -1,6 +1,8 @@
 use super::*;
 use std::os::unix::process::ExitStatusExt;
 
+mod branding;
+
 #[test]
 fn ownership_selects_the_installed_format_not_available_tools() -> Result<()> {
     let executable = Path::new("/usr/bin/herdr-gpui");

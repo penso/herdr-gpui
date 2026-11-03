@@ -168,6 +168,13 @@ xkbcommon, and dlopens the Vulkan loader and libwayland-client. RPM
 requirements are sonames so they resolve on any RPM distribution. Entries are
 stamped with the release date, and the release host name is kept out of the
 RPM header, so repackaging one release produces identical bytes.
+The same completed packages are also published as `Herdr-VERSION-TARGET.deb`,
+`.rpm` and `.pkg.tar.zst`: deployed bridge updaters still select these exact
+download names. The signed package manifest lists only those legacy names, one
+per target and format. The `Sheprd-*` packages retain their Sigstore sidecars and
+provenance; the bare legacy aliases must match them byte-for-byte at publication
+and verification and appear in both checksum manifests. Sharing the signatures
+of identical bytes keeps the release below deployed updaters' 128-asset limit.
 `scripts/release/smoke-linux-packages.sh VERSION TARGET DIST_DIR` then installs
 each package into digest-pinned Ubuntu 24.04, Debian 13 and Fedora 42 containers,
 plus Arch Linux on x86_64 (no official ARM64 image exists), runs both `sheprd --help` and `herdr-gpui --help`
@@ -414,8 +421,9 @@ its Sigstore sidecar is `update-manifest.sig.sig`; the JSON's is
 `update-manifest.json.sig` (and likewise for the package, Windows, and host manifests).
 Starting with `20261102.2`, `artifact-manifest.py create` validates and combines
 the signer's SHA-512 sidecars into one `SHA512SUMS` file. `SHA256SUMS` covers
-every other published file, including `SHA512SUMS`. This keeps the current set
-at 110 assets, below the 128-asset limit in installed updaters, without dropping
+every other published file, including `SHA512SUMS`. The six bare Linux package
+aliases also appear in both manifests and must equal their signed base files.
+This keeps the current set below the 128-asset limit in installed updaters, without dropping
 any platform, signature, or checksum algorithm. Creation refuses sets of 128 or
 more assets. Older immutable releases retain their per-file SHA-512 contract
 and remain verifiable. Missing or additional files fail closed.

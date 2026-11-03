@@ -582,6 +582,8 @@ class ReleaseSecurity(unittest.TestCase):
                 (self.path / f"{name}.{algorithm}").write_text(f"{checksum}  {name}\n")
             for suffix in ("sig", "crt"):
                 (self.path / f"{name}.{suffix}").write_text("test fixture, not a signature\n")
+        for alias, original in MANIFEST.package_aliases(VERSION).items():
+            shutil.copyfile(self.path / original, self.path / alias)
         self.run_manifest("create")
 
     def run_manifest(self, mode, success=True, directory=None):
@@ -610,7 +612,7 @@ class ReleaseSecurity(unittest.TestCase):
               for target in ("x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl")),
             "host-manifest.json", "host-manifest.sig"})
         # Five files per base asset; SHA256SUMS lists all but itself.
-        assets = len(MANIFEST.base_names(VERSION)) * 5
+        assets = len(MANIFEST.base_names(VERSION)) * 5 + len(MANIFEST.package_aliases(VERSION))
         self.assertEqual(len((self.path / "SHA256SUMS").read_text().splitlines()), assets)
         self.assertEqual(len(self.run_manifest("names").splitlines()), assets + 1)
         self.assertEqual(self.run_manifest("base-names").splitlines(), MANIFEST.base_names(VERSION))
@@ -679,7 +681,7 @@ class ReleaseSecurity(unittest.TestCase):
     def test_sign_action_preserves_raw_updater_signature(self):
         raw = (self.path / "update-manifest.sig").read_bytes()
         for path in self.path.iterdir():
-            if path.name not in MANIFEST.base_names(VERSION):
+            if path.name not in MANIFEST.base_names(VERSION) + list(MANIFEST.package_aliases(VERSION)):
                 path.unlink()
         self.run_manifest("base")
         text = (ROOT / ".github/actions/sign-artifacts/action.yml").read_text()

@@ -32,7 +32,7 @@ class RebrandCompatibility(unittest.TestCase):
         version = "20261103.1"
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
-            names = MANIFEST.base_names(version)
+            names = MANIFEST.base_names(version) + list(MANIFEST.package_aliases(version))
             for name in names:
                 if not name.endswith(("-manifest.json", "-manifest.sig")):
                     (directory / name).write_bytes(b"artifact")
@@ -42,7 +42,8 @@ class RebrandCompatibility(unittest.TestCase):
                 for asset in payload["assets"]:
                     self.assertIn(asset["name"], names)
                     self.assertEqual(asset["size"], len(b"artifact"))
-                    self.assertRegex(asset["name"], r"^(?:sheprd-|Sheprd-)")
+                    self.assertRegex(asset["name"], r"^Herdr-" if family.get("packages")
+                                     else r"^(?:sheprd-|Sheprd-)")
 
     def test_historical_asset_set_requires_explicit_legacy_mode(self):
         version = "20261102.1"

@@ -275,10 +275,16 @@ Installation contracts, beyond accepting a filename:
   `herdr-gpui-VERSION-TARGET` or `sheprd-VERSION-TARGET`. It replaces and relaunches
   the existing user-owned executable path, even if that path is still named
   `herdr-gpui`. Companion binaries and desktop integration are not migrated.
-- **Linux packages:** new asset filenames work through both the unprivileged
-  and elevated verifier, but the package must remain owned/named **`herdr-gpui`**,
+- **Linux packages:** the current client accepts both asset filename generations
+  during preparation and through both verifiers. The deployed `v20261103.1`
+  bridge still requires a legacy filename during preparation, so publication
+  retains byte-identical `Herdr-VERSION-TARGET` aliases and lists only those
+  names in the signed package manifest (one asset per target/format).
+  The package must remain owned/named **`herdr-gpui`**,
   install a real root-owned **`/usr/bin/herdr-gpui`**, and report `VERSION-1`.
-  Packages add the canonical `sheprd` executable alongside that compatibility entry point.
+  Packages add the canonical `/usr/bin/sheprd` executable alongside that compatibility
+  entry point. Helper requests accept exactly either installed executable path;
+  elevation still invokes and validates only `/usr/bin/herdr-gpui`.
   Ownership, PolicyKit entry point, protected-copy verification, package-manager
   transaction and restart stay unchanged. A package renamed internally to
   `sheprd`, or one removing that executable, is **not** a supported transition.

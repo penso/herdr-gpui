@@ -43,6 +43,25 @@ UPDATER_SIGNATURES = ("update-manifest.sig", "package-manifest.sig", "windows-ma
                       "host-manifest.sig")
 
 
+def package_aliases(version, legacy=False):
+    """Bare legacy download names; signatures/provenance cover identical bases."""
+    if legacy:
+        return {}
+    return {name.replace("Sheprd-", "Herdr-", 1): name for name in base_names(version)
+            if name.endswith((".deb", ".rpm", ".pkg.tar.zst"))}
+
+
+def check_aliases(directory, version, legacy=False):
+    for alias, original in package_aliases(version, legacy).items():
+        with (directory / alias).open("rb") as copy, (directory / original).open("rb") as source:
+            while True:
+                chunk = source.read(65536)
+                if copy.read(65536) != chunk:
+                    raise ValueError(f"Package alias differs from signed artifact: {alias}")
+                if not chunk:
+                    break
+
+
 def compact_checksums(version):
     # Published releases are immutable. Keep their exact old asset contract
     # verifiable while fitting new releases under installed updaters' 128 cap.
@@ -54,6 +73,7 @@ def asset_names(version, legacy=False):
     suffixes = ("", ".sha256", ".sig", ".crt") if compact_checksums(version) else (
         "", ".sha256", ".sha512", ".sig", ".crt")
     names = [name + suffix for name in bases for suffix in suffixes]
+    names.extend(package_aliases(version, legacy))
     if compact_checksums(version):
         names.append("SHA512SUMS")
     return sorted(names)
@@ -78,14 +98,17 @@ def digest(path, algorithm):
 def consolidate_checksums(directory, version, legacy=False):
     """Validate the signer's full output before replacing SHA-512 sidecars."""
     bases = base_names(version, legacy)
+    aliases = package_aliases(version, legacy)
     check_files(directory, [name + suffix for name in bases
-                            for suffix in ("", ".sha256", ".sha512", ".sig", ".crt")])
+                            for suffix in ("", ".sha256", ".sha512", ".sig", ".crt")] + list(aliases))
+    check_aliases(directory, version, legacy)
     lines = []
     for name in bases:
         expected = f"{digest(directory / name, 'sha512')}  {name}\n"
         if (directory / f"{name}.sha512").read_text() != expected:
             raise ValueError(f"Invalid sha512 sidecar: {name}")
         lines.append(expected)
+    lines.extend(f"{digest(directory / name, 'sha512')}  {name}\n" for name in aliases)
     with (directory / "SHA512SUMS").open("x") as output:
         output.write("".join(lines))
     for name in bases:
@@ -122,7 +145,8 @@ def main():
         print("\n".join(names + ["SHA256SUMS"]))
         return
     if args.mode == "base":
-        check_files(directory, bases)
+        check_files(directory, bases + list(package_aliases(version, args.legacy_names)))
+        check_aliases(directory, version, args.legacy_names)
         return
     if args.mode == "dmg":
         entries = verify_manifest(directory, version, args.legacy_names)
@@ -138,6 +162,7 @@ def main():
             raise ValueError("Release must have fewer than 128 assets for installed updaters")
         consolidate_checksums(directory, version, args.legacy_names)
     check_files(directory, names + ([] if args.mode == "create" else ["SHA256SUMS"]))
+    check_aliases(directory, version, args.legacy_names)
     sha512_lines = []
     for name in bases:
         for algorithm in ("sha256", "sha512"):
@@ -146,6 +171,8 @@ def main():
                 sha512_lines.append(expected)
             elif (directory / f"{name}.{algorithm}").read_text() != expected:
                 raise ValueError(f"Invalid {algorithm} sidecar: {name}")
+    sha512_lines.extend(f"{digest(directory / name, 'sha512')}  {name}\n"
+                        for name in package_aliases(version, args.legacy_names))
     if compact_checksums(version) and (directory / "SHA512SUMS").read_text() != "".join(sha512_lines):
         raise ValueError("Invalid SHA512SUMS manifest")
     if args.mode == "create":

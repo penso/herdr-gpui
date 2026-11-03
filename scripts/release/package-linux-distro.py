@@ -137,7 +137,9 @@ def package(version, target, archive, output_dir, nfpm):
     if not output_dir.is_dir():
         raise ValueError("Existing output directory required")
     outputs = [output_dir.resolve() / f"{name}.{extension}" for _, extension in FORMATS]
-    for output in outputs:
+    # The deployed bridge selects these exact filenames before downloading.
+    aliases = [output.with_name(output.name.replace("Sheprd-", "Herdr-", 1)) for output in outputs]
+    for output in outputs + aliases:
         if output.exists() or output.is_symlink():
             raise ValueError(f"Output already exists: {output}")
     with tempfile.TemporaryDirectory(dir=output_dir, prefix=".herdr-distro.") as temp:
@@ -152,11 +154,16 @@ def package(version, target, archive, output_dir, nfpm):
                             "--packager", packager, "--target", str(partial)],
                            check=True, stdout=subprocess.DEVNULL)
             built.append((partial, output))
+        # Copy the completed packages, never rebuild them under the legacy name.
+        for (partial, _), alias in zip(built.copy(), aliases):
+            copy = temp / alias.name
+            shutil.copyfile(partial, copy)
+            built.append((copy, alias))
         for partial, output in built:
             if output.exists() or output.is_symlink():
                 raise ValueError(f"Output already exists: {output}")
             partial.replace(output)
-    return outputs
+    return outputs + aliases
 
 
 def main():

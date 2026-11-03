@@ -2,8 +2,9 @@ use super::*;
 use ed25519_dalek::{Signer, SigningKey};
 use std::os::unix::fs::PermissionsExt;
 
-#[test]
-fn helper_requests_authenticate_and_reject_stale_or_tampered_packages() -> anyhow::Result<()> {
+mod executable_identities;
+
+fn prepared_request(executable: &str) -> anyhow::Result<(Prepared, String)> {
     let stage = tempfile::tempdir()?;
     fs::set_permissions(stage.path(), fs::Permissions::from_mode(0o700))?;
     let key = SigningKey::from_bytes(&[42; 32]);
@@ -28,7 +29,7 @@ fn helper_requests_authenticate_and_reject_stale_or_tampered_packages() -> anyho
         stage,
         package: Package {
             format: Format::Deb,
-            executable: "/usr/bin/herdr-gpui".into(),
+            executable: executable.into(),
         },
         offer: release::Offer {
             asset: manifest.assets[0].clone(),
@@ -38,6 +39,12 @@ fn helper_requests_authenticate_and_reject_stale_or_tampered_packages() -> anyho
             notes: String::new(),
         },
     };
+    Ok((prepared, public))
+}
+
+#[test]
+fn helper_requests_authenticate_and_reject_stale_or_tampered_packages() -> anyhow::Result<()> {
+    let (prepared, public) = prepared_request(SYSTEM_EXECUTABLE)?;
     write_request(&prepared)?;
     let path = prepared.stage.path();
     let (decoded, verified) = request(path, &public, "20261010.1")?;

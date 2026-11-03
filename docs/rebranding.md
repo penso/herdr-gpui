@@ -41,6 +41,15 @@ New publication emits `sheprd-VERSION-...` updater archives,
 [accepted asset and installation contracts](updating.md#accepted-names-and-installed-layouts):
 case matters, aliases must not duplicate a target/format slot, and accepted asset
 names do not relax signature, extraction, ownership or installed-path checks.
+
+Linux packages additionally retain byte-identical `Herdr-VERSION-TARGET`
+download aliases. The signed package manifest lists the legacy name only, once
+per format and target: the deployed `v20261103.1` bridge accepts Sheprd names
+while selecting an offer but still requires the legacy filename when preparing
+a package download. Current clients accept either spelling at both steps.
+Keep these publication aliases until bridge installations have a tested upgrade
+path; updating this source cannot repair that check in an already installed binary.
+
 Use `sheprd-icon.png`, `sheprd-icon-badge.png`, the `sheprd-icon-square*` family
 and `Sheprd.icns` / `.ico` / `.car` for canonical paw artwork references. Retain
 third-party code and service-mark attribution in [NOTICE](../NOTICE).

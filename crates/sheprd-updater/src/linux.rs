@@ -124,14 +124,7 @@ pub(super) fn prepare(
     if detect(cancel)?.as_ref() != Some(&package) {
         return Err(Error::PackageChanged);
     }
-    if offer.manifest.schema != 2
-        || offer.asset.name
-            != package
-                .format
-                .name(&offer.manifest.version, &offer.asset.target)?
-    {
-        return Err(Error::OfferAsset);
-    }
+    validate_offer(&package, offer)?;
     let stage = tempfile::Builder::new()
         .prefix("herdr-package-")
         .tempdir()?;
@@ -147,6 +140,19 @@ pub(super) fn prepare(
         package,
         offer: offer.clone(),
     })
+}
+
+fn validate_offer(package: &Package, offer: &release::Offer) -> Result<()> {
+    if offer.manifest.schema != 2
+        || !package.format.accepts(
+            &offer.manifest.version,
+            &offer.asset.target,
+            &offer.asset.name,
+        )
+    {
+        return Err(Error::OfferAsset);
+    }
+    Ok(())
 }
 
 /// Only the privileged helper calls this, with a protected, verified copy.

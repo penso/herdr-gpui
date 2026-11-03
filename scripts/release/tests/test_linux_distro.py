@@ -77,7 +77,8 @@ class LinuxDistroTests(unittest.TestCase):
         return result
 
     def outputs(self, target, directory):
-        return [directory / f"Sheprd-{VERSION}-{target}.{extension}" for extension in EXTENSIONS]
+        return [directory / f"{brand}-{VERSION}-{target}.{extension}"
+                for brand in ("Sheprd", "Herdr") for extension in EXTENSIONS]
 
     def test_packages_install_the_manual_tree_under_usr(self):
         for target, arch in zip(TARGETS, ("amd64", "arm64")):

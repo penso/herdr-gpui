@@ -161,7 +161,9 @@ def create(directory, release, require_all_targets=False, packages=False, window
     names = [(target, asset_name(release, target)) for target in TARGETS]
     schema, output = 1, "update-manifest.json"
     if packages:
-        names = [(target, f"Sheprd-{release}-{target}.{extension}")
+        # The deployed bridge still requires legacy filenames at preparation.
+        # Publication verifies these aliases match the canonical Sheprd bytes.
+        names = [(target, f"Herdr-{release}-{target}.{extension}")
                  for target in LINUX_TARGETS for extension in ("deb", "rpm", "pkg.tar.zst")]
         schema, output = 2, "package-manifest.json"
     if windows:
