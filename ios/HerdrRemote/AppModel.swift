@@ -73,6 +73,9 @@ final class AppModel {
     private let spotlight = SpotlightChats()
     /// Nearby computers the person closed the card for, this launch.
     var dismissedNearby: Set<String> = []
+    /// Connection notices the person closed, until each computer is online
+    /// again (`LinkNotice`).
+    var dismissedNotices: Set<LinkNotice.Key> = []
     private let paths = NWPathMonitor()
 
     init() {
