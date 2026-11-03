@@ -74,8 +74,15 @@ pub(crate) fn probe(url: &WebUrl) -> Result<Server> {
 /// Asks the server at `url` for its version alone, sending nothing of the
 /// address's token: for the server the app started, whose token it wrote,
 /// so that no question carries the token to whatever answers the port.
+///
+/// A server the app started listens on `127.0.0.1`, so a loopback name is
+/// asked there: a host's page name under `.localhost`, which a browser
+/// keeps on this computer itself, is one the system's resolver may not know.
 pub(crate) fn version(url: &WebUrl) -> Result<Server> {
-    ask_version(&agent(), url)
+    let loopback = url
+        .loopback_port()
+        .and_then(|port| url.at_local_port(port.get()));
+    ask_version(&agent(), loopback.as_ref().unwrap_or(url))
 }
 
 fn agent() -> ureq::Agent {
