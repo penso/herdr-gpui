@@ -19,7 +19,7 @@ pub(crate) fn locate_in(
     exe: Option<&Path>,
     path: Option<&OsStr>,
 ) -> Option<PathBuf> {
-    // Keep old installations usable, but prefer the helper shipped by Sheprd.
+    // Keep both generations of bundled helpers ahead of unrelated PATH copies.
     let renamed = program.strip_prefix("herdr-").and_then(|name| {
         matches!(
             name.strip_suffix(".exe").unwrap_or(name),
@@ -27,12 +27,18 @@ pub(crate) fn locate_in(
         )
         .then(|| format!("sheprd-{name}"))
     });
-    if let Some(renamed) = renamed
-        && let Some(found) = locate_exact(&renamed, exe, path)
-    {
-        return Some(found);
+    for (exe, path) in [(exe, None), (None, path)] {
+        for name in renamed
+            .as_deref()
+            .into_iter()
+            .chain(std::iter::once(program))
+        {
+            if let Some(found) = locate_exact(name, exe, path) {
+                return Some(found);
+            }
+        }
     }
-    locate_exact(program, exe, path)
+    None
 }
 
 fn locate_exact(program: &str, exe: Option<&Path>, path: Option<&OsStr>) -> Option<PathBuf> {
