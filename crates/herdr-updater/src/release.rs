@@ -4,6 +4,7 @@
 use super::UpdateChannel;
 mod format;
 mod host;
+mod repository;
 use super::error::{Error, Result};
 pub(super) use format::Format;
 pub use host::{HOST_TARGETS, download_host_build};
@@ -179,19 +180,21 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
     }
     for (index, asset) in manifest.assets.iter().enumerate() {
         let valid_name = match manifest.schema {
-            1 => asset.name == asset_name(&manifest.version, &asset.target)?,
-            host::SCHEMA => {
-                host::name(&manifest.version, &asset.target).is_ok_and(|name| name == asset.name)
-            }
-            _ => formats.iter().any(|format| {
-                format
-                    .name(&manifest.version, &asset.target)
-                    .is_ok_and(|name| name == asset.name)
-            }),
+            1 => Format::Archive.accepts(&manifest.version, &asset.target, &asset.name),
+            host::SCHEMA => host::accepts(&manifest.version, &asset.target, &asset.name),
+            _ => formats
+                .iter()
+                .any(|format| format.accepts(&manifest.version, &asset.target, &asset.name)),
         };
         if !valid_name
             || manifest.assets[..index].iter().any(|other| {
-                other.name == asset.name || (manifest.schema != 2 && other.target == asset.target)
+                other.name == asset.name
+                    || (other.target == asset.target
+                        && (manifest.schema != 2
+                            || formats.iter().any(|format| {
+                                format.accepts(&manifest.version, &asset.target, &asset.name)
+                                    && format.accepts(&manifest.version, &other.target, &other.name)
+                            })))
             })
         {
             return Err(Error::ManifestAsset);
@@ -251,7 +254,7 @@ pub fn release_page(version: &str) -> String {
 }
 
 fn release_url(version: &str, name: &str) -> String {
-    format!("https://github.com/penso/herdr-gpui/releases/download/v{version}/{name}")
+    repository::Repository::Herdr.asset(version, name)
 }
 
 fn allowed_url(value: &str) -> bool {
@@ -303,40 +306,58 @@ fn request(
     profile: RequestProfile,
     cancel: &AtomicBool,
 ) -> Result<ureq::http::Response<ureq::Body>> {
+    repository::fetch(url, |url| request_exact(url, profile, cancel))
+}
+
+fn request_exact(
+    url: &str,
+    profile: RequestProfile,
+    cancel: &AtomicBool,
+) -> Result<ureq::http::Response<ureq::Body>> {
     let agent: ureq::Agent = request_config(profile).into();
-    let mut url = url.to_owned();
+    request_with(url, cancel, |url, accept| {
+        agent
+            .get(url)
+            .header("User-Agent", "herdr-gpui-updater")
+            .header("Accept", accept)
+            .header("Accept-Encoding", "identity")
+            .call()
+            .map_err(|source| Error::Http(Box::new(source)))
+    })
+}
+
+fn request_with<T>(
+    original: &str,
+    cancel: &AtomicBool,
+    mut send: impl FnMut(&str, &str) -> Result<ureq::http::Response<T>>,
+) -> Result<ureq::http::Response<T>> {
+    repository::initial(original)?;
+    let accept = if repository::is_metadata(original) {
+        "application/vnd.github+json"
+    } else {
+        "application/octet-stream"
+    };
+    let mut url = original.to_owned();
     for redirects in 0..=5 {
         cancelled(cancel)?;
         if !allowed_url(&url) {
             return Err(Error::UntrustedUrl);
         }
-        let response = agent
-            .get(&url)
-            .header("User-Agent", "herdr-gpui-updater")
-            .header(
-                "Accept",
-                if url == LATEST_URL || url == RELEASES_URL {
-                    "application/vnd.github+json"
-                } else {
-                    "application/octet-stream"
-                },
-            )
-            .header("Accept-Encoding", "identity")
-            .call()
-            .map_err(|source| Error::Http(Box::new(source)))?;
+        let response = send(&url, accept)?;
         match response.status().as_u16() {
             200 => return Ok(response),
             301 | 302 | 303 | 307 | 308 if redirects < 5 => {
                 // GitHub download redirects are absolute. Reject relative URLs rather
                 // than introducing an additional URL resolution policy.
-                url = response
+                let next = response
                     .headers()
                     .get("location")
                     .and_then(|value| value.to_str().ok())
                     .filter(|value| value.len() <= 8192)
-                    .ok_or(Error::InvalidRedirect)?
-                    .to_owned();
+                    .ok_or(Error::InvalidRedirect)?;
+                url = repository::redirect(original, next)?;
             }
+            301 | 302 | 303 | 307 | 308 => return Err(Error::RedirectLimit),
             status => {
                 return Err(status_error(status, response.headers(), chrono::Utc::now()));
             }
@@ -398,6 +419,18 @@ struct ReleaseAsset {
     name: String,
     size: u64,
     browser_download_url: String,
+}
+
+impl Release {
+    // Only called after validate_release has bound every URL to the exact
+    // version/name in one of the two approved repositories.
+    fn asset_url(&self, name: &str) -> Result<&str> {
+        self.assets
+            .iter()
+            .find(|asset| asset.name == name)
+            .map(|asset| asset.browser_download_url.as_str())
+            .ok_or(Error::MissingSignedMetadata)
+    }
 }
 
 /// The stable channel: GitHub's latest release, which must not be a prerelease.
@@ -534,7 +567,9 @@ fn validate_release(mut release: Release, channel: UpdateChannel) -> Result<Rele
             || asset.name == ".."
             || asset.size == 0
             || asset.size > ARCHIVE_LIMIT
-            || asset.browser_download_url != release_url(&release.version, &asset.name)
+            || !repository::Repository::ALL.iter().any(|repository| {
+                asset.browser_download_url == repository.asset(&release.version, &asset.name)
+            })
             || release.assets[..index]
                 .iter()
                 .any(|other| other.name == asset.name)
@@ -564,7 +599,7 @@ pub(super) fn check(
         cancel,
         |url, limit| {
             read_bounded(
-                request(url, RequestProfile::Metadata, cancel)?
+                request_exact(url, RequestProfile::Metadata, cancel)?
                     .into_body()
                     .into_reader(),
                 limit,
@@ -585,6 +620,7 @@ fn check_with(
     cancel: &AtomicBool,
     mut fetch: impl FnMut(&str, usize) -> Result<Vec<u8>>,
 ) -> Result<Option<Offer>> {
+    let mut fetch = |url: &str, limit| repository::fetch(url, |url| fetch(url, limit));
     cancelled(cancel)?;
     let current = parse_version(current_version).ok_or(Error::CurrentVersion)?;
     VerifyingKey::from_bytes(&hex32(key_hex)?).map_err(Error::PublicKey)?;
@@ -615,23 +651,14 @@ fn check_with(
             return Err(Error::SignedMetadataSize);
         }
     }
-    let manifest_bytes = fetch(
-        &release_url(&release.version, manifest_name),
-        MANIFEST_LIMIT,
-    )?;
-    let signature = fetch(&release_url(&release.version, signature_name), 64)?;
+    let manifest_bytes = fetch(release.asset_url(manifest_name)?, MANIFEST_LIMIT)?;
+    let signature = fetch(release.asset_url(signature_name)?, 64)?;
     let manifest = verify_manifest(&manifest_bytes, &signature, key_hex, &release.version)?;
     // A manifest signed for one family must not answer for another.
     if manifest.schema != format.schema() {
         return Err(Error::ManifestSchema);
     }
-    let name = format.name(&release.version, target)?;
-    let asset = manifest
-        .assets
-        .iter()
-        .find(|asset| asset.target == target && asset.name == name)
-        .ok_or(Error::MissingPlatformAsset)?
-        .clone();
+    let asset = format.select(&manifest, target)?.clone();
     if !release
         .assets
         .iter()

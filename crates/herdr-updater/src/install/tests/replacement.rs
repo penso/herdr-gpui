@@ -230,7 +230,7 @@ fn real_executable_archive_installs_relaunches_and_rolls_back() -> anyhow::Resul
         let bytes = fs::read(&archive_path)?;
         let asset = release::Asset {
             target: "portable-test".into(),
-            name: "fixture.tar.gz".into(),
+            name: "herdr-gpui-20260920.2-portable-test-update.tar.gz".into(),
             size: bytes.len() as u64,
             sha256: Sha256::digest(&bytes)
                 .iter()

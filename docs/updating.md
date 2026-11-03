@@ -167,6 +167,177 @@ updater's trust anchor is the embedded Ed25519 key, not these Sigstore sidecars.
 See [release verification](../SECURITY.md#verifying-a-release) for the separate
 Sigstore/provenance trust policy and exact published asset checks.
 
+## Sheprd Compatibility Rollout
+
+This is the **pre-rename, pre-transfer compatibility release**. It adds reader
+support; it does not change what the release scripts publish. Product/crate
+names, configuration and state locations, the site, signing keys, and installed
+identities remain unchanged. Publish this compatibility code with the existing
+Herdr names from `penso/herdr-gpui` **before** transferring the repository or
+publishing renamed assets.
+
+### Repository Discovery And Authentication
+
+The updater permits exactly `penso/herdr-gpui` and `sheprd-labs/sheprd`, not
+arbitrary repositories on GitHub. For both identities it understands:
+
+- `https://api.github.com/repos/OWNER/REPO/releases/latest` (stable),
+  `/releases?per_page=10` (beta), and `/releases?per_page=20` (display-only history).
+- `https://github.com/OWNER/REPO/releases/download/vVERSION/FILENAME` for
+  manifests, raw signatures, archives, packages, installers and remote host builds.
+
+Discovery starts at the legacy endpoint, so this release works before the new
+repository exists. A successful legacy response is authoritative; the updater
+does not poll a second feed or merge independent release histories. Only HTTP
+404 at a legacy resource tries that **same resource** at the successor, once.
+There is no reverse fallback. Authorization refusals (401/403), rate limits,
+server/network errors, invalid metadata, invalid signatures, hash failures and
+cancellation do not trigger fallback. A 404 is treated as absence; GitHub can
+also use it to conceal inaccessible private resources, so these feeds must stay
+public. As before, history is optional and failures fall back to the target's
+notes, never to another update candidate.
+
+Canonical asset URLs returned through a redirected legacy API endpoint are
+accepted only when repository, calendar tag and filename match exactly. Manifest
+and signature requests use those validated metadata URLs. Subsequent artifact
+downloads and version-pinned remote helper downloads use the same legacy-first
+redirect/404 policy. Every download remains bound to the signed version, target,
+length and SHA-256; the existing embedded Ed25519 key remains the trust anchor.
+Stable rejects prereleases; beta selects the highest published calendar version;
+neither channel installs an equal or older version.
+
+Every redirect (maximum five) preserves the original metadata query or exact
+asset tag/name. Only asset requests may redirect to the existing HTTPS
+`release-assets.githubusercontent.com` CDN. Other repositories, prefix lookalikes,
+changed tags/files, credentials, explicit ports, fragments, HTTP and relative
+redirects are rejected. GitHub sometimes redirects a moved API endpoint to
+`/repositories/NUMERIC_ID/releases...`: the updater does **not** fetch that arbitrary
+ID, but re-addresses the same query to the approved successor slug instead.
+This keeps the repository allowlist explicit without depending on GitHub's
+internal repository identifier. API requests keep their JSON Accept header
+through redirects; the transport sends no authorization credentials.
+
+### Accepted Future Names And Installed Layouts
+
+`VERSION` is the existing calendar version without `v`; `TARGET` has the same
+architecture/platform values as the corresponding legacy manifest. These are
+exact, case-sensitive alternatives, not prefix wildcards:
+
+| Signed family | Legacy asset | Accepted future asset |
+| --- | --- | --- |
+| Schema 1, macOS | `herdr-gpui-VERSION-macos-universal.app.tar.gz` | `sheprd-VERSION-macos-universal.app.tar.gz` |
+| Schema 1, GNU Linux | `herdr-gpui-VERSION-TARGET-update.tar.gz` | `sheprd-VERSION-TARGET-update.tar.gz` |
+| Schema 2, GNU Linux | `Herdr-VERSION-TARGET.deb`, `.rpm`, `.pkg.tar.zst` | `Sheprd-VERSION-TARGET.deb`, `.rpm`, `.pkg.tar.zst` |
+| Schema 3, Windows | `Herdr-VERSION-TARGET-setup.exe` | `Sheprd-VERSION-TARGET-setup.exe` |
+| Schema 4, musl host builds | `herdr-remote-control-VERSION-TARGET` | `sheprd-remote-control-VERSION-TARGET` |
+
+The manifest and signature filenames (`update-`, `package-`, `windows-`, and
+`host-manifest.json` / `.sig`), schemas, size limits and target/count bounds stay
+unchanged. Each target has one asset per format: a manifest cannot list both
+legacy and future aliases for the same slot. Mixed spellings in different slots
+are allowed. A package manifest still never substitutes for an archive or host
+manifest. Future publication must update the packaging/signing/attestation
+generators together; they deliberately continue to emit legacy contracts here.
+
+Installation contracts, beyond accepting a filename:
+
+- **macOS standalone and Homebrew beta:** an archive contains exactly one
+  `Herdr.app` or `Sheprd.app` root (independent of the asset spelling), never both.
+  Its sole app executable is `Contents/MacOS/Herdr` or
+  `Contents/MacOS/sheprd`, a regular executable matching `CFBundleExecutable`.
+  Both names present, a symlink executable, a different executable name, escaping
+  links and mixed roots are refused. The whole candidate still must satisfy the
+  existing Developer ID requirement, **`so.pen.herdr-gpui`**, the installed
+  signing team and both expected bundle versions. Renaming to a new bundle ID
+  is not supported. The updater replaces the existing bundle directory **in
+  place**: a `Sheprd.app` payload installed over `/Applications/Herdr.app` remains
+  at `/Applications/Herdr.app`. It launches the candidate's selected executable
+  under that preserved path, retains the previous bundle, and restores it on
+  rename/spawn failure. Moving the installed directory to `Sheprd.app` is a
+  separate future migration, not an implicit side effect of this update.
+- **Homebrew stable:** ownership still requires an artifact receipt symlink to
+  this exact running bundle under `Caskroom/herdr-gpui/VERSION`. Either
+  `Herdr.app` or `Sheprd.app` may name that receipt; the cask token remains
+  `herdr-gpui`. Relaunch accepts either executable at the original bundle path.
+  Before publishing a renamed bundle in the cask, keep its install target at
+  `Herdr.app` (for example `app "Sheprd.app", target: "Herdr.app"`) or implement
+  and test an explicit cask-token/destination migration. This client cannot
+  follow a cask that removes its old target and installs only at a new path.
+- **Linux standalone:** the single regular executable inside the updater tar
+  has the asset's exact stem without `-update.tar.gz`, namely
+  `herdr-gpui-VERSION-TARGET` or `sheprd-VERSION-TARGET`. It replaces and relaunches
+  the existing user-owned executable path, even if that path is still named
+  `herdr-gpui`. Companion binaries and desktop integration are not migrated.
+- **Linux packages:** future asset filenames work through both the unprivileged
+  and elevated verifier, but the package must remain owned/named **`herdr-gpui`**,
+  install a real root-owned **`/usr/bin/herdr-gpui`**, and report `VERSION-1`.
+  Ownership, PolicyKit entry point, protected-copy verification, package-manager
+  transaction and restart stay unchanged. A package renamed internally to
+  `sheprd`, or one removing that executable, is **not** a supported transition.
+  Such a transition first needs explicit dependency/replaces/provides rules,
+  privileged-helper and restart changes, and two-version APT/DNF/pacman tests.
+- **Windows:** future installer filenames enter the existing held-file digest
+  and Authenticode verification, with the **same embedded publisher subject**.
+  The signed installer must keep the permanent Inno AppId
+  `{7FA70894-4FC0-4923-BDCB-B05F7475610A}`, per-user installation at
+  `%LOCALAPPDATA%\Programs\Herdr UI`, existing executable/launcher entry points,
+  AppUserModelID `so.pen.herdr-gpui`, winget identity `Penso.HerdrUI` and its
+  publisher matching contract. `/RELAUNCH=1`, Restart Manager and rollback remain
+  the installer's responsibility. Renaming installed executables/directories or
+  the winget identity needs a separately implemented and native-tested installer
+  migration before publication; accepting `Sheprd-...-setup.exe` alone does not
+  implement that migration.
+- **Remote helpers:** schema 4 accepts either bare host-build filename for the
+  same musl targets. Bytes are verified before copying to the existing
+  version/target cache and remote installation path. Helper commands, service
+  identity, state and wire compatibility must remain usable by the old client.
+- **Manual downloads:** DMGs, Linux manual trees and Windows ZIPs are not
+  self-update inputs. The current scripts still publish/consume the legacy
+  manual names and layouts; this release does not make those installers consume
+  renamed trees. Update and test those scripts, the Homebrew cask, winget
+  publication, and site download links together during the later rebrand.
+
+### Ordering And Clients That Miss This Release
+
+1. Ship this compatibility release on the old repository using legacy names,
+   keys and installed identities. Validate signed two-version upgrades with
+   isolated resources on macOS, Linux and Windows, including Homebrew stable
+   and beta, package ownership, rollback, and restart.
+2. Give existing clients time to install it. Retain old releases and their
+   immutable assets, including version-pinned host builds. Prepare the new
+   repository permissions, protected environments and signing secrets without
+   rotating keys; update OIDC/trusted provenance identities for the later
+   repository location. The separate manual Sigstore/provenance verification
+   policy must be updated for that location too.
+3. Transfer only after reviewing missed-client recovery and the platform
+   prerequisites above. Preserve GitHub's old-repository redirects. Publish
+   higher calendar versions, with the same signed manifest families, from the
+   successor. Rename visible desktop/iOS/watchOS branding and icons, publication
+   assets, site (`herdrui.dev` to `sheprd.org`) and integration references in
+   separately reviewed changes. Keep old install/site URLs operational or
+   redirect them as a separate deployment task.
+
+**An already installed old binary that misses this preparatory release will
+still reject canonical asset URLs after transfer because of its exact legacy
+URL comparison. This code cannot retroactively fix that binary.** It may need
+a manual verified installation or package-manager upgrade. A one-time bridge
+release is insufficient for indefinitely offline clients. Maintaining an
+old-repository compatibility feed is a separate operational decision: recreating
+`penso/herdr-gpui` removes GitHub's transfer redirects, and a successful stale
+legacy feed remains authoritative to this compatibility client. Do not recreate
+the repository casually; such a feed needs a continuing publication/recovery
+plan for both legacy and compatibility clients. No feed is created here.
+
+iOS/watchOS use App Store/TestFlight identities, not this GitHub updater. Retain
+the existing `so.pen.herdr.remote` app and extension/watch bundle identifiers,
+`WKCompanionAppBundleIdentifier`, signing team, `group.so.pen.herdr.remote` App
+Group, Keychain service/access groups and APNs topic/entitlements. Changing them
+can strand pairings, shared data, notifications or companion updates. Visible
+names/icons are deferred to the rebrand; no additional iOS compatibility code
+is required for a repository transfer. The identifiers described in
+[`ios/README.md`](../ios/README.md) for independent developer installations are
+not instructions to change the production app's identity.
+
 ## Packaging API
 
 Python 3.9 or newer is required. All output paths must be new and have existing

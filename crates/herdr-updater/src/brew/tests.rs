@@ -4,6 +4,7 @@ use super::*;
 use anyhow::Context as _;
 use std::os::unix::fs::{PermissionsExt, symlink};
 
+mod migration;
 mod relaunch;
 
 /// A Homebrew prefix that owns `target`, returning the artifact link.

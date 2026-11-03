@@ -21,6 +21,14 @@ pub(super) fn name(version: &str, target: &str) -> Result<String> {
     Ok(format!("herdr-remote-control-{version}-{target}"))
 }
 
+pub(super) fn accepts(version: &str, target: &str, asset: &str) -> bool {
+    name(version, target).is_ok_and(|legacy| {
+        format::Naming::ALL
+            .iter()
+            .any(|naming| naming.name(legacy.clone()) == asset)
+    })
+}
+
 /// The signed listing of `target`'s build in release `version`. Only
 /// transport is injected, so tests run the production checks.
 pub(super) fn host_asset_with(
@@ -29,7 +37,9 @@ pub(super) fn host_asset_with(
     target: &str,
     mut fetch: impl FnMut(&str, usize) -> Result<Vec<u8>>,
 ) -> Result<Asset> {
-    let name = name(version, target)?;
+    name(version, target)?;
+    parse_version(version).ok_or(Error::ReleaseVersion)?;
+    let mut fetch = |url: &str, limit| repository::fetch(url, |url| fetch(url, limit));
     let bytes = fetch(&release_url(version, MANIFEST.0), MANIFEST_LIMIT)?;
     let signature = fetch(&release_url(version, MANIFEST.1), 64)?;
     let manifest = verify_manifest(&bytes, &signature, key_hex, version)?;
@@ -40,7 +50,7 @@ pub(super) fn host_asset_with(
     manifest
         .assets
         .into_iter()
-        .find(|asset| asset.target == target && asset.name == name)
+        .find(|asset| asset.target == target && accepts(version, target, &asset.name))
         .ok_or(Error::MissingPlatformAsset)
 }
 
@@ -65,7 +75,7 @@ pub fn download_host_build(target: &str, destination: &Path, cancel: &AtomicBool
         release_identity(crate::APP_VERSION, option_env!("HERDR_UPDATE_PUBLIC_KEY"))?;
     let asset = host_asset_with(version, key, target, |url, limit| {
         read_bounded(
-            request(url, RequestProfile::Metadata, cancel)?
+            request_exact(url, RequestProfile::Metadata, cancel)?
                 .into_body()
                 .into_reader(),
             limit,
