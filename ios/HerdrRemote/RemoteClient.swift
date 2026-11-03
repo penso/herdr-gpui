@@ -337,41 +337,53 @@ private final class UploadWatcher: NSObject, URLSessionTaskDelegate, Sendable {
     }
 }
 
-/// Bearer tokens per paired computer, from whichever of its addresses
-/// answers first in order, kept until shortly before they expire. Callers
-/// that ask at once share one signing round.
+/// Bearer tokens per paired computer, kept until shortly before they
+/// expire. Callers that ask the same way at once share one signing round;
+/// a link that already found an address never waits behind a walk over
+/// the others, which can take ten seconds for each one that does not
+/// answer.
 actor Sessions {
     private typealias Minted = (client: RemoteClient, token: String, expires: Date)
     private var cached: [String: Minted] = [:]
+    /// Signing rounds under way, by computer and the addresses they try.
     private var pending: [String: Task<Minted, Error>] = [:]
+    /// The address each computer last signed at, tried first next time.
+    private var reached: [String: String] = [:]
 
+    /// A token from the first of the computer's addresses that answers,
+    /// trying the last one that did first.
     func session(for computer: Computer) async throws -> (client: RemoteClient, token: String) {
-        let minted = try await mint(computer, at: computer.origins)
+        var origins = computer.origins
+        if let last = reached[computer.device], let index = origins.firstIndex(of: last) {
+            origins.insert(origins.remove(at: index), at: 0)
+        }
+        let minted = try await mint(computer, at: origins, round: computer.device)
         return (minted.client, minted.token)
     }
 
     /// A token from `origin` alone, for a link that already raced the
     /// addresses; reuses a fresh one from any address.
     func token(for computer: Computer, at origin: String) async throws -> String {
-        try await mint(computer, at: [origin]).token
+        try await mint(computer, at: [origin], round: "\(computer.device) \(origin)").token
     }
 
     func forget(_ computer: Computer) {
         cached[computer.device] = nil
     }
 
-    private func mint(_ computer: Computer, at origins: [String]) async throws -> Minted {
+    private func mint(_ computer: Computer, at origins: [String], round: String) async throws -> Minted {
         if let hit = cached[computer.device], hit.expires > Date().addingTimeInterval(60) {
             return hit
         }
-        if let running = pending[computer.device] {
+        if let running = pending[round] {
             return try await running.value
         }
         let task = Task { try await Self.sign(computer, at: origins) }
-        pending[computer.device] = task
-        defer { pending[computer.device] = nil }
+        pending[round] = task
+        defer { pending[round] = nil }
         let minted = try await task.value
         cached[computer.device] = minted
+        reached[computer.device] = minted.client.origin
         return minted
     }
 
