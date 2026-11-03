@@ -5,6 +5,9 @@
 
 use std::{ffi::OsString, process::Command};
 
+#[cfg(unix)]
+mod locale;
+
 /// Called only by worker threads, such as the daemon connection's and the
 /// VS Code server's, never by a GPUI render/update.
 pub fn apply(command: &mut Command) {
@@ -14,6 +17,8 @@ pub fn apply(command: &mut Command) {
     } else {
         command.env("PATH", crate::local_path::local_path());
     }
+    #[cfg(unix)]
+    locale::fill_in(command, |name| std::env::var_os(name));
     #[cfg(windows)]
     let _ = command;
 }
@@ -34,7 +39,8 @@ pub fn path() -> Option<OsString> {
 }
 
 /// The variable `name` as [`apply`] gives it to a command: the login
-/// shell's value when it sets one, else this process's. Blocking the first
+/// shell's value when it sets one, else this process's. This leaves out the
+/// `LANG` [`apply`] adds on Unix when no locale is set. Blocking the first
 /// time on Unix, like [`apply`]: run it off the UI thread.
 pub fn var(name: &str) -> Option<OsString> {
     #[cfg(unix)]
