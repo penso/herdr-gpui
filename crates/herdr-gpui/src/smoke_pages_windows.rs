@@ -66,7 +66,18 @@ pub(super) fn start_pages(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
                     ));
                 }
                 if started.elapsed() > SETTLE {
-                    bail!("the page did not load within {SETTLE:?}");
+                    let state = handle
+                        .update(cx, |view, _, cx| {
+                            let tab = cx.try_global::<Store>().and_then(|store| store.get(id));
+                            format!(
+                                "location={:?}, title={:?}, page={}",
+                                tab.and_then(|tab| tab.location.as_ref()),
+                                tab.map(|tab| &tab.title),
+                                view.has_page(id),
+                            )
+                        })
+                        .map_err(|error| anyhow!("{error:#}"))?;
+                    bail!("the page did not load within {SETTLE:?}: {state}");
                 }
             }
         }

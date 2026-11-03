@@ -4,6 +4,10 @@ use super::*;
 use crate::browser::{GroupId, Location, Store, TabId, WebUrl};
 use std::io::{Read as _, Write as _};
 
+#[cfg(test)]
+#[path = "smoke_page_fixture/tests.rs"]
+mod tests;
+
 /// The page the check loads: one element over all of it, which the pointer
 /// hovers anywhere on the page.
 pub(super) const PAGE: &str =
@@ -15,18 +19,28 @@ pub(super) fn serve() -> Result<u16> {
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
     std::thread::spawn(move || {
-        for mut stream in listener.incoming().flatten() {
-            // Every request gets the page, so the request itself is dropped.
-            let mut request = [0; 1024];
-            let _ = stream.read(&mut request);
-            let _ = write!(
-                stream,
-                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{PAGE}",
-                PAGE.len()
-            );
+        for stream in listener.incoming().flatten() {
+            let _ = respond(stream);
         }
     });
     Ok(port)
+}
+
+fn respond(mut stream: std::net::TcpStream) -> std::io::Result<()> {
+    // Chromium can preconnect without sending a request. An idle socket
+    // must not hold up the accept loop and the connection loading the page.
+    stream.set_read_timeout(Some(Duration::from_millis(250)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(1)))?;
+    let mut request = [0; 1024];
+    if stream.read(&mut request)? == 0 {
+        return Ok(());
+    }
+    // Every request gets the page, so the request itself is dropped.
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{PAGE}",
+        PAGE.len()
+    )
 }
 
 /// The address `serve` serves its page at on `port`.
