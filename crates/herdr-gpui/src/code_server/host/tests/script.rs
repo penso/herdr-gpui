@@ -261,3 +261,54 @@ fn the_command_line_is_downloaded_and_put_in_place_whole() {
     }
     fs::remove_dir_all(home).unwrap();
 }
+
+/// An unpack that fails after leaving an executable but partial `code`
+/// installs nothing, so the next start downloads again instead of trusting
+/// a broken command line.
+#[test]
+fn a_failed_unpack_installs_nothing() {
+    let home = home("unpack");
+    let bin = home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let tool = |name: &str, body: &str| {
+        let path = bin.join(name);
+        fs::write(&path, body).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    tool(
+        "uname",
+        "#!/bin/sh\ncase $1 in -s) echo Linux ;; -m) echo x86_64 ;; esac\n",
+    );
+    // curl -fsSL --max-time 300 -o ARCHIVE URL
+    tool("curl", "#!/bin/sh\n: > \"$5\"\n");
+    // tar -xzf ARCHIVE -C DIR: a truncated archive's first file, then failure.
+    tool(
+        "tar",
+        "#!/bin/sh\nprintf '#!/bin/sh\\n' > \"$4/code\"\nchmod 755 \"$4/code\"\nexit 2\n",
+    );
+    let path = format!("{}:/usr/bin:/bin", bin.to_string_lossy());
+    let mut child = run(&home, &path);
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"secret\n")
+        .unwrap();
+    let status = child.wait().unwrap();
+    assert!(
+        matches!(
+            exited(status),
+            super::super::super::Error::Host(Error::Unpack)
+        ),
+        "{status:?}"
+    );
+    let dir = home.join(".herdr-gpui/vscode");
+    assert!(!dir.join("code").exists());
+    let left: Vec<_> = fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("download"))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
+    fs::remove_dir_all(home).unwrap();
+}

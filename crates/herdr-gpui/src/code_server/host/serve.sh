@@ -47,10 +47,12 @@ if [ ! -x "$code" ]; then
     { download="$dir/download.$$" && mkdir "$download"; } || exit 2
   archive="$download/cli"
   fetch </dev/null || { rm -rf "$download"; exit 5; }
+  # A failed unpack can still leave an executable but partial `code`, which
+  # later starts would trust, so nothing from it is moved into place.
   case $build in
     cli-darwin-*) unzip -o -q "$archive" -d "$download" ;;
     *) tar -xzf "$archive" -C "$download" ;;
-  esac </dev/null
+  esac </dev/null || { rm -rf "$download"; exit 6; }
   if ! [ -x "$download/code" ] || ! mv -f "$download/code" "$code"; then
     rm -rf "$download"
     exit 6
