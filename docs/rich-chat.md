@@ -46,6 +46,11 @@ herdr-gpui config set chat.max_width 1200  # custom width
 herdr-gpui config unset chat.max_width    # restore the default
 ```
 
+The Terminal layout keeps its composer controls on one row below the input.
+Model and effort choices use short labels, and long model names truncate to
+leave room for context usage and Send/Stop. In exceptionally narrow panes,
+the settings scroll horizontally while context usage and Send/Stop stay visible.
+
 The Terminal layout still renders chat. The terminal button and
 `herdr-gpui chat hide` show the agent's actual terminal;
 `herdr-gpui chat show` restores the chat view. These commands change presentation

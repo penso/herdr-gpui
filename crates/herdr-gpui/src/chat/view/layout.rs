@@ -155,6 +155,12 @@ pub(super) trait ChatLayout {
         None
     }
 
+    /// Whether setting choices stand alone and the model yields width to
+    /// the other controls in a single-line footer.
+    fn compact_settings(&self) -> bool {
+        false
+    }
+
     /// The color an agent message's prose is drawn in: by default the
     /// theme's foreground. `None` keeps the color the row gives it.
     fn prose(&self, look: &Look<'_>) -> Option<u32> {

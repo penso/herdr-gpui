@@ -2,7 +2,7 @@
 //! having at hand (model, thinking level, mode), the menu each opens, the
 //! rest behind one more button, and how full the context window is.
 
-use super::{super::chats::ChatPane, Hues};
+use super::{super::chats::ChatPane, Hues, layout::layout_for};
 use crate::i18n::fl;
 use crate::{
     HerdrWindow, chat::chats::Menu, config::corners, notifications::safe_text,
@@ -99,6 +99,7 @@ fn others(transcript: &Transcript) -> Vec<&ConfigOption> {
 impl HerdrWindow {
     fn chat_header_button(&self, id: SharedString) -> Stateful<Div> {
         let theme = &self.theme;
+        let compact = layout_for(self.config.chat.layout).compact_settings();
         div()
             .id(id.clone())
             .debug_selector(move || id.to_string())
@@ -106,11 +107,15 @@ impl HerdrWindow {
             .flex()
             .items_center()
             .gap(px(4.))
-            .px(px(8.))
+            .px(px(if compact { 7. } else { 8. }))
             .h(px(26.))
             .rounded(px(corners::CONTROL))
             .bg(rgb(theme.active))
-            .text_size(self.chat_small_text())
+            .text_size(if compact {
+                px((self.config.terminal.size - 1.).max(10.))
+            } else {
+                self.chat_small_text()
+            })
             .cursor_pointer()
             .hover(|button| button.bg(rgb(crate::config::mix(theme.active, theme.foreground, 12))))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -185,6 +190,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
+        let compact = layout_for(self.config.chat.layout).compact_settings();
         let on = choices.get(1).is_some_and(|(_, current, _)| *current);
         let name = choices
             .iter()
@@ -209,6 +215,9 @@ impl HerdrWindow {
             .h(px(26.))
             .cursor_pointer()
             .text_size(px((self.chat_text_size() - 2.).max(10.)))
+            .when(compact, |button| {
+                button.text_size(px((self.config.terminal.size - 1.).max(10.)))
+            })
             .text_color(rgb(if on { theme.primary() } else { theme.subtext() }))
             .child(
                 div()
@@ -240,6 +249,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = &self.theme;
+        let compact = layout_for(self.config.chat.layout).compact_settings();
         let yellow = Hues::of(theme).yellow;
         let on = chat.session.transcript().auto_accept;
         let pane = chat.target.pane_id.clone();
@@ -263,6 +273,11 @@ impl HerdrWindow {
                 theme.background
             }))
             .text_size(px((self.chat_text_size() - 2.).max(10.)))
+            .when(compact, |button| {
+                button
+                    .px(px(7.))
+                    .text_size(px((self.config.terminal.size - 1.).max(10.)))
+            })
             .text_color(rgb(color))
             .child(
                 svg()
@@ -296,6 +311,7 @@ impl HerdrWindow {
         let chevron = || {
             svg()
                 .path("icons/chevron-down.svg")
+                .flex_none()
                 .size(px(10.))
                 .text_color(rgb(theme.subtext()))
         };
@@ -329,15 +345,23 @@ impl HerdrWindow {
             }
             let id = option.id.clone();
             let pane = pane_id.clone();
+            let compact = layout_for(self.config.chat.layout).compact_settings()
+                && matches!(option.kind, OptionKind::Select { .. });
             let button = self
                 .chat_header_button(format!("chat-setting-{}", option.id).into())
+                .when(compact && category == OptionCategory::Model, |button| {
+                    button.flex_shrink_1().min_w(px(30.))
+                })
+                .when(!compact, |button| {
+                    button.child(
+                        div()
+                            .text_color(rgb(theme.subtext()))
+                            .child(safe_text(&option.name, 40)),
+                    )
+                })
                 .child(
                     div()
-                        .text_color(rgb(theme.subtext()))
-                        .child(safe_text(&option.name, 40)),
-                )
-                .child(
-                    div()
+                        .when(compact, |label| label.min_w_0().flex_shrink_1())
                         .max_w(px(200.))
                         .truncate()
                         .child(safe_text(&option.current_name(), 80)),
@@ -428,7 +452,12 @@ impl HerdrWindow {
             WARN.. => hues.yellow,
             _ => hues.green,
         };
-        let filled = METER * f32::from(percent) / 100.;
+        let meter = if layout_for(self.config.chat.layout).compact_settings() {
+            34.
+        } else {
+            METER
+        };
+        let filled = meter * f32::from(percent) / 100.;
         Some(
             div()
                 .debug_selector(|| "chat-usage".into())
@@ -439,7 +468,7 @@ impl HerdrWindow {
                 .text_color(rgb(theme.subtext()))
                 .child(
                     div()
-                        .w(px(METER))
+                        .w(px(meter))
                         .h(px(4.))
                         .rounded_full()
                         .bg(rgb(theme.active))
