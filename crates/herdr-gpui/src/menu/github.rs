@@ -52,6 +52,35 @@ impl Action {
 }
 
 impl HerdrWindow {
+    pub(crate) fn github_rate_limit_message(&self) -> Option<String> {
+        let now = std::time::Instant::now();
+        let (profile, wait) = self
+            .github_auths()
+            .filter_map(|auth| {
+                let profile = auth.profile.as_ref()?;
+                self.github_rate_limit_wait(auth, now)
+                    .map(|wait| (profile, wait))
+            })
+            .max_by_key(|(_, wait)| *wait)?;
+        Some(fl!(
+            "github-menu-rate-limited",
+            login = profile.login.as_str(),
+            minutes = wait.as_secs().div_ceil(60).max(1)
+        ))
+    }
+
+    pub(crate) fn github_rate_limit_wait(
+        &self,
+        auth: &Auth,
+        now: std::time::Instant,
+    ) -> Option<std::time::Duration> {
+        let profile = auth.profile.as_ref()?;
+        self.menu.pr_cache.rate_limit_wait(&profile.login, now).max(
+            auth.quota()
+                .and_then(|quota| quota.retry_after(chrono::Utc::now())),
+        )
+    }
+
     /// The saved SSH device whose own account the GitHub page manages, when
     /// that device is selected. Local and explicit sockets use the main account.
     fn github_host(&self) -> Option<&str> {
@@ -162,6 +191,15 @@ impl HerdrWindow {
     }
 
     pub(crate) fn poll_github(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.poll_github_at(std::time::Instant::now(), window, cx);
+    }
+
+    pub(super) fn poll_github_at(
+        &mut self,
+        now: std::time::Instant,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.sync_github_hosts();
         self.sync_github_accounts();
         self.prune_device_removals();
@@ -172,10 +210,9 @@ impl HerdrWindow {
             && self.github_host().is_none()
             && self.menu.github_account.is_none()
         {
-            self.menu.github.probe_github_cli(std::time::Instant::now());
+            self.menu.github.probe_github_cli(now);
         }
         if self.menu.page == Some(super::Page::GitHub) {
-            let now = std::time::Instant::now();
             let host = self.github_host().map(str::to_owned);
             let menu = &mut self.menu;
             host.and_then(|id| menu.github_hosts.get_mut(&id))
@@ -187,6 +224,7 @@ impl HerdrWindow {
         }
         let connected = self.github_auth().connected();
         let mut changed = self.menu.github.poll();
+        changed |= self.menu.pr_cache.poll_countdown(now);
         for auth in self.menu.github_hosts.values_mut() {
             changed |= auth.poll();
         }
@@ -458,6 +496,33 @@ impl HerdrWindow {
             .map(|_| self.endpoints[self.selected_endpoint].label.as_str());
         if let Some(strip) = self.render_github_accounts(cx) {
             body = body.child(strip);
+        }
+        if let Some(message) = self.github_rate_limit_message() {
+            body = body.child(
+                div()
+                    .debug_selector(|| "github-rate-limit".into())
+                    .mb(px(12.))
+                    .p(px(10.))
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .border_1()
+                    .border_color(rgb(theme.ink(theme.palette[208])))
+                    .text_color(rgb(theme.ink(theme.palette[208])))
+                    .child(message),
+            );
+        }
+        if let Some(quota) = auth.quota() {
+            body = body.child(
+                div()
+                    .debug_selector(|| "github-quota".into())
+                    .mb(px(12.))
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!(
+                        "github-menu-quota",
+                        used = quota.used,
+                        limit = quota.limit,
+                        remaining = quota.remaining
+                    )),
+            );
         }
         if let Some(note) = self.github_account_note() {
             body = body.child(

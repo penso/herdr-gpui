@@ -65,6 +65,8 @@ pub struct Cache {
     pub idle: bool,
     /// The store's revision this window last showed.
     pub(super) seen: u64,
+    /// Last paint check, so a rate-limit countdown updates even without replies.
+    last_poll: Option<Instant>,
     pub cursor: usize,
 }
 
@@ -105,6 +107,15 @@ impl Cache {
         let mut cache = Self::default();
         cache.store = store;
         cache
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed_rate_limit(&mut self, login: &str, until: Instant) {
+        self.store.borrow_mut().set_pause(
+            login,
+            until,
+            Some(&crate::Error::RateLimit { reset: None }),
+        );
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -278,11 +289,33 @@ impl Cache {
     /// changed, including answers another window recorded.
     pub fn poll(&mut self, now: Instant) -> bool {
         let changed = self.dispatch(now);
+        let countdown_changed = self.poll_countdown(now);
         let Ok(store) = self.store.try_borrow() else {
-            return changed;
+            return changed || countdown_changed;
         };
         let shown = std::mem::replace(&mut self.seen, store.revision);
-        changed || shown != store.revision
+        changed || shown != store.revision || countdown_changed
+    }
+
+    /// Advances only the visible pause clock, including while disconnected.
+    /// Never collects or dispatches requests, so suspended caches stay suspended.
+    pub fn poll_countdown(&mut self, now: Instant) -> bool {
+        let Ok(store) = self.store.try_borrow() else {
+            return false;
+        };
+        let previous = self.last_poll.replace(now);
+        previous.is_some_and(|previous| {
+            store
+                .pauses
+                .iter()
+                .filter(|pause| pause.rate_limited)
+                .any(|pause| {
+                    let minutes = |at: Instant| {
+                        (at < pause.until).then(|| (pause.until - at).as_secs().div_ceil(60).max(1))
+                    };
+                    minutes(previous) != minutes(now)
+                })
+        })
     }
 
     fn dispatch(&mut self, now: Instant) -> bool {
@@ -363,19 +396,17 @@ impl Cache {
                     let reason = batch
                         .failed
                         .iter()
-                        .find(|(inputs, _)| {
+                        .filter(|(inputs, _)| {
                             inputs.iter().any(|input| paused.inputs.contains(input))
                         })
-                        .map(|(_, error)| error.to_string())
-                        .or_else(|| {
-                            batch.found.iter().find_map(|(input, result)| {
-                                result
-                                    .as_ref()
-                                    .err()
-                                    .filter(|_| paused.inputs.contains(input))
-                                    .map(ToString::to_string)
-                            })
-                        });
+                        .map(|(_, error)| error)
+                        .chain(batch.found.iter().filter_map(|(input, result)| {
+                            result
+                                .as_ref()
+                                .err()
+                                .filter(|_| paused.inputs.contains(input))
+                        }))
+                        .max_by_key(|error| matches!(error, crate::Error::RateLimit { .. }));
                     store.set_pause(&paused.login, now + paused.cooldown, reason);
                 }
                 // A paused account's checkouts wait for it, saying why.
@@ -445,6 +476,18 @@ impl Cache {
                 .as_ref()
                 .is_some_and(|token| pause(&store, token, now).is_none())
                 && self.queue.contains(input))
+    }
+
+    /// Remaining rate-limit pause for an account, shared across windows.
+    /// Authentication and repository-access failures are not rate limits.
+    pub fn rate_limit_wait(&self, login: &str, now: Instant) -> Option<Duration> {
+        self.store
+            .try_borrow()
+            .ok()?
+            .pauses
+            .iter()
+            .find(|pause| pause.login == login && pause.rate_limited && now < pause.until)
+            .map(|pause| pause.until - now)
     }
 
     /// Pure cache read for chrome painted every frame: never schedules work and

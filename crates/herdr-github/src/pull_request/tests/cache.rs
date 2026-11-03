@@ -13,6 +13,7 @@ mod freshness;
 mod hidden;
 mod missing;
 mod pause;
+mod rate_indicator;
 mod shared;
 
 /// The view a [`Peer`] starts in: this machine, read with the fixture account.

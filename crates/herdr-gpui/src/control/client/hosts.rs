@@ -36,8 +36,12 @@ pub(super) fn pr(command: PrCommand, context: &Context) -> crate::Result<Output>
         PrCommand::Status | PrCommand::Checks => HostOp::Pr,
         PrCommand::Comments => HostOp::PrComments,
         PrCommand::Open => HostOp::PrOpen,
+        PrCommand::Quota => HostOp::PrQuota,
     };
     match context.call(Request::Host, op)? {
+        Response::Host {
+            reply: Reply::PrQuota { accounts },
+        } => Output::data(text::quotas(&accounts), &accounts),
         Response::Done { message } => Ok(Output::message(message)),
         Response::Host {
             reply: Reply::Pr { pr: None, note },

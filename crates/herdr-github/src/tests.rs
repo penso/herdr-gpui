@@ -29,6 +29,7 @@ mod github_cli;
 mod installation;
 mod installation_routing;
 mod limits;
+mod rate_limit_spelling;
 mod rejection;
 mod responses;
 mod session;

@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 herdr-client.workspace = true
+herdr-github.workspace = true
 # The remote control daemon's status and device types, never its server.
 herdr-remote-control.workspace = true
 serde.workspace        = true

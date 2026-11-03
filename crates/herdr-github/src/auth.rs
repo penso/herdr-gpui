@@ -52,6 +52,9 @@ pub struct Auth {
     pub(super) last_session_check: Option<Instant>,
     pub(super) next_session_check: Option<Instant>,
     pub profile: Option<Profile>,
+    quota: Option<crate::quota::Quota>,
+    quota_minutes: Option<u64>,
+    quota_token: Option<std::sync::Weak<SecretString>>,
     pub message: Option<String>,
     pub failed: bool,
     pub(super) credential_cleanup: bool,
@@ -496,7 +499,47 @@ impl Auth {
     pub fn poll(&mut self) -> bool {
         let store = self.store;
         let account = self.account.clone();
-        self.poll_with_store(move |token| save(token, store, &account))
+        let changed = self.poll_with_store(move |token| save(token, store, &account));
+        let previous = self.quota;
+        if !self.quota_credential_current() {
+            self.quota = None;
+            self.quota_token = self
+                .profile
+                .as_ref()
+                .map(|profile| Arc::downgrade(&profile.token));
+        }
+        if let Some(profile) = &self.profile
+            && let crate::quota::Observation::Ready(quota) = crate::quota::latest(&profile.token)
+        {
+            self.quota = quota;
+        }
+        let minutes = self
+            .quota
+            .and_then(|quota| quota.retry_after(chrono::Utc::now()))
+            .map(|wait| wait.as_secs().div_ceil(60).max(1));
+        let previous_minutes = std::mem::replace(&mut self.quota_minutes, minutes);
+        changed || previous != self.quota || previous_minutes != minutes
+    }
+
+    pub fn quota(&self) -> Option<crate::quota::Quota> {
+        self.quota.filter(|_| self.quota_credential_current())
+    }
+
+    fn quota_credential_current(&self) -> bool {
+        self.profile.as_ref().is_some_and(|profile| {
+            self.quota_token
+                .as_ref()
+                .is_some_and(|token| token.ptr_eq(&Arc::downgrade(&profile.token)))
+        })
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed_quota(&mut self, quota: crate::quota::Quota) {
+        self.quota = Some(quota);
+        self.quota_token = self
+            .profile
+            .as_ref()
+            .map(|profile| Arc::downgrade(&profile.token));
     }
     /// Credential backend chosen for this build and configuration.
     pub fn store(&self) -> Store {

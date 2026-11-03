@@ -44,6 +44,7 @@ pub(super) struct Pause {
     pub(super) login: String,
     pub(super) until: Instant,
     pub(super) reason: Option<String>,
+    pub(super) rate_limited: bool,
 }
 
 #[derive(Default)]
@@ -100,7 +101,7 @@ impl Store {
             .map(|pause| (pause.until, pause.reason.as_deref()))
     }
 
-    pub(super) fn set_pause(&mut self, login: &str, until: Instant, reason: Option<String>) {
+    pub(super) fn set_pause(&mut self, login: &str, until: Instant, error: Option<&crate::Error>) {
         self.changed();
         self.pauses.retain(|pause| pause.login != login);
         if self.pauses.len() == CACHE_LIMIT {
@@ -109,7 +110,8 @@ impl Store {
         self.pauses.push(Pause {
             login: login.to_owned(),
             until,
-            reason,
+            reason: error.map(ToString::to_string),
+            rate_limited: matches!(error, Some(crate::Error::RateLimit { .. })),
         });
     }
 

@@ -8,7 +8,7 @@ use crate::{
     browser::WebUrl,
     control::protocol::{
         Caller, ErrorCode, Response,
-        hosts::{COMMENTS_WAIT_SECONDS, CheckInfo, CommentInfo, PrInfo, Reply},
+        hosts::{AccountQuota, COMMENTS_WAIT_SECONDS, CheckInfo, CommentInfo, PrInfo, Reply},
     },
     pr_actions::{Comment, Target},
     pull_request::{MergeState, PullRequest, ReviewDecision, workspace_input},
@@ -97,6 +97,51 @@ pub(super) fn status(view: &HerdrWindow, caller: &Caller) -> Response {
         },
         Ok((_, Lookup::Missing(note))) => missing(note),
         Err(response) => response,
+    }
+}
+
+pub(super) fn quota(view: &HerdrWindow) -> Response {
+    let now = std::time::Instant::now();
+    let mut accounts: Vec<AccountQuota> = Vec::new();
+    for auth in view.github_auths().take(128) {
+        let Some(profile) = &auth.profile else {
+            continue;
+        };
+        let observed = AccountQuota {
+            login: profile.login.clone(),
+            quota: auth.quota(),
+            retry_after_seconds: view
+                .github_rate_limit_wait(auth, now)
+                .map(|wait| wait.as_secs().max(1)),
+        };
+        if let Some(account) = accounts
+            .iter_mut()
+            .find(|account| account.login == profile.login)
+        {
+            // One login can have several credentials. Prefer a known observation
+            // from the latest quota window, then the furthest consumption within
+            // that window. Keep the whole observation; never sum shared usage.
+            account.quota = account
+                .quota
+                .into_iter()
+                .chain(observed.quota)
+                .max_by_key(|quota| {
+                    (
+                        quota.reset,
+                        quota.used,
+                        std::cmp::Reverse(quota.remaining),
+                        quota.limit,
+                    )
+                });
+            account.retry_after_seconds = account
+                .retry_after_seconds
+                .max(observed.retry_after_seconds);
+        } else {
+            accounts.push(observed);
+        }
+    }
+    Response::Host {
+        reply: Reply::PrQuota { accounts },
     }
 }
 

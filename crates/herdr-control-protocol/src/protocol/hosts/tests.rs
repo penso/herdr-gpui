@@ -3,6 +3,7 @@ use super::*;
 use crate::protocol::{Call, Caller, MAX_WAIT_SECONDS, Request, Response};
 
 mod automation;
+mod quota;
 mod security;
 
 #[test]

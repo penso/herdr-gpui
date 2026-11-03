@@ -73,6 +73,10 @@ impl HerdrWindow {
     /// Every signed-in account: the device's own, saved SSH devices', and
     /// additional ones.
     fn github_profiles(&self) -> impl Iterator<Item = &Profile> {
+        self.github_auths().filter_map(|auth| auth.profile.as_ref())
+    }
+
+    pub(crate) fn github_auths(&self) -> impl Iterator<Item = &crate::github::Auth> {
         std::iter::once(&self.menu.github)
             .chain(self.menu.github_hosts.values())
             .chain(
@@ -81,7 +85,6 @@ impl HerdrWindow {
                     .iter()
                     .map(|account| &account.auth),
             )
-            .filter_map(|auth| auth.profile.as_ref())
     }
 
     /// Whether any account waits on the user, for the title bar's dot.

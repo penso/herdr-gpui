@@ -21,6 +21,7 @@ pub use http::fake_graphql;
 mod log;
 pub mod pr_actions;
 pub mod pull_request;
+pub mod quota;
 mod repository;
 mod routing;
 mod store;
