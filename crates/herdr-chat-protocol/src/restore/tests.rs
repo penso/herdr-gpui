@@ -1,15 +1,24 @@
 use super::*;
 use std::ffi::OsString;
 
+/// `path` made absolute on this platform: Windows needs a drive.
+fn abs(path: &str) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(format!("C:{path}"))
+    } else {
+        PathBuf::from(path)
+    }
+}
+
 fn record(endpoint: &str) -> Record {
     Record {
         adapter: false,
         agent: Agent::Claude,
-        cwd: PathBuf::from("/work/repo"),
+        cwd: abs("/work/repo"),
         endpoint: endpoint.parse().unwrap(),
         pane: "w1:p3".to_owned(),
         session: "0c6f0c39-3c1e-4b7e-9a51-6d1b8e2d7f10".to_owned(),
-        socket: PathBuf::from("/home/me/.config/herdr/herdr.sock"),
+        socket: abs("/home/me/.config/herdr/herdr.sock"),
     }
 }
 
@@ -266,9 +275,21 @@ fn concurrent_stamps_of_one_chat_never_leave_a_partial_file() {
             let (dir, id, boots) = (dir.path(), &id, &boots);
             scope.spawn(move || {
                 for _ in 0..50 {
-                    write_seen(dir, id, boot).unwrap();
-                    let read = read_seen(dir, id).unwrap();
-                    assert!(boots.contains(&read), "{read:?}");
+                    // Windows may refuse to replace a file another thread
+                    // has open for a moment; a refused write, or a read in
+                    // that moment, is not a partial stamp.
+                    let written = write_seen(dir, id, boot);
+                    let read = read_seen(dir, id);
+                    #[cfg(not(windows))]
+                    {
+                        written.unwrap();
+                        assert!(read.is_some(), "a stamp went missing");
+                    }
+                    #[cfg(windows)]
+                    let _ = written;
+                    if let Some(read) = read {
+                        assert!(boots.contains(&read), "{read:?}");
+                    }
                 }
             });
         }

@@ -1,11 +1,20 @@
 use super::*;
 
+/// `path` made absolute on this platform: Windows needs a drive.
+fn abs(path: &str) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(format!("C:{path}"))
+    } else {
+        PathBuf::from(path)
+    }
+}
+
 const ENDPOINT: &str = "0123456789abcdef0123456789abcdef";
 
 fn target() -> Target {
     Target {
         pane: "w1:p2".to_owned(),
-        socket: PathBuf::from("/home/me/.config/herdr/herdr.sock"),
+        socket: abs("/home/me/.config/herdr/herdr.sock"),
     }
 }
 
@@ -26,7 +35,7 @@ fn a_chat_keeps_its_latest_session_until_it_ends() {
         Some(&endpoint),
         &builtin(Vec::new()),
         true,
-        Path::new("/work"),
+        &abs("/work"),
     )
     .unwrap();
     keeper.opened("first");
@@ -38,7 +47,7 @@ fn a_chat_keeps_its_latest_session_until_it_ends() {
     assert_eq!(record.agent, Agent::Codex);
     assert!(record.adapter);
     assert_eq!(record.pane, "w1:p2");
-    assert_eq!(record.cwd, Path::new("/work"));
+    assert_eq!(record.cwd, abs("/work"));
 
     // An id that could not be typed back drops the record rather than
     // leaving the older session to be continued.

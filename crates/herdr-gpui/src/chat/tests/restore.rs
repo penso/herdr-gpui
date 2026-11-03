@@ -21,17 +21,26 @@ use std::path::Path;
 const ONE: &str = "0123456789abcdef0123456789abcdef";
 const TWO: &str = "fedcba9876543210fedcba9876543210";
 const SOCKET: &str = "/home/me/.config/herdr/herdr.sock";
+/// `path` made absolute on this platform: Windows needs a drive.
+fn abs(path: &str) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(format!("C:{path}"))
+    } else {
+        PathBuf::from(path)
+    }
+}
+
 const PROGRAM: &str = "/Applications/Herdr.app/Contents/MacOS/herdr-acp";
 
 fn record(endpoint: &str, pane: &str) -> Record {
     Record {
         adapter: false,
         agent: Agent::Claude,
-        cwd: PathBuf::from("/work"),
+        cwd: abs("/work"),
         endpoint: endpoint.parse().unwrap(),
         pane: pane.to_owned(),
         session: "0c6f0c39-3c1e-4b7e-9a51-6d1b8e2d7f10".to_owned(),
-        socket: PathBuf::from(SOCKET),
+        socket: abs(SOCKET),
     }
 }
 
@@ -44,7 +53,7 @@ fn pane(id: &str, occupied: bool) -> Pane {
 }
 
 fn ours(socket: &Path) -> bool {
-    socket == Path::new(SOCKET)
+    socket == abs(SOCKET)
 }
 
 fn scope(boot: &str, connection: u64) -> Scope {
