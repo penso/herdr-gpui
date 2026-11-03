@@ -6,8 +6,8 @@ use super::*;
 use crate::chat::restore::{
     Outcome,
     plan::{
-        self, CONFIRM_WITHIN, ENDED_AFTER, MAX_PROBES, PASS_INTERVAL, PASSES, Pane, Probes, Scope,
-        Settled, Typed, Watched,
+        self, CONFIRM_WITHIN, ENDED_AFTER, MAX_PROBES, MAX_STAMPS, PASS_INTERVAL, PASSES, Pane,
+        Probes, Scope, Settled, Typed, Watched,
     },
     spawn,
 };
@@ -654,4 +654,46 @@ fn a_pass_whose_window_is_gone_gives_its_claims_back() {
     drop(receiver);
     release.send(()).unwrap();
     wait_until(|| listed(&path) == 1);
+}
+
+#[test]
+fn every_live_chat_counts_when_judging_which_ended() {
+    let count = MAX_STAMPS + 4;
+    let mut snapshot: ClientShellSnapshot = crate::sidebar::layout_tests::snapshot(1);
+    let template = snapshot.agents[0].clone();
+    let ids: Vec<String> = (0..count).map(|n| format!("{n:032x}")).collect();
+    snapshot.agents = ids
+        .iter()
+        .enumerate()
+        .map(|(n, id)| {
+            let mut agent = template.clone();
+            agent.pane_id = format!("w1:p{n}");
+            agent.tokens = vec![(herdr_chat_protocol::TOKEN.to_owned(), id.clone())];
+            agent
+        })
+        .collect();
+    let live = plan::live_chats(&snapshot);
+    assert_eq!(
+        live.len(),
+        count,
+        "no chat is left out of the snapshot's list"
+    );
+
+    // Watched against the whole list, the chat past the stamping batch is
+    // never taken for ended, however long it runs.
+    let boot = scope("boot-1", 1);
+    let endpoints: Vec<EndpointId> = live.iter().map(|(endpoint, _)| endpoint.clone()).collect();
+    let mut watched = Watched::default();
+    let now = Instant::now();
+    for tick in 0..4 {
+        let at = now + ENDED_AFTER * tick;
+        assert!(watched.observe(&boot, &endpoints, at).is_empty());
+    }
+
+    // Stamping takes a bounded batch, and the next batch the rest.
+    let first = plan::to_stamp(live.clone(), &HashSet::new());
+    assert_eq!(first.len(), MAX_STAMPS);
+    let done: HashSet<EndpointId> = first.into_iter().map(|(endpoint, _)| endpoint).collect();
+    let rest = plan::to_stamp(live, &done);
+    assert_eq!(rest.len(), count - MAX_STAMPS);
 }

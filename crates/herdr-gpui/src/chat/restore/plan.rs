@@ -28,6 +28,8 @@ pub(in crate::chat) const CONFIRM_WITHIN: Duration = Duration::from_secs(60);
 /// How old a claim may be when the window reads it: an older one rests on
 /// an idle check that no longer says much, so it is given back instead.
 pub(in crate::chat) const CLAIM_FRESH: Duration = Duration::from_secs(10);
+/// Live chats one watch job stamps; the rest wait for the next.
+pub(in crate::chat) const MAX_STAMPS: usize = super::super::MAX_CHATS;
 /// Panes the pass asks Herdr about in one run; the rest wait for the next.
 pub(in crate::chat) const MAX_PROBES: usize = super::super::MAX_CHATS;
 
@@ -67,6 +69,34 @@ pub(in crate::chat) fn panes(snapshot: &ClientShellSnapshot) -> Vec<Pane> {
             id: pane.pane_id.clone(),
             occupied: occupied.contains(pane.pane_id.as_str()),
         })
+        .collect()
+}
+
+/// Every chat live in `snapshot`, with the pane it runs in. Not capped:
+/// whether a watched chat ended is judged against all of them, and a chat
+/// left out would look ended.
+pub(in crate::chat) fn live_chats(snapshot: &ClientShellSnapshot) -> Vec<(EndpointId, String)> {
+    snapshot
+        .agents
+        .iter()
+        .filter_map(|agent| {
+            Some((
+                super::super::discovery::endpoint(&agent.tokens)?,
+                agent.pane_id.clone(),
+            ))
+        })
+        .collect()
+}
+
+/// The live chats not yet stamped this scope, at most
+/// [`MAX_STAMPS`] of them, for one job; the rest wait for the next.
+pub(in crate::chat) fn to_stamp(
+    live: Vec<(EndpointId, String)>,
+    stamped: &HashSet<EndpointId>,
+) -> Vec<(EndpointId, String)> {
+    live.into_iter()
+        .filter(|(endpoint, _)| !stamped.contains(endpoint))
+        .take(MAX_STAMPS)
         .collect()
 }
 

@@ -41,8 +41,8 @@
 pub(super) mod plan;
 
 use plan::{
-    PASSES, Pane, Probes, Scope, Typed, Watched, every_record, free, idle, panes, pass, pass_due,
-    settle, superseded,
+    PASSES, Pane, Probes, Scope, Typed, Watched, every_record, free, idle, live_chats, panes, pass,
+    pass_due, settle, superseded, to_stamp,
 };
 
 use super::{Route, discovery};
@@ -266,12 +266,7 @@ impl HerdrWindow {
             });
             return;
         }
-        let live: Vec<(EndpointId, String)> = snapshot
-            .agents
-            .iter()
-            .filter_map(|agent| Some((discovery::endpoint(&agent.tokens)?, agent.pane_id.clone())))
-            .take(super::MAX_CHATS)
-            .collect();
+        let live = live_chats(snapshot);
         self.watch_live_chats(dir, scope, owner, live, now);
     }
 
@@ -339,9 +334,10 @@ impl HerdrWindow {
     }
 
     /// Now and then: drops the records of chats that ended under the
-    /// running daemon, and of those a chat newly live in their pane
-    /// replaced, and stamps the records of the `live` chats with the scope's
-    /// boot, each once per scope.
+    /// running daemon, judged against every chat `live` in the snapshot,
+    /// and of those a chat newly live in their pane replaced, and stamps the
+    /// records of the live chats with the scope's boot, each once per scope
+    /// and a bounded batch at a time.
     fn watch_live_chats(
         &mut self,
         dir: PathBuf,
@@ -362,10 +358,7 @@ impl HerdrWindow {
             restore.stamped.clear();
             restore.stamped_scope = Some(scope.clone());
         }
-        let unstamped: Vec<(EndpointId, String)> = live
-            .into_iter()
-            .filter(|(endpoint, _)| !restore.stamped.contains(endpoint))
-            .collect();
+        let unstamped = to_stamp(live, &restore.stamped);
         if unstamped.is_empty() && ended.is_empty() {
             return;
         }
