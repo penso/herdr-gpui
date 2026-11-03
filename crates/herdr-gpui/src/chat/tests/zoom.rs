@@ -69,7 +69,7 @@ fn zoom_shortcuts_keep_the_native_chat_composer_focused(cx: &mut TestAppContext)
             assert!(input.read(cx).focus.is_focused(window), "{key}");
             view.read_with(cx, |view, _| {
                 assert_eq!(view.config.terminal.size, expected, "{key}");
-                assert_eq!(view.chat_text_size(), expected + 2., "{key}");
+                assert_eq!(view.chat_text_size(), expected, "{key}");
             });
         });
         poll(&view, &program, cx);

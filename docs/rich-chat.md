@@ -37,10 +37,8 @@ The default is 800 logical pixels; custom widths range from 320 to 4,000 and
 shrink to fit narrower windows. The transcript and native composer use the
 same width. At the default, the agent's prose keeps to about 70 characters a
 line, the length that reads most easily, while code, tables, and pictures use
-the whole column; a width you choose is followed as set. The **Terminal**
-layout reads like a terminal: at the default reading width it fills the
-conversation area instead of the book's measure; a width you configure is
-followed as set. The equivalent commands are:
+the whole column; a width you choose is followed as set. This applies to every
+layout, including **Terminal**. The equivalent commands are:
 
 ```sh
 herdr-gpui config set chat.max_width 0     # full width
@@ -92,7 +90,9 @@ this, and how, is in the [`herdr-acp` README](../crates/herdr-acp/README.md#beha
 Write normal Markdown and TeX in user and agent messages. Rich chat supports
 headings, lists, links, aligned tables with horizontal scrolling, Mermaid,
 attached images, and explicitly loaded remote pictures. Conversation prose uses
-the UI font; inline code and code fences use the terminal font. Code blocks
+the UI font (the terminal font in **Terminal** layout), at the terminal's
+configured font size with the same zoom controls. Inline code and code fences
+use the terminal font. Code blocks
 preserve blank lines, show tabs at four-column stops and scroll without wrapping.
 **Copy code** preserves the parsed source's tabs, indentation and Unicode.
 
