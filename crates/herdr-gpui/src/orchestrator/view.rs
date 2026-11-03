@@ -167,7 +167,8 @@ pub(crate) struct OrchestratorView {
     sort: Sort,
     sort_open: bool,
     filters: Filters,
-    mine: bool,
+    /// The Pull requests tab's Mine and Review requested toggles.
+    yours: rows::Yours,
     /// Whether the Issues filters' column is unfolded.
     filters_open: bool,
     /// Only issues with this label.
@@ -251,7 +252,7 @@ impl OrchestratorView {
             sort: Sort::default(),
             sort_open: false,
             filters: Filters::default(),
-            mine: false,
+            yours: rows::Yours::default(),
             filters_open: false,
             label: None,
             collapsed: HashSet::new(),

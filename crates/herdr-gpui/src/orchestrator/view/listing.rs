@@ -156,8 +156,8 @@ impl OrchestratorView {
                 &runs,
                 &self.query,
                 self.filters,
-                repo.reading_login(),
-                self.mine,
+                (repo.reading_login(), &repo.snapshot.pr_status),
+                self.yours,
                 self.sort,
             );
             if let Some(label) = &self.label {

@@ -23,6 +23,7 @@ mod pills;
 mod pr_empty;
 mod refresh;
 mod repo_name;
+mod review_requested;
 mod row_start;
 mod rows;
 mod sessions;

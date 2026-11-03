@@ -187,7 +187,7 @@ impl OrchestratorView {
             || !self.backends.is_empty()
             || match self.tab {
                 Tab::Issues => self.active_filters() > 0,
-                Tab::PullRequests => self.mine || self.filters.has_run,
+                Tab::PullRequests => self.yours.any() || self.filters.has_run,
             };
         if self.repos.is_empty() {
             Empty::NoRepositories

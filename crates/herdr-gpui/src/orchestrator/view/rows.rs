@@ -402,14 +402,45 @@ pub(crate) fn issue_rows(
     rows
 }
 
+/// Which pull requests of the signed-in account the tab narrows to. With
+/// both on, a pull request of either kind is listed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Yours {
+    /// Opened by the account.
+    pub(crate) authored: bool,
+    /// The account is asked to review it.
+    pub(crate) review_requested: bool,
+}
+
+impl Yours {
+    pub(crate) fn any(self) -> bool {
+        self.authored || self.review_requested
+    }
+
+    fn keeps(self, item: &Item, status: Option<&PrStatus>, login: Option<&str>) -> bool {
+        if !self.any() {
+            return true;
+        }
+        let Some(login) = login else {
+            return false;
+        };
+        let authored = item
+            .author
+            .as_deref()
+            .is_some_and(|author| author.eq_ignore_ascii_case(login));
+        (self.authored && authored)
+            || (self.review_requested && status.is_some_and(|status| status.requests(login)))
+    }
+}
+
 /// The Pull requests tab: open and draft ones unless `open_only` is off.
 pub(crate) fn pull_request_rows(
     items: &[Item],
     runs: &Runs<'_>,
     query: &str,
     filters: Filters,
-    login: Option<&str>,
-    mine: bool,
+    (login, statuses): (Option<&str>, &HashMap<(String, u64), PrStatus>),
+    yours: Yours,
     sort: Sort,
 ) -> Vec<ItemRow> {
     let latest = runs.latest();
@@ -418,9 +449,7 @@ pub(crate) fn pull_request_rows(
         .enumerate()
         .filter(|(_, item)| item.pull_request.is_some())
         .filter(|(_, item)| !filters.open_only || matches!(item.state.as_str(), "open" | "draft"))
-        .filter(|(_, item)| {
-            !mine || login.is_some_and(|login| item.author.as_deref() == Some(login))
-        })
+        .filter(|(_, item)| yours.keeps(item, status_of(item, statuses), login))
         .filter(|(_, item)| matches(item, query))
         .map(|(index, item)| ItemRow {
             repo: 0,

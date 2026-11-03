@@ -513,9 +513,17 @@ impl OrchestratorView {
                             row.child(toggle(
                                 "orchestrator-mine",
                                 fl!("orchestrator-filter-mine"),
-                                self.mine,
+                                self.yours.authored,
                                 |this| {
-                                    this.mine = !this.mine;
+                                    this.yours.authored = !this.yours.authored;
+                                },
+                            ))
+                            .child(toggle(
+                                "orchestrator-review-requested",
+                                fl!("orchestrator-filter-review-requested"),
+                                self.yours.review_requested,
+                                |this| {
+                                    this.yours.review_requested = !this.yours.review_requested;
                                 },
                             ))
                         },

@@ -33,17 +33,25 @@ fn pr_toggles_explain_why_loaded_pull_requests_are_hidden(cx: &mut gpui::TestApp
             assert_eq!(view.empty(), Empty::Filtered);
 
             view.filters.has_run = false;
-            view.mine = true;
+            view.yours.authored = true;
             view.refresh_rows();
             assert!(view.keys().is_empty());
             assert_eq!(view.empty(), Empty::Filtered);
+
+            view.yours.authored = false;
+            view.yours.review_requested = true;
+            view.refresh_rows();
+            assert!(view.keys().is_empty());
+            assert_eq!(view.empty(), Empty::Filtered);
+            view.yours.review_requested = false;
+            view.yours.authored = true;
 
             view.tab = Tab::Issues;
             view.refresh_rows();
             assert_eq!(view.empty(), Empty::Nothing);
 
             view.tab = Tab::PullRequests;
-            view.mine = false;
+            view.yours.authored = false;
             view.refresh_rows();
             assert_eq!(view.keys(), [key]);
             view.repos[0].snapshot.items = Arc::default();

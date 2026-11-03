@@ -30,6 +30,7 @@ orchestrator-refresh = Refresh
 orchestrator-filters = Filters
 orchestrator-filter-open = Open
 orchestrator-filter-mine = Mine
+orchestrator-filter-review-requested = Review requested
 orchestrator-has-agent = Has agent
 orchestrator-blocked = Blocked
 orchestrator-clear-search = Clear search
