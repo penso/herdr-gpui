@@ -12,11 +12,10 @@ on:
 # keep pull_request, hosted runners, and secret-free/read-only PR jobs.
 permissions: {}
 
-# A newer push cancels a pull request's run, but every main run finishes:
-# a release requires a complete CI run for its exact commit.
+# A newer run cancels the previous run for the same ref, including main.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 # Every rust-cache entry shares the repository's 10 GB budget. With full
 # debug info the entries overflowed it, and GitHub evicted the Windows
