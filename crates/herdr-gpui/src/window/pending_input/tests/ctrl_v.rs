@@ -1,5 +1,6 @@
-//! On Windows plain Ctrl+V is the app's paste, so while input waits for the
-//! frame it is held as a paste is and reads the clipboard when delivered.
+//! On Windows and Linux plain Ctrl+V is the app's paste, so while input
+//! waits for the frame it is held as a paste is and reads the clipboard when
+//! delivered.
 use super::*;
 
 fn ctrl_v() -> gpui::KeyDownEvent {

@@ -23,8 +23,10 @@ use herdr_client::{
 };
 use std::path::PathBuf;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 mod ctrl_v;
+#[cfg(target_os = "linux")]
+mod linux_ctrl_v;
 
 const BOOT: &str = "boot-v1";
 const PANE: &str = "w1:p1";

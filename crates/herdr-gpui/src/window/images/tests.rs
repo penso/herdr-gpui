@@ -4,6 +4,7 @@ use herdr_client::ConnectTarget;
 use std::io;
 
 mod en_xa;
+mod key_fallback;
 mod paste_errors;
 
 fn processing_errors() -> Vec<Error> {
