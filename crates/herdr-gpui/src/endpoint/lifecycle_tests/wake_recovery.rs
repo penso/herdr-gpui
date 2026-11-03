@@ -154,7 +154,12 @@ fn recovering_waits_while_the_worker_report_cannot_be_read() {
     assert!(!handle.is_disconnected());
     assert_eq!(endpoint.recovery, Some(Trigger::Sleep));
     drop(busy);
-    endpoint.poll(Instant::now());
+    // Releasing our guard does not keep the worker from taking the inbox
+    // again. Drive the deferred recovery as later application ticks do.
+    wait_until(|| {
+        endpoint.poll(Instant::now());
+        endpoint.recovery.is_none()
+    });
     assert!(handle.is_disconnected());
     assert_eq!(endpoint.recovery, None);
     std::fs::remove_file(path).unwrap();
