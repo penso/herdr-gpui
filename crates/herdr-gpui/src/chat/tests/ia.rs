@@ -28,10 +28,11 @@ fn prompts_steps_and_prose_share_one_column(cx: &mut TestAppContext) {
     // The prompt's mark hangs in the gutter, left of the text.
     let mark = cx.debug_bounds("chat-ia-mark-1").unwrap();
     let gutter = view.read_with(cx, |view, _| view.chat_text_size()) * 1.6;
-    // The row's padding, then the gutter, then the text.
+    // The row's padding, then the gutter, then the text. Layout snaps the
+    // fractional-em gutter to device pixels.
     let text = prompt.left() + px(16. + gutter);
     assert!(
-        mark.left() >= prompt.left() && mark.right() <= text,
+        mark.left() >= prompt.left() && mark.right() <= text + px(0.5),
         "{mark:?} in {prompt:?}"
     );
     assert!(
