@@ -149,6 +149,12 @@ pub(super) trait ChatLayout {
         look.text
     }
 
+    /// How far a tool call is inset from the column edge. By default,
+    /// nothing is.
+    fn tool_indent(&self) -> Option<ToolIndent> {
+        None
+    }
+
     /// The color an agent message's prose is drawn in: by default the
     /// theme's foreground. `None` keeps the color the row gives it.
     fn prose(&self, look: &Look<'_>) -> Option<u32> {
@@ -261,6 +267,16 @@ pub(super) fn bubble_row(row: Row<'_>, look: &Look<'_>, bubble: Bubble) -> AnyEl
             .child(body),
     )
     .into_any_element()
+}
+
+/// The shape of a tool call's inset in a layout.
+#[derive(Clone, Copy)]
+pub(super) struct ToolIndent {
+    /// The padding on the call's row: its header sits this far in.
+    pub(super) header: f32,
+    /// The padding the call's body (previews, opened details) adds past
+    /// `header`.
+    pub(super) body: f32,
 }
 
 /// The shape of a [`bubble_row`].
