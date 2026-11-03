@@ -68,6 +68,10 @@ struct Mockup: View {
         case ("spaces", "C"): SpacesOneComputer(state: state)
         case ("spaces", "D"): SpacesFolded(state: state)
         case ("spaces", "Mix"): SpacesMix(state: state)
+        case ("forget", "A"): ForgetPage(state: state)
+        case ("forget", "B"): ForgetHeaderMenu(state: state)
+        case ("forget", "C"): ForgetUnpairedCard(state: state)
+        case ("forget", "D"): ForgetEditList(state: state)
         default: Text("No mockup \(screen) \(variant)")
         }
     }

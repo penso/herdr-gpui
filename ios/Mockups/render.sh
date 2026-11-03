@@ -18,6 +18,8 @@ case "$round" in
      ipad="" ;;
   mix) phone="spaces-Mix-0 spaces-Mix-1"
      ipad="" ;;
+  forget) phone="forget-A-0 forget-A-1 forget-B-0 forget-B-1 forget-C-0 forget-C-1 forget-D-0 forget-D-1"
+     ipad="" ;;
   *) echo "unknown round $round" >&2; exit 2 ;;
 esac
 
