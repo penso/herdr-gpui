@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Sheprd Atlas: every feature, its status and where it runs</title>
+<meta name="description" content="The complete Sheprd feature atlas: every capability of the open-source desktop app for coding agents, with honest status and platform notes for macOS, Linux, Windows and phones.">
+<meta property="og:title" content="Sheprd Atlas: every feature, its status and where it runs">
+<meta property="og:description" content="Search the whole Sheprd feature set: terminals, agents, worktrees, review, hosts, browser, usage, mods, phone. Status and platform for each.">
+<meta property="og:image" content="../../assets/paw-512.png">
+<!-- Social card direction (Atlas): an index card. Off-white background, a
+     faint grid, the 13 area names in two monospaced columns with their feature
+     counts, small paw tile and "sheprd.org/features" in the corner. -->
+<link rel="icon" href="../../assets/paw.svg">
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/features.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Concept 04 · Atlas</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+
+<header class="bar">
+  <a class="brand" href="#main" aria-label="Sheprd Atlas home">
+    <img src="../../assets/paw.svg" alt="" width="28" height="28">
+    <span>Sheprd</span><span class="brand-sub">Atlas</span>
+  </a>
+  <label class="bar-search">
+    <span class="sr-only">Search features</span>
+    <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="q" type="search" placeholder="Search features" autocomplete="off" aria-describedby="q-hint">
+    <kbd id="q-hint" aria-label="Press slash to search">/</kbd>
+  </label>
+  <nav class="bar-links" aria-label="Site">
+    <a href="#matrix">Platforms</a>
+    <a href="#install">Install</a>
+    <a href="https://github.com/sheprd-labs">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="side" aria-label="Feature areas">
+    <p class="side-title">Areas</p>
+    <ol id="area-nav" class="area-nav"></ol>
+    <p class="side-title">Reference</p>
+    <ol class="area-nav">
+      <li><a href="#matrix"><span>Platform matrix</span></a></li>
+      <li><a href="#install"><span>Install</span></a></li>
+      <li><a href="#how"><span>How it connects</span></a></li>
+    </ol>
+  </aside>
+
+  <main id="main" class="content">
+    <section class="intro" aria-labelledby="intro-title">
+      <p class="crumb">sheprd.org / features</p>
+      <h1 id="intro-title">Every agent. Every worktree. Every machine. <span>One window.</span></h1>
+      <p class="lede">Sheprd is an open-source desktop app for running a team of coding agents on macOS, Linux and Windows. This atlas lists everything it does today, what is opt-in or still in beta, and where each piece runs.</p>
+      <dl class="stats" id="stats" aria-label="Feature counts"></dl>
+      <div class="filters">
+        <div class="filter" role="group" aria-label="Filter by status" id="status-filter"></div>
+        <div class="filter" role="group" aria-label="Filter by platform" id="platform-filter"></div>
+      </div>
+      <p class="result" id="result" aria-live="polite"></p>
+    </section>
+
+    <div id="areas"></div>
+
+    <p class="empty" id="empty" hidden>No feature matches. Try “worktree”, “phone” or “usage”.</p>
+
+    <section id="matrix" class="ref" aria-labelledby="matrix-title">
+      <h2 id="matrix-title">Platform matrix</h2>
+      <p class="ref-lede">Most of Sheprd runs everywhere. These are the differences worth knowing before you install.</p>
+      <div class="table-wrap" tabindex="0" role="region" aria-labelledby="matrix-title">
+        <table class="matrix">
+          <thead><tr><th scope="col">Capability</th><th scope="col">macOS</th><th scope="col">Linux</th><th scope="col">Windows</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Embedded browser tabs, annotations, VS Code, px0</th><td class="y">Yes</td><td class="n">System browser instead</td><td class="y">Yes</td></tr>
+            <tr><th scope="row">Page screenshots in notes</th><td class="y">Yes</td><td class="n">No</td><td class="n">No</td></tr>
+            <tr><th scope="row">Teleport, Fan-out, Smart Dispatch, pane moves to devices</th><td class="y">Yes</td><td class="y">Yes</td><td class="n">Not yet</td></tr>
+            <tr><th scope="row">Cloud devices and containers</th><td class="y">Yes</td><td class="y">Yes</td><td class="n">Not yet</td></tr>
+            <tr><th scope="row">SSH machines</th><td class="y">Yes</td><td class="y">Yes</td><td class="p">Yes, without connection sharing, uploads or port forwarding</td></tr>
+            <tr><th scope="row">WSL distributions as devices</th><td class="na">—</td><td class="na">—</td><td class="y">Yes</td></tr>
+            <tr><th scope="row">Unread badge</th><td class="y">Dock</td><td class="n">None</td><td class="y">Taskbar overlay and progress</td></tr>
+            <tr><th scope="row">Launch at login</th><td class="n">Not yet</td><td class="n">Not yet</td><td class="y">Yes</td></tr>
+            <tr><th scope="row">Editing settings shared with Herdr</th><td class="y">Yes</td><td class="y">Yes</td><td class="p">Read-only</td></tr>
+            <tr><th scope="row">Open a file in your terminal editor</th><td class="y">Yes</td><td class="y">Yes</td><td class="p">Opens a code tab</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fine">Requirements: macOS 14.2 or newer (Apple silicon or Intel). Linux x86_64 or ARM64 with glibc 2.39+ and Vulkan. Windows 10 or 11, x86_64 or ARM64. Phones: any modern browser for the remote-control web app; the native iPhone and iPad app (iOS 26) is in TestFlight beta.</p>
+    </section>
+
+    <section id="install" class="ref" aria-labelledby="install-title">
+      <h2 id="install-title">Install</h2>
+      <p class="ref-lede">Releases are still published as Herdr UI from the current repository. Sheprd-named builds will come from <code class="future">github.com/sheprd-labs/sheprd</code> <span class="st st-planned">future</span>.</p>
+      <div class="install-grid">
+        <article class="inst"><h3>macOS</h3><p class="inst-meta">Universal · signed and notarized · current channel</p><pre><code>brew install penso/tap/herdr-gpui</code></pre><button type="button" class="copy" data-copy="brew install penso/tap/herdr-gpui">Copy command</button></article>
+        <article class="inst"><h3>Linux</h3><p class="inst-meta">APT, DNF or pacman · current channel</p><pre><code>curl -fsSL https://herdrui.dev/install.sh | sh</code></pre><button type="button" class="copy" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">Copy command</button></article>
+        <article class="inst"><h3>Windows</h3><p class="inst-meta">PowerShell, per-user · current channel</p><pre><code>irm https://herdrui.dev/install.ps1 | iex</code></pre><button type="button" class="copy" data-copy="irm https://herdrui.dev/install.ps1 | iex">Copy command</button></article>
+        <article class="inst"><h3>Nix</h3><p class="inst-meta">Builds from source · current channel</p><pre><code>nix run github:penso/herdr-gpui</code></pre><button type="button" class="copy" data-copy="nix run github:penso/herdr-gpui">Copy command</button></article>
+        <article class="inst inst-soft"><h3>iPhone and iPad</h3><p class="inst-meta"><span class="st st-testflight">TestFlight beta</span></p><p>Native app for iOS 26, with internal TestFlight builds today. You can also build it from source with your own Apple team.</p></article>
+        <article class="inst inst-soft"><h3>Any phone</h3><p class="inst-meta"><span class="st st-optin">Opt-in</span></p><p>Turn on Remote control in Settings. Your computer serves an installable web app; pair it by scanning a QR code and approving on both screens.</p></article>
+      </div>
+    </section>
+
+    <section id="how" class="ref" aria-labelledby="how-title">
+      <h2 id="how-title">How it connects</h2>
+      <div class="how">
+        <ol class="how-flow" aria-label="Connection layers">
+          <li><b>Sheprd</b><span>Native window: painting, input, review, browser, orchestration</span></li>
+          <li><b>Terminal server</b><span><code>herdr server</code> (Herdr 1) or herdr-core (Herdr 2), on this computer, an SSH host, WSL or a cloud machine</span></li>
+          <li><b>Your terminals and agents</b><span>Owned by the server. They keep running when Sheprd closes, detaches or updates.</span></li>
+        </ol>
+        <p>Sheprd starts a terminal server only to connect: an installed <code>herdr server</code>, or the pinned herdr-core that ships with the app. It never upgrades or replaces one you run yourself.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-in">
+    <p class="foot-brand"><img src="../../assets/paw.svg" alt="" width="22" height="22"> Sheprd · Apache-2.0 · <a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a></p>
+    <p>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (<code>herdr server</code> and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
+    <p class="fine">Statuses reflect release v20261102.2. Screenshots show the current build, still branded Herdr UI, with sample projects.</p>
+  </div>
+</footer>
+</body>
+</html>

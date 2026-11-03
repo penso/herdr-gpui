@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheprd · Your agents, wherever your machines are</title>
+<meta name="description" content="Sheprd is an open-source desktop app for running coding agents across your desk, your SSH and cloud machines, and your phone. macOS, Linux and Windows.">
+<!-- Social card direction (Everywhere): pale sky background, the constellation
+     illustration cropped around the laptop with three lit links (server, cloud,
+     phone), headline "Your agents, wherever your machines are." and the paw tile
+     bottom-left. 1200×630. Image not generated yet; the paw is a placeholder. -->
+<meta property="og:title" content="Sheprd · Your agents, wherever your machines are">
+<meta property="og:description" content="One native window for agents on your laptop, your servers, your cloud sandboxes and your phone.">
+<meta property="og:image" content="../../assets/paw-512.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="../../assets/paw.svg">
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/features.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Concept 07 · Everywhere</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="#main" aria-label="Sheprd home">
+      <img src="../../assets/paw.svg" alt="" width="32" height="32"><span>Sheprd</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav">
+        <li><a href="#desk">Desk</a></li>
+        <li><a href="#machines">Machines</a></li>
+        <li><a href="#pocket">Pocket</a></li>
+        <li><a href="#matrix">Platforms</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a class="nav-cta" href="#install">Install</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">For macOS, Linux and Windows · open source</p>
+        <h1 id="hero-title">Your agents, wherever your machines are.</h1>
+        <p class="lede">Sheprd is a native desktop app for running a team of coding agents. Start them on your laptop, a build box over SSH, a container or a cloud sandbox, keep them all in one window, and answer them from your phone.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#install">Install Sheprd</a>
+          <a class="btn btn-ghost" href="#machines">See how machines connect</a>
+        </div>
+        <ul class="hero-facts" aria-label="At a glance">
+          <li><strong>3</strong> desktop OSes, x86_64 and ARM64</li>
+          <li><strong>SSH, WSL, containers, cloud</strong> as devices</li>
+          <li><strong>Any phone</strong> through the remote-control web app</li>
+        </ul>
+      </div>
+
+      <figure class="constellation">
+        <span class="tag-illustration fig-tag">Illustration</span>
+        <svg viewBox="0 0 560 480" role="img" aria-labelledby="cst-title cst-desc">
+          <title id="cst-title">One computer running Sheprd, connected to many machines and devices</title>
+          <desc id="cst-desc">A laptop in the centre links to two SSH servers, a WSL distribution, a container, two cloud sandboxes, and a phone, a tablet and a watch.</desc>
+          <defs>
+            <linearGradient id="pawg" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="#f39a5a"/><stop offset="1" stop-color="#d65f2a"/></linearGradient>
+            <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+          </defs>
+          <circle cx="280" cy="240" r="210" fill="none" stroke="#cfe0ee" stroke-dasharray="2 8"/>
+          <circle cx="280" cy="240" r="140" fill="none" stroke="#dbe8f3"/>
+          <circle cx="280" cy="240" r="120" fill="url(#glow)"/>
+          <g class="links" fill="none" stroke-width="2" stroke-linecap="round">
+            <path class="ln" d="M280 240 L96 96"/>
+            <path class="ln" d="M280 240 L270 50"/>
+            <path class="ln" d="M280 240 L466 92"/>
+            <path class="ln" d="M280 240 L506 250"/>
+            <path class="ln ln-warm" d="M280 240 L452 404"/>
+            <path class="ln ln-warm" d="M280 240 L300 438"/>
+            <path class="ln ln-warm" d="M280 240 L150 410"/>
+            <path class="ln" d="M280 240 L58 262"/>
+          </g>
+          <!-- central laptop -->
+          <g transform="translate(206 186)">
+            <rect x="8" y="0" width="132" height="86" rx="8" fill="#1d2a3a"/>
+            <rect x="14" y="6" width="120" height="74" rx="4" fill="#0f1823"/>
+            <rect x="14" y="6" width="34" height="74" fill="#16212e"/>
+            <circle cx="22" cy="16" r="2.5" fill="#7fd1a3"/><rect x="28" y="14" width="16" height="4" rx="2" fill="#5d7690"/>
+            <circle cx="22" cy="28" r="2.5" fill="#f2c45a"/><rect x="28" y="26" width="14" height="4" rx="2" fill="#5d7690"/>
+            <circle cx="22" cy="40" r="2.5" fill="#ef8a8a"/><rect x="28" y="38" width="16" height="4" rx="2" fill="#5d7690"/>
+            <rect x="54" y="14" width="60" height="4" rx="2" fill="#7fb4e0"/>
+            <rect x="54" y="24" width="72" height="4" rx="2" fill="#41566c"/>
+            <rect x="54" y="34" width="48" height="4" rx="2" fill="#41566c"/>
+            <rect x="54" y="44" width="66" height="4" rx="2" fill="#f39a5a"/>
+            <path d="M0 90 H148 L140 100 H8 Z" fill="#9db3c6"/>
+          </g>
+          <g transform="translate(262 152)"><rect width="36" height="36" rx="9" fill="url(#pawg)"/>
+            <g fill="#fff8f0" transform="scale(.36)"><path d="M50 50 C60 50 70 60 72 68 C74 76 68 80 61 79 C56 78 54 76 50 76 C46 76 44 78 39 79 C32 80 26 76 28 68 C30 60 40 50 50 50Z"/><ellipse cx="27" cy="45" rx="7" ry="9" transform="rotate(-25 27 45)"/><ellipse cx="41" cy="31" rx="7" ry="10" transform="rotate(-8 41 31)"/><ellipse cx="59" cy="31" rx="7" ry="10" transform="rotate(8 59 31)"/><ellipse cx="73" cy="45" rx="7" ry="9" transform="rotate(25 73 45)"/></g></g>
+          <!-- nodes -->
+          <g class="node" transform="translate(96 96)"><circle r="30"/><rect x="-14" y="-14" width="28" height="9" rx="2" class="ink"/><rect x="-14" y="-2" width="28" height="9" rx="2" class="ink"/><circle cx="9" cy="-9.5" r="1.8" class="ok"/><circle cx="9" cy="2.5" r="1.8" class="ok"/><text y="48">build-box · SSH</text></g>
+          <g class="node" transform="translate(270 50)"><circle r="30"/><rect x="-14" y="-14" width="28" height="9" rx="2" class="ink"/><rect x="-14" y="-2" width="28" height="9" rx="2" class="ink"/><circle cx="9" cy="-9.5" r="1.8" class="warn"/><circle cx="9" cy="2.5" r="1.8" class="ok"/><text y="-40">gpu-runner · SSH</text></g>
+          <g class="node" transform="translate(466 92)"><circle r="30"/><path d="M-16 6 a10 10 0 0 1 6-18 a13 13 0 0 1 24 3 a8 8 0 0 1 2 15 Z" class="ink"/><text y="48">Coder · Azure</text></g>
+          <g class="node" transform="translate(506 250)"><circle r="30"/><path d="M-16 6 a10 10 0 0 1 6-18 a13 13 0 0 1 24 3 a8 8 0 0 1 2 15 Z" class="ink-soft"/><text y="48">More clouds</text><text y="62" class="sub">experimental</text></g>
+          <g class="node" transform="translate(58 262)"><circle r="30"/><rect x="-13" y="-12" width="26" height="22" rx="3" class="ink"/><path d="M-8 -4 l5 4 -5 4" stroke="#fff" stroke-width="2" fill="none"/><text y="48">Containers</text><text y="62" class="sub">Docker · Podman</text></g>
+          <g class="node node-warm" transform="translate(452 404)"><circle r="30"/><rect x="-9" y="-16" width="18" height="32" rx="4" class="ink"/><rect x="-6" y="-12" width="12" height="20" rx="1" fill="#fff8f0"/><text y="48">Any phone</text><text y="62" class="sub">web app · opt-in</text></g>
+          <g class="node node-warm" transform="translate(300 438)"><circle r="28"/><rect x="-15" y="-11" width="30" height="22" rx="3" class="ink"/><rect x="-12" y="-8" width="24" height="16" rx="1" fill="#fff8f0"/><text y="-38">iPhone · iPad</text><text y="44" class="sub">TestFlight beta</text></g>
+          <g class="node node-warm" transform="translate(150 410)"><circle r="26"/><rect x="-8" y="-10" width="16" height="20" rx="5" class="ink"/><rect x="-3" y="-15" width="6" height="5" class="ink"/><rect x="-3" y="10" width="6" height="5" class="ink"/><text y="44">Watch</text><text y="58" class="sub">experimental</text></g>
+        </svg>
+        <figcaption>Hosts shown are examples. Cloud devices, Teleport and Fan-out need a macOS or Linux client.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band" id="desk" aria-labelledby="desk-title">
+    <div class="wrap two">
+      <div>
+        <p class="kicker"><span class="num">01</span> Your desk</p>
+        <h2 id="desk-title">A native window on the computer you sit at.</h2>
+        <p>Sheprd is written in Rust on GPUI and draws every terminal cell itself, on macOS, Linux and Windows. Every agent CLI you already use runs in its own pane, with idle, working, blocked and done dots on every tab and sidebar row.</p>
+        <ul class="ticks">
+          <li><strong>Worktrees in the sidebar.</strong> Each checkout nests under its repository with its PR, diff counts and agent status.</li>
+          <li><strong>Overview.</strong> Agents waiting on you, failed runs and finished work, in one list.</li>
+          <li><strong>Sessions outlive the window.</strong> The terminal server owns every process; close or update the app and agents keep running.</li>
+        </ul>
+        <div class="agents" aria-label="Agent CLIs shown with brand icons">
+          <img src="../../assets/agent-claude.svg" alt="Claude Code" width="28" height="28">
+          <img src="../../assets/agent-codex.svg" alt="Codex" width="28" height="28">
+          <img src="../../assets/agent-gemini.svg" alt="Gemini CLI" width="28" height="28">
+          <img src="../../assets/agent-copilot.svg" alt="Copilot CLI" width="28" height="28">
+          <img src="../../assets/agent-opencode.svg" alt="OpenCode" width="28" height="28">
+          <span>and about 20 more</span>
+        </div>
+      </div>
+      <figure class="shot">
+        <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" alt="Sheprd window: a sidebar of workspaces and nested worktrees with agent status dots, an editor pane and two terminal panes running git log and tests.">
+        <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Workspaces, nested worktrees and agents with demo projects.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band band-sky" id="machines" aria-labelledby="machines-title">
+    <div class="wrap">
+      <p class="kicker"><span class="num">02</span> Your machines</p>
+      <h2 id="machines-title">Put the agent where the cores are.</h2>
+      <p class="section-lede">Every machine joins the same sidebar. The All Devices view shows spaces and agents across them, with a two-hour activity heatmap and load per host.</p>
+
+      <div class="hosts">
+        <article class="host">
+          <h3>Saved SSH machines</h3>
+          <p>One shared login per host, MFA hosts through your own ControlMaster, suggestions from your SSH config, Tailscale peers and Bonjour.</p>
+          <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">Windows: no connection sharing</span></p>
+        </article>
+        <article class="host">
+          <h3>WSL distributions</h3>
+          <p>Herdr inside WSL appears as a device, with load, plan usage, ports and checkpoints, and path-mapped file drops.</p>
+          <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">Windows</span></p>
+        </article>
+        <article class="host">
+          <h3>Containers per agent</h3>
+          <p>Docker or Podman containers with resource limits, no-new-privileges and idle auto-stop, built from your project's Dockerfile or devcontainer.</p>
+          <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">macOS and Linux clients</span></p>
+        </article>
+        <article class="host">
+          <h3>Coder and Azure</h3>
+          <p>Create Coder workspaces, Azure VMs or Container Apps sandboxes as devices, with setup scripts that install the agent CLIs.</p>
+          <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">macOS and Linux clients</span></p>
+        </article>
+        <article class="host">
+          <h3>More cloud sandboxes</h3>
+          <p>Daytona, Fly Sprites, Boat, Railway's temporary VMs and self-hosted OpenSandbox.</p>
+          <p class="meta"><span class="st st-experimental">Experimental</span> <span class="where">macOS and Linux clients</span></p>
+        </article>
+        <article class="host">
+          <h3>Ports, wherever they are</h3>
+          <p>Listening ports show up per workspace. Click one to open it in a browser tab, tunnelled from remote machines automatically.</p>
+          <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">Forwarding: macOS and Linux</span></p>
+        </article>
+      </div>
+
+      <h3 class="sub-h">Three ways to spread the work</h3>
+      <div class="moves" role="tablist" aria-label="Ways to spread work across machines">
+        <button role="tab" id="tab-dispatch" aria-controls="panel-dispatch" aria-selected="true">Smart Dispatch</button>
+        <button role="tab" id="tab-fanout" aria-controls="panel-fanout" aria-selected="false" tabindex="-1">Fan-out</button>
+        <button role="tab" id="tab-teleport" aria-controls="panel-teleport" aria-selected="false" tabindex="-1">Teleport</button>
+      </div>
+      <div class="move-panels">
+        <div role="tabpanel" id="panel-dispatch" aria-labelledby="tab-dispatch" class="move-panel">
+          <div>
+            <p class="big">Sheprd ranks connected machines by spare cores and load, then creates the worktree on the best one, shipping a Git bundle when the host does not have the branch.</p>
+            <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">macOS and Linux clients</span></p>
+          </div>
+          <figure class="shot shot-small">
+            <img src="../../assets/shots/system-load.png" width="1388" height="280" loading="lazy" alt="Status bar showing a CPU sparkline and memory meter for the selected machine.">
+            <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Load per machine feeds the ranking.</figcaption>
+          </figure>
+        </div>
+        <div role="tabpanel" id="panel-fanout" aria-labelledby="tab-fanout" class="move-panel" hidden>
+          <div>
+            <p class="big">Send one prompt to several agents and lanes, optionally spread across hosts. Compare what came back, keep one, and Sheprd removes the rest. A fan-out survives a crash.</p>
+            <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">macOS and Linux clients</span></p>
+          </div>
+          <ol class="lanes" aria-label="Example fan-out lanes (illustration)">
+            <li><img src="../../assets/agent-claude.svg" alt="" width="20" height="20"> claude · build-box <span class="dot dot-done">done</span></li>
+            <li><img src="../../assets/agent-codex.svg" alt="" width="20" height="20"> codex · gpu-runner <span class="dot dot-work">working</span></li>
+            <li><img src="../../assets/agent-gemini.svg" alt="" width="20" height="20"> gemini · local <span class="dot dot-done">done</span></li>
+            <li class="lanes-tag"><span class="tag-illustration">Illustration</span></li>
+          </ol>
+        </div>
+        <div role="tabpanel" id="panel-teleport" aria-labelledby="tab-teleport" class="move-panel" hidden>
+          <div>
+            <p class="big">Move a worktree to another machine with its commits, uncommitted changes, tabs, splits, running programs and agent sessions (Claude Code, Codex, opencode, pi, Copilot CLI, Letta), then teleport it back.</p>
+            <p class="meta"><span class="st st-shipped">Shipped</span> <span class="where">macOS and Linux clients · local, SSH and cloud hosts</span></p>
+          </div>
+          <figure class="shot shot-small">
+            <img src="../../assets/shots/teleport.png" width="1180" height="640" loading="lazy" alt="Teleport dialog moving the feat-multi-currency worktree from Local, listing build-box and gpu-runner reached over SSH.">
+            <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Choosing a destination.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band band-warm" id="pocket" aria-labelledby="pocket-title">
+    <div class="wrap two two-rev">
+      <div>
+        <p class="kicker"><span class="num">03</span> Your pocket</p>
+        <h2 id="pocket-title">Answer the agent from the sofa.</h2>
+        <p>Turn on remote control and your computer serves a small installable web app to your phone: chats, the questions agents are waiting on, and Web Push notifications. Approving one phone also enrols it on the SSH and cloud machines your computer uses.</p>
+        <ul class="pocket-list">
+          <li><span class="st st-optin">Opt-in</span><div><strong>Remote control web app</strong><span>Any modern phone browser, Android included. Off until you enable it.</span></div></li>
+          <li><span class="st st-optin">Opt-in</span><div><strong>Pairing approved on both screens</strong><span>QR plus a matching six-digit code, then Allow on the desktop. Its own certificate authority, over your LAN or Tailscale.</span></div></li>
+          <li><span class="st st-testflight">TestFlight beta</span><div><strong>Native iPhone and iPad app</strong><span>Merged home across computers, chat, dictation, a terminal with key rows, iPad split view. iOS 26. No public link yet.</span></div></li>
+          <li><span class="st st-experimental">Experimental</span><div><strong>Live Activities, widgets, Apple Watch, nearby pairing</strong><span>Built into TestFlight builds; not yet verified on real devices.</span></div></li>
+          <li><span class="st st-planned">Planned</span><div><strong>Native Android app</strong><span>Android uses the web app and Web Push today.</span></div></li>
+        </ul>
+      </div>
+      <figure class="phone-fig">
+        <span class="tag-illustration fig-tag">Illustration</span>
+        <div class="phone" aria-hidden="true">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <p class="ph-time">9:41</p>
+            <div class="ph-card ph-card-warn"><span class="ph-dot"></span><div><b>ledger-api</b><small>claude asks: run the migration?</small></div></div>
+            <div class="ph-actions"><span>Allow once</span><span>Deny</span></div>
+            <div class="ph-card"><span class="ph-dot ph-ok"></span><div><b>pixel-forge</b><small>codex finished · 3 files</small></div></div>
+            <div class="ph-card"><span class="ph-dot ph-work"></span><div><b>harbor-docs</b><small>pi is working · 4m</small></div></div>
+          </div>
+        </div>
+        <figcaption>A sketch of the phone flow with demo projects. The real web app and iOS app differ in detail.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band" id="matrix" aria-labelledby="matrix-title">
+    <div class="wrap">
+      <p class="kicker"><span class="num">04</span> Platforms</p>
+      <h2 id="matrix-title">What works where, honestly.</h2>
+      <p class="section-lede">Most of Sheprd works on all three desktop systems. These are the differences today.</p>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Platform matrix, scrolls horizontally">
+        <table class="matrix">
+          <caption class="sr-only">Capabilities by desktop platform</caption>
+          <thead><tr><th scope="col">Capability</th><th scope="col">macOS</th><th scope="col">Linux</th><th scope="col">Windows</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Terminals, agents, worktrees, review, checkpoints, orchestrator, usage, mods, automations, CLI</th><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+            <tr><th scope="row">Browser tabs, page annotations, VS Code and px0 tabs</th><td class="y">Yes</td><td class="n">System browser instead</td><td class="y">Yes</td></tr>
+            <tr><th scope="row">Teleport, Fan-out, Smart Dispatch to other hosts</th><td class="y">Yes</td><td class="y">Yes</td><td class="n">Not yet</td></tr>
+            <tr><th scope="row">Cloud devices and containers</th><td class="y">Yes</td><td class="y">Yes</td><td class="n">Not yet</td></tr>
+            <tr><th scope="row">SSH machines</th><td class="y">Yes</td><td class="y">Yes</td><td class="p">Yes, without connection sharing, uploads or port forwarding</td></tr>
+            <tr><th scope="row">WSL distributions as devices</th><td class="na">—</td><td class="na">—</td><td class="y">Yes</td></tr>
+            <tr><th scope="row">Dock or taskbar badge</th><td class="y">Dock</td><td class="n">None</td><td class="y">Taskbar</td></tr>
+            <tr><th scope="row">Launch at login</th><td class="n">Not yet</td><td class="n">Not yet</td><td class="y">Yes</td></tr>
+            <tr><th scope="row">Remote control daemon for phones</th><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="band band-sky" id="install" aria-labelledby="install-title">
+    <div class="wrap">
+      <p class="kicker"><span class="num">05</span> Install</p>
+      <h2 id="install-title">Pick the device in front of you.</h2>
+      <p class="section-lede">Releases are still published under the Herdr UI name from the current channel below. Sheprd-named downloads at <code>github.com/sheprd-labs/sheprd</code> are a future destination.</p>
+      <div class="install">
+        <div class="os-tabs" role="tablist" aria-label="Choose a platform">
+          <button role="tab" id="os-mac" aria-controls="os-mac-p" aria-selected="true">macOS</button>
+          <button role="tab" id="os-linux" aria-controls="os-linux-p" aria-selected="false" tabindex="-1">Linux</button>
+          <button role="tab" id="os-win" aria-controls="os-win-p" aria-selected="false" tabindex="-1">Windows</button>
+          <button role="tab" id="os-nix" aria-controls="os-nix-p" aria-selected="false" tabindex="-1">Nix</button>
+          <button role="tab" id="os-phone" aria-controls="os-phone-p" aria-selected="false" tabindex="-1">Phone</button>
+        </div>
+        <div role="tabpanel" id="os-mac-p" aria-labelledby="os-mac" class="os-panel">
+          <p class="req">macOS 14.2 Sonoma or newer, Apple silicon or Intel (universal, signed and notarized). <span class="chan">Current channel</span></p>
+          <div class="cmd"><code>brew install penso/tap/herdr-gpui</code><button type="button" class="copy" data-copy="brew install penso/tap/herdr-gpui">Copy</button></div>
+        </div>
+        <div role="tabpanel" id="os-linux-p" aria-labelledby="os-linux" class="os-panel" hidden>
+          <p class="req">x86_64 and ARM64; installs a .deb, .rpm or Arch package. Needs glibc 2.39+ and a Vulkan driver. <span class="chan">Current channel</span></p>
+          <div class="cmd"><code>curl -fsSL https://herdrui.dev/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">Copy</button></div>
+        </div>
+        <div role="tabpanel" id="os-win-p" aria-labelledby="os-win" class="os-panel" hidden>
+          <p class="req">x86_64 and ARM64, per-user, no administrator rights. PowerShell: <span class="chan">Current channel</span></p>
+          <div class="cmd"><code>irm https://herdrui.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://herdrui.dev/install.ps1 | iex">Copy</button></div>
+        </div>
+        <div role="tabpanel" id="os-nix-p" aria-labelledby="os-nix" class="os-panel" hidden>
+          <p class="req">Builds from source with the flake, x86_64 and ARM64 Linux. Never updates itself. <span class="chan">Current channel</span></p>
+          <div class="cmd"><code>nix run github:penso/herdr-gpui</code><button type="button" class="copy" data-copy="nix run github:penso/herdr-gpui">Copy</button></div>
+        </div>
+        <div role="tabpanel" id="os-phone-p" aria-labelledby="os-phone" class="os-panel" hidden>
+          <p class="req"><strong>Any phone:</strong> enable Settings › Remote control on your computer, scan the QR code and approve on both screens. The web app installs to your home screen.</p>
+          <p class="req"><strong>iPhone and iPad:</strong> native app in TestFlight beta for internal testers; no public link yet. Or build it from source with your own Apple team.</p>
+        </div>
+        <p class="gh"><a class="btn btn-ghost" href="https://github.com/sheprd-labs">GitHub · sheprd-labs</a> <span class="future">github.com/sheprd-labs/sheprd (future)</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <p class="kicker"><span class="num">06</span> Everything</p>
+      <h2 id="features-title">The full feature directory.</h2>
+      <p class="section-lede">Every capability with its status and platform caveats. Open an area, or search.</p>
+      <div id="directory" class="directory"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-brand"><img src="../../assets/paw.svg" alt="" width="28" height="28"><span>Sheprd</span></div>
+    <p class="attrib">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
+    <p class="foot-links"><a href="https://github.com/sheprd-labs">GitHub</a> · <a href="#features">Features</a> · <a href="#install">Install</a> · <a href="../../index.html">Gallery</a></p>
+  </div>
+</footer>
+</body>
+</html>

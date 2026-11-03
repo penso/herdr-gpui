@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheprd — Every agent. Every worktree. Every machine. One window.</title>
+<meta name="description" content="Sheprd is an open-source control room for coding agents: status for every agent, worktree and machine, dispatch, fan-out, review and checkpoints, on macOS, Linux and Windows.">
+<!-- Social card direction (Control Room): near-black card, monospace
+     headline, a cropped strip of the agent board with four colored status
+     dots, small orange paw tile bottom-left. -->
+<meta property="og:title" content="Sheprd — the control room for your coding agents">
+<meta property="og:description" content="Every agent. Every worktree. Every machine. One native window. Open source.">
+<meta property="og:image" content="../../assets/paw-512.png">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0e0f12">
+<link rel="icon" href="../../assets/paw.svg">
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/features.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Concept 02 · Control Room</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+
+<header class="topbar">
+  <a class="brand" href="#main" aria-label="Sheprd, back to top"><img src="../../assets/paw.svg" alt="" width="26" height="26"><span>sheprd</span></a>
+  <nav aria-label="Sections">
+    <a href="#loops">loops</a>
+    <a href="#machines">machines</a>
+    <a href="#matrix">platforms</a>
+    <a href="#directory-h">directory</a>
+    <a class="cta-mini" href="#install">install</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="led" aria-hidden="true"></span> open source · macOS · Linux · Windows</p>
+      <h1 id="hero-h">Every agent.<br>Every worktree.<br>Every machine.<br><span>One window.</span></h1>
+      <p class="lede">Sheprd is a native control room for coding agents. Claude Code, Codex, Gemini, OpenCode, Copilot and any other agent CLI run side by side in their own worktrees, on your laptop, your SSH boxes or cloud machines, and every one of them reports in.</p>
+      <div class="ctas">
+        <a class="btn" href="#install">Install</a>
+        <a class="btn btn-line" href="https://github.com/sheprd-labs">GitHub</a>
+      </div>
+      <ul class="agents" aria-label="Agents with native icons">
+        <li><img src="../../assets/agent-claude.svg" alt="Claude Code" width="20" height="20"></li>
+        <li><img src="../../assets/agent-codex.svg" alt="Codex" width="20" height="20"></li>
+        <li><img src="../../assets/agent-gemini.svg" alt="Gemini CLI" width="20" height="20"></li>
+        <li><img src="../../assets/agent-opencode.svg" alt="OpenCode" width="20" height="20"></li>
+        <li><img src="../../assets/agent-copilot.svg" alt="Copilot CLI" width="20" height="20"></li>
+        <li class="more">+ ~20 more</li>
+      </ul>
+    </div>
+
+    <figure class="board" aria-labelledby="board-cap">
+      <div class="board-head">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="board-title">agents · all devices</span>
+        <span class="tag-illustration">Illustration</span>
+      </div>
+      <table class="board-table">
+        <caption class="sr-only">Illustrative agent board with sample workspaces</caption>
+        <thead><tr><th scope="col">status</th><th scope="col">worktree</th><th scope="col">agent</th><th scope="col">device</th><th scope="col" class="r">time</th></tr></thead>
+        <tbody id="board-rows">
+          <tr data-s="working"><td><span class="s"></span><span class="sl">working</span></td><td>feat/multi-currency</td><td>claude</td><td>local</td><td class="r t">04:12</td></tr>
+          <tr data-s="blocked"><td><span class="s"></span><span class="sl">blocked</span></td><td>fix/rounding</td><td>codex</td><td>build-box</td><td class="r t">00:47</td></tr>
+          <tr data-s="done"><td><span class="s"></span><span class="sl">done</span></td><td>docs/http-surface</td><td>pi</td><td>local</td><td class="r t">12:03</td></tr>
+          <tr data-s="working"><td><span class="s"></span><span class="sl">working</span></td><td>agent/42-paginate</td><td>gemini</td><td>gpu-runner</td><td class="r t">01:58</td></tr>
+          <tr data-s="idle"><td><span class="s"></span><span class="sl">idle</span></td><td>pixel-forge/main</td><td>opencode</td><td>coder-ws</td><td class="r t">—</td></tr>
+        </tbody>
+      </table>
+      <ol class="log" id="board-log" aria-label="Recent events (illustration)">
+        <li><b>build-box</b> codex is asking a question in fix/rounding</li>
+        <li><b>local</b> checkpoint saved · feat/multi-currency · turn 14</li>
+        <li><b>local</b> pi finished docs/http-surface · review ready</li>
+      </ol>
+      <figcaption id="board-cap">Hand-drawn board with sample data, showing the four statuses Sheprd reads from the terminal server: idle, working, blocked, done. <span id="motion-note"></span></figcaption>
+    </figure>
+  </section>
+
+  <section class="kpis" aria-label="Sheprd by the numbers">
+    <dl>
+      <div><dt>features indexed</dt><dd data-feature-count>68</dd></div>
+      <div><dt>desktop OSes</dt><dd>3</dd><dd class="fine">x86_64 + ARM64</dd></div>
+      <div><dt>AI plans tracked</dt><dd>85+</dd><dd class="fine">usage providers</dd></div>
+      <div><dt>CLI commands</dt><dd>~60</dd><dd class="fine">for agents, --json</dd></div>
+      <div><dt>Rust tests</dt><dd>8,493</dd><dd class="fine">at 8e03793da</dd></div>
+      <div><dt>license</dt><dd>Apache-2.0</dd></div>
+    </dl>
+  </section>
+
+  <section class="real" aria-labelledby="real-h">
+    <div class="sec-head">
+      <p class="idx">[00]</p>
+      <h2 id="real-h">The real window</h2>
+      <p>Sidebar of workspaces and nested worktrees, agents grouped below, terminals natively painted, usage and load in the status bar.</p>
+    </div>
+    <figure class="shot">
+      <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" loading="lazy" alt="The Sheprd window: workspaces with nested worktrees, an agents list with Claude, Codex and Pi, an editor pane and terminals showing git log and a passing test run.">
+      <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Demo repositories: ledger-api, pixel-forge, harbor-docs.</figcaption>
+    </figure>
+  </section>
+
+  <section class="loops" id="loops" aria-labelledby="loops-h">
+    <div class="sec-head">
+      <p class="idx">[01]</p>
+      <h2 id="loops-h">Six loops you run every day</h2>
+    </div>
+    <div class="panels">
+      <article class="panel">
+        <h3><span>01</span> Triage</h3>
+        <p>Overview lists agents waiting on you, failed runs and finished work. Snooze, pin, reopen a finished Claude, Codex or opencode session.</p>
+        <p class="kv"><span>cmd</span> Overview · status bar usage · Devices heatmap</p>
+      </article>
+      <article class="panel">
+        <h3><span>02</span> Dispatch</h3>
+        <p>Issues from GitHub, GitLab and Beads. Pick one, choose an agent and model, get a worktree with the agent already running.</p>
+        <p class="kv"><span>cmd</span> Issues → Dispatch agent</p>
+      </article>
+      <article class="panel">
+        <h3><span>03</span> Fan out</h3>
+        <p>One prompt across several agents and machines. Compare, keep one, the rest are cleaned up. Survives a crash.</p>
+        <p class="kv"><span>where</span> macOS and Linux clients</p>
+      </article>
+      <article class="panel">
+        <h3><span>04</span> Review</h3>
+        <p>PR-style diff of uncommitted or branch changes. Notes on lines go back to the agent. Commit, push, open the PR from the title bar.</p>
+        <p class="kv"><span>where</span> local checkouts</p>
+      </article>
+      <article class="panel">
+        <h3><span>05</span> Roll back</h3>
+        <p>A hidden Git checkpoint at every agent turn, newest 50 per branch. Diff any of them, restore one in a click.</p>
+        <p class="kv"><span>cmd</span> herdr-gpui checkpoint list|diff|restore</p>
+      </article>
+      <article class="panel">
+        <h3><span>06</span> Answer from anywhere</h3>
+        <p>Your computer serves a phone web app: chats, questions, push. Pairing approved on both screens, its own CA, LAN or Tailscale.</p>
+        <p class="kv"><span>status</span> <span class="st st-optin">Opt-in</span> <span class="st st-testflight">iOS TestFlight beta</span></p>
+      </article>
+    </div>
+    <div class="pair">
+      <figure class="shot">
+        <img src="../../assets/shots/review.jpg" width="1800" height="1125" loading="lazy" alt="Review changes tab with a diff of src/ledger.rs and two numbered review notes ready to send to the agent.">
+        <figcaption><span class="tag-screenshot">Real screenshot</span> Review Changes with notes for the agent.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="../../assets/shots/browser-annotate.jpg" width="1800" height="1125" loading="lazy" alt="Browser tab with annotations pinned to a button and a card on a local preview page.">
+        <figcaption><span class="tag-screenshot">Real screenshot</span> Page annotations (macOS and Windows).</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="machines" id="machines" aria-labelledby="machines-h">
+    <div class="sec-head">
+      <p class="idx">[02]</p>
+      <h2 id="machines-h">Machines are just rows</h2>
+      <p>Local, SSH, WSL, containers and cloud sit in one sidebar with load, ports and sessions. Work moves between them.</p>
+    </div>
+    <div class="machine-grid">
+      <ul class="hosts">
+        <li><b>local</b><span>laptop · CPU, memory, disk, uptime</span><span class="st st-shipped">Shipped</span></li>
+        <li><b>ssh</b><span>saved hosts, one shared login each</span><span class="st st-shipped">Shipped</span></li>
+        <li><b>wsl</b><span>distributions as devices</span><span class="st st-shipped">Windows</span></li>
+        <li><b>containers</b><span>Docker or Podman, one per agent</span><span class="st st-shipped">Shipped</span></li>
+        <li><b>coder · azure</b><span>created from Settings</span><span class="st st-shipped">Shipped</span></li>
+        <li><b>daytona · sprites · boat · railway · opensandbox</b><span>cloud sandboxes</span><span class="st st-experimental">Experimental</span></li>
+      </ul>
+      <figure class="shot">
+        <img src="../../assets/shots/teleport.png" width="1180" height="640" loading="lazy" alt="Teleport dialog moving a worktree from Local to build-box or gpu-runner over SSH.">
+        <figcaption><span class="tag-screenshot">Real screenshot</span> Teleport moves a worktree, its programs and agent sessions to another machine. Smart Dispatch picks the least-loaded one. Both from macOS and Linux clients; cloud devices are not available from Windows clients.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="matrix" id="matrix" aria-labelledby="matrix-h">
+    <div class="sec-head">
+      <p class="idx">[03]</p>
+      <h2 id="matrix-h">Platform matrix</h2>
+      <p>Where the platforms differ today. Everything else works on all three.</p>
+    </div>
+    <div class="table-wrap" tabindex="0" role="region" aria-labelledby="matrix-h">
+      <table class="mtx">
+        <thead><tr><th scope="col">capability</th><th scope="col">macOS</th><th scope="col">Linux</th><th scope="col">Windows</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Browser tabs, annotations, VS Code, px0</th><td class="y">yes</td><td class="n">system browser</td><td class="y">yes</td></tr>
+          <tr><th scope="row">Teleport, Fan-out, Smart Dispatch</th><td class="y">yes</td><td class="y">yes</td><td class="n">not yet</td></tr>
+          <tr><th scope="row">Cloud devices</th><td class="y">yes</td><td class="y">yes</td><td class="n">not yet</td></tr>
+          <tr><th scope="row">SSH machines</th><td class="y">yes</td><td class="y">yes</td><td class="p">no sharing, uploads, forwarding</td></tr>
+          <tr><th scope="row">WSL devices</th><td>—</td><td>—</td><td class="y">yes</td></tr>
+          <tr><th scope="row">Dock / taskbar badge</th><td class="y">Dock</td><td class="n">none</td><td class="y">taskbar</td></tr>
+          <tr><th scope="row">Launch at login</th><td class="n">not yet</td><td class="n">not yet</td><td class="y">yes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="dir" aria-labelledby="directory-h">
+    <div class="sec-head">
+      <p class="idx">[04]</p>
+      <h2 id="directory-h">Feature directory</h2>
+      <p>Every feature with its status. Filter by status or search by name, platform or area.</p>
+    </div>
+    <div id="directory"></div>
+  </section>
+
+  <section class="install" id="install" aria-labelledby="install-h">
+    <div class="sec-head">
+      <p class="idx">[05]</p>
+      <h2 id="install-h">Install</h2>
+      <p>Current channel: releases are still published as Herdr UI from penso/herdr-gpui. Sheprd-named releases at <em>github.com/sheprd-labs/sheprd (future)</em> come next.</p>
+    </div>
+    <div class="cmds">
+      <div class="cmd"><p class="os">macOS 14.2+ <small>universal</small></p><pre><code>brew install penso/tap/herdr-gpui</code></pre><button type="button" class="copy">Copy</button></div>
+      <div class="cmd"><p class="os">Linux <small>x86_64 · ARM64 · APT, DNF, pacman</small></p><pre><code>curl -fsSL https://herdrui.dev/install.sh | sh</code></pre><button type="button" class="copy">Copy</button></div>
+      <div class="cmd"><p class="os">Windows <small>x86_64 · ARM64 · PowerShell</small></p><pre><code>irm https://herdrui.dev/install.ps1 | iex</code></pre><button type="button" class="copy">Copy</button></div>
+      <div class="cmd"><p class="os">Nix</p><pre><code>nix run github:penso/herdr-gpui</code></pre><button type="button" class="copy">Copy</button></div>
+    </div>
+    <p class="phones"><b>iPhone &amp; iPad:</b> TestFlight beta, no public link yet; or build from source. <b>Any phone:</b> the remote-control web app your computer serves once you enable it.</p>
+    <p class="sr-only" aria-live="polite" id="copy-status"></p>
+  </section>
+</main>
+
+<footer class="foot">
+  <div>
+    <p class="brand"><img src="../../assets/paw.svg" alt="" width="22" height="22"><span>sheprd</span></p>
+    <p>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (<code>herdr server</code> and herdr-core). It is not made, endorsed or supported by the Herdr project. About Herdr: <a href="https://herdr.dev">herdr.dev</a>.</p>
+    <p><a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a> · <em>github.com/sheprd-labs/sheprd (future)</em> · <a href="../../FEATURE-INVENTORY.md">source-backed inventory</a></p>
+    <p class="fine">Numbers: 8,493 Rust test functions and ~380k lines of production Rust across 26 crates, measured with tokei over tracked first-party files at commit 8e03793da.</p>
+  </div>
+</footer>
+</body>
+</html>

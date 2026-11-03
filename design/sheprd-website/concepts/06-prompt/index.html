@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sheprd --help · Sheprd, the workbench for coding agents</title>
+<meta name="description" content="Sheprd is an open-source desktop app that runs coding agents in parallel worktrees across your machines, and a CLI your agents can drive.">
+<meta property="og:title" content="$ sheprd --help">
+<meta property="og:description" content="Run a team of coding agents from one native window. And let them drive it from the command line.">
+<meta property="og:image" content="../../assets/paw-512.png">
+<!-- Social-card direction (Prompt): a near-black 1200x630 terminal frame. Line 1:
+     "$ sheprd --help" in amber with a block cursor. Below, three lines of output
+     ("run a team of coding agents", "from one native window", "macOS · Linux · Windows")
+     and the small cream paw tile in the top-right corner. No screenshots: it should
+     read like a shell, at thumbnail size. -->
+<link rel="icon" href="../../assets/paw.svg">
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/features.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Concept 06 · Prompt</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+
+<div class="term">
+  <header class="chrome">
+    <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+    <a class="title" href="#main"><img src="../../assets/paw.svg" alt="" width="18" height="18"> sheprd — ~/agents — zsh</a>
+    <a class="gh" href="https://github.com/sheprd-labs">github.com/sheprd-labs</a>
+  </header>
+
+  <main id="main">
+    <!-- 0: help -->
+    <section id="help" class="block" aria-labelledby="h-help">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> <span class="typed" style="--n:13">sheprd --help</span></p>
+      <div class="out reveal">
+        <div class="banner">
+          <img src="../../assets/paw.svg" alt="Sheprd paw mark" width="88" height="88">
+          <div>
+            <h1 id="h-help"><span class="amber">Sheprd</span> runs a team of coding agents from one native window.</h1>
+            <p class="dim">Open source · Rust + GPUI · macOS, Linux, Windows · x86_64 and ARM64</p>
+          </div>
+        </div>
+<pre class="usage" tabindex="0" aria-label="Sheprd overview, formatted as command help"><span class="hd">USAGE</span>
+  Open the app. Run every agent CLI you already use, side by side.
+
+<span class="hd">WHAT IT KEEPS IN ONE WINDOW</span>
+  <span class="g">workspaces</span>   every checkout and linked worktree, with agent status
+  <span class="g">agents</span>       Claude Code, Codex, Gemini, Copilot, OpenCode, any terminal agent
+  <span class="g">machines</span>     local, SSH, WSL, containers, cloud sandboxes
+  <span class="g">issues</span>       GitHub, GitLab and Beads, dispatched straight to agents
+  <span class="g">review</span>       diffs with notes the agent receives, then commit, push, PR
+  <span class="g">browser</span>      previews beside the terminal, annotated for the agent
+  <span class="g">phone</span>        remote control from any phone browser (opt-in)
+
+<span class="hd">SEE ALSO</span>
+  <a href="#overview">overview</a>  <a href="#fanout">fan-out</a>  <a href="#review">review</a>  <a href="#checkpoint">checkpoint</a>  <a href="#teleport">teleport</a>  <a href="#browser">browser</a>  <a href="#features">features</a>  <a href="#install">install</a></pre>
+        <p class="note"><span class="hash">#</span> Today the app and its CLI ship as <code>herdr-gpui</code> (Herdr UI). The command name under Sheprd is not decided. Every command below is a real one from <code>docs/cli.md</code>.</p>
+        <div class="actions">
+          <a class="key" href="#install"><kbd>↵</kbd> install</a>
+          <a class="key key-ghost" href="#features"><kbd>/</kbd> search features</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1: overview -->
+    <section id="overview" class="block" aria-labelledby="h-ov">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> herdr-gpui ui panel overview</p>
+      <div class="out">
+        <h2 id="h-ov"><span class="amber">Overview:</span> what needs you, on every machine.</h2>
+        <p>Agents waiting on you, failed runs, finished work to review, and what is still working. Snooze, settle, pin, or reopen a finished Claude, Codex or opencode session.</p>
+<pre class="sample" tabindex="0" aria-label="Sample overview output"><span class="dim">STATE      WORKSPACE             AGENT    HOST</span>
+<span class="r">● blocked</span>  feat/multi-currency   claude   local
+<span class="y">● working</span>  harbor-docs           pi       build-box
+<span class="gr">● done</span>     fix/rounding          codex    local
+<span class="dim">○ idle</span>     pixel-forge           claude   gpu-runner</pre>
+        <p class="caption"><span class="tag-illustration">Illustration</span> sample output; the app shows this as a panel, not a table.</p>
+      </div>
+    </section>
+
+    <!-- 2: fan-out -->
+    <section id="fanout" class="block" aria-labelledby="h-fan">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/ledger-api ❯</span> herdr-gpui fan-out "add a Currency type" --agent claude:2 --agent codex</p>
+      <div class="out">
+        <h2 id="h-fan"><span class="amber">Fan-out:</span> one prompt, several agents, keep the best.</h2>
+        <p>Opens the fan-out dialog prefilled; you start it there. Each lane gets its own worktree, optionally on another machine. Compare, keep one, and the rest are cleaned up. <a href="#dispatch">Smart Dispatch</a> picks the least-loaded host.</p>
+        <p class="caveat">macOS and Linux clients</p>
+      </div>
+    </section>
+
+    <!-- 3: review -->
+    <section id="review" class="block" aria-labelledby="h-rev">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/ledger-api ❯</span> herdr-gpui review</p>
+      <div class="out">
+        <h2 id="h-rev"><span class="amber">Review:</span> notes on the diff go straight back to the agent.</h2>
+        <p>PR-style review of uncommitted or branch changes, unified or split. Then commit, push, create and merge the pull request from the title-bar Git menu.</p>
+        <figure class="shot">
+          <img src="../../assets/shots/review.jpg" width="1800" height="1125" loading="lazy" alt="Review Changes tab: a diff of src/ledger.rs with two numbered notes for the agent and a Send to agent button.">
+          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 4: checkpoints -->
+    <section id="checkpoint" class="block" aria-labelledby="h-cp">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/ledger-api ❯</span> herdr-gpui checkpoint list</p>
+      <div class="out">
+        <h2 id="h-cp"><span class="amber">Checkpoints:</span> a snapshot at every agent turn.</h2>
+<pre class="sample" tabindex="0" aria-label="Sample checkpoint list"><span class="dim">ID        WHEN      LABEL</span>
+<span class="g">a41c9e2</span>   2m ago    claude finished a turn
+<span class="g">7d02b11</span>   6m ago    claude started a turn
+<span class="g">c95fa30</span>   14m ago   before rebase</pre>
+        <p class="caption"><span class="tag-illustration">Illustration</span> sample output.</p>
+        <p>Hidden Git refs, newest 50 per branch, on by default. <code>checkpoint diff</code> shows what changed; <code>checkpoint restore</code> opens the dialog, and you confirm there.</p>
+      </div>
+    </section>
+
+    <!-- 5: teleport -->
+    <section id="teleport" class="block" aria-labelledby="h-tp">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/ledger-api ❯</span> herdr-gpui teleport --to gpu-runner</p>
+      <div class="out split">
+        <div>
+          <h2 id="h-tp"><span class="amber">Teleport:</span> move a live worktree to a bigger machine.</h2>
+          <p>Commits, uncommitted changes, tabs, splits, running programs and agent sessions move together. Teleport back later. The command only opens the dialog; you confirm there.</p>
+          <p class="caveat">macOS and Linux clients · local, SSH and cloud hosts</p>
+        </div>
+        <figure class="shot shot-small">
+          <img src="../../assets/shots/teleport.png" width="1180" height="640" loading="lazy" alt="Teleport dialog listing SSH machines build-box and gpu-runner.">
+          <figcaption><span class="tag-screenshot">Real screenshot</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 6: machines -->
+    <section id="dispatch" class="block" aria-labelledby="h-host">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> herdr-gpui host list</p>
+      <div class="out">
+        <h2 id="h-host"><span class="amber">Machines:</span> local, SSH, WSL, containers, cloud.</h2>
+<pre class="sample" tabindex="0" aria-label="Sample host list"><span class="dim">ID                 KIND        LOAD</span>
+local              this Mac    27%
+ssh:build-box      SSH         12%
+ssh:gpu-runner     SSH         64%
+coder:dev-3        Coder        4%</pre>
+        <p class="caption"><span class="tag-illustration">Illustration</span> sample output.</p>
+        <p>Saved SSH hosts share one login each. Nearby hosts are suggested from your SSH config, Tailscale and Bonjour. Agents can ask for machines too: <code>herdr-gpui cloud create coder --count 3</code> asks you once in the window.</p>
+        <p class="caveat">Cloud devices: macOS and Linux clients · WSL devices: Windows · Daytona, Sprites, Boat, Railway, OpenSandbox: experimental</p>
+      </div>
+    </section>
+
+    <!-- 7: browser -->
+    <section id="browser" class="block" aria-labelledby="h-br">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/harbor-docs ❯</span> herdr-gpui browser open http://localhost:4173</p>
+      <p class="cmd cmd-2"><span class="ps1" aria-hidden="true">~/harbor-docs ❯</span> herdr-gpui browser feedback --wait 600</p>
+      <div class="out">
+        <h2 id="h-br"><span class="amber">Browser:</span> the agent opens the page, you point at what to fix.</h2>
+        <p>Pages open beside the terminal. Pin notes to elements, text or regions and press Send to agent; the agent waiting on <code>feedback</code> gets them, screenshots included on macOS.</p>
+        <figure class="shot">
+          <img src="../../assets/shots/browser-annotate.jpg" width="1800" height="1125" loading="lazy" alt="A localhost page in a browser tab with two numbered notes on a button and a card, and a notes panel.">
+          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+        </figure>
+        <p class="caveat">macOS and Windows · Linux opens your system browser</p>
+      </div>
+    </section>
+
+    <!-- 8: usage -->
+    <section id="usage" class="block" aria-labelledby="h-us">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> herdr-gpui usage</p>
+      <div class="out split">
+        <div>
+          <h2 id="h-us"><span class="amber">Usage:</span> plan limits for 85+ AI services.</h2>
+          <p>The services closest to their limits sit in the status bar; click one for details. Read on the selected host, so a remote machine's sign-ins count too. <code>herdr-gpui system</code> prints CPU, memory, disk and uptime.</p>
+        </div>
+        <figure class="shot shot-small">
+          <img src="../../assets/shots/usage.png" width="1000" height="800" loading="lazy" alt="Codex usage panel: weekly 97% left, resets in 4 days 6 hours.">
+          <figcaption><span class="tag-screenshot">Real screenshot</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 9: remote -->
+    <section id="remote" class="block" aria-labelledby="h-rm">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> herdr-gpui remote pair</p>
+      <div class="out">
+        <h2 id="h-rm"><span class="amber">Remote:</span> answer your agents from a phone.</h2>
+        <p>Your computer serves an installable web app: chats, the questions agents wait on, and push notifications. Pairing is approved on both screens, over the LAN or Tailscale, with the app's own certificate authority.</p>
+        <p class="caveat">Opt-in, any phone browser · native iPhone and iPad app: TestFlight beta · Live Activities, widgets, Watch: experimental</p>
+      </div>
+    </section>
+
+    <!-- 10: extend -->
+    <section id="extend" class="block" aria-labelledby="h-ex">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> herdr-gpui automation approve nightly.luau</p>
+      <div class="out">
+        <h2 id="h-ex"><span class="amber">Automations and mods:</span> Luau, sandboxed, approved by you.</h2>
+<pre class="sample code" tabindex="0" aria-label="Automation script excerpt from docs/automations.md"><span class="dim">-- nightly.luau (from docs/automations.md, abridged)</span>
+herdr.caps { agents_per_run = <span class="y">2</span>, tokens_per_day = <span class="y">2_000_000</span>, wall_time = <span class="g">"3h"</span> }
+
+herdr.at(<span class="g">"03:00"</span>, { tz = <span class="g">"Europe/Paris"</span> }, <span class="amber">function</span>(fire)
+  pull(<span class="g">"main"</span>)
+  <span class="amber">local</span> v = sh(<span class="g">"just ci"</span>, { check = <span class="amber">false</span> })
+  <span class="amber">if not</span> v.ok <span class="amber">then</span>
+    agent { harness = <span class="g">"claude"</span>, prompt = <span class="g">"Nightly validation failed. Fix it."</span> }
+  <span class="amber">end</span>
+<span class="amber">end</span>)</pre>
+        <p>The command approves nothing: it opens the plan, caps and content hash in the app for you to approve. Mods add status items, sidebar sections, panels, palette commands or whole apps, and reload live.</p>
+      </div>
+    </section>
+
+    <!-- 11: features -->
+    <section id="features" class="block" aria-labelledby="h-ft">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> ls -l ~/sheprd/features | grep -i <label class="grep"><span class="sr-only">Filter features</span><input id="q" type="search" placeholder="anything" autocomplete="off" spellcheck="false"></label></p>
+      <div class="out">
+        <h2 id="h-ft" class="sr-only">Feature directory</h2>
+        <div class="flags" role="group" aria-label="Filter by status">
+          <button type="button" data-status="all" aria-pressed="true">--all</button>
+          <button type="button" data-status="shipped" aria-pressed="false">--shipped</button>
+          <button type="button" data-status="optin" aria-pressed="false">--opt-in</button>
+          <button type="button" data-status="experimental" aria-pressed="false">--experimental</button>
+          <button type="button" data-status="testflight" aria-pressed="false">--testflight</button>
+          <button type="button" data-status="planned" aria-pressed="false">--planned</button>
+        </div>
+        <p class="dim" id="total" aria-live="polite"></p>
+        <div id="ls" class="ls"></div>
+        <noscript><p>The listing needs JavaScript. See FEATURE-INVENTORY.md in the repository.</p></noscript>
+        <p class="legend dim">status column: <span class="g">shipped</span> in releases, on by default · <span class="y">opt-in</span> in releases, off by default · <span class="r">experimental</span> · <span class="b">testflight</span> iOS beta · <span class="dim">planned</span> not built</p>
+      </div>
+    </section>
+
+    <!-- 12: install -->
+    <section id="install" class="block" aria-labelledby="h-in">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> cat INSTALL</p>
+      <div class="out">
+        <h2 id="h-in"><span class="amber">Install</span> <span class="dim">— current channel, still named Herdr UI</span></h2>
+        <div class="installs">
+          <div class="inst"><p class="dim"># macOS 14.2+, universal</p><div class="line"><code>brew install penso/tap/herdr-gpui</code><button type="button" class="copy" data-copy="brew install penso/tap/herdr-gpui">copy</button></div></div>
+          <div class="inst"><p class="dim"># Linux x86_64/ARM64 · APT, DNF, pacman</p><div class="line"><code>curl -fsSL https://herdrui.dev/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">copy</button></div></div>
+          <div class="inst"><p class="dim"># Windows x86_64/ARM64 · PowerShell</p><div class="line"><code>irm https://herdrui.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://herdrui.dev/install.ps1 | iex">copy</button></div></div>
+          <div class="inst"><p class="dim"># Nix · builds from source</p><div class="line"><code>nix run github:penso/herdr-gpui</code><button type="button" class="copy" data-copy="nix run github:penso/herdr-gpui">copy</button></div></div>
+        </div>
+        <p><span class="b">iPhone, iPad:</span> TestFlight beta, no public link yet; build from source today. <span class="y">Any phone:</span> turn on remote control (opt-in) and scan the QR code.</p>
+        <p class="dim"># future: github.com/sheprd-labs/sheprd releases and sheprd.org install scripts (not published yet)</p>
+        <p class="sr-only" id="copy-status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- 13: about -->
+    <section id="about" class="block" aria-labelledby="h-ab">
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> cat NOTICE</p>
+      <div class="out">
+        <h2 id="h-ab" class="sr-only">About and attribution</h2>
+        <p>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the Herdr project. <a href="https://herdr.dev">herdr.dev</a></p>
+        <p class="dim">26 Rust crates · ~380k lines of production Rust · 8,000+ tests · measured at 8e03793da, method in FEATURE-INVENTORY.md</p>
+        <p><a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a> · <span class="dim">github.com/sheprd-labs/sheprd (future)</span></p>
+      </div>
+      <p class="cmd"><span class="ps1" aria-hidden="true">~/agents ❯</span> <span class="cursor" aria-hidden="true"></span></p>
+    </section>
+  </main>
+
+  <nav class="tmux" aria-label="Sections">
+    <span class="sess" aria-hidden="true">[sheprd]</span>
+    <ol>
+      <li><a href="#help">0:help</a></li>
+      <li><a href="#overview">1:overview</a></li>
+      <li><a href="#fanout">2:fan-out</a></li>
+      <li><a href="#review">3:review</a></li>
+      <li><a href="#teleport">4:teleport</a></li>
+      <li><a href="#browser">5:browser</a></li>
+      <li><a href="#remote">6:remote</a></li>
+      <li><a href="#features">7:features</a></li>
+      <li><a href="#install">8:install</a></li>
+    </ol>
+  </nav>
+</div>
+</body>
+</html>
