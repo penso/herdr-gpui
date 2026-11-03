@@ -47,6 +47,8 @@ pub struct MultilineInput {
     lines: Option<Vec<LineShape>>,
     bounds: Option<Bounds<Pixels>>,
     scroll: Pixels,
+    /// Edits and caret moves reveal the caret; wheel scrolling must not.
+    reveal_caret: bool,
     selecting: bool,
     /// Text drawn dimmed after the caret, which the owner offers to complete
     /// what is typed; shown only while the caret ends the text.
@@ -325,6 +327,7 @@ impl MultilineInput {
             lines: None,
             bounds: None,
             scroll: px(0.),
+            reveal_caret: true,
             selecting: false,
             completion: None,
             goal_x: None,
@@ -410,6 +413,7 @@ impl MultilineInput {
         if self.font == font && self.theme == theme {
             return;
         }
+        self.reveal_caret |= self.font != font;
         self.font = font;
         self.theme = theme;
         cx.notify();
@@ -417,6 +421,7 @@ impl MultilineInput {
 
     fn did_edit(&mut self, changed: bool, cx: &mut Context<Self>) {
         self.goal_x = None;
+        self.reveal_caret = true;
         if changed {
             cx.emit(Changed);
         }
@@ -459,7 +464,12 @@ impl MultilineInput {
     fn max_scroll(&self) -> Pixels {
         let line_height = self.font.line_height();
         let rows = self.lines.as_ref().map_or(1, |lines| rows_total(lines));
-        px((rows.saturating_sub(MAX_VISIBLE)) as f32 * line_height)
+        let visible = self
+            .bounds
+            .map_or(px(line_height * MAX_VISIBLE as f32), |bounds| {
+                bounds.size.height
+            });
+        (px(rows as f32 * line_height) - visible).max(px(0.))
     }
 }
 
@@ -492,6 +502,7 @@ impl MultilineInput {
             }
         }
         self.selecting = true;
+        self.reveal_caret = true;
         cx.notify();
     }
 
@@ -501,6 +512,7 @@ impl MultilineInput {
             && let Some(offset) = self.index_for_point(event.position)
         {
             self.edit.select_to(offset, true);
+            self.reveal_caret = true;
             cx.stop_propagation();
             cx.notify();
         }
@@ -523,11 +535,23 @@ impl Render for MultilineInput {
         let font_size = self.font.size;
         // The height follows the wrapped rows; until the first paint reports
         // the real width, assume a reasonable one.
-        let rows = visual_rows(
-            &self.edit.text,
-            font_size,
-            self.wrap_width.unwrap_or(px(FALLBACK_WRAP_WIDTH)),
-            window,
+        // Measure with the same face the field applies below, rather than
+        // inheriting the surrounding layout's (possibly monospace) font.
+        let font = self.font.font();
+        let rows = window.with_text_style(
+            Some(gpui::TextStyleRefinement {
+                font_family: Some(font.family),
+                font_fallbacks: font.fallbacks,
+                ..Default::default()
+            }),
+            |window| {
+                visual_rows(
+                    &self.edit.text,
+                    font_size,
+                    self.wrap_width.unwrap_or(px(FALLBACK_WRAP_WIDTH)),
+                    window,
+                )
+            },
         );
         let height = px(line_height_f * rows.clamp(1, MAX_VISIBLE) as f32);
         div()
@@ -621,12 +645,25 @@ fn paint_field(
     )
     .unwrap_or_default();
 
-    // Keep the caret's row in view.
+    // A new width changes the measured height on the next frame. Notify
+    // only when it changes, so a settled field does not keep redrawing.
+    let width_changed = input.wrap_width != Some(bounds.size.width);
+    if width_changed {
+        input.wrap_width = Some(bounds.size.width);
+        input.reveal_caret = true;
+        // GPUI suppresses frame requests made during paint.
+        cx.defer_in(window, |_, _, cx| cx.notify());
+    }
+
+    // Respect wheel scrolling between edits. Use the actual viewport while
+    // a width change's height is settling, rather than assuming eight rows.
     let total_rows = rows_total(&shape);
-    let max_scroll = (total_rows.saturating_sub(MAX_VISIBLE)) as f32 * line_height_f;
-    if let Some(spot) = caret_position(&shape, line_height, input.edit.cursor) {
+    let visible = f32::from(bounds.size.height);
+    let max_scroll = (total_rows as f32 * line_height_f - visible).max(0.);
+    if std::mem::take(&mut input.reveal_caret)
+        && let Some(spot) = caret_position(&shape, line_height, input.edit.cursor)
+    {
         let y = f32::from(spot.y);
-        let visible = line_height_f * MAX_VISIBLE as f32;
         let current = f32::from(input.scroll);
         if y < current {
             input.scroll = px(y);
@@ -788,6 +825,8 @@ fn paint_field(
     });
 
     input.bounds = Some(bounds);
-    input.wrap_width = Some(bounds.size.width);
     input.lines = Some(shape);
 }
+
+#[cfg(test)]
+mod tests;

@@ -75,6 +75,7 @@ impl MultilineInput {
         let byte = line.carets.index_at(px(local + row.start_x));
         let offset = line.range.start + byte.clamp(row.start, row.end);
         self.edit.select_to(offset, extend);
+        self.reveal_caret = true;
         cx.notify();
         true
     }
@@ -162,6 +163,7 @@ impl MultilineInput {
         }
         let key = event.keystroke.key.as_str();
         let modifiers = event.keystroke.modifiers;
+        let previous_cursor = self.edit.cursor;
         if key != "up" && key != "down" {
             self.goal_x = None;
         }
@@ -180,6 +182,7 @@ impl MultilineInput {
             return;
         }
         if self.control_key(key, modifiers, window, cx) {
+            self.reveal_caret |= self.edit.cursor != previous_cursor;
             cx.stop_propagation();
             window.prevent_default();
             cx.notify();
@@ -291,6 +294,7 @@ impl MultilineInput {
         }
         cx.stop_propagation();
         window.prevent_default();
+        self.reveal_caret |= self.edit.cursor != previous_cursor;
         cx.notify();
     }
 }
