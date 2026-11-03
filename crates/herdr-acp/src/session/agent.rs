@@ -97,6 +97,12 @@ impl<R: FnMut(Update)> Session<R> {
                     Pending::LoadSession,
                 );
             }
+            Some(id) if self.config.require_load => {
+                self.fail(&format!(
+                    "{} cannot continue session {id}, so no new session was started.",
+                    self.config.agent
+                ));
+            }
             load => {
                 if load.is_some() {
                     let notice = self.projector.notice(
@@ -154,6 +160,7 @@ impl<R: FnMut(Update)> Session<R> {
             return;
         };
         self.ready = true;
+        (self.report)(Update::Opened(id.0.to_string()));
         self.emit(Change::Session {
             session: Some(project::session(&id, &self.config.cwd)),
         });

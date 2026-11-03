@@ -104,6 +104,7 @@ impl HerdrWindow {
         if enabled {
             self.locate_chat_program(cx);
             self.probe_chat_agents(cx);
+            self.poll_chat_restore(route.as_ref());
         }
         self.poll_chat_start(cx);
         let mut changed = self.chats.reconcile(targets, now, connect) || discovered;

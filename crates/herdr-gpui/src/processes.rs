@@ -92,7 +92,7 @@ impl Daemon {
     }
 
     /// Blocking: runs the CLI and waits for its answer.
-    fn process_info(
+    pub(crate) fn process_info(
         &self,
         pane: &str,
         cancelled: &AtomicBool,

@@ -18,6 +18,7 @@ mod pictures;
 mod process;
 mod project;
 mod relay;
+mod restore;
 mod rpc;
 mod session;
 mod tui;

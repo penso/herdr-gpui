@@ -29,6 +29,7 @@ mod prepared;
 #[cfg(feature = "integration-test")]
 pub(crate) mod preview;
 mod reader;
+mod restore;
 mod rich;
 mod selection;
 mod session;

@@ -41,6 +41,9 @@ impl Localize for Error {
                 "error-chat-protocol-question-answers-limit",
                 id = format!("{id:?}")
             ),
+            // Records are read and written only off the UI thread and never
+            // shown; one message covers their failures.
+            Self::Restore(_) => fl!("error-chat-protocol-restore"),
             Self::UnknownEntry(id) => {
                 fl!("error-chat-protocol-unknown-entry", id = format!("{id:?}"))
             }

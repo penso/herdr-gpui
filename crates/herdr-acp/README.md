@@ -8,6 +8,7 @@ and show it as a native chat.
 herdr-acp claude             # or codex, copilot, gemini, opencode
 herdr-acp -- goose acp       # any ACP agent command
 herdr-acp --load ID codex    # continue one of the agent's sessions
+herdr-acp --resume ID codex  # the same, but never start a new session instead
 ```
 
 `herdr-acp --help` lists every option and key.
@@ -139,6 +140,18 @@ through Herdr's JSON API:
 - on exit, the token and title are cleared, the tab gets the agent's name
   back unless the user renamed it, and the agent is released.
 
+Herdr does not keep the token, or the program, when it restores a pane after
+a reboot or a server restart. So once the agent's session opens, a chat of a
+built-in agent in a Herdr pane also writes a restore record to
+`restore/<endpoint>.json` beside the attach sockets (`~/.local/state/herdr/acp`,
+or `$XDG_STATE_HOME/herdr/acp`; private to this user): the pane, the Herdr API
+socket, the agent, whether `--acp` was used, the folder, and the session id.
+It removes the record when it ends on its own, because the user quit or the
+agent ended; a killed chat, as a reboot kills it, leaves it behind for Herdr UI
+to continue the session with `--resume`. A custom command (`-- COMMAND`), a
+chat started with extra agent arguments, one with `--no-attach`, and a chat
+outside a Herdr pane (including a Herdr 2 terminal) keep no record.
+
 It also writes OSC 7501 program status to the terminal, for terminals that read
 it; terminals that do not ignore it.
 
@@ -267,4 +280,6 @@ session's earlier prompts, whichever client sent them.
   the next chat to start removes sockets nothing answers on. A pipe goes away
   with its process.
 - Resuming after a restart needs `--load` with the agent's session id, and an
-  agent that supports `session/load`.
+  agent that supports `session/load`. With `--load` an agent that cannot
+  load starts a new session with a warning; with `--resume` the chat fails
+  instead.

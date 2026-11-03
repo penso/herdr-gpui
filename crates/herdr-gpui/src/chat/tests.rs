@@ -43,6 +43,7 @@ mod prepared;
 mod questions;
 mod recall;
 mod relocale;
+mod restore;
 mod running;
 mod selection;
 mod session;

@@ -81,10 +81,16 @@ impl Daemon {
         &self.host
     }
 
+    /// Whether the daemon's socket or session is known, so [`Self::owns`]
+    /// tells its panes from another daemon's rather than accepting all.
+    pub(crate) fn identified(&self) -> bool {
+        self.identity.is_some()
+    }
+
     /// Whether a pane whose `HERDR_SOCKET_PATH` was `socket` is this daemon's.
     /// A pane that did not say, from an older Herdr, is given the benefit of
     /// the doubt, as is a daemon whose socket cannot be named.
-    fn owns(&self, socket: &str) -> bool {
+    pub(crate) fn owns(&self, socket: &str) -> bool {
         let (false, Some(identity)) = (socket.is_empty(), &self.identity) else {
             return true;
         };
