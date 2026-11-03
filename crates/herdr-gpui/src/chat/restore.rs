@@ -13,65 +13,85 @@
 //! - it names this daemon (its Herdr session) and a pane this snapshot has,
 //!   with no agent or chat reported in it, and no other record names it;
 //! - nothing listens on its endpoint any more;
-//! - Herdr says the pane's shell is at its prompt, in the record's folder;
+//! - Herdr says the pane's shell itself is in the foreground, in the
+//!   record's folder;
 //! - this window claimed the record first, so of several windows or apps
-//!   only one continues the chat.
+//!   only one continues the chat;
+//! - the window still shows that boot and connection, and the pane is still
+//!   free, when the line is typed.
 //!
-//! The pass runs a few times, [`PASS_INTERVAL`] apart, for each daemon boot
-//! and connection, since a restored shell may still be starting when the
-//! first snapshot arrives; its last run also drops records whose pane is
-//! gone. It runs only for a daemon on this machine whose `herdr` CLI can be
-//! asked about a pane's processes (Linux and macOS).
+//! A typed line is only queued, so the record stays claimed until a chat
+//! shows in its pane, and is given back if the boot or connection changes
+//! first, chats are turned off, or none shows in time. Claims a dropped
+//! window or a failed job held are given back too, and `prune` returns any
+//! an exited app left behind; a record is removed only once its chat shows.
+//!
+//! While a window is connected it also watches the chats it saw live: one
+//! missing from the snapshot for [`plan::ENDED_AFTER`] under the same boot
+//! ended there (its pane closed, or the program was killed), and its record
+//! goes, so a later pane that reuses its id is never handed the old chat.
+//! A chat newly live in a pane also replaces any older record naming it.
+//!
+//! The pass runs [`plan::PASSES`] times, [`plan::PASS_INTERVAL`] apart, for
+//! each daemon boot and connection, since a restored shell may still be
+//! starting when the first snapshot arrives. It runs only for a daemon on
+//! this machine whose `herdr` CLI can be asked about a pane's processes
+//! (Linux and macOS).
+
+pub(super) mod plan;
+
+use plan::{
+    PASSES, Pane, Probes, Scope, Typed, Watched, every_record, free, idle, panes, pass, pass_due,
+    settle, superseded,
+};
 
 use super::{Route, discovery};
 use crate::{HerdrWindow, listening_ports, processes};
-use herdr_chat_protocol::{EndpointId, TOKEN, restore};
-use herdr_client::protocol::ClientShellSnapshot;
+use herdr_chat_protocol::{EndpointId, restore};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::{atomic::AtomicBool, mpsc},
     time::{Duration, Instant},
 };
 
-/// How often live chats are stamped with the boot they run under.
+/// How often live chats are stamped with the boot they run under, and
+/// watched for having ended.
 const STAMP_INTERVAL: Duration = Duration::from_secs(5);
-/// How long the restore pass waits between its runs for one scope.
-const PASS_INTERVAL: Duration = Duration::from_secs(5);
-/// How many times the restore pass runs for one scope.
-const PASSES: u8 = 6;
-
-/// The connection and daemon boot a pass belongs to.
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct Scope {
-    boot: String,
-    connection: u64,
-    selection: u64,
-}
-
-/// A restored pane as the snapshot shows it.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct Pane {
-    /// Its folder as the snapshot reports it, for when Herdr cannot say
-    /// where its shell is.
-    pub(super) cwd: Option<String>,
-    pub(super) id: String,
-    /// Whether an agent or a chat is reported in it.
-    pub(super) occupied: bool,
-}
-
+/// How often the window looks at all, between jobs.
+const CHECK_INTERVAL: Duration = Duration::from_secs(1);
 /// What the window learned off the UI thread.
-enum Outcome {
-    /// Records this window claimed, each with the line that continues it.
-    Claimed(Scope, Vec<(restore::Record, String)>),
+pub(super) enum Outcome {
+    /// Records a pass claimed, each with the line that continues it; when
+    /// the pass finished; and where the next pass reads on from.
+    Claimed {
+        at: Instant,
+        claimed: Vec<(restore::Record, String)>,
+        next: Option<EndpointId>,
+        scope: Scope,
+    },
     /// Live chats whose records now carry the current boot.
     Stamped(Scope, Vec<EndpointId>),
+}
+
+impl Outcome {
+    /// Gives back what a pass claimed, as one nobody will act on. Blocking.
+    fn give_back(self, dir: &Path) {
+        if let Self::Claimed { claimed, .. } = self {
+            for (record, _) in claimed {
+                let _ = restore::unclaim(dir, &record.endpoint);
+            }
+        }
+    }
 }
 
 /// The window's restore state. One background job runs at a time.
 #[derive(Default)]
 pub(crate) struct Restore {
+    /// Where the next pass reads on from.
+    cursor: Option<EndpointId>,
     job: Option<mpsc::Receiver<Outcome>>,
+    next_check: Option<Instant>,
     /// When the restore pass may run again for [`Self::passes`]' scope.
     next_pass: Option<Instant>,
     next_stamp: Option<Instant>,
@@ -79,79 +99,33 @@ pub(crate) struct Restore {
     passes: Option<(Scope, u8)>,
     stamped: HashSet<EndpointId>,
     stamped_scope: Option<Scope>,
+    /// Lines typed whose chat has not shown yet; their records stay claimed.
+    typed: Vec<Typed>,
+    watched: Watched,
 }
 
-/// The panes of `snapshot`, each marked occupied when the daemon reports an
-/// agent or a chat token in it.
-pub(super) fn panes(snapshot: &ClientShellSnapshot) -> Vec<Pane> {
-    let occupied: HashSet<&str> = snapshot
-        .agents
-        .iter()
-        .filter(|agent| agent.agent.is_some() || agent.tokens.iter().any(|(name, _)| name == TOKEN))
-        .map(|agent| agent.pane_id.as_str())
-        .collect();
-    snapshot
-        .panes
-        .iter()
-        .map(|pane| Pane {
-            cwd: pane.foreground_cwd.clone().or_else(|| pane.cwd.clone()),
-            id: pane.pane_id.clone(),
-            occupied: occupied.contains(pane.pane_id.as_str()),
-        })
-        .collect()
-}
-
-/// The records worth checking further for `boot`: seen live under another
-/// boot, of this daemon (`owns` their socket), naming an unoccupied pane
-/// that no other record names. Pure, so it is tested without files.
-pub(super) fn plan(
-    records: Vec<(restore::Record, Option<String>)>,
-    panes: &[Pane],
-    boot: &str,
-    owns: impl Fn(&Path) -> bool,
-) -> Vec<restore::Record> {
-    let mut named: HashMap<String, usize> = HashMap::new();
-    for (record, _) in &records {
-        *named.entry(record.pane.clone()).or_default() += 1;
+/// A window going away gives back every claim it holds: those of a pass
+/// whose result it will never read, and those of lines whose chat never
+/// showed. A pass still running gives its own back when it cannot report.
+impl Drop for Restore {
+    fn drop(&mut self) {
+        let outcome = self.job.take().and_then(|job| job.try_recv().ok());
+        let typed = std::mem::take(&mut self.typed);
+        if outcome.is_none() && typed.is_empty() {
+            return;
+        }
+        let Some(dir) = restore::restore_dir() else {
+            return;
+        };
+        detach(move || {
+            if let Some(outcome) = outcome {
+                outcome.give_back(&dir);
+            }
+            for line in typed {
+                let _ = restore::unclaim(&dir, &line.endpoint);
+            }
+        });
     }
-    records
-        .into_iter()
-        .filter(|(_, seen)| seen.as_deref().is_some_and(|seen| seen != boot))
-        .map(|(record, _)| record)
-        .filter(|record| owns(&record.socket))
-        // Two chats once in one pane: which is the latest cannot be told,
-        // so neither is continued.
-        .filter(|record| named.get(&record.pane) == Some(&1))
-        .filter(|record| {
-            panes
-                .iter()
-                .any(|pane| pane.id == record.pane && !pane.occupied)
-        })
-        .take(super::MAX_CHATS)
-        .collect()
-}
-
-/// The line typed into a restored shell to continue `record` with
-/// `program`. `sh` runs it, so it reads the same from bash, zsh, fish, or
-/// nushell; each argument rides as its own single-quoted word, and a value
-/// holding a quote or a control character makes no line at all. A leading
-/// space keeps it out of shells' history that honor that.
-pub(super) fn line(program: &Path, record: &restore::Record) -> Option<String> {
-    let program = program.to_str()?;
-    let mut words = vec![program, "--resume", record.session.as_str()];
-    if record.adapter {
-        words.push("--acp");
-    }
-    words.push(record.agent.name());
-    if !restore::session_id_is_plain(&record.session)
-        || words
-            .iter()
-            .any(|word| word.contains('\'') || word.chars().any(char::is_control))
-    {
-        return None;
-    }
-    let quoted: Vec<String> = words.iter().map(|word| format!("'{word}'")).collect();
-    Some(format!(" sh -c 'exec \"$0\" \"$@\"' {}", quoted.join(" ")))
 }
 
 /// Whether a program still listens on `endpoint`. Only a refused or missing
@@ -181,173 +155,199 @@ fn listening(endpoint: &EndpointId) -> bool {
 /// reports it. Blocking.
 fn idle_in(daemon: &processes::Daemon, pane: &Pane, cwd: &Path) -> bool {
     let cancelled = AtomicBool::new(false);
-    let Ok(info) = daemon.process_info(&pane.id, &cancelled) else {
-        return false;
-    };
-    if info.foreground_job().is_some() {
-        return false;
-    }
-    let shell_cwd = info
-        .foreground_processes
-        .iter()
-        .find(|process| Some(process.pid) == info.shell_pid)
-        .and_then(|process| process.cwd.clone())
-        .or_else(|| pane.cwd.clone());
-    shell_cwd
-        .and_then(|shell_cwd| std::fs::canonicalize(shell_cwd).ok())
-        .is_some_and(|shell_cwd| shell_cwd == cwd)
+    daemon.process_info(&pane.id, &cancelled).is_ok_and(|info| {
+        idle(&info, pane.cwd.as_deref(), cwd, |path| {
+            std::fs::canonicalize(path).ok()
+        })
+    })
 }
 
-/// The records of this daemon (`owns` their socket) that no restore can
-/// use any more: seen live under an earlier boot, and their pane is gone.
-/// A record never seen live may belong to a chat whose pane is newer than
-/// the snapshot, so [`restore::prune`] ages those out instead.
-pub(super) fn orphans<'a>(
-    records: &'a [(restore::Record, Option<String>)],
-    panes: &[Pane],
-    boot: &str,
-    owns: impl Fn(&Path) -> bool,
-) -> impl Iterator<Item = &'a EndpointId> {
-    records
-        .iter()
-        .filter(move |(record, seen)| {
-            seen.as_deref().is_some_and(|seen| seen != boot)
-                && owns(&record.socket)
-                && !panes.iter().any(|pane| pane.id == record.pane)
-        })
-        .map(|(record, _)| &record.endpoint)
-}
-
-/// The restore pass, off the UI thread: the records [`plan`] keeps whose
-/// endpoint is gone and whose pane is an idle shell in their folder, each
-/// claimed for this window with its line. The `last` run also removes the
-/// [`orphans`].
-fn pass(
-    dir: &Path,
-    panes: &[Pane],
-    boot: &str,
-    owner: &listening_ports::Daemon,
-    daemon: &processes::Daemon,
-    program: &Path,
-    last: bool,
-) -> Vec<(restore::Record, String)> {
-    let owns = |socket: &Path| socket.to_str().is_some_and(|socket| owner.owns(socket));
-    let records = restore::list(dir);
-    if last {
-        for endpoint in orphans(&records, panes, boot, owns) {
-            restore::remove(dir, endpoint);
-        }
-        restore::prune(dir, std::time::SystemTime::now());
-    }
-    plan(records, panes, boot, owns)
-        .into_iter()
-        .filter(|record| !listening(&record.endpoint))
-        .filter(|record| {
-            panes
-                .iter()
-                .find(|pane| pane.id == record.pane)
-                .is_some_and(|pane| idle_in(daemon, pane, &record.cwd))
-        })
-        .filter_map(|record| Some((line(program, &record)?, record)))
-        .filter(|(_, record)| restore::claim(dir, &record.endpoint).unwrap_or(false))
-        .map(|(line, record)| (record, line))
-        .collect()
+/// Whether a record's Herdr API socket is `owner`'s.
+fn owned_by(owner: &listening_ports::Daemon, socket: &Path) -> bool {
+    socket.to_str().is_some_and(|socket| owner.owns(socket))
 }
 
 /// Runs `job` on a thread of its own; the window reads its outcome on a
-/// later tick. A thread that cannot start leaves nothing to read.
-fn spawn(job: impl FnOnce() -> Outcome + Send + 'static) -> Option<mpsc::Receiver<Outcome>> {
+/// later tick. When the window has stopped listening, the job gives back
+/// what it claimed. A thread that cannot start leaves nothing to read.
+pub(super) fn spawn(
+    dir: PathBuf,
+    job: impl FnOnce(&Path) -> Outcome + Send + 'static,
+) -> Option<mpsc::Receiver<Outcome>> {
     let (sender, receiver) = mpsc::sync_channel(1);
     std::thread::Builder::new()
         .name("chat-restore".to_owned())
         .spawn(move || {
-            let _ = sender.send(job());
+            if let Err(mpsc::SendError(outcome)) = sender.send(job(&dir)) {
+                outcome.give_back(&dir);
+            }
         })
         .ok()?;
     Some(receiver)
 }
 
 /// Runs `work` on a thread of its own and forgets it: removing or giving
-/// back a claimed record needs no answer.
+/// back a record needs no answer.
 fn detach(work: impl FnOnce() + Send + 'static) {
     let _ = std::thread::Builder::new()
         .name("chat-restore".to_owned())
         .spawn(work);
 }
 
+/// What the restore pass and the watch need of the selected daemon.
+struct Target {
+    daemon: processes::Daemon,
+    owner: listening_ports::Daemon,
+    scope: Scope,
+}
+
 impl HerdrWindow {
-    /// Runs every tick while chats are on: runs the restore pass for the
-    /// daemon's boot, continues the chats it claimed, and stamps live chats
-    /// with the boot in between.
-    pub(super) fn poll_chat_restore(&mut self, route: Option<&Route>) {
+    /// Runs every tick: runs the restore pass for the daemon's boot,
+    /// continues the chats it claimed, settles the lines it typed, and in
+    /// between stamps and watches live chats. With chats off it only gives
+    /// back what it holds.
+    pub(super) fn poll_chat_restore(&mut self, enabled: bool, route: Option<&Route>) {
+        let restore = &self.chats.restore;
+        if !enabled && restore.job.is_none() && restore.typed.is_empty() {
+            return;
+        }
         let Some(dir) = restore::restore_dir() else {
             return;
         };
-        self.finish_chat_restore(&dir);
-        if self.chats.restore.job.is_some() || route != Some(&Route::Local) {
-            return;
-        }
-        let Some(endpoint) = self.endpoints.get(self.selected_endpoint) else {
-            return;
-        };
-        let target = &endpoint.connection.target;
-        // A daemon whose socket cannot be named could own any record.
-        let (Some(owner), Some(daemon)) = (
-            listening_ports::Daemon::of(target).filter(listening_ports::Daemon::identified),
-            processes::Daemon::for_target(target),
-        ) else {
-            return;
-        };
-        let Some(snapshot) = self
-            .live
-            .snapshot
-            .as_deref()
-            .filter(|_| self.live.status.is_connected())
+        let now = Instant::now();
+        self.finish_chat_restore(&dir, enabled, now);
+        let target = enabled.then(|| self.chat_restore_target(route)).flatten();
+        self.settle_typed_chats(&dir, target.as_ref().map(|target| &target.scope), now);
+        let restore = &mut self.chats.restore;
+        let Some(Target {
+            daemon,
+            owner,
+            scope,
+        }) = target
         else {
             return;
         };
-        let scope = Scope {
-            boot: snapshot.boot_id.clone(),
-            connection: endpoint.generation,
-            selection: self.selection_epoch,
+        if restore.job.is_some() || restore.next_check.is_some_and(|next| now < next) {
+            return;
+        }
+        restore.next_check = Some(now + CHECK_INTERVAL);
+        let Some(snapshot) = self.live.snapshot.as_deref() else {
+            return;
         };
-        let now = Instant::now();
-        let restore = &mut self.chats.restore;
-        let passes = match &restore.passes {
-            Some((ran, passes)) if *ran == scope => *passes,
-            _ => 0,
-        };
-        let due = restore.next_pass.is_none_or(|next| now >= next) || passes == 0;
-        if passes < PASSES
-            && due
+        if let Some(run) = pass_due(restore.passes.as_ref(), restore.next_pass, &scope, now)
             && let Ok(program) = self.chats.program.found().map(Path::to_owned)
         {
             let panes = panes(snapshot);
-            restore.passes = Some((scope.clone(), passes + 1));
-            restore.next_pass = Some(now + PASS_INTERVAL);
-            let last = passes + 1 == PASSES;
-            restore.job = spawn(move || {
-                let claimed = pass(&dir, &panes, &scope.boot, &owner, &daemon, &program, last);
-                Outcome::Claimed(scope, claimed)
+            let cursor = restore.cursor.clone();
+            restore.passes = Some((scope.clone(), run));
+            restore.next_pass = Some(now + plan::PASS_INTERVAL);
+            let last = run == PASSES;
+            restore.job = spawn(dir, move |dir| {
+                let probes = Probes {
+                    owns: |socket: &Path| owned_by(&owner, socket),
+                    listening,
+                    idle: |pane: &Pane, cwd: &Path| idle_in(&daemon, pane, cwd),
+                };
+                let passed = pass(
+                    dir,
+                    cursor.as_ref(),
+                    &panes,
+                    &scope.boot,
+                    &program,
+                    last,
+                    probes,
+                );
+                Outcome::Claimed {
+                    at: Instant::now(),
+                    claimed: passed.claimed,
+                    next: passed.next,
+                    scope,
+                }
             });
             return;
         }
-        let live: Vec<EndpointId> = snapshot
+        let live: Vec<(EndpointId, String)> = snapshot
             .agents
             .iter()
-            .filter_map(|agent| discovery::endpoint(&agent.tokens))
+            .filter_map(|agent| Some((discovery::endpoint(&agent.tokens)?, agent.pane_id.clone())))
             .take(super::MAX_CHATS)
             .collect();
-        self.stamp_live_chats(dir, scope, live, now);
+        self.watch_live_chats(dir, scope, owner, live, now);
     }
 
-    /// Stamps the records of the `live` chats with the scope's boot, now and
-    /// then, each once per scope.
-    fn stamp_live_chats(
+    /// The selected daemon, when its chats can be continued: on this
+    /// machine, named, asked about through its CLI, and connected.
+    fn chat_restore_target(&self, route: Option<&Route>) -> Option<Target> {
+        if route != Some(&Route::Local) {
+            return None;
+        }
+        let endpoint = self.endpoints.get(self.selected_endpoint)?;
+        let target = &endpoint.connection.target;
+        // A daemon whose socket cannot be named could own any record.
+        let owner =
+            listening_ports::Daemon::of(target).filter(listening_ports::Daemon::identified)?;
+        let daemon = processes::Daemon::for_target(target)?;
+        let snapshot = self
+            .live
+            .snapshot
+            .as_deref()
+            .filter(|_| self.live.status.is_connected())?;
+        Some(Target {
+            daemon,
+            owner,
+            scope: Scope {
+                boot: snapshot.boot_id.clone(),
+                connection: endpoint.generation,
+                selection: self.selection_epoch,
+            },
+        })
+    }
+
+    /// Settles the typed lines against `current`, the scope the window
+    /// shows (none while it cannot continue chats): removes the records of
+    /// chats that showed, and gives back the rest that cannot.
+    fn settle_typed_chats(&mut self, dir: &Path, current: Option<&Scope>, now: Instant) {
+        if self.chats.restore.typed.is_empty() {
+            return;
+        }
+        let chat_panes: HashSet<&str> = self
+            .live
+            .snapshot
+            .as_deref()
+            .map(|snapshot| {
+                snapshot
+                    .agents
+                    .iter()
+                    .filter(|agent| discovery::endpoint(&agent.tokens).is_some())
+                    .map(|agent| agent.pane_id.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let settled = settle(&mut self.chats.restore.typed, current, &chat_panes, now);
+        if settled.confirmed.is_empty() && settled.returned.is_empty() {
+            return;
+        }
+        let dir = dir.to_owned();
+        detach(move || {
+            for endpoint in &settled.confirmed {
+                restore::remove(&dir, endpoint);
+            }
+            for endpoint in &settled.returned {
+                let _ = restore::unclaim(&dir, endpoint);
+            }
+        });
+    }
+
+    /// Now and then: drops the records of chats that ended under the
+    /// running daemon, and of those a chat newly live in their pane
+    /// replaced, and stamps the records of the `live` chats with the scope's
+    /// boot, each once per scope.
+    fn watch_live_chats(
         &mut self,
         dir: PathBuf,
         scope: Scope,
-        live: Vec<EndpointId>,
+        owner: listening_ports::Daemon,
+        live: Vec<(EndpointId, String)>,
         now: Instant,
     ) {
         let restore = &mut self.chats.restore;
@@ -355,23 +355,37 @@ impl HerdrWindow {
             return;
         }
         restore.next_stamp = Some(now + STAMP_INTERVAL);
+        let endpoints: Vec<EndpointId> =
+            live.iter().map(|(endpoint, _)| endpoint.clone()).collect();
+        let ended = restore.watched.observe(&scope, &endpoints, now);
         if restore.stamped_scope.as_ref() != Some(&scope) {
             restore.stamped.clear();
             restore.stamped_scope = Some(scope.clone());
         }
-        let live: Vec<EndpointId> = live
+        let unstamped: Vec<(EndpointId, String)> = live
             .into_iter()
-            .filter(|endpoint| !restore.stamped.contains(endpoint))
+            .filter(|(endpoint, _)| !restore.stamped.contains(endpoint))
             .collect();
-        if live.is_empty() {
+        if unstamped.is_empty() && ended.is_empty() {
             return;
         }
-        restore.job = spawn(move || {
-            let stamped = live
+        restore.job = spawn(dir, move |dir| {
+            for endpoint in &ended {
+                restore::remove(dir, endpoint);
+            }
+            if !unstamped.is_empty() {
+                let records = every_record(dir);
+                for endpoint in superseded(&records, &unstamped, |socket| owned_by(&owner, socket))
+                {
+                    restore::remove(dir, endpoint);
+                }
+            }
+            let stamped = unstamped
                 .into_iter()
+                .map(|(endpoint, _)| endpoint)
                 .filter(|endpoint| {
-                    restore::write_seen(&dir, endpoint, &scope.boot).is_ok()
-                        && restore::read_seen(&dir, endpoint).as_deref() == Some(&scope.boot)
+                    restore::write_seen(dir, endpoint, &scope.boot).is_ok()
+                        && restore::read_seen(dir, endpoint).as_deref() == Some(&scope.boot)
                 })
                 .collect();
             Outcome::Stamped(scope, stamped)
@@ -379,8 +393,10 @@ impl HerdrWindow {
     }
 
     /// Applies a finished job: remembers stamped chats, and types the line
-    /// into each claimed pane that is still as the pass found it.
-    fn finish_chat_restore(&mut self, dir: &Path) {
+    /// into each claimed pane that is still as the pass found it, while
+    /// chats are on and the claim is fresh, holding its record claimed until
+    /// the chat shows; any other claim is given back.
+    fn finish_chat_restore(&mut self, dir: &Path, enabled: bool, now: Instant) {
         let Some(job) = &self.chats.restore.job else {
             return;
         };
@@ -399,19 +415,43 @@ impl HerdrWindow {
                     self.chats.restore.stamped.extend(stamped);
                 }
             }
-            Outcome::Claimed(scope, claimed) => {
+            Outcome::Claimed {
+                at,
+                claimed,
+                next,
+                scope,
+            } => {
+                self.chats.restore.cursor = next;
+                let fresh = enabled && now.saturating_duration_since(at) <= plan::CLAIM_FRESH;
+                let mut returned = Vec::new();
                 for (record, line) in claimed {
-                    let typed = self.continue_restored_chat(&scope, &record, &line);
-                    let dir = dir.to_owned();
-                    let endpoint = record.endpoint.clone();
-                    if typed {
-                        tracing::info!(pane = %record.pane, agent = %record.agent, "Continuing a chat in its restored pane");
-                        detach(move || restore::remove(&dir, &endpoint));
-                    } else {
-                        detach(move || {
-                            let _ = restore::unclaim(&dir, &endpoint);
+                    if fresh && self.continue_restored_chat(&scope, &record, &line) {
+                        tracing::info!(
+                            pane = %record.pane,
+                            agent = %record.agent,
+                            "Continuing a chat in its restored pane"
+                        );
+                        self.chats.restore.typed.push(Typed {
+                            endpoint: record.endpoint,
+                            pane: record.pane,
+                            scope: scope.clone(),
+                            since: now,
                         });
+                    } else {
+                        tracing::debug!(
+                            pane = %record.pane,
+                            "A restored chat's pane or connection changed; not continuing it"
+                        );
+                        returned.push(record.endpoint);
                     }
+                }
+                if !returned.is_empty() {
+                    let dir = dir.to_owned();
+                    detach(move || {
+                        for endpoint in &returned {
+                            let _ = restore::unclaim(&dir, endpoint);
+                        }
+                    });
                 }
             }
         }
@@ -434,11 +474,8 @@ impl HerdrWindow {
             .is_some_and(|endpoint| endpoint.generation == scope.connection)
             && self.selection_epoch == scope.selection
             && snapshot.boot_id == scope.boot;
-        let free = panes(snapshot)
-            .iter()
-            .any(|pane| pane.id == record.pane && !pane.occupied);
         current
-            && free
+            && free(&panes(snapshot), &record.pane)
             && self
                 .type_script_line(&scope.boot, &record.pane, line)
                 .is_ok()

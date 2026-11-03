@@ -34,8 +34,11 @@ use crate::{Agent, EndpointId};
 pub const VERSION: u32 = 1;
 /// The most bytes a record or a seen stamp may hold.
 pub const MAX_RECORD_SIZE: u64 = 8 * 1024;
-/// Records a client looks at in one pass; more are left for a later one.
-pub const MAX_RECORDS: usize = 64;
+/// Records [`list`] reads in one call; the rest wait for the next, which
+/// starts where this one stopped.
+pub const MAX_RECORDS: usize = 256;
+/// Directory entries [`list`] and [`prune`] look at in one call.
+pub const MAX_ENTRIES: usize = 4096;
 /// The longest agent session id a record keeps.
 pub const MAX_SESSION_ID: usize = 200;
 /// The longest Herdr pane id a record keeps.
@@ -43,14 +46,13 @@ pub const MAX_PANE_ID: usize = 128;
 /// The longest daemon boot id a seen stamp keeps.
 pub const MAX_BOOT_ID: usize = 128;
 
-/// Entries [`prune`] looks at in one call.
-pub const MAX_PRUNE: usize = 256;
 /// How long a record no client ever saw live is kept: its chat ran while no
 /// client was connected, and nothing can tell which boot it ran under.
 pub const UNSEEN_AGE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 60 * 60);
-/// How long a claimed record or a temporary file outlives the client that
-/// made it, as one that crashed between claiming and finishing leaves it.
-pub const CLAIMED_AGE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+/// How long a claim may last before [`prune`] gives it back: longer than any
+/// client holds one, so only a client that exited or crashed between claiming
+/// and finishing leaves one this old. Also how long a temporary file lasts.
+pub const CLAIM_STALE: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
 const RECORD_EXTENSION: &str = "json";
 const CLAIMED_EXTENSION: &str = "claimed";
@@ -203,27 +205,75 @@ pub fn seen_path(dir: &Path, id: &EndpointId) -> PathBuf {
     dir.join(format!("{id}.{SEEN_EXTENSION}"))
 }
 
-/// The records in `dir`, at most [`MAX_RECORDS`], each with the boot a
-/// client last saw its chat live under. A record that does not read is
-/// skipped: it is another version's, or damaged, and harms nobody.
-pub fn list(dir: &Path) -> Vec<(Record, Option<String>)> {
+/// One call's worth of [`list`]: the records read, each with the boot a
+/// client last saw its chat live under, and where the next call starts.
+#[derive(Debug, Default)]
+pub struct Listing {
+    pub records: Vec<(Record, Option<String>)>,
+    /// The last record read, when more remain after it; the next call
+    /// passes it back to read on from there, round the directory.
+    pub next: Option<EndpointId>,
+    /// How many records the directory holds, read or not.
+    pub total: usize,
+}
+
+impl Listing {
+    /// Whether every record in the directory was read.
+    pub fn complete(&self) -> bool {
+        self.next.is_none()
+    }
+}
+
+/// The endpoints of the records in `dir`, in order, from at most
+/// [`MAX_ENTRIES`] entries.
+fn record_ids(dir: &Path) -> Vec<EndpointId> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
-    entries
+    let mut ids: Vec<EndpointId> = entries
         .flatten()
+        .take(MAX_ENTRIES)
         .map(|entry| entry.path())
         .filter(|path| {
             path.extension()
                 .is_some_and(|extension| extension == RECORD_EXTENSION)
         })
-        .take(MAX_RECORDS)
-        .filter_map(|path| Record::read(&path).ok())
+        .filter_map(|path| path.file_stem()?.to_str()?.parse().ok())
+        .collect();
+    ids.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    ids
+}
+
+/// At most [`MAX_RECORDS`] records in `dir`, in endpoint order, starting
+/// after `after` and going round, so calls that pass back
+/// [`Listing::next`] each read on and every record is reached in turn. A
+/// record that does not read is skipped: it is another version's, or
+/// damaged, and harms nobody.
+pub fn list(dir: &Path, after: Option<&EndpointId>) -> Listing {
+    let ids = record_ids(dir);
+    let start = after.map_or(0, |after| {
+        ids.iter()
+            .position(|id| id.as_str() > after.as_str())
+            .unwrap_or(0)
+    });
+    let count = ids.len().min(MAX_RECORDS);
+    let window: Vec<&EndpointId> = ids.iter().cycle().skip(start).take(count).collect();
+    let next = (ids.len() > MAX_RECORDS)
+        .then(|| window.last().map(|id| (*id).clone()))
+        .flatten();
+    let records = window
+        .into_iter()
+        .filter_map(|id| Record::read(&record_path(dir, id)).ok())
         .map(|record| {
             let seen = read_seen(dir, &record.endpoint);
             (record, seen)
         })
-        .collect()
+        .collect();
+    Listing {
+        records,
+        next,
+        total: ids.len(),
+    }
 }
 
 /// Stamps the record of `id`, when there is one, with the daemon boot its
@@ -248,10 +298,20 @@ pub fn read_seen(dir: &Path, id: &EndpointId) -> Option<String> {
 
 /// Takes the record of `id` for this client in one rename, so of several
 /// clients that see the same restored pane only one continues its chat.
-/// `Ok(false)` when another client took it first or it is gone.
+/// `Ok(false)` when another client took it first or it is gone. The claim
+/// is dated now, so [`prune`] can tell one a crashed client left behind.
 pub fn claim(dir: &Path, id: &EndpointId) -> Result<bool, Error> {
-    match fs::rename(record_path(dir, id), claimed_path(dir, id)) {
-        Ok(()) => Ok(true),
+    let claimed = claimed_path(dir, id);
+    match fs::rename(record_path(dir, id), &claimed) {
+        Ok(()) => {
+            // Undated, a claim is given back after CLAIM_STALE from when
+            // the record was written: sooner, never twice.
+            let _ = fs::OpenOptions::new()
+                .write(true)
+                .open(&claimed)
+                .and_then(|file| file.set_modified(std::time::SystemTime::now()));
+            Ok(true)
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(Error::Io(error)),
     }
@@ -274,10 +334,11 @@ pub fn remove(dir: &Path, id: &EndpointId) {
     }
 }
 
-/// Removes what no client can use any more, at most [`MAX_PRUNE`] entries
-/// looked at: records never seen live for [`UNSEEN_AGE`], claimed records
-/// and temporary files older than [`CLAIMED_AGE`], and seen stamps without
-/// a record. `now` is the wall clock to age files against.
+/// Tidies `dir`, at most [`MAX_ENTRIES`] entries looked at: gives back
+/// claims older than [`CLAIM_STALE`], which a client that exited or crashed
+/// left, so a later pass can continue their chats; and removes records never
+/// seen live for [`UNSEEN_AGE`], temporary files older than [`CLAIM_STALE`],
+/// and seen stamps with no record. `now` is the wall clock to age against.
 pub fn prune(dir: &Path, now: std::time::SystemTime) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -290,8 +351,12 @@ pub fn prune(dir: &Path, now: std::time::SystemTime) {
                     .is_ok_and(|elapsed| elapsed > age)
             })
     };
-    for entry in entries.flatten().take(MAX_PRUNE) {
-        let path = entry.path();
+    let paths: Vec<PathBuf> = entries
+        .flatten()
+        .take(MAX_ENTRIES)
+        .map(|entry| entry.path())
+        .collect();
+    for path in paths {
         let Some(id) = path
             .file_stem()
             .and_then(|stem| stem.to_str())
@@ -299,20 +364,28 @@ pub fn prune(dir: &Path, now: std::time::SystemTime) {
         else {
             continue;
         };
-        let extension = path.extension().and_then(|extension| extension.to_str());
-        let stale = match extension {
+        match path.extension().and_then(|extension| extension.to_str()) {
             Some(RECORD_EXTENSION) => {
-                !seen_path(dir, &id).exists() && older_than(&path, UNSEEN_AGE)
+                if !seen_path(dir, &id).exists() && older_than(&path, UNSEEN_AGE) {
+                    let _ = fs::remove_file(&path);
+                }
             }
-            Some(CLAIMED_EXTENSION) => older_than(&path, CLAIMED_AGE),
+            Some(CLAIMED_EXTENSION) if older_than(&path, CLAIM_STALE) => {
+                if record_path(dir, &id).exists() {
+                    let _ = fs::remove_file(&path);
+                } else {
+                    let _ = fs::rename(&path, record_path(dir, &id));
+                }
+            }
             Some(SEEN_EXTENSION) => {
-                !record_path(dir, &id).exists() && !claimed_path(dir, &id).exists()
+                if !record_path(dir, &id).exists() && !claimed_path(dir, &id).exists() {
+                    let _ = fs::remove_file(&path);
+                }
             }
-            Some(extension) if extension.starts_with("tmp-") => older_than(&path, CLAIMED_AGE),
-            _ => false,
-        };
-        if stale {
-            let _ = fs::remove_file(&path);
+            Some(extension) if extension.starts_with("tmp-") && older_than(&path, CLAIM_STALE) => {
+                let _ = fs::remove_file(&path);
+            }
+            _ => {}
         }
     }
 }
@@ -331,11 +404,14 @@ fn read_bounded(path: &Path) -> Result<Vec<u8>, Error> {
 /// with the directory and file private to this user on Unix.
 fn write_private(dir: &Path, path: &Path, bytes: &[u8]) -> Result<(), Error> {
     create_private_dir(dir)?;
-    let name = path.file_name().ok_or(Error::Path)?;
-    let mut temporary = dir.join(name);
-    temporary.set_extension(format!("tmp-{}", std::process::id()));
+    // Unique per write, and never an existing file: two windows of one app
+    // may stamp the same chat at once.
+    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let write = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut temporary = path.to_owned();
+    temporary.set_extension(format!("tmp-{}-{write}", std::process::id()));
     let mut options = fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    options.write(true).create_new(true);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     let written = options

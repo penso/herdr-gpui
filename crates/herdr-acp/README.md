@@ -148,7 +148,9 @@ or `$XDG_STATE_HOME/herdr/acp`; private to this user): the pane, the Herdr API
 socket, the agent, whether `--acp` was used, the folder, and the session id.
 It removes the record when it ends on its own, because the user quit or the
 agent ended; a killed chat, as a reboot kills it, leaves it behind for Herdr UI
-to continue the session with `--resume`. A custom command (`-- COMMAND`), a
+to continue the session with `--resume` (see
+[Chats after a reboot](../../docs/rich-chat.md#chats-after-a-reboot), which
+also covers how Herdr UI drops the record of a chat it saw end). A custom command (`-- COMMAND`), a
 chat started with extra agent arguments, one with `--no-attach`, and a chat
 outside a Herdr pane (including a Herdr 2 terminal) keep no record.
 

@@ -31,7 +31,7 @@ fn a_chat_keeps_its_latest_session_until_it_ends() {
     .unwrap();
     keeper.opened("first");
     keeper.opened("second");
-    let records = restore::list(dir.path());
+    let records = restore::list(dir.path(), None).records;
     assert_eq!(records.len(), 1);
     let record = &records[0].0;
     assert_eq!(record.session, "second");
@@ -43,7 +43,7 @@ fn a_chat_keeps_its_latest_session_until_it_ends() {
     // An id that could not be typed back drops the record rather than
     // leaving the older session to be continued.
     keeper.opened("not safe; rm -rf");
-    assert!(restore::list(dir.path()).is_empty());
+    assert!(restore::list(dir.path(), None).records.is_empty());
 
     keeper.opened("third");
     keeper.ended();
