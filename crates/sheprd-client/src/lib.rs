@@ -83,7 +83,10 @@ pub use sessions::{
     list_local_sessions, list_remote_sessions,
 };
 pub use ssh::mux::Lane as SshLane;
-pub use ssh::{Bridge, SshChannel, connect_command, script_command, shared_script_command};
+pub use ssh::{
+    Bridge, SshChannel, connect_command, remote_socket, script_command, serve_command,
+    shared_script_command,
+};
 pub use ssh::{
     Destination, FORWARD_READY, HostKeyFingerprint, HostKeyScan, HostKeys, HostProbe,
     MAX_UNVERIFIED_HOSTS, NewHostKey, SshFailure, forward_command, probe_host, probe_host_with,

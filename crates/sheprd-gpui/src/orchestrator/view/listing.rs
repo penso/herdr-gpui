@@ -18,6 +18,14 @@ impl OrchestratorView {
         self.repos.iter().filter(|repo| !repo.outside_git())
     }
 
+    /// Tells every repository's worker whether the view is on screen; a
+    /// hidden one syncs less often. Cheap, so the tick calls it each time.
+    pub(crate) fn set_visible(&self, visible: bool) {
+        for service in self.repos.iter().filter_map(|repo| repo.service.as_ref()) {
+            service.set_visible(visible);
+        }
+    }
+
     /// Lists the projects in `specs`: a repository no longer asked for stops
     /// its worker, a new candidate starts its own. The active one stays active.
     pub(crate) fn set_repos(&mut self, mut specs: Vec<RepoSpec>, cx: &mut Context<Self>) {

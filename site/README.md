@@ -1,11 +1,17 @@
 # Sheprd website
 
-The current landing page for <https://sheprd.org>, published by Netlify from
-`site/`. Root `netlify.toml` explicitly selects this directory and an empty
-build command. It is plain HTML, CSS and JavaScript: no dependency install or
-build tool is needed. Connect the repository `sheprd-labs/sheprd` to Netlify
-and select its production branch separately; this configuration does not
-deploy anything or change DNS.
+The landing page for <https://sheprd.org>, with Netlify publishing configured
+from `site/`. Automatic Netlify builds are paused: root `netlify.toml` sets
+`build.ignore = "exit 0"` for production, branches, and pull requests. Remove
+that setting to resume publishing. The site is plain HTML, CSS and JavaScript:
+no dependency install or build tool is needed.
+
+The ignore command skips Git-triggered builds; it does not disconnect the
+Netlify GitHub integration, remove existing failed checks, or stop build-hook
+deploys. To stop all builds and integration checks, disable builds/disconnect
+the repository in the Netlify project's settings as well. Connecting the
+successor repository `sheprd-labs/sheprd`, selecting its production branch,
+and changing DNS remain separate rollout steps.
 
 ```sh
 python3 -m http.server -d site 8000

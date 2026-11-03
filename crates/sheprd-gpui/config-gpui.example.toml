@@ -484,6 +484,13 @@ size = 12
 # address. mode = "address" uses a server you run at url, with its ?tkn=
 # token; a url without a mode does too. Show VS Code appears in each editor
 # group's … menu once either is possible.
+# In start mode a workspace on an SSH host gets VS Code from that host, on
+# the workspace's folder there: the app downloads VS Code's command line to
+# ~/.herdr-gpui/vscode on the host, runs `code serve-web` over SSH, and stops
+# it when the app quits. A server with no machine settings yet gets
+# "window.autoDetectColorScheme": true in ~/.vscode-server/data/Machine/
+# settings.json, so VS Code follows the app's light or dark theme; a file
+# that already has settings is left alone.
 # [code]
 # mode = "start"
 # port = 51234

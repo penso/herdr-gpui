@@ -44,6 +44,28 @@ pub(super) fn http(context: &'static str, status: u16, headers: &ureq::http::Hea
     );
 }
 
+/// Every GraphQL exchange, answered or refused, with the quota GitHub reports
+/// after it. Consecutive `rate_limit_used` values for one account give each
+/// caller's cost, so the log shows which feature spends the hourly points.
+/// Debug level: one line per request is too many for the default view.
+pub(super) fn usage(
+    context: &'static str,
+    status: u16,
+    elapsed: std::time::Duration,
+    headers: &ureq::http::HeaderMap,
+) {
+    tracing::debug!(
+        category = "github_usage",
+        context,
+        status,
+        elapsed_ms = elapsed.as_millis(),
+        rate_limit_resource = header(headers, "x-ratelimit-resource"),
+        rate_limit_used = header(headers, "x-ratelimit-used"),
+        rate_limit_remaining = header(headers, "x-ratelimit-remaining"),
+        "GitHub request"
+    );
+}
+
 /// Public headers of a GraphQL exchange, kept past the body read.
 pub(super) struct Exchange {
     request_id: String,

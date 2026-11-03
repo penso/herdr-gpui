@@ -22,7 +22,7 @@ fn pull_requests_map_to_agent_launcher_rows() {
         "pageInfo": {"hasNextPage": false, "endCursor": null},
         "nodes": [node("OPEN", false)]
     }}}});
-    let page = connection::<PullRequestNode>(response, "pullRequests").unwrap();
+    let page = connection::<PullRequestNode>(&response, "pullRequests").unwrap();
     let item = page.nodes.into_iter().next().unwrap().into_item(&github());
     assert_eq!(
         item.key.canonical(),
@@ -88,7 +88,7 @@ fn issues_keep_their_number_as_native_id_and_lowercase_state() {
 fn a_response_without_the_connection_is_a_typed_error() {
     let missing = json!({"data": {"repository": null}});
     assert!(matches!(
-        connection::<IssueNode>(missing, "issues"),
+        connection::<IssueNode>(&missing, "issues"),
         Err(Error::Output { .. })
     ));
 }

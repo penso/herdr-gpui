@@ -28,10 +28,15 @@ fn luminance(color: u32) -> f32 {
     0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
 }
 
+/// Whether `theme` reads as light, by its background.
+pub(crate) fn is_light(theme: &Theme) -> bool {
+    luminance(theme.background) > 0.5
+}
+
 /// The kit's color tokens for `theme`. The selector outranks the kit's own
 /// light and dark defaults, which come after it in the cascade.
 pub(crate) fn theme_css(theme: &Theme) -> String {
-    let light = luminance(theme.background) > 0.5;
+    let light = is_light(theme);
     let raised = if light {
         mix(theme.background, 0xffffff, 70)
     } else {

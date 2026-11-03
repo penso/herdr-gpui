@@ -6,6 +6,7 @@ mod beads;
 mod beads_only;
 #[cfg(unix)]
 mod beads_script;
+mod combined_changes;
 mod full_listing;
 mod gateway_timeout;
 mod git;

@@ -59,6 +59,8 @@ pub enum Error {
     Silent(Duration),
     #[error("Could not start the VS Code worker.")]
     Worker(#[source] io::Error),
+    #[error(transparent)]
+    Host(#[from] super::host::Error),
 }
 
 pub(super) type Result<T> = std::result::Result<T, Error>;

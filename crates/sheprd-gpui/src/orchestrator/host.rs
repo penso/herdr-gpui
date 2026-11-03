@@ -349,7 +349,13 @@ impl SheprdWindow {
         let (live, branches) = self.live_agents();
         let look = self.look();
         let specs = self.repo_specs();
-        for (_, view) in views {
+        // Only the shown Pull requests or Issues section is on screen; the
+        // bar's counts alone do not need a sync a minute.
+        let shown_view = self
+            .activity_section()
+            .and_then(super::section::list_of)
+            .and(self.activity.section_view);
+        for (id, view) in views {
             let accounts: Vec<_> = view
                 .read(cx)
                 .targets()
@@ -361,6 +367,7 @@ impl SheprdWindow {
                 .collect();
             view.update(cx, |view, cx| {
                 view.set_repos(specs.clone(), cx);
+                view.set_visible(shown_view == Some(id));
                 view.poll(cx);
                 view.set_look(look.clone(), cx);
                 view.set_live(live.clone(), branches.clone(), cx);

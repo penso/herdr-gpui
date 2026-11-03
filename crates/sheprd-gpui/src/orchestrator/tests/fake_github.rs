@@ -82,6 +82,11 @@ fn answer(request: &Value, asked: &Mutex<Vec<String>>) -> Value {
             "nodes": nodes,
         }}}})
     };
+    if query.contains("issues(") && query.contains("pullRequests(") {
+        // An incremental sync's combined first pages: nothing changed.
+        let empty = json!({"pageInfo": {"hasNextPage": false, "endCursor": null}, "nodes": []});
+        return json!({"data": {"repository": {"issues": empty, "pullRequests": empty}}});
+    }
     if query.contains("issues(") {
         asked.lock().unwrap().push(repository.clone());
         return page("issues", json!([issue(&repository, 7, ISSUE_TITLE)]));

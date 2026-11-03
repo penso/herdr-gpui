@@ -39,6 +39,9 @@ fn the_served_theme_follows_the_users_colors() {
     let css = theme_css(&light);
     assert!(css.contains("color-scheme: light;"));
     assert!(css.contains(&format!("--hk-bg: #{:06x};", light.background)));
+    // Pages report the same light or dark as their color scheme.
+    assert!(!is_light(&dark));
+    assert!(is_light(&light));
     // The key changes with the colors, so a theme switch is noticed.
     assert_ne!(theme_key(&dark), theme_key(&light));
     assert_eq!(theme_key(&dark), theme_key(&Theme::default()));

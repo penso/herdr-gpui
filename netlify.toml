@@ -2,6 +2,9 @@
 [build]
   command = ""
   publish = "site"
+  # Pause automatic production, branch, and PR builds during the migration.
+  # Netlify treats exit 0 as "ignore this build"; remove this to resume.
+  ignore = "exit 0"
 
 # Scope the canonical redirect to www so deploy previews remain usable.
 [[redirects]]

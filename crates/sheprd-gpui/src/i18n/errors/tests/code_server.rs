@@ -44,6 +44,9 @@ fn every_code_server_variant_has_a_message() {
         Error::Watch(io()),
         Error::Silent(Duration::from_secs(30)),
         Error::Worker(io()),
+        Error::Host(crate::code_server::host::Error::NotLoopback {
+            name: "vscode-0123456789abcdef.localhost".into(),
+        }),
     ];
     errors.extend(
         [

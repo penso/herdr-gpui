@@ -99,6 +99,11 @@ mod code_group_server;
 #[cfg(any(target_os = "macos", windows))]
 mod code_folder;
 
+/// A workspace on an SSH host opens VS Code from that host's own server,
+/// which only builds that show pages start.
+#[cfg(any(target_os = "macos", windows))]
+mod code_host;
+
 /// The VS Code server the app starts: its license, its states, and when it
 /// starts. Only builds that show pages start one.
 #[cfg(any(target_os = "macos", windows))]

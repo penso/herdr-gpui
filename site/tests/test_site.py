@@ -52,7 +52,8 @@ class PublishingTests(unittest.TestCase):
 
     def test_netlify_only_canonicalizes_www_and_blocks_internal_files(self):
         config = tomllib.loads((ROOT / "netlify.toml").read_text())
-        self.assertEqual(config["build"], {"publish": "site", "command": ""})
+        self.assertEqual(config["build"]["publish"], "site")
+        self.assertEqual(config["build"]["command"], "")
         redirects = config["redirects"]
         canonical = [r for r in redirects if r["status"] == 301]
         self.assertEqual({r["from"] for r in canonical}, {

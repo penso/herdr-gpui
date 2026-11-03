@@ -9,12 +9,15 @@
 //! window first asks the server whether it is there, and creates each page
 //! only after an answer of its own. Until then the tab says why it is
 //! empty. The server is the one at `[code] url`, or the one the app starts
-//! (see [`crate::code_server::launcher`]).
-use super::{Editor, GroupId, Location, Scope, Store, TabId, WebUrl, view::store};
+//! (see [`crate::code_server::launcher`]), or for a workspace on an SSH host
+//! the one the app starts there (see [`super::code_host`]).
+use super::{
+    Editor, GroupId, Location, Scope, Store, TabId, WebUrl, code_host::CodeHost, view::store,
+};
 use crate::i18n::fl;
 use crate::{
     SheprdWindow,
-    code_server::{self, Launcher, Server, Startup},
+    code_server::{self, Server, Startup},
     window::Flash,
 };
 use gpui::{prelude::*, *};
@@ -56,6 +59,20 @@ impl Default for CodeServer {
     }
 }
 
+impl CodeServer {
+    /// A server nothing is known of yet, asked with these.
+    pub(super) fn asked_by(
+        probe: fn(&WebUrl) -> crate::Result<Server>,
+        started_probe: fn(&WebUrl) -> crate::Result<Server>,
+    ) -> Self {
+        Self {
+            probe,
+            started_probe,
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Reach {
     Unknown,
@@ -84,7 +101,8 @@ impl SheprdWindow {
             self.show_flash(Flash::warning(fl!("browser-open-workspace-first")), cx);
             return;
         }
-        let startup = Launcher::startup(cx, &self.config.code);
+        let host = self.code_host(cx);
+        let startup = self.code_startup(&host, cx);
         if !super::EMBEDDED {
             self.show_flash(Flash::warning(fl!("browser-no-pages")), cx);
             return;
@@ -98,7 +116,7 @@ impl SheprdWindow {
             return;
         }
         let location = startup.url(&self.config.code).map(|url| Location::Web {
-            url: self.code_start(url),
+            url: self.code_start(url, &host),
         });
         self.open_embedded_editor(Editor::VsCode, group, location, window, cx);
     }
@@ -125,27 +143,24 @@ impl SheprdWindow {
         if !super::EMBEDDED {
             return;
         }
-        Launcher::sync(cx, &self.config.code);
+        let host = self.code_host(cx);
         let wanted = self.code_page_wanted(cx);
-        if wanted {
-            Launcher::want(cx, &self.config.code);
-        }
-        Launcher::refresh(cx);
-        let startup = Launcher::startup(cx, &self.config.code);
+        self.sync_code_servers(&host, wanted, cx);
+        let startup = self.code_startup(&host, cx);
         let Some(url) = startup.url(&self.config.code).cloned() else {
-            self.forget_code_address(cx);
+            self.forget_code_address(&host, cx);
             return;
         };
         let Some((scope, workspace)) = self.browser_key() else {
             return;
         };
-        self.follow_code_address(&url, cx);
+        self.follow_code_address(&host, &url, cx);
         // A page left on a server that stopped would show VS Code's own
         // reconnecting screen; the tab says why instead, and the page is
         // made again, where it was, once the server is back.
         #[cfg(any(target_os = "macos", windows))]
         if matches!(startup, Startup::Failed { .. }) {
-            self.close_editor_pages(Editor::VsCode, cx);
+            self.close_code_pages(&host, cx);
         }
         // A tab opened before its server's address was known starts at it
         // now, on the workspace's folder.
@@ -153,9 +168,26 @@ impl SheprdWindow {
             .and_then(|store| store.code_tab(&scope, &workspace))
             .filter(|tab| tab.location.is_none())
         {
-            let (id, start) = (tab.id, self.code_start(&url));
+            let (id, start) = (tab.id, self.code_start(&url, &host));
             Store::update(cx, |store| {
                 store.visited(id, Some(Location::Web { url: start }), None)
+            });
+        }
+        // A tab that moved to its host's server from this computer's, where
+        // it could name no folder, opens the workspace's folder there.
+        if matches!(host, CodeHost::Ssh(_))
+            && let Some(folder) = self.host_editor_root()
+            && let Some((id, page)) = store(cx)
+                .and_then(|store| store.code_tab(&scope, &workspace))
+                .filter(|tab| self.browser.code_folderless.contains(&tab.id))
+                .and_then(|tab| match &tab.location {
+                    Some(Location::Web { url: page }) => Some((tab.id, with_folder(page, folder))),
+                    _ => None,
+                })
+        {
+            self.browser.code_folderless.remove(&id);
+            Store::update(cx, |store| {
+                store.visited(id, Some(Location::Web { url: page }), None)
             });
         }
         let started = !matches!(startup, Startup::Address);
@@ -164,8 +196,8 @@ impl SheprdWindow {
         if !wanted
             || !startup.serving()
             || self.code_page_settled(&scope, &workspace, cx)
-            || !self.code_server_ready(&url, started, cx)
-            || (started && !Launcher::alive(cx))
+            || !self.code_server_ready(&host, &url, started, cx)
+            || (started && !Self::code_server_alive(&host, cx))
         {
             return;
         }
@@ -187,7 +219,7 @@ impl SheprdWindow {
             self.create_editor_page(&tab, window, cx);
             // An answer serves one page: the next one asks again, in case
             // the server has stopped since.
-            self.browser.code_server.state = Reach::Unknown;
+            self.code_server_mut(&host).state = Reach::Unknown;
             cx.notify();
         }
     }
@@ -209,40 +241,57 @@ impl SheprdWindow {
     /// still on another server to this one, where they stay in their groups
     /// with their folders, and closes their pages, so each reopens there
     /// with its token.
-    fn follow_code_address(&mut self, url: &WebUrl, cx: &mut Context<Self>) {
-        if self.browser.code_server.url.as_ref() != Some(url) {
-            let server = &mut self.browser.code_server;
+    /// Only the tabs `host` serves move. A tab that moves to a host's server
+    /// without a folder is marked to get its workspace's.
+    fn follow_code_address(&mut self, host: &CodeHost, url: &WebUrl, cx: &mut Context<Self>) {
+        let server = self.code_server_mut(host);
+        if server.url.as_ref() != Some(url) {
             server.url = Some(url.clone());
             server.state = Reach::Unknown;
             server.generation += 1;
-            Store::update(cx, |store| {
-                store.follow_code_server(url, |page| on_server(page, url))
+            let serves = self.code_scopes(host, cx);
+            let moved = Store::update(cx, |store| {
+                store.follow_code_server(url, serves, |page| on_server(page, url))
             });
+            if matches!(host, CodeHost::Ssh(_))
+                && let Some(store) = store(cx)
+            {
+                let folderless = moved.into_iter().filter(|id| {
+                    store.get(*id).is_some_and(|tab| {
+                        matches!(&tab.location, Some(Location::Web { url }) if !has_folder(url))
+                    })
+                });
+                self.browser.code_folderless.extend(folderless);
+            }
             #[cfg(any(target_os = "macos", windows))]
-            self.close_editor_pages(Editor::VsCode, cx);
+            self.close_code_pages(host, cx);
         }
     }
 
-    /// Where the focused workspace's new VS Code tab opens: the configured
-    /// `url`, on the folder the workspace started in, as its first tab's
-    /// first pane reports it. Only a workspace on this computer names one,
-    /// since a remote one's folder is on another machine than the server.
-    pub(super) fn code_start(&self, url: &WebUrl) -> WebUrl {
-        self.local_editor_root()
-            .map_or_else(|| url.clone(), |folder| with_folder(url, folder))
+    /// Where the focused workspace's new VS Code tab opens: `host`'s `url`,
+    /// on the folder the workspace started in, as its first tab's first pane
+    /// reports it. The local server names one only for a workspace on this
+    /// computer, since a remote one's folder is on another machine; a host's
+    /// own server opens it there.
+    pub(super) fn code_start(&self, url: &WebUrl, host: &CodeHost) -> WebUrl {
+        match host {
+            CodeHost::Local => self.local_editor_root(),
+            CodeHost::Ssh(_) => self.host_editor_root(),
+        }
+        .map_or_else(|| url.clone(), |folder| with_folder(url, folder))
     }
 
     /// Forgets the server once its address is removed, closing the pages
     /// still showing it, so their tabs ask for an address instead.
-    fn forget_code_address(&mut self, cx: &App) {
-        let server = &mut self.browser.code_server;
+    fn forget_code_address(&mut self, host: &CodeHost, cx: &App) {
+        let server = self.code_server_mut(host);
         if server.url.take().is_none() {
             return;
         }
         server.state = Reach::Unknown;
         server.generation += 1;
         #[cfg(any(target_os = "macos", windows))]
-        self.close_editor_pages(Editor::VsCode, cx);
+        self.close_code_pages(host, cx);
         #[cfg(not(any(target_os = "macos", windows)))]
         let _ = cx;
     }
@@ -252,26 +301,32 @@ impl SheprdWindow {
     /// while ago. A page created against a server that has since stopped
     /// would stay blank, so an old answer is not trusted.
     /// `started` says the server is the one the app started.
-    fn code_server_ready(&mut self, url: &WebUrl, started: bool, cx: &mut Context<Self>) -> bool {
-        match &self.browser.code_server.state {
+    fn code_server_ready(
+        &mut self,
+        host: &CodeHost,
+        url: &WebUrl,
+        started: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match &self.code_server_mut(host).state {
             Reach::Ready { at, .. } if at.elapsed() < RETRY => return true,
             Reach::Asking => return false,
             Reach::Failed { at, .. } if at.elapsed() < RETRY => return false,
             Reach::Unknown | Reach::Ready { .. } | Reach::Failed { .. } => {}
         }
-        let server = &mut self.browser.code_server;
+        let server = self.code_server_mut(host);
         server.state = Reach::Asking;
         let probe = if started {
             server.started_probe
         } else {
             server.probe
         };
-        let (generation, url) = (server.generation, url.clone());
+        let (generation, url, host) = (server.generation, url.clone(), host.clone());
         let answer = cx.background_executor().spawn(async move { probe(&url) });
         cx.spawn(async move |this, cx| {
             let answer = answer.await;
             let _ = this.update(cx, |this, cx| {
-                let server = &mut this.browser.code_server;
+                let server = this.code_server_mut(&host);
                 if server.generation != generation {
                     return;
                 }
@@ -346,6 +401,11 @@ fn on_server(page: &WebUrl, server: &WebUrl) -> WebUrl {
     url.set_path(page.0.path());
     url.set_query((!query.is_empty()).then(|| query.join("&")).as_deref());
     WebUrl::try_from(url.as_str()).unwrap_or_else(|_| server.clone())
+}
+
+/// Whether `url` names a folder for `code serve-web` to open.
+fn has_folder(url: &WebUrl) -> bool {
+    url.0.query_pairs().any(|(key, _)| key == FOLDER)
 }
 
 /// `url` opening `folder`, which `code serve-web` takes as its `folder`
