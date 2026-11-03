@@ -14,6 +14,8 @@ use std::sync::atomic::AtomicBool;
 
 mod en_xa;
 mod flow;
+#[cfg(not(windows))]
+mod include;
 mod review;
 
 /// A window connected to `peer`, projecting the peer's own snapshot so
