@@ -73,9 +73,11 @@ struct RootView: View {
         .animation(.spring(duration: 0.4), value: model.nearbyOffer?.id)
         // Bluetooth looks for computers only while pairing is likely, so
         // its permission prompt comes when the person is pairing.
+        // Shared by every window: each says whether it wants it.
         .onChange(of: window.pairing || model.computers.isEmpty, initial: true) { _, looking in
-            if looking { model.bluetooth.start() } else { model.bluetooth.stop() }
+            model.bluetooth.look(looking, for: window)
         }
+        .onDisappear { model.bluetooth.look(false, for: window) }
         #if DEBUG
         .task { await followLaunchArguments() }
         #endif

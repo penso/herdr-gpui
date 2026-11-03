@@ -14,6 +14,8 @@ final class NearbyBluetooth: NSObject {
     private(set) var computers: [NearbyComputer] = []
     private var manager: CBCentralManager?
     private var wanted = false
+    /// The windows that want scanning (`look`); it runs while any does.
+    private var lookers: Set<ObjectIdentifier> = []
     private var peripherals: [UUID: CBPeripheral] = [:]
     /// Peripherals whose `info` is being read, to list them.
     private var probing: Set<UUID> = []
@@ -41,6 +43,19 @@ final class NearbyBluetooth: NSObject {
             case .gone: "The computer went out of Bluetooth range."
             case let .refused(message): message
             }
+        }
+    }
+
+    /// Whether `window` wants scanning. One window closing its pair sheet
+    /// leaves another that is still pairing scanning.
+    func look(_ looking: Bool, for window: AnyObject) {
+        let id = ObjectIdentifier(window)
+        let was = !lookers.isEmpty
+        if looking { lookers.insert(id) } else { lookers.remove(id) }
+        switch (was, !lookers.isEmpty) {
+        case (false, true): start()
+        case (true, false): stop()
+        default: break
         }
     }
 
