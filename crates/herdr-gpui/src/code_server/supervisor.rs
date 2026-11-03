@@ -30,6 +30,9 @@ pub(crate) struct Plan {
     /// keeps its settings in the storage of the page's origin.
     pub(crate) port: Option<NonZeroU16>,
     pub(crate) token_file: PathBuf,
+    /// The SSH host VS Code runs on, through `program` (`ssh`), which hands
+    /// the token to it on standard input; `None` for this computer.
+    pub(crate) host: Option<String>,
 }
 
 /// Where the server listens, and the address with its token that the
@@ -235,9 +238,15 @@ impl Supervisor {
         Self::start_with(
             plan,
             |plan, port| {
+                if let Some(home) = herdr_client::local_path::home_dir() {
+                    let settings = super::machine::path(&home);
+                    if let Err(error) = super::machine::seed(&settings) {
+                        tracing::warn!(%error, "Could not write VS Code's machine settings");
+                    }
+                }
                 let mut command = serve_web(plan, port);
                 crate::login_env::apply(&mut command);
-                command
+                Ok(command)
             },
             // Never the token: the app wrote the file the server reads it from.
             super::version,
@@ -248,7 +257,7 @@ impl Supervisor {
 
     pub(super) fn start_with(
         plan: Plan,
-        command: impl Fn(&Plan, NonZeroU16) -> Command + Send + 'static,
+        command: impl Fn(&Plan, NonZeroU16) -> crate::Result<Command> + Send + 'static,
         probe: impl Fn(&WebUrl) -> crate::Result<Server> + Send + 'static,
         save_port: impl Fn(NonZeroU16) -> crate::Result<()> + Send + 'static,
         timing: Timing,
@@ -386,7 +395,7 @@ struct Worker<C, P, S> {
 
 impl<C, P, S> Worker<C, P, S>
 where
-    C: Fn(&Plan, NonZeroU16) -> Command,
+    C: Fn(&Plan, NonZeroU16) -> crate::Result<Command>,
     P: Fn(&WebUrl) -> crate::Result<Server>,
     S: Fn(NonZeroU16) -> crate::Result<()>,
 {
@@ -428,6 +437,11 @@ where
         match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
             Ok(listener) => drop(listener),
             Err(error) if error.kind() == ErrorKind::AddrInUse => {
+                // A host's port is the app's own pick, so the next start
+                // picks another.
+                if self.plan.host.is_some() {
+                    self.port = None;
+                }
                 return failed(Error::PortTaken { port });
             }
             Err(source) => return failed(Error::PortCheck { port, source }),
@@ -442,7 +456,15 @@ where
         let port = match self.port {
             Some(port) => port,
             None => {
-                let port = free_port()?;
+                let port = match self
+                    .plan
+                    .host
+                    .as_deref()
+                    .and_then(super::host::preferred_port)
+                {
+                    Some(port) => port,
+                    None => free_port()?,
+                };
                 // VS Code still runs on it; the next launch picks another.
                 if let Err(error) = (self.save_port)(port) {
                     tracing::warn!(%error, port = port.get(), "Could not save the VS Code port");
@@ -451,7 +473,15 @@ where
                 port
             }
         };
-        let url = WebUrl::try_from(format!("http://127.0.0.1:{port}/?tkn={}", token.as_str()))?;
+        let host = self
+            .plan
+            .host
+            .as_deref()
+            .map_or_else(|| "127.0.0.1".to_owned(), super::host::page_host);
+        if self.plan.host.is_some() && super::host::resolves_elsewhere(&host, port) {
+            return Err(Error::from(super::host::Error::NotLoopback { name: host }).into());
+        }
+        let url = WebUrl::try_from(format!("http://{host}:{port}/?tkn={}", token.as_str()))?;
         let address = Address { port, url };
         self.shared.publish(|slot| {
             slot.status = Some(Status::Starting);
@@ -468,14 +498,29 @@ where
             }
             slot.spawning = true;
         }
-        let mut command = (self.command)(&self.plan, address.port);
+        let mut command = match (self.command)(&self.plan, address.port) {
+            Ok(command) => command,
+            Err(error) => {
+                self.shared.lock().spawning = false;
+                self.shared.wake.notify_all();
+                return failed(error);
+            }
+        };
         process::isolate(&mut command);
+        if self.plan.host.is_some() {
+            command.stdin(std::process::Stdio::piped());
+        }
         let spawned = command.spawn();
         let stdout = {
             let mut slot = self.shared.lock();
             slot.spawning = false;
             let stdout = spawned.map(|mut child| {
                 let stdout = child.stdout.take();
+                // A host's server takes the token on the first line, and
+                // stops when the rest of its input ends, with the child.
+                if let (Some(stdin), Some(token)) = (child.stdin.as_mut(), token(&address.url)) {
+                    let _ = std::io::Write::write_all(stdin, format!("{token}\n").as_bytes());
+                }
                 slot.child = Some(child);
                 stdout
             });
@@ -526,6 +571,7 @@ where
                     self.shared
                         .publish(|slot| slot.status = Some(Status::Starting));
                     let error = match self.shared.end(self.timing.grace) {
+                        Some(Ok(status)) if self.plan.host.is_some() => super::host::exited(status),
                         Some(Ok(status)) => Error::Exited(status),
                         Some(Err(source)) => Error::Watch(source),
                         // Taken by a shutdown, which stopped it.
@@ -559,6 +605,15 @@ where
             self.shared.sleep(self.timing.poll);
         }
     }
+}
+
+/// The connection token `url` carries.
+fn token(url: &WebUrl) -> Option<String> {
+    url::Url::parse(url.as_str())
+        .ok()?
+        .query_pairs()
+        .find(|(key, _)| key == "tkn")
+        .map(|(_, value)| value.into_owned())
 }
 
 /// A loopback port the system considers free right now.

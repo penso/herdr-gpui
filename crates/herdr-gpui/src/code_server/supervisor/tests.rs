@@ -64,6 +64,7 @@ mod process {
                 program: self.program.clone(),
                 port,
                 token_file: self.path("vscode-token"),
+                host: None,
             }
         }
 
@@ -96,7 +97,7 @@ mod process {
             let recorded = saved.clone();
             let supervisor = Supervisor::start_with(
                 self.plan(port),
-                serve_web,
+                |plan, port| Ok(serve_web(plan, port)),
                 probe,
                 move |port| {
                     recorded.lock().unwrap().push(port);
@@ -325,7 +326,7 @@ mod process {
             move |plan, port| {
                 let _ = starting.send(());
                 thread::sleep(Duration::from_millis(300));
-                serve_web(plan, port)
+                Ok(serve_web(plan, port))
             },
             fake.probe(),
             |_| Ok(()),
@@ -393,7 +394,7 @@ mod process {
             shared: Arc::default(),
             plan,
             port: None,
-            command: serve_web,
+            command: |plan: &Plan, port| Ok(serve_web(plan, port)),
             probe: |_: &WebUrl| -> crate::Result<Server> {
                 panic!("a missing program cannot answer")
             },
@@ -420,7 +421,7 @@ mod process {
         let fake = Fake::new("exec sleep 60");
         let supervisor = Supervisor::start_with(
             fake.plan(None),
-            serve_web,
+            |plan, port| Ok(serve_web(plan, port)),
             fake.probe(),
             |_| Ok(()),
             Timing {

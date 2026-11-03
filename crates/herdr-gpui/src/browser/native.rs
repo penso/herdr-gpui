@@ -124,6 +124,9 @@ pub(crate) struct Pages {
     preview: Option<Rc<Preview>>,
     /// The theme the kit serves local pages, and the colors it came from.
     theme: (super::kit::ThemeKey, String),
+    /// Whether that theme is light, which every page reports as its color
+    /// scheme; `None` until the window sets a theme.
+    light: Option<bool>,
 }
 
 impl Default for Pages {
@@ -149,6 +152,7 @@ impl Default for Pages {
             parked: HashMap::new(),
             preview: None,
             theme: Default::default(),
+            light: None,
         }
     }
 }
@@ -394,7 +398,11 @@ impl Pages {
         view: wry::WebView,
         window: &Window,
     ) -> crate::Result<()> {
-        self.pages.insert(id, Rc::new(Page::new(view, window)?));
+        let page = Rc::new(Page::new(view, window)?);
+        if let Some(light) = self.light {
+            page.set_light(light);
+        }
+        self.pages.insert(id, page);
         self.hide(id);
         Ok(())
     }
@@ -411,7 +419,8 @@ impl Pages {
     }
 
     /// Serves `theme` to local pages from now on: a page picks it up when it
-    /// next loads. Cheap when the colors did not change.
+    /// next loads. Every page reports its light or dark at once. Cheap when
+    /// the colors did not change.
     pub(crate) fn set_theme(&mut self, theme: &crate::config::Theme) {
         let key = super::kit::theme_key(theme);
         if self.theme.0 == key && !self.theme.1.is_empty() {
@@ -420,6 +429,13 @@ impl Pages {
         self.theme = (key, super::kit::theme_css(theme));
         if let Some(preview) = &self.preview {
             preview.set_theme(self.theme.1.clone());
+        }
+        let light = super::kit::is_light(theme);
+        if self.light != Some(light) {
+            self.light = Some(light);
+            for page in self.pages.values() {
+                page.set_light(light);
+            }
         }
     }
 
@@ -491,7 +507,11 @@ impl Pages {
         let mtm = objc2::MainThreadMarker::new().ok_or(crate::Error::PageStack)?;
         let (view, delegate, place) = popup.into_parts(mtm);
         // It was built hidden, and appears when the window presents it.
-        self.pages.insert(id, Rc::new(Page::new(view, window)?));
+        let page = Rc::new(Page::new(view, window)?);
+        if let Some(light) = self.light {
+            page.set_light(light);
+        }
+        self.pages.insert(id, page);
         self.delegates.insert(id, delegate);
         self.parked.insert(id, place);
         if let Source::Popup(key) = source {

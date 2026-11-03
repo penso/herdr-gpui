@@ -20,6 +20,7 @@ mod chat_pages;
 mod closed;
 mod code;
 mod code_group;
+mod code_host;
 mod code_start;
 mod code_view;
 mod editor;

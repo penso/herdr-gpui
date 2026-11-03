@@ -31,12 +31,12 @@ pub(crate) fn license_terms() -> String {
 }
 
 /// How often the worker's state is read for the windows.
-const POLL: Duration = Duration::from_millis(250);
+pub(super) const POLL: Duration = Duration::from_millis(250);
 /// GPUI gives every quit handler together 200 ms; the child gets most of it
 /// to stop before it is killed.
-const QUIT_BUDGET: Duration = Duration::from_millis(150);
+pub(super) const QUIT_BUDGET: Duration = Duration::from_millis(150);
 /// How long a worker that could not start is left before trying again.
-const RETRY: Duration = Duration::from_secs(5);
+pub(super) const RETRY: Duration = Duration::from_secs(5);
 
 /// What is known of VS Code's command line.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -138,6 +138,12 @@ fn startup(
         Cli::Found(_) if !code.license_accepted => return Startup::Consent,
         Cli::Found(_) => {}
     }
+    reported(running, report)
+}
+
+/// Where a server the app starts is, from its worker's last report: `running`
+/// says a worker was started, which may not have reported yet.
+pub(super) fn reported(running: bool, report: Option<&Report>) -> Startup {
     let Some(report) = report else {
         return if running {
             Startup::Starting { url: None }
@@ -166,6 +172,7 @@ fn plan(embedded: bool, code: &CodeConfig, cli: &Cli, token_file: PathBuf) -> Op
         program: program.clone(),
         port: code.port,
         token_file,
+        host: None,
     })
 }
 
