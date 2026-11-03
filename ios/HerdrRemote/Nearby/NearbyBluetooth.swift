@@ -101,14 +101,54 @@ final class NearbyBluetooth: NSObject {
     }
 
     /// The two pairing messages over this peripheral's `pair` characteristic.
+    /// The exchange ends with the reveal, or with the first failure: either
+    /// way it is released, so the computer can age out of the list again.
     func io(for identifier: UUID) -> NearbyIO {
         NearbyIO(
-            start: { key in try await self.request(identifier, ["type": "start", "public_key": key]) },
-            reveal: { session, nonce in try await self.request(identifier, ["type": "reveal", "session": session, "nonce": nonce]) }
+            start: { key in
+                try await self.releasing(identifier, after: false) {
+                    try await self.request(identifier, ["type": "start", "public_key": key])
+                }
+            },
+            reveal: { session, nonce in
+                try await self.releasing(identifier, after: true) {
+                    try await self.request(identifier, ["type": "reveal", "session": session, "nonce": nonce])
+                }
+            }
         )
     }
 
+    /// Runs one step of an exchange, releasing it when the step fails, and
+    /// after it when `after` (the last step).
+    private func releasing<Answer>(_ identifier: UUID, after: Bool, _ step: () async throws -> Answer) async throws -> Answer {
+        do {
+            let answer = try await step()
+            if after { release(identifier) }
+            return answer
+        } catch {
+            release(identifier)
+            throw error
+        }
+    }
+
+    /// Ends an exchange: forgets it and closes the pairing connection.
+    private func release(_ identifier: UUID) {
+        fail(identifier, CancellationError())
+        if let peripheral = peripherals[identifier] { manager?.cancelPeripheralConnection(peripheral) }
+    }
+
+    /// One message and its answer. Cancelling the pairing (closing the
+    /// card) fails the exchange, which resumes whatever it was waiting on.
     private func request<Answer: Decodable>(_ identifier: UUID, _ body: [String: String]) async throws -> Answer {
+        try await withTaskCancellationHandler {
+            try await send(identifier, body)
+        } onCancel: {
+            Task { @MainActor in self.fail(identifier, CancellationError()) }
+        }
+    }
+
+    private func send<Answer: Decodable>(_ identifier: UUID, _ body: [String: String]) async throws -> Answer {
+        try Task.checkCancellation()
         guard let manager, let peripheral = peripherals[identifier] else { throw Failure.gone }
         let exchange = exchanges[identifier] ?? Exchange()
         exchanges[identifier] = exchange
