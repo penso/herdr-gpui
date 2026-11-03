@@ -7,6 +7,7 @@ mod beads_only;
 #[cfg(unix)]
 mod beads_script;
 mod full_listing;
+mod gateway_timeout;
 mod git;
 mod github;
 mod gitlab;

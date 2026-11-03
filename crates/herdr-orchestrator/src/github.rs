@@ -30,6 +30,9 @@ pub const FULL_EVERY: TimeDelta = TimeDelta::minutes(30);
 /// Pull requests read per page when only changes are wanted: usually the
 /// first page already reaches one older than the last sync.
 const CHANGED_PAGE: usize = 20;
+/// The fewest open pull requests a full listing asks for once GitHub timed
+/// out on a larger page.
+const SMALLEST_PAGE: usize = 25;
 
 const ISSUES: &str = r#"query($owner: String!, $repo: String!, $after: String) {
   repository(owner: $owner, name: $repo) {
@@ -205,13 +208,24 @@ pub fn full(
 
     let issues = items.len();
     let mut after = Value::Null;
+    // GitHub stops a GraphQL query after about ten seconds and answers 502
+    // or 504. A page of a hundred pull requests with their bodies can take
+    // that long in a busy repository, so a timed-out page is read again at
+    // half the size, and the rest of the listing keeps the smaller size.
+    let mut count = PAGE;
     loop {
         let variables = json!({
             "owner": owner, "repo": repo, "after": after,
-            "states": ["OPEN"], "count": PAGE,
+            "states": ["OPEN"], "count": count,
         });
-        let page: Page<PullRequestNode> =
-            connection(fetch(PULL_REQUESTS, variables)?, "pullRequests")?;
+        let response = match fetch(PULL_REQUESTS, variables) {
+            Err(error) if gateway_timeout(&error) && count > SMALLEST_PAGE => {
+                count = (count / 2).max(SMALLEST_PAGE);
+                continue;
+            }
+            response => response?,
+        };
+        let page: Page<PullRequestNode> = connection(response, "pullRequests")?;
         items.extend(page.nodes.into_iter().map(|node| node.into_item(source)));
         match next(&page.page_info, items.len() - issues) {
             Next::Page(cursor) => after = cursor,
@@ -373,6 +387,12 @@ enum Next {
     Page(Value),
     Done,
     Capped,
+}
+
+/// Whether GitHub gave up on a query that ran too long, rather than refusing
+/// it: a smaller page may then succeed.
+fn gateway_timeout(error: &Error) -> bool {
+    matches!(error, Error::Github(error) if matches!(**error, herdr_github::Error::Status(502 | 504)))
 }
 
 fn next(info: &PageInfo, read: usize) -> Next {
