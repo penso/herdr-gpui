@@ -19,7 +19,7 @@ use gpui::{prelude::*, *};
 /// Avatar or signed-out GitHub icon. Smaller than the hit target, which stays a
 /// comfortable size for the pointer.
 const AVATAR: f32 = 20.;
-/// The dot an account waiting on GitHub App approval puts on the avatar.
+/// The dot for an account needing attention or waiting on its API quota.
 const ATTENTION_DOT: f32 = 10.;
 
 const SIDEBAR_TOGGLE_SIZE: f32 = 28.;
@@ -46,6 +46,7 @@ impl HerdrWindow {
         if self.orchestrator_gitlab_needs_sign_in(cx)
             && self.pr_profile().is_some()
             && !self.github_needs_attention()
+            && self.github_rate_limit_message().is_none()
         {
             self.open_gitlab_page(window, cx);
             return;
@@ -317,6 +318,10 @@ impl HerdrWindow {
             .pr_profile()
             .and_then(|profile| self.menu.github_avatars.get(&profile.avatar_url));
         let attention = self.github_needs_attention() || self.orchestrator_gitlab_needs_sign_in(cx);
+        let rate_limit = self.github_rate_limit_message();
+        let limited = rate_limit.is_some();
+        let foreground = self.theme.foreground;
+        let surface = self.theme.surface;
         div()
             .row()
             .flex_none()
@@ -336,7 +341,9 @@ impl HerdrWindow {
                         div()
                             .id("titlebar-avatar")
                             .role(Role::Button)
-                            .aria_label(if attention {
+                            .aria_label(if let Some(message) = &rate_limit {
+                                message.clone()
+                            } else if attention {
                                 fl!("titlebar-accounts-attention")
                             } else {
                                 fl!("titlebar-accounts")
@@ -356,6 +363,16 @@ impl HerdrWindow {
                             .size(px(28.))
                             .rounded_full()
                             .cursor_pointer()
+                            .when_some(rate_limit.clone(), |control, message| {
+                                control.tooltip(move |_, cx| {
+                                    cx.new(|_| crate::usage::Hint {
+                                        text: message.clone().into(),
+                                        foreground,
+                                        surface,
+                                    })
+                                    .into()
+                                })
+                            })
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
@@ -400,7 +417,7 @@ impl HerdrWindow {
                             // On the avatar's upper right, inside the hit
                             // target, ringed in the bar's color to stand off
                             // any avatar.
-                            .when(attention, |control| {
+                            .when(attention || limited, |control| {
                                 control.child(
                                     div()
                                         .debug_selector(|| "titlebar-avatar-attention".into())
@@ -411,7 +428,9 @@ impl HerdrWindow {
                                         .rounded_full()
                                         .border_2()
                                         .border_color(bar(self.theme.surface))
-                                        .bg(rgb(self.theme.ink(self.theme.palette[1]))),
+                                        .bg(rgb(self.theme.ink(
+                                            self.theme.palette[if limited { 208 } else { 1 }],
+                                        ))),
                                 )
                             }),
                     ),

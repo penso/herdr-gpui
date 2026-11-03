@@ -22,6 +22,8 @@ pub enum HostOp {
     PrComments,
     /// Open it in a browser tab.
     PrOpen,
+    /// Last reported GitHub GraphQL quota and active account pauses.
+    PrQuota,
     /// Ports the caller's workspace's processes listen on, and forwards.
     Ports,
     /// Forward a port of the selected SSH host to this machine.
@@ -199,6 +201,9 @@ pub enum Reply {
     Comments {
         comments: Vec<CommentInfo>,
     },
+    PrQuota {
+        accounts: Vec<AccountQuota>,
+    },
     Ports(Box<Ports>),
     Usage {
         host: String,
@@ -217,6 +222,13 @@ pub enum Reply {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountQuota {
+    pub login: String,
+    pub quota: Option<herdr_github::quota::Quota>,
+    pub retry_after_seconds: Option<u64>,
 }
 
 /// One repository the Security section read.

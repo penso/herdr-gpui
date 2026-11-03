@@ -49,6 +49,12 @@ fn native_sidebar() {
     native_fixture(Fixture::Sidebar);
 }
 
+#[test]
+#[ignore = "requires active native desktop; isolated GitHub quota fixtures, no daemon"]
+fn native_github_quota() {
+    native_fixture(Fixture::GitHubQuota);
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 #[ignore = "requires active Linux desktop; GUI-only menu fixtures, no daemon"]
@@ -106,6 +112,7 @@ fn native_input_shutdown(field: &'static str) {
 }
 
 enum Fixture {
+    GitHubQuota,
     Sidebar,
     #[cfg(target_os = "linux")]
     ApplicationMenus,
@@ -152,6 +159,7 @@ fn native_fixture(fixture: Fixture) {
     }
     assert!(status.success(), "native sidebar failed: {status}");
     assert!(log.contains(match fixture {
+        Fixture::GitHubQuota => "GITHUB QUOTA native PASS",
         #[cfg(target_os = "linux")]
         Fixture::ApplicationMenus => "APPLICATION MENUS native PASS",
         Fixture::Notifications => "NOTIFICATIONS native PASS:",
@@ -173,7 +181,13 @@ fn run_fixture(fixture: &Fixture) -> Option<(ExitStatus, String)> {
     if let Some(path) = std::env::var_os("HERDR_TEST_SETTINGS_CAPTURE") {
         command.env("HERDR_TEST_SETTINGS_CAPTURE", path);
     }
+    if let Some(path) = std::env::var_os("HERDR_TEST_GITHUB_CAPTURE") {
+        command.env("HERDR_TEST_GITHUB_CAPTURE", path);
+    }
     match fixture {
+        Fixture::GitHubQuota => {
+            command.env("HERDR_TEST_GITHUB_QUOTA_ONLY", "1");
+        }
         Fixture::Sidebar => {}
         #[cfg(target_os = "linux")]
         Fixture::ApplicationMenus => {

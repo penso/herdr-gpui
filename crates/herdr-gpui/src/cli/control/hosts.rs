@@ -7,6 +7,7 @@ pub enum PrCommand {
     Checks,
     Comments,
     Open,
+    Quota,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,6 +74,7 @@ pub(super) fn pr(args: &mut Args) -> Result<PrCommand, CliError> {
         Some("checks") => PrCommand::Checks,
         Some("comments") => PrCommand::Comments,
         Some("open") => PrCommand::Open,
+        Some("quota") => PrCommand::Quota,
         _ => return Err(unknown("pr", verb)),
     })
 }

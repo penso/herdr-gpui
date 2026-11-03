@@ -8,6 +8,8 @@ use gpui::{
 /// A signed-in fixture account's picture address, shown without loading it.
 pub(super) const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/1";
 
+mod rate_limit;
+
 /// The fixture window with Herdr's tab bar at the bottom, so it keeps the
 /// full-width header these tests measure.
 pub(crate) fn header_window(

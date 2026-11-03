@@ -41,6 +41,7 @@ pub(super) fn serve(
             select(view, &id, |view, id| view.select_endpoint(id, cx))
         }),
         HostOp::Pr => in_window(caller, cx, |view, _, _| pr::status(view, caller)),
+        HostOp::PrQuota => in_window(caller, cx, |view, _, _| pr::quota(view)),
         HostOp::PrComments => return pr::comments(call.caller, incoming, watches, cx),
         HostOp::PrOpen => in_window(caller, cx, |view, window, cx| {
             pr::open(view, caller, window, cx)

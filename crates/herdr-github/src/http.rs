@@ -99,7 +99,7 @@ pub fn graphql(
             errors.iter().any(|error| {
                 matches!(
                     error["type"].as_str(),
-                    Some("RATE_LIMITED" | "FORBIDDEN" | "UNAUTHORIZED")
+                    Some("RATE_LIMIT" | "RATE_LIMITED" | "FORBIDDEN" | "UNAUTHORIZED")
                 )
             })
         }) {
@@ -161,7 +161,7 @@ pub(super) fn split_aliases(
                 .is_some_and(|kind| types.contains(&kind))
         })
     };
-    if typed(&["RATE_LIMITED", "FORBIDDEN", "UNAUTHORIZED"]) {
+    if typed(&["RATE_LIMIT", "RATE_LIMITED", "FORBIDDEN", "UNAUTHORIZED"]) {
         *cooldown = Some(pause_until(reset, now));
     }
     let claimed = |error: &Value| {
@@ -169,7 +169,7 @@ pub(super) fn split_aliases(
             .as_str()
             .is_some_and(|alias| aliases.iter().any(|(known, _)| known == alias))
     };
-    if typed(&["RATE_LIMITED"]) || !listed.iter().all(claimed) {
+    if typed(&["RATE_LIMIT", "RATE_LIMITED"]) || !listed.iter().all(claimed) {
         return Err(query_error(&errors, None, token_kind, reset));
     }
     Ok(aliases
@@ -284,7 +284,7 @@ pub(super) fn query_error(
     let listed = errors.as_array().map(Vec::as_slice).unwrap_or_default();
     if listed
         .iter()
-        .any(|error| error["type"].as_str() == Some("RATE_LIMITED"))
+        .any(|error| matches!(error["type"].as_str(), Some("RATE_LIMIT" | "RATE_LIMITED")))
     {
         return Error::RateLimit { reset };
     }
@@ -359,6 +359,7 @@ fn post(
     );
     // GraphQL reports failures with a 200, so the headers that explain them are
     // captured before the body consumes the response.
+    crate::quota::record(token, reply.headers());
     let exchange = log::Exchange::new(reply.headers());
     let result: Value = response("graphql", reply)?;
     Ok((result, exchange))

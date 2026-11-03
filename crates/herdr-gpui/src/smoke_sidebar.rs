@@ -1,6 +1,9 @@
 //! Daemon-free sidebar fixture driver.
 use super::*;
 
+#[path = "smoke_sidebar/quota.rs"]
+mod quota;
+
 /// Native check that the icon cascade reaches an installed Nerd Font. Prompts
 /// draw powerline separators and icons from the Private Use Area, which no text
 /// face and no platform default cascade covers, so without the cascade every
@@ -65,6 +68,20 @@ fn symbol_cascade(window: &mut Window, cx: &mut App) -> Result<&'static str> {
 }
 
 pub fn start_sidebar(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
+    if std::env::var_os("HERDR_TEST_GITHUB_QUOTA_ONLY").is_some() {
+        cx.spawn(async move |cx| match quota::run(handle, cx).await {
+            Ok(()) => {
+                eprintln!("GITHUB QUOTA native PASS");
+                std::process::exit(0);
+            }
+            Err(error) => {
+                eprintln!("GITHUB QUOTA native FAIL: {error:#}");
+                std::process::exit(1);
+            }
+        })
+        .detach();
+        return;
+    }
     if std::env::var_os("HERDR_TEST_RICH_CHAT").is_some() {
         crate::chat::preview::start(handle, cx);
         return;

@@ -52,6 +52,8 @@ pub struct Auth {
     pub(super) last_session_check: Option<Instant>,
     pub(super) next_session_check: Option<Instant>,
     pub profile: Option<Profile>,
+    quota: Option<crate::quota::Quota>,
+    quota_minutes: Option<u64>,
     pub message: Option<String>,
     pub failed: bool,
     pub(super) credential_cleanup: bool,
@@ -496,7 +498,26 @@ impl Auth {
     pub fn poll(&mut self) -> bool {
         let store = self.store;
         let account = self.account.clone();
-        self.poll_with_store(move |token| save(token, store, &account))
+        let changed = self.poll_with_store(move |token| save(token, store, &account));
+        let quota = self
+            .profile
+            .as_ref()
+            .and_then(|profile| crate::quota::latest(&profile.token));
+        let previous = std::mem::replace(&mut self.quota, quota);
+        let minutes = quota
+            .and_then(|quota| quota.retry_after(chrono::Utc::now()))
+            .map(|wait| wait.as_secs().div_ceil(60).max(1));
+        let previous_minutes = std::mem::replace(&mut self.quota_minutes, minutes);
+        changed || previous != quota || previous_minutes != minutes
+    }
+
+    pub fn quota(&self) -> Option<crate::quota::Quota> {
+        self.profile.as_ref().and(self.quota)
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed_quota(&mut self, quota: crate::quota::Quota) {
+        self.quota = Some(quota);
     }
     /// Credential backend chosen for this build and configuration.
     pub fn store(&self) -> Store {

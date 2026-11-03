@@ -100,6 +100,34 @@ pub(super) fn status(view: &HerdrWindow, caller: &Caller) -> Response {
     }
 }
 
+pub(super) fn quota(view: &HerdrWindow) -> Response {
+    let now = std::time::Instant::now();
+    let mut accounts = Vec::new();
+    for auth in view.github_auths().take(128) {
+        let Some(profile) = &auth.profile else {
+            continue;
+        };
+        if accounts
+            .iter()
+            .any(|account: &crate::control::protocol::hosts::AccountQuota| {
+                account.login == profile.login
+            })
+        {
+            continue;
+        }
+        accounts.push(crate::control::protocol::hosts::AccountQuota {
+            login: profile.login.clone(),
+            quota: auth.quota(),
+            retry_after_seconds: view
+                .github_rate_limit_wait(auth, now)
+                .map(|wait| wait.as_secs().max(1)),
+        });
+    }
+    Response::Host {
+        reply: Reply::PrQuota { accounts },
+    }
+}
+
 pub(super) fn pr_info(pr: &PullRequest) -> PrInfo {
     PrInfo {
         number: pr.number,

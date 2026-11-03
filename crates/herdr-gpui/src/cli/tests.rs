@@ -14,6 +14,7 @@ mod links;
 mod mods;
 mod open_command;
 mod px0;
+mod quota;
 mod remote;
 mod security;
 mod ui_panel;

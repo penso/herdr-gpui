@@ -27,7 +27,7 @@ fn a_paused_account_holds_only_its_own_checkouts() {
     peer.cache.store.borrow_mut().set_pause(
         "emu",
         now + Duration::from_secs(600),
-        Some("GitHub rate limit reached.".into()),
+        Some(&Error::RateLimit { reset: None }),
     );
     peer.cache.schedule([input("main-branch")], now);
     peer.cache.poll(now);
@@ -54,7 +54,7 @@ fn a_paused_account_holds_only_its_own_checkouts() {
     peer.cache.present(&input("main-branch"), &mut view, now);
     let message = view.message.unwrap();
     assert!(
-        message.starts_with("GitHub rate limit reached. GitHub requests paused"),
+        message.starts_with("GitHub rate limit reached. Retry later. GitHub requests paused"),
         "{message}"
     );
     // Held until emu resumes, then asked again.

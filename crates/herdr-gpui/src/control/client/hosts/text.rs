@@ -334,3 +334,30 @@ pub(super) fn security(reply: &Reply) -> String {
     }
     text.trim_end().to_owned()
 }
+
+pub(super) fn quotas(accounts: &[crate::control::protocol::hosts::AccountQuota]) -> String {
+    if accounts.is_empty() {
+        return "No GitHub accounts signed in".into();
+    }
+    accounts
+        .iter()
+        .map(|account| {
+            let usage = account.quota.map_or_else(
+                || "GraphQL quota not reported yet".to_owned(),
+                |quota| {
+                    format!(
+                        "{} / {} GraphQL points used; {} remaining",
+                        quota.used, quota.limit, quota.remaining
+                    )
+                },
+            );
+            let pause = account
+                .retry_after_seconds
+                .map_or_else(String::new, |seconds| {
+                    format!("; retrying in {} min", seconds.div_ceil(60))
+                });
+            format!("{}: {usage}{pause}", account.login)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
