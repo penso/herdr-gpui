@@ -3954,6 +3954,9 @@ Ctrl+Shift+U is left unbound for
    supplies quota headers, the dialog also shows the last reported GraphQL points
    used, allowed, and remaining. These are account-wide points, shared with other
    apps, rather than a count of this app's requests.
+   Quota details stay visible while the shared transport cache is busy, but
+   never carry across credentials. The retry countdown keeps updating while
+   the selected host is disconnected, without resuming its suspended lookups.
    Discovery uses the daemon repository key and exact branch to resolve a unique
    Git worktree, followed by common-directory/current-branch checks and an explicit
    GitHub repository/head query. It never occupies the deletion dialog response slot.

@@ -1,6 +1,18 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod contention;
+
+// Tests that write the process-wide transport cache coordinate explicitly.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn known(token: &SecretString) -> Option<Quota> {
+    let Observation::Ready(quota) = latest(token) else {
+        panic!("unexpected contended quota read")
+    };
+    quota
+}
+
 fn headers() -> ureq::http::HeaderMap {
     let mut headers = ureq::http::HeaderMap::new();
     for (name, value) in [
@@ -15,17 +27,18 @@ fn headers() -> ureq::http::HeaderMap {
 
 #[test]
 fn captures_points_from_headers_and_keeps_credentials_separate() {
+    let _serial = SERIAL.lock().unwrap();
     let first = SecretString::from("quota-first");
     let second = SecretString::from("quota-second");
     record(&first, &headers());
-    let quota = latest(&first).unwrap();
+    let quota = known(&first).unwrap();
     assert_eq!((quota.used, quota.limit, quota.remaining), (4971, 5000, 29));
     assert_eq!(quota.reset.unwrap().timestamp(), 2000000000);
-    assert_eq!(latest(&second), None);
+    assert_eq!(known(&second), None);
     let mut headers = headers();
     headers.insert("x-ratelimit-remaining", "0".parse().unwrap());
     record(&first, &headers);
-    assert_eq!(latest(&first).unwrap().used, 5000);
+    assert_eq!(known(&first).unwrap().used, 5000);
 }
 
 #[test]
@@ -74,6 +87,7 @@ fn reported_usage_can_exceed_the_allowance() {
 
 #[test]
 fn an_account_publishes_transport_usage_and_drops_it_when_signed_out() {
+    let _serial = SERIAL.lock().unwrap();
     let mut auth = crate::Auth::connected_fixture();
     let token = std::sync::Arc::new(SecretString::from("quota-account-poll"));
     auth.profile.as_mut().unwrap().token = token.clone();

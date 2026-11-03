@@ -48,3 +48,27 @@ fn permission_pause_is_not_a_rate_limit_and_signout_clears_the_dot() {
     peer.cache.clear();
     assert_eq!(peer.cache.rate_limit_wait("fixture", now), None);
 }
+
+#[test]
+fn suspended_cache_advances_the_countdown_without_dispatching() {
+    let mut peer = Peer::new();
+    let now = Instant::now();
+    let until = now + Duration::from_secs(120);
+    peer.cache.seed_rate_limit("fixture", until);
+    peer.cache.schedule([input("waiting")], now);
+    peer.cache.poll_countdown(now);
+    peer.cache.suspend();
+    assert!(peer.cache.poll_countdown(now + Duration::from_secs(60)));
+    assert!(!peer.cache.poll_countdown(now + Duration::from_secs(61)));
+    assert!(!peer.cache.poll_countdown(until - Duration::from_millis(1)));
+    assert!(
+        peer.cache.poll_countdown(until),
+        "expiry redraws even in the last partial second"
+    );
+    assert_eq!(peer.cache.rate_limit_wait("fixture", until), None);
+    assert!(!peer.cache.poll_countdown(until + Duration::from_secs(1)));
+    assert!(
+        peer.incoming.try_recv().is_err(),
+        "the display clock must not wake a suspended worker"
+    );
+}

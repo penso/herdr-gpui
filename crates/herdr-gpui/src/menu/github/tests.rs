@@ -7,6 +7,7 @@ mod accounts;
 mod en_xa;
 mod github_cli;
 mod installation;
+mod quota_countdown;
 
 #[gpui::test]
 fn successful_signin_dismisses_only_the_signin_panel_and_restores_focus(cx: &mut TestAppContext) {

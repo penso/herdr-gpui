@@ -35,15 +35,27 @@ fn key(token: &SecretString) -> [u8; 32] {
     Sha256::digest(token.expose_secret().as_bytes()).into()
 }
 
+/// An unavailable read must not erase an account's last observation.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Observation {
+    // keep-sorted start
+    Ready(Option<Quota>),
+    Unavailable,
+    // keep-sorted end
+}
+
 /// Nonblocking read used by the account's UI-thread poll.
-pub(crate) fn latest(token: &SecretString) -> Option<Quota> {
+pub(crate) fn latest(token: &SecretString) -> Observation {
     let key = key(token);
-    QUOTAS
-        .try_lock()
-        .ok()?
-        .iter()
-        .find(|(stored, _)| *stored == key)
-        .map(|(_, quota)| *quota)
+    let Ok(quotas) = QUOTAS.try_lock() else {
+        return Observation::Unavailable;
+    };
+    Observation::Ready(
+        quotas
+            .iter()
+            .find(|(stored, _)| *stored == key)
+            .map(|(_, quota)| *quota),
+    )
 }
 
 pub(crate) fn record(token: &SecretString, headers: &ureq::http::HeaderMap) {

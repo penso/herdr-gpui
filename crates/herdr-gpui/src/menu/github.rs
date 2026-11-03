@@ -191,6 +191,15 @@ impl HerdrWindow {
     }
 
     pub(crate) fn poll_github(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.poll_github_at(std::time::Instant::now(), window, cx);
+    }
+
+    pub(super) fn poll_github_at(
+        &mut self,
+        now: std::time::Instant,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.sync_github_hosts();
         self.sync_github_accounts();
         self.prune_device_removals();
@@ -201,10 +210,9 @@ impl HerdrWindow {
             && self.github_host().is_none()
             && self.menu.github_account.is_none()
         {
-            self.menu.github.probe_github_cli(std::time::Instant::now());
+            self.menu.github.probe_github_cli(now);
         }
         if self.menu.page == Some(super::Page::GitHub) {
-            let now = std::time::Instant::now();
             let host = self.github_host().map(str::to_owned);
             let menu = &mut self.menu;
             host.and_then(|id| menu.github_hosts.get_mut(&id))
@@ -216,6 +224,7 @@ impl HerdrWindow {
         }
         let connected = self.github_auth().connected();
         let mut changed = self.menu.github.poll();
+        changed |= self.menu.pr_cache.poll_countdown(now);
         for auth in self.menu.github_hosts.values_mut() {
             changed |= auth.poll();
         }

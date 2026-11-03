@@ -289,12 +289,22 @@ impl Cache {
     /// changed, including answers another window recorded.
     pub fn poll(&mut self, now: Instant) -> bool {
         let changed = self.dispatch(now);
+        let countdown_changed = self.poll_countdown(now);
         let Ok(store) = self.store.try_borrow() else {
-            return changed;
+            return changed || countdown_changed;
         };
         let shown = std::mem::replace(&mut self.seen, store.revision);
+        changed || shown != store.revision || countdown_changed
+    }
+
+    /// Advances only the visible pause clock, including while disconnected.
+    /// Never collects or dispatches requests, so suspended caches stay suspended.
+    pub fn poll_countdown(&mut self, now: Instant) -> bool {
+        let Ok(store) = self.store.try_borrow() else {
+            return false;
+        };
         let previous = self.last_poll.replace(now);
-        let countdown_changed = previous.is_some_and(|previous| {
+        previous.is_some_and(|previous| {
             store
                 .pauses
                 .iter()
@@ -305,8 +315,7 @@ impl Cache {
                     };
                     minutes(previous) != minutes(now)
                 })
-        });
-        changed || shown != store.revision || countdown_changed
+        })
     }
 
     fn dispatch(&mut self, now: Instant) -> bool {
