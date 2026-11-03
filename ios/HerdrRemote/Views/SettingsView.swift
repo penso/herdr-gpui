@@ -1,28 +1,42 @@
 import ActivityKit
 import HerdrRemoteCore
 import SwiftUI
+import UIKit
 
 /// Settings A: one grouped list.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var cacheSize = 0
+    @State private var forgetting: Computer?
+    @State private var editMode = EditMode.inactive
     @AppStorage(AppLock.setting, store: AppLock.store) private var requireFaceID = false
 
     var body: some View {
         List {
-            Section("Computers") {
+            Section {
                 ForEach(model.computers) { computer in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.displayName(computer))
-                        if let vouching = model.vouching(computer) {
-                            Text("via \(model.displayName(vouching))").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Text(computer.origins.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
-                        Text(fingerprintLine(computer)).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                    NavigationLink {
+                        ComputerScreen(device: computer.device)
+                    } label: {
+                        ComputerRow(computer: computer)
                     }
                     .swipeActions {
-                        Button("Forget", role: .destructive) { model.forget(computer) }
+                        // Not `.destructive`: that removes the row before
+                        // the confirmation answers.
+                        Button("Forget", systemImage: "trash") { forgetting = computer }.tint(.red)
                     }
+                }
+                .onDelete { offsets in forgetting = offsets.first.map { model.computers[$0] } }
+                Button("Pair a Computer", systemImage: "plus") { model.pairing = true }
+            } header: {
+                HStack {
+                    Text("Computers")
+                    Spacer()
+                    if !model.computers.isEmpty { EditButton().textCase(nil).font(.subheadline) }
+                }
+            } footer: {
+                if !model.computers.isEmpty {
+                    Text("Forgetting a computer removes its chats from this \(UIDevice.current.model). It does not stop Herdr there.")
                 }
             }
             if !model.computers.isEmpty {
@@ -94,11 +108,30 @@ struct SettingsView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { cacheSize = model.fleet.cache.size() }
+        .forgetConfirmation($forgetting)
+        .environment(\.editMode, $editMode)
+        #if DEBUG
+        .task { if UserDefaults.standard.bool(forKey: "editComputers") { editMode = .active } }
+        #endif
     }
+}
 
-    /// The fingerprint in groups of four, the way the desktop shows it.
-    private func fingerprintLine(_ computer: Computer) -> String {
-        let hex = Array(computer.fingerprint.hex.prefix(16))
-        return stride(from: 0, to: hex.count, by: 4).map { String(hex[$0..<min($0 + 4, hex.count)]) }.joined(separator: " ")
+/// A computer in Settings: its name, then how it stands or where it is.
+private struct ComputerRow: View {
+    @Environment(AppModel.self) private var model
+    var computer: Computer
+
+    var body: some View {
+        let status = model.fleet.machines.first { $0.id == computer.device }?.status
+        VStack(alignment: .leading, spacing: 2) {
+            Text(model.displayName(computer))
+            if status == .revoked {
+                ComputerStatusLine(status: .revoked).font(.caption)
+            } else if let vouching = model.vouching(computer) {
+                Text("via \(model.displayName(vouching))").font(.caption).foregroundStyle(.secondary)
+            } else if let kind = computer.origins.lazy.map(OriginKind.init(origin:)).first(where: { $0 != .loopback }) {
+                Text(kind.label).font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }

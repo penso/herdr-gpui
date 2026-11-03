@@ -9,6 +9,7 @@ struct HomeTab: View {
     var body: some View {
         ChatList()
             .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .top) { UnpairedCards() }
             .overlay {
                 if model.computers.isEmpty {
                     ContentUnavailableView {
@@ -25,7 +26,6 @@ struct HomeTab: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    // Pairing is rare, so it lives at the bottom of Computers.
                     Button("New Workspace", systemImage: "plus") { model.creating = .workspace(device: nil) }
                         .disabled(model.fleet.machines.isEmpty)
                 }

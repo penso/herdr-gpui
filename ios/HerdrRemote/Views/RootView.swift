@@ -12,7 +12,6 @@ struct RootView: View {
     @State private var tab = RootTab.home
     @State private var homePath: [Route] = []
     @State private var workspacesPath = NavigationPath()
-    @State private var pairing = false
     @State private var selection: Route?
     @State private var windowWidth: CGFloat = 0
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -29,7 +28,7 @@ struct RootView: View {
             if wide {
                 // The split view collapses to one column in a compact size
                 // class, and the chat lays out its header by it.
-                IPadRoot(pairing: $pairing, selection: $selection)
+                IPadRoot(pairing: Bindable(model).pairing, selection: $selection)
                     .environment(\.horizontalSizeClass, .regular)
             } else {
                 tabs
@@ -48,7 +47,7 @@ struct RootView: View {
                 homePath = [route]
             }
         }
-        .sheet(isPresented: $pairing) { PairView() }
+        .sheet(isPresented: Bindable(model).pairing) { PairView() }
         .alert("Not sent", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
         } message: {
             Text(model.notice ?? "")
@@ -71,7 +70,7 @@ struct RootView: View {
         .animation(.spring(duration: 0.4), value: model.nearbyOffer?.id)
         // Bluetooth looks for computers only while pairing is likely, so
         // its permission prompt comes when the person is pairing.
-        .onChange(of: pairing || model.computers.isEmpty, initial: true) { _, looking in
+        .onChange(of: model.pairing || model.computers.isEmpty, initial: true) { _, looking in
             if looking { model.bluetooth.start() } else { model.bluetooth.stop() }
         }
         #if DEBUG
@@ -98,18 +97,18 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab("Home", systemImage: "house", value: RootTab.home) {
                 NavigationStack(path: $homePath) {
-                    HomeTab(pairing: $pairing).withRoutes()
+                    HomeTab(pairing: Bindable(model).pairing).withRoutes()
                 }
-                .connectionToast(pairing: $pairing)
+                .connectionToast(pairing: Bindable(model).pairing)
             }
             .badge(model.fleet.waiting)
             Tab("Workspaces", systemImage: "square.stack.3d.up", value: RootTab.workspaces) {
-                NavigationStack(path: $workspacesPath) { WorkspacesTab(pairing: $pairing).withRoutes() }
-                    .connectionToast(pairing: $pairing)
+                NavigationStack(path: $workspacesPath) { WorkspacesTab(pairing: Bindable(model).pairing).withRoutes() }
+                    .connectionToast(pairing: Bindable(model).pairing)
             }
             Tab("Settings", systemImage: "gearshape", value: RootTab.settings) {
                 NavigationStack { SettingsView() }
-                    .connectionToast(pairing: $pairing)
+                    .connectionToast(pairing: Bindable(model).pairing)
             }
         }
     }
@@ -123,7 +122,9 @@ extension RootView {
     /// the activity would, `-openTerm PANE` opens the terminal pane of
     /// whichever computer lists it, `-tab workspaces|settings` picks
     /// that tab, `-openWorkspace ID` opens that workspace in the Workspaces
-    /// tab, and `-newWorkspace YES` opens the new workspace form. In a
+    /// tab, `-newWorkspace YES` opens the new workspace form,
+    /// `-openComputer YES` opens the first computer's page from Workspaces,
+    /// and `-editComputers YES` puts Settings' computers in Edit. In a
     /// chat, `-session YES` opens its session sheet and `-draft TEXT`
     /// types into the composer.
     func followLaunchArguments() async {

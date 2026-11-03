@@ -16,6 +16,9 @@ struct WorkspacesTab: View {
     @Environment(AppModel.self) private var model
     @Binding var pairing: Bool
     @State private var query = ""
+    /// The computer whose page is open from its header menu.
+    @State private var details: String?
+    @State private var forgetting: Computer?
 
     var body: some View {
         Group {
@@ -25,6 +28,11 @@ struct WorkspacesTab: View {
         // No title, as Home and Settings have none; the search names it.
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: WorkspaceKey.self) { WorkspaceScreen(key: $0) }
+        .navigationDestination(item: $details) { ComputerScreen(device: $0) }
+        .forgetConfirmation($forgetting)
+        #if DEBUG
+        .task { if UserDefaults.standard.bool(forKey: "openComputer") { details = model.computers.first?.device } }
+        #endif
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -43,12 +51,12 @@ struct WorkspacesTab: View {
                 Section {
                     HostRows(computer: machine.computer)
                 } header: {
-                    MachineHeader(machine: machine)
-                        .contextMenu {
-                            Button("Forget \(model.displayName(machine.computer))", systemImage: "trash", role: .destructive) {
-                                model.forget(machine.computer)
-                            }
-                        }
+                    MachineHeader(machine: machine) {
+                        MachineActions(machine: machine, details: { details = machine.id }, forget: { forgetting = machine.computer })
+                    }
+                    .contextMenu {
+                        MachineActions(machine: machine, details: { details = machine.id }, forget: { forgetting = machine.computer })
+                    }
                 }
                 ForEach(machine.home?.repositories ?? []) { repository in
                     Section {
@@ -74,9 +82,10 @@ struct WorkspacesTab: View {
 
 /// A computer above its repositories: its name, how the phone reaches it,
 /// whether it is connected, and its CPU and memory.
-private struct MachineHeader: View {
+private struct MachineHeader<Actions: View>: View {
     @Environment(AppModel.self) private var model
     var machine: Fleet.Machine
+    @ViewBuilder var actions: Actions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -88,6 +97,10 @@ private struct MachineHeader: View {
                 }
                 Spacer()
                 MachineStatus(machine: machine)
+                Menu { actions } label: {
+                    Image(systemName: "ellipsis.circle").font(.title3)
+                }
+                .accessibilityLabel("\(model.displayName(machine.computer)) actions")
             }
             .foregroundStyle(.primary)
             if let load = machine.home?.load {
@@ -312,5 +325,27 @@ extension Home.PullRequest.Tone {
         case .waiting: "checks or review pending"
         case .other: "draft"
         }
+    }
+}
+
+/// What a computer's header menu and long press offer.
+private struct MachineActions: View {
+    @Environment(AppModel.self) private var model
+    var machine: Fleet.Machine
+    var details: () -> Void
+    var forget: () -> Void
+
+    var body: some View {
+        let computer = machine.computer
+        Toggle("Hold Alerts at the Desk", systemImage: "bell.badge", isOn: Binding(
+            get: { computer.presence },
+            set: { model.setPresence($0, for: computer) }
+        ))
+        Button("Computer Details", systemImage: "info.circle", action: details)
+        if machine.status == .revoked {
+            Button("Pair Again", systemImage: "arrow.triangle.2.circlepath") { model.pairing = true }
+        }
+        Divider()
+        Button("Forget \(model.displayName(computer))…", systemImage: "trash", role: .destructive, action: forget)
     }
 }

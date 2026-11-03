@@ -41,9 +41,10 @@ struct ConnectionToast: View {
     }
 
     /// The worst state wins: unpaired, then outdated, offline, connecting.
+    /// Unpaired computers have their own cards on Home, which ask instead.
     private func problem(_ machines: [Fleet.Machine], connecting: [String]) -> Problem? {
         let revoked = machines.filter { $0.status == .revoked }.map(\.computer.name)
-        if !revoked.isEmpty { return .revoked(revoked) }
+        if !revoked.isEmpty, !model.unpairedCardsShown { return .revoked(revoked) }
         let outdated = machines.filter { $0.status == .outdated }.map(\.computer.name)
         if !outdated.isEmpty { return .outdated(outdated) }
         let offline = machines.filter { if case .offline = $0.status { true } else { false } }
