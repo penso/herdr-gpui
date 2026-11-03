@@ -110,7 +110,7 @@ extension Computer {
         self.init(
             device: enrolled.device,
             name: enrolled.computer,
-            origins: enrolled.origins.filter { seen.insert($0).inserted },
+            origins: enrolled.origins.filter { Computer.isOrigin($0) && seen.insert($0).inserted },
             fingerprint: enrolled.fingerprint,
             keyKind: key.kind,
             keyData: key.data,

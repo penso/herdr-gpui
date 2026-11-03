@@ -159,6 +159,19 @@ impl Resolver {
             .map(|current| Arc::clone(&current.key))
     }
 
+    /// The certificate a handshake on local `address` presents. A client
+    /// that sent a name gets the DNS leaf; one that did not gets the leaf
+    /// for the address it reached, or the DNS leaf when that address has
+    /// none. The latter is a link-local IPv6 address reached through
+    /// `HOST.local`: iOS resolves it there and sends no SNI for `.local`,
+    /// and refusing the handshake surfaces on the phone as a TLS alert.
+    pub(super) fn for_handshake(&self, address: IpAddr, sent_name: bool) -> Arc<CertifiedKey> {
+        if sent_name {
+            return self.current();
+        }
+        self.current_for(address).unwrap_or_else(|| self.current())
+    }
+
     fn read(&self) -> std::sync::RwLockReadGuard<'_, Current> {
         // A panic elsewhere cannot leave `Current` half-written: it is only
         // ever replaced whole.
@@ -196,9 +209,12 @@ fn address_keys(
         .iter()
         .map(|ip| {
             let ip = ip.to_canonical();
+            // The computer's names too: a phone that reaches `HOST.local`
+            // at this address sends no SNI, so it gets this certificate
+            // and checks it against the name it dialled.
             let names = Names {
                 ips: vec![ip],
-                dns: Vec::new(),
+                dns: names.dns.clone(),
             };
             if let Some(current) = old
                 .get(&ip)
@@ -242,11 +258,10 @@ struct AddressResolver {
 
 impl ResolvesServerCert for AddressResolver {
     fn resolve(&self, hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
-        if hello.server_name().is_some() {
-            Some(self.resolver.current())
-        } else {
-            self.resolver.current_for(self.address)
-        }
+        Some(
+            self.resolver
+                .for_handshake(self.address, hello.server_name().is_some()),
+        )
     }
 }
 

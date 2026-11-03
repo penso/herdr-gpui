@@ -13,6 +13,7 @@ use std::{
 };
 
 mod advertised;
+mod handshake;
 mod per_address;
 mod persistence;
 mod stored;

@@ -100,6 +100,14 @@ final class PairingTests: XCTestCase {
         XCTAssertEqual(origins, ["https://192.168.1.20:7443", "https://100.64.0.3:7443"])
     }
 
+    func testOriginsKeepOnlyBareHTTPS() {
+        let origins = Computer.origins(
+            pairedAt: "https://100.64.0.3:7443",
+            served: ["http://100.64.0.3:7443", "ftp://studio.local", "https://studio.local:7443/pair", "https://studio.local:7443"]
+        )
+        XCTAssertEqual(origins, ["https://100.64.0.3:7443", "https://studio.local:7443"])
+    }
+
     func testClaimStatusDecodesEachState() throws {
         let decode = { (json: String) in
             try JSONDecoder().decode(API.ClaimStatus.self, from: Data(json.utf8))

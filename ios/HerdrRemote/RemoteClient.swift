@@ -17,12 +17,36 @@ enum TermAction: String, Encodable, CaseIterable {
 /// must contain the certificate whose SHA-256 the pairing QR carried, and
 /// the chain must then verify with that certificate as its only anchor
 /// (host name and validity included). No profile install is needed, and no
-/// other CA, public or installed, is accepted for these addresses.
-final class PinnedTrust: NSObject, URLSessionDelegate, Sendable {
+/// other CA, public or installed, is accepted for these addresses. ATS
+/// would still fail a non-local address such as Tailscale's 100.x after
+/// this delegate accepts it, as the CA is not a system root;
+/// `NSAllowsArbitraryLoads` in `project.yml` turns that check off, which
+/// leaves this delegate as the only one. With ATS off it also refuses
+/// what ATS would have: any load that is not `https` or `wss`, and every
+/// redirect, so no address a computer sends can carry tokens in the clear.
+final class PinnedTrust: NSObject, URLSessionTaskDelegate, Sendable {
     let fingerprint: Fingerprint
 
     init(fingerprint: Fingerprint) {
         self.fingerprint = fingerprint
+    }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        guard Self.isEncrypted(task.originalRequest?.url) else { return task.cancel() }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest
+    ) async -> URLRequest? {
+        nil
+    }
+
+    static func isEncrypted(_ url: URL?) -> Bool {
+        guard let scheme = url?.scheme?.lowercased() else { return false }
+        return scheme == "https" || scheme == "wss"
     }
 
     func urlSession(
