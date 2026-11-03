@@ -209,9 +209,12 @@ fn address_keys(
         .iter()
         .map(|ip| {
             let ip = ip.to_canonical();
+            // The computer's names too: a phone that reaches `HOST.local`
+            // at this address sends no SNI, so it gets this certificate
+            // and checks it against the name it dialled.
             let names = Names {
                 ips: vec![ip],
-                dns: Vec::new(),
+                dns: names.dns.clone(),
             };
             if let Some(current) = old
                 .get(&ip)
