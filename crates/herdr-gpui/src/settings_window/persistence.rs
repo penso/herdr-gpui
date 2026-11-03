@@ -5,7 +5,7 @@ use super::{Section, SettingsWindow, layouts, themes};
 use crate::{
     config::{Config, FontFace, Theme},
     herdr_settings::{self, Edit},
-    i18n::fl,
+    i18n::{Localize, fl},
 };
 use gpui::*;
 
@@ -228,7 +228,7 @@ impl SettingsWindow {
                 Err(error) if config.theme == "Follow Herdr" => return Err(error),
                 Err(error) => (
                     None,
-                    Some(fl!("settings-error-load-herdr", error = error.to_string())),
+                    Some(fl!("settings-error-load-herdr", error = error.localize())),
                     config.theme(light)?,
                 ),
             };
@@ -257,6 +257,17 @@ impl SettingsWindow {
                 crate::caffeine::set_scope(loaded.config.status_bar.keep_awake_scope, cx);
                 // Settings may outlive every main window, whose reload also follows it.
                 crate::i18n::follow_config(&loaded.config.language, cx);
+                // The language list's choices follow the setting (a tag
+                // without messages is listed), so a list opened before the
+                // setting changed would pick by stale positions.
+                if loaded.config.language != self.config.language
+                    && self
+                        .dropdown
+                        .as_ref()
+                        .is_some_and(|open| open.field == super::inputs::DropdownField::Language)
+                {
+                    self.dropdown = None;
+                }
                 self.config = loaded.config;
                 if let Some(mode) = self.layout_intent {
                     self.config.layout.mode = mode;
@@ -279,9 +290,7 @@ impl SettingsWindow {
                     source.read(cx).sound.set_volume(self.config.sound.volume);
                 }
             }
-            Err(error) => {
-                self.error = Some(fl!("settings-error-reload", error = error.to_string()))
-            }
+            Err(error) => self.error = Some(fl!("settings-error-reload", error = error.localize())),
         }
         // Appearance may have changed while the loader was running. Resolve
         // Follow Herdr from the prepared snapshot against the current OS mode.
@@ -471,7 +480,7 @@ impl SettingsWindow {
                     };
                 }
                 if let Err(error) = &saved {
-                    this.error = Some(fl!("settings-error-save", error = error.to_string()));
+                    this.error = Some(fl!("settings-error-save", error = error.localize()));
                 }
                 let _ = this.source.update(cx, |source, _| {
                     // The source's guarded file watcher owns applying changes.
@@ -489,7 +498,7 @@ impl SettingsWindow {
                         {
                             this.status = Some(fl!(
                                 "settings-saved-daemon-unqueued",
-                                error = error.to_string()
+                                error = error.localize()
                             ));
                         }
                     }

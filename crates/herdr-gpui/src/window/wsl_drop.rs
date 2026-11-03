@@ -10,12 +10,14 @@
 //! that arrive while a snapshot waits for its surface wait with those keys,
 //! and are delivered once the same pane takes input again. One drop maps at
 //! a time.
+// i18n: migrated
 
 mod error;
 
 pub(crate) use error::Error;
 
 use super::{HerdrWindow, file_drop::quote_paths, pending_input::Delivery};
+use crate::i18n::{Localize, fl};
 use crate::{Result, connection::ConnectionBridge, terminal::InputTarget};
 use gpui::Context;
 use herdr_client::protocol::ClientPaneInputEvent;
@@ -109,7 +111,10 @@ impl HerdrWindow {
             }
             Err(error) => {
                 self.wsl_paste = None;
-                self.local_error = Some(format!("Files not pasted: {}", crate::Error::from(error)));
+                self.local_error = Some(fl!(
+                    "window-input-files-failed",
+                    error = crate::Error::from(error).localize()
+                ));
                 // Keys typed after the drop never run without its paths.
                 self.discard_all_held(Delivery::Refused, cx);
                 cx.notify();
@@ -155,7 +160,7 @@ impl HerdrWindow {
             return true;
         };
         if let Err(error) = self.send_wsl_paths(&paste, mapped) {
-            self.local_error = Some(format!("Files not pasted: {error}"));
+            self.local_error = Some(fl!("window-input-files-failed", error = error.localize()));
             self.discard_all_held(Delivery::Refused, cx);
             cx.notify();
         }

@@ -49,10 +49,7 @@ pub(super) fn label(count: usize) -> String {
 
 /// What a screen reader says about the taskbar button.
 pub(super) fn description(count: usize) -> String {
-    match count {
-        1 => "1 agent needs attention".into(),
-        _ => format!("{count} agents need attention"),
-    }
+    crate::i18n::fl!("taskbar-attention", count = count)
 }
 
 /// Straight-alpha BGRA pixels, top row first: a disc filling the square,
@@ -186,7 +183,7 @@ impl Icon {
                 CLIP_DEFAULT_PRECIS,
                 ANTIALIASED_QUALITY,
                 0,
-                w!("Segoe UI"),
+                w!("Segoe UI"), // i18n: data
             )
         };
         let font = Object(font.into());

@@ -37,7 +37,7 @@ mod device_multi_select;
 #[cfg(all(test, feature = "azure"))]
 mod device_removing;
 #[cfg(test)]
-mod device_sessions_row;
+mod device_sessions_unfold;
 #[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
@@ -58,6 +58,10 @@ mod layouts;
 mod listening_ports;
 #[cfg(test)]
 mod local_counts_chip;
+#[cfg(test)]
+mod mod_places;
+#[cfg(test)]
+mod mutes;
 #[cfg(test)]
 mod nested_agents;
 #[cfg(test)]
@@ -81,7 +85,11 @@ mod probes;
 #[cfg(test)]
 mod repository_icons;
 #[cfg(test)]
+mod resize_grip;
+#[cfg(test)]
 mod row_drag;
+#[cfg(test)]
+mod rtl_layouts;
 #[cfg(test)]
 mod search;
 #[cfg(test)]
@@ -114,6 +122,8 @@ mod update_notes;
 mod update_notes_scrollbar;
 #[cfg(test)]
 mod update_panel;
+#[cfg(test)]
+mod upstream;
 #[cfg(test)]
 mod workspace_click_hover;
 #[cfg(test)]
@@ -537,6 +547,25 @@ pub(crate) fn full_draw(window: &mut Window, cx: &mut App) -> ArenaClearNeeded {
     window.draw(cx)
 }
 
+/// Lets `frames` display frames pass, `step` apart: each advances the clock,
+/// runs the frame callbacks a moving mark waits on, and draws what they
+/// invalidated, as the platform would.
+#[cfg(test)]
+pub(crate) fn run_frames(
+    cx: &mut gpui::VisualTestContext,
+    frames: usize,
+    step: std::time::Duration,
+) {
+    for _ in 0..frames {
+        cx.executor().advance_clock(step);
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
     let sidebar_view = {
@@ -571,6 +600,8 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         app_update_notes_scroll: gpui::ScrollHandle::new(),
         removal: None,
         merged_cleanup: Default::default(),
+        mod_panel_width: crate::panel_resize::MOD_PANEL,
+        mods: Default::default(),
         #[cfg(feature = "integration-test")]
         navigations: Default::default(),
         worktree_script: None,
@@ -588,6 +619,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         selection_follow: Default::default(),
         find: None,
         copy_mode: None,
+        core_terminals: Default::default(),
         find_memory: Default::default(),
         flash: None,
         flash_motion: Default::default(),
@@ -694,6 +726,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         cell_width: 9.,
         hovered_terminal_link: false,
         pressed_terminal_link: None,
+        link_complaint: None,
         links: Default::default(),
         terminal_mouse: None,
         #[cfg(feature = "cloud")]
@@ -709,6 +742,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         held_keys: Default::default(),
         // No AppKit event to read; a test that needs one supplies its own.
         key_press: || None,
+        landing_launch: None,
         key_layout: |_| None,
         file_transfer: None,
         presentation: Default::default(),
@@ -767,6 +801,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         surface_signal: cx.new(|_| crate::window::SurfaceSignal),
         _sidebar_invalidation: HerdrWindow::invalidate_sidebar(cx),
         _host_theme: HerdrWindow::observe_host_theme(cx),
+        _notification_mutes: HerdrWindow::observe_notification_mutes(cx),
         browser: crate::browser::Browser::new(cx),
         _browser_tabs: cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify()),
         _worktree_notes: HerdrWindow::observe_worktree_notes(window, cx),

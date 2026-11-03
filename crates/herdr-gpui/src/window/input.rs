@@ -1,8 +1,10 @@
 //! Semantic input on its way to a pane or popup: keystrokes, paste, and wheel
 //! deltas. Nothing here synthesizes terminal keys for an operation that has an
 //! endpoint API method, and nothing is sent while a menu page holds input.
+// i18n: migrated
 
 use super::HerdrWindow;
+use crate::i18n::{Localize, fl};
 use crate::{
     connection::ConnectionBridge,
     terminal::{
@@ -30,16 +32,20 @@ fn plain_ctrl_v_paste(
     ctrl_v_pastes: bool,
     read_clipboard: impl FnOnce() -> Option<ClipboardItem>,
 ) -> bool {
+    ctrl_v_pastes
+        && plain_ctrl_v(keystroke)
+        && read_clipboard().is_some_and(|item| item.text().is_some_and(|text| !text.is_empty()))
+}
+
+/// Ctrl+V with no other modifier.
+fn plain_ctrl_v(keystroke: &Keystroke) -> bool {
     let modifiers = keystroke.modifiers;
-    let plain_ctrl_v = modifiers.control
+    modifiers.control
         && !modifiers.shift
         && !modifiers.alt
         && !modifiers.platform
         && !modifiers.function
-        && keystroke.key.eq_ignore_ascii_case("v");
-    ctrl_v_pastes
-        && plain_ctrl_v
-        && read_clipboard().is_some_and(|item| item.text().is_some_and(|text| !text.is_empty()))
+        && keystroke.key.eq_ignore_ascii_case("v")
 }
 
 impl HerdrWindow {
@@ -267,7 +273,7 @@ impl HerdrWindow {
             ConnectionBridge::send_inputs(handle, &snapshot.boot_id, &target.target, inputs)
         };
         if let Err(error) = result {
-            self.local_error = Some(format!("Wheel input not sent: {error}"));
+            self.local_error = Some(fl!("window-input-wheel-failed", error = error.localize()));
             // The rows asked for never left, so nothing may wait on them.
             self.presentation.scroll.clear();
             cx.notify();
@@ -316,6 +322,10 @@ impl HerdrWindow {
             return;
         }
         if self.chat_focused(window, cx) {
+            return;
+        }
+        // A herdr-core terminal takes its own keys; none reach a Herdr pane.
+        if self.core_terminals.focused(window, cx) {
             return;
         }
         // Copy mode owns the keyboard: its keys run and nothing else is typed.
@@ -399,6 +409,19 @@ impl HerdrWindow {
             self.paste(cx);
             cx.stop_propagation();
             window.prevent_default();
+        } else if cfg!(target_os = "linux")
+            && plain_ctrl_v(&event.keystroke)
+            && self.keymap().pane_key(&event.keystroke).is_none()
+        {
+            // Desktops such as Omarchy send plain Ctrl+V for their universal
+            // paste (Super+V), so it pastes text here too, unless
+            // `[pane_keys]` says what Ctrl+V sends. The background reader
+            // decides: text pastes, a remote pane's image is bridged, and
+            // anything else still reaches the pane as Ctrl+V, so local agents
+            // keep reading clipboard images themselves.
+            self.paste_or_hold(false, key_input(event, alt_keys), cx);
+            cx.stop_propagation();
+            window.prevent_default();
         } else if event.keystroke.key == "v"
             && event.keystroke.modifiers.control
             && !event.keystroke.modifiers.alt
@@ -408,7 +431,12 @@ impl HerdrWindow {
             && self.selected_is_remote()
             && (self.accepts_remote_images() || !self.input_ready())
         {
-            self.paste_or_hold(true, key_input(event, alt_keys), cx);
+            // Without an image the key goes out as `[pane_keys]` maps it.
+            let key = match self.keymap().pane_key(&event.keystroke) {
+                Some(sent) => pane_key_input(event, sent),
+                None => key_input(event, alt_keys),
+            };
+            self.paste_or_hold(true, key, cx);
             cx.stop_propagation();
             window.prevent_default();
         } else if self.marked.is_empty()

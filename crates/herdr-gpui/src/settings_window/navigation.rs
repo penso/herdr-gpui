@@ -17,7 +17,7 @@ impl SettingsWindow {
                 cx.listener(|this, event: &DragMoveEvent<PanelDrag>, _, cx| {
                     if *event.drag(cx) == PanelDrag::SettingsNavigation
                         && this.navigation_width.drag(
-                            Side::Left,
+                            Side::start(),
                             event.bounds,
                             event.event.position.x,
                         )
@@ -28,7 +28,7 @@ impl SettingsWindow {
             )
             .child(handle(
                 "settings-navigation-resize",
-                Side::Left,
+                Side::start(),
                 PanelDrag::SettingsNavigation,
                 cx.listener(|this, _, _, cx| {
                     this.navigation_width.reset();
@@ -42,7 +42,7 @@ impl SettingsWindow {
             .p(px(12.))
             .gap(px(2.))
             .bg(rgb(mix(theme.surface, theme.background, 25)))
-            .border_r_1()
+            .border_e(px(1.))
             .border_color(rgb(theme.active))
             .child(
                 div()
@@ -123,7 +123,7 @@ impl SettingsWindow {
                 row
             })
             .debug_selector(move || section.selector())
-            .flex()
+            .row()
             .items_center()
             .gap(px(10.))
             .px(px(10.))
@@ -189,7 +189,7 @@ impl SettingsWindow {
             .flex_none()
             .min_h(px(36.))
             .px(px(16.))
-            .flex()
+            .row()
             .items_center()
             .gap(px(12.))
             .border_t_1()

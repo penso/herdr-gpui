@@ -1,6 +1,7 @@
 //! Validated `[azure]` configuration settings.
 
 use super::{Error, Result};
+use crate::cloud::Value;
 use crate::{config::AzureConfig, credentials::Store};
 use std::ffi::OsString;
 
@@ -62,7 +63,7 @@ impl Settings {
         let env_string = |name| -> Result<Option<String>> {
             match var(name) {
                 Some(val) => Ok(Some(val.into_string().map_err(|_| {
-                    Error::Encoding(Box::leak(name.to_owned().into_boxed_str()))
+                    Error::Encoding(Value::Key(Box::leak(name.to_owned().into_boxed_str())))
                 })?)),
                 None => Ok(None),
             }
@@ -102,14 +103,14 @@ impl Settings {
         };
 
         if !is_guid(&subscription_id) {
-            return Err(Error::Field("azure.subscription_id"));
+            return Err(Error::Field(Value::Key("azure.subscription_id")));
         }
 
         let tenant_id = match tenant {
             Some(t) if !t.trim().is_empty() => {
                 let t = t.trim().to_owned();
                 if !is_guid(&t) {
-                    return Err(Error::Field("azure.tenant_id"));
+                    return Err(Error::Field(Value::Key("azure.tenant_id")));
                 }
                 Some(t)
             }
@@ -121,7 +122,7 @@ impl Settings {
             Some(c) if !c.trim().is_empty() => {
                 let c = c.trim().to_owned();
                 if !is_guid(&c) {
-                    return Err(Error::Field("azure.client_id"));
+                    return Err(Error::Field(Value::Key("azure.client_id")));
                 }
                 Some(c)
             }
@@ -156,7 +157,7 @@ impl Settings {
             .map(|s| s.trim().to_owned())
             .unwrap_or_else(|| DEFAULT_SANDBOX_GROUP.to_owned());
         if !is_segment(&sandbox_group) {
-            return Err(Error::Field("azure.sandbox_group"));
+            return Err(Error::Field(Value::Key("azure.sandbox_group")));
         }
 
         let sandbox_location = env_string("HERDR_AZURE_SANDBOX_LOCATION")?
@@ -171,7 +172,7 @@ impl Settings {
                 .bytes()
                 .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
         {
-            return Err(Error::Field("azure.sandbox_location"));
+            return Err(Error::Field(Value::Key("azure.sandbox_location")));
         }
 
         let sandbox_image = env_string("HERDR_AZURE_SANDBOX_IMAGE")?
@@ -180,16 +181,15 @@ impl Settings {
             .map(|s| s.trim().to_owned())
             .unwrap_or_else(|| DEFAULT_SANDBOX_IMAGE.to_owned());
         if !is_segment(&sandbox_image) {
-            return Err(Error::Field("azure.sandbox_image"));
+            return Err(Error::Field(Value::Key("azure.sandbox_image")));
         }
 
         let sandbox_size = match env_string("HERDR_AZURE_SANDBOX_CPU")?
             .or_else(|| config.sandbox_cpu.clone())
             .filter(|s| !s.trim().is_empty())
         {
-            Some(cores) => {
-                super::sizes::SandboxSize::parse(&cores).ok_or(Error::Field("azure.sandbox_cpu"))?
-            }
+            Some(cores) => super::sizes::SandboxSize::parse(&cores)
+                .ok_or(Error::Field(Value::Key("azure.sandbox_cpu")))?,
             None => super::sizes::SandboxSize::standard(super::sizes::DEFAULT_SANDBOX_MILLICORES),
         };
 
@@ -245,7 +245,7 @@ impl Settings {
         }
         let place: Vec<&str> = account.split('/').skip(1).collect();
         if place.iter().any(|part| part.is_empty()) {
-            return Err(Error::Field("saved Azure device account"));
+            return Err(Error::Field(Value::AzureDeviceAccount));
         }
         let mut scoped = self.clone();
         match place[..] {
@@ -253,13 +253,13 @@ impl Settings {
             [resource_group] => scoped.resource_group = resource_group.to_owned(),
             [resource_group, sandbox_group, sandbox_location] => {
                 if !is_segment(sandbox_group) || !is_segment(sandbox_location) {
-                    return Err(Error::Field("saved Azure device account"));
+                    return Err(Error::Field(Value::AzureDeviceAccount));
                 }
                 scoped.resource_group = resource_group.to_owned();
                 scoped.sandbox_group = sandbox_group.to_owned();
                 scoped.sandbox_location = sandbox_location.to_owned();
             }
-            _ => return Err(Error::Field("saved Azure device account")),
+            _ => return Err(Error::Field(Value::AzureDeviceAccount)),
         }
         Ok(scoped)
     }
@@ -283,9 +283,9 @@ pub fn parse_auto_stop(text: &str) -> Result<Option<std::time::Duration>> {
         let mins: u64 = min
             .trim()
             .parse()
-            .map_err(|_| Error::Field("azure.auto_stop"))?;
+            .map_err(|_| Error::Field(Value::Key("azure.auto_stop")))?;
         if mins == 0 {
-            return Err(Error::Field("azure.auto_stop"));
+            return Err(Error::Field(Value::Key("azure.auto_stop")));
         }
         return Ok(Some(std::time::Duration::from_secs(mins * 60)));
     }
@@ -293,9 +293,9 @@ pub fn parse_auto_stop(text: &str) -> Result<Option<std::time::Duration>> {
         let hours: u64 = hrs
             .trim()
             .parse()
-            .map_err(|_| Error::Field("azure.auto_stop"))?;
+            .map_err(|_| Error::Field(Value::Key("azure.auto_stop")))?;
         if hours == 0 {
-            return Err(Error::Field("azure.auto_stop"));
+            return Err(Error::Field(Value::Key("azure.auto_stop")));
         }
         return Ok(Some(std::time::Duration::from_secs(hours * 3600)));
     }
@@ -303,15 +303,17 @@ pub fn parse_auto_stop(text: &str) -> Result<Option<std::time::Duration>> {
         let seconds: u64 = secs
             .trim()
             .parse()
-            .map_err(|_| Error::Field("azure.auto_stop"))?;
+            .map_err(|_| Error::Field(Value::Key("azure.auto_stop")))?;
         if seconds == 0 {
-            return Err(Error::Field("azure.auto_stop"));
+            return Err(Error::Field(Value::Key("azure.auto_stop")));
         }
         return Ok(Some(std::time::Duration::from_secs(seconds)));
     }
-    let seconds: u64 = text.parse().map_err(|_| Error::Field("azure.auto_stop"))?;
+    let seconds: u64 = text
+        .parse()
+        .map_err(|_| Error::Field(Value::Key("azure.auto_stop")))?;
     if seconds == 0 {
-        return Err(Error::Field("azure.auto_stop"));
+        return Err(Error::Field(Value::Key("azure.auto_stop")));
     }
     Ok(Some(std::time::Duration::from_secs(seconds)))
 }

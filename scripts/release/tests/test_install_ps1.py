@@ -13,6 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[3]
 INSTALL = ROOT / "site/install.ps1"
 ISS = ROOT / "scripts/release/herdr-gpui.iss"
+ISL = ROOT / "scripts/release/installer/en-US.isl"
 SCHEME_KEY = r"HKCU:\Software\Classes\herdr-gpui"
 COMMAND_KEY = r"shell\open\command"
 
@@ -77,10 +78,16 @@ def installer_scheme_values(app):
     launcher = re.search(r'^#define Launcher "([^"]+)"$', iss, re.M).group(1)
     pattern = (r'^Root: HKCU; Subkey: "Software\\Classes\\herdr-gpui(?:\\([^"]+))?"; ValueType: string; '
                r'ValueName: "([^"]*)"; ValueData: "((?:[^"]|"")*)"')
+    app_name = re.search(r'^#define AppName "([^"]+)"$', iss, re.M).group(1)
+    # Setup's own text comes from its English messages, as ISCC fills them in.
+    messages = dict(re.findall(r"^(\w+)=(.*)$", ISL.read_text(encoding="utf-8"), re.M))
     values = {}
     for subkey, name, data in re.findall(pattern, iss, re.M):
         data = data.replace('""', '"').replace("{app}", app)
-        values[(subkey, name)] = data.replace("{#AppExe}", exe).replace("{#Launcher}", launcher)
+        data = data.replace("{#AppExe}", exe).replace("{#Launcher}", launcher).replace("{#AppName}", app_name)
+        data = re.sub(r"\{cm:(\w+)(?:,([^}]*))?\}",
+                      lambda m: messages[m[1]].replace("%1", m[2] or ""), data)
+        values[(subkey, name)] = data
     return values
 
 

@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod activities;
 mod agents;
 mod assist;
 mod auto_accept;
@@ -11,6 +12,7 @@ mod endpoint;
 mod frame;
 mod media;
 mod notices;
+mod revisions;
 mod wire;
 
 fn text(id: u64, kind: fn(String) -> EntryKind, value: &str) -> Entry {
@@ -36,6 +38,7 @@ fn tool(id: u64, status: ToolStatus) -> Entry {
             content: Vec::new(),
             kind: ToolKind::Execute,
             locations: Vec::new(),
+            parent: None,
             status,
             title: "cargo test".to_owned(),
         }),

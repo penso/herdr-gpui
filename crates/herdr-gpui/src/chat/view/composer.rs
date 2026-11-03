@@ -3,12 +3,14 @@
 //! chat's layout arranges. The settings' menus open above them.
 
 use super::{
-    super::chats::ChatPane,
+    super::chats::{ChatPane, SendButton},
     Hues,
     layout::{ComposerParts, layout_for},
 };
+use crate::i18n::{Localize, fl};
 use crate::{HerdrWindow, config::corners};
 use gpui::{prelude::*, *};
+use herdr_chat_protocol::Command;
 
 /// Draft lines shown above the editable one; earlier ones are counted, so a
 /// long draft never pushes the editable line out of the pane.
@@ -30,7 +32,7 @@ impl HerdrWindow {
                 .p(px(12.))
                 .text_size(self.chat_small_text())
                 .text_color(rgb(theme.subtext()))
-                .child("Continue this conversation in its terminal.")
+                .child(fl!("chat-read-only-hint"))
                 .child(
                     div()
                         .id("chat-reply-terminal")
@@ -49,7 +51,7 @@ impl HerdrWindow {
                         .cursor_pointer()
                         .hover(|button| button.border_color(rgb(theme.primary())))
                         .child(svg().path("icons/terminal.svg").size(px(13.)))
-                        .child("Reply in terminal")
+                        .child(fl!("chat-reply-in-terminal"))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                             cx.stop_propagation();
@@ -60,7 +62,7 @@ impl HerdrWindow {
         let problem = chat.error.clone().or_else(|| {
             chat.session
                 .rejection()
-                .map(|rejection| rejection.to_string())
+                .map(|rejection| rejection.localize())
         });
         let small = px((self.chat_text_size() - 2.).max(10.));
         let round = |id: &'static str| {
@@ -92,9 +94,15 @@ impl HerdrWindow {
                 }))
         };
         let copying = (chat.uploading > 0).then(|| {
-            let host = match &chat.target.route {
-                super::super::Route::Ssh(host) => crate::notifications::safe_text(host, 80),
-                super::super::Route::Local => String::new(),
+            // On this machine only a pasted picture is ever pending.
+            let label = match &chat.target.route {
+                super::super::Route::Ssh(host) => {
+                    let host = crate::notifications::safe_text(host, 80);
+                    fl!("chat-copying-files", count = chat.uploading, host = host)
+                }
+                super::super::Route::Local => {
+                    fl!("chat-preparing-pictures", count = chat.uploading)
+                }
             };
             div()
                 .debug_selector(|| "chat-uploading".into())
@@ -106,10 +114,7 @@ impl HerdrWindow {
                 .bg(rgb(theme.active))
                 .text_size(small)
                 .text_color(rgb(theme.subtext()))
-                .child(match chat.uploading {
-                    1 => format!("Copying a file to {host}\u{2026}"),
-                    count => format!("Copying {count} files to {host}\u{2026}"),
-                })
+                .child(label)
         });
         let chips = (!chat.attachments.is_empty() || copying.is_some()).then(|| {
             div()
@@ -187,26 +192,45 @@ impl HerdrWindow {
                         )
                 }))
         });
-        let accepts = transcript.status.accepts_prompts();
-        let send = {
-            let pane_id = pane_id.clone();
-            let fill = if accepts {
-                theme.primary()
-            } else {
-                theme.active
-            };
-            round("chat-send")
-                .bg(rgb(fill))
-                .child(
-                    svg()
-                        .path("icons/arrow-right.svg")
-                        .size(px(12.))
-                        .text_color(rgb(theme.text_on(fill))),
-                )
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.send_chat_composer(&pane_id, cx);
-                }))
+        // As in the phone app: Stop while the agent works and nothing is
+        // written, Send once something is, and Send greyed out otherwise.
+        let send = match chat.send {
+            SendButton::Stop => {
+                let pane_id = pane_id.clone();
+                let fill = hues.red;
+                round("chat-stop")
+                    .bg(rgb(fill))
+                    .child(
+                        div()
+                            .size(px(10.))
+                            .rounded(px(2.))
+                            .bg(rgb(theme.text_on(fill))),
+                    )
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.chat_send(&pane_id, Command::Cancel, cx);
+                    }))
+            }
+            SendButton::Send | SendButton::Off => {
+                let on = chat.send == SendButton::Send;
+                let pane_id = pane_id.clone();
+                let fill = if on { theme.primary() } else { theme.active };
+                round("chat-send")
+                    .bg(rgb(fill))
+                    .when(!on, |button| button.cursor_default())
+                    .child(
+                        svg()
+                            .path("icons/arrow-up.svg")
+                            .size(px(12.))
+                            .text_color(rgb(if on { theme.text_on(fill) } else { theme.muted })),
+                    )
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        if on {
+                            this.send_chat_composer(&pane_id, cx);
+                        }
+                    }))
+            }
         };
         let draft = div()
             .flex()
@@ -218,10 +242,7 @@ impl HerdrWindow {
                     .debug_selector(|| "chat-draft-earlier".into())
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child(match earlier {
-                        1 => "1 earlier line".to_owned(),
-                        count => format!("{count} earlier lines"),
-                    })
+                    .child(fl!("chat-draft-earlier", count = earlier))
             }))
             .children(
                 chat.draft

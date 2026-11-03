@@ -69,6 +69,7 @@ fn remote_replies_round_trip() {
                 port: 7443,
                 addresses: vec!["https://192.168.1.20:7443".into()],
                 fingerprint: "5F:2A".into(),
+                computer: String::new(),
                 herdr: true,
                 chats: 2,
                 devices: 1,
@@ -84,6 +85,8 @@ fn remote_replies_round_trip() {
                 last_seen_ms: None,
                 push: true,
                 connected: false,
+                via: None,
+                hosts: Vec::new(),
             }],
         },
     ] {

@@ -4,6 +4,7 @@ use super::super::Tab;
 use crate::{
     HerdrWindow,
     browser::annotate::{Anchor, Note},
+    i18n::fl,
 };
 use gpui::{prelude::*, *};
 use std::sync::Arc;
@@ -81,7 +82,7 @@ impl HerdrWindow {
                     draft.child(
                         div()
                             .text_color(rgb(theme.muted))
-                            .child("Taking a screenshot\u{2026}"),
+                            .child(fl!("browser-notes-capturing")),
                     )
                 })
                 .child(
@@ -103,9 +104,9 @@ impl HerdrWindow {
                         button(
                             "annotation-add",
                             if editing.is_some() {
-                                "Save note"
+                                fl!("browser-notes-save")
                             } else {
-                                "Add note"
+                                fl!("browser-notes-add")
                             }
                             .into(),
                             true,
@@ -157,7 +158,7 @@ impl HerdrWindow {
                                 .text_color(rgb(theme.muted))
                                 .truncate()
                                 .child(if sent {
-                                    format!("{} \u{b7} sent", note.anchor.summary())
+                                    fl!("browser-notes-sent", note = note.anchor.summary())
                                 } else {
                                     note.anchor.summary()
                                 }),
@@ -171,7 +172,7 @@ impl HerdrWindow {
                                 // A page's result arrives without a note.
                                 .when(note.comment.is_empty(), |hint| {
                                     hint.text_color(rgb(theme.muted))
-                                        .child("Add a note\u{2026}")
+                                        .child(fl!("browser-notes-placeholder"))
                                 })
                                 .child(note.comment)
                                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -221,7 +222,7 @@ impl HerdrWindow {
                     .p_2()
                     .border_b_1()
                     .border_color(rgb(theme.active))
-                    .child("Notes")
+                    .child(fl!("browser-notes-title"))
                     .child(
                         div()
                             .flex()
@@ -229,15 +230,21 @@ impl HerdrWindow {
                             .child(
                                 // Drag draws a region while this is on;
                                 // Shift-drag draws one either way.
-                                button("annotation-region", "Region".into(), regions).on_click(
+                                button(
+                                    "annotation-region",
+                                    fl!("browser-notes-region").into(),
+                                    regions,
+                                )
+                                .on_click(
                                     cx.listener(move |this, _, _, cx| this.toggle_regions(id, cx)),
                                 ),
                             )
-                            .child(button("annotation-page", "Note on page".into(), false).on_click(
-                                cx.listener(move |this, _, window, cx| {
-                                    this.begin_note(id, Anchor::Page, None, window, cx);
-                                }),
-                            )),
+                            .child(
+                                button("annotation-page", fl!("browser-notes-page").into(), false)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.begin_note(id, Anchor::Page, None, window, cx);
+                                    })),
+                            ),
                     ),
             )
             .children(composer)
@@ -253,7 +260,7 @@ impl HerdrWindow {
                             div()
                                 .p_2()
                                 .text_color(rgb(theme.muted))
-                                .child("Click an element, select text, or Shift-drag a region in the page, then describe the change."),
+                                .child(fl!("browser-notes-empty")),
                         )
                     }),
             )
@@ -277,24 +284,47 @@ impl HerdrWindow {
                                     .text_color(rgb(theme.muted))
                                     .child(queued.label()),
                             )
-                            .child(button("annotation-withdraw", "Withdraw".into(), true).on_click(
-                                cx.listener(move |this, _, _, cx| this.withdraw_notes(id, cx)),
-                            ))
+                            .child(
+                                button(
+                                    "annotation-withdraw",
+                                    fl!("browser-notes-withdraw").into(),
+                                    true,
+                                )
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.withdraw_notes(id, cx)),
+                                ),
+                            )
                         })
                         .when(origin && queued.is_none(), |row| {
                             row.child(button("annotation-send", send_label.into(), true).on_click(
-                                cx.listener(move |this, _, _, cx| this.send_notes(&tab_for_send, cx)),
+                                cx.listener(move |this, _, _, cx| {
+                                    this.send_notes(&tab_for_send, cx)
+                                }),
                             ))
                         })
                         .when(has_notes, |row| {
-                            row.child(button("annotation-copy", "Copy".into(), !origin).on_click(
-                                cx.listener(move |this, _, _, cx| this.copy_notes(&tab_for_copy, cx)),
-                            ))
+                            row.child(
+                                button(
+                                    "annotation-copy",
+                                    fl!("browser-notes-copy").into(),
+                                    !origin,
+                                )
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| this.copy_notes(&tab_for_copy, cx),
+                                )),
+                            )
                         })
                         .when(any_sent, |row| {
                             row.child(
-                                button("annotation-clear-sent", "Clear sent".into(), false).on_click(
-                                    cx.listener(move |this, _, _, cx| this.clear_sent_notes(id, cx)),
+                                button(
+                                    "annotation-clear-sent",
+                                    fl!("browser-notes-clear-sent").into(),
+                                    false,
+                                )
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.clear_sent_notes(id, cx)
+                                    }),
                                 ),
                             )
                         }),

@@ -18,7 +18,7 @@ rules apply throughout.
 | TLS | The daemon's own certificate authority, trusted once on the phone. Works by IP address on the LAN and over Tailscale; no DNS name is required. |
 | Notifications | Web Push from an installed PWA. |
 | UI | Mobile-first server-rendered HTML: Tailwind, Alpine (CSP build), SSE. Mockups: `docs/mockups/remote-control/index.html`. Picked: home F (needs-you strip over lists grouped by computer, Ghostty-style), workspaces and tabs D (attention board), chat C (focus), questions A (bottom sheet). |
-| Computers | One phone app shows every paired computer, plus the SSH hosts a paired computer's Herdr UI connects to. |
+| Computers | One phone app shows every paired computer. Allowing a phone on one computer also pairs it directly with the SSH and cloud machines that computer's Herdr UI connects to. |
 | iOS Live Activities | A PWA cannot start them, so a small native companion app (`ios/`) adds them, updated by the daemon through APNs. |
 
 ## Architecture
@@ -278,9 +278,15 @@ shell connection. It uses Herdr's public API socket (`herdr.sock` beside
 focus nor resize anything:
 
 - **Screen**: `pane.read {source: visible, format: ansi}` while a phone
-  shows the pane, every 300 ms, sent as a patch only when it changed. The
-  ANSI (SGR only) becomes escaped spans on the server. No cursor position
-  comes with it.
+  shows the pane, every 300 ms, sent as a patch only when it changed. Input
+  Herdr takes also reads it at once, then 50 ms and 150 ms later, so an
+  echo does not wait out the timer. The ANSI (SGR only) becomes escaped
+  spans on the server. No cursor position comes with it.
+- **Echo strip**: what was typed but is not on the screen yet shows,
+  dotted, above the key rows (backspace takes back what it can). An input
+  leaves it once Herdr took it and a screen arrived after, or 1 s after
+  Herdr took it when the screen did not change. Typing in place on the
+  screen, as mosh predicts, needs the cursor, which `pane.read` lacks.
 - **Typing**: one key at a time with `pane.send_keys` (Herdr's key syntax:
   `ctrl+c`, `esc`, `up`, `pageup`), because `pane.send_text` arrives as a
   bracketed paste, which an editor inserts rather than runs; a paste uses
@@ -351,9 +357,55 @@ phone never disturbs the desktop's layout.
   Until then the app holds one subscription, for one computer
   (`herdr.push-host`); Settings on any other says where notifications come
   from, and a notification opens its page on the computer shown.
-- SSH hosts a paired computer's Herdr UI connects to appear as their own
-  sections, reached through that computer with `herdr-acp connect ID`, with
-  no pairing of their own.
+- **Other machines.** Allowing a phone on one computer also pairs it with
+  the SSH and cloud machines that computer's Herdr UI connects to. The phone
+  reaches each machine's own daemon directly, so it keeps them while that
+  computer sleeps. They are not reached through it.
+  - **Allow.** The Allow step lists the machines, every one ticked.
+    `Approve` carries the ticked ones, and the daemon keeps them on the
+    device as allowed (`links` in `devices.json`).
+  - **The phone's side.** The phone reads `GET /api/v2/hosts`, which lists
+    each machine as `offered`, `allowed`, `asking`, `pending`, `paired`, or
+    `failed`. For each allowed machine it makes a new Secure Enclave key and
+    sends it with `POST /api/v2/hosts/{host}/pair`.
+  - **Herdr UI's side.**
+    - It takes each request (`HostPairings`) and copies its own
+      `herdr-remote-control` into the machine's home when the machine lacks
+      that build (`~/.local/share/herdr-remote-control/bin/VERSION/`).
+    - It runs `herdr-remote-control enroll` there over SSH. On the way that
+      sends this daemon's APNs key (0600), so the machine notifies the phone
+      itself. It starts the machine's daemon as a user service unless one is
+      installed. It turns on `[remote]` in that machine's Herdr UI settings,
+      if it has any. Then it adds the phone, marked `via` this computer.
+    - It reports the machine's fingerprint and addresses back
+      (`HostPaired`).
+  - **Trust.** The phone pins that fingerprint because the computer it
+    already pinned said so. Herdr UI vouches with the user's own SSH access.
+  - **Machines added later.** The phone offers them with a Pair button.
+    Herdr UI asks on the desktop before pairing one, and closing the
+    question declines.
+  - **Revoking.** Revoking the phone here also revokes it on every machine
+    it was paired with from here. Herdr UI does that once each machine can
+    be reached (`host-revokes.json`). An idle expiry here does not cascade:
+    the phone may be using those machines while this computer sleeps.
+  - **What it needs.** A machine is reachable only at an address its CA
+    covers: a LAN, Tailscale, or `.local` address. A machine reached only
+    through a provider's proxy is paired but unreachable from the phone.
+  - **Which build a machine gets.** Herdr UI copies every build over SSH,
+    so the machine needs no internet:
+    - A machine like this computer, or any Mac when this is a release (its
+      build is universal), gets the app's own `herdr-remote-control`.
+    - A Linux machine, when this is a release, gets the release's static
+      musl build for its architecture (`herdr-remote-control-VERSION-ARCH-unknown-linux-musl`),
+      which runs whatever its glibc. Herdr UI downloads it once per
+      version and checks it against the release's Ed25519-signed
+      `host-manifest.json` (schema 4) before it leaves this computer.
+    - A development build, as on a pull request, sends its checkout's
+      source (uncommitted changes included, through `git stash create`)
+      and builds `herdr-remote-control` on the machine with its own Rust.
+      The pinned toolchain comes from rustup, and outputs stay in
+      `~/.cache/herdr-remote-control`, so the next build is incremental.
+      A machine without Rust says so.
 
 ## iOS Live Activities
 
@@ -363,7 +415,8 @@ amber with "Needs an answer" when a question waits; ending with the turn
 summary.
 
 A web app cannot do this. Live Activities belong to ActivityKit, so they need
-a native companion app:
+a native companion app. (`docs/ios-app-plan.md` now plans a full native app
+that replaces the companion described here.)
 
 - A small SwiftUI app plus widget extension, paired the same way as the PWA
   (QR, matching code, device key in the Keychain). It does not duplicate the
@@ -384,7 +437,7 @@ the APNs key):
 
 - **Project**: an XcodeGen spec (`ios/project.yml`) for the `HerdrRemote` app
   and the `HerdrRemoteWidgets` extension, iOS 17.2+, bundle
-  `so.pen.herdr-remote`. Logic without UIKit sits in the `HerdrRemoteCore`
+  `so.pen.herdr.remote`. Logic without UIKit sits in the `HerdrRemoteCore`
   Swift package, whose tests run on the Mac with `swift test`.
 - **Activity**: `ChatActivityAttributes` (computer name, computer id,
   workspace, chat title, agent, pane) with `ChatActivityState` as its

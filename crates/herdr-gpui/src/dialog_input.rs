@@ -1,8 +1,11 @@
+// i18n: migrated
 use gpui::{prelude::*, *};
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{HerdrWindow, input::ViewInputHandler, words};
+use crate::caret::Carets;
+use crate::i18n::fl;
 
 /// Rewrites an edit, given the text left of the range it replaces, the text
 /// typed, and the text right of the range: what to insert there, and how the
@@ -17,14 +20,15 @@ pub(super) struct DialogInput {
     pub reversed: bool,
     pub marked: Option<Range<usize>>,
     pub bounds: Bounds<Pixels>,
-    line: Option<ShapedLine>,
+    /// Where the last drawn text puts each caret.
+    carets: Option<Carets>,
     scroll: Pixels,
     /// Rewrites each edit. Composition is shown as typed and only its commit
     /// is rewritten, so the IME is never fought mid-word.
     format: Option<Format>,
     /// What a screen reader calls the field, when a caption beside it
     /// names it rather than the field itself.
-    pub label: Option<&'static str>,
+    pub label: Option<SharedString>,
 }
 
 impl DialogInput {
@@ -41,7 +45,7 @@ impl DialogInput {
     pub fn branch(text: String) -> Self {
         Self {
             format: Some(crate::worktree::format_edit),
-            label: Some("Branch"),
+            label: Some(fl!("dialog-input-branch").into()),
             ..Self::new(text)
         }
     }
@@ -99,7 +103,17 @@ impl DialogInput {
         }
         self.text
             .replace_range(range.clone(), &format!("{text}{after}"));
-        let end = range.start + text.len();
+        let mut end = range.start + text.len();
+        if !marked {
+            // What was typed can join the cluster after it, as a letter typed
+            // before a combining accent does; the caret goes after the cluster.
+            end = self
+                .text
+                .grapheme_indices(true)
+                .map(|(i, _)| i)
+                .find(|i| *i >= end)
+                .unwrap_or(self.text.len());
+        }
         self.selection = if let Some(selected) = selected {
             let start = byte_offset(&text, selected.start);
             range.start + start..range.start + byte_offset(&text, selected.end).max(start)
@@ -108,7 +122,7 @@ impl DialogInput {
         };
         self.reversed = false;
         self.marked = (marked && !text.is_empty()).then_some(range.start..end);
-        self.line = None;
+        self.carets = None;
     }
 
     /// Ends a composition where it stands, as when the platform unmarks the
@@ -243,21 +257,20 @@ impl DialogInput {
     }
 
     pub fn index_at(&self, position: Point<Pixels>) -> Option<usize> {
-        self.line
+        self.carets
             .as_ref()
-            .map(|line| line.closest_index_for_x(position.x - self.bounds.left() + self.scroll))
+            .map(|carets| carets.index_at(position.x - self.bounds.left() + self.scroll))
     }
 
     pub fn range_bounds(&self, range: Range<usize>) -> Option<Bounds<Pixels>> {
         let range = self.range_from_utf16(range);
-        let line = self.line.as_ref()?;
-        let x = |index| {
-            (self.bounds.left() + line.x_for_index(index) - self.scroll)
-                .clamp(self.bounds.left(), self.bounds.right())
+        let extent = self.carets.as_ref()?.extent(range);
+        let x = |x| {
+            (self.bounds.left() + x - self.scroll).clamp(self.bounds.left(), self.bounds.right())
         };
         Some(Bounds::from_corners(
-            point(x(range.start), self.bounds.top()),
-            point(x(range.end), self.bounds.bottom()),
+            point(x(extent.start), self.bounds.top()),
+            point(x(extent.end), self.bounds.bottom()),
         ))
     }
 }
@@ -289,7 +302,10 @@ impl HerdrWindow {
                     .unwrap_or_default(),
             )
             .when_some(
-                self.menu.input.as_ref().and_then(|input| input.label),
+                self.menu
+                    .input
+                    .as_ref()
+                    .and_then(|input| input.label.clone()),
                 |field, label| field.aria_label(label),
             )
             .w_full()
@@ -344,24 +360,33 @@ impl HerdrWindow {
                                 &[run],
                                 None,
                             );
-                            let caret = line.x_for_index(input.cursor());
+                            let carets = Carets::new(&input.text, &line);
+                            let caret = carets.x(input.cursor());
                             input.scroll = input
                                 .scroll
                                 .min(caret)
                                 .max(caret - bounds.size.width + px(2.))
                                 .max(px(0.));
+                            // Right to left, a line that fits sets against
+                            // the field's right, its start.
+                            let room = bounds.size.width - px(2.);
+                            if crate::direction::is_rtl() && line.width < room {
+                                input.scroll = line.width - room;
+                            }
                             let origin = bounds.origin - point(input.scroll, px(0.));
                             window.with_content_mask(Some(ContentMask { bounds }), |window| {
-                                let left = origin.x + line.x_for_index(input.selection.start);
-                                let right = origin.x + line.x_for_index(input.selection.end);
+                                // Across a change of direction, a selection
+                                // is a stretch on each side of it.
                                 if focused && !input.selection.is_empty() {
-                                    window.paint_quad(fill(
-                                        Bounds::from_corners(
-                                            point(left, bounds.top()),
-                                            point(right, bounds.bottom()),
-                                        ),
-                                        rgb(this.theme.muted),
-                                    ));
+                                    for span in carets.spans(input.selection.clone()) {
+                                        window.paint_quad(fill(
+                                            Bounds::from_corners(
+                                                point(origin.x + span.start, bounds.top()),
+                                                point(origin.x + span.end, bounds.bottom()),
+                                            ),
+                                            rgb(this.theme.muted),
+                                        ));
+                                    }
                                 }
                                 let _ = line.paint(
                                     origin,
@@ -380,25 +405,23 @@ impl HerdrWindow {
                                         rgb(this.theme.foreground),
                                     ));
                                 }
-                                if let Some(marked) = &input.marked {
+                                for span in input
+                                    .marked
+                                    .clone()
+                                    .map(|marked| carets.spans(marked))
+                                    .unwrap_or_default()
+                                {
                                     window.paint_quad(fill(
                                         Bounds::new(
-                                            point(
-                                                origin.x + line.x_for_index(marked.start),
-                                                bounds.bottom() - px(1.),
-                                            ),
-                                            size(
-                                                line.x_for_index(marked.end)
-                                                    - line.x_for_index(marked.start),
-                                                px(1.),
-                                            ),
+                                            point(origin.x + span.start, bounds.bottom() - px(1.)),
+                                            size(span.end - span.start, px(1.)),
                                         ),
                                         rgb(this.theme.foreground),
                                     ));
                                 }
                             });
                             input.bounds = bounds;
-                            input.line = Some(line);
+                            input.carets = Some(carets);
                         });
                     },
                 )
@@ -408,72 +431,4 @@ impl HerdrWindow {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::DialogInput;
-    use gpui::Keystroke;
-
-    mod branch_format;
-    mod word_keys;
-
-    #[test]
-    fn utf16_replacement_and_composition_use_relative_selection() {
-        let mut input = DialogInput::new("a\u{1f600}z".into());
-        assert_eq!(input.range_from_utf16(1..3), 1..5);
-        assert_eq!(input.to_utf16(1..5), 1..3);
-        input.replace(Some(1..3), "\u{65e5}\u{1f600}", true, Some(1..3));
-        assert_eq!(input.text, "a\u{65e5}\u{1f600}z");
-        assert_eq!(input.selection, 4..8);
-        assert_eq!(input.marked, Some(1..8));
-        input.replace(None, "\u{672c}", true, Some(1..1));
-        assert_eq!(input.text, "a\u{672c}z");
-        assert_eq!(input.selection, 4..4);
-        input.replace(None, "\u{65e5}\u{672c}", false, None);
-        assert_eq!(input.text, "a\u{65e5}\u{672c}z");
-        assert_eq!(input.selection, 7..7);
-        assert!(input.marked.is_none());
-        assert_eq!(
-            input.range_from_utf16(999..1000),
-            input.text.len()..input.text.len()
-        );
-    }
-
-    #[gpui::test]
-    fn editing_uses_graphemes_selection_clipboard_and_bounded_single_line_text(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        cx.update(|cx| {
-            let mut input =
-                DialogInput::new("e\u{301}\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}".into());
-            input.key(&Keystroke::parse("end").unwrap_or_default(), cx);
-            input.key(&Keystroke::parse("backspace").unwrap_or_default(), cx);
-            assert_eq!(input.text, "e\u{301}");
-            input.key(&Keystroke::parse("shift-left").unwrap_or_default(), cx);
-            assert_eq!(input.selection, 0..3);
-            input.key(&Keystroke::parse("cmd-x").unwrap_or_default(), cx);
-            assert_eq!(input.text, "");
-            input.key(&Keystroke::parse("cmd-v").unwrap_or_default(), cx);
-            assert_eq!(input.text, "e\u{301}");
-            input.replace(None, "\n\r\tX", false, None);
-            assert_eq!(input.text, "e\u{301}X");
-            input.replace(None, &"x".repeat(20000), false, None);
-            assert_eq!(input.text.len(), 4100);
-        });
-    }
-
-    #[gpui::test]
-    fn cmd_backspace_and_cmd_delete_reach_the_line_ends(cx: &mut gpui::TestAppContext) {
-        cx.update(|cx| {
-            let mut input = DialogInput::new("one two".into());
-            input.key(&Keystroke::parse("cmd-left").unwrap_or_default(), cx);
-            for _ in 0..3 {
-                input.key(&Keystroke::parse("right").unwrap_or_default(), cx);
-            }
-            input.key(&Keystroke::parse("cmd-delete").unwrap_or_default(), cx);
-            assert_eq!(input.text, "one");
-            input.key(&Keystroke::parse("left").unwrap_or_default(), cx);
-            input.key(&Keystroke::parse("cmd-backspace").unwrap_or_default(), cx);
-            assert_eq!(input.text, "e");
-            assert_eq!(input.selection, 0..0);
-        });
-    }
-}
+mod tests;

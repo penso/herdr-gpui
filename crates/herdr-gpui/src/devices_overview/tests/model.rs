@@ -100,3 +100,10 @@ fn only_a_reachable_device_is_counted() {
         "no snapshot yet"
     );
 }
+
+#[test]
+fn every_column_names_an_english_message() {
+    for (id, _) in crate::devices_overview::table::COLUMNS {
+        assert!(id.is_empty() || crate::i18n::takes(id) == Some(&[]), "{id}");
+    }
+}

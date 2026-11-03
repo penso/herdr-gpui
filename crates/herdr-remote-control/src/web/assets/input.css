@@ -228,6 +228,14 @@
      colored rows showed the screen between them as stripes. As inline
      blocks the runs fill the whole line box; a run never spans a line. */
   .term-screen span { display: inline-block; vertical-align: top; }
+  /* Typing not on the screen yet: dotted, as a terminal never draws. */
+  .term-echo {
+    @apply px-3 py-1 overflow-x-auto whitespace-pre text-muted border-t border-line;
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--term-bg); scrollbar-width: none;
+  }
+  .term-echo span { @apply underline decoration-dotted underline-offset-4; }
+  .term-echo::after { content: "▏"; @apply text-accent; }
   .term-input {
     @apply fixed bottom-0 left-0 w-px h-px opacity-0 pointer-events-none;
     /* 16px keeps Safari from zooming the page when it takes focus. */

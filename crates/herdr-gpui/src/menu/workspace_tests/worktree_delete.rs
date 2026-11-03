@@ -113,7 +113,7 @@ fn dismissed_removal_reports_refusals(cx: &mut gpui::TestAppContext) {
             view.update_workspace_dialog(window, cx);
             let refused = view.removal.as_ref().unwrap();
             assert!(refused.force && refused.pending.is_none());
-            assert_eq!(view.local_error.as_deref(), Some("Remove worktree: dirty_worktree_requires_force: modified or untracked files"));
+            assert_eq!(view.local_error.as_deref(), Some("Remove worktree: \u{2068}dirty_worktree_requires_force: modified or untracked files\u{2069}"));
             view.open_workspace_menu("w4", Default::default(), window, cx);
             view.open_workspace_dialog(WorkspaceAction::DeleteWorktree, window, cx);
             assert!(view.menu.deletion.as_ref().unwrap().force);

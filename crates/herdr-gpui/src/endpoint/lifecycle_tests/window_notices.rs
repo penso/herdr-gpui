@@ -8,7 +8,7 @@ fn system_notification_click_opens_its_origin_and_rejects_a_reconnect(
     // Unregistered windows, as in fixtures, never reach the notification center.
     let post = |view: &gpui::Entity<HerdrWindow>, cx: &mut gpui::VisualTestContext| {
         view.update_in(cx, |view, window, cx| {
-            view.tick_toasts(false, Instant::now());
+            view.tick_toasts(false, Instant::now(), cx);
             view.post_system_notifications(window, cx);
         });
     };

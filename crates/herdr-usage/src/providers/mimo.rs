@@ -8,6 +8,7 @@
 //! separate wrapper script writes to `~/.codexbar/mimo-local-usage.json`.
 //! That file belongs to CodexBar's own tooling, not to MiMo.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -31,21 +32,8 @@ pub(crate) struct Mimo;
 static META: Meta = Meta::new("mimo", "Xiaomi MiMo")
     .dashboard("https://platform.xiaomimimo.com/#/console/balance")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "The MiMo console session. Sign in at \
-             https://platform.xiaomimimo.com/#/console/balance, open Developer Tools → \
-             Application → Cookies → https://platform.xiaomimimo.com, copy the \
-             api-platform_serviceToken and userId cookies (and api-platform_ph and \
-             api-platform_slh when present), and paste them as \
-             \"api-platform_serviceToken=value; userId=value\".",
-        ),
-        Setting::new(
-            "base_url",
-            &["MIMO_API_URL"],
-            "Optional HTTPS API URL. Defaults to https://platform.xiaomimimo.com/api/v1.",
-        ),
+        Setting::new("cookie", &[], "usage-mimo-setting-cookie"),
+        Setting::new("base_url", &["MIMO_API_URL"], "usage-mimo-setting-base-url"),
     ]);
 
 impl Service for Mimo {
@@ -122,21 +110,30 @@ pub(crate) fn parse(balance: &str, detail: Option<&str>, usage: Option<&str>) ->
             period_end.map(|_| MONTH),
         )
     });
-    let money =
-        |amount: f64| Balance::new("", amount, Unit::Currency(currency.clone())).amount_text();
+    let money = |amount: f64| {
+        Text::service(
+            Balance::new(Text::service(""), amount, Unit::Currency(currency.clone())).amount_text(),
+        )
+    };
     let mut facts = Vec::new();
     if let (Some(paid), Some(granted)) = (balance.cash_balance, balance.gift_balance) {
-        facts.push(("Paid".to_owned(), money(paid)));
-        facts.push(("Granted".to_owned(), money(granted)));
+        facts.push((Text::message("usage-mimo-paid"), money(paid)));
+        facts.push((Text::message("usage-mimo-granted"), money(granted)));
     }
     if let Some(item) = &item {
         facts.push((
-            "Token plan".to_owned(),
-            format!("{} of {} credits", group(item.used), group(item.limit)),
+            Text::message("usage-mimo-token-plan"),
+            Text::message("usage-mimo-credits-used")
+                .arg("used", group(item.used))
+                .arg("limit", group(item.limit))
+                .arg("count", item.limit),
         ));
     }
     if detail.as_ref().is_some_and(|detail| detail.expired) {
-        facts.push(("Token plan".to_owned(), "Expired".to_owned()));
+        facts.push((
+            Text::message("usage-mimo-token-plan"),
+            Text::message("usage-mimo-expired"),
+        ));
     }
     let plan = detail
         .and_then(|detail| detail.plan_code)
@@ -144,12 +141,19 @@ pub(crate) fn parse(balance: &str, detail: Option<&str>, usage: Option<&str>) ->
         .filter(|code| !code.is_empty());
     Ok(Report::new(
         Provider(&Mimo),
-        Account { email: None, plan },
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
         window.into_iter().collect(),
     )
-    .with_balances([Balance::new("Balance", amount, Unit::Currency(currency))])
+    .with_balances([Balance::new(
+        Text::message("usage-mimo-balance"),
+        amount,
+        Unit::Currency(currency),
+    )])
     .with_sections((!facts.is_empty()).then(|| Section::Facts {
-        title: "Account".into(),
+        title: Text::message("usage-mimo-account"),
         facts,
     })))
 }
@@ -226,7 +230,10 @@ mod tests {
     fn merges_balance_and_token_plan() {
         let report = parse(BALANCE, Some(DETAIL), Some(USAGE)).unwrap();
         assert_eq!(report.provider.id(), "mimo");
-        assert_eq!(report.account.plan.as_deref(), Some("Standard"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Standard")
+        );
         let window = &report.windows[0];
         assert_eq!(window.kind, Kind::Monthly);
         assert!((window.used - 5.05).abs() < 1e-4);
@@ -239,14 +246,23 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Paid".to_owned(), "$20.00".to_owned()));
-        assert_eq!(facts[1], ("Granted".to_owned(), "$5.51".to_owned()));
         assert_eq!(
-            facts[2],
-            (
-                "Token plan".to_owned(),
-                "10,100,158 of 200,000,000 credits".to_owned()
-            )
+            facts,
+            &[
+                (Text::message("usage-mimo-paid"), Text::service("$20.00")),
+                (Text::message("usage-mimo-granted"), Text::service("$5.51")),
+                (
+                    Text::message("usage-mimo-token-plan"),
+                    Text::message("usage-mimo-credits-used")
+                        .arg("used", "10,100,158")
+                        .arg("limit", "200,000,000")
+                        .arg("count", 200_000_000)
+                ),
+            ]
+        );
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-mimo-balance")
         );
     }
 

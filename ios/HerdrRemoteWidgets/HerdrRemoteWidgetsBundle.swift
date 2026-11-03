@@ -1,11 +1,13 @@
 import SwiftUI
 import WidgetKit
 
-/// The widget extension holds only the Live Activity; Herdr Remote has no
-/// home screen widgets.
+/// The Live Activity, the needs-you widget, and the Controls.
 @main
 struct HerdrRemoteWidgetsBundle: WidgetBundle {
     var body: some Widget {
         ChatLiveActivity()
+        AttentionWidget()
+        BoardControl()
+        NewWorkspaceControl()
     }
 }

@@ -33,6 +33,7 @@ use super::{
     },
     api,
 };
+use crate::cloud::Value;
 use base64::Engine as _;
 use output::Output;
 use secrecy::ExposeSecret;
@@ -90,8 +91,8 @@ pub fn run_helper(args: &[OsString]) -> Option<ExitCode> {
 }
 
 fn run(account: &OsString, sandbox: &OsString, remote: &[OsString]) -> Result<ExitCode> {
-    let account = account.to_str().ok_or(Error::Encoding("account"))?;
-    let sandbox = sandbox.to_str().ok_or(Error::Encoding("sandbox ID"))?;
+    let account = account.to_str().ok_or(Error::Encoding(Value::Account))?;
+    let sandbox = sandbox.to_str().ok_or(Error::Encoding(Value::SandboxId))?;
     let config = crate::config::load().map_err(|error| Error::Storage(Box::new(error)))?;
     let settings = config
         .azure
@@ -181,7 +182,7 @@ pub(super) fn fetch_errors<S: Read + Write>(
 pub(super) fn remote_command(remote: &[OsString]) -> Result<Vec<u8>> {
     let words = remote
         .iter()
-        .map(|word| word.to_str().ok_or(Error::Encoding("remote command")))
+        .map(|word| word.to_str().ok_or(Error::Encoding(Value::RemoteCommand)))
         .collect::<Result<Vec<_>>>()?;
     Ok(words.join(" ").into_bytes())
 }
@@ -225,7 +226,7 @@ fn open(url: &str, token: &str) -> Result<Socket> {
     let host = request
         .uri()
         .host()
-        .ok_or(Error::Field("Azure sandbox endpoint"))?
+        .ok_or(Error::Field(Value::AzureSandboxEndpoint))?
         .to_owned();
     let mut authorization =
         HeaderValue::from_str(&format!("Bearer {token}")).map_err(Error::StreamHeader)?;
@@ -235,7 +236,7 @@ fn open(url: &str, token: &str) -> Result<Socket> {
     let address = std::net::ToSocketAddrs::to_socket_addrs(&(host.as_str(), 443))
         .map_err(Error::Process)?
         .next()
-        .ok_or(Error::Field("Azure sandbox endpoint"))?;
+        .ok_or(Error::Field(Value::AzureSandboxEndpoint))?;
     let tcp = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT).map_err(Error::Process)?;
     tcp.set_read_timeout(Some(HANDSHAKE_TIMEOUT))
         .map_err(Error::Process)?;
@@ -254,7 +255,7 @@ fn open(url: &str, token: &str) -> Result<Socket> {
     .with_root_certificates(roots)
     .with_no_client_auth();
     let name = rustls::pki_types::ServerName::try_from(host)
-        .map_err(|_| Error::Field("Azure sandbox endpoint"))?;
+        .map_err(|_| Error::Field(Value::AzureSandboxEndpoint))?;
     let connection = rustls::ClientConnection::new(Arc::new(tls), name).map_err(Error::Tls)?;
     let stream = rustls::StreamOwned::new(connection, tcp);
 

@@ -81,7 +81,7 @@ pub(super) fn request(target: &EditorTarget) -> Option<String> {
     let path = path.replace('\'', "''");
     let mut commands = vec![format!("'drop ' .. fnameescape('{path}')")];
     if let Some(line) = target.line {
-        commands.push(format!("'call cursor({line}, 1)'"));
+        commands.push(format!("'call cursor({line}, 1)'")); // i18n: data
         commands.push("'normal! zz'".to_owned());
     }
     Some(format!("execute([{}])", commands.join(", ")))

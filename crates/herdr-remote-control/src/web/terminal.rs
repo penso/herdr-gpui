@@ -2,7 +2,7 @@
 //! and what the phone types or asks of Herdr. Everything goes through
 //! Herdr's public API, which neither focuses nor resizes anything, so a
 //! phone watching or typing leaves the desktop's layout alone. Only panes
-//! of terminal tabs in the layout are reachable, never a chat's pane.
+//! of the layout's terminal tabs and chats are reachable.
 
 use super::{ApiError, Device, Shared, render, render::now_ms};
 use crate::hub::{ApiMethod, Layout};
@@ -122,6 +122,7 @@ pub(super) async fn keys(
             json!({"pane_id": pane, "keys": request.keys}),
         )
         .await?;
+    state.typed.typed(&pane);
     Ok(Json(json!({})))
 }
 
@@ -149,6 +150,7 @@ pub(super) async fn paste(
             json!({"pane_id": pane, "text": request.text}),
         )
         .await?;
+    state.typed.typed(&pane);
     Ok(Json(json!({})))
 }
 
@@ -179,6 +181,7 @@ pub(super) async fn upload(
             json!({"pane_id": pane, "text": dropped_path(&path)}),
         )
         .await?;
+    state.typed.typed(&pane);
     Ok(Json(json!({})))
 }
 
@@ -251,7 +254,8 @@ pub(crate) fn action_call(
 }
 
 /// Runs an action from the sheet; answers where the phone goes next: the
-/// new pane or tab, or home when the pane is gone.
+/// new pane or tab, or home when the pane is gone. A chat's pane is a
+/// Herdr pane too, so the phone closes an agent the same way.
 pub(super) async fn action(
     State(state): State<Shared>,
     _device: Device,
@@ -260,8 +264,15 @@ pub(super) async fn action(
 ) -> Result<Json<Value>, ApiError> {
     let (tab, workspace) = {
         let layout = state.hub.layout();
-        let (workspace, terminal) = layout.terminal(&pane).ok_or(ApiError::NotFound)?;
-        (terminal.tab.clone(), workspace.id.clone())
+        layout
+            .terminal(&pane)
+            .map(|(workspace, terminal)| (terminal.tab.clone(), workspace.id.clone()))
+            .or_else(|| {
+                layout
+                    .chat(&pane)
+                    .map(|(workspace, chat)| (chat.tab.clone(), workspace.id.clone()))
+            })
+            .ok_or(ApiError::NotFound)?
     };
     let (method, params) = action_call(request.action, &pane, &tab, &workspace);
     let result = state.hub.call(method, params).await?;
@@ -269,12 +280,91 @@ pub(super) async fn action(
         .as_str()
         .or_else(|| result["root_pane"]["pane_id"].as_str())
         .filter(|id| !id.is_empty());
-    let location = match (request.action, created) {
-        (Action::SplitRight | Action::SplitDown | Action::NewTab, Some(created)) => {
-            format!("/term/{}", render::urlencode(created))
+    let next = next_pane(request.action, &pane, created);
+    let location = next.map_or_else(
+        || "/".to_owned(),
+        |next| format!("/term/{}", render::urlencode(next)),
+    );
+    // `location` for the web app, `pane` for the native one.
+    Ok(Json(json!({ "location": location, "pane": next })))
+}
+
+/// The pane the phone shows after `action` on `pane`: the one it created,
+/// the same one, or none (home) when it is gone.
+pub(crate) fn next_pane<'a>(
+    action: Action,
+    pane: &'a str,
+    created: Option<&'a str>,
+) -> Option<&'a str> {
+    match (action, created) {
+        (Action::SplitRight | Action::SplitDown | Action::NewTab, Some(created)) => Some(created),
+        (Action::ClosePane | Action::CloseTab, _) => None,
+        _ => Some(pane),
+    }
+}
+
+/// The longest name the phone gives a chat or a tab, in characters.
+pub(crate) const MAX_LABEL: usize = 200;
+
+#[derive(Deserialize)]
+pub(super) struct RenameRequest {
+    label: String,
+}
+
+/// What the phone renames: a chat by its pane, whose label the chat's
+/// title reads first, or a terminal by its tab, whose label its row shows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RenameTarget<'a> {
+    Chat { pane: &'a str },
+    Tab { tab: &'a str },
+}
+
+/// The Herdr method and parameters that give `target` the name `label`.
+/// An empty name clears a chat's label, so its title is the agent's again;
+/// a tab always has a name.
+pub(crate) fn rename_call(
+    target: RenameTarget<'_>,
+    label: &str,
+) -> Result<(ApiMethod, Value), ApiError> {
+    let label = label.trim();
+    if label.chars().count() > MAX_LABEL {
+        return Err(ApiError::Invalid("that name is too long"));
+    }
+    match target {
+        RenameTarget::Chat { pane } if label.is_empty() => {
+            Ok((ApiMethod::PaneRename, json!({ "pane_id": pane })))
         }
-        (Action::ClosePane | Action::CloseTab, _) => "/".to_owned(),
-        _ => format!("/term/{}", render::urlencode(&pane)),
+        RenameTarget::Chat { pane } => Ok((
+            ApiMethod::PaneRename,
+            json!({ "pane_id": pane, "label": label }),
+        )),
+        RenameTarget::Tab { .. } if label.is_empty() => {
+            Err(ApiError::Invalid("a tab needs a name"))
+        }
+        RenameTarget::Tab { tab } => Ok((
+            ApiMethod::TabRename,
+            json!({ "tab_id": tab, "label": label }),
+        )),
+    }
+}
+
+/// Renames the chat `pane` runs, or the terminal tab it is in.
+pub(super) async fn rename(
+    State(state): State<Shared>,
+    _device: Device,
+    Path(pane): Path<String>,
+    Json(request): Json<RenameRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let (method, params) = {
+        let layout = state.hub.layout();
+        let target = if layout.chat(&pane).is_some() {
+            RenameTarget::Chat { pane: &pane }
+        } else {
+            let (_, terminal) = layout.terminal(&pane).ok_or(ApiError::NotFound)?;
+            RenameTarget::Tab { tab: &terminal.tab }
+        };
+        rename_call(target, &request.label)?
     };
-    Ok(Json(json!({ "location": location })))
+    state.hub.call(method, params).await?;
+    Ok(Json(json!({})))
 }

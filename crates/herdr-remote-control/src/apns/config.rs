@@ -4,7 +4,7 @@
 //!
 //! ```json
 //! { "team_id": "ABCDE12345", "key_id": "XYZ9876543",
-//!   "topic": "so.pen.herdr-remote", "sandbox": true }
+//!   "topic": "so.pen.herdr.remote", "sandbox": true }
 //! ```
 
 use super::{Error, Host, Result};
@@ -52,7 +52,7 @@ pub(crate) struct Config {
     pub(crate) key_id: String,
     /// The ten-character Apple Developer team, the JWT's `iss`.
     pub(crate) team_id: String,
-    /// The app's bundle identifier, such as `so.pen.herdr-remote`.
+    /// The app's bundle identifier, such as `so.pen.herdr.remote`.
     pub(crate) topic: String,
 }
 

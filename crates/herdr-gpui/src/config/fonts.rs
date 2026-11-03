@@ -1,7 +1,8 @@
-//! Font faces, their configured overrides and sizes, and the icon-font cascade.
+//! Font faces, their configured overrides and sizes, and the icon-font and
+//! CJK cascades.
 use super::Error;
 use super::{
-    Config,
+    Config, cjk_fonts,
     font_weight::{self, MissingWeight},
 };
 use crate::Result;
@@ -148,41 +149,41 @@ pub(super) struct DefaultFonts {
 /// distribution that installs it, like Omarchy, chose it as its terminal face
 /// over the Noto fonts it also ships; the Nerd Font build also covers icons.
 pub(super) const LINUX_FONTS: DefaultFonts = DefaultFonts {
-    monospace: "DejaVu Sans Mono",
-    sans: "DejaVu Sans",
+    monospace: "DejaVu Sans Mono", // i18n: data
+    sans: "DejaVu Sans",           // i18n: data
     monospace_alternatives: &[
-        "JetBrainsMono Nerd Font",
-        "JetBrains Mono",
-        "Noto Sans Mono",
-        "Liberation Mono",
-        "Ubuntu Mono",
-        "Cascadia Mono",
-        "Fira Mono",
-        "Source Code Pro",
-        "Hack",
+        "JetBrainsMono Nerd Font", // i18n: data
+        "JetBrains Mono",          // i18n: data
+        "Noto Sans Mono",          // i18n: data
+        "Liberation Mono",         // i18n: data
+        "Ubuntu Mono",             // i18n: data
+        "Cascadia Mono",           // i18n: data
+        "Fira Mono",               // i18n: data
+        "Source Code Pro",         // i18n: data
+        "Hack",                    // i18n: data
     ],
     sans_alternatives: &[
-        "Noto Sans",
-        "Cantarell",
-        "Ubuntu",
-        "Liberation Sans",
-        "IBM Plex Sans",
+        "Noto Sans",       // i18n: data
+        "Cantarell",       // i18n: data
+        "Ubuntu",          // i18n: data
+        "Liberation Sans", // i18n: data
+        "IBM Plex Sans",   // i18n: data
     ],
 };
 
 /// Cascadia Mono ships with Windows 11 and Windows Terminal; Consolas with
 /// every release since Vista. GPUI resolves `.SystemUIFont` to Segoe UI.
 pub(super) const WINDOWS_FONTS: DefaultFonts = DefaultFonts {
-    monospace: "Cascadia Mono",
-    sans: ".SystemUIFont",
-    monospace_alternatives: &["Consolas", "Lucida Console", "Courier New"],
+    monospace: "Cascadia Mono", // i18n: data
+    sans: ".SystemUIFont",      // i18n: data
+    monospace_alternatives: &["Consolas", "Lucida Console", "Courier New"], // i18n: data
     sans_alternatives: &[],
 };
 
 /// Menlo and the system UI font ship with every macOS release.
 pub(super) const MACOS_FONTS: DefaultFonts = DefaultFonts {
-    monospace: "Menlo",
-    sans: ".SystemUIFont",
+    monospace: "Menlo",    // i18n: data
+    sans: ".SystemUIFont", // i18n: data
     monospace_alternatives: &[],
     sans_alternatives: &[],
 };
@@ -250,6 +251,7 @@ impl DefaultFonts {
 
 /// Nerd Font patches keep this marker in every patched family name, so matching
 /// it finds the installed icon faces without naming individual fonts.
+// i18n: data
 const SYMBOL_FAMILY_MARKER: &str = "nerd font";
 
 /// A cascade is searched in order for every uncovered codepoint, so automatic
@@ -364,6 +366,7 @@ fn resolves_platform_alias(family: &str) -> bool {
 /// variants keep every icon inside a single terminal cell, so both come first.
 fn fallback_rank(family: &str) -> u8 {
     let lowercase = family.to_lowercase();
+    // i18n: data
     let symbols = lowercase.starts_with("symbols nerd font");
     let mono = lowercase.ends_with(" mono");
     match (symbols, mono) {
@@ -427,6 +430,8 @@ impl Config {
         I: IntoIterator<Item = String>,
     {
         self.replace_undrawable_fonts(super::bitmap_fonts::is_undrawable);
+        let cjk_script =
+            cjk_fonts::preferred_script(&self.language, &herdr_i18n::system_languages());
         let terminal_detects = self.terminal.fallbacks.is_none();
         let configured = [&self.sidebar, &self.tabs, &self.terminal, &self.ui];
         let requested: BTreeSet<&str> = configured
@@ -463,13 +468,20 @@ impl Config {
         let [_, _, terminal, _] = &faces;
         let terminal_draws_icons =
             draws_icons(&terminal.family) && !self.missing_fonts.contains(&terminal.family);
+        let cjk = cjk_fonts::cjk_fallbacks(cjk_fonts::PLATFORM_CJK_FONTS, cjk_script, &installed);
         let detected = symbol_fallbacks(installed);
         // Only the terminal draws prompts; an explicit `fallback`, even `[]`,
         // is a choice the user already made.
         self.icon_font_missing = detected.is_empty() && terminal_detects && !terminal_draws_icons;
-        for face in faces {
+        let [sidebar, tabs, terminal, ui] = faces;
+        if terminal.fallbacks.is_none() {
+            terminal.fallbacks = Some(detected.clone());
+        }
+        // Icons first, so a CJK family that also maps the Private Use Area
+        // never draws a prompt icon.
+        for face in [sidebar, tabs, ui] {
             if face.fallbacks.is_none() {
-                face.fallbacks = Some(detected.clone());
+                face.fallbacks = Some(detected.iter().chain(&cjk).cloned().collect());
             }
         }
     }

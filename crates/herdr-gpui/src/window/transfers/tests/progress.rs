@@ -11,7 +11,10 @@ fn progress_sizes_and_percentages_are_readable_and_bounded() {
         (2048, 1024, 1., "2 KiB / 1 KiB (100%)"),
         (u64::MAX, u64::MAX, 1., "16 EiB / 16 EiB (100%)"),
     ] {
-        assert_eq!(transfer_progress(sent, total), (fraction, label.into()));
+        let (shown, progress) = transfer_progress(sent, total);
+        // Without the isolation marks Fluent puts around each placeable.
+        let progress = progress.replace(['\u{2068}', '\u{2069}'], "");
+        assert_eq!((shown, progress), (fraction, label.into()));
     }
 }
 

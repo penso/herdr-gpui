@@ -4,6 +4,7 @@ mod configuration;
 mod fonts;
 mod general;
 mod indicators;
+mod language;
 pub(in crate::settings_window) mod notifications;
 pub(in crate::settings_window) mod remote_control;
 mod sidebar;
@@ -16,6 +17,7 @@ use super::{SettingsWindow, inputs::DropdownField, ui};
 use crate::i18n::{self, fl};
 pub(super) use fonts::size_control;
 use gpui::{prelude::*, *};
+pub(super) use language::language_choices;
 pub(super) use sidebar::Spacing;
 pub(super) use window::padding_ids;
 

@@ -7,8 +7,11 @@ use std::borrow::Cow;
 /// without a message stands out, and a clipped label loses its closing mark.
 pub const MARKS: (char, char) = ('[', ']');
 
-/// Right-to-left override and pop: `en-XB` text reads backwards in a
-/// left-to-right layout, and forwards once the layout mirrors.
+/// Right-to-left override and pop: `en-XB` letters are drawn right to left
+/// whichever way the layout runs, as a Hebrew word is, so text the app shows
+/// without a message still reads forwards. Fluent transforms each run of a
+/// message's text apart from its placeables, so a message with arguments
+/// reverses piece by piece around them.
 const RLO: char = '\u{202E}';
 const PDF: char = '\u{202C}';
 

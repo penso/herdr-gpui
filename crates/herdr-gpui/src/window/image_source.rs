@@ -1,4 +1,5 @@
 //! Disk-free source recognition; opaque image bytes are prepared off the UI thread.
+// i18n: migrated
 
 use crate::{Error, Result};
 use gpui::{Image, ImageFormat};
@@ -25,7 +26,7 @@ pub(super) const MAX_IMAGE_INPUT_BYTES: usize = 128 * 1024 * 1024;
 const MAX_DECODE_PIXELS: u64 = 64 * 1024 * 1024;
 const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 
-pub(super) struct PreparedImage {
+pub(crate) struct PreparedImage {
     pub extension: &'static str,
     pub bytes: Vec<u8>,
     /// True when recompressed or downscaled, rather than passed through unchanged.
@@ -34,6 +35,7 @@ pub(super) struct PreparedImage {
 
 impl std::fmt::Debug for PreparedImage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // i18n: data
         f.debug_struct("PreparedImage")
             .field("extension", &self.extension)
             .field("byte_count", &self.bytes.len())
@@ -43,7 +45,7 @@ impl std::fmt::Debug for PreparedImage {
 }
 
 // Deliberately no Debug: neither local paths nor clipboard bytes belong in logs.
-pub(super) enum Source {
+pub(crate) enum Source {
     File {
         path: PathBuf,
         extension: &'static str,
@@ -84,6 +86,7 @@ pub(super) fn temporary_drag_image(paths: &[PathBuf]) -> Option<Source> {
             && directory
                 .parent()
                 .and_then(Path::file_name)
+                // i18n: data
                 .is_some_and(|name| name == "TemporaryItems")
     });
     if !temporary {

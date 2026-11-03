@@ -3,7 +3,9 @@
 //! nothing happens until the user confirms here, once for the whole batch.
 //! The batch it answers is cancelled if the question closes unanswered.
 
+// i18n: migrated
 use super::Page;
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     cloud::batch::{Registry, Target, destroy},
@@ -98,12 +100,15 @@ impl HerdrWindow {
             self.menu.removing_devices.remove(&device.endpoint);
         }
         if let Some(first) = failed.first() {
-            self.local_error = Some(format!(
-                "Could not destroy {} of {} cloud devices. {}: {}",
-                failed.len(),
-                batch.devices.len(),
-                first.label,
-                first.error.as_deref().unwrap_or("unknown error"),
+            self.local_error = Some(fl!(
+                "cloud-destroy-failed",
+                failed = failed.len(),
+                total = batch.devices.len(),
+                device = first.label.as_str(),
+                error = first
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| fl!("cloud-destroy-unknown-error")),
             ));
         }
         cx.notify();
@@ -143,11 +148,13 @@ impl HerdrWindow {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("Destroy {}?", devices(count))),
+                    .child(fl!("cloud-destroy-title", count = count)),
             )
-            .child(div().text_color(rgb(theme.subtext())).child(
-                "A command asked for this. Their files are not kept, and this cannot be undone.",
-            ))
+            .child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("cloud-destroy-note")),
+            )
             .child(
                 div()
                     .id("destroy-cloud-list")
@@ -169,7 +176,7 @@ impl HerdrWindow {
                             .debug_selector(|| "destroy-cloud-cancel".into())
                             .p(px(6.))
                             .cursor_pointer()
-                            .child("Cancel")
+                            .child(fl!("cloud-destroy-cancel"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.dismiss_menu(window, cx);
@@ -184,7 +191,7 @@ impl HerdrWindow {
                             .bg(rgb(theme.active))
                             .text_color(super::danger(theme))
                             .cursor_pointer()
-                            .child(format!("Destroy {}", devices(count)))
+                            .child(fl!("cloud-destroy-submit", count = count))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 cx.stop_propagation();
                                 this.confirm_destroy_cloud(window, cx);
@@ -194,25 +201,20 @@ impl HerdrWindow {
     }
 }
 
-fn devices(count: usize) -> String {
-    match count {
-        1 => "1 device".to_owned(),
-        count => format!("{count} devices"),
-    }
-}
-
 /// What confirming does to one device, as its row says it.
 fn consequence(target: &Target) -> String {
     let provider = crate::cloud::name(target.provider);
     match crate::cloud::deletion(target.provider) {
-        Some(deletion) => format!(
-            "Delete the {} at {provider}{} and remove it from Herdr",
-            (deletion.noun)(&target.id),
-            deletion.leftovers,
+        Some(deletion) => fl!(
+            "cloud-destroy-delete",
+            machine = (deletion.noun)(&target.id),
+            provider = provider,
+            leftovers = deletion.leftovers,
         ),
-        None => format!(
-            "Remove it from Herdr only; {provider} cannot delete its {} from here",
-            crate::cloud::noun(target.provider)
+        None => fl!(
+            "cloud-destroy-forget",
+            provider = provider,
+            machine = crate::cloud::noun(target.provider),
         ),
     }
 }

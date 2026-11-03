@@ -1,5 +1,6 @@
 //! Virtual row geometry and bounded, single-flight thumbnail preparation.
 use super::*;
+use crate::direction::Logical;
 use std::{collections::VecDeque, ops::Range};
 
 const CACHE_LIMIT: usize = 64;
@@ -180,7 +181,7 @@ impl SettingsWindow {
                 .bg(rgb(theme.background))
                 .text_color(rgb(theme.foreground))
                 .px(px(4.))
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(3.))
                 // A glyph sample, the same in every language.

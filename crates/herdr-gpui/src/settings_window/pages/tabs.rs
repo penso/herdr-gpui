@@ -45,6 +45,16 @@ impl SettingsWindow {
                         }),
                     )),
             )
+            .child(
+                ui::row(theme, "tabs-herdr-2", fl!("settings-tabs-herdr-2"))
+                    .description(fl!("settings-tabs-herdr-2-description"))
+                    .switch(self.preference_toggle(
+                        "tabs-herdr-2-toggle",
+                        self.config.herdr_2_terminals,
+                        Preference::Herdr2Terminals(!self.config.herdr_2_terminals),
+                        cx,
+                    )),
+            )
             .child(ui::section(
                 theme,
                 &fl!("settings-tabs-section-tab-bar"),

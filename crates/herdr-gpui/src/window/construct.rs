@@ -1,5 +1,6 @@
 //! Building a window: its effects run in a fixed order before the fields,
 //! which stay sorted so parallel additions land on different lines.
+// i18n: migrated
 
 use super::{HerdrWindow, SurfaceSignal, function_keys, prefix};
 #[cfg(feature = "integration-test")]
@@ -82,7 +83,7 @@ impl HerdrWindow {
         let configured_terminal_size = config.terminal.size;
         let status_bar_visible = config.status_bar.show;
         let mut gui_config_diagnostic = crate::config_diagnostic::ConfigDiagnostic::default();
-        gui_config_diagnostic.sync(config.diagnostic().as_deref());
+        gui_config_diagnostic.sync_own(config.diagnostic().as_deref());
         let catalog = endpoint::Catalog::new(&target);
         let menu = menu::MenuState::new(cx);
         // Starts the thread that reads and saves the marks file.
@@ -96,6 +97,7 @@ impl HerdrWindow {
         // Another window, or an agent, may open or close a tab.
         let browser_tabs = cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify());
         let worktree_notes = Self::observe_worktree_notes(window, cx);
+        let notification_mutes = Self::observe_notification_mutes(cx);
         let prefix_interceptor = Self::intercept_prefix(window, cx);
         let activation = cx.observe_window_activation(window, |this, window, cx| {
             this.active = window.is_window_active();
@@ -128,6 +130,7 @@ impl HerdrWindow {
             _appearance: appearance_change,
             _browser_tabs: browser_tabs,
             _host_theme: host_theme,
+            _notification_mutes: notification_mutes,
             _poll: poll,
             _prefix_interceptor: prefix_interceptor,
             _sidebar_invalidation: sidebar_invalidation,
@@ -166,6 +169,7 @@ impl HerdrWindow {
             config_watch: None,
             configured_terminal_size,
             copy_mode: None,
+            core_terminals: Default::default(),
             daemon_text: Default::default(),
             deliveries: Default::default(),
             device_drag: None,
@@ -179,6 +183,7 @@ impl HerdrWindow {
             editor_panes: Vec::new(),
             endpoints: vec![endpoint::Endpoint::new(
                 endpoint::LOCAL.into(),
+                // i18n: data
                 "Local".into(),
                 target,
                 true,
@@ -204,9 +209,11 @@ impl HerdrWindow {
             integrations: Default::default(),
             key_layout: prefix::current_layout,
             key_press: function_keys::current_press,
+            landing_launch: None,
             last_input: None,
             last_pointer: None,
             last_queued_options: None,
+            link_complaint: None,
             links: Default::default(),
             listening_ports: Default::default(),
             live: LiveState::default(),
@@ -216,6 +223,8 @@ impl HerdrWindow {
             marked_selection: None,
             menu,
             merged_cleanup: Default::default(),
+            mod_panel_width: crate::panel_resize::MOD_PANEL,
+            mods: Default::default(),
             #[cfg(feature = "integration-test")]
             navigations: Default::default(),
             network_quality_seen: 0,

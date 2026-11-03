@@ -128,11 +128,11 @@ fn a_script_opens_beside_the_list_and_a_run_beside_it(cx: &mut gpui::TestAppCont
 fn the_timeline_groups_runs_and_filters_by_host(cx: &mut gpui::TestAppContext) {
     let (view, cx) = shown(cx);
     click(cx, "automations-mode-timeline");
-    assert!(cx.debug_bounds("automations-group-Needs you").is_some());
+    assert!(cx.debug_bounds("automations-group-NeedsYou").is_some());
     assert!(cx.debug_bounds("automations-group-Now").is_some());
     assert!(cx.debug_bounds("automations-group-Older").is_some());
     assert!(cx.debug_bounds("automations-older").is_some());
-    let needs = cx.debug_bounds("automations-group-Needs you").unwrap();
+    let needs = cx.debug_bounds("automations-group-NeedsYou").unwrap();
     let older = cx.debug_bounds("automations-group-Older").unwrap();
     assert!(needs.top() < older.top());
     // Only machines that were read have a chip.

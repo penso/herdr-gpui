@@ -7,6 +7,7 @@
 //! needs Azure Resource Manager credentials, which CodexBar does not read
 //! either. There is no local sign-in to detect.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -32,26 +33,22 @@ static META: Meta = Meta::new("azureopenai", "Azure OpenAI")
         Setting::new(
             "api_key",
             &["AZURE_OPENAI_API_KEY"],
-            "An Azure OpenAI resource key: in the Azure portal open the Azure OpenAI \
-             resource, then Resource Management > Keys and Endpoint, and copy KEY 1.",
+            "usage-azureopenai-setting-api-key",
         ),
         Setting::new(
             "endpoint",
             &["AZURE_OPENAI_ENDPOINT"],
-            "The resource endpoint from the same Keys and Endpoint page, e.g. \
-             https://my-resource.openai.azure.com. Only HTTPS is accepted.",
+            "usage-azureopenai-setting-endpoint",
         ),
         Setting::new(
             "deployment",
             &["AZURE_OPENAI_DEPLOYMENT_NAME"],
-            "The deployment name to check, as listed under Deployments in Azure AI \
-             Foundry (https://ai.azure.com), e.g. chat-prod.",
+            "usage-azureopenai-setting-deployment",
         ),
         Setting::new(
             "api_version",
             &["AZURE_OPENAI_API_VERSION"],
-            "Optional. \"v1\" for the OpenAI-compatible v1 API, or a dated API version. \
-             Defaults to 2024-10-21.",
+            "usage-azureopenai-setting-api-version",
         ),
     ]);
 
@@ -180,20 +177,35 @@ impl Target {
 pub(crate) fn parse(body: &str, target: &Target) -> Result<Report> {
     let completion: Completion = json(body)?;
     let mut facts = vec![
-        ("Resource".to_owned(), target.host.clone()),
-        ("Deployment".to_owned(), target.deployment.clone()),
+        (
+            Text::message("usage-azureopenai-resource"),
+            Text::service(&target.host),
+        ),
+        (
+            Text::message("usage-azureopenai-deployment"),
+            Text::service(&target.deployment),
+        ),
     ];
     if let Some(model) = completion.model.filter(|model| !model.trim().is_empty()) {
-        facts.push(("Model".into(), model.trim().to_owned()));
+        facts.push((
+            Text::message("usage-azureopenai-model"),
+            Text::service(model.trim()),
+        ));
     }
-    facts.push(("API version".into(), target.version.clone()));
+    facts.push((
+        Text::message("usage-azureopenai-api-version"),
+        Text::service(&target.version),
+    ));
     let account = Account {
         email: None,
-        plan: Some(format!("Deployment: {}", target.deployment)),
+        plan: Some(
+            Text::message("usage-azureopenai-deployment-plan")
+                .arg("deployment", target.deployment.as_str()),
+        ),
     };
     Ok(
         Report::new(Provider(&Azureopenai), account, Vec::new()).with_sections([Section::Facts {
-            title: "Deployment reachable".into(),
+            title: Text::message("usage-azureopenai-reachable"),
             facts,
         }]),
     )
@@ -251,13 +263,19 @@ mod tests {
         .unwrap();
         assert!(report.windows.is_empty());
         assert_eq!(
-            report.account.plan.as_deref(),
-            Some("Deployment: chat-prod")
+            report.account.plan,
+            Some(Text::message("usage-azureopenai-deployment-plan").arg("deployment", "chat-prod"))
         );
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert!(facts.contains(&("Model".into(), "gpt-4o-2024-08-06".into())));
-        assert!(facts.contains(&("Resource".into(), "resource.openai.azure.com".into())));
+        assert!(facts.contains(&(
+            Text::message("usage-azureopenai-model"),
+            Text::service("gpt-4o-2024-08-06")
+        )));
+        assert!(facts.contains(&(
+            Text::message("usage-azureopenai-resource"),
+            Text::service("resource.openai.azure.com")
+        )));
     }
 }

@@ -24,10 +24,16 @@ impl HerdrWindow {
         };
         let body = chat.prepared.body(entry.id);
         let Some(Body::Answers { text, parts }) = body.as_deref() else {
-            return div().child("Preparing answers…");
+            return div().child(fl!("chat-answers-preparing"));
         };
-        let message =
-            self.render_chat_message(pane_id, entry.id, parts, &chat.prepared.visuals, cx);
+        let message = self.render_chat_message(
+            pane_id,
+            entry.id,
+            parts,
+            &chat.prepared.visuals,
+            self.chat_text_size(),
+            cx,
+        );
         let id = entry.id.0;
         div()
             .debug_selector(move || format!("chat-answers-{id}"))
@@ -54,7 +60,7 @@ impl HerdrWindow {
                     pane_id,
                     entry.id,
                     *level,
-                    "Original record",
+                    &fl!("chat-answers-record"),
                     details.as_deref(),
                     cx,
                 ))

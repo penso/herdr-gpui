@@ -1,4 +1,5 @@
 use super::*;
+use crate::cloud::Value;
 
 #[test]
 fn checking_a_cli_account_still_validates_the_other_keys() {
@@ -15,6 +16,6 @@ fn checking_a_cli_account_still_validates_the_other_keys() {
     };
     assert!(matches!(
         Settings::check(&broken, |_| None),
-        Err(Error::Field("azure.sandbox_cpu"))
+        Err(Error::Field(Value::Key("azure.sandbox_cpu")))
     ));
 }

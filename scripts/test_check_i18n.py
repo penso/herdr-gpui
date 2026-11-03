@@ -212,5 +212,54 @@ class MigratedTests(unittest.TestCase):
         )
 
 
+class PlatformTests(unittest.TestCase):
+    FILES = [
+        parse("language-name = English\n", Path("crates/app/locales/en-US/language.ftl"))[0],
+        parse("language-name = עברית\n", Path("crates/app/locales/he/language.ftl"))[0],
+    ]
+    PLIST = {"CFBundleDevelopmentRegion": "en-US", "CFBundleLocalizations": ["he", "en-US"]}
+
+    def test_files_naming_the_apps_languages_pass(self) -> None:
+        translations = [
+            Path("assets/macos/he.lproj"),
+            Path("scripts/release/installer/en-US.isl"),
+            Path("scripts/release/installer/he.isl"),
+        ]
+        desktop = "[Desktop Entry]\nComment=Client\nComment[he]=Klient\n"
+        self.assertEqual(
+            check_i18n.platform(self.FILES, self.PLIST, translations, desktop), []
+        )
+
+    def test_a_language_missing_or_extra_is_reported(self) -> None:
+        plist = {"CFBundleDevelopmentRegion": "en", "CFBundleLocalizations": ["en-US"]}
+        translations = [Path("scripts/release/installer/en-US.isl"), Path("scripts/release/installer/de.isl")]
+        desktop = "Comment=Client\nComment[pt_BR]=Cliente\n"
+        unnamed = parse("menu-quit = Quit\n", Path("crates/app/locales/fr/menu.ftl"))[0]
+        errors = check_i18n.platform([*self.FILES, unnamed], plist, translations, desktop)
+        plist_path, desktop_path = check_i18n.INFO_PLIST, check_i18n.DESKTOP_ENTRY
+        self.assertEqual(
+            errors,
+            [
+                "fr does not name itself: add language-name to its language.ftl",
+                f"{plist_path}: CFBundleDevelopmentRegion must be en-US",
+                f"{plist_path}: CFBundleLocalizations lists ['en-US'], the app has ['en-US', 'fr', 'he']",
+                "scripts/release/installer/de.isl: de is not one of the app's languages",
+                "scripts/release/installer/fr.isl is missing: the installer has no fr text",
+                "scripts/release/installer/he.isl is missing: the installer has no he text",
+                f"{desktop_path}: [pt_BR] is not one of the app's languages",
+                f"{desktop_path}: no Comment[fr] for fr",
+                f"{desktop_path}: no Comment[he] for he",
+            ],
+        )
+
+    def test_english_needs_the_plain_comment(self) -> None:
+        english = self.FILES[:1]
+        plist = {"CFBundleDevelopmentRegion": "en-US", "CFBundleLocalizations": ["en-US"]}
+        installer = [Path("scripts/release/installer/en-US.isl")]
+        self.assertEqual(check_i18n.platform(english, plist, installer, "Comment=Client\n"), [])
+        errors = check_i18n.platform(english, plist, installer, "Name=Herdr\n")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("no Comment[en_US] for en-US", errors[0])
+
 if __name__ == "__main__":
     unittest.main()

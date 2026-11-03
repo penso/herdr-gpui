@@ -1,6 +1,7 @@
 //! Shared row and control builders for the Settings pages. Pure rendering:
 //! they take the theme and return elements; state and saves stay on the view.
 // i18n: migrated
+use crate::direction::Logical;
 use crate::{
     config::{Theme, corners},
     i18n::fl,
@@ -51,7 +52,7 @@ pub(in crate::settings_window) fn section(
     tag_source: Option<Source>,
 ) -> Div {
     div()
-        .flex()
+        .row()
         .items_center()
         .gap(px(6.))
         .mt(px(22.))
@@ -153,7 +154,7 @@ impl Row {
         div()
             .debug_selector(move || id.to_string())
             .relative()
-            .flex()
+            .row()
             .items_center()
             .gap(px(16.))
             .min_h(px(ROW_HEIGHT))
@@ -172,7 +173,7 @@ impl Row {
                     .child(
                         div()
                             .debug_selector(move || title_id.clone())
-                            .flex()
+                            .row()
                             .items_center()
                             .gap(px(6.))
                             .text_size(px(12.))
@@ -193,7 +194,7 @@ impl Row {
             )
             .child(
                 div()
-                    .flex()
+                    .row()
                     .items_center()
                     .gap(px(8.))
                     .flex_none()
@@ -321,7 +322,7 @@ fn segments<T: Copy + PartialEq + 'static>(
 ) -> Div {
     let on_pick = Rc::new(on_pick);
     div()
-        .flex()
+        .row()
         .flex_none()
         .p(px(2.))
         .rounded(px(corners::CONTROL))

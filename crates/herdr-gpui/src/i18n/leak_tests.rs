@@ -152,3 +152,28 @@ pub(crate) fn assert_translated(surface: &str, shown: &[String], data: &[String]
         "{surface} shows text that is not a message: {leaks:#?}"
     );
 }
+
+/// `shown` without the cuts GPUI shapes while it measures a truncated
+/// element: a prefix ending in an ellipsis of a line also drawn whole, and
+/// each lone character it measures the cut by. A label clipped short is
+/// left for the eye, since its whole line is shaped first too.
+pub(crate) fn uncut(shown: Vec<String>) -> Vec<String> {
+    shown
+        .iter()
+        .filter(|line| line.chars().nth(1).is_some())
+        .filter(|line| {
+            line.strip_suffix('…').is_none_or(|stem| {
+                !shown
+                    .iter()
+                    .any(|whole| whole.len() > line.len() && whole.starts_with(stem))
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+/// `text` without the isolation marks Fluent puts around each placeable,
+/// for tests that compare a message with its English.
+pub(crate) fn unmarked(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
+}

@@ -34,7 +34,7 @@ fn an_uninstalled_app_links_its_install_page_only_when_known() {
         known.links,
         [("Install on GitHub".to_owned(), INSTALL.to_owned())]
     );
-    assert!(known.body.contains("@me"));
+    assert!(known.body.contains("@\u{2068}me\u{2069}"));
     // Another App's page cannot be found from its client ID.
     let custom = attention("me", &Access::NotInstalled, None).unwrap();
     assert!(custom.links.is_empty());
@@ -47,7 +47,7 @@ fn pending_owners_are_each_linked_up_to_a_bound() {
     assert_eq!(
         one.links,
         [(
-            "Approve for @me".to_owned(),
+            "Approve for @\u{2068}me\u{2069}".to_owned(),
             "https://github.com/settings/installations/1".to_owned()
         )]
     );
@@ -58,7 +58,7 @@ fn pending_owners_are_each_linked_up_to_a_bound() {
     assert_eq!(
         many.links[1],
         (
-            "Approve for org1 (needs an owner of it)".to_owned(),
+            "Approve for \u{2068}org1\u{2069} (needs an owner of it)".to_owned(),
             "https://github.com/organizations/org1/settings/installations/2".to_owned()
         )
     );

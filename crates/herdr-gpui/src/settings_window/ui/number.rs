@@ -1,6 +1,7 @@
 //! A number with typed entry, and -/+ steppers and an optional drag slider
 //! unless it is a bare field.
 use crate::config::{Theme, corners};
+use crate::direction::Logical;
 use crate::i18n::fl;
 use crate::search_input::SearchInput;
 use gpui::{prelude::*, *};
@@ -133,7 +134,7 @@ pub(in crate::settings_window) fn number(
     let range = spec.range.clone();
     let mut root = div()
         .debug_selector(move || id.into())
-        .flex()
+        .row()
         .items_center()
         .gap(px(10.))
         .flex_none()
@@ -159,7 +160,7 @@ pub(in crate::settings_window) fn number(
             .debug_selector(move || format!("{id}-slider"))
             .w(px(150.))
             .h(px(16.))
-            .flex()
+            .row()
             .items_center()
             .child(
                 div()
@@ -216,7 +217,7 @@ pub(in crate::settings_window) fn number(
             .id((ElementId::from(id), "value"))
             .w(width)
             .px(px(6.))
-            .text_right()
+            .text_end()
             .when(enabled, |value| value.cursor_text())
             .child(value_text)
             .when(enabled, |value| {
@@ -236,7 +237,7 @@ pub(in crate::settings_window) fn number(
     };
     let field = div()
         .debug_selector(move || format!("{id}-field"))
-        .flex()
+        .row()
         .items_center()
         .rounded(px(corners::CONTROL))
         .border_1()
@@ -245,7 +246,7 @@ pub(in crate::settings_window) fn number(
         .child(shown)
         .child(
             div()
-                .pr(px(6.))
+                .pe(px(6.))
                 .text_color(rgb(theme.muted))
                 .child(spec.unit.label()),
         )
@@ -289,7 +290,7 @@ fn stepper(
         .w(px(20.))
         .py(px(3.))
         .text_center()
-        .border_l_1()
+        .border_s(px(1.))
         .border_color(rgb(theme.active))
         .text_color(rgb(theme.subtext()))
         .when(enabled, |stepper| {

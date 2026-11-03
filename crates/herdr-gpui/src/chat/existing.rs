@@ -219,6 +219,7 @@ fn query(host: &Host, body: &str, cancelled: &AtomicBool) -> Result<Vec<u8>, Err
 }
 
 fn snapshot(host: &Host, cancelled: &AtomicBool) -> Result<SnapshotResult, Error> {
+    // i18n: data
     let bytes = query(host, "herdr_cli api snapshot\n", cancelled)?;
     serde_json::from_slice::<Envelope<SnapshotResult>>(&bytes)
         .map(|answer| answer.result)
@@ -269,6 +270,7 @@ fn inspect_host(
     }
     let process_script = selected.iter().map(|selected| {
         let pane = shell_quote(&selected.pane.pane_id);
+        // i18n: data
         format!("printf '\\036%s\\n' {pane}\nherdr_cli pane process-info --pane {pane} 2>/dev/null || :\n")
     }).collect::<String>();
     let bytes = query(host, &process_script, cancelled)?;
@@ -291,6 +293,7 @@ fn inspect_host(
     }
     // Linux is the supported host for this observer. Read only known pids;
     // globbing stays disabled because a process name may contain metacharacters.
+    // i18n: data
     let mut script = String::from("set -f\n[ \"$(uname -s)\" = Linux ] || exit 1\n");
     for pid in pids {
         script.push_str(&STAT_SCRIPT.replace("{pid}", &pid.to_string()));
@@ -349,6 +352,7 @@ fn inspect_host(
 /// `/proc/<pid>/stat`, after a record separator naming it. The command name
 /// before them may hold spaces or `)`, so the fields are read after its
 /// last `) `.
+// i18n: data
 const STAT_SCRIPT: &str = r#"printf '\036%s\n' {pid}
 if [ -r /proc/{pid}/stat ]; then
   IFS= read -r stat < /proc/{pid}/stat || :

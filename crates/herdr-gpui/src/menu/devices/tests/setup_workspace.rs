@@ -74,7 +74,7 @@ fn created_space_runs_setup_in_its_root_pane(cx: &mut gpui::TestAppContext) {
             ));
             view.poll_device_setup(window, cx);
             assert!(matches!(step(view), Step::Confirm(_, Offer::Terminal)));
-            assert!(view.menu.device_setup.as_ref().unwrap().error.as_deref().unwrap().ends_with("denied: no"));
+            assert!(view.menu.device_setup.as_ref().unwrap().error.as_deref().unwrap().replace(['\u{2068}', '\u{2069}'], "").ends_with("denied: no"));
 
             // Another dialog's response is not this workspace.
             let created = serde_json::json!({"result":{"type":"workspace_created","workspace":{"workspace_id":"w9"},"tab":{"tab_id":"t9"},"root_pane":{"pane_id":"w9:p1"}}});

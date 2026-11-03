@@ -64,21 +64,12 @@ settings-cloud-images-note = { $provider ->
 # $project is the project's name, $path its folder.
 settings-cloud-image-build-error = { $project }: { $error } Open { $path } in a window to build its image.
 settings-cloud-image-no-window = Open a main Herdr window to build images.
-# $image is the image's tag; $built when it was built, a settings-cloud-ago- message.
+# $image is the image's tag; $built when it was built, an ago- message.
 settings-cloud-image-ready = Ready · { $image } · built { $built }
 settings-cloud-image-failed = Build failed { $built }
-# A build's progress; $status is the builder's own output.
-settings-cloud-image-step = Step { $step } of { $total }: { $status }
 settings-cloud-image-log = Log
 settings-cloud-image-hide-log = Hide log
 settings-cloud-image-build = Build now
 settings-cloud-image-reset = Reset
 settings-cloud-image-delete = Delete image
 settings-cloud-image-reset-confirm = Deletes the image here; the next new machine for this project builds it again. Click Delete image to confirm.
-settings-cloud-ago-now = just now
-settings-cloud-ago-minutes = { $count } min ago
-settings-cloud-ago-hours = { $count } h ago
-settings-cloud-ago-days = { $count ->
-        [one] { $count } day ago
-       *[other] { $count } days ago
-    }

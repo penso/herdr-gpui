@@ -5,6 +5,7 @@
 use crate::{
     HerdrWindow,
     devices_overview::{Device, Link, Look, Tally},
+    i18n::fl,
     system_load::{self, CPU_WARN, GPU_WARN, MEMORY_WARN, VRAM_WARN},
 };
 use gpui::{prelude::*, *};
@@ -100,7 +101,7 @@ impl HerdrWindow {
                     .text_size(look.small())
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(theme.subtext()))
-                    .child("Hosts")
+                    .child(fl!("overview-hosts"))
                     .child(
                         div()
                             .text_color(rgb(theme.muted))
@@ -147,8 +148,8 @@ impl HerdrWindow {
         let id = device.id.clone();
         let agents = match device.link {
             Link::Online => agents_line(device.tally),
-            Link::Connecting => "Connecting…".to_owned(),
-            Link::Offline | Link::Disabled => "Not connected".to_owned(),
+            Link::Connecting => fl!("overview-connecting"),
+            Link::Offline | Link::Disabled => fl!("overview-not-connected"),
         };
         let header = div()
             .id(SharedString::from(format!("overview-host-{}", device.id)))
@@ -223,14 +224,29 @@ impl HerdrWindow {
                                 .text_color(rgb(theme.muted))
                                 .child(agents),
                         )
-                        .child(meter(look, "CPU", cpu, CPU_WARN))
-                        .child(meter(look, "MEM", memory, MEMORY_WARN))
+                        .child(meter(look, fl!("overview-meter-cpu"), cpu, CPU_WARN))
+                        .child(meter(
+                            look,
+                            fl!("overview-meter-memory"),
+                            memory,
+                            MEMORY_WARN,
+                        ))
                         .when_some(gpu, |card, gpu| {
                             card.when(gpu.busy.is_some(), |card| {
-                                card.child(meter(look, "GPU", gpu.busy, GPU_WARN))
+                                card.child(meter(
+                                    look,
+                                    fl!("overview-meter-gpu"),
+                                    gpu.busy,
+                                    GPU_WARN,
+                                ))
                             })
                             .when_some(gpu.memory, |card, memory| {
-                                card.child(meter(look, "VRAM", Some(memory.percent()), VRAM_WARN))
+                                card.child(meter(
+                                    look,
+                                    fl!("overview-meter-vram"),
+                                    Some(memory.percent()),
+                                    VRAM_WARN,
+                                ))
                             })
                         })
                         .when(!ports.is_empty(), |card| {
@@ -294,18 +310,17 @@ impl HerdrWindow {
 /// An online host's agents, leaving out counts of none as the rest of the
 /// Overview does.
 pub(super) fn agents_line(tally: Tally) -> String {
-    let agents = match tally.total() {
-        0 => return "No agents".to_owned(),
-        1 => "1 agent".to_owned(),
-        total => format!("{total} agents"),
-    };
     match tally.working {
-        0 => agents,
-        working => format!("{agents} · {working} working"),
+        0 => fl!("overview-agents", total = tally.total()),
+        working => fl!(
+            "overview-agents-working",
+            total = tally.total(),
+            working = working
+        ),
     }
 }
 
-fn meter(look: &Look, label: &'static str, percent: Option<f32>, warn: f32) -> Div {
+fn meter(look: &Look, label: String, percent: Option<f32>, warn: f32) -> Div {
     let theme = look.theme;
     let fill = percent
         .map(|percent| system_load::severity(percent, warn, theme, theme.ink(theme.palette[2])));
@@ -313,7 +328,8 @@ fn meter(look: &Look, label: &'static str, percent: Option<f32>, warn: f32) -> D
         .flex()
         .items_center()
         .gap_2()
-        .child(div().w(px(30.)).child(look.mono(label)))
+        // At least the width of the English abbreviations; longer ones push the bar.
+        .child(div().flex_none().min_w(px(30.)).child(look.mono(label)))
         .child(
             div()
                 .w(px(METER))

@@ -2,8 +2,9 @@
 //! terminal area, where Herdr draws its own: this app's GUI config warning,
 //! the missing icon font, then the selected endpoint's daemon `config.toml`
 //! diagnostic.
+// i18n: migrated
 use super::{Flash, HerdrWindow, chrome_focus::Region, render::Notice};
-use crate::{fonts::StyledFont, notifications::safe_text};
+use crate::{fonts::StyledFont, i18n::fl, notifications::safe_text};
 use gpui::{prelude::*, *};
 use std::sync::Arc;
 
@@ -33,7 +34,7 @@ impl HerdrWindow {
             self.render_diagnostic_card(
                 Card {
                     selector: "gui-config-diagnostic",
-                    label: "Herdr UI".into(),
+                    label: fl!("window-notices-diagnostic-app"),
                     lines,
                     expanded: self.gui_config_diagnostic.expanded(),
                     footer: None,
@@ -58,7 +59,7 @@ impl HerdrWindow {
             self.render_diagnostic_card(
                 Card {
                     selector: "icon-font-notice",
-                    label: "Herdr UI".into(),
+                    label: fl!("window-notices-diagnostic-app"),
                     lines,
                     expanded: self.icon_font_notice.expanded(),
                     footer: command,
@@ -138,7 +139,7 @@ impl HerdrWindow {
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 cx.write_to_clipboard(ClipboardItem::new_string(command.into()));
-                this.show_flash(Flash::success("Copied the command"), cx);
+                this.show_flash(Flash::success(fl!("window-notices-diagnostic-copied")), cx);
             }))
             .child(
                 div()
@@ -264,7 +265,7 @@ impl HerdrWindow {
             .id("dismiss")
             .debug_selector(move || format!("{selector}-dismiss"))
             .role(Role::Button)
-            .aria_label("Dismiss")
+            .aria_label(fl!("window-dismiss"))
             .flex_none()
             .size(px(fold::CONTROL))
             .rounded(px(crate::config::corners::CONTROL))

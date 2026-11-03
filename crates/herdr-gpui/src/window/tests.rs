@@ -11,8 +11,12 @@ use std::sync::Arc;
 mod backdrop;
 mod close_window;
 mod detach;
+mod en_xa;
+mod en_xa_input;
+mod en_xa_notices;
 mod padding;
 mod report_issue;
+mod rtl;
 mod sound_volume;
 
 fn main_windows(cx: &mut gpui::App) -> Vec<gpui::WindowHandle<HerdrWindow>> {

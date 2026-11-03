@@ -21,6 +21,7 @@ use crate::{
     session::{MAX_ENTRIES, MAX_TRANSCRIPT_TEXT, keep_from},
 };
 
+mod activities;
 mod codex_messages;
 mod notices;
 mod question_replies;
@@ -222,6 +223,10 @@ fn text_block(block: &Value) -> bool {
 #[derive(Default)]
 struct Projection {
     answered: HashMap<QuestionKey, herdr_chat_protocol::QuestionAnswer>,
+    /// Claude Code's sub-agents and background shells in the log.
+    background: crate::claude::background::Background,
+    /// The tool each call ran, by call id.
+    names: HashMap<String, String>,
     transcript: Transcript,
     tools: HashMap<String, usize>,
 }
@@ -288,6 +293,7 @@ impl Projection {
             }],
             kind: ToolKind::Other,
             locations: Vec::new(),
+            parent: None,
             status: ToolStatus::Pending,
             title: limited(name, MAX_TITLE),
         };
@@ -462,27 +468,34 @@ impl Projection {
                     let thought = self.clip(string(block, "thinking"), TEXT);
                     self.message(id, Role::Thought, thought);
                 }
-                "tool_use" if role == Role::Agent => self.tool(
-                    id,
-                    string(block, "id"),
-                    string(block, "name"),
-                    &block["input"],
-                ),
-                "tool_result" if role == Role::User => self.output(
-                    string(block, "tool_use_id"),
-                    &block["content"],
-                    if block["is_error"] == true {
-                        ToolStatus::Failed
-                    } else {
-                        ToolStatus::Completed
-                    },
-                ),
+                "tool_use" if role == Role::Agent => {
+                    let (call, name) = (string(block, "id"), string(block, "name"));
+                    self.tool(id, call, name, &block["input"]);
+                    self.activity_started(call, name, &block["input"], record);
+                }
+                "tool_result" if role == Role::User => {
+                    let call = string(block, "tool_use_id");
+                    let failed = block["is_error"] == true;
+                    self.output(
+                        call,
+                        &block["content"],
+                        if failed {
+                            ToolStatus::Failed
+                        } else {
+                            ToolStatus::Completed
+                        },
+                    );
+                    self.activity_result(call, failed, &block["content"], blocks.len(), record);
+                }
                 _ => {}
             }
         }
     }
 
     fn claude_message(&mut self, id: EntryId, role: Role, record: &Value, content: &str) {
+        if role == Role::User {
+            self.activity_notified(record, content);
+        }
         if role == Role::User
             && let Some(notice) = notices::project(record, content)
         {

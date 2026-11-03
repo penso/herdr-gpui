@@ -11,6 +11,7 @@
 //! replaced rather than trusted.
 
 use super::{Error, Result, Settings, http::Request, store};
+use crate::cloud::Value;
 use crate::cloud::image::{Project, Recipe, Support, key};
 use std::time::{Duration, Instant};
 
@@ -95,7 +96,7 @@ fn segment(name: &str) -> Result<&str> {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'));
     valid
         .then_some(name)
-        .ok_or(Error::Field("Daytona snapshot name"))
+        .ok_or(Error::Field(Value::DaytonaSnapshot))
 }
 
 /// The snapshot `name`, or `None` when Daytona has none of that name.

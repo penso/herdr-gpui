@@ -44,7 +44,7 @@ fn loads_the_key_and_config_from_the_state_directory() {
     assert_eq!(config.key.verifying_key(), key().verifying_key());
     assert_eq!(
         config.live_activity_topic(),
-        "so.pen.herdr-remote.push-type.liveactivity"
+        "so.pen.herdr.remote.push-type.liveactivity"
     );
     assert_eq!(dir(state.path()), state.path().join("apns"));
 }
@@ -115,7 +115,7 @@ fn identifier_rules() {
     assert!(apple_id("ABCDE12345"));
     assert!(!apple_id("abcde12345"));
     assert!(!apple_id("ABCDE1234"));
-    assert!(bundle_id("so.pen.herdr-remote"));
+    assert!(bundle_id("so.pen.herdr.remote"));
     assert!(!bundle_id("so..pen"));
     assert!(!bundle_id(".so"));
     assert!(!bundle_id("so pen"));

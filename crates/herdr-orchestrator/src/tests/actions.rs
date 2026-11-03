@@ -168,7 +168,7 @@ fn dispatch_creates_the_worktree_starts_the_agent_and_records_the_run() {
         &AtomicBool::new(false),
     )
     .unwrap();
-    assert_eq!(done, "Agent started");
+    assert_eq!(done, Done::Started);
     let calls = calls(dir.path());
     assert_eq!(calls[0], "api snapshot");
     assert!(calls[1].starts_with("worktree create --workspace w1 --branch 377-icons --base "));

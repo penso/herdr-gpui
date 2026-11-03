@@ -12,10 +12,17 @@ settings-general-section-updates = Updates
 
 ## Rows.
 
+# The language picker's first choice. $language is the name, in itself, of
+# the language the system's preferences pick (English, עברית).
+settings-general-language-system = System ({ $language })
+# A tag the `language` setting names that has no messages. $tag is the BCP 47
+# tag (fr-CA); $language names, in itself, the language shown instead.
+settings-general-language-unavailable = { $tag }, shown in { $language }
+
 settings-general-window-controls = Show window controls
 settings-general-window-controls-description = Draw minimize, maximize, and close buttons in the menu bar. Disable server-side decorations in your window manager to avoid a double bar.
 settings-general-chat-layout = Chat layout
-settings-general-chat-layout-description = How chat views draw messages and the composer: on a timeline, as bubbles like Claude's app, as Claude Code's terminal screen, as a document, or as one card per turn. The button in a chat's header steps through them too.
+settings-general-chat-layout-description = How chat views draw messages and the composer: on a timeline, as bubbles like Claude's app, as Claude Code's terminal screen, as a document, as one card per turn, as Messages bubbles, or in one quiet column like iA Writer. The button in a chat's header steps through them too.
 settings-general-chat-launcher = Chat launcher
 settings-general-chat-launcher-description = Where tab strips offer a one-click chat with each installed agent. "+" keeps opening a terminal tab in every placement.
 settings-general-chat-glide = Smooth chat scrolling

@@ -7,7 +7,19 @@ use crate::{
 };
 use herdr_client::ConnectTarget;
 
+mod locale;
+mod mutes;
 mod permission;
+
+/// An endpoint for contributions made by hand, living as long as the test.
+fn local() -> &'static Endpoint {
+    Box::leak(Box::new(Endpoint::new(
+        "local".into(),
+        "Local".into(),
+        ConnectTarget::Local,
+        true,
+    )))
+}
 
 #[gpui::test]
 fn first_snapshot_counts_existing_attention_without_surface_or_notifications(
@@ -100,8 +112,8 @@ fn only_done_and_blocked_need_attention_even_when_focused(cx: &mut gpui::TestApp
         state.agents[0].focused = true;
         let state = Arc::new(state);
         let contribution = badge.windows.entry(id).or_default();
-        assert!(contribution.update(std::iter::once((None, &state))));
-        assert!(!contribution.update(std::iter::once((None, &state))));
+        assert!(contribution.update(std::iter::once((None, &state, local())), None));
+        assert!(!contribution.update(std::iter::once((None, &state, local())), None));
         badge.publish();
         assert_eq!(badge.published, Some(expected));
     }
@@ -113,7 +125,7 @@ fn only_done_and_blocked_need_attention_even_when_focused(cx: &mut gpui::TestApp
             .windows
             .entry(id)
             .or_default()
-            .update(std::iter::once((None, &state)))
+            .update(std::iter::once((None, &state, local())), None)
     );
     badge.publish();
     assert_eq!(badge.published, Some(1));
@@ -124,7 +136,7 @@ fn only_done_and_blocked_need_attention_even_when_focused(cx: &mut gpui::TestApp
             .windows
             .entry(id)
             .or_default()
-            .update(std::iter::once((None, &state)))
+            .update(std::iter::once((None, &state, local())), None)
     );
     badge.publish();
     assert_eq!(badge.published, Some(0));
@@ -147,7 +159,7 @@ fn count_drops_from_two_to_one_despite_a_lagging_duplicate_window(cx: &mut gpui:
             .windows
             .entry(id)
             .or_default()
-            .update(std::iter::once((None, &stale)));
+            .update(std::iter::once((None, &stale, local())), None);
     }
     badge.publish();
     assert_eq!(
@@ -164,7 +176,7 @@ fn count_drops_from_two_to_one_despite_a_lagging_duplicate_window(cx: &mut gpui:
         .windows
         .get_mut(&first)
         .unwrap()
-        .update(std::iter::once((None, &seen)));
+        .update(std::iter::once((None, &seen, local())), None);
     badge.publish();
     assert_eq!(badge.published, Some(1));
     state.agents[1].agent_status = AgentStatus::Idle;
@@ -173,7 +185,7 @@ fn count_drops_from_two_to_one_despite_a_lagging_duplicate_window(cx: &mut gpui:
         .windows
         .get_mut(&first)
         .unwrap()
-        .update(std::iter::once((None, &seen)));
+        .update(std::iter::once((None, &seen, local())), None);
     badge.publish();
     assert_eq!(badge.published, Some(0));
 
@@ -184,7 +196,7 @@ fn count_drops_from_two_to_one_despite_a_lagging_duplicate_window(cx: &mut gpui:
         .windows
         .get_mut(&second)
         .unwrap()
-        .update(std::iter::once((None, &waiting)));
+        .update(std::iter::once((None, &waiting, local())), None);
     badge.publish();
     assert_eq!(
         badge.published,
@@ -197,7 +209,7 @@ fn count_drops_from_two_to_one_despite_a_lagging_duplicate_window(cx: &mut gpui:
         .windows
         .get_mut(&first)
         .unwrap()
-        .update(std::iter::once((Some("remote"), &waiting)));
+        .update(std::iter::once((Some("remote"), &waiting, local())), None);
     badge.publish();
     assert_eq!(badge.published, Some(2));
 }

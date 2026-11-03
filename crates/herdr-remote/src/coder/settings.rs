@@ -2,6 +2,7 @@
 //! request works with a known-good deployment URL, client, and redirect.
 
 use super::{Error, Result};
+use crate::cloud::Value;
 use crate::{config::CoderConfig, credentials::Store};
 use secrecy::{ExposeSecret, SecretString};
 use std::{
@@ -51,7 +52,7 @@ impl Settings {
                 Some(value) => value
                     .into_string()
                     .map(Some)
-                    .map_err(|_| Error::Encoding(name)),
+                    .map_err(|_| Error::Encoding(Value::Key(name))),
                 None => Ok(value.clone()),
             }
         };
@@ -68,7 +69,7 @@ impl Settings {
                 let bytes = zeroize::Zeroizing::new(value.into_encoded_bytes());
                 std::str::from_utf8(&bytes)
                     .map(SecretString::from)
-                    .map_err(|_| Error::Encoding("HERDR_CODER_OAUTH_CLIENT_SECRET"))?
+                    .map_err(|_| Error::Encoding(Value::Key("HERDR_CODER_OAUTH_CLIENT_SECRET")))?
             }),
             None => config.oauth_client_secret.clone(),
         };
@@ -133,7 +134,7 @@ fn check_client_id(client_id: &str) -> Result<()> {
     if identifier(client_id, 256) {
         Ok(())
     } else {
-        Err(Error::Field("coder.oauth_client_id"))
+        Err(Error::Field(Value::Key("coder.oauth_client_id")))
     }
 }
 
@@ -141,7 +142,7 @@ fn check_secret(secret: &SecretString) -> Result<()> {
     if super::token::valid(secret.expose_secret()) {
         Ok(())
     } else {
-        Err(Error::Field("coder.oauth_client_secret"))
+        Err(Error::Field(Value::Key("coder.oauth_client_secret")))
     }
 }
 
@@ -152,21 +153,21 @@ fn check_file_only(config: &CoderConfig) -> Result<()> {
         .as_deref()
         .is_some_and(|name| !identifier(name, 64))
     {
-        return Err(Error::Field("coder.organization"));
+        return Err(Error::Field(Value::Key("coder.organization")));
     }
     if config
         .workspace_prefix
         .as_deref()
         .is_some_and(|prefix| !super::names::valid(prefix) || prefix.len() > PREFIX_LIMIT)
     {
-        return Err(Error::Field("coder.workspace_prefix"));
+        return Err(Error::Field(Value::Key("coder.workspace_prefix")));
     }
     if config
         .cli
         .as_deref()
         .is_some_and(|path| !path.is_absolute())
     {
-        return Err(Error::Field("coder.cli"));
+        return Err(Error::Field(Value::Key("coder.cli")));
     }
     Ok(())
 }
@@ -211,7 +212,7 @@ fn redirect(text: &str) -> Result<Redirect> {
     let port = url
         .port()
         .filter(|port| *port != 0)
-        .ok_or(Error::Field(field))?;
+        .ok_or(Error::Field(Value::Key(field)))?;
     if url.scheme() != "http" || !plain(&url) || !loopback(&url) {
         return Err(Error::Url(field));
     }

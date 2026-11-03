@@ -113,11 +113,11 @@ pub(crate) fn classify(error: herdr_client::Error, stdout: &[u8], local: bool) -
 
 fn refused(message: &str) -> Error {
     let message = crate::notifications::safe_text(message, MESSAGE);
-    Error::Refused(if message.trim().is_empty() {
-        "the command failed".to_owned()
+    if message.trim().is_empty() {
+        Error::Failed
     } else {
-        message
-    })
+        Error::Refused(message)
+    }
 }
 
 /// Parses one report from `output`.
@@ -236,5 +236,5 @@ pub(crate) fn parse_version(output: &[u8]) -> Result<String, Error> {
                     .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+'))
         })
         .map(str::to_owned)
-        .ok_or_else(|| refused(&format!("unexpected version output: {}", text.trim())))
+        .ok_or_else(|| Error::Version(crate::notifications::safe_text(text.trim(), MESSAGE)))
 }

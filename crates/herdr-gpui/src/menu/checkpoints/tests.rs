@@ -2,6 +2,9 @@
 
 use crate::HerdrWindow;
 
+// Host scripts need a POSIX client, so other clients offer no dialog.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod en_xa;
 mod timeline;
 
 /// The fixture's w4 (a linked worktree on `worktree/sidebar-child`) on

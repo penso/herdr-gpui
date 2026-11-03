@@ -12,6 +12,7 @@ mod pr;
 mod security;
 mod security_open;
 mod strict;
+mod usage;
 mod wsl_forwards;
 
 fn caller(workspace: Option<&str>) -> Caller {

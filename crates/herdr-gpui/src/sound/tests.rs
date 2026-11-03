@@ -322,12 +322,12 @@ fn service_nonblocking_queue_bound_reload_and_move_once() {
         state.sound_events.push_back((now, event(Kind::Custom)));
     }
     let mut policy = Policy::default();
-    service.poll(&mut policy, &mut state, false, now);
+    service.poll(&mut policy, &mut state, false, now, |_| false);
     assert!(service.reload.load(Ordering::Acquire));
     assert!(!state.reload_sound);
     assert!(receiver.try_recv().is_ok());
     assert!(receiver.try_recv().is_err());
-    service.poll(&mut policy, &mut state, false, now);
+    service.poll(&mut policy, &mut state, false, now, |_| false);
     assert!(receiver.try_recv().is_err());
 }
 
@@ -474,6 +474,7 @@ fn worker_drops_cancelled_and_expired_jobs_without_playing_them() {
     ));
 }
 
+mod mutes;
 mod play;
 mod repeats;
 mod staged_metadata;

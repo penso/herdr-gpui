@@ -116,7 +116,11 @@ fn older_and_newer_move_from_the_current_match_and_reveal_it() {
     let matches = vec![range(5, 1, 2), range(20, 0, 1), range(55, 3, 4)];
     let reveal = search.answer("1", Ok(result(2, matches.clone(), 1, 1)));
     assert_eq!(reveal, Some(matches[1]));
-    assert_eq!(search.label(), "2 of 3");
+    // Without the isolation marks Fluent puts around each placeable.
+    assert_eq!(
+        search.label().replace(['\u{2068}', '\u{2069}'], ""),
+        "2 of 3"
+    );
     assert!(search.has_matches());
 
     search.step(Step::Older);

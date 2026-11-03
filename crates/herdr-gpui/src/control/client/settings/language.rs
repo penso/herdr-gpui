@@ -75,34 +75,36 @@ pub(super) fn text(info: &LanguageInfo, running: bool) -> String {
 }
 
 fn list() -> crate::Result<Output> {
+    // Each language by its name in itself, as Settings lists it; a
+    // pseudo-locale has none.
     let languages: Vec<_> = crate::i18n::available()
         .into_iter()
-        .map(|locale| (locale, false))
-        .chain(Pseudo::ALL.map(|pseudo| (pseudo.locale(), true)))
+        .map(|locale| {
+            let name = crate::i18n::endonym(&locale);
+            (locale, Some(name))
+        })
+        .chain(Pseudo::ALL.map(|pseudo| (pseudo.locale(), None)))
         .collect();
     let text = languages
         .iter()
-        .map(|(locale, pseudo)| {
-            let note = if *pseudo {
-                "  pseudo-locale for testing"
-            } else {
-                ""
-            };
+        .map(|(locale, name)| {
             format!(
-                "{:<8}{}{note}",
+                "{:<8}{}  {}",
                 locale.to_string(),
-                locale.direction().name()
+                locale.direction().name(),
+                name.as_deref().unwrap_or("pseudo-locale for testing")
             )
         })
         .collect::<Vec<_>>()
         .join("\n");
     let languages: Vec<_> = languages
         .iter()
-        .map(|(locale, pseudo)| {
+        .map(|(locale, name)| {
             json!({
                 "tag": locale.to_string(),
+                "name": name,
                 "direction": locale.direction().name(),
-                "pseudo": pseudo,
+                "pseudo": name.is_none(),
             })
         })
         .collect();

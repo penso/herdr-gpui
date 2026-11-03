@@ -9,11 +9,11 @@
 //! click is not a selection attempt and never raises it. It shows once per
 //! app session, shared by its windows, and not at all once the user has
 //! pressed with Shift over such a pane: they already know the gesture.
+// i18n: migrated
 
 use super::{Flash, HerdrWindow};
+use crate::i18n::fl;
 use gpui::{App, Context, Global};
-
-const TEXT: &str = "Hold Shift and drag to select text";
 
 /// Whether this session still has the hint to give.
 #[derive(Debug, Default)]
@@ -39,6 +39,6 @@ impl HerdrWindow {
             return;
         }
         hint.spent = true;
-        self.show_flash(Flash::hint(TEXT), cx);
+        self.show_flash(Flash::hint(fl!("window-notices-shift-select")), cx);
     }
 }

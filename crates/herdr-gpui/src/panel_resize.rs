@@ -2,12 +2,14 @@
 //! content, double-click it to go back to the default width. A panel never
 //! takes more than `MAX_SHARE` of the window, however wide it was made, so a
 //! narrow window keeps room for what the panel sits next to.
+mod grip;
+
 use gpui::{prelude::*, *};
+
+pub(crate) use grip::{Grip, GripHold, THICKNESS as GRIP_THICKNESS};
 
 /// How wide the grabbable edge is, laid over the panel's border.
 const HANDLE: f32 = 6.;
-/// The tint a resizable edge shows under the pointer, the sidebar's first.
-pub(crate) const RESIZE_HOVER: u32 = 0x78a9ff44;
 /// The share of the surrounding space a panel may take.
 const MAX_SHARE: f32 = 0.6;
 /// A stored width beyond this is not a real panel.
@@ -19,6 +21,17 @@ const MAX_WIDTH: f32 = 4096.;
 pub(crate) enum Side {
     Left,
     Right,
+}
+
+impl Side {
+    /// Where a panel that leads its content sits: the left, or in a
+    /// right-to-left language the right.
+    pub(crate) fn start() -> Self {
+        match crate::direction::is_rtl() {
+            false => Self::Left,
+            true => Self::Right,
+        }
+    }
 }
 
 /// The panel a drag resizes.
@@ -36,10 +49,14 @@ pub(crate) enum PanelDrag {
     DiffSides,
     /// The review's list of changed files.
     ReviewFiles,
+    /// The panel of mod sections on the window's right.
+    ModPanel,
 }
 
 /// The notes panel beside a review or an annotated page.
 pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
+/// The panel of mod sections on the window's right.
+pub(crate) const MOD_PANEL: PanelWidth = PanelWidth::new(300., 220.);
 /// The review's list of changed files.
 pub(crate) const REVIEW_FILES: PanelWidth = PanelWidth::new(240., 160.);
 /// The settings window's section list.
@@ -128,13 +145,16 @@ pub(crate) fn handle(
     side: Side,
     drag: PanelDrag,
     reset: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-) -> Stateful<Div> {
+) -> Grip {
     let handle = grip(id, drag, reset);
     // Inside the panel's edge: a panel that slides open clips its overflow.
-    match side {
-        Side::Right => handle.left_0(),
-        Side::Left => handle.right_0(),
-    }
+    Grip::new(
+        Axis::Horizontal,
+        match side {
+            Side::Right => handle.left_0(),
+            Side::Left => handle.right_0(),
+        },
+    )
 }
 
 /// A line to drag at `x` within its `relative()` container, such as the one
@@ -144,12 +164,15 @@ pub(crate) fn divider(
     x: Pixels,
     drag: PanelDrag,
     reset: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
-) -> Stateful<Div> {
-    grip(id, drag, reset).left(x - px(HANDLE / 2.))
+) -> Grip {
+    Grip::new(
+        Axis::Horizontal,
+        grip(id, drag, reset).left(x - px(HANDLE / 2.)),
+    )
 }
 
-/// The grabbable strip both share: the sidebar's cursor and hover tint, a
-/// drag of `drag`, and `reset` on a double-click.
+/// The grabbable strip both share: the sidebar's cursor, a drag of `drag`,
+/// and `reset` on a double-click.
 fn grip(
     id: &'static str,
     drag: PanelDrag,
@@ -163,7 +186,6 @@ fn grip(
         .h_full()
         .w(px(HANDLE))
         .cursor(CursorStyle::ResizeLeftRight)
-        .hover(|style| style.bg(rgba(RESIZE_HOVER)))
         .on_mouse_down(MouseButton::Left, move |event, window, cx| {
             cx.stop_propagation();
             if event.click_count == 2 {
@@ -189,6 +211,7 @@ impl crate::HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((&mut self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((&mut self.review_files_width, Side::Left)),
+            PanelDrag::ModPanel => Some((&mut self.mod_panel_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }
@@ -200,6 +223,7 @@ impl crate::HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((self.review_files_width, Side::Left)),
+            PanelDrag::ModPanel => Some((self.mod_panel_width, Side::Right)),
             PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
         }
     }

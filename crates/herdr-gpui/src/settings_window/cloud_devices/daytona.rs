@@ -9,6 +9,7 @@ use super::{
     super::{Section, SettingsWindow},
     Hint, follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     cloud::{
         CloudProvider, SavedDevice,
@@ -20,7 +21,7 @@ use crate::{
         setup::{self, AddRequest, Key, Overview},
     },
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -173,7 +174,9 @@ impl SettingsWindow {
                 tracing::error!(category = "daytona_worker", error_kind = ?error.kind(), "Could not start Daytona settings worker");
                 if let Some(card) = &mut self.daytona_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -321,7 +324,7 @@ impl SettingsWindow {
                         fl!("settings-cloud-daytona-sandboxes", count = *count)
                     }
                     (_, Some(Err(error))) => {
-                        fl!("settings-cloud-key-unusable", error = error.to_string())
+                        fl!("settings-cloud-key-unusable", error = error.localize())
                     }
                     (_, None) => fl!("settings-cloud-checking"),
                 },
@@ -349,7 +352,7 @@ impl SettingsWindow {
                     .child(self.cloud_field(fl!("settings-cloud-api-key"), card.key.clone().into()))
                     .child(
                         div()
-                            .flex()
+                            .row()
                             .flex_wrap()
                             .items_center()
                             .justify_between()
@@ -375,7 +378,7 @@ impl SettingsWindow {
             }
         }
         account = account.child(
-            div().flex().justify_end().child(
+            div().row().justify_end().child(
                 self.cloud_button("cloud-daytona-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-daytona-save".into())
                     .when(ready, |button| {
@@ -416,7 +419,7 @@ impl SettingsWindow {
                 cx,
             ))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-daytona-create",
                         fl!("settings-cloud-create-sandbox"),

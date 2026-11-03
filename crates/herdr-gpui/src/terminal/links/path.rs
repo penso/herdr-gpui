@@ -80,7 +80,16 @@ pub(super) fn plain_path(text: &str, hit: usize) -> Option<PlainPath<'_>> {
 /// Whether `word` starts with a drive and the separator after it, as in
 /// `C:\` or `C:/`: a Windows path, whose backslashes separate folders.
 fn drive_path(word: &str) -> bool {
-    matches!(word.as_bytes(), [letter, b':', b'\\' | b'/', ..] if letter.is_ascii_alphabetic())
+    starts_with_drive(word.chars())
+}
+
+/// Whether `chars` start with a drive and the separator after it; see
+/// [`drive_path`].
+pub(super) fn starts_with_drive(mut chars: impl Iterator<Item = char>) -> bool {
+    matches!(
+        (chars.next(), chars.next(), chars.next()),
+        (Some(letter), Some(':'), Some('\\' | '/')) if letter.is_ascii_alphabetic()
+    )
 }
 
 /// Whether `text` holds a colon no backslash escapes, which names a scheme,

@@ -6,7 +6,7 @@
 //! this client knows, never from the daemon's text.
 
 use super::closed;
-use crate::{HerdrWindow, NavigationTarget, teleport::AgentKind, window::Flash};
+use crate::{HerdrWindow, NavigationTarget, i18n::fl, teleport::AgentKind, window::Flash};
 use gpui::Context;
 use herdr_client::Method;
 use serde_json::{Value, json};
@@ -86,13 +86,13 @@ impl HerdrWindow {
             return;
         };
         if self.script_slot_busy() {
-            self.show_flash(Flash::warning("Another tab is still opening"), cx);
+            self.show_flash(Flash::warning(fl!("overview-tab-opening")), cx);
             return;
         }
         if self.endpoints[self.selected_endpoint].id != job.endpoint
             && (self.menu.page.is_some() || !self.select_endpoint(&job.endpoint, cx))
         {
-            self.show_flash(Flash::warning("Cannot switch to the agent's host"), cx);
+            self.show_flash(Flash::warning(fl!("overview-host-switch")), cx);
             return;
         }
         self.overview.reopen = Some(job);
@@ -106,7 +106,7 @@ impl HerdrWindow {
             return;
         };
         if Instant::now() >= job.deadline {
-            return self.fail_overview_reopen("The agent's host did not answer in time", cx);
+            return self.fail_overview_reopen(fl!("overview-host-timeout"), cx);
         }
         if self.endpoints[self.selected_endpoint].id != job.endpoint {
             return;
@@ -131,7 +131,7 @@ impl HerdrWindow {
                     .any(|workspace| workspace.workspace_id == job.workspace)
             });
             if !open {
-                return self.fail_overview_reopen("The agent's workspace is closed", cx);
+                return self.fail_overview_reopen(fl!("overview-workspace-closed"), cx);
             }
             if self.script_job_busy() {
                 return;
@@ -150,7 +150,7 @@ impl HerdrWindow {
             }
             return;
         };
-        let Some(result) = self.take_script_response(&request) else {
+        let Some(result) = self.take_answer(crate::state::Answer::Script, &request) else {
             return;
         };
         let created = result
@@ -183,7 +183,7 @@ impl HerdrWindow {
     fn fail_overview_reopen(&mut self, why: impl std::fmt::Display, cx: &mut Context<Self>) {
         self.overview.reopen = None;
         self.show_flash(
-            Flash::warning(format!("The agent did not reopen: {why}")),
+            Flash::warning(fl!("overview-reopen-failed", error = why.to_string())),
             cx,
         );
     }

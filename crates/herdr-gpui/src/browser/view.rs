@@ -7,6 +7,7 @@ use super::{
     Location, Scope, Store, TabId, WebUrl,
     groups::{GroupId, GroupIds, Layout, Pick, SavedLayout},
 };
+use crate::i18n::fl;
 use crate::{HerdrWindow, NavigationTarget, search_input::SearchInput, window::Flash};
 use gpui::{prelude::*, *};
 use std::collections::{HashMap, HashSet};
@@ -158,10 +159,11 @@ pub(crate) fn scope(endpoint: &crate::endpoint::Endpoint) -> Scope {
 }
 
 /// Page titles run long; a tab shows the start of one, like a web browser.
+/// The budget is in columns, so a CJK title is cut about as wide.
 pub(super) fn tab_label(title: &str) -> SharedString {
-    const MAX_CHARS: usize = 28;
-    match title.char_indices().nth(MAX_CHARS) {
-        Some((end, _)) => format!("{}\u{2026}", title[..end].trim_end()).into(),
+    const MAX_COLUMNS: usize = 28;
+    match crate::truncate::cut_width(title, MAX_COLUMNS) {
+        Some(kept) => format!("{}{}", kept.trim_end(), crate::truncate::ELLIPSIS).into(),
         None => title.to_owned().into(),
     }
 }
@@ -238,18 +240,18 @@ impl HerdrWindow {
         if !super::EMBEDDED {
             match url {
                 Some(url) => cx.open_url(url.as_str()),
-                None => self.show_flash(Flash::warning("Browser tabs need macOS or Windows"), cx),
+                None => self.show_flash(Flash::warning(fl!("browser-unsupported")), cx),
             }
             return;
         }
         let Some((scope, workspace)) = self.browser_key() else {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            self.show_flash(Flash::warning(fl!("browser-open-workspace-first")), cx);
             return;
         };
         let location = url.map(|url| Location::Web { url });
         match Store::update(cx, |store| store.open(scope, &workspace, location, None)) {
             Some(id) => self.show_browser_tab(id, window, cx),
-            None => self.show_flash(Flash::warning("Too many browser tabs are open"), cx),
+            None => self.show_flash(Flash::warning(fl!("browser-too-many-tabs")), cx),
         }
     }
 
@@ -282,7 +284,7 @@ impl HerdrWindow {
             })
         });
         let Some(id) = opened else {
-            self.show_flash(Flash::warning("Too many browser tabs are open"), cx);
+            self.show_flash(Flash::warning(fl!("browser-too-many-tabs")), cx);
             return PageOpened::Full;
         };
         if !self.navigate_endpoint(endpoint, NavigationTarget::Workspace(workspace), cx) {
@@ -438,7 +440,9 @@ impl HerdrWindow {
                         if let Err(error) = self.browser.pages.adopt(opened, source, popup, window)
                         {
                             tracing::warn!(%error, "Cannot show a popup's page");
-                            self.browser.failed.insert(opened, error.to_string().into());
+                            self.browser
+                                .failed
+                                .insert(opened, crate::i18n::Localize::localize(&error).into());
                         }
                         self.show_browser_tab_in(group, opened, window, cx);
                     }
@@ -532,15 +536,4 @@ impl HerdrWindow {
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn long_titles_are_shortened_on_a_character_boundary() {
-        assert_eq!(super::tab_label("Example Domain"), "Example Domain");
-        let long = "Rust Programming Language — Official Site";
-        assert_eq!(
-            super::tab_label(long),
-            "Rust Programming Language \u{2014}\u{2026}"
-        );
-        assert_eq!(super::tab_label(&"é".repeat(40)).chars().count(), 29);
-    }
-}
+mod tests;

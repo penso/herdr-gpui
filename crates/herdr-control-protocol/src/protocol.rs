@@ -7,6 +7,7 @@ pub mod chat;
 pub mod cloud;
 pub mod events;
 pub mod hosts;
+pub mod mods;
 pub mod remote;
 pub mod settings;
 pub mod tabs;
@@ -29,7 +30,8 @@ pub enum Placement {
 /// an outdated app from a refused request. 3: `browser.open` placement.
 /// 4: `link`. 5: the `tab` family's `zoom`. 6: the `cloud` family. 7: `chat`.
 /// 8: `host` `automation_approve`. 9: `remote`. 10: `settings` `language`.
-pub const PROTOCOL_VERSION: u32 = 10;
+/// 11: `mod`.
+pub const PROTOCOL_VERSION: u32 = 11;
 
 /// Older apps and clients know only tabs, so a tab is left off the wire.
 fn is_tab(placement: &Placement) -> bool {
@@ -81,6 +83,8 @@ pub enum Request {
     Cloud(Call<cloud::CloudOp>),
     #[serde(rename = "remote")]
     Remote(Call<remote::RemoteOp>),
+    #[serde(rename = "mod")]
+    Mod(Call<mods::ModOp>),
 }
 
 /// A `herdr-gpui://` link the shell started a second copy of the app with.
@@ -270,6 +274,9 @@ pub enum Response {
     },
     Remote {
         reply: remote::Reply,
+    },
+    Mod {
+        reply: mods::Reply,
     },
     Error {
         code: ErrorCode,

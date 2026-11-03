@@ -7,6 +7,8 @@ use crate::code_server::{
     Launcher, Startup,
     launcher::{self, Cli, LICENSE_URL, PRIVACY_URL},
 };
+use crate::direction::Logical;
+use crate::i18n::Localize;
 
 impl SettingsWindow {
     /// The mode in effect, or `None` while VS Code is still being looked for.
@@ -71,7 +73,7 @@ impl SettingsWindow {
             ))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(12.))
                     .child(choice(
@@ -109,7 +111,7 @@ impl SettingsWindow {
             Startup::Failed { error, .. } => card.child(self.render_code_state(
                 "icons/error.svg",
                 self.theme.palette[1],
-                fl!("settings-code-failed", error = error.to_string()).into(),
+                fl!("settings-code-failed", error = error.localize()).into(),
             )),
             // The mode card says why.
             Startup::Address | Startup::Finding | Startup::Missing => card,
@@ -145,7 +147,7 @@ impl SettingsWindow {
             .child(div().min_w_0().child(fl!("settings-code-license-terms")))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(16.))
                     .child(link(
@@ -159,13 +161,13 @@ impl SettingsWindow {
                         PRIVACY_URL,
                     )),
             )
-            .child(div().flex().child(accept))
+            .child(div().row().child(accept))
     }
 
     fn render_code_state(&self, icon: &'static str, color: u32, text: SharedString) -> Div {
         div()
             .debug_selector(|| "settings-code-state".into())
-            .flex()
+            .row()
             .items_center()
             .gap(px(8.))
             .min_w_0()

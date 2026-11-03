@@ -98,6 +98,16 @@ pub(crate) fn bridge_connecting(target: &str, session: &str) {
     let _ = (target, session);
 }
 
+/// Whether `target`'s host key is checked has changed, so its masters, opened
+/// under the old choice, take no new channels; the next command starts a
+/// master that follows the new one.
+pub(crate) fn host_keys_changed(target: &str) {
+    #[cfg(unix)]
+    shared::registry().retire(target);
+    #[cfg(not(unix))]
+    let _ = target;
+}
+
 #[cfg(unix)]
 pub(crate) use shared::Channel;
 

@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ConfigOption, Entry, EntryId, EntryKind, Error, Modes, Permission, PermissionId, PlanEntry,
-    Queued, Result, SessionInfo, SlashCommand, Status, Transcript, Turn, Usage,
-    valid_question_answers,
+    Activity, ConfigOption, Entry, EntryId, EntryKind, Error, MAX_ACTIVITIES, Modes, Permission,
+    PermissionId, PlanEntry, Queued, Result, SessionInfo, SlashCommand, Status, Transcript, Turn,
+    Usage, valid_question_answers,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -72,6 +72,11 @@ pub enum Change {
     /// Permission requests are now answered without asking, or asked again.
     AutoAccept {
         on: bool,
+    },
+    /// A sub-agent or background shell started, or what is known of one
+    /// changed; it replaces the activity with the same call id.
+    Activity {
+        activity: Activity,
     },
 }
 
@@ -151,7 +156,34 @@ impl Transcript {
             Change::Commands { commands } => self.commands.clone_from(commands),
             Change::Usage { usage } => self.usage.clone_from(usage),
             Change::AutoAccept { on } => self.auto_accept = *on,
+            Change::Activity { activity } => self.record(activity)?,
         }
+        Ok(())
+    }
+
+    /// Replaces the activity with the same call id, or adds it, making room
+    /// by dropping the oldest that has ended.
+    fn record(&mut self, activity: &Activity) -> Result<()> {
+        if !activity.fits() {
+            return Err(Error::ActivityText);
+        }
+        if let Some(known) = self
+            .activities
+            .iter_mut()
+            .find(|known| known.call_id == activity.call_id)
+        {
+            known.clone_from(activity);
+            return Ok(());
+        }
+        if self.activities.len() >= MAX_ACTIVITIES {
+            let ended = self
+                .activities
+                .iter()
+                .position(|known| !known.is_running())
+                .ok_or(Error::ActivityLimit)?;
+            self.activities.remove(ended);
+        }
+        self.activities.push(activity.clone());
         Ok(())
     }
 }

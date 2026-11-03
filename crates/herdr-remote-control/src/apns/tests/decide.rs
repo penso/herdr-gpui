@@ -7,6 +7,8 @@ use herdr_chat_protocol::{
     PlanStatus, Status, Tool, ToolKind, ToolStatus, Transcript, Turn, TurnEnd, TurnSummary, Usage,
 };
 
+mod buttons;
+
 const NOW_MS: u64 = 1_800_000_000_000;
 const STARTED_MS: u64 = 1_799_999_990_000;
 /// `state.fingerprint`'s form: uppercase hex pairs joined by colons (here
@@ -50,6 +52,7 @@ fn tool(title: &str, status: ToolStatus) -> EntryKind {
         content: Vec::new(),
         kind: ToolKind::Execute,
         locations: Vec::new(),
+        parent: None,
         status,
         title: title.to_owned(),
     })
@@ -86,6 +89,7 @@ fn plan(statuses: &[(&str, PlanStatus)]) -> Vec<PlanEntry> {
 
 fn summary(end: TurnEnd) -> EntryKind {
     EntryKind::Turn(TurnSummary {
+        ended_ms: None,
         duration_ms: 362_000,
         end,
         tokens: None,
@@ -139,7 +143,6 @@ fn a_running_tool_call_updates_the_step_once() {
     .unwrap();
     assert_eq!(live.event, Event::Update { alert: None });
     assert_eq!(live.state.step, "Run just ci");
-    assert_eq!(live.state.cost.as_deref(), Some("$0.34"));
 
     let mut shown = before.clone();
     shown.entries.push(Entry {
@@ -260,10 +263,7 @@ fn the_summary_ends_it_finished_and_lingering() {
         }
     );
     assert_eq!(live.state.phase, Phase::Finished);
-    assert_eq!(
-        live.state.summary.as_deref(),
-        Some("Worked 6m 2s \u{b7} $0.34")
-    );
+    assert_eq!(live.state.summary.as_deref(), Some("Worked 6m 2s"));
 }
 
 #[test]

@@ -164,10 +164,10 @@ fn ensure_herdr(
         .with_command(|command| install::installed(command, &cancelled))?;
     if !installed {
         if !install {
-            return Err(cloud::Error::Install(format!(
-                "Herdr is not installed in Boat sandbox {}; enable Install Herdr and use Finish setup",
-                sandbox.id
-            ))
+            return Err(cloud::Error::Install(install::Failure::NotInstalled {
+                machine: Some(sandbox.id.clone()),
+                retry: install::Retry::FinishSetup,
+            })
             .into());
         }
         report(cloud::Step::InstallingHerdr);
@@ -176,10 +176,7 @@ fn ensure_herdr(
         if !gateway::prepare(request, &sandbox.id)?
             .with_command(|command| install::installed(command, &cancelled))?
         {
-            return Err(cloud::Error::Install(
-                "the installer finished but Herdr is not on the expected paths".into(),
-            )
-            .into());
+            return Err(cloud::Error::Install(install::Failure::Missing).into());
         }
     }
     Ok(())

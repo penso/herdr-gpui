@@ -19,6 +19,7 @@ use crate::{
         model::{Account, Balance, Kind, Provider, Report, Section, Unit, Window},
         probe::{Probe, Request, Secret},
         service::{Meta, Service, Setting, Timestamp},
+        text::Text,
         values,
     },
 };
@@ -48,20 +49,11 @@ pub(crate) struct Opencode;
 static META: Meta = Meta::new("opencode", "OpenCode")
     .dashboard("https://opencode.ai/auth")
     .settings(&[
-        Setting::new(
-            "cookie",
-            &[],
-            "Your opencode.ai session. Sign in at https://opencode.ai/auth, open Developer \
-             Tools > Application > Cookies > https://opencode.ai, and copy the auth and \
-             __Host-console_session cookies (either one alone also works). Paste them as \
-             \"auth=value; __Host-console_session=value\".",
-        ),
+        Setting::new("cookie", &[], "usage-opencode-setting-cookie"),
         Setting::new(
             "workspace_id",
             &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
-            "Optional. The workspace to read, as a wrk_... ID or the \
-             https://opencode.ai/workspace/... URL of its dashboard. Defaults to the first \
-             workspace of the account.",
+            "usage-opencode-setting-workspace-id",
         ),
     ]);
 
@@ -456,22 +448,35 @@ pub(crate) fn parse_billing(text: &str) -> Option<Report> {
     let usd = || Unit::Currency("USD".into());
     let mut balances = Vec::new();
     if let Some(balance) = balance {
-        balances.push(Balance::new("Zen balance", balance / MICRO_CENTS, usd()));
+        balances.push(Balance::new(
+            Text::message("usage-opencode-zen-balance"),
+            balance / MICRO_CENTS,
+            usd(),
+        ));
     }
     if let Some(limit) = limit.filter(|limit| *limit > 0.) {
-        balances
-            .push(Balance::new("Monthly limit left", (limit - spent).max(0.), usd()).out_of(limit));
+        balances.push(
+            Balance::new(
+                Text::message("usage-opencode-monthly-limit-left"),
+                (limit - spent).max(0.),
+                usd(),
+            )
+            .out_of(limit),
+        );
     }
     let account = Account {
         email: None,
-        plan: Some("Pay as you go".into()),
+        plan: Some(Text::message("usage-opencode-pay-as-you-go")),
     };
     Some(
         Report::new(Provider(&Opencode), account, Vec::new())
             .with_balances(balances)
             .with_sections([Section::Facts {
-                title: "This month".into(),
-                facts: vec![("Spent".into(), format!("${spent:.2}"))],
+                title: Text::message("usage-opencode-this-month"),
+                facts: vec![(
+                    Text::message("usage-opencode-spent"),
+                    Text::service(format!("${spent:.2}")),
+                )],
             }]),
     )
 }
@@ -550,8 +555,29 @@ mod tests {
         )
         .unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Zen balance");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-opencode-zen-balance")
+        );
         assert_eq!(report.balances[0].amount, 5.);
+        assert_eq!(
+            report.balances[1].label,
+            Text::message("usage-opencode-monthly-limit-left")
+        );
+        assert_eq!(
+            report.account.plan,
+            Some(Text::message("usage-opencode-pay-as-you-go"))
+        );
+        assert_eq!(
+            report.sections,
+            vec![Section::Facts {
+                title: Text::message("usage-opencode-this-month"),
+                facts: vec![(
+                    Text::message("usage-opencode-spent"),
+                    Text::service("$2.50")
+                )],
+            }]
+        );
         assert_eq!(report.balances[1].amount, 7.5);
         assert_eq!(report.balances[1].total, Some(10.));
         let script = r#"$R[1]={customerID:"cus_TEST",balance:$R[2]=1250000000,monthlyUsage:1500000000,subscription:null}"#;

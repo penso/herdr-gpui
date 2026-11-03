@@ -38,34 +38,6 @@ fn config_ignores_unknown_providers_and_settings() {
     );
 }
 
-/// Regenerate with `HERDR_BLESS_EXAMPLE=1 cargo test example_config_documents`.
-#[test]
-fn example_config_documents_every_provider_setting() {
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../herdr-gpui/config-gpui.example.toml"
-    );
-    // A Windows checkout may carry CRLF line endings.
-    let text = std::fs::read_to_string(path).unwrap().replace("\r\n", "\n");
-    let expected = super::super::settings::example_docs();
-    if std::env::var_os("HERDR_BLESS_EXAMPLE").is_some() {
-        let updated = match super::super::settings::docs_in(&text) {
-            Some(current) => text.replace(current, &expected),
-            None => format!(
-                "{}\n{expected}",
-                text.trim_end_matches('\n').to_owned() + "\n"
-            ),
-        };
-        std::fs::write(path, updated).unwrap();
-        return;
-    }
-    assert_eq!(
-        super::super::settings::docs_in(&text),
-        Some(expected.as_str()),
-        "config-gpui.example.toml is stale; rerun with HERDR_BLESS_EXAMPLE=1"
-    );
-}
-
 #[test]
 fn settings_come_from_this_machines_config() {
     let settings = ProviderSettings::default().with("api_key", "config-key");

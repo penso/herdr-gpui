@@ -7,6 +7,7 @@ use crate::{
     checkpoint::Checkpoint,
     config::{corners, mix},
     fonts::StyledFont,
+    i18n::fl,
 };
 use chrono::{DateTime, Datelike, Days, TimeZone};
 use gpui::{prelude::*, *};
@@ -47,9 +48,11 @@ where
     if date == today {
         return None;
     }
-    let format = if today.checked_sub_days(Days::new(1)) == Some(date) {
-        "Yesterday, %b %-d"
-    } else if date.year() == today.year() {
+    if today.checked_sub_days(Days::new(1)) == Some(date) {
+        let date = date.format("%b %-d").to_string();
+        return Some(fl!("checkpoints-yesterday", date = date));
+    }
+    let format = if date.year() == today.year() {
         "%a, %b %-d"
     } else {
         "%b %-d, %Y"
@@ -201,10 +204,13 @@ impl HerdrWindow {
                             .child(format!("\u{2212}{}", diff.deletions)),
                     )
                     .child(
+                        // A language's longer unit gives way before the
+                        // restore icon is pushed out of the line.
                         div()
-                            .flex_none()
+                            .min_w_0()
+                            .truncate()
                             .text_color(muted)
-                            .child(format!("{}f", diff.files)),
+                            .child(fl!("checkpoints-files", count = diff.files)),
                     );
             }
             // The restore icon shows on the selected or hovered line only, so

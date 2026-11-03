@@ -3,6 +3,7 @@
 //! requests grouped by what each waits on. Pure, so it is tested without a
 //! window.
 
+use crate::i18n::fl;
 use crate::orchestrator::{
     Backend, CheckState, HerdrSession, Item, PrStatus, Provider, Review, Run, RunState,
 };
@@ -38,13 +39,13 @@ impl Sort {
         Self::Title,
     ];
 
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> String {
         match self {
-            Self::Updated => "Recently updated",
-            Self::Newest => "Newest",
-            Self::Oldest => "Oldest",
-            Self::Priority => "Priority",
-            Self::Title => "Title",
+            Self::Updated => fl!("orchestrator-sort-updated"),
+            Self::Newest => fl!("orchestrator-sort-newest"),
+            Self::Oldest => fl!("orchestrator-sort-oldest"),
+            Self::Priority => fl!("orchestrator-sort-priority"),
+            Self::Title => fl!("orchestrator-sort-title"),
         }
     }
 
@@ -104,15 +105,15 @@ pub(crate) enum Status {
 }
 
 impl Status {
-    pub(crate) fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> String {
         match self {
-            Self::Starting => "starting",
-            Self::Working => "working",
-            Self::NeedsInput => "needs input",
-            Self::Idle => "idle",
-            Self::Done => "done",
-            Self::Failed => "failed",
-            Self::Stopped => "stopped",
+            Self::Starting => fl!("orchestrator-status-starting"),
+            Self::Working => fl!("orchestrator-status-working"),
+            Self::NeedsInput => fl!("orchestrator-status-needs-input"),
+            Self::Idle => fl!("orchestrator-status-idle"),
+            Self::Done => fl!("orchestrator-status-done"),
+            Self::Failed => fl!("orchestrator-status-failed"),
+            Self::Stopped => fl!("orchestrator-status-stopped"),
         }
     }
 
@@ -435,7 +436,8 @@ pub(crate) fn pull_request_rows(
 }
 
 /// What a run's item is called when the item is not listed, such as a
-/// closed issue: `#375` for a GitHub issue or pull request, else its id.
+/// closed issue: `#375` for an issue or GitHub pull request, `!375` for a
+/// GitLab merge request, else its id.
 pub(crate) fn key_label(key: &str) -> String {
     let native = key
         .rsplit(':')
@@ -445,7 +447,8 @@ pub(crate) fn key_label(key: &str) -> String {
         .replace("%25", "%");
     let number = native.strip_prefix("pr/").unwrap_or(&native);
     if !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()) {
-        format!("#{number}")
+        let merge_request = native.starts_with("pr/") && key.starts_with("gitlab:");
+        format!("{}{number}", if merge_request { '!' } else { '#' })
     } else {
         native
     }
@@ -524,7 +527,7 @@ pub(crate) fn status_of<'a>(
     item: &Item,
     statuses: &'a HashMap<(String, u64), PrStatus>,
 ) -> Option<&'a PrStatus> {
-    let number = item.pull_request.as_ref()?.number;
+    let number = item.github_pull_request()?.number;
     statuses.get(&(item.key.source.repository.clone(), number))
 }
 

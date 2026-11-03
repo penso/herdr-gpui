@@ -1,4 +1,5 @@
-//! The HTTP/2 request that hands a Live Activity push to APNs. Async, on the
+//! The HTTP/2 request that hands a push to APNs: a Live Activity update, a
+//! sealed alert, or a background clear. Async, on the
 //! daemon's Tokio runtime: one TLS connection to Apple, reused for every
 //! push (APNs asks providers to keep connections open) and opened again
 //! when it drops.
@@ -57,6 +58,37 @@ impl Priority {
     }
 }
 
+/// `apns-push-type`, which also picks the topic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PushType {
+    /// A notification the app shows, after its extension opens it.
+    Alert,
+    /// Wakes the app without showing anything, such as to clear one.
+    Background,
+    LiveActivity,
+}
+
+impl PushType {
+    pub(crate) fn header(self) -> &'static str {
+        match self {
+            Self::Alert => "alert",
+            Self::Background => "background",
+            Self::LiveActivity => "liveactivity",
+        }
+    }
+}
+
+/// One push's body and the headers that go with it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Push {
+    pub(crate) body: Vec<u8>,
+    /// `apns-collapse-id`: a newer push with the same id replaces the
+    /// older one on the phone.
+    pub(crate) collapse_id: Option<String>,
+    pub(crate) priority: Priority,
+    pub(crate) push_type: PushType,
+}
+
 /// What APNs did with a push.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Outcome {
@@ -100,28 +132,34 @@ fn provider_token_refused(outcome: &Outcome) -> bool {
     )
 }
 
-/// The request for one push to `token`, authorized by `bearer`.
+/// The request for `push` to `token`, authorized by `bearer`.
 pub(crate) fn request(
     config: &Config,
     token: &DeviceToken,
-    priority: Priority,
+    push: &Push,
     bearer: &str,
-    body: Vec<u8>,
 ) -> Result<Request<Full<Bytes>>> {
-    Ok(Request::post(format!(
+    let topic = match push.push_type {
+        PushType::LiveActivity => config.live_activity_topic(),
+        PushType::Alert | PushType::Background => config.topic.clone(),
+    };
+    let mut request = Request::post(format!(
         "https://{}/3/device/{}",
         config.host.name(),
         token.as_str()
     ))
     .header(AUTHORIZATION, format!("bearer {bearer}"))
     .header(CONTENT_TYPE, "application/json")
-    .header("apns-push-type", "liveactivity")
-    .header("apns-topic", config.live_activity_topic())
-    .header("apns-priority", priority.header())
-    .body(Full::new(Bytes::from(body)))?)
+    .header("apns-push-type", push.push_type.header())
+    .header("apns-topic", topic)
+    .header("apns-priority", push.priority.header());
+    if let Some(id) = &push.collapse_id {
+        request = request.header("apns-collapse-id", id);
+    }
+    Ok(request.body(Full::new(Bytes::from(push.body.clone())))?)
 }
 
-/// Sends Live Activity pushes with the user's APNs key.
+/// Sends pushes with the user's APNs key.
 #[derive(Debug)]
 pub(crate) struct Sender {
     config: Config,
@@ -167,12 +205,26 @@ impl Sender {
         live: &Live,
         now_s: u64,
     ) -> Result<Outcome> {
-        let body = live.payload(now_s)?;
-        let priority = if live.urgent() {
-            Priority::High
-        } else {
-            Priority::Low
+        let push = Push {
+            body: live.payload(now_s)?,
+            collapse_id: None,
+            priority: if live.urgent() {
+                Priority::High
+            } else {
+                Priority::Low
+            },
+            push_type: PushType::LiveActivity,
         };
+        self.post(token, &push, now_s).await
+    }
+
+    /// Sends `push` to `token` at `now_s`, within ten seconds.
+    pub(crate) async fn post(
+        &self,
+        token: &DeviceToken,
+        push: &Push,
+        now_s: u64,
+    ) -> Result<Outcome> {
         let bearer = self.token.current(now_s)?;
         let exchange = async {
             // A kept connection may have been closed by Apple meanwhile;
@@ -180,7 +232,7 @@ impl Sender {
             let mut fresh = false;
             loop {
                 let mut sender = self.sender(fresh).await?;
-                let request = request(&self.config, token, priority, &bearer, body.clone())?;
+                let request = request(&self.config, token, push, &bearer)?;
                 match send_on(&mut sender, request).await {
                     Ok(response) => return read(response).await,
                     Err(error) if fresh => return Err(error),

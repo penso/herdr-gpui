@@ -1,6 +1,7 @@
 use super::*;
 
 mod copies;
+mod en_xa;
 mod pending_send;
 mod withdraw;
 
@@ -33,6 +34,6 @@ fn send_delivers_new_notes_or_all_again() {
     assert_eq!(round([true, true]), [0, 1]);
     assert!(round([]).is_empty());
     assert_eq!(send_label(2, 2), "Send to agent");
-    assert_eq!(send_label(3, 1), "Send 1 new");
+    assert_eq!(send_label(3, 1), "Send \u{2068}1\u{2069} new");
     assert_eq!(send_label(3, 0), "Resend all");
 }

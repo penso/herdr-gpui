@@ -13,12 +13,16 @@ mod add_provider;
 mod boat_rail;
 #[cfg(feature = "cloud")]
 mod cloud_providers;
+mod en_xa;
+mod fold;
 mod host_key;
+mod host_key_choice;
 mod key_login;
 mod local_network;
 #[cfg(feature = "cloud")]
 mod rail;
 mod scope;
+mod selection;
 #[cfg(unix)]
 mod setup_activation;
 #[cfg(unix)]
@@ -39,7 +43,10 @@ fn only_a_present_herdr_is_saved_without_a_terminal() {
         Offer::for_probe(HostProbe::SshFailed(herdr_client::SshFailure::Auth)),
         Some(Offer::InstallKey)
     );
-    let question = Offer::Install.question("dev@box", Some("dev"));
+    // Without Fluent's isolation marks around each name.
+    let question = Offer::Install
+        .question("dev@box", Some("dev"))
+        .replace(['\u{2068}', '\u{2069}'], "");
     if cfg!(windows) {
         // No terminal setup: the user is told what to run instead.
         assert!(question.contains("Herdr was not detected there"));
@@ -64,6 +71,7 @@ fn open_form(view: &mut HerdrWindow, step: Step, cx: &mut Context<HerdrWindow>) 
         highlight: None,
         suggestion_scroll: gpui::ScrollHandle::new(),
         error: None,
+        host_keys: herdr_client::HostKeys::Verify,
     });
     view.menu.page = Some(Page::AddDevice);
 }

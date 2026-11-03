@@ -21,7 +21,7 @@ pub(super) mod brew {
         _current: &str,
         _expected: &str,
         _cancel: &AtomicBool,
-        _progress: impl FnMut(String),
+        _progress: impl FnMut(crate::Progress),
     ) -> Result<String> {
         Err(Error::UnsupportedTarget)
     }

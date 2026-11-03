@@ -38,12 +38,13 @@ pub(crate) use themes::{
     apply_loaded_theme, apply_theme_draft, theme_load_revision, theme_pending,
 };
 
+use crate::direction::Logical;
 use crate::{
     HerdrWindow,
     config::{Config, Theme, corners, mix},
     fonts::StyledFont,
     herdr_settings,
-    i18n::fl,
+    i18n::{Localize, fl},
 };
 use gpui::{prelude::*, *};
 
@@ -508,7 +509,7 @@ impl SettingsWindow {
                 Err(error) => {
                     self.error = Some(fl!(
                         "settings-error-system-appearance",
-                        error = error.to_string()
+                        error = error.localize()
                     ));
                 }
             }
@@ -793,9 +794,10 @@ impl Render for SettingsWindow {
             .line_height(px(18.))
             .bg(rgb(theme.background))
             .text_color(rgb(theme.foreground))
+            .text_start()
             .children(header)
             .child(
-                div().flex_1().min_h_0().flex().child(navigation).child(
+                div().flex_1().min_h_0().row().child(navigation).child(
                     self.scroll_area(
                         scrollbar::Pane::Body,
                         div()

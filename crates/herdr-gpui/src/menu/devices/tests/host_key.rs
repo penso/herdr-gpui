@@ -49,6 +49,7 @@ fn a_changed_host_key_is_never_offered_for_approval(cx: &mut gpui::TestAppContex
                     .error
                     .as_deref()
                     .unwrap()
+                    .replace(['\u{2068}', '\u{2069}'], "")
                     .starts_with("The host key of dev@box differs from the one you trusted before")
             );
         });
@@ -63,8 +64,17 @@ fn a_failed_key_fetch_offers_the_terminal_with_its_reason(cx: &mut gpui::TestApp
             fetching(view, cx);
             view.host_key_fetched(Ok(HostKeyScan::Refused(SshFailure::Unreachable)), cx);
             assert!(matches!(step(view), Step::Confirm(_, Offer::Terminal)));
+            let error = |view: &HerdrWindow| {
+                view.menu
+                    .device_setup
+                    .as_ref()
+                    .unwrap()
+                    .error
+                    .as_deref()
+                    .map(|error| error.replace(['\u{2068}', '\u{2069}'], ""))
+            };
             assert_eq!(
-                view.menu.device_setup.as_ref().unwrap().error.as_deref(),
+                error(view).as_deref(),
                 Some("SSH to dev@box: the host is unreachable")
             );
 
@@ -75,7 +85,7 @@ fn a_failed_key_fetch_offers_the_terminal_with_its_reason(cx: &mut gpui::TestApp
             );
             assert!(matches!(step(view), Step::Confirm(_, Offer::Terminal)));
             assert_eq!(
-                view.menu.device_setup.as_ref().unwrap().error.as_deref(),
+                error(view).as_deref(),
                 Some("Fetch the host key of dev@box: SSH discovery timed out")
             );
         });

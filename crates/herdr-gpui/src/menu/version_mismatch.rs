@@ -2,12 +2,14 @@
 //! be updated. The update command is shown and copied, never run: updating a
 //! daemon may stop its sessions, so the user decides when.
 
+// i18n: migrated
 use super::Page;
+use crate::i18n::fl;
 use crate::{HerdrWindow, fonts::StyledFont, notifications::safe_text, window::Flash};
 use gpui::{prelude::*, *};
 use herdr_client::{ConnectTarget, MIN_HERDR_VERSION, VersionMismatch};
 
-pub(crate) const UPDATE_COMMAND: &str = "herdr update";
+pub(crate) const UPDATE_COMMAND: &str = "herdr update"; // i18n: data
 
 /// What the open notice describes, captured as it opens so a retry that
 /// resets the connection cannot change the text under the reader.
@@ -19,42 +21,44 @@ pub(crate) struct Notice {
 }
 
 impl Notice {
-    pub(crate) fn title(&self) -> &'static str {
+    pub(crate) fn title(&self) -> String {
         match self.mismatch {
-            VersionMismatch::DaemonOutdated { .. } => "Herdr needs an update",
-            VersionMismatch::ClientOutdated { .. } => "Herdr UI needs an update",
+            VersionMismatch::DaemonOutdated { .. } => fl!("version-mismatch-daemon-title"),
+            VersionMismatch::ClientOutdated { .. } => fl!("version-mismatch-client-title"),
         }
     }
 
     pub(crate) fn body(&self) -> String {
-        let place = match &self.host {
-            Some(host) => safe_text(host, 64),
-            None => "this device".into(),
-        };
-        let version = self.mismatch.server_version();
-        let server = match version {
-            Some(version) => format!("The Herdr server on {place} (version {version})"),
-            None => format!("The Herdr server on {place}"),
+        let (place, host) = match &self.host {
+            Some(host) => ("host", safe_text(host, 64)),
+            None => ("local", String::new()),
         };
         // Releases before the endpoint protocol report no version to this
         // app, so only the requirement can be stated, not their age.
-        let problem = match version {
-            Some(_) => format!("{server} is too old for this app."),
-            None => format!(
-                "{server} did not answer this app's handshake. This app needs Herdr {MIN_HERDR_VERSION} or newer."
+        match (&self.mismatch, self.mismatch.server_version()) {
+            (VersionMismatch::DaemonOutdated { .. }, Some(version)) => fl!(
+                "version-mismatch-daemon-old",
+                place = place,
+                host = host,
+                version = version,
             ),
-        };
-        let wherever = match &self.host {
-            Some(_) => format!("on {place}"),
-            None => "in a terminal".into(),
-        };
-        match &self.mismatch {
-            VersionMismatch::DaemonOutdated { .. } => format!(
-                "{problem} Run this command {wherever}; the app reconnects once the updated server is running."
+            (VersionMismatch::DaemonOutdated { .. }, None) => fl!(
+                "version-mismatch-daemon-silent",
+                place = place,
+                host = host,
+                minimum = MIN_HERDR_VERSION,
             ),
-            VersionMismatch::ClientOutdated { .. } => {
-                format!("{server} is newer than this app supports. Update this app to connect.")
-            }
+            (VersionMismatch::ClientOutdated { .. }, Some(version)) => fl!(
+                "version-mismatch-client-old",
+                place = place,
+                host = host,
+                version = version,
+            ),
+            (VersionMismatch::ClientOutdated { .. }, None) => fl!(
+                "version-mismatch-client-old-unknown",
+                place = place,
+                host = host,
+            ),
         }
     }
 }
@@ -104,7 +108,10 @@ impl HerdrWindow {
         match notice.mismatch {
             VersionMismatch::DaemonOutdated { .. } => {
                 cx.write_to_clipboard(ClipboardItem::new_string(UPDATE_COMMAND.into()));
-                self.show_flash(Flash::success(format!("Copied `{UPDATE_COMMAND}`")), cx);
+                self.show_flash(
+                    Flash::success(fl!("version-mismatch-copied", command = UPDATE_COMMAND)),
+                    cx,
+                );
                 self.dismiss_menu(window, cx);
             }
             VersionMismatch::ClientOutdated { .. } => self.open_app_update(false, window, cx),
@@ -116,7 +123,7 @@ impl HerdrWindow {
         let Some(notice) = &self.menu.version_notice else {
             return div();
         };
-        let button = |id: &'static str, label: &'static str, primary: bool| {
+        let button = |id: &'static str, label: String, primary: bool| {
             div()
                 .id(id)
                 .debug_selector(move || id.into())
@@ -165,9 +172,9 @@ impl HerdrWindow {
                         button(
                             "version-mismatch-action",
                             if daemon {
-                                "Copy Command"
+                                fl!("version-mismatch-copy")
                             } else {
-                                "Check for Updates"
+                                fl!("version-mismatch-check")
                             },
                             true,
                         )
@@ -177,12 +184,15 @@ impl HerdrWindow {
                         })),
                     )
                     .child(
-                        button("version-mismatch-dismiss", "Dismiss", false).on_click(cx.listener(
-                            |this, _, window, cx| {
-                                cx.stop_propagation();
-                                this.dismiss_menu(window, cx);
-                            },
-                        )),
+                        button(
+                            "version-mismatch-dismiss",
+                            fl!("version-mismatch-dismiss"),
+                            false,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.dismiss_menu(window, cx);
+                        })),
                     ),
             )
     }

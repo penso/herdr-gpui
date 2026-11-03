@@ -77,6 +77,9 @@ pub struct Pairing {
     in_flight: bool,
     last_poll: Option<Instant>,
     preferred_address: Option<String>,
+    /// The hosts ticked when the user allowed the phone, for it to be
+    /// paired with too.
+    hosts: Vec<control::hosts::HostId>,
 }
 
 impl Pairing {
@@ -92,6 +95,7 @@ impl Pairing {
             in_flight: false,
             last_poll: None,
             preferred_address: None,
+            hosts: Vec::new(),
         }
     }
 
@@ -155,6 +159,11 @@ impl Pairing {
                 allow: *allow,
                 // The daemon refuses an approval for any claim but this one.
                 code: code.clone(),
+                hosts: if *allow {
+                    self.hosts.clone()
+                } else {
+                    Vec::new()
+                },
             },
             Phase::Showing { offer, .. } | Phase::Claimed { offer, .. } if poll_due => {
                 Request::Pairing {
@@ -316,10 +325,17 @@ impl Pairing {
 
     /// The user's Allow or Deny for the claimed device.
     pub fn answer(&mut self, allow: bool) {
+        self.answer_with_hosts(allow, Vec::new());
+    }
+
+    /// The user's Allow or Deny, with the hosts ticked for the phone to be
+    /// paired with too.
+    pub fn answer_with_hosts(&mut self, allow: bool, hosts: Vec<control::hosts::HostId>) {
         if let Phase::Claimed { answer, .. } = &mut self.phase
             && answer.is_none()
         {
             *answer = Some(Answer { allow, sent: false });
+            self.hosts = hosts;
             self.epoch += 1;
             self.in_flight = false;
         }

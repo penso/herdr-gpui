@@ -1,0 +1,5 @@
+# An example mod: copy this folder to <config>/herdr/gpui-mods/agents.
+name = "agents"
+api = 1
+places = ["status_bar"]
+commands = [{ id = "names", title = "Show agent names in the status bar" }]

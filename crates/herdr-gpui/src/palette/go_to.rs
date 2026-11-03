@@ -3,7 +3,7 @@
 //! destination still exists.
 
 use super::{Action, Entry, Error, Source, frecency, projects};
-use crate::{NavigationTarget, Result};
+use crate::{NavigationTarget, Result, i18n::fl};
 use gpui::SharedString;
 use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
 
@@ -38,13 +38,25 @@ pub(super) fn destination_exists(
     }
 }
 
-pub(super) fn status_badge(status: AgentStatus) -> &'static str {
+/// An agent's status word, searched for in English whatever the language.
+fn status_keyword(status: AgentStatus) -> &'static str {
     match status {
         AgentStatus::Blocked => "blocked",
         AgentStatus::Done => "done",
         AgentStatus::Working => "working",
         AgentStatus::Idle => "idle",
         AgentStatus::Unknown => "",
+    }
+}
+
+/// An agent's status word, as its badge shows it.
+pub(super) fn status_badge(status: AgentStatus) -> String {
+    match status {
+        AgentStatus::Blocked => fl!("palette-go-to-blocked"),
+        AgentStatus::Done => fl!("palette-go-to-done"),
+        AgentStatus::Working => fl!("palette-go-to-working"),
+        AgentStatus::Idle => fl!("palette-go-to-idle"),
+        AgentStatus::Unknown => String::new(),
     }
 }
 
@@ -78,7 +90,7 @@ pub(super) fn go_to_entries(
         let mut entry = Entry::new(
             workspace.label.clone(),
             detail,
-            "Workspace",
+            fl!("palette-go-to-workspace"),
             go(NavigationTarget::Workspace(workspace.workspace_id.clone())),
             None,
         );
@@ -109,7 +121,7 @@ pub(super) fn go_to_entries(
                 let mut entry = Entry::new(
                     tab.label.clone(),
                     detail,
-                    "Tab",
+                    fl!("palette-go-to-tab"),
                     go(NavigationTarget::Tab(tab.tab_id.clone())),
                     Some(workspace_row),
                 );
@@ -145,8 +157,7 @@ pub(super) fn go_to_entries(
                         .as_deref()
                         .map(str::trim)
                         .filter(|label| !label.is_empty())
-                        .unwrap_or("Terminal")
-                        .to_owned(),
+                        .map_or_else(|| fl!("palette-go-to-terminal"), str::to_owned),
                 };
                 let path = pane.foreground_cwd.as_deref().or(pane.cwd.as_deref());
                 let detail = [host, Some(workspace.label.as_str()), tab, path]
@@ -158,12 +169,18 @@ pub(super) fn go_to_entries(
                 // An agent is also found by its kind, name, and plain status word,
                 // whatever its row is titled or its integration labels the state,
                 // and by the titles and Rename label its sidebar row can show.
+                // Status and kind words match in English and as shown.
                 let keywords = agent.map_or(String::new(), |agent| {
+                    let badge = status_badge(agent.agent_status);
+                    let kind = fl!("palette-go-to-agent");
                     [
                         agent.agent.as_deref(),
                         agent.name.as_deref(),
-                        Some(status_badge(agent.agent_status)),
+                        Some(status_keyword(agent.agent_status)),
+                        Some(badge.as_str()),
+                        // i18n: data
                         Some("agent"),
+                        Some(kind.as_str()),
                         agent.title.as_deref(),
                         agent.terminal_title_stripped.as_deref(),
                         pane.label.as_deref(),
@@ -176,11 +193,15 @@ pub(super) fn go_to_entries(
                 let mut entry = Entry::with_keywords(
                     name,
                     detail,
-                    agent.map_or(SharedString::new_static("Terminal"), |agent| {
-                        crate::sidebar::state_label(agent, status_badge(agent.agent_status))
-                            .into_owned()
-                            .into()
-                    }),
+                    agent.map_or_else(
+                        || SharedString::from(fl!("palette-go-to-terminal")),
+                        |agent| {
+                            let badge = status_badge(agent.agent_status);
+                            crate::sidebar::state_label(agent, &badge)
+                                .into_owned()
+                                .into()
+                        },
+                    ),
                     go(NavigationTarget::Pane(pane.pane_id.clone())),
                     parent,
                     &keywords,
@@ -234,7 +255,7 @@ pub(super) fn note_entries(
             entries.push(Entry::with_keywords(
                 workspace.label.clone(),
                 detail,
-                "Note",
+                fl!("palette-go-to-note"),
                 Action::Note {
                     endpoint: checkout.endpoint.clone(),
                     boot: snapshot.boot_id.clone(),

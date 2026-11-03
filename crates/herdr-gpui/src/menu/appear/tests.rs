@@ -109,6 +109,18 @@ fn all_devices_sinks_away_after_it_closes() {
 }
 
 #[test]
+fn a_session_form_closes_at_once_instead_of_the_picker_sinking() {
+    let start = Instant::now();
+    let mut appear = live();
+    let anchor = Shown::Popover(point(px(10.), px(600.)));
+    appear.observe(Some(anchor), Some(Page::Devices), start);
+    // The form opens over the picker, then a click outside closes both.
+    appear.observe(Some(Shown::Dialog), Some(Page::Devices), start + ENTER);
+    appear.observe(None, None, start + ENTER * 2);
+    assert!(appear.leaving(start + ENTER * 2).is_none());
+}
+
+#[test]
 fn a_closed_page_lets_go_of_what_it_read_once_it_has_gone() {
     let start = Instant::now();
     let mut appear = live();
@@ -221,18 +233,21 @@ fn the_dimming_lifts_behind_the_picker_a_dialog_returns_to(cx: &mut gpui::TestAp
         view.menu.appear.live = true;
         view.menu
             .appear
-            .observe(Some(Shown::Dialog), Some(Page::Sessions), start);
+            .observe(Some(Shown::Dialog), Some(Page::Devices), start);
         let open = start + ENTER;
         // Escape in the session editor goes back to the picker, a popover.
-        view.menu.page = Some(Page::Sessions);
+        view.menu.page = Some(Page::Devices);
         view.menu.appear.observe(
             Some(Shown::Popover(point(px(10.), px(600.)))),
-            Some(Page::Sessions),
+            Some(Page::Devices),
             open,
         );
         assert!(!view.menu_dims());
         assert_eq!(view.menu.appear.backdrop(open), 1.);
         assert!(view.menu.appear.moving(open));
         assert_eq!(view.menu.appear.backdrop(open + LEAVE), 0.);
+        // The picker was drawn beneath the form all along, so it is uncovered
+        // in place rather than rising out of the footer again.
+        assert_eq!(view.menu.appear.panel(open), 1.);
     });
 }

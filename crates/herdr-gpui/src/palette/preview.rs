@@ -11,6 +11,7 @@ use super::{go_to::status_badge, last_seen::LastSeen, projects};
 use crate::{
     NavigationTarget,
     config::Theme,
+    i18n::fl,
     terminal_painter::{Ground, Layer, Part, Span, TerminalPainter},
 };
 use gpui::*;
@@ -112,14 +113,14 @@ fn facts(snapshot: &ClientShellSnapshot, target: NavigationTarget<&str>) -> Opti
             .as_deref()
             .map(str::trim)
             .filter(|label| !label.is_empty())
-            .unwrap_or("Terminal");
+            .map_or_else(|| fl!("palette-go-to-terminal"), str::to_owned);
         match agent(&pane.pane_id) {
             Some(agent) => (
                 crate::sidebar::agent_name(agent).to_owned(),
-                crate::sidebar::state_label(agent, status_badge(agent.agent_status)).into_owned(),
+                crate::sidebar::state_label(agent, &status_badge(agent.agent_status)).into_owned(),
             ),
             None => (
-                name.to_owned(),
+                name,
                 pane.foreground_cwd
                     .as_deref()
                     .or(pane.cwd.as_deref())
@@ -134,16 +135,16 @@ fn facts(snapshot: &ClientShellSnapshot, target: NavigationTarget<&str>) -> Opti
             let (name, state) = pane_fact(pane);
             let mut facts = Vec::new();
             if agent(id).is_some() {
-                facts.push(("Status".into(), state));
+                facts.push((fl!("palette-go-to-fact-status"), state));
             }
             if let Some(cwd) = pane.foreground_cwd.as_deref().or(pane.cwd.as_deref()) {
-                facts.push(("Directory".into(), cwd.into()));
+                facts.push((fl!("palette-go-to-fact-directory"), cwd.into()));
             }
             if let Some(workspace) = workspace(&pane.workspace_id) {
-                facts.push(("Workspace".into(), workspace.label.clone()));
+                facts.push((fl!("palette-go-to-fact-workspace"), workspace.label.clone()));
             }
             if let Some(tab) = tab(&pane.tab_id) {
-                facts.push(("Tab".into(), tab.label.clone()));
+                facts.push((fl!("palette-go-to-fact-tab"), tab.label.clone()));
             }
             (name, facts)
         }
@@ -151,7 +152,7 @@ fn facts(snapshot: &ClientShellSnapshot, target: NavigationTarget<&str>) -> Opti
             let tab = tab(id)?;
             let mut facts = Vec::new();
             if let Some(workspace) = workspace(&tab.workspace_id) {
-                facts.push(("Workspace".into(), workspace.label.clone()));
+                facts.push((fl!("palette-go-to-fact-workspace"), workspace.label.clone()));
             }
             facts.extend(
                 snapshot
@@ -166,17 +167,17 @@ fn facts(snapshot: &ClientShellSnapshot, target: NavigationTarget<&str>) -> Opti
             let workspace = workspace(id)?;
             let mut facts = Vec::new();
             if let Some(branch) = &workspace.branch {
-                facts.push(("Branch".into(), branch.clone()));
+                facts.push((fl!("palette-go-to-fact-branch"), branch.clone()));
             }
             if let Some(root) = projects::launch_root(snapshot, id) {
-                facts.push(("Path".into(), root.into()));
+                facts.push((fl!("palette-go-to-fact-path"), root.into()));
             }
             let tabs = snapshot
                 .tabs
                 .iter()
                 .filter(|t| t.workspace_id == id)
                 .count();
-            facts.push(("Tabs".into(), tabs.to_string()));
+            facts.push((fl!("palette-go-to-fact-tabs"), tabs.to_string()));
             facts.extend(
                 snapshot
                     .panes

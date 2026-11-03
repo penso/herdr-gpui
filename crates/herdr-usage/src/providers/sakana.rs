@@ -7,6 +7,7 @@
 //! Everything CodexBar reads is ported. CodexBar imports no browser cookies
 //! for Sakana; the automatic import here is an addition.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -28,11 +29,7 @@ static META: Meta = Meta::new("sakana", "Sakana AI")
     .settings(&[Setting::new(
         "cookie",
         &["SAKANA_COOKIE"],
-        "Sign in to https://console.sakana.ai, open Developer Tools > Application > \
-         Cookies for https://console.sakana.ai, and copy every cookie there (the \
-         sign-in session cookies are required). Paste them as \"name=value; \
-         name2=value2\"; the Cookie header of a request to console.sakana.ai/billing \
-         in the Network tab also works.",
+        "usage-sakana-setting-cookie",
     )]);
 
 impl Service for Sakana {
@@ -81,11 +78,16 @@ pub(crate) fn parse(billing: &str, payg: Option<&str>) -> Result<Report> {
     }
     let plan = plan(&nodes);
     let (balances, sections) = payg.and_then(pay_as_you_go).unwrap_or_default();
-    Ok(
-        Report::new(Provider(&Sakana), Account { email: None, plan }, windows)
-            .with_balances(balances)
-            .with_sections(sections),
+    Ok(Report::new(
+        Provider(&Sakana),
+        Account {
+            email: None,
+            plan: plan.map(Text::service),
+        },
+        windows,
     )
+    .with_balances(balances)
+    .with_sections(sections))
 }
 
 /// A window's body runs from its label to the next window label or card.
@@ -186,7 +188,11 @@ fn pay_as_you_go(html: &str) -> Option<(Vec<Balance>, Vec<Section>)> {
         .flatten()
         .next()?;
     let usd = || Unit::Currency("USD".into());
-    let mut balances = vec![Balance::new("Credit balance", balance, usd())];
+    let mut balances = vec![Balance::new(
+        Text::message("usage-sakana-credit-balance"),
+        balance,
+        usd(),
+    )];
     let usage = nodes
         .iter()
         .position(|node| matches!(node, Node::Text(text) if text == "Usage"))
@@ -209,11 +215,18 @@ fn pay_as_you_go(html: &str) -> Option<(Vec<Balance>, Vec<Section>)> {
         });
     let mut sections = Vec::new();
     if let Some(spent) = usage {
-        balances.push(Balance::new("Pay-as-you-go usage", spent, usd()));
+        balances.push(Balance::new(
+            Text::message("usage-sakana-pay-as-you-go-usage"),
+            spent,
+            usd(),
+        ));
         if let Some(range) = range {
             sections.push(Section::Facts {
-                title: "Pay as you go".into(),
-                facts: vec![("Usage period".into(), range)],
+                title: Text::message("usage-sakana-pay-as-you-go"),
+                facts: vec![(
+                    Text::message("usage-sakana-usage-period"),
+                    Text::service(range),
+                )],
             });
         }
     }
@@ -331,7 +344,10 @@ mod tests {
     #[test]
     fn billing_page_maps_windows_and_plan() {
         let report = parse(BILLING, None).unwrap();
-        assert_eq!(report.account.plan.as_deref(), Some("Standard $20/mo"));
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Standard $20/mo")
+        );
         assert_eq!(
             report.windows,
             vec![
@@ -359,15 +375,22 @@ mod tests {
         assert_eq!(
             report.balances,
             vec![
-                Balance::new("Credit balance", 12.34, usd.clone()),
-                Balance::new("Pay-as-you-go usage", 5.67, usd),
+                Balance::new(
+                    Text::message("usage-sakana-credit-balance"),
+                    12.34,
+                    usd.clone()
+                ),
+                Balance::new(Text::message("usage-sakana-pay-as-you-go-usage"), 5.67, usd),
             ]
         );
         assert_eq!(
             report.sections,
             vec![Section::Facts {
-                title: "Pay as you go".into(),
-                facts: vec![("Usage period".into(), "Jun 02, 2026 - Jul 01, 2026".into())],
+                title: Text::message("usage-sakana-pay-as-you-go"),
+                facts: vec![(
+                    Text::message("usage-sakana-usage-period"),
+                    Text::service("Jun 02, 2026 - Jul 01, 2026")
+                )],
             }]
         );
     }

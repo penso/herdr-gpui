@@ -269,7 +269,9 @@ fn without_a_local_checkout_the_search_says_so(cx: &mut TestAppContext) {
     search(&view, cx, |code| {
         assert_eq!(
             code.status,
-            Status::Failed(crate::code_index::Error::Root.to_string())
+            Status::Failed(crate::i18n::Localize::localize(
+                &crate::code_index::Error::Root
+            ))
         );
     });
 }
@@ -332,3 +334,6 @@ fn shown_hits_keep_the_index_they_were_ranked_against(cx: &mut TestAppContext) {
     });
     assert!(selected.ends_with("src/lib.rs"));
 }
+
+mod changed;
+mod en_xa;

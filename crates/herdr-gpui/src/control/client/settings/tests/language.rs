@@ -33,3 +33,33 @@ fn status_names_the_setting_the_locale_and_a_pseudo_locale() {
         "language = system\nHerdr UI shows en-XA (ltr), the QA pseudo-locale en-XA"
     );
 }
+
+#[test]
+fn list_names_each_language_in_itself() {
+    let output = super::super::language::language(
+        crate::cli::control::LanguageCommand::List,
+        &crate::control::client::Context {
+            json: true,
+            window: None,
+        },
+    )
+    .unwrap();
+    let json = &output.json;
+    assert!(
+        output.text.starts_with("en-US   ltr  English\n"),
+        "{}",
+        output.text
+    );
+    let english = &json[0];
+    assert_eq!(english["tag"], "en-US");
+    assert_eq!(english["name"], "English");
+    assert_eq!(english["pseudo"], false);
+    let accented = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|language| language["tag"] == "en-XA")
+        .unwrap();
+    assert!(accented["name"].is_null());
+    assert_eq!(accented["pseudo"], true);
+}

@@ -15,6 +15,7 @@ use super::opencode::{
     BASE, COOKIES, DOMAINS, USER_AGENT, call, json_windows, meter, usage, value_number,
     windows as meter_windows, workspace_id,
 };
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -46,26 +47,13 @@ static META: Meta = Meta::new("opencodego", "OpenCode Go")
         Setting::new(
             "api_key",
             &["OPENCODE_API_KEY"],
-            "An OpenCode API key for the account with the Go subscription, created at \
-             https://opencode.ai/auth under API Keys. Preferred over the cookie. When \
-             unset, the key `opencode auth login` saved in \
-             ~/.local/share/opencode/auth.json is used.",
+            "usage-opencodego-setting-api-key",
         ),
-        Setting::new(
-            "cookie",
-            &[],
-            "Your opencode.ai session, used when no API key is set. Sign in at \
-             https://opencode.ai/auth, open Developer Tools > Application > Cookies > \
-             https://opencode.ai, and copy the __Host-console_session and auth cookies \
-             (either one alone also works). Paste them as \
-             \"__Host-console_session=value; auth=value\".",
-        ),
+        Setting::new("cookie", &[], "usage-opencodego-setting-cookie"),
         Setting::new(
             "workspace_id",
             &["CODEXBAR_OPENCODE_WORKSPACE_ID"],
-            "Optional, for the cookie sign-in. The workspace to read, as a wrk_... or \
-             org_... ID or its https://opencode.ai/console/... URL. Defaults to the first \
-             workspace of the account.",
+            "usage-opencodego-setting-workspace-id",
         ),
     ]);
 
@@ -214,19 +202,28 @@ fn report(windows: Vec<Window>, balance: Option<f64>) -> Report {
         Provider(&Opencodego),
         Account {
             email: None,
-            plan: (!windows.is_empty()).then(|| "Go".to_owned()),
+            // The plan's name.
+            plan: (!windows.is_empty()).then(|| Text::service("Go")),
         },
         windows,
     )
-    .with_balances(
-        balance.map(|balance| Balance::new("Zen balance", balance, Unit::Currency("USD".into()))),
-    )
+    .with_balances(balance.map(|balance| {
+        Balance::new(
+            Text::message("usage-opencodego-zen-balance"),
+            balance,
+            Unit::Currency("USD".into()),
+        )
+    }))
 }
 
 fn no_subscription(balance: Option<f64>) -> Report {
     report(Vec::new(), balance).with_sections([Section::Facts {
-        title: "Subscription".into(),
-        facts: vec![("OpenCode Go".into(), "None".into())],
+        title: Text::message("usage-opencodego-subscription"),
+        // The product's name, and that the workspace has none of it.
+        facts: vec![(
+            Text::service("OpenCode Go"),
+            Text::message("usage-opencodego-none"),
+        )],
     }])
 }
 
@@ -421,7 +418,20 @@ mod tests {
     fn missing_subscription_keeps_the_balance() {
         let report = parse_console("null", Some(5.), at(NOW)).unwrap();
         assert!(report.windows.is_empty());
-        assert_eq!(report.balances[0].label, "Zen balance");
+        assert_eq!(
+            report.balances[0].label,
+            Text::message("usage-opencodego-zen-balance")
+        );
+        assert_eq!(
+            report.sections,
+            vec![Section::Facts {
+                title: Text::message("usage-opencodego-subscription"),
+                facts: vec![(
+                    Text::service("OpenCode Go"),
+                    Text::message("usage-opencodego-none")
+                )],
+            }]
+        );
         let report = parse_console(r#"{"access":null}"#, None, at(NOW)).unwrap();
         assert!(report.balances.is_empty());
     }

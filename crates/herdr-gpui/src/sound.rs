@@ -1,5 +1,6 @@
 //! Local TUI sound settings and endpoint-scoped semantic notification policy.
 //! Policy adapted from Herdr; see SOUND-NOTICE.md.
+// i18n: migrated
 mod config;
 mod error;
 mod playback;
@@ -100,6 +101,13 @@ impl Policy {
             self.tick(live, focused, received, &mut emit);
         }
         self.tick(live, focused, now, emit);
+    }
+
+    /// Forgets the notifications still waiting whose workspace or tab the
+    /// user has muted since they arrived.
+    fn forget(&mut self, silenced: impl Fn(&SemanticNotification) -> bool) {
+        self.incoming.retain(|(_, event)| !silenced(event));
+        self.pending.retain(|pending| !silenced(&pending.event));
     }
 
     fn tick(
@@ -383,16 +391,22 @@ impl Service {
         (service, receiver)
     }
 
+    /// Plays what `live`'s notifications ask for, as the policy delays and
+    /// validates them. Notifications `silenced` says the user muted, on
+    /// arrival or while they wait, never play.
     pub(crate) fn poll(
         &self,
         policy: &mut Policy,
         live: &mut LiveState,
         focused: bool,
         now: Instant,
+        silenced: impl Fn(&SemanticNotification) -> bool,
     ) {
         if std::mem::take(&mut live.reload_sound) {
             self.reload();
         }
+        live.sound_events.retain(|(_, event)| !silenced(event));
+        policy.forget(&silenced);
         let settings = self
             .settings
             .try_lock()

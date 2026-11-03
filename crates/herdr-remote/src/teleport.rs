@@ -21,6 +21,7 @@ pub mod provision;
 pub mod remote;
 mod sessions;
 pub mod snapshot;
+mod warning;
 
 pub use {
     error::{Error, Step},
@@ -36,9 +37,15 @@ pub use {
         Envelope, HostSnapshot, PaneInfoResult, ProcessInfo, ProcessInfoResult, SnapshotResult,
         WorkspaceCreated, WorktreeCreated,
     },
+    warning::Warning,
 };
 #[cfg(any(test, feature = "test-support"))]
-pub use {job::Repository, marks::Destination as MarkDestination};
+pub use {
+    git::SourceState,
+    job::{Repository, plan::TabPlan},
+    layout::Node,
+    marks::Destination as MarkDestination,
+};
 
 /// The host Teleport, fan-out, and dispatch script for an endpoint, if they
 /// can: each drives the endpoint's session through `herdr_cli`, which cannot

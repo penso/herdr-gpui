@@ -10,6 +10,7 @@
 //! cannot make the daemon post to an arbitrary host.
 
 mod encrypt;
+mod presence;
 mod send;
 mod subscription;
 mod throttle;
@@ -20,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use std::{io, path::PathBuf};
 
 pub(crate) use encrypt::{MAX_PAYLOAD, encrypt};
+pub(crate) use presence::{Hold, Near};
+#[cfg(test)]
+pub(crate) use presence::{MAX_HELD, NEAR_TTL_MS};
 pub(crate) use send::{Delivery, Outcome, Sender, Urgency};
 #[cfg(test)]
 pub(crate) use send::{Topic, outcome};

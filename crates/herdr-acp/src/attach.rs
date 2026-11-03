@@ -21,6 +21,9 @@ use crate::{
     session::{Attach, ConnId, Input},
 };
 
+mod downgrade;
+pub(crate) use downgrade::Downgrade;
+
 /// Messages queued for one client before it counts as lagging.
 const CLIENT_QUEUE: usize = 4096;
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -114,8 +117,19 @@ fn serve(connection: Connection, inputs: &Sender<Input>) -> Result<()> {
     reader.set_timeout(Some(HELLO_TIMEOUT))?;
     let mut reader = BufReader::new(reader);
     let mut writer = BufWriter::new(writer);
+    let mut downgrade;
     let since = match read_frame::<_, ClientMessage>(&mut reader) {
-        Ok(Some(ClientMessage::Hello { since, version, .. })) if version == VERSION => since,
+        Ok(Some(ClientMessage::Hello {
+            revision,
+            since,
+            version,
+            ..
+        })) if version == VERSION => {
+            downgrade = Downgrade::new(revision);
+            // An older client starts from a snapshot, which tells its
+            // downgrade what the client holds.
+            since.filter(|_| downgrade.current())
+        }
         Ok(Some(ClientMessage::Hello { .. })) => {
             let reason = ByeReason::Version { supported: VERSION };
             return Ok(write_frame(&mut writer, &ServerMessage::Bye { reason })?);
@@ -134,6 +148,9 @@ fn serve(connection: Connection, inputs: &Sender<Input>) -> Result<()> {
         .name("chat-writer".to_owned())
         .spawn(move || {
             for message in queue {
+                let Some(message) = downgrade.message(message) else {
+                    break;
+                };
                 if write_frame(&mut writer, &message).is_err() {
                     break;
                 }
@@ -198,11 +215,22 @@ fn command_frame(frame: serde_json::Value) -> Frame {
     }
 }
 
-/// Where this run listens, and its id for the Herdr token.
+/// Where this run listens, and its id for the Herdr token: the one the
+/// client that started it chose, when it gave a valid one in
+/// [`herdr_chat_protocol::ENDPOINT_ENV`], or else a new one.
 pub(crate) fn address() -> Result<(PathBuf, EndpointId)> {
-    let id = EndpointId::random();
+    let id = endpoint_id(std::env::var_os(herdr_chat_protocol::ENDPOINT_ENV).as_deref());
     let address = herdr_chat_protocol::endpoint_address(&id).ok_or(Error::NoEndpointDir)?;
     Ok((address, id))
+}
+
+/// The id `given` names, or a new one when it names none. A herdr-core
+/// client labels the terminal with the id it gives, so it finds the chat.
+fn endpoint_id(given: Option<&std::ffi::OsStr>) -> EndpointId {
+    given
+        .and_then(std::ffi::OsStr::to_str)
+        .and_then(|value| value.parse().ok())
+        .unwrap_or_else(EndpointId::random)
 }
 
 #[cfg(test)]

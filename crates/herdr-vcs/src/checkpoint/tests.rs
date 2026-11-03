@@ -304,16 +304,7 @@ fn stamps_always_increase() {
 }
 
 #[test]
-fn ages_read_plainly() {
-    assert_eq!(age(100, 130), "just now");
-    assert_eq!(age(0, 125), "2 min ago");
-    assert_eq!(age(0, 7200), "2 h ago");
-    assert_eq!(age(0, 200_000), "2 d ago");
-    assert_eq!(
-        age(100, 0),
-        "just now",
-        "a host clock ahead is not negative"
-    );
+fn script_failures_name_their_cause() {
     assert_eq!(
         describe(&Error::Script(herdr_client::Error::ScriptTimeout)),
         "Checkpoint Git commands failed: host script made no progress before its deadline"

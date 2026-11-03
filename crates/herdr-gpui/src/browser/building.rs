@@ -93,7 +93,9 @@ impl HerdrWindow {
             }
             Err(error) => {
                 tracing::warn!(%error, "Cannot create a browser page");
-                self.browser.failed.insert(id, error.to_string().into());
+                self.browser
+                    .failed
+                    .insert(id, crate::i18n::Localize::localize(&error).into());
             }
         }
         cx.notify();

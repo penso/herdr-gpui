@@ -1,0 +1,68 @@
+{
+  "type": "chat_snapshot",
+  "pane": "p1",
+  "cursor": {
+    "epoch": "01234567-89ab-cdef-0123-456789abcdef",
+    "seq": 41
+  },
+  "connected": true,
+  "transcript": {
+    "agent": "Claude",
+    "auto_accept": false,
+    "clients": 0,
+    "commands": [],
+    "entries": [
+      {
+        "id": 1,
+        "kind": {
+          "type": "user",
+          "text": "Make it even out nested splits too."
+        }
+      },
+      {
+        "id": 2,
+        "kind": {
+          "type": "agent",
+          "text": "Added **Equalize Splits**."
+        }
+      }
+    ],
+    "modes": null,
+    "options": [],
+    "permissions": [
+      {
+        "call_id": "call-1",
+        "id": 3,
+        "options": [
+          {
+            "id": "allow",
+            "kind": "allow_once",
+            "name": "Allow once"
+          },
+          {
+            "id": "reject",
+            "kind": "reject_once",
+            "name": "Deny"
+          }
+        ],
+        "title": "Run `git push origin fix/mise`?"
+      }
+    ],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "working"
+    },
+    "truncated": false,
+    "turn": {
+      "started_ms": 1761670000000
+    },
+    "usage": {
+      "cost": null,
+      "size": 200000,
+      "used": 84000
+    }
+  }
+}

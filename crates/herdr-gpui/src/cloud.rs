@@ -1,10 +1,12 @@
 //! Cloud machines as devices: `herdr_remote::cloud`, plus what the window
 //! drives here: the background jobs that add machines with their progress
 //! and toasts, the batches agents ask for, and the sandbox image builds.
+// i18n: migrated
 
 pub(crate) mod batch;
 pub(crate) mod image;
 mod jobs;
+pub(crate) mod status;
 pub(crate) mod worker;
 
 pub(crate) use herdr_remote::cloud::*;

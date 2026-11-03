@@ -3,6 +3,7 @@
 //! moves there moves here too.
 // i18n: migrated
 use super::{SettingsWindow, ui};
+use crate::direction::Logical;
 use crate::{
     config::{StatusIcons, corners, preferences::Preference},
     i18n::{self, fl},
@@ -69,7 +70,7 @@ impl SettingsWindow {
                     .child(crate::settings_window::search::track_bounds(
                         "indicators-sets".into(),
                     ))
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(10.))
                     .pt(px(4.))
@@ -112,7 +113,7 @@ impl SettingsWindow {
             })
             .child(
                 div()
-                    .flex()
+                    .row()
                     .items_center()
                     .justify_between()
                     .text_color(rgb(theme.foreground))
@@ -122,7 +123,7 @@ impl SettingsWindow {
             )
             .child(
                 div()
-                    .flex()
+                    .row()
                     .justify_between()
                     .px(px(4.))
                     .py(px(6.))
@@ -155,7 +156,7 @@ impl SettingsWindow {
 fn radio(theme: &crate::config::Theme, on: bool) -> Div {
     div()
         .size(px(14.))
-        .flex()
+        .row()
         .items_center()
         .justify_center()
         .rounded_full()

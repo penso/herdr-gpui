@@ -4,6 +4,7 @@ use gpui::TestAppContext;
 
 mod access_refresh;
 mod accounts;
+mod en_xa;
 mod github_cli;
 mod installation;
 

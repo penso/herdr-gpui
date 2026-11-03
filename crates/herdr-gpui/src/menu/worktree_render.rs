@@ -2,12 +2,14 @@
 //! listings behind it. Rows are drawn from the prepared filter, never from a
 //! query made while rendering.
 
+// i18n: migrated
 use super::{
     Page, WorkspaceAction,
-    worktree_source::{Row, Tab},
+    worktree_source::{Row, Tab, signed_out_hint},
 };
 use crate::{
     HerdrWindow,
+    i18n::fl,
     repo_items::{Kind, Origin},
 };
 use gpui::{prelude::*, *};
@@ -43,13 +45,13 @@ impl HerdrWindow {
             .id("worktree-tabs")
             .debug_selector(|| "worktree-tabs".into())
             .role(Role::TabList)
-            .aria_label("Worktree source")
+            .aria_label(fl!("worktree-source-tabs"))
             .flex()
             .gap(px(4.))
             .px(px(16.))
             .pt(px(10.));
         for tab in Tab::ALL {
-            let label = tab.label();
+            let (key, label) = (tab.key(), tab.label());
             let enabled = connected || tab.kind().is_none();
             let selected = tab == source.tab;
             // A tab that cannot be opened drops its outline and fades, so it
@@ -58,12 +60,16 @@ impl HerdrWindow {
             let hits = source.hits(tab).filter(|_| enabled);
             strip = strip.child(
                 div()
-                    .id(label)
-                    .debug_selector(move || format!("worktree-tab-{label}"))
+                    .id(key)
+                    .debug_selector(move || format!("worktree-tab-{key}"))
                     .role(Role::Tab)
                     .aria_label(match hits {
-                        Some(hits) => SharedString::from(format!("{label} {hits}")),
-                        None => SharedString::from(label),
+                        Some(hits) => SharedString::from(fl!(
+                            "worktree-source-tab-hits",
+                            tab = label.as_str(),
+                            hits = hits
+                        )),
+                        None => SharedString::from(label.clone()),
                     })
                     .aria_selected(selected)
                     .flex()
@@ -92,7 +98,7 @@ impl HerdrWindow {
                     .when_some(tab.kind().filter(|_| !enabled), |button, kind| {
                         button.tooltip(move |_, cx| {
                             cx.new(|_| crate::usage::Hint {
-                                text: kind.signed_out_hint().into(),
+                                text: signed_out_hint(kind).into(),
                                 foreground,
                                 surface,
                             })
@@ -112,7 +118,7 @@ impl HerdrWindow {
                     .when_some(hits, |button, hits| {
                         button.child(
                             div()
-                                .debug_selector(move || format!("worktree-tab-count-{label}"))
+                                .debug_selector(move || format!("worktree-tab-count-{key}"))
                                 .text_color(rgb(theme.muted))
                                 .child(hits.to_string()),
                         )
@@ -141,36 +147,51 @@ impl HerdrWindow {
         };
         let (shown, total) = source.counts();
         let rows = source.filtered.len();
-        let (noun, loading, message, empty) = match source.tab {
+        let (count, loading, message, empty) = match source.tab {
             Tab::New => return div(),
             Tab::Existing => (
-                "checkouts not open in Herdr",
+                fl!(
+                    "worktree-source-count-existing",
+                    shown = shown,
+                    total = total
+                ),
                 source.checkouts.request.is_some(),
                 source.checkouts.message.as_ref(),
                 if total > 0 {
-                    "No matching checkouts."
+                    fl!("worktree-source-no-matching-checkouts")
                 } else {
-                    "Every checkout of this repository is already open."
+                    fl!("worktree-source-all-checkouts-open")
                 },
             ),
             Tab::Branches => (
-                "local branches without a checkout",
+                fl!(
+                    "worktree-source-count-branches",
+                    shown = shown,
+                    total = total
+                ),
                 source.branches.loading,
                 source.branches.message.as_ref(),
                 if total > 0 {
-                    "No matching branches."
+                    fl!("worktree-source-no-matching-branches")
                 } else {
-                    "Every branch already has a checkout."
+                    fl!("worktree-source-all-branches-checked-out")
                 },
             ),
-            Tab::Items(kind) => (
-                match kind {
-                    Kind::PullRequest => "open pull requests",
-                    Kind::Issue => "open issues",
-                },
+            Tab::Items(Kind::PullRequest) => (
+                fl!(
+                    "worktree-source-count-pull-requests",
+                    shown = shown,
+                    total = total
+                ),
                 source.lookup.loading,
                 source.lookup.message.as_ref(),
-                kind.empty_label(),
+                fl!("worktree-source-no-pull-requests"),
+            ),
+            Tab::Items(Kind::Issue) => (
+                fl!("worktree-source-count-issues", shown = shown, total = total),
+                source.lookup.loading,
+                source.lookup.message.as_ref(),
+                fl!("worktree-source-no-issues"),
             ),
         };
         let message = self.menu.error.as_ref().or(message);
@@ -178,24 +199,18 @@ impl HerdrWindow {
             // Dismissing only closes the panel; the daemon keeps queued work,
             // as the branch tab's own waiting note says.
             if pending.opens() {
-                format!(
-                    "Opening {}. Dismissing does not cancel it.",
-                    pending.label()
-                )
+                fl!("worktree-source-opening", name = pending.label())
             } else {
-                format!(
-                    "Creating a checkout for {}. Dismissing does not cancel it.",
-                    pending.label()
-                )
+                fl!("worktree-source-creating", name = pending.label())
             }
         } else if let Some(error) = message {
             error.clone()
         } else if loading {
-            "Loading...".to_owned()
+            fl!("worktree-source-loading")
         } else {
             match source.tab {
-                Tab::Existing => "Opening adds the checkout to Herdr; nothing is created.".into(),
-                Tab::Branches => "The checkout uses the local branch as it is.".into(),
+                Tab::Existing => fl!("worktree-source-existing-note"),
+                Tab::Branches => fl!("worktree-source-branch-note"),
                 _ => source
                     .lookup
                     .origin
@@ -216,7 +231,7 @@ impl HerdrWindow {
                     .px(px(16.))
                     .pt(px(8.))
                     .text_color(rgb(theme.muted))
-                    .child(format!("{shown} of {total} {noun}")),
+                    .child(count),
             )
             .when(rows == 0, |panel| {
                 panel.child(
@@ -226,7 +241,11 @@ impl HerdrWindow {
                         .px(px(16.))
                         .py(px(12.))
                         .text_color(rgb(theme.muted))
-                        .child(if loading { "Loading..." } else { empty }),
+                        .child(if loading {
+                            fl!("worktree-source-loading")
+                        } else {
+                            empty
+                        }),
                 )
             })
             .when(rows > 0, |panel| {
@@ -283,18 +302,18 @@ impl HerdrWindow {
             Row::Checkout(entry) => (
                 None,
                 entry.branch.clone().unwrap_or_else(|| entry.label.clone()),
-                entry.is_detached.then_some("detached"),
+                entry.is_detached.then(|| fl!("worktree-source-detached")),
                 Some(entry.path.clone()),
             ),
             Row::Branch(branch) => (None, branch.name.clone(), None, None),
             Row::Item(item) => (
                 Some(format!("#{}", item.number)),
                 item.title.clone(),
-                item.draft.then_some("draft"),
+                item.draft.then(|| fl!("worktree-source-draft")),
                 // A fork's head branch has no ref on `origin`, so the row says
                 // why it cannot be picked rather than failing once it is.
                 Some(if item.fork_owner.is_some() {
-                    "from a fork - check out manually".to_owned()
+                    fl!("worktree-source-from-fork")
                 } else {
                     let branch = item.branch();
                     match item.author.is_empty() {

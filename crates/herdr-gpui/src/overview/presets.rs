@@ -2,7 +2,8 @@
 //! now, this evening, tomorrow morning, next Monday morning. These are the
 //! times T3 Code offers.
 
-use chrono::{DateTime, Datelike, Duration, NaiveTime, TimeZone};
+use crate::i18n::fl;
+use chrono::{DateTime, Datelike, Duration, NaiveTime, TimeZone, Weekday};
 use std::time::SystemTime;
 
 const EVENING_HOUR: u32 = 18;
@@ -10,6 +11,7 @@ const MORNING_HOUR: u32 = 9;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Preset {
+    /// The message naming it, such as `overview-preset-tomorrow`.
     pub label: &'static str,
     /// When it ends, as the menu shows it: `18:00`, `Mon 09:00`.
     pub when: String,
@@ -39,18 +41,18 @@ where
             until: SystemTime::from(time.with_timezone(&chrono::Utc)),
         });
     };
-    for (label, hours) in [("In 1 hour", 1), ("In 3 hours", 3)] {
+    for (label, hours) in [("overview-preset-hour", 1), ("overview-preset-hours", 3)] {
         let time = now.clone() + Duration::hours(hours);
         push(label, clock(&time), time);
     }
     if let Some(evening) =
         at(now, EVENING_HOUR).filter(|evening| evening.timestamp() - now.timestamp() > 3600)
     {
-        push("This evening", clock(&evening), evening);
+        push("overview-preset-evening", clock(&evening), evening);
     }
     let tomorrow = at(&(now.clone() + Duration::days(1)), MORNING_HOUR);
     if let Some(tomorrow) = tomorrow.clone() {
-        push("Tomorrow", clock(&tomorrow), tomorrow);
+        push("overview-preset-tomorrow", clock(&tomorrow), tomorrow);
     }
     let to_monday = (7 - now.weekday().num_days_from_monday()) % 7;
     let to_monday = if to_monday == 0 { 7 } else { to_monday };
@@ -59,7 +61,7 @@ where
         MORNING_HOUR,
     );
     if let Some(monday) = monday.filter(|monday| Some(monday) != tomorrow.as_ref()) {
-        push("Next week", monday.format("%a %H:%M").to_string(), monday);
+        push("overview-preset-next-week", weekday_time(&monday), monday);
     }
     presets
 }
@@ -70,10 +72,10 @@ pub(crate) fn elapsed(since: SystemTime, now: SystemTime) -> String {
         .duration_since(since)
         .map_or(0, |elapsed| elapsed.as_secs());
     match seconds {
-        0..60 => "now".to_owned(),
-        60..3600 => format!("{}m", seconds / 60),
-        3600..86_400 => format!("{}h", seconds / 3600),
-        _ => format!("{}d", seconds / 86_400),
+        0..60 => fl!("overview-elapsed-now"),
+        60..3600 => fl!("overview-elapsed-minutes", minutes = seconds / 60),
+        3600..86_400 => fl!("overview-elapsed-hours", hours = seconds / 3600),
+        _ => fl!("overview-elapsed-days", days = seconds / 86_400),
     }
 }
 
@@ -86,6 +88,27 @@ where
     if until.date_naive() == now.date_naive() {
         until.format("%H:%M").to_string()
     } else {
-        until.format("%a %H:%M").to_string()
+        weekday_time(&until)
     }
+}
+
+/// `Mon 09:00`, with the weekday in the shown language.
+fn weekday_time<Tz: TimeZone>(time: &DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let day = match time.weekday() {
+        Weekday::Mon => "mon",
+        Weekday::Tue => "tue",
+        Weekday::Wed => "wed",
+        Weekday::Thu => "thu",
+        Weekday::Fri => "fri",
+        Weekday::Sat => "sat",
+        Weekday::Sun => "sun",
+    };
+    fl!(
+        "overview-weekday-time",
+        day = day,
+        time = time.format("%H:%M").to_string()
+    )
 }

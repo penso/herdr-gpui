@@ -44,6 +44,7 @@ pub(super) use railway::RailwayCard;
 pub(super) use sprites::SpritesCard;
 
 use super::SettingsWindow;
+use crate::direction::Logical;
 use crate::{
     cloud::CloudProvider,
     config::{Config, corners},
@@ -256,7 +257,7 @@ impl SettingsWindow {
     }
 
     fn cloud_tabs(&self, cx: &mut Context<Self>) -> Div {
-        let mut tabs = div().flex().flex_wrap().gap(px(8.));
+        let mut tabs = div().row().flex_wrap().gap(px(8.));
         for &provider in CloudProvider::ALL {
             let key = provider.key();
             tabs = tabs.child(
@@ -437,7 +438,7 @@ impl SettingsWindow {
         actions: impl IntoIterator<Item = AnyElement>,
     ) -> Div {
         div()
-            .flex()
+            .row()
             .items_center()
             .justify_between()
             .gap(px(12.))
@@ -454,7 +455,7 @@ impl SettingsWindow {
             )
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_none()
                     .items_center()
                     .gap(px(8.))

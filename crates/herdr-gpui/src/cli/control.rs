@@ -8,6 +8,7 @@ mod browser;
 mod chat;
 mod exec;
 mod hosts;
+mod mods;
 mod remote;
 mod settings;
 mod tabs;
@@ -24,6 +25,7 @@ pub use exec::ExecCommand;
 pub use hosts::{
     AutomationCommand, CloudCommand, HostCommand, PortsCommand, PrCommand, SecurityCommand,
 };
+pub use mods::ModCommand;
 pub use remote::RemoteCommand;
 pub use settings::{
     CaffeineCommand, ConfigCommand, IntegrationsCommand, KeybindsCommand, LanguageCommand,
@@ -93,6 +95,8 @@ pub enum ControlCommand {
     Security(SecurityCommand),
     Automation(AutomationCommand),
     Remote(RemoteCommand),
+    /// The mods the window runs; `check` runs here.
+    Mod(ModCommand),
     Search {
         files: bool,
         query: String,
@@ -212,6 +216,10 @@ pub const FAMILIES: &[(&str, &str)] = &[
     (
         "remote",
         "Remote control from a phone: status, pairing, and paired devices",
+    ),
+    (
+        "mod",
+        "Mods: list, reload, read logs, or check a mod folder",
     ),
     ("search", "Find a symbol or a file in the focused checkout"),
     ("config", "Herdr UI settings: path, get, set, reload, check"),
@@ -367,6 +375,7 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
         "security" => ControlCommand::Security(hosts::security(args)?),
         "automation" => ControlCommand::Automation(hosts::automation(args)?),
         "remote" => ControlCommand::Remote(remote::remote(args)?),
+        "mod" => ControlCommand::Mod(mods::command(args)?),
         "search" => {
             let files = match args.verb().as_ref().and_then(|verb| verb.to_str()) {
                 Some("symbol" | "symbols") => false,

@@ -194,6 +194,7 @@ impl DiagramStyle {
         let family = self.family.replace(['"', '\'', '<', '>', '&'], "");
         let named = (!family.starts_with('.')).then(|| format!("'{family}', "));
         theme.font_family = format!(
+            // i18n: data
             "{}'Helvetica Neue', 'Segoe UI', 'Noto Sans', 'IBM Plex Sans', Arial, sans-serif",
             named.unwrap_or_default()
         );

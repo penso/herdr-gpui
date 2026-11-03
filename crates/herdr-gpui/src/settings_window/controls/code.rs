@@ -3,6 +3,7 @@
 //! address of their own, which a check asks whether it answers.
 // i18n: migrated
 use super::*;
+use crate::direction::Logical;
 use crate::{
     browser::WebUrl,
     code_server::{self, Server},
@@ -401,7 +402,7 @@ impl SettingsWindow {
             })
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .items_center()
                     .gap(px(12.))
@@ -436,7 +437,7 @@ impl SettingsWindow {
         Some(
             div()
                 .debug_selector(|| "settings-code-result".into())
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(8.))
                 .min_w_0()

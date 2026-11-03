@@ -1,8 +1,11 @@
+// i18n: migrated
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     browser::GroupId,
     controls::Command,
     menu::Page,
+    notification_mutes::Scope,
     pane_move::{self, Choice, Destination},
     search_input::SearchInput,
 };
@@ -98,16 +101,24 @@ enum Action {
     NewTab,
     Rename,
     MoveToWorkspace,
+    /// Silence this tab's notifications, or let them through again.
+    Mute,
+    Unmute,
+    /// The tab is silent because its workspace is muted: lift that.
+    UnmuteWorkspace,
     Close,
 }
 
 impl Action {
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::NewTab => "New Tab",
-            Self::Rename => "Rename",
-            Self::MoveToWorkspace => "Move to Workspace\u{2026}",
-            Self::Close => "Close Tab",
+            Self::NewTab => fl!("tab-menu-new-tab"),
+            Self::Rename => fl!("tab-menu-rename"),
+            Self::MoveToWorkspace => fl!("tab-menu-move-to-workspace"),
+            Self::Mute => fl!("tab-menu-mute"),
+            Self::Unmute => fl!("tab-menu-unmute"),
+            Self::UnmuteWorkspace => fl!("tab-menu-unmute-workspace"),
+            Self::Close => fl!("tab-menu-close"),
         }
     }
 }
@@ -122,15 +133,22 @@ const ACTIONS: [Action; 4] = [
 
 impl TabMenu {
     /// The rows this menu offers: moving to a workspace needs a host the
-    /// `herdr` CLI can run on and at least one pane in the tab.
+    /// `herdr` CLI can run on and at least one pane in the tab. This
+    /// client's mute row comes before closing, which stays last.
     fn actions(&self) -> Vec<Action> {
-        ACTIONS
+        let mut actions: Vec<_> = ACTIONS
             .into_iter()
             .filter(|action| match action {
                 Action::MoveToWorkspace => self.movable && !self.target.panes.is_empty(),
                 _ => true,
             })
-            .collect()
+            .collect();
+        let close = actions
+            .iter()
+            .position(|action| *action == Action::Close)
+            .unwrap_or(actions.len());
+        actions.insert(close, self.mute);
+        actions
     }
 
     /// How many rows the current page lists.
@@ -159,6 +177,9 @@ pub(super) struct TabMenu {
     /// The move picker's panel scroll, so a row the keyboard selects in a
     /// long list of workspaces scrolls into view.
     scroll: ScrollHandle,
+    /// The mute row, as the tab and its workspace were muted when the menu
+    /// opened.
+    mute: Action,
 }
 
 impl HerdrWindow {
@@ -183,6 +204,13 @@ impl HerdrWindow {
         }
         let connect = &self.endpoints[self.selected_endpoint].connection.target;
         let movable = pane_move::refusal(connect).is_none();
+        let mute = if self.muted_on_selected(Scope::Workspace, &target.workspace, cx) {
+            Action::UnmuteWorkspace
+        } else if self.muted_on_selected(Scope::Tab, &target.tab, cx) {
+            Action::Unmute
+        } else {
+            Action::Mute
+        };
         self.menu.anchor = anchor;
         self.menu.page = Some(Page::Tab);
         self.menu.tab = Some(TabMenu {
@@ -195,6 +223,7 @@ impl HerdrWindow {
             movable,
             moving: None,
             scroll: ScrollHandle::new(),
+            mute,
         });
     }
 
@@ -263,6 +292,14 @@ impl HerdrWindow {
             }
             // As the tab's own close button: the close confirmation decides.
             Action::Close => self.open_tab_close(&target.tab, window, cx),
+            Action::Mute | Action::Unmute | Action::UnmuteWorkspace => {
+                let (scope, id) = match action {
+                    Action::UnmuteWorkspace => (Scope::Workspace, &target.workspace),
+                    _ => (Scope::Tab, &target.tab),
+                };
+                self.set_muted_on_selected(scope, id, &target.boot, action == Action::Mute, cx);
+                self.dismiss_menu(window, cx);
+            }
             Action::MoveToWorkspace => {
                 if let Some(tab) = &mut self.menu.tab {
                     tab.selected = None;
@@ -275,7 +312,7 @@ impl HerdrWindow {
                 let input = cx.new(SearchInput::new);
                 input.update(cx, |input, cx| {
                     input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
-                    input.set_placeholder("Tab name", cx);
+                    input.set_placeholder_with(|| fl!("tab-menu-rename-placeholder"), cx);
                     input.set_text_selected(&target.label, cx);
                     window.focus(&input.focus, cx);
                 });
@@ -546,7 +583,7 @@ impl HerdrWindow {
                 .debug_selector(|| "tab-move-pending".into())
                 .p(px(8.))
                 .text_color(rgb(self.theme.muted))
-                .child("Moving tab\u{2026}"),
+                .child(fl!("tab-menu-moving")),
         )
     }
 
@@ -570,7 +607,7 @@ impl HerdrWindow {
                 .px(px(8.))
                 .py(px(4.))
                 .text_color(rgb(self.theme.muted))
-                .child("Move to workspace"),
+                .child(fl!("tab-menu-move-heading")),
         );
         for (index, choice) in tab.target.choices.iter().enumerate() {
             let destination = choice.destination.clone();
@@ -663,7 +700,11 @@ impl HerdrWindow {
             body =
                 body.p(px(8.))
                     .gap(px(12.))
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Rename tab"))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(fl!("tab-menu-rename-title")),
+                    )
                     .when_some(tab.input.clone(), |body, input| {
                         if tab.pending.is_some() {
                             body.child(div().child(input.read(cx).text().to_owned()))
@@ -681,7 +722,7 @@ impl HerdrWindow {
                                     .id("tab-rename-cancel")
                                     .p(px(6.))
                                     .cursor_pointer()
-                                    .child("Cancel")
+                                    .child(fl!("tab-menu-cancel"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.dismiss_menu(window, cx)
                                     })),
@@ -694,9 +735,9 @@ impl HerdrWindow {
                                     .bg(rgb(theme.active))
                                     .cursor_pointer()
                                     .child(if tab.pending.is_some() {
-                                        "Renaming..."
+                                        fl!("tab-menu-renaming")
                                     } else {
-                                        "Rename"
+                                        fl!("tab-menu-rename-submit")
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.submit_tab_rename(window, cx)

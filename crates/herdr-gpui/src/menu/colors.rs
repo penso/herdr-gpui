@@ -1,6 +1,7 @@
 //! Accent and danger colors derived from the active theme's ANSI palette,
 //! mixed with foreground so they stay readable on dark surfaces.
 
+// i18n: migrated
 use gpui::{Rgba, rgb, rgba};
 
 /// Mix an ANSI color with foreground so it stays readable on dark themes, where

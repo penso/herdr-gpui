@@ -1,5 +1,6 @@
 //! Workspace-scoped px0 pages; the workbench owns its checkout processes.
 use super::{Editor, GroupId, Location, Store, TabId, WebUrl, view::store};
+use crate::i18n::{Localize, fl};
 use crate::{
     HerdrWindow,
     px0::{Launcher, State},
@@ -29,11 +30,11 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Option<TabId> {
         if !super::EMBEDDED {
-            self.show_flash(Flash::warning("This build cannot show px0 pages"), cx);
+            self.show_flash(Flash::warning(fl!("browser-px0-unsupported")), cx);
             return None;
         }
         if self.px0_root().is_none() {
-            self.show_flash(Flash::warning("px0 needs a workspace on this computer"), cx);
+            self.show_flash(Flash::warning(fl!("browser-px0-no-workspace")), cx);
             return None;
         }
         self.open_embedded_editor(Editor::Px0, group, None, window, cx)
@@ -75,7 +76,7 @@ impl HerdrWindow {
             let url = match crate::px0::workspace_url(&base, &root) {
                 Ok(url) => url,
                 Err(error) => {
-                    self.browser.failed.insert(tab.id, error.to_string().into());
+                    self.browser.failed.insert(tab.id, error.localize().into());
                     return;
                 }
             };
@@ -99,14 +100,14 @@ impl HerdrWindow {
         let text = if let Some(failure) = failure {
             failure.to_string()
         } else if !super::EMBEDDED {
-            "This build cannot show px0 pages".into()
+            fl!("browser-px0-unsupported")
         } else if self.px0_root().is_none() {
-            "px0 needs a workspace on this computer".into()
+            fl!("browser-px0-no-workspace")
         } else {
             match Launcher::state(cx) {
-                State::Idle | State::Starting => "Starting px0…".into(),
-                State::Ready(_) => "Loading px0…".into(),
-                State::Failed(error) => error.to_string(),
+                State::Idle | State::Starting => fl!("browser-px0-starting"),
+                State::Ready(_) => fl!("browser-px0-loading"),
+                State::Failed(error) => error.localize(),
             }
         };
         super::code_view::centered(
@@ -121,7 +122,7 @@ impl HerdrWindow {
                     div()
                         .id("px0-retry")
                         .cursor_pointer()
-                        .child("Retry")
+                        .child(fl!("browser-px0-retry"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             Launcher::reset(cx);
                             this.browser.px0.bound.clear();

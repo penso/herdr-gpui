@@ -200,6 +200,10 @@ pub enum Error {
     MissingHome,
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
+    #[error(transparent)]
+    Mods(#[from] crate::mods::Error),
+    #[error(transparent)]
+    Nearby(#[from] crate::remote::nearby::Error),
     #[error("No current daemon snapshot.")]
     NoSnapshot,
     #[error("No tab selected.")]
@@ -208,6 +212,8 @@ pub enum Error {
     NotAGitRepository { path: PathBuf },
     #[error("Not connected to a daemon.")]
     NotConnected,
+    #[error(transparent)]
+    NotificationMutes(#[from] crate::notification_mutes::Error),
     #[error("The current directory is not in a Git checkout.")]
     NotInCheckout,
     #[error("Could not read the orchestrator's database: {0}")]
@@ -299,6 +305,8 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    #[error(transparent)]
+    SshHosts(#[from] crate::config::ssh_hosts::Error),
     #[error("The original target changed or no longer exists. Cancel and try again.")]
     StaleCloseTarget,
     #[error("The selected connection changed or is not ready. Cancel and try again.")]

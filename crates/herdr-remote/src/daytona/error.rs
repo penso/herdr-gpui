@@ -8,9 +8,9 @@ pub enum Error {
     #[error("{0} must be https (http only on loopback) with no credentials, query, or fragment.")]
     Url(&'static str),
     #[error("{0} is not valid.")]
-    Field(&'static str),
+    Field(crate::cloud::Value),
     #[error("{0} must be UTF-8.")]
-    Encoding(&'static str),
+    Encoding(crate::cloud::Value),
     #[error("Daytona needs an API key. Save one in Settings > Cloud devices.")]
     MissingKey,
     #[error("Daytona rejected the API key.")]

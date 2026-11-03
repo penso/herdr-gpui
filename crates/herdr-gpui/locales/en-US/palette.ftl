@@ -12,6 +12,7 @@ palette-placeholder = Search workspaces, commands, agents, and projects...
 # What a row of each kind is, after its shortcut.
 palette-badge-command = GUI action
 palette-badge-herdr-command = Herdr command
+palette-badge-mod = Mod
 palette-badge-project = Project
 palette-not-on-screen = Not on screen. Press Enter to go there and watch it live.
 palette-loading-projects = Loading local projects...

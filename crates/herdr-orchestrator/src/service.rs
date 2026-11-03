@@ -129,7 +129,7 @@ pub struct PullRequestLookup {
 /// How an action the user asked for ended.
 #[derive(Clone, Debug)]
 pub struct Notice {
-    pub outcome: std::result::Result<&'static str, Arc<Error>>,
+    pub outcome: std::result::Result<crate::actions::Done, Arc<Error>>,
 }
 
 /// How one source is doing.
@@ -449,7 +449,7 @@ impl Worker {
         self.publish();
     }
 
-    fn notice(&self, outcome: std::result::Result<&'static str, Arc<Error>>) {
+    fn notice(&self, outcome: std::result::Result<crate::actions::Done, Arc<Error>>) {
         push(&self.notices, Notice { outcome });
     }
 

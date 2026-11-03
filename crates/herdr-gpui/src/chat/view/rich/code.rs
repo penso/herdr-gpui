@@ -3,6 +3,7 @@ use crate::chat::{
     rich::{CodeText, MAX_CODE_LINE_CHARS, MAX_CODE_LINES},
     selection::{Cell, Segment},
 };
+use crate::i18n::fl;
 use crate::review::highlight::{Contrast, Span};
 use std::sync::Arc;
 
@@ -63,9 +64,9 @@ impl HerdrWindow {
                     .text_color(rgb(self.theme.muted))
                     .child(
                         if language.is_empty() {
-                            "Code"
+                            fl!("chat-code")
                         } else {
-                            language
+                            language.to_owned()
                         }
                         .to_owned(),
                     )
@@ -131,10 +132,10 @@ impl HerdrWindow {
 /// What a cut code block says under its last line, from the limits that
 /// cut it.
 fn truncation_note() -> String {
-    format!(
-        "Preview limited to {} lines and {} characters per line; Copy code includes the full block.",
-        grouped(MAX_CODE_LINES),
-        grouped(MAX_CODE_LINE_CHARS),
+    fl!(
+        "chat-code-truncated",
+        lines = grouped(MAX_CODE_LINES),
+        characters = grouped(MAX_CODE_LINE_CHARS),
     )
 }
 

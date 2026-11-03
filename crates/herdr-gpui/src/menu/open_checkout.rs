@@ -4,8 +4,9 @@
 //! nothing opens unless they say so. A checkout already open is focused
 //! without asking (see `link::follow`).
 
+// i18n: migrated
 use super::Page;
-use crate::{HerdrWindow, endpoint::LOCAL, fonts::StyledFont};
+use crate::{HerdrWindow, endpoint::LOCAL, fonts::StyledFont, i18n::fl};
 use gpui::{prelude::*, *};
 use herdr_client::Method;
 use std::path::PathBuf;
@@ -19,7 +20,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         if self.menu.page.is_some() || !self.open_menu(window, cx) {
-            self.local_error = Some("Open link: close the open dialog first".into());
+            self.local_error = Some(fl!("open-checkout-busy"));
             return;
         }
         self.menu.open_checkout = Some(path);
@@ -39,7 +40,7 @@ impl HerdrWindow {
             return;
         };
         if !self.select_endpoint(LOCAL, cx) {
-            self.local_error = Some("Open link: this computer's Herdr is not available".into());
+            self.local_error = Some(fl!("open-checkout-unavailable"));
             return;
         }
         let label = path
@@ -51,11 +52,11 @@ impl HerdrWindow {
             "focus": true,
             "trust_repository": false,
         });
-        if !self.request_focus_change("Open workspace", None, |handle, boot| {
+        if !self.request_focus_change(&fl!("open-checkout-operation"), None, |handle, boot| {
             handle.request(boot, Method::WorkspaceCreate, params)
         }) && self.local_error.is_none()
         {
-            self.local_error = Some("Open link: not connected to this computer's Herdr".into());
+            self.local_error = Some(fl!("open-checkout-disconnected"));
         }
         cx.notify();
     }
@@ -65,7 +66,7 @@ impl HerdrWindow {
         let Some(path) = &self.menu.open_checkout else {
             return div();
         };
-        let button = |id: &'static str, label: &'static str, primary: bool| {
+        let button = |id: &'static str, label: String, primary: bool| {
             div()
                 .id(id)
                 .debug_selector(move || id.into())
@@ -82,7 +83,7 @@ impl HerdrWindow {
                 div()
                     .p(px(8.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Open a workspace in this folder?"),
+                    .child(fl!("open-checkout-title")),
             )
             .child(
                 div().px(px(8.)).child(
@@ -98,9 +99,10 @@ impl HerdrWindow {
                 ),
             )
             .child(
-                div().p(px(8.)).text_color(rgb(theme.muted)).child(
-                    "A link from another application asked for it. A new workspace starts a shell there; the repository's scripts do not run.",
-                ),
+                div()
+                    .p(px(8.))
+                    .text_color(rgb(theme.muted))
+                    .child(fl!("open-checkout-note")),
             )
             .child(
                 div()
@@ -108,18 +110,22 @@ impl HerdrWindow {
                     .flex_wrap()
                     .gap(px(8.))
                     .p(px(8.))
-                    .child(button("open-checkout-yes", "Open", true).on_click(cx.listener(
-                        |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.confirm_open_checkout(window, cx);
-                        },
-                    )))
-                    .child(button("open-checkout-no", "Cancel", false).on_click(cx.listener(
-                        |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.dismiss_menu(window, cx);
-                        },
-                    ))),
+                    .child(
+                        button("open-checkout-yes", fl!("open-checkout-open"), true).on_click(
+                            cx.listener(|this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.confirm_open_checkout(window, cx);
+                            }),
+                        ),
+                    )
+                    .child(
+                        button("open-checkout-no", fl!("open-checkout-cancel"), false).on_click(
+                            cx.listener(|this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.dismiss_menu(window, cx);
+                            }),
+                        ),
+                    ),
             )
     }
 }

@@ -77,3 +77,31 @@ fn pseudo_locales_transform_text_but_not_placeables() {
     assert_eq!(bidi.direction(), Direction::Rtl);
     assert_eq!(bidi.text("menu-quit"), "\u{202E}Quit\u{202C}");
 }
+
+#[test]
+fn each_language_is_named_in_itself() {
+    let files = [
+        FILES,
+        &[
+            File {
+                language: "en-US",
+                feature: "language",
+                source: "language-name = English\n",
+            },
+            File {
+                language: "he",
+                feature: "language",
+                source: "language-name = עברית\n",
+            },
+        ],
+    ]
+    .concat();
+    assert_eq!(
+        Catalog::endonyms(&files),
+        [
+            (Locale::FALLBACK, "English".to_owned()),
+            (locale("fr"), "fr".to_owned()),
+            (locale("he"), "עברית".to_owned()),
+        ]
+    );
+}

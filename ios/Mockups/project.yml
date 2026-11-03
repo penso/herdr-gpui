@@ -1,0 +1,30 @@
+# Native screen mockups for the Herdr Remote app (docs/ios-app-plan.md).
+# `render.sh` builds this, runs each variant in a headless simulator, and
+# writes screenshots plus a picking page. Not shipped.
+name: HerdrMockups
+
+options:
+  bundleIdPrefix: so.pen
+  deploymentTarget:
+    iOS: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGNING_ALLOWED: NO
+
+targets:
+  HerdrMockups:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Herdr Mockups
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-mockups

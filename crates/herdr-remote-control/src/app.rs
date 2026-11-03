@@ -4,6 +4,7 @@
 //! parts off its UI thread and draws the rest.
 
 pub mod config;
+pub mod enroll;
 mod error;
 pub mod pairing;
 pub mod qr;

@@ -6,8 +6,8 @@
 
 use super::{Marks, Row, Sections, State, presets};
 use crate::{
-    HerdrWindow, config::corners, devices_overview::Look, fonts::StyledFont, icons::AgentIcon,
-    pull_request::Outcome,
+    HerdrWindow, config::corners, devices_overview::Look, fonts::StyledFont, i18n::fl,
+    icons::AgentIcon, pull_request::Outcome,
 };
 use chrono::{DateTime, Local};
 use gpui::{prelude::*, *};
@@ -92,7 +92,7 @@ impl HerdrWindow {
 
     fn overview_summary(&self, look: &Look, sections: &Sections) -> Div {
         let theme = look.theme;
-        let stat = |count: usize, label: &'static str, status: AgentStatus| {
+        let stat = |count: usize, text: fn(usize) -> String, status: AgentStatus| {
             // A zero says nothing the missing stat does not.
             (count > 0).then(|| {
                 div()
@@ -100,12 +100,11 @@ impl HerdrWindow {
                     .items_center()
                     .gap_2()
                     .child(look.dot(status))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(count.to_string()),
-                    )
-                    .child(div().text_color(rgb(theme.subtext())).child(label))
+                    .child(div().text_color(rgb(theme.subtext())).child(stressed_count(
+                        text(count),
+                        count,
+                        theme.foreground,
+                    )))
             })
         };
         div()
@@ -122,15 +121,23 @@ impl HerdrWindow {
                 div()
                     .text_size(px(look.ui.size + 3.))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Overview"),
+                    .child(fl!("overview-title")),
             )
-            .children(stat(sections.needing(), "need you", AgentStatus::Blocked))
+            .children(stat(
+                sections.needing(),
+                |count| fl!("overview-stat-needs", count = count),
+                AgentStatus::Blocked,
+            ))
             .children(stat(
                 sections.working.len(),
-                "working",
+                |count| fl!("overview-stat-working", count = count),
                 AgentStatus::Working,
             ))
-            .children(stat(sections.ready.len(), "ready", AgentStatus::Done))
+            .children(stat(
+                sections.ready.len(),
+                |count| fl!("overview-stat-ready", count = count),
+                AgentStatus::Done,
+            ))
     }
 
     fn overview_list(&self, frame: &Frame, sections: &Sections, cx: &mut Context<Self>) -> Div {
@@ -141,7 +148,11 @@ impl HerdrWindow {
         };
         let mut list = div().px_4().pb_4().flex().flex_col();
         if !sections.pinned.is_empty() {
-            list = list.child(heading(look, "Pinned", Some(sections.pinned.len())));
+            list = list.child(heading(
+                look,
+                fl!("overview-pinned"),
+                Some(sections.pinned.len()),
+            ));
             for pinned in &sections.pinned {
                 list = list.child(row(pinned, Shelf::Active, cx));
             }
@@ -166,7 +177,7 @@ impl HerdrWindow {
                     .gap_2()
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(look.dot(AgentStatus::Blocked))
-                    .child("Needs you")
+                    .child(fl!("overview-needs-you"))
                     .child(
                         div()
                             .text_color(rgb(theme.muted))
@@ -185,7 +196,7 @@ impl HerdrWindow {
         if !sections.ready.is_empty() {
             list = list.child(heading(
                 look,
-                "Ready for review",
+                fl!("overview-ready-for-review"),
                 Some(sections.ready.len()),
             ));
         }
@@ -193,7 +204,11 @@ impl HerdrWindow {
             list = list.child(row(ready, Shelf::Active, cx));
         }
         if !sections.working.is_empty() {
-            list = list.child(heading(look, "Working", Some(sections.working.len())));
+            list = list.child(heading(
+                look,
+                fl!("overview-working"),
+                Some(sections.working.len()),
+            ));
         }
         let mut host: Option<&str> = None;
         for working in &sections.working {
@@ -225,7 +240,11 @@ impl HerdrWindow {
             list = list.child(row(working, Shelf::Active, cx));
         }
         if !sections.idle.is_empty() {
-            list = list.child(heading(look, "Idle", Some(sections.idle.len())));
+            list = list.child(heading(
+                look,
+                fl!("overview-idle"),
+                Some(sections.idle.len()),
+            ));
             for idle in &sections.idle {
                 list = list.child(row(idle, Shelf::Active, cx));
             }
@@ -275,9 +294,21 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let theme = look.theme;
         let (id, label, open) = match shelf {
-            ShelfId::Snoozed => ("overview-snoozed", "Snoozed", self.overview.snoozed_open),
-            ShelfId::Settled => ("overview-settled", "Settled", self.overview.settled_open),
-            ShelfId::Closed => ("overview-closed", "Closed", self.overview.closed_open),
+            ShelfId::Snoozed => (
+                "overview-snoozed",
+                fl!("overview-snoozed"),
+                self.overview.snoozed_open,
+            ),
+            ShelfId::Settled => (
+                "overview-settled",
+                fl!("overview-settled"),
+                self.overview.settled_open,
+            ),
+            ShelfId::Closed => (
+                "overview-closed",
+                fl!("overview-closed"),
+                self.overview.closed_open,
+            ),
         };
         div()
             .id(id)
@@ -354,9 +385,15 @@ impl HerdrWindow {
             AgentIcon::from_identity(row.identity.as_deref()).path()
         };
         let second = match shelf {
-            Shelf::Snoozed(until) => format!("Wakes {}", presets::wakes(until, &frame.local)),
+            Shelf::Snoozed(until) => {
+                fl!("overview-wakes", time = presets::wakes(until, &frame.local))
+            }
             _ if row.workspace.is_empty() => row.detail.clone(),
-            _ => format!("{} · {}", row.workspace, row.detail),
+            _ => fl!(
+                "overview-row-detail",
+                workspace = row.workspace.as_str(),
+                detail = row.detail.as_str()
+            ),
         };
         let actions = self.overview_actions(row, shelf, pinned, &group, menu_open, look, cx);
         let clicked = row.clone();
@@ -404,7 +441,10 @@ impl HerdrWindow {
                                     .font_weight(FontWeight::MEDIUM)
                                     .child(row.title.clone()),
                             )
-                            .when(woke, |title| title.child(tag(look, "Woke"))),
+                            .when(woke, |title| title.child(tag(look, fl!("overview-woke"))))
+                            .when(row.muted, |title| {
+                                title.child(muted_mark(row.key.selector(), theme))
+                            }),
                     )
                     .child(
                         div()
@@ -487,7 +527,7 @@ impl HerdrWindow {
             Shelf::Closed(id, _) => id.to_string(),
             _ => row.key.selector(),
         };
-        let action = |name: &'static str, icon: &'static str, label: &'static str| {
+        let action = |name: &'static str, icon: &'static str, label: String| {
             div()
                 .id(SharedString::from(format!("overview-{name}-{key}")))
                 .debug_selector({
@@ -543,22 +583,24 @@ impl HerdrWindow {
                 .and_then(super::reopen::kind)
                 .is_some();
             if reopenable {
-                actions = actions.child(action("reopen", "icons/play.svg", "Reopen").on_click(
-                    cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.show_activity_panel(
-                            crate::sidebar::ActivityPanel::Workspaces,
-                            window,
-                            cx,
-                        );
-                        this.activity.return_to = Some(crate::sidebar::ActivityPanel::Overview);
-                        this.reopen_closed_agent(id, cx);
-                        window.focus(&this.focus, cx);
-                    }),
-                ));
+                actions = actions.child(
+                    action("reopen", "icons/play.svg", fl!("overview-reopen")).on_click(
+                        cx.listener(move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.show_activity_panel(
+                                crate::sidebar::ActivityPanel::Workspaces,
+                                window,
+                                cx,
+                            );
+                            this.activity.return_to = Some(crate::sidebar::ActivityPanel::Overview);
+                            this.reopen_closed_agent(id, cx);
+                            window.focus(&this.focus, cx);
+                        }),
+                    ),
+                );
             }
             return actions.child(
-                action("forget", "icons/x.svg", "Forget").on_click(cx.listener(
+                action("forget", "icons/x.svg", fl!("overview-forget")).on_click(cx.listener(
                     move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.overview.closed.forget(id);
@@ -570,29 +612,33 @@ impl HerdrWindow {
         if shelf == Shelf::Active {
             actions = actions
                 .child(
-                    action("snooze", "icons/coffee.svg", "Snooze").on_click(cx.listener(
-                        move |this, _, _, cx| {
+                    action("snooze", "icons/coffee.svg", fl!("overview-snooze")).on_click(
+                        cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
                             this.overview.menu = (this.overview.menu.as_ref() != Some(&snooze))
                                 .then(|| snooze.clone());
                             cx.notify();
-                        },
-                    )),
+                        }),
+                    ),
                 )
                 .child(
-                    action("settle", "icons/check.svg", "Settle").on_click(cx.listener(
-                        move |this, _, _, cx| {
+                    action("settle", "icons/check.svg", fl!("overview-settle")).on_click(
+                        cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
                             let (key, state) = &settle;
                             this.mark_overview_row(cx, |marks| marks.settle(key, *state));
-                        },
-                    )),
+                        }),
+                    ),
                 )
                 .child(
                     action(
                         "pin",
                         "icons/lock.svg",
-                        if pinned { "Unpin" } else { "Pin" },
+                        if pinned {
+                            fl!("overview-unpin")
+                        } else {
+                            fl!("overview-pin")
+                        },
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -601,9 +647,9 @@ impl HerdrWindow {
                 );
         } else {
             let label = if shelf == Shelf::Settled {
-                "Unsettle"
+                fl!("overview-unsettle")
             } else {
-                "Wake now"
+                fl!("overview-wake-now")
             };
             actions = actions.child(action("restore", "icons/refresh.svg", label).on_click(
                 cx.listener(move |this, _, _, cx| {
@@ -612,12 +658,14 @@ impl HerdrWindow {
                 }),
             ));
         }
-        actions = actions.child(action("open", "icons/arrow-right.svg", "Open").on_click(
-            cx.listener(move |this, _, window, cx| {
-                cx.stop_propagation();
-                this.open_overview_row(&open, window, cx);
-            }),
-        ));
+        actions = actions.child(
+            action("open", "icons/arrow-right.svg", fl!("overview-open")).on_click(cx.listener(
+                move |this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.open_overview_row(&open, window, cx);
+                },
+            )),
+        );
         if menu_open {
             actions = actions.child(
                 deferred(
@@ -656,7 +704,7 @@ impl HerdrWindow {
                     .py_1()
                     .text_size(look.small())
                     .text_color(rgb(theme.muted))
-                    .child("Snooze until"),
+                    .child(fl!("overview-snooze-until")),
             );
         for (index, preset) in presets::presets(&Local::now()).into_iter().enumerate() {
             let (key, state, until) = (row.key.clone(), row.state, preset.until);
@@ -671,7 +719,11 @@ impl HerdrWindow {
                     .rounded(px(corners::CONTROL))
                     .cursor_pointer()
                     .hover(|style| style.bg(rgb(theme.active)))
-                    .child(div().flex_1().child(preset.label))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(crate::i18n::message(preset.label, &[])),
+                    )
                     .child(look.mono(preset.when))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
@@ -713,24 +765,18 @@ fn overview_empty(look: &Look) -> Div {
         .child(
             div()
                 .font_weight(FontWeight::SEMIBOLD)
-                .child("No agents to look at"),
+                .child(fl!("overview-empty-title")),
         )
         .child(
             div()
                 .max_w(px(460.))
                 .text_center()
                 .text_color(rgb(theme.muted))
-                .child(
-                    "The Overview gathers the agents on every host this window connects \
-                     to: those waiting on you and failed runs first, then finished work \
-                     ready for review, working agents, and idle ones. Snooze or settle a \
-                     row to put it aside; an agent you close waits under Closed to be \
-                     reopened.",
-                ),
+                .child(fl!("overview-empty")),
         )
 }
 
-fn heading(look: &Look, label: &'static str, count: Option<usize>) -> Div {
+fn heading(look: &Look, label: String, count: Option<usize>) -> Div {
     let theme = look.theme;
     div()
         .pt_4()
@@ -748,7 +794,18 @@ fn heading(look: &Look, label: &'static str, count: Option<usize>) -> Div {
         })
 }
 
-fn tag(look: &Look, text: &'static str) -> Div {
+/// The struck-through bell after a muted agent's title. The rows carry no
+/// accessible name of their own, so the mark names itself.
+pub(super) fn muted_mark(key: String, theme: &crate::config::Theme) -> Stateful<Div> {
+    let selector = format!("overview-muted-{key}");
+    crate::icons::spoken_muted(
+        SharedString::from(selector.clone()),
+        crate::icons::icon(crate::icons::MUTED, 12., theme.subtext()),
+    )
+    .debug_selector(move || selector.clone())
+}
+
+fn tag(look: &Look, text: String) -> Div {
     let theme = look.theme;
     let color = look.status(AgentStatus::Done);
     div()
@@ -759,6 +816,26 @@ fn tag(look: &Look, text: &'static str) -> Div {
         .text_color(rgb(color))
         .text_size(look.small())
         .child(text)
+}
+
+/// `text` with `count` in it set in `color` and semibold, as the summary
+/// stresses its numbers. Fluent isolates the number, which finds it in any
+/// word order.
+fn stressed_count(text: String, count: usize, color: u32) -> StyledText {
+    let number = format!("\u{2068}{count}\u{2069}");
+    let highlights = text
+        .find(&number)
+        .map(|start| {
+            let style = HighlightStyle {
+                color: Some(rgb(color).into()),
+                font_weight: Some(FontWeight::SEMIBOLD),
+                ..HighlightStyle::default()
+            };
+            (start..start + number.len(), style)
+        })
+        .into_iter()
+        .collect::<Vec<_>>();
+    StyledText::new(text).with_highlights(highlights)
 }
 
 fn pr_chip(look: &Look, pr: super::model::Pr) -> Div {

@@ -28,10 +28,10 @@ pub(crate) fn command_line(kind: ScriptKind, force: bool) -> &'static str {
     match (kind, force) {
         (ScriptKind::Setup | ScriptKind::Run, _) => r#"sh -ec 'eval "$HERDR_WORKTREE_SCRIPT"'"#,
         (ScriptKind::Archive, false) => {
-            r#"sh -ec 'eval "$HERDR_WORKTREE_SCRIPT"; exec "${HERDR_BIN_PATH:-herdr}" worktree remove --workspace "$HERDR_WORKSPACE_ID"'"#
+            r#"sh -ec 'eval "$HERDR_WORKTREE_SCRIPT"; exec "${HERDR_BIN_PATH:-herdr}" worktree remove --workspace "$HERDR_WORKSPACE_ID"'"# // i18n: data
         }
         (ScriptKind::Archive, true) => {
-            r#"sh -ec 'eval "$HERDR_WORKTREE_SCRIPT"; exec "${HERDR_BIN_PATH:-herdr}" worktree remove --workspace "$HERDR_WORKSPACE_ID" --force'"#
+            r#"sh -ec 'eval "$HERDR_WORKTREE_SCRIPT"; exec "${HERDR_BIN_PATH:-herdr}" worktree remove --workspace "$HERDR_WORKSPACE_ID" --force'"# // i18n: data
         }
     }
 }

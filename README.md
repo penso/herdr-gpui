@@ -102,6 +102,18 @@ running another terminal emulator or wrapping the TUI.
       <sub><b>Light or dark, or both.</b> Any theme, or a light and dark pair that follows the system appearance; status colours keep their contrast on either.</sub>
     </td>
   </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/theme-favorites.png" alt="Color Scheme picker with three starred themes pinned above a rule, and an outline star on the selected row whose light theme is previewed">
+      <br>
+      <sub><b>Star your favorites.</b> Pin the themes you keep coming back to at the top of the Color Scheme picker; one click stars or unstars a theme, and the stars are saved with your settings.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/theme-search.png" alt="Color Scheme picker filtered by a search, with the starred Catppuccin Mocha first among the results">
+      <br>
+      <sub><b>Hundreds of themes, one search away.</b> Built-ins and Ghostty themes in one list: arrow or hover through them to preview each live, and your starred themes lead every search.</sub>
+    </td>
+  </tr>
 </table>
 
 Also included: saved SSH hosts with [file copies](crates/herdr-gpui/README.md#ssh-file-copies),
@@ -190,7 +202,12 @@ sudo pacman -U Herdr-VERSION-x86_64-unknown-linux-gnu.pkg.tar.zst  # Arch Linux
 ```
 
 The package manager pulls in the runtime libraries, including the Vulkan loader;
-a Vulkan driver for your GPU must also be present. **App Updates** detects which
+a Vulkan driver for your GPU must also be present. On laptops with two GPUs,
+install the driver for the GPU your display uses, not only the discrete one.
+Without it, Herdr UI renders on the discrete GPU, which can go to sleep while the
+window is hidden, so the window stays blank for a second or more each time you
+return to its workspace. On Arch Linux, install `vulkan-radeon` for AMD or
+`vulkan-intel` for Intel. **App Updates** detects which
 package manager owns the installed executable, downloads the matching `.deb`,
 `.rpm`, or Arch package, verifies its signed release metadata and checksum, then
 installs it through APT, DNF, or pacman with a PolicyKit authentication prompt.

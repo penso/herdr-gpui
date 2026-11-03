@@ -13,6 +13,7 @@ use crate::browser::TabId;
 use crate::{
     HerdrWindow,
     config::Theme,
+    i18n::fl,
     review::{
         diff::{Body, Kind, Lines, RowId, SplitRow},
         highlight::{Contrast, Span},
@@ -489,13 +490,9 @@ impl HerdrWindow {
         };
         let reading = review.expanding.contains(&(file, header));
         let label = if reading {
-            "Reading\u{2026}".to_owned()
+            fl!("review-reading")
         } else {
-            let count = gap.len();
-            format!(
-                "\u{2195} {count} more line{}",
-                if count == 1 { "" } else { "s" }
-            )
+            fl!("review-more-lines", count = gap.len())
         };
         div()
             .id(ElementId::named_usize(

@@ -4,7 +4,9 @@
 //! it is replaced with the connection, so an answer can never reach a newer
 //! one. Each feature keeps at most one request here at a time, so the slots
 //! below are bounded by the number of features, not by user input.
+// i18n: migrated
 
+use crate::i18n::fl;
 use crate::terminal_painter::{Highlight, Tint};
 use herdr_client::{
     ClientEvent,
@@ -204,9 +206,13 @@ pub(crate) fn push_matches(
 /// current, or "No results".
 pub(crate) fn match_count(total: u64, current_global: Option<u64>) -> String {
     match (total, current_global) {
-        (0, _) => "No results".into(),
-        (total, Some(index)) => format!("{} of {total}", index.saturating_add(1)),
-        (total, None) => format!("{total} found"),
+        (0, _) => fl!("window-find-no-results"),
+        (total, Some(index)) => fl!(
+            "window-find-match",
+            current = index.saturating_add(1),
+            total = total
+        ),
+        (total, None) => fl!("window-find-found", total = total),
     }
 }
 

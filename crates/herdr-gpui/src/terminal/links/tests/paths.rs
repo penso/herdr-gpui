@@ -2,7 +2,7 @@ use super::*;
 
 /// What the detector reads in a one-row frame at `column`.
 fn read(text: &str, column: u16) -> Option<RowLink> {
-    frame_link(&frame(text, 60, 1), column, 0, 0, 60)
+    frame_link(&frame(text, 60, 1), column, 0, 0..60, 0..1)
 }
 
 fn path(text: &str, column: u16) -> Option<(String, Range<u16>)> {
@@ -118,17 +118,17 @@ fn paths_are_pane_links_only_and_never_web_links() {
 #[test]
 fn paths_that_may_wrap_are_not_guessed() {
     // Running to the right edge, the path may continue on the next row.
-    assert!(frame_link(&frame("ab src/long/path", 16, 1), 5, 0, 0, 16).is_none());
+    assert!(frame_link(&frame("ab src/long/path", 16, 1), 5, 0, 0..16, 0..1).is_none());
     // Starting a row under a full one, it may be the tail of that row.
     let wrapped = frame("https://example.com/src/a.rs", 20, 2);
-    assert!(frame_link(&wrapped, 2, 1, 0, 20).is_none());
+    assert!(frame_link(&wrapped, 2, 1, 0..20, 0..2).is_none());
     let mut separate = frame("first line ends here", 20, 2);
     separate.cells[19].symbol = " ".into();
     for (cell, symbol) in separate.cells[20..].iter_mut().zip("src/a.rs".chars()) {
         cell.symbol = symbol.to_string();
     }
     assert_eq!(
-        frame_link(&separate, 2, 1, 0, 20).map(|link| link.target),
+        frame_link(&separate, 2, 1, 0..20, 0..2).map(|link| link.target),
         Some(bare("src/a.rs"))
     );
 }
@@ -145,7 +145,7 @@ fn wide_characters_before_a_path_keep_its_columns() {
     );
     wide.cells.pop();
     assert_eq!(
-        frame_link(&wide, 4, 0, 0, 20).map(|link| link.columns),
+        frame_link(&wide, 4, 0, 0..20, 0..1).map(|link| link.columns),
         Some(3..11)
     );
 }

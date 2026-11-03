@@ -106,14 +106,31 @@ impl Session {
         self.snapshots
     }
 
-    /// Each entry with the revision it last changed at.
+    /// Each entry with the revision it last changed at. A sub-agent's call
+    /// lists its steps, so it changes with the latest of them too.
     pub(crate) fn keys(&self) -> Vec<(EntryId, u64)> {
+        let revision = |id: &EntryId| self.revisions.get(id).copied().unwrap_or(0);
+        let mut steps: HashMap<&str, u64> = HashMap::new();
+        for entry in &self.transcript.entries {
+            if let herdr_chat_protocol::EntryKind::Tool(tool) = &entry.kind
+                && let Some(parent) = &tool.parent
+            {
+                let latest = steps.entry(parent).or_default();
+                *latest = (*latest).max(revision(&entry.id));
+            }
+        }
         self.transcript
             .entries
             .iter()
             .map(|entry| {
-                let revision = self.revisions.get(&entry.id).copied().unwrap_or(0);
-                (entry.id, revision)
+                let own = revision(&entry.id);
+                let steps = match &entry.kind {
+                    herdr_chat_protocol::EntryKind::Tool(tool) => {
+                        steps.get(tool.call_id.as_str()).copied().unwrap_or(0)
+                    }
+                    _ => 0,
+                };
+                (entry.id, own.max(steps))
             })
             .collect()
     }

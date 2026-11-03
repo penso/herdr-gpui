@@ -6,12 +6,13 @@
 // i18n: migrated
 
 use super::{SettingsWindow, on_value, ui};
+use crate::direction::Logical;
 use crate::{
     config::{
         preferences::Preference,
         remote::{Bind, Certificate, Edit, Privacy},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     remote::{Health, Supervisor, supervisor::Lease},
     search_input::SearchInput,
     settings_window::{
@@ -199,7 +200,7 @@ impl SettingsWindow {
                 if let Err(error) = result {
                     view.error = Some(fl!(
                         "settings-remote-revoke-failed",
-                        error = error.to_string()
+                        error = error.localize()
                     ));
                 }
                 cx.notify();
@@ -283,6 +284,16 @@ impl SettingsWindow {
                     Preference::Remote(Edit::KeepRunning(!remote.keep_running)),
                     cx,
                 )),
+            )
+            .child(
+                ui::row(theme, "remote-presence", fl!("settings-remote-presence"))
+                    .description(fl!("settings-remote-presence-note"))
+                    .switch(self.preference_toggle(
+                        "remote-presence-toggle",
+                        remote.presence,
+                        Preference::Remote(Edit::Presence(!remote.presence)),
+                        cx,
+                    )),
             )
             .child(
                 ui::row(theme, "remote-restart", fl!("settings-remote-restart"))
@@ -442,7 +453,7 @@ impl SettingsWindow {
             .mt(px(8.))
             .mb(px(4.))
             .p(px(12.))
-            .flex()
+            .row()
             .items_center()
             .gap(px(12.))
             .rounded(px(crate::config::corners::PANEL))
@@ -548,7 +559,7 @@ impl SettingsWindow {
     fn remote_files(&self, cx: &mut Context<Self>) -> Div {
         let field = |label: String, selector: &'static str, input: &Option<Entity<SearchInput>>| {
             div()
-                .flex()
+                .row()
                 .items_center()
                 .gap(px(8.))
                 .child(div().w(px(80.)).flex_none().child(label))
@@ -616,7 +627,10 @@ impl SettingsWindow {
                 .description(if asking {
                     fl!("settings-remote-device-revoke-ask")
                 } else {
-                    device_line(device, now)
+                    match crate::remote::hosts_line(device) {
+                        Some(hosts) => format!("{} \u{b7} {hosts}", device_line(device, now)),
+                        None => device_line(device, now),
+                    }
                 })
                 .when(asking, |row| row.control(cancel))
                 .control(

@@ -9,6 +9,7 @@
 //! encode a secret nor read inside a JWT, and the bare cookie value cannot be
 //! cut out of a Cookie header.
 
+use crate::text::Text;
 use crate::{
     Error, Result,
     {
@@ -35,18 +36,8 @@ static META: Meta = Meta::new("groq", "Groq")
     .dashboard("https://console.groq.com/dashboard/usage")
     .status_page("https://status.groq.com")
     .settings(&[
-        Setting::new(
-            "api_key",
-            &["GROQ_API_KEY"],
-            "A GroqCloud Enterprise API key from https://console.groq.com/keys. Only \
-             Enterprise organizations can read Prometheus metrics.",
-        ),
-        Setting::new(
-            "base_url",
-            &["GROQ_API_URL"],
-            "Optional HTTPS API base URL for a private gateway. Defaults to \
-             https://api.groq.com/v1.",
-        ),
+        Setting::new("api_key", &["GROQ_API_KEY"], "usage-groq-setting-api-key"),
+        Setting::new("base_url", &["GROQ_API_URL"], "usage-groq-setting-base-url"),
     ]);
 
 impl Service for Groq {
@@ -122,30 +113,30 @@ fn report([requests, tokens_in, tokens_out, cache]: [f64; 4]) -> Report {
         } else {
             2
         };
-        format!("{value:.digits$}")
+        Text::service(format!("{value:.digits$}"))
     };
     let mut facts = vec![
-        ("Requests / min".to_owned(), per_minute(requests)),
+        (Text::message("usage-groq-requests"), per_minute(requests)),
         (
-            "Tokens / min".to_owned(),
+            Text::message("usage-groq-tokens"),
             per_minute(tokens_in + tokens_out),
         ),
     ];
     if cache > 0. {
-        facts.push(("Cache hits / min".to_owned(), per_minute(cache)));
+        facts.push((Text::message("usage-groq-cache-hits"), per_minute(cache)));
     }
     Report::new(Provider(&Groq), metrics_account(), Vec::new()).with_sections([Section::Facts {
-        title: "Last 5 minutes".into(),
+        title: Text::message("usage-groq-last-5-minutes"),
         facts,
     }])
 }
 
 fn enterprise_only() -> Report {
     Report::new(Provider(&Groq), metrics_account(), Vec::new()).with_sections([Section::Facts {
-        title: "Metrics".into(),
+        title: Text::message("usage-groq-metrics"),
         facts: vec![(
-            "Unavailable".into(),
-            "Prometheus metrics need a GroqCloud Enterprise key".into(),
+            Text::message("usage-groq-unavailable"),
+            Text::message("usage-groq-enterprise-only"),
         )],
     }])
 }
@@ -153,7 +144,7 @@ fn enterprise_only() -> Report {
 fn metrics_account() -> Account {
     Account {
         email: None,
-        plan: Some("Prometheus metrics".into()),
+        plan: Some(Text::message("usage-groq-prometheus")),
     }
 }
 
@@ -217,8 +208,14 @@ mod tests {
         let Section::Facts { facts, .. } = &report.sections[0] else {
             panic!("expected facts");
         };
-        assert_eq!(facts[0], ("Requests / min".into(), "120".into()));
-        assert_eq!(facts[1], ("Tokens / min".into(), "9000".into()));
+        assert_eq!(
+            facts[0],
+            (Text::message("usage-groq-requests"), Text::service("120"))
+        );
+        assert_eq!(
+            facts[1],
+            (Text::message("usage-groq-tokens"), Text::service("9000"))
+        );
         assert_eq!(facts.len(), 2);
     }
 

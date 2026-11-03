@@ -1,4 +1,6 @@
+// i18n: migrated
 use super::{Page, WorkspaceMenuAction};
+use crate::i18n::fl;
 use crate::{
     HerdrWindow,
     pull_request::{Input, Origin, Outcome, ReviewDecision, View, workspace_input},
@@ -231,12 +233,10 @@ impl HerdrWindow {
             self.menu.pr_cache.suspend();
         }
         if self.menu.page == Some(Page::Workspace) && !self.workspace_pr_target_current() {
-            if self.menu.pr.message.as_deref()
-                != Some("Workspace changed or disconnected. Reopen the menu.")
-            {
+            let changed_message = fl!("pr-menu-workspace-changed");
+            if self.menu.pr.message.as_deref() != Some(changed_message.as_str()) {
                 self.menu.pr.clear();
-                self.menu.pr.message =
-                    Some("Workspace changed or disconnected. Reopen the menu.".into());
+                self.menu.pr.message = Some(changed_message);
                 changed = true;
             }
         } else if changed && self.menu.page == Some(Page::Workspace) {
@@ -283,7 +283,7 @@ impl HerdrWindow {
                     .pb(px(4.))
                     .text_size(small)
                     .text_color(rgb(theme.muted))
-                    .child("Pull request"),
+                    .child(fl!("pr-menu-heading")),
             );
         let card = || {
             div()
@@ -319,133 +319,130 @@ impl HerdrWindow {
                 ReviewDecision::ReviewRequired => theme.ink(theme.palette[3]),
                 ReviewDecision::None => theme.muted,
             };
-            section = section.child(
-                card()
-                    .id("workspace-pr-card")
-                    .debug_selector(|| "workspace-pr-card".into())
-                    .cursor_pointer()
-                    .when(selected, |card| card.bg(rgb(theme.active)))
-                    .on_hover(cx.listener(move |this, hovered, _, cx| {
-                        if *hovered {
-                            this.menu.workspace_selected = Some(action);
-                        } else if this.menu.workspace_selected == Some(action) {
-                            this.menu.workspace_selected = None;
-                        }
-                        cx.notify();
-                    }))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.activate_workspace_menu(action, window, cx);
-                    }))
-                    .child(
-                        div()
-                            .w(text_width)
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(pill(
-                                value.lifecycle().into(),
-                                crate::pull_request::color(value, theme),
-                            ))
-                            .child(
-                                div()
-                                    .id("workspace-pr-title")
-                                    .debug_selector(|| "workspace-pr-title".into())
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(crate::sidebar::label_text(&format!(
-                                        "#{} {}",
-                                        value.number, value.title
-                                    ))),
-                            )
-                            .child(
-                                svg()
-                                    .path("icons/external.svg")
-                                    .size(px(14.))
-                                    .flex_none()
-                                    .text_color(rgb(if selected {
-                                        theme.foreground
-                                    } else {
-                                        theme.muted
-                                    })),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt(px(2.))
-                            .w(text_width)
-                            .truncate()
-                            .text_size(small)
-                            .text_color(rgb(theme.muted))
-                            .child(crate::sidebar::label_text(&format!(
-                                "{} -> {}",
-                                value.head_ref_name, value.base_ref_name
-                            ))),
-                    )
-                    .child(
-                        div()
-                            .mt(px(8.))
-                            .w(text_width)
-                            .flex()
-                            .flex_wrap()
-                            .items_center()
-                            .gap(px(6.))
-                            .text_size(small)
-                            .child(pill(value.checks_summary.clone().into(), checks))
-                            .child(pill(value.review().into(), review))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap(px(6.))
-                                    .child(
-                                        div().text_color(rgb(theme.ink(theme.palette[2]))).child(
-                                            crate::sidebar::label_text(&format!(
-                                                "+{}",
-                                                value.additions
-                                            )),
-                                        ),
-                                    )
-                                    .child(
-                                        div().text_color(rgb(theme.ink(theme.palette[1]))).child(
-                                            crate::sidebar::label_text(&format!(
-                                                "-{}",
-                                                value.deletions
-                                            )),
-                                        ),
-                                    )
-                                    .child(div().text_color(rgb(theme.muted)).child(format!(
-                                        "{} {}",
-                                        value.changed_files,
-                                        if value.changed_files == 1 {
-                                            "file"
+            section =
+                section.child(
+                    card()
+                        .id("workspace-pr-card")
+                        .debug_selector(|| "workspace-pr-card".into())
+                        .cursor_pointer()
+                        .when(selected, |card| card.bg(rgb(theme.active)))
+                        .on_hover(cx.listener(move |this, hovered, _, cx| {
+                            if *hovered {
+                                this.menu.workspace_selected = Some(action);
+                            } else if this.menu.workspace_selected == Some(action) {
+                                this.menu.workspace_selected = None;
+                            }
+                            cx.notify();
+                        }))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.activate_workspace_menu(action, window, cx);
+                        }))
+                        .child(
+                            div()
+                                .w(text_width)
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(pill(
+                                    value.lifecycle().into(),
+                                    crate::pull_request::color(value, theme),
+                                ))
+                                .child(
+                                    div()
+                                        .id("workspace-pr-title")
+                                        .debug_selector(|| "workspace-pr-title".into())
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(crate::sidebar::label_text(&format!(
+                                            "#{} {}",
+                                            value.number, value.title
+                                        ))),
+                                )
+                                .child(
+                                    svg()
+                                        .path("icons/external.svg")
+                                        .size(px(14.))
+                                        .flex_none()
+                                        .text_color(rgb(if selected {
+                                            theme.foreground
                                         } else {
-                                            "files"
-                                        }
-                                    ))),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt(px(6.))
-                            .w(text_width)
-                            .truncate()
-                            .text_size(small)
-                            .text_color(rgb(theme.muted))
-                            .child(value.merge_status()),
-                    ),
-            );
+                                            theme.muted
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .mt(px(2.))
+                                .w(text_width)
+                                .truncate()
+                                .text_size(small)
+                                .text_color(rgb(theme.muted))
+                                .child(crate::sidebar::label_text(&format!(
+                                    "{} -> {}",
+                                    value.head_ref_name, value.base_ref_name
+                                ))),
+                        )
+                        .child(
+                            div()
+                                .mt(px(8.))
+                                .w(text_width)
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap(px(6.))
+                                .text_size(small)
+                                .child(pill(value.checks_summary.clone().into(), checks))
+                                .child(pill(value.review().into(), review))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap(px(6.))
+                                        .child(
+                                            div()
+                                                .text_color(rgb(theme.ink(theme.palette[2])))
+                                                .child(crate::sidebar::label_text(&format!(
+                                                    "+{}",
+                                                    value.additions
+                                                ))),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_color(rgb(theme.ink(theme.palette[1])))
+                                                .child(crate::sidebar::label_text(&format!(
+                                                    "-{}",
+                                                    value.deletions
+                                                ))),
+                                        )
+                                        .child(div().text_color(rgb(theme.muted)).child(fl!(
+                                            "pr-menu-files",
+                                            count = value.changed_files
+                                        ))),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .mt(px(6.))
+                                .w(text_width)
+                                .truncate()
+                                .text_size(small)
+                                .text_color(rgb(theme.muted))
+                                .child(value.merge_status()),
+                        ),
+                );
         }
         let note = if pr.loading {
-            Some("Checking GitHub...".to_owned())
+            Some(fl!("pr-menu-checking"))
         } else if let Some(message) = &pr.message {
-            Some(format!(
-                "{}{message}",
-                if pr.value.is_some() { "Stale: " } else { "" }
-            ))
+            Some(if pr.value.is_some() {
+                fl!("pr-menu-stale", message = message.as_str())
+            } else {
+                message.clone()
+            })
         } else if pr.value.is_none() {
-            Some("No PR found for this origin and branch.".to_owned())
+            Some(fl!("pr-menu-none"))
         } else {
             None
         };

@@ -7,12 +7,13 @@
 
 use super::super::{Section, SettingsWindow};
 use super::input;
+use crate::direction::Logical;
 use crate::{
     cloud::{
         CloudProvider,
         worker::{self, Worker},
     },
-    i18n::fl,
+    i18n::{Localize, fl},
     railway::setup::{self, AddRequest, Overview},
     search_input::SearchInput,
 };
@@ -160,7 +161,9 @@ impl SettingsWindow {
                 if let Some(card) = &mut self.railway_card {
                     card.changing = false;
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -373,7 +376,7 @@ impl SettingsWindow {
             .debug_selector(|| "cloud-railway-key".into())
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .gap(px(8.))
                     .child(self.railway_choice(
@@ -407,7 +410,7 @@ impl SettingsWindow {
                     card.name.clone().into(),
                 ))
                 .child(self.control_note(note))
-                .child(div().flex().justify_end().child(self.railway_button(
+                .child(div().row().justify_end().child(self.railway_button(
                     "cloud-railway-generate",
                     fl!("settings-cloud-railway-generate"),
                     available && valid && overview.is_some(),
@@ -457,7 +460,7 @@ impl SettingsWindow {
                 },
                 cx,
             ))
-            .child(div().flex().justify_end().child(self.railway_button(
+            .child(div().row().justify_end().child(self.railway_button(
                 "cloud-railway-create",
                 fl!("settings-cloud-railway-create"),
                 available,

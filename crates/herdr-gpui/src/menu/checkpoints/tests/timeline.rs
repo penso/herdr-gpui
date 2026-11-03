@@ -20,7 +20,7 @@ fn day_headings_name_yesterday_weekdays_and_other_years() {
     assert_eq!(day_heading(NOW - 3600, NOW, &utc), None);
     assert_eq!(
         day_heading(NOW - DAY, NOW, &utc).as_deref(),
-        Some("Yesterday, Oct 7")
+        Some("Yesterday, \u{2068}Oct 7\u{2069}")
     );
     assert_eq!(
         day_heading(NOW - 3 * DAY, NOW, &utc).as_deref(),
@@ -35,7 +35,7 @@ fn day_headings_name_yesterday_weekdays_and_other_years() {
     assert_eq!(day_heading(NOW - 10 * 3600, NOW, &utc), None);
     assert_eq!(
         day_heading(NOW - 10 * 3600, NOW, &kiritimati).as_deref(),
-        Some("Yesterday, Oct 8")
+        Some("Yesterday, \u{2068}Oct 8\u{2069}")
     );
 }
 

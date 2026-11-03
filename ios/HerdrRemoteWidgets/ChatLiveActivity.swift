@@ -96,12 +96,14 @@ private struct ExpandedBottom: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            StepStack(state: state)
             Text(text)
                 .font(.system(.footnote, design: state.phase == .question ? .monospaced : .default))
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
                 .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            AnswerButtons(attributes: attributes, state: state)
             HStack {
                 if state.phase == .working, let plan = state.planLabel {
                     Text(plan)

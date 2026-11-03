@@ -19,6 +19,7 @@ pub(super) const SHIM_COMMAND: &str = "~/.local/state/herdr/gpui/bin/herdr-gpui"
 
 /// Writes standard input to the shim's path unless the user has a file of
 /// their own there.
+// i18n: data
 pub(super) const SHIM_SCRIPT: &str = r#"set -eu
 dir="$HOME/.local/state/herdr/gpui/bin"
 file="$dir/herdr-gpui"
@@ -32,6 +33,7 @@ mv -f "$tmp" "$file""#;
 
 /// Writes standard input as the skill in each agent directory the host has,
 /// as the app does on this machine.
+// i18n: data
 pub(super) const SKILL_SCRIPT: &str = r#"set -eu
 text=$(cat)
 for root in "$HOME/.claude" "$HOME/.agents"; do
@@ -46,6 +48,7 @@ done"#;
 
 /// Removes the shim and the skill copies this app wrote, keeping files the
 /// user wrote under the same names.
+// i18n: data
 pub(super) const REMOVE_SCRIPT: &str = r#"set -u
 remove() {
     if [ -f "$1" ] && grep -q "$2" "$1"; then rm -f "$1"; fi

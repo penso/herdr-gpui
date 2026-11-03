@@ -24,6 +24,8 @@ pub enum Certificate {
 pub struct Options {
     /// Where to listen: every interface (`[::]`, dual stack) or one address.
     pub bind: IpAddr,
+    /// Whether to advertise over Bonjour, for phones nearby to find it.
+    pub bonjour: bool,
     pub certificate: Certificate,
     /// The folder chat sockets live in, as Herdr UI resolved it; `None`
     /// resolves it from this process's environment.
@@ -60,12 +62,24 @@ pub enum ParseError {
 #[derive(Debug, Eq, PartialEq)]
 pub enum Invocation {
     Serve(Options),
+    /// Adds a phone another computer's Herdr UI allowed, read as JSON from
+    /// standard input (`app::enroll`).
+    Enroll {
+        state_dir: Option<PathBuf>,
+    },
+    /// Revokes a device that other computer enrolled.
+    Revoke {
+        state_dir: Option<PathBuf>,
+        device: String,
+    },
     Help,
     Version,
 }
 
 pub const USAGE: &str = "\
 Usage: herdr-remote-control serve --state-dir DIR [options]
+       herdr-remote-control enroll [--state-dir DIR] < REQUEST.json
+       herdr-remote-control revoke --device ID [--state-dir DIR]
 
 Serves this computer's Herdr chats to paired phones over HTTPS. Herdr UI
 starts it when Remote control is on.
@@ -82,14 +96,23 @@ Options:
                            Whether notifications may quote the chat (default generic)
   --device-idle-days N     Forget devices unseen this long, 0 for never
                            (default 30)
+  --no-bonjour             Do not advertise over Bonjour; phones then pair
+                           by QR code only (on macOS, Herdr UI advertises
+                           while its pairing dialog is open instead)
   -h, --help               Show this help
   -V, --version            Show the version
+
+enroll and revoke are what Herdr UI on another computer runs here over SSH,
+so a phone paired there also reaches this computer. enroll starts the
+daemon when it does not run and prints this computer's answer as JSON.
+Their state directory defaults to the one Herdr UI on this computer uses.
 ";
 
 pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, ParseError> {
     let mut args = args.into_iter().skip(1);
     match args.next().as_deref().and_then(|arg| arg.to_str()) {
         Some("serve") => {}
+        Some(verb @ ("enroll" | "revoke")) => return parse_host(verb == "enroll", args),
         Some("-h" | "--help") | None => return Ok(Invocation::Help),
         Some("-V" | "--version") => return Ok(Invocation::Version),
         Some(other) => return Err(ParseError::Unknown(other.to_owned())),
@@ -101,6 +124,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let mut privacy = Privacy::Generic;
     let mut idle_days = DEFAULT_IDLE_DAYS;
     let (mut herdr_socket, mut chat_dir) = (None, None);
+    let mut bonjour = true;
     while let Some(arg) = args.next() {
         let name = arg.to_str().unwrap_or_default().to_owned();
         let mut value = |option: &'static str| args.next().ok_or(ParseError::Missing(option));
@@ -150,6 +174,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                         option: "--device-idle-days",
                     })?;
             }
+            "--no-bonjour" => bonjour = false,
             "-h" | "--help" => return Ok(Invocation::Help),
             _ => return Err(ParseError::Unknown(name)),
         }
@@ -161,6 +186,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     };
     Ok(Invocation::Serve(Options {
         bind,
+        bonjour,
         certificate,
         chat_dir,
         device_idle: (idle_days != 0).then(|| Duration::from_secs(idle_days * 24 * 60 * 60)),
@@ -169,6 +195,43 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         privacy,
         state_dir: state_dir.ok_or(ParseError::NoStateDir)?,
     }))
+}
+
+/// `enroll [--state-dir DIR]` and `revoke --device ID [--state-dir DIR]`.
+fn parse_host(
+    enroll: bool,
+    mut args: impl Iterator<Item = OsString>,
+) -> Result<Invocation, ParseError> {
+    let (mut state_dir, mut device) = (None, None);
+    while let Some(arg) = args.next() {
+        let name = arg.to_str().unwrap_or_default().to_owned();
+        match name.as_str() {
+            "--state-dir" => {
+                state_dir = Some(PathBuf::from(
+                    args.next().ok_or(ParseError::Missing("--state-dir"))?,
+                ));
+            }
+            "--device" if !enroll => {
+                device = Some(
+                    args.next()
+                        .ok_or(ParseError::Missing("--device"))?
+                        .into_string()
+                        .ok()
+                        .filter(|device| !device.is_empty())
+                        .ok_or(ParseError::Value { option: "--device" })?,
+                );
+            }
+            "-h" | "--help" => return Ok(Invocation::Help),
+            _ => return Err(ParseError::Unknown(name)),
+        }
+    }
+    if enroll {
+        return Ok(Invocation::Enroll { state_dir });
+    }
+    Ok(Invocation::Revoke {
+        state_dir,
+        device: device.ok_or(ParseError::Missing("--device"))?,
+    })
 }
 
 /// The computer's name as its owner knows it.

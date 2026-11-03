@@ -12,6 +12,7 @@ use super::{
     super::{Section, SettingsWindow},
     follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     azure::{
         Settings,
@@ -25,7 +26,7 @@ use crate::{
     },
     config::{AzureConfig, AzureFields, Config},
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -95,7 +96,7 @@ enum Account {
         /// What sizes cost in the saved regions; `None` when unreadable.
         catalog: Option<Box<crate::azure::sizes::Catalog>>,
         /// Each saved device's size, by device ID.
-        sizes: HashMap<String, String>,
+        sizes: HashMap<String, crate::azure::sizes::DeviceSize>,
     },
 }
 
@@ -226,9 +227,9 @@ impl AzureCard {
         }
     }
 
-    fn device_size(&self, id: &str) -> Option<&str> {
+    fn device_size(&self, id: &str) -> Option<String> {
         match &self.account {
-            Account::Known { sizes, .. } => sizes.get(id).map(String::as_str),
+            Account::Known { sizes, .. } => sizes.get(id).map(sizes::device_size),
             Account::Checking | Account::Unconfigured { .. } => None,
         }
     }
@@ -376,7 +377,9 @@ impl SettingsWindow {
                 if let Some(card) = &mut self.azure_card {
                     card.refreshing = false;
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -616,7 +619,7 @@ impl SettingsWindow {
                 card.secret.clone().into(),
             ))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button("cloud-azure-save", fl!("settings-cloud-save"), ready)
                         .when(ready, |button| {
                             button.on_click(cx.listener(|this, _, _, cx| this.save_azure(cx)))
@@ -634,7 +637,7 @@ impl SettingsWindow {
             .child(self.azure_install_switch("cloud-azure-install", card.install, ready, cx))
             .children(self.azure_setup_switch("cloud-azure-vm-setup", card.setup, ready, cx))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-azure-create",
                         fl!("settings-cloud-azure-create-vm"),
@@ -658,7 +661,7 @@ impl SettingsWindow {
             ))
             .children(self.azure_setup_switch("cloud-azure-sandbox-setup", card.setup, ready, cx))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-azure-create-sandbox",
                         fl!("settings-cloud-azure-create-sandbox"),
@@ -691,7 +694,7 @@ impl SettingsWindow {
                 Some(size) => fl!(
                     "settings-cloud-azure-device-size",
                     kind = kind,
-                    size = size.to_owned(),
+                    size = size,
                     group = group
                 ),
                 None => fl!("settings-cloud-azure-device", kind = kind, group = group),

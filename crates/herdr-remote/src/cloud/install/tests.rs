@@ -51,7 +51,7 @@ fn failures_report_the_output_tail_without_terminal_escapes() {
         "-c",
         r#"{ for i in 1 2 3 4 5 6 7 8; do echo "line $i"; done; printf '\033[31mboom\033[0m\n'; } >&2; exit 9; #"#,
     ]);
-    let Err(Error::Install(text)) = install(failing, &|| false) else {
+    let Err(Error::Install(Failure::Output(text))) = install(failing, &|| false) else {
         panic!("expected an install failure");
     };
     assert!(text.ends_with("boom"), "{text}");
@@ -64,10 +64,10 @@ fn failures_report_the_output_tail_without_terminal_escapes() {
 fn a_missing_curl_is_named_and_cancellation_kills_the_child() {
     let mut no_curl = Command::new("/bin/sh");
     no_curl.args(["-c", "exit 4; #"]);
-    let Err(Error::Install(text)) = install(no_curl, &|| false) else {
-        panic!("expected an install failure");
-    };
-    assert!(text.contains("curl"));
+    assert!(matches!(
+        install(no_curl, &|| false),
+        Err(Error::Install(Failure::NoCurl))
+    ));
     // `sleep` is not the script's last command, so every shell forks it: a
     // grandchild that still holds the output pipes after the child is
     // killed. Cancelling only once it has had time to start makes that so.
@@ -83,7 +83,7 @@ fn a_missing_curl_is_named_and_cancellation_kills_the_child() {
 fn output_is_bounded() {
     let mut chatty = Command::new("/bin/sh");
     chatty.args(["-c", "yes | head -c 1000000; exit 1; #"]);
-    let Err(Error::Install(text)) = install(chatty, &|| false) else {
+    let Err(Error::Install(Failure::Output(text))) = install(chatty, &|| false) else {
         panic!("expected an install failure");
     };
     assert!(text.len() <= OUTPUT_LIMIT);

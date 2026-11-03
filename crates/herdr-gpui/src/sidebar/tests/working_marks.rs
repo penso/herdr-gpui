@@ -1,4 +1,5 @@
 use super::*;
+use crate::sidebar::layout_tests::run_frames;
 use gpui::{IntoElement, ParentElement, Render, TestAppContext, div};
 use std::{cell::Cell, rc::Rc, time::Duration};
 
@@ -104,14 +105,7 @@ fn moving_marks_redraw_as_time_passes_and_rest_under_reduced_motion(cx: &mut Tes
                 });
                 cx.update(|window, cx| window.draw(cx).clear(cx));
                 // Long enough for the slowest mark's next frame, each time.
-                for _ in 0..4 {
-                    cx.executor().advance_clock(Duration::from_millis(150));
-                    cx.update(|window, cx| {
-                        window.simulate_next_frame(cx);
-                    });
-                    cx.run_until_parked();
-                    cx.update(|window, cx| window.draw(cx).clear(cx));
-                }
+                run_frames(cx, 4, Duration::from_millis(150));
                 let moves = expected(icons, status).is_some() && !reduced;
                 let asked = frames.get();
                 if moves {

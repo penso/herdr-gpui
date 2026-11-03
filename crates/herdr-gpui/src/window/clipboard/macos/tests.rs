@@ -1,5 +1,6 @@
 mod cleanup;
 mod large_output;
+mod missing_executable;
 
 use super::*;
 use gpui::{ClipboardEntry, ExternalPaths, Image, ImageFormat};

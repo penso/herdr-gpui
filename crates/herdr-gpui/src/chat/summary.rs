@@ -6,18 +6,19 @@
 
 use crate::release_notes::{Kind, Line};
 
+// They match what an agent writes, in English.
 /// Section titles compaction summaries use; an answer with
 /// [`MIN_SECTIONS`] of them as headings is taken for one.
 const SECTIONS: &[&str] = &[
     "active",
     "blocked",
     "completed",
-    "important details",
-    "next move",
-    "next steps",
+    "important details", // i18n: data
+    "next move",         // i18n: data
+    "next steps",        // i18n: data
     "objective",
-    "relevant files",
-    "work state",
+    "relevant files", // i18n: data
+    "work state",     // i18n: data
 ];
 const MIN_SECTIONS: usize = 3;
 /// A line that says a section is empty.

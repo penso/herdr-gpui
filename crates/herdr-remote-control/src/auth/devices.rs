@@ -2,7 +2,7 @@
 //! directory. Every change replaces the file atomically, private to this
 //! user; seeing a device is written at most once a minute.
 
-use super::{Error, NewDevice, PublicKey, Result, StoreOperation};
+use super::{Error, NewDevice, PublicKey, Result, StoreOperation, links::Link};
 use crate::control::{self, DeviceId};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -38,6 +38,14 @@ pub(crate) struct DeviceRecord {
     /// the store.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) apns: Option<serde_json::Value>,
+    /// The computer that vouched for this device, when it was enrolled by
+    /// another computer's Herdr UI rather than paired here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) via: Option<String>,
+    /// The other hosts the desktop allowed this device on, and what each
+    /// answered.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) links: Vec<Link>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -91,12 +99,30 @@ impl Devices {
         self.records.len()
     }
 
+    /// Every paired device's id.
+    pub(crate) fn ids(&self) -> impl Iterator<Item = &DeviceId> {
+        self.records.iter().map(|record| &record.id)
+    }
+
     pub(crate) fn get(&self, id: &DeviceId) -> Option<&DeviceRecord> {
         self.records.iter().find(|record| &record.id == id)
     }
 
     /// Stores an approved device. Blocking.
+    #[cfg(test)]
     pub(crate) fn add(&mut self, device: NewDevice, now_ms: u64) -> Result<()> {
+        self.add_with(device, now_ms, None, Vec::new())
+    }
+
+    /// Stores a device with the computer that vouched for it and the hosts
+    /// it may be paired with. Blocking.
+    pub(crate) fn add_with(
+        &mut self,
+        device: NewDevice,
+        now_ms: u64,
+        via: Option<String>,
+        links: Vec<Link>,
+    ) -> Result<()> {
         self.records.push(DeviceRecord {
             app: device.app,
             id: device.id,
@@ -106,6 +132,8 @@ impl Devices {
             last_seen_ms: None,
             push: None,
             apns: None,
+            via,
+            links,
         });
         self.save_or_undo(|devices| {
             devices.records.pop();
@@ -137,8 +165,36 @@ impl Devices {
                 last_seen_ms: record.last_seen_ms,
                 push: record.push.is_some(),
                 connected: connected(&record.id),
+                via: record.via.clone(),
+                hosts: Vec::new(),
             })
             .collect()
+    }
+
+    /// Every device's record, oldest first.
+    pub(crate) fn records(&self) -> &[DeviceRecord] {
+        &self.records
+    }
+
+    /// Keeps what a host answered for a device, replacing an earlier link
+    /// to the same host. Blocking.
+    pub(crate) fn set_link(&mut self, id: &DeviceId, link: Link) -> Result<()> {
+        let record = self.record_mut(id)?;
+        let previous = record.links.clone();
+        match record
+            .links
+            .iter_mut()
+            .find(|known| known.host == link.host)
+        {
+            Some(known) => *known = link,
+            None => record.links.push(link),
+        }
+        let id = id.clone();
+        self.save_or_undo(move |devices| {
+            if let Ok(record) = devices.record_mut(&id) {
+                record.links = previous;
+            }
+        })
     }
 
     /// Marks a device seen now, writing the store only when its stored time

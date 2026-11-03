@@ -73,7 +73,10 @@ fn a_key_held_after_a_wsl_drop_whose_mapping_fails_is_not_sent(cx: &mut TestAppC
         assert!(view.wsl_paste.is_none());
         assert_eq!(view.pending_input.len(), 0);
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
             Some("Files not pasted: invalid WSL distribution name (1 held input discarded)")
         );
         sentinel(view, &mut peer);
@@ -89,7 +92,10 @@ fn a_key_held_after_a_drop_refused_by_an_open_menu_is_not_sent(cx: &mut TestAppC
         frame_returns(view, cx);
         assert!(view.wsl_paste.is_none(), "nothing was mapped");
         assert_eq!(
-            view.local_error.as_deref(),
+            view.local_error
+                .as_deref()
+                .map(crate::i18n::leak_tests::unmarked)
+                .as_deref(),
             Some("Files not pasted: a menu is open (1 held input discarded)")
         );
         view.menu.page = None;

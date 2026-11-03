@@ -19,11 +19,20 @@ contexts and bindings. A literal that is data, such as a font or a theme
 name, takes `// i18n: data` at the end of its line or on a line of its own
 just above it.
 
+The platform files name the same languages as the app: the macOS bundle's
+`CFBundleLocalizations` lists every language directory, each of which
+names itself in `language-name`, and its development region is `en-US`;
+every language has an installer `scripts/release/installer/<tag>.isl` and a
+desktop entry `Comment[tag]` (the plain `Comment` is English); and each
+`assets/macos/<tag>.lproj`, which is optional, installer file, and
+`Comment[tag]` is for one of them.
+
     python3 scripts/check-i18n.py
 """
 
 from __future__ import annotations
 
+import plistlib
 import re
 import subprocess
 import sys
@@ -37,6 +46,12 @@ ATTRIBUTE = re.compile(rf"^\s+\.{IDENTIFIER}\s*=")
 REFERENCE = re.compile(rf"\{{\s*({IDENTIFIER})(?:\.{IDENTIFIER})?\s*\}}")
 FL = re.compile(r"\bfl!\(\s*\"([^\"]*)\"")
 LITERAL = re.compile(r"\"([a-z][a-z0-9-]*)\"")
+LOCALIZED_KEY = re.compile(r"^\w+\[([^\]]+)\]=", re.MULTILINE)
+# The message each language names itself by in the Settings language picker.
+ENDONYM = "language-name"
+INFO_PLIST = Path("assets/macos/Info.plist")
+INSTALLER = Path("scripts/release/installer")
+DESKTOP_ENTRY = Path("scripts/release/so.pen.herdr-gpui.desktop")
 MIGRATED = "// i18n: migrated"
 DATA = "// i18n: data"
 # A capitalized word, or two lowercase words with a space between, outside
@@ -322,6 +337,41 @@ def check(files: list[Ftl], sources: dict[Path, str]) -> list[str]:
     return errors
 
 
+def platform(files: list[Ftl], plist: dict, translations: list[Path], desktop: str) -> list[str]:
+    """Where one of the app's languages does not name itself, or the macOS
+    bundle, the Windows installer, or the Linux desktop entry names other
+    languages than the app has."""
+    errors: list[str] = []
+    languages = {ftl.language for ftl in files}
+    named = {ftl.language for ftl in files if ENDONYM in ftl.messages}
+    for language in sorted(languages - named):
+        errors.append(f"{language} does not name itself: add {ENDONYM} to its language.ftl")
+    if plist.get("CFBundleDevelopmentRegion") != FALLBACK:
+        errors.append(f"{INFO_PLIST}: CFBundleDevelopmentRegion must be {FALLBACK}")
+    listed = plist.get("CFBundleLocalizations", [])
+    if sorted(listed) != sorted(languages):
+        errors.append(
+            f"{INFO_PLIST}: CFBundleLocalizations lists {sorted(listed)}, the app has {sorted(languages)}"
+        )
+    for path in translations:
+        if path.stem not in languages:
+            errors.append(f"{path}: {path.stem} is not one of the app's languages")
+    installer = {path.stem for path in translations if path.suffix == ".isl"}
+    for language in sorted(languages - installer):
+        errors.append(f"{INSTALLER}/{language}.isl is missing: the installer has no {language} text")
+    # The plain Comment is the English one.
+    commented = {FALLBACK} if re.search(r"^Comment=", desktop, re.MULTILINE) else set()
+    for tag in LOCALIZED_KEY.findall(desktop):
+        language = tag.replace("_", "-")
+        if language not in languages:
+            errors.append(f"{DESKTOP_ENTRY}: [{tag}] is not one of the app's languages")
+        commented.add(language)
+    for language in sorted(languages - commented):
+        tag = language.replace("-", "_")
+        errors.append(f"{DESKTOP_ENTRY}: no Comment[{tag}] for {language}")
+    return errors
+
+
 def tracked(*patterns: str) -> list[Path]:
     output = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *patterns],
@@ -341,6 +391,18 @@ def main() -> int:
         errors.extend(problems)
     sources = {path: path.read_text(encoding="utf-8") for path in tracked("crates/*.rs")}
     errors.extend(check(files, sources))
+    translations = sorted(
+        {path.parent for path in tracked("assets/macos/*.lproj/*")}
+        | set(tracked(f"{INSTALLER}/*.isl"))
+    )
+    errors.extend(
+        platform(
+            [ftl for ftl in files if ftl.path.parts[:2] == ("crates", "herdr-gpui")],
+            plistlib.loads(INFO_PLIST.read_bytes()),
+            translations,
+            DESKTOP_ENTRY.read_text(encoding="utf-8"),
+        )
+    )
     for error in errors:
         print(f"FAIL: {error}")
     if errors:

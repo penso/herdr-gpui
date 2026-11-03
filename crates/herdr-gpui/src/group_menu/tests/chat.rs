@@ -57,7 +57,7 @@ fn the_menu_offers_a_chat_per_installed_agent(cx: &mut TestAppContext) {
     assert!(listed[..first].iter().all(|action| action.section() == 0));
     let row = &listed[first];
     assert_eq!(row.label(), Agent::ALL[0].display_name());
-    assert_eq!(row.heading(), Some("New Chat"));
+    assert_eq!(row.heading().as_deref(), Some("New Chat"));
     assert_eq!(
         row.icon(),
         Some(crate::icons::AgentIcon::from_identity(Some(Agent::ALL[0].name())).path())

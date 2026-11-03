@@ -9,6 +9,7 @@ use super::{
     super::{Section, SettingsWindow},
     follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     cloud::{
         CloudProvider, SavedDevice,
@@ -16,7 +17,7 @@ use crate::{
     },
     config::{Config, SpritesFields},
     github::Store,
-    i18n::fl,
+    i18n::{Localize, fl},
     search_input::SearchInput,
     sprites::{
         Settings,
@@ -145,7 +146,9 @@ impl SettingsWindow {
                 tracing::error!(category = "sprites_worker", error_kind = ?error.kind(), "Could not start the Sprites settings worker");
                 if let Some(card) = &mut self.sprites_card {
                     // i18n: data
-                    card.message = Some(crate::cloud::Error::Worker("settings").to_string());
+                    card.message = Some(
+                        crate::cloud::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -291,7 +294,7 @@ impl SettingsWindow {
                     (_, Some(Ok(count))) => fl!("settings-cloud-sprites-count", count = *count),
                     (_, Some(Err(error))) => fl!(
                         "settings-cloud-sprites-token-unusable",
-                        error = error.to_string()
+                        error = error.localize()
                     ),
                     (_, None) => fl!("settings-cloud-checking"),
                 },
@@ -323,7 +326,7 @@ impl SettingsWindow {
             ))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .items_center()
                     .justify_between()
@@ -345,7 +348,7 @@ impl SettingsWindow {
                     }),
             )
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button("cloud-sprites-save", fl!("settings-cloud-save"), ready)
                         .debug_selector(|| "cloud-sprites-save".into())
                         .when(ready, |button| {
@@ -386,7 +389,7 @@ impl SettingsWindow {
                 cx,
             ))
             .child(
-                div().flex().justify_end().child(
+                div().row().justify_end().child(
                     self.cloud_button(
                         "cloud-sprites-create",
                         fl!("settings-cloud-sprites-create"),

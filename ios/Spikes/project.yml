@@ -1,0 +1,95 @@
+# Phase 0 spikes for the native app (docs/ios-spikes.md): Bluetooth
+# central with state restoration and L2CAP throughput, sealed
+# notifications opened in a Notification Service Extension, and a Live
+# Activity button that runs an intent over pinned TLS. Not shipped.
+name: HerdrSpikes
+
+options:
+  bundleIdPrefix: so.pen
+  deploymentTarget:
+    iOS: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    TARGETED_DEVICE_FAMILY: "1"
+    # Set your team to run on a device; the simulator signs ad hoc.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  HerdrRemoteCore:
+    path: ../HerdrRemoteCore
+
+targets:
+  HerdrSpikes:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    dependencies:
+      - package: HerdrRemoteCore
+      - target: HerdrSpikesNotifications
+      - target: HerdrSpikesWidgets
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Herdr Spikes
+        UILaunchScreen: {}
+        NSBluetoothAlwaysUsageDescription: The spike finds a Mac running the Herdr Bluetooth spike.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes: [bluetooth-central, remote-notification]
+    entitlements:
+      path: App/HerdrSpikes.entitlements
+      properties:
+        aps-environment: development
+        com.apple.security.application-groups: [group.so.pen.herdr-spikes]
+        keychain-access-groups: [group.so.pen.herdr-spikes]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-spikes
+
+  HerdrSpikesNotifications:
+    type: app-extension
+    platform: iOS
+    sources: [Notifications, Shared]
+    dependencies:
+      - package: HerdrRemoteCore
+    info:
+      path: Notifications/Info.plist
+      properties:
+        CFBundleDisplayName: Herdr Spikes Notifications
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: Notifications/HerdrSpikesNotifications.entitlements
+      properties:
+        com.apple.security.application-groups: [group.so.pen.herdr-spikes]
+        keychain-access-groups: [group.so.pen.herdr-spikes]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-spikes.notifications
+
+  HerdrSpikesWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [Widgets, Shared]
+    dependencies:
+      - package: HerdrRemoteCore
+      - sdk: SwiftUI.framework
+      - sdk: WidgetKit.framework
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Herdr Spikes Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/HerdrSpikesWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.so.pen.herdr-spikes]
+        keychain-access-groups: [group.so.pen.herdr-spikes]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-spikes.widgets

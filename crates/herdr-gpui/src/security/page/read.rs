@@ -23,6 +23,7 @@ pub(crate) const MAX_COMMENTS: usize = 50;
 /// The longest link kept.
 const MAX_URL: usize = 1024;
 
+// i18n: data
 const ALERT_QUERY: &str = r#"query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     vulnerabilityAlert(number: $number) {

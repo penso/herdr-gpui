@@ -6,17 +6,17 @@ mod moved;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod spread;
 
-fn offered(view: &HerdrWindow) -> Option<&'static str> {
+fn offered(view: &HerdrWindow) -> Option<String> {
     view.workspace_items()
         .into_iter()
         .find(|(action, _)| *action == WorkspaceMenuAction::FanOut)
-        .map(|(_, label)| label)
+        .map(|(_, label)| label.english())
 }
 
 #[gpui::test]
 fn offered_for_git_workspaces_on_scriptable_hosts(cx: &mut gpui::TestAppContext) {
     let expected =
-        cfg!(any(target_os = "linux", target_os = "macos")).then_some("Fan out prompt...");
+        cfg!(any(target_os = "linux", target_os = "macos")).then(|| "Fan out prompt...".to_owned());
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {

@@ -1,6 +1,7 @@
 //! Durable exactly-once creation intent. One account's requests are serialized
 //! across windows and processes; a failed attempt keeps its key and exact body.
 use super::{Error, Result, Settings, api::Create};
+use crate::cloud::Value;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -81,7 +82,7 @@ fn read(path: &Path, settings: &Settings) -> Result<Option<Creation>> {
         .read_to_end(&mut bytes)
         .map_err(|error| io(path, error))?;
     if bytes.len() as u64 > LIMIT {
-        return Err(Error::Field("Boat pending creation size"));
+        return Err(Error::Field(Value::BoatPendingSize));
     }
     let creation: Creation = serde_json::from_slice(&bytes).map_err(Error::Json)?;
     if creation.account != settings.account()
@@ -90,7 +91,7 @@ fn read(path: &Path, settings: &Settings) -> Result<Option<Creation>> {
         || creation.name.len() > 128
         || creation.name.chars().any(char::is_control)
     {
-        return Err(Error::Field("Boat pending creation"));
+        return Err(Error::Field(Value::BoatPending));
     }
     Ok(Some(creation))
 }
@@ -151,7 +152,7 @@ impl Journal {
         let parent = self
             .path
             .parent()
-            .ok_or(Error::Field("Boat pending path"))?;
+            .ok_or(Error::Field(Value::BoatPendingPath))?;
         let mut file =
             tempfile::NamedTempFile::new_in(parent).map_err(|error| io(&self.path, error))?;
         serde_json::to_writer(&mut file, &creation).map_err(Error::Json)?;

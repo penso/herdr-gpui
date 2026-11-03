@@ -1,4 +1,5 @@
 use super::*;
+use crate::cloud::Value;
 use crate::cloud::tests::server::serve;
 use secrecy::SecretString;
 
@@ -54,6 +55,6 @@ fn polling_cannot_redirect_setup_to_another_sandbox() {
     };
     assert!(matches!(
         wait_ready(&request, "bx_23456789", || false, |_| {}),
-        Err(Error::Field("Boat sandbox ID"))
+        Err(Error::Field(Value::BoatSandboxId))
     ));
 }

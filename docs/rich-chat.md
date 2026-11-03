@@ -20,8 +20,11 @@ render_existing = true
 
 `render_existing` opts into discovery of running Codex and Claude sessions.
 It is disabled by default. The chat header cycles
-through **Timeline**, **Bubbles**, **Terminal**, **Document**, **Cards**, and
-**iMessage**.
+through **Timeline**, **Bubbles**, **Terminal**, **Document**, **Cards**,
+**iMessage**, and **iA**. **iA** sets the chat like iA Writer: one column at
+about 70 characters a line, your prompts and the agent's steps as quiet notes
+hung from a gutter mark, the agent's prose in full ink, and earlier turns muted
+until you point at them.
 Select a layout directly with:
 
 ```sh
@@ -32,7 +35,10 @@ In **Settings > General**, turn on **Full-width chat** to use the available
 conversation area, or set **Chat width** with the slider or numeric field.
 The default is 800 logical pixels; custom widths range from 320 to 4,000 and
 shrink to fit narrower windows. The transcript and native composer use the
-same width. The equivalent commands are:
+same width. At the default, the agent's prose keeps to about 70 characters a
+line, the length that reads most easily, while code, tables, and pictures use
+the whole column; a width you choose is followed as set. The equivalent
+commands are:
 
 ```sh
 herdr-gpui config set chat.max_width 0     # full width
@@ -44,6 +50,40 @@ The Terminal layout still renders chat. The terminal button and
 `herdr-gpui chat hide` show the agent's actual terminal;
 `herdr-gpui chat show` restores the chat view. These commands change presentation
 without starting or stopping the agent. See the [CLI guide](cli.md#existing-agent-rendering).
+
+## Chats in Herdr 2 panes
+
+In a Herdr 2 (herdr-core) tab, starting a chat from the tab strip's launcher
+or the group menu splits the pane in use and runs the chat beside it. A tab
+can hold several chats side by side, each in its own pane, along with plain
+terminals. The window picks the chat's endpoint before `herdr-acp` starts:
+it passes the id in `HERDR_ACP_ENDPOINT` and labels the terminal `acp=<id>`
+in herdr-core. Because herdr-core keeps the label, the chat view comes back
+after a restart and appears in every window that shows the pane.
+`herdr-acp` reports its status to herdr-core with OSC 7501, so the pane's
+activity dot behaves as it does in Herdr.
+
+The window only attaches to terminals of the herdr-core on this machine. A
+chat in a terminal on another machine that core added keeps its terminal
+view. Mirror tabs only watch, so they show the terminal rather than a chat.
+A `herdr-acp` started by hand in a Herdr 2 pane has no label, so it also
+keeps its terminal view.
+
+## Sub-agents and background shells
+
+When the agent hands a task to a sub-agent or leaves a command running in the
+background, the row above the composer says so after what the agent is doing,
+such as `Writing… 12s · 2 sub-agents · 1 background shell`. A background shell
+outlives the turn that started it, so once the agent is idle the row keeps
+saying what still runs (`1 background shell still running`) and clears when
+everything has ended. Click it for a table of each one: what it is, how long it
+has run or ran, and whether it is running, done, failed, or stopped.
+
+A sub-agent's call is marked **Sub-agent** in the conversation, with the number
+of steps it took; open it to list them. Its steps stay in its card rather than
+in the conversation. A call that started a background shell says `running`
+until the shell ends, even though the call itself is done. Which agents report
+this, and how, is in the [`herdr-acp` README](../crates/herdr-acp/README.md#behaviour).
 
 ## Messages and controls
 

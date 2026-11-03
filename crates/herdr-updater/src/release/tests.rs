@@ -4,6 +4,7 @@ use ed25519_dalek::{Signer, SigningKey};
 
 mod beta_channel;
 mod grouped_notes;
+mod host_builds;
 mod null_body;
 mod package_selection;
 mod packages;

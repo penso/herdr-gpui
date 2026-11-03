@@ -11,6 +11,7 @@ mod appearance_messages;
 mod config_watch;
 mod en_xa;
 mod gpu_settings;
+mod language_picker;
 mod language_reload;
 #[cfg(windows)]
 mod launch_at_login;
@@ -24,6 +25,7 @@ mod pages_behaviour;
 mod quit_saves;
 mod remote_control;
 mod remote_history_reload;
+mod rtl;
 mod save_now;
 mod scrollbars;
 mod search;

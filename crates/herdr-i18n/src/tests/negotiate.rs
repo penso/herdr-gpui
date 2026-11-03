@@ -51,3 +51,36 @@ fn system_languages_parse_posix_tags() {
     // Whatever the OS reports, every entry is a parsed identifier.
     let _ = system_languages();
 }
+
+#[test]
+fn negotiation_keeps_scripts_regions_and_the_callers_locales() {
+    // `fluent-langneg` matches its own identifier type; every subtag must
+    // survive the conversion and the result must be one of `available`.
+    let available = vec![
+        locale("en-US"),
+        locale("pt-BR"),
+        locale("zh-Hant"),
+        locale("zh-Hans"),
+        Pseudo::ALL[0].locale(),
+    ];
+    assert_eq!(
+        negotiate(&ids(&["zh-Hant-TW"]), &available),
+        locale("zh-Hant")
+    );
+    assert_eq!(
+        negotiate(&ids(&["zh-Hans-CN"]), &available),
+        locale("zh-Hans")
+    );
+    // A bare language takes a regional translation as a range.
+    assert_eq!(negotiate(&ids(&["pt"]), &available), locale("pt-BR"));
+    assert_eq!(negotiate(&ids(&["PT-br"]), &available), locale("pt-BR"));
+    assert_eq!(
+        negotiate(&[Pseudo::ALL[0].locale().id().clone()], &available),
+        Pseudo::ALL[0].locale()
+    );
+    // An unmatched preference does not hide a later one.
+    assert_eq!(
+        negotiate(&ids(&["ja", "zh-Hans"]), &available),
+        locale("zh-Hans")
+    );
+}

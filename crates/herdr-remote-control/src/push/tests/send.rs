@@ -45,6 +45,7 @@ fn delivery_follows_the_notification() {
         clear: false,
         kind: Kind::Question,
         pane: "p".to_owned(),
+        permission: None,
         tag: "chat-p".to_owned(),
         title: String::new(),
         urgency: Urgency::High,

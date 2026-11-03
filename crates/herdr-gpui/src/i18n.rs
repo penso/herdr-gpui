@@ -11,12 +11,14 @@
 
 mod check;
 mod current;
+pub(crate) mod errors;
 #[cfg(test)]
 pub(crate) mod leak_tests;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use check::check;
+pub(crate) use errors::Localize;
 pub(crate) use herdr_i18n::FluentValue;
 use herdr_i18n::{Catalog, Direction, FluentArgs, Language, Locale, Pseudo};
 use std::sync::LazyLock;
@@ -112,6 +114,18 @@ pub(crate) fn available() -> Vec<Locale> {
     Catalog::available(FILES)
 }
 
+/// Each language with messages, named in itself, as [`available`] orders them.
+static ENDONYMS: LazyLock<Vec<(Locale, String)>> = LazyLock::new(|| Catalog::endonyms(FILES));
+
+/// What `locale` calls itself (`English`, `עברית`), or its tag when it has
+/// no messages of its own, whatever language the windows show.
+pub(crate) fn endonym(locale: &Locale) -> String {
+    ENDONYMS
+        .iter()
+        .find(|(candidate, _)| candidate == locale)
+        .map_or_else(|| locale.to_string(), |(_, name)| name.clone())
+}
+
 /// The locale every window shows, and what chose it.
 #[derive(Clone, Debug)]
 pub(crate) struct CurrentLocale {
@@ -167,6 +181,26 @@ impl CurrentLocale {
 /// to check. Like Slow Animations, it is read where there is no app context.
 pub(crate) fn shown_pseudo() -> Option<Pseudo> {
     current::catalog()?.locale().pseudo()
+}
+
+/// The locale the windows show, for caches of text written in it to
+/// notice a switch. Read where there is no app context, as [`shown_pseudo`] is.
+pub(crate) fn shown_locale() -> Option<Locale> {
+    current::catalog().map(|catalog| catalog.locale().clone())
+}
+
+/// Which way the windows lay their chrome out: the shown locale's
+/// direction, read where there is no app context, as [`shown_pseudo`] is.
+/// [`crate::direction`] mirrors layout by it.
+pub(crate) fn direction() -> Direction {
+    current::direction()
+}
+
+/// Shows `locale` on this test's thread with no app, for tests of text and
+/// layout outside a window.
+#[cfg(test)]
+pub(crate) fn show(locale: &Locale) {
+    current::replace(locale);
 }
 
 /// Picks the locale the setting asks for when the app starts, before any

@@ -8,10 +8,12 @@ mod close;
 mod close_unconfirmed;
 mod dialog_layout;
 mod dispatch;
+mod en_xa;
 mod issues;
 mod left_checkout;
 mod left_checkout_lookup;
 mod merged_removal;
+mod mute;
 mod naming;
 mod pull_requests;
 #[cfg(all(feature = "container", any(target_os = "linux", target_os = "macos")))]
@@ -29,6 +31,9 @@ mod worktree_create;
 mod worktree_delete;
 mod worktree_delete_keys;
 mod worktree_delete_recovery;
+// Host scripts, which find and start agents, need a POSIX client.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod worktree_landing;
 
 /// Presses the open workspace dialog's submit, for `endpoint::lifecycle_tests`.
 #[cfg(unix)]
@@ -258,8 +263,8 @@ pub(crate) fn check_menu_interactions(
                 super::Page::Workspace,
                 items.len(),
                 // Debug selectors are static; leaking two test labels is fine.
-                &*format!("workspace-menu-{}", items[0].1).leak(),
-                &*format!("workspace-menu-{}", items[1].1).leak(),
+                &*format!("workspace-menu-{}", items[0].1.english()).leak(),
+                &*format!("workspace-menu-{}", items[1].1.english()).leak(),
             )
         } else {
             (

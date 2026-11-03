@@ -11,6 +11,7 @@ use super::{
     super::{Section, SettingsWindow},
     Hint, follow_config, input,
 };
+use crate::direction::Logical;
 use crate::{
     cloud::{
         SavedDevice,
@@ -22,7 +23,7 @@ use crate::{
     },
     config::{CoderConfig, CoderFields, Config},
     github::Store,
-    i18n::{self, fl},
+    i18n::{self, Localize, fl},
     search_input::SearchInput,
 };
 use gpui::{prelude::*, *};
@@ -192,8 +193,9 @@ impl SettingsWindow {
             Err(error) => {
                 tracing::error!(category = "coder_worker", error_kind = ?error.kind(), "Could not start Coder settings worker");
                 if let Some(cloud) = &mut self.coder_card {
-                    // i18n: data
-                    cloud.message = Some(crate::coder::Error::Worker("settings").to_string());
+                    cloud.message = Some(
+                        crate::coder::Error::Worker(crate::cloud::Worker::Settings).localize(),
+                    );
                 }
             }
         }
@@ -365,7 +367,7 @@ impl SettingsWindow {
             .child(self.control_note(fl!("settings-cloud-coder-note")))
             .child(
                 div()
-                    .flex()
+                    .row()
                     .flex_wrap()
                     .items_center()
                     .justify_between()
@@ -412,7 +414,7 @@ impl SettingsWindow {
                     ))
                     .child(
                         div()
-                            .flex()
+                            .row()
                             .flex_wrap()
                             .items_center()
                             .justify_between()
@@ -438,7 +440,7 @@ impl SettingsWindow {
             }
         }
         card = card.child(
-            div().flex().justify_end().child(
+            div().row().justify_end().child(
                 self.cloud_button("cloud-coder-save", fl!("settings-cloud-save"), ready)
                     .debug_selector(|| "cloud-coder-save".into())
                     .when(ready, |button| {

@@ -2,10 +2,12 @@
 //! first, each with what its turn changed, and a restore behind a
 //! confirmation that says what restoring replaces.
 
+// i18n: migrated
 use super::Page;
 use crate::{
     HerdrWindow,
-    checkpoint::{Checkout, Listing, age, host_for},
+    checkpoint::{Checkout, Listing, host_for},
+    i18n::fl,
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
@@ -121,35 +123,29 @@ impl HerdrWindow {
         if let Some(checkpoint) = confirming {
             body = body
                 .child(
-                    line(format!(
-                        "Restore \u{201c}{}\u{201d} from {}?",
-                        checkpoint.label,
-                        age(checkpoint.created, now)
+                    line(fl!(
+                        "checkpoints-restore-title",
+                        label = checkpoint.label.as_str(),
+                        age = crate::ago::text(crate::ago::since(checkpoint.created, now)),
                     ))
                     .font_weight(FontWeight::SEMIBOLD),
                 )
-                .child(line(format!(
-                    "Files in this checkout go back to how they were then, and {} moves back to the commit it was on. Files created since are removed; ignored files are left alone.",
-                    view.checkout.branch
+                .child(line(fl!(
+                    "checkpoints-restore-note",
+                    branch = view.checkout.branch.as_str()
                 )))
-                .child(
-                    line("The current state is saved as a checkpoint first, so this can be undone.".into())
-                        .text_color(muted),
-                );
+                .child(line(fl!("checkpoints-undo-note")).text_color(muted));
             if self.checkpoint_agent_working() {
                 body = body.child(
-                    line(
-                        "An agent in this workspace is still working and may keep changing files."
-                            .into(),
-                    )
-                    .debug_selector(|| "checkpoints-agent-working".into())
-                    .text_color(danger),
+                    line(fl!("checkpoints-agent-working"))
+                        .debug_selector(|| "checkpoints-agent-working".into())
+                        .text_color(danger),
                 );
             }
         } else {
             match &view.listing {
                 Listing::Loading => {
-                    body = body.child(line("Loading checkpoints...".into()).text_color(muted));
+                    body = body.child(line(fl!("checkpoints-loading")).text_color(muted));
                 }
                 Listing::Failed(error) => {
                     body = body.child(
@@ -161,9 +157,9 @@ impl HerdrWindow {
                 Listing::Ready(list) if list.is_empty() => {
                     body = body.child(
                         line(if self.config.agent_checkpoints {
-                            "No checkpoints yet. One is taken each time an agent here starts or finishes a turn.".into()
+                            fl!("checkpoints-empty")
                         } else {
-                            "No checkpoints. Checkpoint agent turns is off in Settings > General.".into()
+                            fl!("checkpoints-off")
                         })
                         .text_color(muted),
                     );
@@ -203,9 +199,9 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .hover(|button| button.bg(rgb(theme.active)))
                     .child(if confirming.is_some() {
-                        "Cancel"
+                        fl!("checkpoints-cancel")
                     } else {
-                        "Close"
+                        fl!("checkpoints-close")
                     })
                     .on_click(cx.listener(|this, _, window, cx| {
                         cx.stop_propagation();
@@ -224,7 +220,11 @@ impl HerdrWindow {
                 button("checkpoints-restore")
                     .border_color(danger)
                     .text_color(danger)
-                    .child(if armed { "Restore" } else { "Restoring..." })
+                    .child(if armed {
+                        fl!("checkpoints-restore")
+                    } else {
+                        fl!("checkpoints-restoring")
+                    })
                     .when(!armed, |button| {
                         button.opacity(0.4).cursor(CursorStyle::OperationNotAllowed)
                     })
@@ -268,14 +268,13 @@ impl HerdrWindow {
                                 div()
                                     .text_size(px(font.size * 1.35))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Checkpoints"),
+                                    .child(fl!("checkpoints-title")),
                             )
-                            .child(
-                                div().truncate().text_color(muted).child(format!(
-                                    "{} \u{b7} {}",
-                                    view.title, view.checkout.branch
-                                )),
-                            ),
+                            .child(div().truncate().text_color(muted).child(fl!(
+                                "checkpoints-subtitle",
+                                workspace = view.title.as_str(),
+                                branch = view.checkout.branch.as_str(),
+                            ))),
                     ),
             )
             .child(

@@ -4,6 +4,8 @@
 use super::Choice;
 use crate::sidebar::layout_tests::fixture_window;
 
+mod en_xa;
+
 /// A new workspace runs the setup script by default; attaching an existing
 /// one, which may be set up already, does not.
 #[gpui::test]

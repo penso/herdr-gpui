@@ -40,10 +40,14 @@ impl Tools {
         let record = format!("printf '%s\\n' \"$0 $*\" >> '{}'\n", events.display());
         let open_fails = root.path().join("open-fails");
         let running = root.path().join("running");
+        let locale = format!(
+            "printf 'locale: LC_ALL=%s LANG=%s\\n' \"${{LC_ALL-unset}}\" \"${{LANG-unset}}\" >> '{}'\n",
+            events.display()
+        );
         let tools = [
             (
                 "open",
-                format!("{record}[ ! -e '{}' ]\n", open_fails.display()),
+                format!("{record}{locale}[ ! -e '{}' ]\n", open_fails.display()),
             ),
             ("logger", record.clone()),
             ("osascript", record),
@@ -151,6 +155,21 @@ fn relaunch_waits_for_the_running_app_then_opens_the_same_bundle() -> anyhow::Re
     );
     anyhow::ensure!(opens(&events) == 1, "opened more than once: {events:?}");
     anyhow::ensure!(!events.iter().any(|event| event.contains("osascript")));
+    Ok(())
+}
+
+#[test]
+fn relaunch_opens_the_app_without_setting_a_locale() -> anyhow::Result<()> {
+    let tools = Tools::new()?;
+    let watched = Command::new("/bin/sleep").arg("30").spawn()?;
+    let pid = watched.id();
+    drop(Reap(Some(watched)));
+    tools.schedule(pid, Duration::from_secs(600))?;
+    let events = tools.wait_for(&tools.logged("opened"))?;
+    anyhow::ensure!(
+        events.contains(&"locale: LC_ALL=unset LANG=unset".to_owned()),
+        "open passed a locale to the app: {events:?}"
+    );
     Ok(())
 }
 
