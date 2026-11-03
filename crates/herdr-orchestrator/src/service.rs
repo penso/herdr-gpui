@@ -4,7 +4,8 @@
 //! mailbox on its tick; it never waits on this thread.
 
 use super::{
-    Access, Error, HerdrSession, Item, Provider, Result, Run, SourceKey, Store,
+    Access, CheckState, Error, HerdrSession, Item, PrStatus, Provider, Result, Run, SourceKey,
+    Store,
     actions::{Action, Site},
     beads, database_path, github, gitlab,
     location::{database_path_in, legacy_path, legacy_path_in},
@@ -30,7 +31,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod github_source;
 mod gitlab_source;
+mod schedule;
 mod sources;
 
 pub use sources::sources;
@@ -183,7 +186,7 @@ pub struct Snapshot {
     pub branches: Arc<Vec<String>>,
     /// Each open pull request's review and checks, by repository and number,
     /// as the last sync of its source read them. Never stored.
-    pub pr_status: Arc<HashMap<(String, u64), super::PrStatus>>,
+    pub pr_status: Arc<HashMap<(String, u64), PrStatus>>,
 }
 
 pub struct Service {
@@ -191,6 +194,7 @@ pub struct Service {
     mailbox: Arc<Mutex<Option<Snapshot>>>,
     notices: Arc<Mutex<VecDeque<Notice>>>,
     cancelled: Arc<AtomicBool>,
+    visible: Arc<AtomicBool>,
 }
 
 impl Service {
@@ -213,6 +217,9 @@ impl Service {
         let mailbox = Arc::new(Mutex::new(None));
         let notices = Arc::new(Mutex::new(VecDeque::new()));
         let cancelled = Arc::new(AtomicBool::new(false));
+        // Shown until the view says otherwise, so a view opened on screen
+        // never waits out the hidden period.
+        let visible = Arc::new(AtomicBool::new(true));
         let worker = Worker {
             request,
             mailbox: mailbox.clone(),
@@ -232,12 +239,17 @@ impl Service {
             resume: HashMap::new(),
             gitlab_token: None,
             cooldown: None,
+            visible: visible.clone(),
+            checks: HashMap::new(),
+            remembered: HashMap::new(),
+            failures: HashMap::new(),
         };
         let service = Self {
             commands,
             mailbox,
             notices,
             cancelled,
+            visible,
         };
         (service, worker, receiver)
     }
@@ -266,6 +278,14 @@ impl Service {
         match self.commands.try_send(Command::Refresh(token)) {
             Ok(()) | Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {}
         }
+    }
+
+    /// Whether the view is on screen. Hidden, sources sync every
+    /// [`schedule::HIDDEN_SYNC`]; shown again, a sync older than the visible
+    /// period runs at the worker's next tick. A flag rather than a command,
+    /// so a full queue never drops it.
+    pub fn set_visible(&self, visible: bool) {
+        self.visible.store(visible, Ordering::Relaxed);
     }
 
     /// The newest snapshot since the last call, if any.
@@ -314,6 +334,14 @@ struct Worker {
     /// connected account is picked up without reopening the view.
     gitlab_token: Option<(String, Option<gitlab::account::Found>)>,
     cooldown: Option<Duration>,
+    /// Whether the view is on screen, as the UI last said.
+    visible: Arc<AtomicBool>,
+    /// When each GitHub source's checks were last read, and what was open.
+    checks: HashMap<SourceKey, schedule::ChecksRead>,
+    /// The checkpoint of each GitHub listing in `uncached`.
+    remembered: HashMap<SourceKey, github_source::Remembered>,
+    /// Each source's failures in a row, which lengthen its wait.
+    failures: HashMap<SourceKey, u32>,
 }
 
 impl Worker {
@@ -329,17 +357,17 @@ impl Worker {
             self.sync(token.as_ref());
         }
         let Timing { reload, sync } = self.request.timing;
-        let mut next_sync = Instant::now() + sync;
+        let mut last_sync = Instant::now();
         while !self.cancelled() {
+            let visible = self.visible.load(Ordering::Relaxed);
+            let next_sync = last_sync + schedule::period(sync, visible);
             let wait = reload.min(next_sync.saturating_duration_since(Instant::now()));
             match commands.recv_timeout(wait) {
                 Ok(Command::Refresh(token)) => {
-                    self.request.token = token;
-                    self.gitlab_token = None;
-                    self.retry.clear();
+                    self.refreshed(token);
                     let token = self.request.token.clone();
                     self.sync(token.as_ref());
-                    next_sync = Instant::now() + sync;
+                    last_sync = Instant::now();
                 }
                 Ok(Command::Act(action)) => self.act(action),
                 Ok(Command::LoadPullRequest(number)) => self.load_pull_request(number),
@@ -372,12 +400,22 @@ impl Worker {
                 Err(RecvTimeoutError::Timeout) if Instant::now() >= next_sync => {
                     let token = self.request.token.clone();
                     self.sync(token.as_ref());
-                    next_sync = Instant::now() + sync;
+                    last_sync = Instant::now();
                 }
                 Err(RecvTimeoutError::Timeout) => self.reload_if_changed(),
                 Err(RecvTimeoutError::Disconnected) => return,
             }
         }
+    }
+
+    /// Forgets what spaced out the next sync, so Refresh (or a new account)
+    /// reads everything again: the token looked up, the sources' waits, and
+    /// when their checks were last read, which a re-run check may not move.
+    fn refreshed(&mut self, token: Option<Tokens>) {
+        self.request.token = token;
+        self.gitlab_token = None;
+        self.retry.clear();
+        self.checks.clear();
     }
 
     /// Starts `action` on a thread of its own, at most [`MAX_ACTIONS`] at once.
@@ -719,6 +757,7 @@ impl Worker {
             let state = match self.sync_source(&key, token) {
                 // The view shows no sync times, so the log keeps them.
                 Ok(state) => {
+                    self.failures.remove(&key);
                     tracing::debug!(
                         category = "orchestrator_sync",
                         provider = ?key.provider,
@@ -732,7 +771,10 @@ impl Worker {
                 }
                 Err(Error::Cancelled) => return,
                 Err(error) => {
-                    let wait = retry_wait(&error, self.cooldown.take());
+                    let failures = self.failures.entry(key.clone()).or_default();
+                    *failures = failures.saturating_add(1);
+                    let wait =
+                        schedule::backoff(retry_wait(&error, self.cooldown.take()), *failures);
                     tracing::warn!(
                         category = "orchestrator_sync",
                         provider = ?key.provider,
@@ -781,108 +823,10 @@ impl Worker {
                     count,
                 })
             }
-            Provider::Github => {
-                let Some(tokens) = token else {
-                    return Ok(SyncState::SignIn);
-                };
-                let owner = key
-                    .repository
-                    .split_once('/')
-                    .map_or(key.repository.as_str(), |(owner, _)| owner);
-                let token = tokens.for_owner(owner);
-                let previous = store.checkpoint(key)?;
-                // What the last complete sync stored, for reading only the
-                // changes since; a read-only store keeps none.
-                let cached = match (&previous, writable) {
-                    (Some(_), true) => Some(
-                        store
-                            .items()?
-                            .into_iter()
-                            .filter(|item| item.key.source == *key)
-                            .collect(),
-                    ),
-                    _ => None,
-                };
-                // Only while the stored checkpoint is still the one this
-                // worker wrote: agent-launcher shares the database and may
-                // have stored an older listing since.
-                let resume = self.resume.get(key).copied().filter(|resume| {
-                    previous
-                        .as_ref()
-                        .and_then(|checkpoint| checkpoint.updated_at)
-                        == Some(resume.oldest())
-                });
-                let cancelled = &self.cancelled;
-                let listing = github::sync(
-                    key,
-                    token,
-                    previous.as_ref(),
-                    (cached, resume),
-                    &|| cancelled.load(Ordering::Relaxed),
-                    &mut self.cooldown,
-                )?;
-                let count = listing.items.len();
-                // Reviews and checks change with every CI run, so they are
-                // read again each sync. Failing to read them keeps the last
-                // ones rather than failing the listing.
-                let statuses = super::review::fetch(&key.repository, |query, variables| {
-                    herdr_github::graphql(
-                        "orchestrator",
-                        token,
-                        query,
-                        variables,
-                        super::review::timeout(),
-                        || cancelled.load(Ordering::Relaxed),
-                        &mut self.cooldown,
-                    )
-                    .map_err(|error| match error {
-                        herdr_github::Error::PullRequest(
-                            herdr_github::pull_request::Error::Cancelled,
-                        ) => Error::Cancelled,
-                        error => Error::Github(Box::new(error)),
-                    })
-                });
-                match statuses {
-                    Ok(statuses) => {
-                        if writable
-                            && let Err(error) =
-                                store.replace_pr_statuses(&key.repository, &statuses)
-                        {
-                            tracing::warn!(%error, "Cannot keep pull request checks");
-                        }
-                        let mut all = (*self.snapshot.pr_status).clone();
-                        all.retain(|(repository, _), _| *repository != key.repository);
-                        all.extend(
-                            statuses
-                                .into_iter()
-                                .map(|(number, status)| ((key.repository.clone(), number), status)),
-                        );
-                        self.snapshot.pr_status = Arc::new(all);
-                    }
-                    Err(Error::Cancelled) => return Err(Error::Cancelled),
-                    Err(error) => tracing::warn!(%error, "Cannot read pull request checks"),
-                }
-                // A listing that is not stored is no place to resume from.
-                self.resume.remove(key);
-                if !listing.complete || !writable {
-                    self.uncached.insert(key.clone(), listing.items);
-                    return Ok(if listing.complete {
-                        SyncState::Synced {
-                            at: Utc::now(),
-                            count,
-                        }
-                    } else {
-                        SyncState::Capped { count }
-                    });
-                }
-                store.replace_items(key, &listing.items, &listing.checkpoint)?;
-                self.resume.insert(key.clone(), listing.resume);
-                self.uncached.remove(key);
-                Ok(SyncState::Synced {
-                    at: Utc::now(),
-                    count,
-                })
-            }
+            Provider::Github => match token {
+                Some(tokens) => self.github_listing(key, tokens),
+                None => Ok(SyncState::SignIn),
+            },
             Provider::Gitlab => {
                 let previous = store.checkpoint(key)?;
                 let listing = self.gitlab_listing(key, previous.as_ref())?;
