@@ -191,7 +191,7 @@ axum                 = { default-features = false, features = ["http1", "json", 
 tower                = { default-features = false, features = ["util"], version = "0.5" }
 # A WebSocket client for herdr-remote-control's live socket tests; axum's
 # `ws` feature already links this version.
-tokio-tungstenite    = { default-features = false, features = ["handshake"], version = "0.29" }
+tokio-tungstenite    = { default-features = false, features = ["handshake"], version = "0.30" }
 tokio-rustls         = { default-features = false, features = ["ring", "tls12"], version = "0.26" }
 # herdr-remote-control's APNs sender for iOS Live Activities: APNs speaks only
 # HTTP/2, which ureq lacks. hyper's own HTTP/2 client (plus h2) over the
