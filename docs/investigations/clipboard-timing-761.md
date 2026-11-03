@@ -1,5 +1,9 @@
 # macOS dictation clipboard timing (#761)
 
+Historical investigation: commands and diagnostics below retain the names used
+at that revision. In the current tree, the main crate is `sheprd-gpui` and its
+binary is `sheprd`; no native reproduction is implied by this documentation rename.
+
 ## Status
 
 **Unresolved.** Investigation against `d4a488314ebb5b9c60655e1273410d7e56a7e38a`,
@@ -117,6 +121,6 @@ or daemon was changed during this investigation.
   is not installed. The host Linux Clippy runs above did pass.
 - No macOS compilation, private-pasteboard test, or native GUI QA was run.
 
-[#758]: https://github.com/penso/herdr-gpui/pull/758
-[#818]: https://github.com/penso/herdr-gpui/pull/818
+[#758]: https://github.com/sheprd-labs/sheprd/pull/758
+[#818]: https://github.com/sheprd-labs/sheprd/pull/818
 [apple]: https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/PasteboardGuide106/Articles/pbConcepts.html

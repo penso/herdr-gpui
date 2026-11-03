@@ -1,5 +1,5 @@
 name: Documentation Issue
-description: Report missing, incorrect, or unclear Herdr UI documentation
+description: Report missing, incorrect, or unclear Sheprd documentation
 title: "[Docs]: "
 labels:
   - documentation
@@ -19,7 +19,7 @@ body:
     id: location
     attributes:
       label: Documentation URL or file
-      placeholder: "README.md, crates/herdr-gpui/README.md, or a URL"
+      placeholder: "README.md, crates/sheprd-gpui/README.md, or a URL"
   - type: textarea
     id: problem
     attributes:

@@ -2,7 +2,7 @@
 //! uses, to embed its `gpui.manifest.xml` as the executable's manifest.
 //!
 //! Herdr's executables embed their own manifest instead
-//! (`crates/herdr-gpui/windows.manifest`, through `winresource`), and an
+//! (`crates/sheprd-gpui/windows.manifest`, through `winresource`), and an
 //! executable holds one: a second manifest resource fails the link with
 //! CVT1100. GPUI's platform crate turns GPUI's `windows-manifest` feature on
 //! for every Windows build, so the feature cannot be switched off; the

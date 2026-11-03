@@ -1,6 +1,6 @@
 # Orchestrator
 
-The orchestrator (`crates/herdr-gpui/src/orchestrator/`) lists a repository's
+The orchestrator (`crates/sheprd-gpui/src/orchestrator/`) lists a repository's
 issues, pull requests, and the agent runs dispatched for them in the activity
 bar's Pull requests and Issues sections, and dispatches new ones through the
 Herdr CLI. User-facing behavior is in the crate README's "Orchestrator"
@@ -20,7 +20,8 @@ which added each open pull request's last read review and checks):
   is copied in, if there is one, so its items and runs come along. Nothing
   is written back to it afterwards.
 - Runs keep their `runs.owner` (`agent-launcher` or `herdr-gpui`); only
-  herdr-gpui's own runs are stopped, messaged, or removed.
+  Sheprd's own runs are stopped, messaged, or removed. The persisted owner token
+  stays `herdr-gpui` across the rename.
 - A source's issues are replaced only with a complete listing. A capped
   listing, or one made while the schema is newer than this build knows, is
   shown and not written. A newer schema opens read-only, with a banner.
@@ -176,7 +177,7 @@ save succeeds, and saving or forgetting one makes every view sync again.
 (`gitlab/oauth.rs`), as GitHub's sign-in does: GitLab issues a code, the page
 shows it with **Open GitLab** and **Copy code**, and polls `/oauth/token` on
 timers until the user approves it there. The application is public, so only
-its ID is sent: gitlab.com uses Herdr UI's own, and a self-managed instance
+its ID is sent: gitlab.com uses Sheprd's own, and a self-managed instance
 gets Connect once `[gitlab] applications` names one for it. The approval page
 must be an HTTPS page on the instance, or nothing opens. The granted pair is
 checked with `/api/v4/user`, then kept like a pasted token. GitLab's access

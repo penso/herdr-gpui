@@ -1,50 +1,69 @@
 #!/usr/bin/env python3
-"""Generate circular Linux SVGs from the shared ram artwork (standard library only)."""
+"""Derive platform SVGs from Sheprd's canonical paw (standard library only).
+
+Linux uses a circular mask; desktop tiles keep platform-specific margins.
+This runs first in `just icons`, before the native raster/package generators.
+"""
+from copy import deepcopy
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets/icons"
 SVG = "{http://www.w3.org/2000/svg}"
-# The red palette matches the flat colors of the macOS worktree PNG.
-PALETTES = {
-    "herdr-linux.svg": ("#f4f1e9", "#303438"),
-    "herdr-linux-worktree.svg": ("#ea6369", "#8e2b38"),
-}
+ET.register_namespace("", SVG[1:-1])
 
 
-def artwork(source, background, foreground):
-    root = ET.fromstring(source)
-    ram = root.find(f".//{SVG}path[@id='ram']")
-    metadata = root.find(f"{SVG}metadata")
-    if ram is None or metadata is None:
-        raise ValueError("Shared icon must contain the ram path and attribution")
-    # Keep the entire silhouette inside the disc, rather than clipping the
-    # full-bleed macOS composition. A 64px margin balances the disc's footprint.
+def artwork(source, shape="circle", worktree=False, badge=False):
+    canonical = ET.fromstring(source)
+    defs = deepcopy(canonical.find(f"{SVG}defs"))
+    paw = deepcopy(canonical.find(f"{SVG}g"))
+    if defs is None or paw is None or len(paw) != 5:
+        raise ValueError("Canonical avatar must contain its gradient and five paw shapes")
+    if worktree:
+        # Recolor only the background: the cream paw stays bright, unlike a
+        # luminance remap which turns the foreground into low-contrast red.
+        for stop, color in zip(defs.iter(f"{SVG}stop"), ("#df4b62", "#991f43"), strict=True):
+            stop.set("stop-color", color)
     icon = ET.Element(f"{SVG}svg", {
         "width": "1024", "height": "1024", "viewBox": "0 0 1024 1024",
         "role": "img", "aria-labelledby": "title desc",
     })
-    ET.SubElement(icon, f"{SVG}title", id="title").text = "Herdr"
+    ET.SubElement(icon, f"{SVG}title", id="title").text = "Sheprd"
     ET.SubElement(icon, f"{SVG}desc", id="desc").text = (
-        "Herdr's ram and terminal prompt centered on a circular background."
+        "Cream paw on a " + ("berry-red development" if worktree else "warm orange") + " gradient."
     )
-    ET.SubElement(icon, f"{SVG}metadata").text = metadata.text
-    ET.SubElement(icon, f"{SVG}circle", {
-        "cx": "512", "cy": "512", "r": "448", "fill": background,
-    })
-    ET.SubElement(icon, f"{SVG}path", {
-        "id": "ram", "d": ram.attrib["d"],
-        "transform": "translate(51 792) scale(.15 -.15)", "fill": foreground,
-    })
-    ET.register_namespace("", SVG[1:-1])
+    ET.SubElement(icon, f"{SVG}metadata").text = "Derived from sheprd-avatar.svg; original Sheprd artwork, Apache-2.0."
+    icon.append(defs)
+    if shape == "circle":
+        ET.SubElement(icon, f"{SVG}circle", cx="512", cy="512", r="448", fill="url(#background)")
+    elif shape == "tile":
+        ET.SubElement(icon, f"{SVG}rect", x="64", y="64", width="896", height="896", rx="192", fill="url(#background)")
+    elif shape == "square":
+        ET.SubElement(icon, f"{SVG}rect", width="1024", height="1024", fill="url(#background)")
+    else:
+        raise ValueError(f"Unknown icon shape: {shape}")
+    paw.set("transform", "scale(10.24)" if shape == "square" else "translate(64 64) scale(8.96)")
+    icon.append(paw)
+    if badge:
+        ET.SubElement(icon, f"{SVG}circle", cx="839", cy="185", r="135", fill="#c93647", stroke="#fff8f0", **{"stroke-width": "20"})
+        # Outlined numeral, independent of installed fonts.
+        ET.SubElement(icon, f"{SVG}path", d="M811 152 L842 130 L842 236 M812 236 H874", fill="none", stroke="#fff8f0", **{"stroke-width": "22", "stroke-linecap": "round", "stroke-linejoin": "round"})
     ET.indent(icon, space="  ")
     return ET.tostring(icon, encoding="unicode") + "\n"
 
 
 def main():
-    source = (ASSETS / "herdr-ui-icon-clean.svg").read_text()
-    for name, colors in PALETTES.items():
-        (ASSETS / name).write_text(artwork(source, *colors))
+    source = (ASSETS / "sheprd-avatar.svg").read_text()
+    variants = {
+        "sheprd-linux.svg": ("circle", False, False),
+        "sheprd-linux-worktree.svg": ("circle", True, False),
+        "sheprd-icon.svg": ("tile", False, False),
+        "sheprd-icon-square.svg": ("square", False, False),
+        "sheprd-icon-badge.svg": ("tile", False, True),
+        "sheprd-github-app.svg": ("square", False, False),
+    }
+    for name, options in variants.items():
+        (ASSETS / name).write_text(artwork(source, *options))
         print(f"Generated assets/icons/{name}")
 
 

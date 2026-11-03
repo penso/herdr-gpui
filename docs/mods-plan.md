@@ -1,6 +1,6 @@
 # Plan: Luau mods
 
-People and their agents extend Herdr UI without a Rust change: a mod is a
+People and their agents extend Sheprd without a Rust change: a mod is a
 small sandboxed Luau script that adds a status bar item, a sidebar section,
 palette commands, a tab, or a whole app with its own icon in the activity
 bar, drawn by the app in the user's theme and reloaded live when its files
@@ -18,17 +18,17 @@ access.
 | Question | Decision |
 | --- | --- |
 | Language | Luau through `mlua`, already in the workspace for automations. No JavaScript engine, no gpui-kit. |
-| VM | The automation VM's setup (`herdr-automation/src/vm.rs`) moves to a shared `herdr-luau` crate. Each user picks its own policy for what globals are removed. |
+| VM | The automation VM's setup (`sheprd-automation/src/vm.rs`) moves to a shared `sheprd-luau` crate. Each user picks its own policy for what globals are removed. |
 | UI contract | A mod returns a tree of plain tables from a closed set of elements, checked into a typed `Node`. The app builds the GPUI elements. A mod never calls GPUI. |
 | Events | Elm-style: `init`, `update(state, msg)`, `view(state, app)`. Buttons carry a catalog `command` or a `msg`, never a Lua function, so the tree is plain data that can leave the mod's thread. |
-| Effects | Commands in the `herdr-commands` catalog, the same ones the palette and `herdr-gpui run` use. A destructive command still opens its own confirmation. |
+| Effects | Commands in the `sheprd-commands` catalog, the same ones the palette and `sheprd run` use. A destructive command still opens its own confirmation. |
 | Threads | One worker thread per mod. The window renders the last good tree from a mailbox. Mod code never runs on the UI thread or during rendering. |
 | Placement | Fixed places only: activity bar app, status bar item, sidebar section, and palette commands first; tab and toast next; sidebar row cells later. Mods add to the app; they do not replace built-in parts. |
 | Activity bar apps | A mod may add one icon to the activity bar. Selecting it gives the mod the window's body, as Overview or Usage has, keeping the bar, title bar, and status bar. The icon can show a count and a busy pulse, as built-in sections do. |
-| State | Read-only, built from the same data the window shows. Once the `herdr-backend` traits land, it is built from them, so one mod works on Herdr 1 and herdr-core. |
+| State | Read-only, built from the same data the window shows. Once the `sheprd-backend` traits land, it is built from them, so one mod works on Herdr 1 and herdr-core. |
 | Capabilities | A mod that only reads state and runs catalog commands needs no approval. A mod that declares `exec`, `network` or `read` is approved in the app's dialog, pinned to the hash of its manifest and sources, as automations are. *(Proposed; confirm.)* |
 | Folder | `<config root>/herdr/gpui-mods/<name>/`, beside `config-gpui.toml`, so it cannot collide with folders Herdr itself may add under `herdr/`. *(Proposed; confirm.)* |
-| Default UI | Stays Rust. Example mods live under `crates/herdr-gpui/mods/` for people to copy; the app installs none, so no item appears uninvited. |
+| Default UI | Stays Rust. Example mods live under `crates/sheprd-gpui/mods/` for people to copy; the app installs none, so no item appears uninvited. |
 
 ## Why not herdr-app's model
 
@@ -42,27 +42,27 @@ access.
 | Scope | Most of the window | Fixed places alongside a Rust UI |
 
 herdr-app's core is about 20k lines of Rust, so its window can be mostly mods.
-Herdr UI's is far larger and carries paint budgets, so mods extend it rather
+Sheprd's is far larger and carries paint budgets, so mods extend it rather
 than replace it. A narrow element set is also a smaller contract to keep
 compatible across releases.
 
 ## Architecture
 
 ```
-mods folder ──notify──▶ loader ──▶ worker thread (one per mod, herdr-luau VM)
+mods folder ──notify──▶ loader ──▶ worker thread (one per mod, sheprd-luau VM)
                                       │ ▲
                          Node tree ───┘ └── state snapshot, msgs, timer ticks
                              ▼
                        mailbox (last good)
                              ▼
-              HerdrWindow: status bar · sidebar · palette · tab
+              SheprdWindow: status bar · sidebar · palette · tab
                              │
                   click ─────┴──▶ msg → worker   or   command → catalog
 ```
 
-### `crates/herdr-luau` (new, no GPUI)
+### `crates/sheprd-luau` (new, no GPUI)
 
-The parts of `herdr-automation/src/vm.rs` that are not specific to
+The parts of `sheprd-automation/src/vm.rs` that are not specific to
 automations:
 
 - `Limits` (interrupts, memory) and the interrupt `Meter`.
@@ -75,10 +75,10 @@ automations:
   `print` and `os`.
 - Its own `Error` and `Result`.
 
-`herdr-automation` depends on it, and its behavior and tests stay unchanged.
+`sheprd-automation` depends on it, and its behavior and tests stay unchanged.
 This is the first step and lands on its own.
 
-### `crates/herdr-mods` (new, no GPUI)
+### `crates/sheprd-mods` (new, no GPUI)
 
 - **`manifest`:** `mod.toml`, parsed with `serde`:
   ```toml
@@ -121,12 +121,12 @@ This is the first step and lands on its own.
   approval. `exec` and `network` calls check the grant before running, and
   run on the worker, never on the UI thread.
 - Its own `Error` and `Result`. The app's root `Error` gets one
-  `Mods(#[from] herdr_mods::Error)` variant.
+  `Mods(#[from] sheprd_mods::Error)` variant.
 
-Only `herdr-luau`, `mlua`, `serde`, `toml`, `thiserror`, and `herdr-commands`
+Only `sheprd-luau`, `mlua`, `serde`, `toml`, `thiserror`, and `sheprd-commands`
 (for command IDs) are needed. There is no Tokio.
 
-### `crates/herdr-gpui/src/mods/` (new module)
+### `crates/sheprd-gpui/src/mods/` (new module)
 
 - **`Mods`:** one per window. It owns a scanner thread that lists the mods
   folder, one worker per mod, and their mailboxes. It offers the window's
@@ -197,7 +197,7 @@ A mod with an `[activity]` table becomes a full app: an icon in the activity
 bar and the window's body when selected, beside Overview, Pull requests,
 Usage, and the other built-in sections.
 
-- **Section identity.** `ActivityPanel` in `herdr-control-protocol` is a closed
+- **Section identity.** `ActivityPanel` in `sheprd-control-protocol` is a closed
   enum of built-in sections and stays one. The window's current section
   becomes `Section::Builtin(ActivityPanel)` or `Section::Mod(ModId)`, so
   built-in code keeps matching on `ActivityPanel`. The control protocol gets
@@ -230,7 +230,7 @@ Usage, and the other built-in sections.
 - **Storage.** `herdr.store` is a small key-value table per mod, saved under
   the app's state folder with a size limit, so an app keeps settings and
   caches across restarts without file access.
-- **Commands.** `herdr-gpui activity show --mod NAME` opens an app, and its
+- **Commands.** `sheprd activity show --mod NAME` opens an app, and its
   manifest `commands` appear in the palette as `Deploys: Refresh`.
 - **Budgets.** An app's tree may be larger than a status bar item's (for
   example 5,000 nodes against 200), and `list` and `table` rows beyond what is
@@ -241,14 +241,14 @@ Usage, and the other built-in sections.
 - **Types:** the app writes `herdr.d.luau` (the API's Luau types) and a short
   `README.md` into the mods folder on start, so `luau-analyze` and an agent's
   editor can check a mod. These are generated, not hand-kept.
-- **Commands** (`herdr-control-protocol`, `control/server`, `control/client`,
+- **Commands** (`sheprd-control-protocol`, `control/server`, `control/client`,
   `--help`, tests, `docs/cli.md`), all with `--json` and `--window`:
-  - `herdr-gpui mod check DIR`: load and view the mod once against a fixture
+  - `sheprd mod check DIR`: load and view the mod once against a fixture
     state, headless; nonzero exit with the Luau error and line.
-  - `herdr-gpui mod list`: mods, places, enabled, approval state, last error.
-  - `herdr-gpui mod reload NAME`
-  - `herdr-gpui mod logs NAME`: the bounded `herdr.log` output.
-  - `herdr-gpui mod approve NAME`: opens the app's approval dialog; it never
+  - `sheprd mod list`: mods, places, enabled, approval state, last error.
+  - `sheprd mod reload NAME`
+  - `sheprd mod logs NAME`: the bounded `herdr.log` output.
+  - `sheprd mod approve NAME`: opens the app's approval dialog; it never
     approves by itself.
 - **Skill:** a managed `herdr-mods` skill (`skills/herdr-mods/SKILL.md`),
   installed beside the browser and automations skills, on when to write a mod
@@ -258,11 +258,11 @@ Usage, and the other built-in sections.
 
 Each phase is its own pull request, with `just ci` passing.
 
-1. **`herdr-luau`.** Move the VM setup out of `herdr-automation` behind a
+1. **`sheprd-luau`.** Move the VM setup out of `sheprd-automation` behind a
    policy. Automations behave the same and their tests pass unchanged. New
    tests: each policy's removed globals, the memory limit, and the interrupt
    budget.
-2. **`herdr-mods` core, no window.** Manifest, sources and hash, `Node` and
+2. **`sheprd-mods` core, no window.** Manifest, sources and hash, `Node` and
    its checker, state snapshot types, and the runtime. Tests: malformed and
    oversized trees, unknown keys, budget overruns, a `view` that errors,
    rate limits, `require` outside the folder, and hash changes on any file.
@@ -292,7 +292,7 @@ Each phase is its own pull request, with `just ci` passing.
 7. **More places and agents.** The mod tab kind, toasts, `herdr.d.luau`
    generation, and the skill section.
 8. **Later.** Sidebar row cells through `RowLayout`, the `terminal` element
-   on herdr-core's observer terminals, and state from the `herdr-backend`
+   on herdr-core's observer terminals, and state from the `sheprd-backend`
    traits.
 
 ## Open questions

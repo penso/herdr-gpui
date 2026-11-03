@@ -11,7 +11,7 @@ permissions: {}
 jobs:
   cancel:
     if: >-
-      github.repository == 'penso/herdr-gpui' &&
+      (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 5

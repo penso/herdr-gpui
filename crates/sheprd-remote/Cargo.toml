@@ -1,0 +1,61 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-remote"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace                 = true
+chrono.workspace                 = true
+getrandom.workspace              = true
+sheprd-client.workspace           = true
+sheprd-control-protocol.workspace = true
+sheprd-credentials.workspace      = true
+percent-encoding.workspace       = true
+rustls                           = { optional = true, workspace = true }
+secrecy.workspace                = true
+serde.workspace                  = true
+serde_json.workspace             = true
+sha2.workspace                   = true
+tar.workspace                    = true
+tempfile.workspace               = true
+thiserror.workspace              = true
+tracing.workspace                = true
+tungstenite                      = { optional = true, workspace = true }
+ureq.workspace                   = true
+url.workspace                    = true
+uuid.workspace                   = true
+webpki-roots                     = { optional = true, workspace = true }
+zeroize.workspace                = true
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace    = true
+rustix.workspace = true
+
+[dev-dependencies]
+sheprd-client = { features = ["test-support"], workspace = true }
+toml.workspace = true
+
+[features]
+# Machines from cloud providers as devices: the saved device list, the
+# connector, and running scripts on them. Turned on by each provider below;
+# not useful alone.
+cloud = ["sheprd-client/cloud"]
+# Azure VMs and Container Apps sandboxes, reached over the data plane's exec stream.
+azure = ["cloud", "sheprd-client/azure", "dep:rustls", "dep:tungstenite", "dep:webpki-roots"]
+boat = ["cloud", "sheprd-client/boat"]
+coder = ["cloud", "sheprd-client/coder"]
+container = ["cloud", "sheprd-client/container"]
+daytona = ["cloud", "sheprd-client/daytona"]
+# Sandboxes on a self-hosted OpenSandbox server, with this app as their exec relay.
+opensandbox = ["cloud", "sheprd-client/opensandbox", "dep:rustls", "dep:tungstenite", "dep:webpki-roots"]
+railway = ["cloud", "sheprd-client/railway"]
+# Fly Sprites, with this app as their exec relay.
+sprites = ["cloud", "sheprd-client/sprites", "dep:rustls", "dep:tungstenite", "dep:webpki-roots"]
+# Shared fixtures (provider settings, a mock server) for the app's own tests.
+test-support = []

@@ -16,39 +16,40 @@ Engineering guidance for agents working in this repository. Read this alongside
 
 ## Architecture
 
-Herdr UI is a native client of an existing local Herdr daemon, not a terminal
-emulator, server, or TUI wrapper. Herdr owns terminal processes and session state.
-Closing or detaching the GUI must leave the daemon and its terminals running.
+Sheprd is a native client of Herdr 1 and herdr-core, not a TUI wrapper.
+Herdr 1 supplies terminal cells; herdr-core supplies raw output emulated by
+`sheprd-terminal`. The daemons own terminal processes and session state.
+Closing or detaching the GUI must leave the daemons and their terminals running.
 
 | Location | Responsibility |
 | --- | --- |
-| `crates/herdr-protocol` | Generation-1 wire types, framing, validation, and atomic surface patches |
-| `crates/herdr-acp` | `herdr-acp` binary run inside a Herdr pane: the only ACP client of an agent, its in-pane chat view, the attach socket Herdr UI connects to, and Herdr status reports |
-| `crates/herdr-chat-protocol` | Attach wire between `herdr-acp` and its clients: transcript model, the shared change reducer, framing, and endpoint discovery; no ACP or GPUI types |
-| `crates/herdr-client` | Discovery, socket worker, session transitions, ordered commands, and client-local activity projection |
-| `crates/herdr-backend` | The `Backend` and `Terminal` traits both Herdr generations implement: terminals listed, watched, attached, started, and ended, as `herdr-protocol` cells and semantic input; no GPUI or transport |
-| `crates/herdr-core-client` | herdr-core (`hc`, Herdr 2): endpoint discovery, the framed JSON-RPC connection worker, credit-flowed terminal and event streams, starting a core, and its `herdr-backend` implementation; no GPUI |
-| `crates/herdr-terminal` | The terminal emulator for herdr-core's raw byte streams (alacritty_terminal): bytes in, `herdr-protocol` cells and damage out, and semantic input encoded for the program's modes; no GPUI or I/O |
-| `crates/herdr-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
-| `crates/herdr-control-protocol` | The control socket between `herdr-gpui <command>` and the running app: request and response types, bounds, and the Unix socket or named pipe; no GPUI |
-| `crates/herdr-commands` | The command catalog: each command's name, default shortcuts per platform, and the daemon request it becomes against a snapshot; no GPUI (the app binds the keys and runs window commands) |
-| `crates/herdr-usage` | Plan usage of AI services on a host: the providers, their probes and sign-ins, the registry, and the read worker; no GPUI (the app draws the status bar and panel) |
-| `crates/herdr-credentials` | Where saved sign-ins live: the store policy, the macOS Keychain, Linux Secret Service, Windows Credential Manager, and the private `0600` file; GitHub and the cloud providers keep their secrets here; no GPUI |
-| `crates/herdr-github` | GitHub sign-in (device flow, pasted tokens, the GitHub CLI, additional accounts), its REST and GraphQL transport, the `[github]` config table, the read-only pull request prefetch, and explicit pull request actions; no GPUI (the app keeps the account avatars, the shared PR store, and badge colors) |
-| `crates/herdr-vcs` | Git on the checkouts the app shows: working-tree status, commit, push, and pull request creation, checkpoints kept as Git refs on each host, and the code search index; no GPUI (the app runs the workers from its views) |
-| `crates/herdr-orchestrator` | The orchestrator's backend: issue and pull request records, the per-repository SQLite database, the GitHub, GitLab, and Beads readers, agent dispatch, and the worker; also the app's cache database and private-file setup; no GPUI (the app draws the sections and pages) |
-| `crates/herdr-remote` | Machines beyond this computer's daemon: the cloud providers (one feature each), their config tables and saved devices, running scripts on any host, and Teleport's core; no GPUI (the app runs its jobs and draws its views) |
-| `crates/herdr-remote-control` | Remote control from a phone. With the `server` feature, the `herdr-remote-control` daemon: HTTPS with its own CA, dual-approval pairing, Web Push, and chats and terminal tabs through Herdr's API socket. Without it, what Herdr UI uses: the daemon's control protocol, the `[remote]` config table, the user service install, and the pairing state; no GPUI, and no Tokio without `server` |
-| `crates/herdr-nearby` | `herdr-nearby` on Linux and Windows: Herdr UI's Bluetooth helper for nearby pairing and presence, BlueZ over `zbus` or WinRT's GATT server, speaking the macOS Swift helper's stdio protocol (`macos/herdr-nearby`); no GPUI or Tokio |
-| `crates/herdr-updater` | The in-app update service: release checks, signed manifests, staging, the install helpers, and the release identity (`APP_ID`, `APP_VERSION`); no GPUI |
-| `crates/herdr-diagnostics` | The app's log file and crash reports: the bounded capture of the crates the app names, the writer thread and rotation, the reader the log window tails, the panic hook, and Windows minidumps; no GPUI |
-| `crates/herdr-i18n` | The languages the app shows (`docs/i18n.md`): `Locale`, `Direction`, the `language` setting and its negotiation with an `en-US` fallback, the Fluent catalog, and the `en-XA`/`en-XB` pseudo-locales; no GPUI (the app embeds `crates/herdr-gpui/locales`, keeps the current locale, and checks `fl!`) |
-| `crates/herdr-gpui-launcher` | Windows-only windowed launcher that starts `herdr-gpui.exe` without a console window; std plus `MessageBoxW` for start failures |
-| `crates/herdr-automation` | Automation scripts (`docs/automations.md`): the sandboxed Luau state, the step catalog, schedules, caps, and the plan a person approves; no GPUI or runtime |
-| `crates/herdr-luau` | The sandboxed Luau state automations and mods share: safe libraries, memory and interrupt budgets, sealed globals, and the `Policy` each user removes beyond them; no GPUI |
-| `crates/herdr-mods` | Mods (`docs/mods-plan.md`): the `mod.toml` manifest, a mod's sources and the hash approval pins, the element tree a view returns, the state mods read, effects, and the sandboxed runtime; no GPUI (the app runs mods on worker threads and draws their trees) |
-| `crates/herdr-automate` | The automation daemon and its command line: schedules approved scripts per host, runs their steps through the `herdr` CLI, keeps state in SQLite, and answers `--json` reports for Herdr UI |
-| `crates/embed-resource` | No-op stand-in for GPUI's `embed-resource` build dependency, patched in so GPUI embeds no Windows manifest beside `crates/herdr-gpui/windows.manifest`; not a production crate |
+| `crates/sheprd-protocol` | Generation-1 wire types, framing, validation, and atomic surface patches |
+| `crates/sheprd-acp` | `sheprd-acp` binary run inside a Herdr pane: the only ACP client of an agent, its in-pane chat view, the attach socket Sheprd connects to, and Herdr status reports |
+| `crates/sheprd-chat-protocol` | Attach wire between `sheprd-acp` and its clients: transcript model, the shared change reducer, framing, and endpoint discovery; no ACP or GPUI types |
+| `crates/sheprd-client` | Discovery, socket worker, session transitions, ordered commands, and client-local activity projection |
+| `crates/sheprd-backend` | The `Backend` and `Terminal` traits both Herdr generations implement: terminals listed, watched, attached, started, and ended, as `sheprd-protocol` cells and semantic input; no GPUI or transport |
+| `crates/sheprd-core-client` | herdr-core (`hc`, Herdr 2): endpoint discovery, the framed JSON-RPC connection worker, credit-flowed terminal and event streams, starting a core, and its `sheprd-backend` implementation; no GPUI |
+| `crates/sheprd-terminal` | The terminal emulator for herdr-core's raw byte streams (alacritty_terminal): bytes in, `sheprd-protocol` cells and damage out, and semantic input encoded for the program's modes; no GPUI or I/O |
+| `crates/sheprd-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
+| `crates/sheprd-control-protocol` | The control socket between `sheprd <command>` and the running app: request and response types, bounds, and the Unix socket or named pipe; no GPUI |
+| `crates/sheprd-commands` | The command catalog: each command's name, default shortcuts per platform, and the daemon request it becomes against a snapshot; no GPUI (the app binds the keys and runs window commands) |
+| `crates/sheprd-usage` | Plan usage of AI services on a host: the providers, their probes and sign-ins, the registry, and the read worker; no GPUI (the app draws the status bar and panel) |
+| `crates/sheprd-credentials` | Where saved sign-ins live: the store policy, the macOS Keychain, Linux Secret Service, Windows Credential Manager, and the private `0600` file; GitHub and the cloud providers keep their secrets here; no GPUI |
+| `crates/sheprd-github` | GitHub sign-in (device flow, pasted tokens, the GitHub CLI, additional accounts), its REST and GraphQL transport, the `[github]` config table, the read-only pull request prefetch, and explicit pull request actions; no GPUI (the app keeps the account avatars, the shared PR store, and badge colors) |
+| `crates/sheprd-vcs` | Git on the checkouts the app shows: working-tree status, commit, push, and pull request creation, checkpoints kept as Git refs on each host, and the code search index; no GPUI (the app runs the workers from its views) |
+| `crates/sheprd-orchestrator` | The orchestrator's backend: issue and pull request records, the per-repository SQLite database, the GitHub, GitLab, and Beads readers, agent dispatch, and the worker; also the app's cache database and private-file setup; no GPUI (the app draws the sections and pages) |
+| `crates/sheprd-remote` | Machines beyond this computer's daemon: the cloud providers (one feature each), their config tables and saved devices, running scripts on any host, and Teleport's core; no GPUI (the app runs its jobs and draws its views) |
+| `crates/sheprd-remote-control` | Remote control from a phone. With the `server` feature, the `sheprd-remote-control` daemon: HTTPS with its own CA, dual-approval pairing, Web Push, and chats and terminal tabs through Herdr's API socket. Without it, what Sheprd uses: the daemon's control protocol, the `[remote]` config table, the user service install, and the pairing state; no GPUI, and no Tokio without `server` |
+| `crates/sheprd-nearby` | `sheprd-nearby` on Linux and Windows: Sheprd's Bluetooth helper for nearby pairing and presence, BlueZ over `zbus` or WinRT's GATT server, speaking the macOS Swift helper's stdio protocol (`macos/sheprd-nearby`); no GPUI or Tokio |
+| `crates/sheprd-updater` | The in-app update service: release checks, signed manifests, staging, the install helpers, and the release identity (`APP_ID`, `APP_VERSION`); no GPUI |
+| `crates/sheprd-diagnostics` | The app's log file and crash reports: the bounded capture of the crates the app names, the writer thread and rotation, the reader the log window tails, the panic hook, and Windows minidumps; no GPUI |
+| `crates/sheprd-i18n` | The languages the app shows (`docs/i18n.md`): `Locale`, `Direction`, the `language` setting and its negotiation with an `en-US` fallback, the Fluent catalog, and the `en-XA`/`en-XB` pseudo-locales; no GPUI (the app embeds `crates/sheprd-gpui/locales`, keeps the current locale, and checks `fl!`) |
+| `crates/sheprd-launcher` | Windows-only windowed launcher that starts `sheprd.exe` without a console window; std plus `MessageBoxW` for start failures |
+| `crates/sheprd-automation` | Automation scripts (`docs/automations.md`): the sandboxed Luau state, the step catalog, schedules, caps, and the plan a person approves; no GPUI or runtime |
+| `crates/sheprd-luau` | The sandboxed Luau state automations and mods share: safe libraries, memory and interrupt budgets, sealed globals, and the `Policy` each user removes beyond them; no GPUI |
+| `crates/sheprd-mods` | Mods (`docs/mods-plan.md`): the `mod.toml` manifest, a mod's sources and the hash approval pins, the element tree a view returns, the state mods read, effects, and the sandboxed runtime; no GPUI (the app runs mods on worker threads and draws their trees) |
+| `crates/sheprd-automate` | The automation daemon and its command line: schedules approved scripts per host, runs their steps through the `herdr` CLI, keeps state in SQLite, and answers `--json` reports for Sheprd |
+| `crates/embed-resource` | No-op stand-in for GPUI's `embed-resource` build dependency, patched in so GPUI embeds no Windows manifest beside `crates/sheprd-gpui/windows.manifest`; not a production crate |
 | `crates/test-support/sandbox.rs` | Shared isolated process setup for opt-in integration tests; not a production crate |
 | `crates/test-support/pe.rs` | Windows executable (PE) reader for tests that check subsystem and resources; not a production crate |
 
@@ -88,10 +89,10 @@ at the same spot, or both bumping one hard-coded count.
   the crate's root `Error`, as `pane_move` and `backdrop` do, rather than a
   run of variants in `error.rs`. The root enum stays sorted. Callers name it
   `feature::Error`, never through an `as FeatureError` alias.
-- Wrap another crate's error the same way (`GitHub(#[from] herdr_github::Error)`).
+- Wrap another crate's error the same way (`GitHub(#[from] sheprd_github::Error)`).
   Do not mirror its variants in the app's root and convert one by one: each
   failure has one definition, and callers match the nested variant.
-- Shared state structs (`HerdrWindow`, `Config`, `herdr_settings::Settings`)
+- Shared state structs (`SheprdWindow`, `Config`, `herdr_settings::Settings`)
   and their constructors keep their fields sorted. Run an initializer that has
   an effect or depends on another (registering a subscription, creating an
   entity, reading a value before it moves) in a `let` before the struct
@@ -113,7 +114,7 @@ at the same spot, or both bumping one hard-coded count.
 
 ## Command Line
 
-`herdr-gpui COMMAND` drives the running app over its control socket, so
+`sheprd COMMAND` drives the running app over its control socket, so
 agents in Herdr panes can use what only this client shows or keeps
 (`docs/cli.md`). Agents learn about it from the managed skill in
 `skills/herdr-gpui-browser/SKILL.md`, which the app installs and refreshes.
@@ -121,7 +122,7 @@ agents in Herdr panes can use what only this client shows or keeps
 - When a feature adds something an agent or script could reasonably ask for
   (open or focus a view, read state the app holds, change a setting, wait for
   an event), add a command in the same change: the request in
-  `herdr-control-protocol`'s `protocol`, its handler in `control/server`,
+  `sheprd-control-protocol`'s `protocol`, its handler in `control/server`,
   parsing and output in `control/client`, its `--help` text, and tests for
   each.
 - Do not add a command that repeats Herdr's own `herdr` CLI (workspaces,
@@ -166,7 +167,7 @@ agents in Herdr panes can use what only this client shows or keeps
 
 - Treat app, window, and entity contexts as UI-thread execution. A foreground `spawn` future does not make blocking work safe.
 - Never perform blocking socket/disk I/O, process waits, sleeps, or expensive background computation on the UI thread. Use the existing worker threads or GPUI background executor, then apply results through the appropriate context update.
-- Start child processes with `herdr_client::new_command`, never `Command::new` (clippy rejects it outside tests). On Windows a console child built any other way can open a window of its own.
+- Start child processes with `sheprd_client::new_command`, never `Command::new` (clippy rejects it outside tests). On Windows a console child built any other way can open a window of its own.
 - Keep render and input paths thin. Render from prepared state and bounded caches; do not query the daemon, scan files, or launch processes while rendering.
 - Preserve continuously drained ordered events and the coalesced latest-state mailbox. Do not replace them with an unbounded UI event queue.
 - Route connection/startup failures through the authoritative inbox. Reconnect and detach must isolate old inboxes so delayed events and paint acknowledgements cannot affect the new connection.
@@ -181,7 +182,7 @@ agents in Herdr panes can use what only this client shows or keeps
 
 ## Protocol And Safety
 
-- Vendored bincode field and enum variant order is a compatibility contract. Do not reorder declarations as cleanup. Preserve attribution in `crates/herdr-protocol/NOTICE.md`.
+- Vendored bincode field and enum variant order is a compatibility contract. Do not reorder declarations as cleanup. Preserve attribution in `crates/sheprd-protocol/NOTICE.md`.
 - Keep frame/response/geometry bounds, strict decoding, and atomic patch validation. Test malformed inputs and limits, not only valid fixtures.
 - Never mix snapshot metadata and surface cells across boot IDs or projection revisions. Preserve future-surface buffering and stale-boot rejection.
 - Preserve the single in-flight API request, bounded command/event queues, FIFO ordering, bounded write batches, and request correlation.
@@ -189,7 +190,7 @@ agents in Herdr panes can use what only this client shows or keeps
 - Cancellation must not flush queued work, replay commands, or join a worker on the UI thread. Do not add automatic reconnect/replay as an incidental refactor.
 - Crossbeam receiver clones compete for events; they are not broadcast subscribers.
 - Treat terminal content and daemon messages as untrusted data. Do not execute terminal escapes, follow graphics file paths, or run displayed update commands automatically. The one exception is the daemon's OSC 52 `ServerMessage::Clipboard`: decode it and put only its bounded UTF-8 text on the pasteboard, never arbitrary bytes, files, or images.
-- The normal app never installs, stops, migrates, or upgrades a personal daemon. It starts one only to connect: `herdr server` when Herdr 1 is installed, and herdr-core for Herdr 2 terminals (or when no Herdr 1 is installed), the user's own or else the pinned one every release bundles beside the app as a companion like `herdr-acp` (`scripts/release/herdr-core.json`, licenses in `herdr-core-licenses.txt`), never when a core already answers. Herdr 1 sessions stay where they are: moving users to Herdr 2 is their choice, never an automatic switch. Explicit sockets refer to the binary client socket, not the JSON API socket.
+- The normal app never installs, stops, migrates, or upgrades a personal daemon. It starts one only to connect: `herdr server` when Herdr 1 is installed, and herdr-core for Herdr 2 terminals (or when no Herdr 1 is installed), the user's own or else the pinned one every release bundles beside the app as a companion like `sheprd-acp` (`scripts/release/herdr-core.json`, licenses in `herdr-core-licenses.txt`), never when a core already answers. Herdr 1 sessions stay where they are: moving users to Herdr 2 is their choice, never an automatic switch. Explicit sockets refer to the binary client socket, not the JSON API socket.
 - Never commit secrets, credentials, private terminal output, or machine-local configuration.
 
 ## Dependencies And Features

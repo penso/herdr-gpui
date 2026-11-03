@@ -21,11 +21,11 @@ let info = Data("herdr-remote-notify-v1".utf8)
 let key = try ephemeral.sharedSecretFromKeyAgreement(with: device).hkdfDerivedSymmetricKey(
     using: SHA256.self, salt: ephemeral.publicKey.x963Representation + device.x963Representation,
     sharedInfo: info, outputByteCount: 32)
-let plaintext = #"{"title":"herdr-gpui · Fix mise discovery","body":"Run git push origin fix/mise?"}"#
+let plaintext = #"{"title":"sheprd · Fix mise discovery","body":"Run git push origin fix/mise?"}"#
 let box = try AES.GCM.seal(Data(plaintext.utf8), using: key, authenticating: info)
 let sealed = ephemeral.publicKey.x963Representation + Data(box.nonce) + box.ciphertext + box.tag
 let payload: [String: Any] = [
-    "aps": ["alert": ["title": "Herdr", "body": "New activity"], "mutable-content": 1],
+    "aps": ["alert": ["title": "Sheprd", "body": "New activity"], "mutable-content": 1],
     "sealed": b64(sealed),
 ]
 print(String(decoding: try JSONSerialization.data(withJSONObject: payload), as: UTF8.self))
