@@ -8,7 +8,7 @@
 mod grid;
 mod orca;
 
-use super::STATUS_DOT_UNKNOWN;
+use super::unknown_dot;
 use crate::config::StatusIcons;
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
@@ -65,7 +65,7 @@ fn braille_set(status: AgentStatus, size: f32, color: u32) -> AnyElement {
 /// Herdr's dot at `size`: filled, hollow for idle, small for unknown.
 fn herdr_dot(status: AgentStatus, size: f32, color: u32) -> AnyElement {
     match status {
-        AgentStatus::Unknown => disc(STATUS_DOT_UNKNOWN, color).into_any_element(),
+        AgentStatus::Unknown => disc(unknown_dot(size), color).into_any_element(),
         AgentStatus::Idle => div()
             .size(px(size))
             .flex_none()

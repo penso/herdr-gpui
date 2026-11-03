@@ -3,7 +3,7 @@
 //! bubble when the agent asks for you, a ringed check when done, and quiet
 //! dots otherwise. Nothing but the working ring moves, as in Orca.
 
-use super::{STATUS_DOT_UNKNOWN, disc, dot_size};
+use super::{disc, dot_size, unknown_dot};
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 use std::time::Duration;
@@ -43,7 +43,7 @@ pub(super) fn mark(status: AgentStatus, size: f32, color: u32) -> AnyElement {
         AgentStatus::Idle => disc(dot_size(size), color)
             .opacity(IDLE_OPACITY)
             .into_any_element(),
-        AgentStatus::Unknown => disc(STATUS_DOT_UNKNOWN, color).into_any_element(),
+        AgentStatus::Unknown => disc(unknown_dot(dot_size(size)), color).into_any_element(),
     }
 }
 

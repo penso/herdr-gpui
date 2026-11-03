@@ -32,6 +32,7 @@ mod agent_order;
 mod change_counts;
 mod hierarchy;
 mod host_mark;
+mod mark_sizes;
 mod pane_names;
 mod row_text;
 mod statuses;

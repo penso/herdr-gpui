@@ -53,6 +53,16 @@ pub(super) fn start_pages(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
             let id = handle
                 .update(cx, |view, window, cx| type_address(view, window, cx, port))
                 .map_err(|error| anyhow!("{error:#}"))??;
+            AnyWindowHandle::from(handle)
+                .update(cx, |_, window, cx| {
+                    // Key listeners belong to the last drawn dispatch tree.
+                    // Paint the new address field before posting Enter, or
+                    // the message can reach the previous frame's handlers.
+                    window.refresh();
+                    window.draw(cx).clear(cx);
+                    press_enter(window)
+                })
+                .map_err(|error| anyhow!("{error:#}"))??;
             let started = Instant::now();
             loop {
                 timer.timer(Duration::from_millis(100)).await;
@@ -96,9 +106,7 @@ pub(super) fn start_pages(handle: WindowHandle<HerdrWindow>, cx: &mut App) {
     .detach();
 }
 
-/// Opens a blank tab, types the page's address into its focused address
-/// field, and posts Enter to the window, which handles it once this update
-/// has ended.
+/// Opens a blank tab and types the page's address into its focused field.
 fn type_address(
     view: &mut HerdrWindow,
     window: &mut Window,
@@ -109,6 +117,12 @@ fn type_address(
     let url = page_url(port)?;
     view.group_address(group, cx)
         .update(cx, |input, cx| input.set_text_selected(url.as_str(), cx));
+    Ok(id)
+}
+
+/// Posts Enter after the address field has drawn, to be handled once this
+/// update has ended.
+fn press_enter(window: &Window) -> Result<()> {
     // Window has an inherent `window_handle` of its own.
     let RawWindowHandle::Win32(handle) = HasWindowHandle::window_handle(window)?.as_raw() else {
         bail!("not a Win32 window");
@@ -123,7 +137,7 @@ fn type_address(
             LPARAM(RETURN_DOWN),
         )
     }?;
-    Ok(id)
+    Ok(())
 }
 
 /// Whether tab `id`'s page exists and its title has reached the tab. Applies

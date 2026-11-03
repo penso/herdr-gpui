@@ -8,7 +8,7 @@ use super::{
     ARROW_RESERVE, ICON_RESERVE, STATUS_WIDTH,
     agents::{Indicators, status_indicator},
     cell::{RowContext, RowState},
-    glyph_width, line_height, segment_budgets,
+    glyph_width, line_height, scaled, segment_budgets,
     tokens::ResolvedToken,
 };
 use crate::config::{FontConfig, Theme};
@@ -55,12 +55,13 @@ impl RowIcon {
             Self::Worktree(_) => "worktree-icon",
             _ => "github",
         };
+        let size = scaled(font, 12.);
         div()
             .debug_selector(|| format!("{probe}-{key}"))
             .absolute()
             .inset_s(px(0.))
-            .top(px((line_height(font) - 12.) / 2.))
-            .size(px(12.))
+            .top(px((line_height(font) - size) / 2.))
+            .size(px(size))
             .flex_none()
             .overflow_hidden()
             .child(self.element(color))
@@ -212,7 +213,10 @@ pub(super) enum Elbow {
 
 /// The gutter a child of Herdr's rows reserves for its guide, as `(x,
 /// width)` from the sidebar's leading edge: from the parent's label column
-/// to the child's status dot. A configured indent or gap can leave none.
+/// to the child's status dot. A child steps in past a status slot wider than
+/// the default dot, as the parent's label does, so the width does not depend
+/// on the font or the indicator set; Minimal's rows nest the same way. A
+/// configured indent or gap can leave none.
 pub(super) fn tree_gutter(cx: &RowContext<'_>) -> (f32, f32) {
     let layout = cx.look.density;
     let extra_status_width = cx.indicators.width(cx.font) - STATUS_WIDTH;
@@ -392,10 +396,12 @@ fn place_line(
     line
 }
 
-pub(super) fn removing_dot(selector: &'static str, theme: &Theme) -> Div {
+/// The pulse a status dot gives way to while its checkout or device is
+/// removed, as large as the dot at `font`.
+pub(super) fn removing_dot(selector: &'static str, font: &FontConfig, theme: &Theme) -> Div {
     div()
         .debug_selector(move || selector.into())
-        .size(px(STATUS_WIDTH))
+        .size(px(scaled(font, STATUS_WIDTH)))
         .flex_none()
         .child(
             div()
@@ -471,7 +477,7 @@ pub(super) fn row(
     };
     let icon_reserve = match workspace_icon {
         RowIcon::None => 0.,
-        _ => ICON_RESERVE,
+        _ => scaled(font, ICON_RESERVE),
     };
     let muted = theme.muted;
     let status_width = indicators.width(font);
@@ -485,7 +491,7 @@ pub(super) fn row(
     // Only a drawn chevron takes its column. The badge hugs the row's edge
     // either way, so an empty column would only cut a group member's name.
     let arrow_reserve = if reserve_arrow && arrow.is_some() {
-        ARROW_RESERVE
+        scaled(font, ARROW_RESERVE)
     } else {
         0.
     };
@@ -596,11 +602,11 @@ pub(super) fn row(
                 if removing {
                     div()
                         .w(px(indicators.width(font)))
-                        .mt(px((line_height(font) - STATUS_WIDTH) / 2.))
+                        .mt(px((line_height(font) - scaled(font, STATUS_WIDTH)) / 2.))
                         .flex_none()
                         .row()
                         .justify_center()
-                        .child(removing_dot("worktree-removing", theme))
+                        .child(removing_dot("worktree-removing", font, theme))
                 } else if let Some(token) = leading_icon {
                     configured_status(token, status, cx)
                 } else {
@@ -760,9 +766,9 @@ pub(super) fn row(
         })
 }
 
+/// An agent's icon and the room it takes before the name beside it.
 fn agent_icon_size(font: &FontConfig) -> (f32, f32) {
-    let size = line_height(font).min(12.);
-    (size, size + 4.)
+    (scaled(font, 12.), scaled(font, 16.))
 }
 
 fn agent_mark(

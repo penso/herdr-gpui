@@ -13,6 +13,7 @@ use super::{
             Elbow, RowIcon, RowKind, RowLift, RowTree, TokenLook, configured_status_style, guide,
             leading_status, left_behind, removing_dot, token_column,
         },
+        scaled,
         tokens::ResolvedToken,
     },
     parts::{self, Line, glyph_at, wash},
@@ -150,6 +151,7 @@ fn slot(
                 ));
         }
         let (diameter, filled, _) = status_style(status, theme);
+        let diameter = scaled(cx.font, diameter);
         // A working dot turns in the dot's own place, so the badge stays clear
         // of the icon's center.
         if status == AgentStatus::Working {
@@ -254,7 +256,7 @@ impl RowLayout for Superset {
         let dirty = badge.as_ref().is_some_and(|badge| badge.dirty);
         let teleported = badge.as_ref().is_some_and(|badge| badge.teleported);
         let muted = badge.as_ref().is_some_and(|badge| badge.muted);
-        let dirty_size = (line_height(cx.font) * 0.75).round().min(15.);
+        let dirty_size = (line_height(cx.font) * 0.75).round();
         let size = m.icon * GLYPH;
         let icon_color = if state.selected {
             theme.foreground
@@ -275,7 +277,7 @@ impl RowLayout for Superset {
         let slot = if removing {
             slot(
                 label,
-                removing_dot("worktree-removing", theme),
+                removing_dot("worktree-removing", cx.font, theme),
                 (status, None),
                 &m,
                 cx,
@@ -345,7 +347,8 @@ impl RowLayout for Superset {
             })
             .when_some(fold, |line, fold| {
                 let width = m.icon * 0.6;
-                line.fixed(width, fold.element(theme).w(px(width)).text_size(px(14.)))
+                let size = scaled(cx.font, 14.);
+                line.fixed(width, fold.element(theme).w(px(width)).text_size(px(size)))
             });
         // The slot is centred in the row, so the tick meets it halfway down.
         shell(label, state, indent, line, cx).children(guide(

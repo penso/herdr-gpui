@@ -289,10 +289,13 @@ pub(super) fn check_scaled_sidebar(view: &Entity<HerdrWindow>, cx: &mut gpui::Vi
     let icon = cx.debug_bounds("github-herdr").unwrap();
     assert_eq!(title.bottom(), detail.top());
     assert_eq!(detail.size.height, px(line_height));
-    assert_eq!(
-        title.size.width,
-        px(crate::sidebar::LABEL_WIDTH - crate::sidebar::ICON_RESERVE)
-    );
+    // The status dot and the icon grow with the font, and the name yields to
+    // both.
+    let font = cx.update(|_, cx| view.read(cx).config.sidebar.clone());
+    let marks = crate::sidebar::scaled(&font, crate::sidebar::STATUS_WIDTH)
+        - crate::sidebar::STATUS_WIDTH
+        + crate::sidebar::scaled(&font, crate::sidebar::ICON_RESERVE);
+    assert_eq!(title.size.width, px(crate::sidebar::LABEL_WIDTH - marks));
     assert_eq!(title.right(), detail.right());
     assert_eq!(icon.center().y, title.center().y);
     cx.simulate_keystrokes("escape");

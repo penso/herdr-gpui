@@ -312,7 +312,7 @@ pub(super) fn status(status: AgentStatus, removing: bool, cx: &RowContext<'_>) -
             .flex_none()
             .flex()
             .justify_center()
-            .child(removing_dot("worktree-removing", cx.theme))
+            .child(removing_dot("worktree-removing", cx.font, cx.theme))
     } else {
         status_indicator(status, cx.font, cx.status_indicators()).mt_0()
     }

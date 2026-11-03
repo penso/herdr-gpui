@@ -11,6 +11,8 @@ pub(super) const HOVER_MENU_DELAY: Duration = Duration::from_millis(600);
 /// Pointer drift, in pixels, that still counts as resting on the row.
 pub(super) const HOVER_MENU_SLOP: f32 = 3.;
 pub(super) const ROW_PADDING: f32 = 12.;
+/// A status dot's diameter at the default size; [`scaled`] sizes it for the
+/// configured font.
 pub(crate) const STATUS_WIDTH: f32 = 8.;
 // Unknown stays a smaller dot so it reads as "no reported status" next to the full ones.
 pub(super) const STATUS_DOT_UNKNOWN: f32 = 3.;
@@ -30,6 +32,24 @@ pub(crate) const LABEL_WIDTH: f32 =
 
 pub(super) fn line_height(font: &FontConfig) -> f32 {
     font.size * 4. / 3.
+}
+
+/// The `[sidebar] size` the marks' pixel sizes here and in the rows are
+/// drawn for: its default.
+const MARK_FONT_SIZE: f32 = 12.;
+
+/// `size`, a mark's size at the default sidebar font, at `font` instead, so
+/// dots, icons, and chevrons grow with `[sidebar] size` as the text beside
+/// them does. Whole pixels keep their edges crisp, and the default size
+/// keeps every mark as it was.
+pub(crate) fn scaled(font: &FontConfig, size: f32) -> f32 {
+    (size * font.size / MARK_FONT_SIZE).round()
+}
+
+/// The unknown status's dot beside full dots `diameter` across: as much
+/// smaller as it is at the default size.
+pub(super) fn unknown_dot(diameter: f32) -> f32 {
+    (diameter * STATUS_DOT_UNKNOWN / STATUS_WIDTH).round()
 }
 
 pub(super) fn sidebar_width(preferred: Option<f32>, window_width: f32) -> f32 {

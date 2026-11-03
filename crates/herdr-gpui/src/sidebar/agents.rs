@@ -2,7 +2,9 @@
 //! are labelled. Status comes from the daemon's snapshot, never from guessing
 //! at terminal output.
 
-use super::{STATUS_DOT_UNKNOWN, STATUS_WIDTH, first_text, label_text, line_height};
+use super::{
+    STATUS_DOT_UNKNOWN, STATUS_WIDTH, first_text, label_text, line_height, scaled, unknown_dot,
+};
 use crate::direction::Logical;
 use crate::i18n::fl;
 use crate::preferences::AgentSort;
@@ -327,7 +329,7 @@ impl Indicators {
 
     pub(crate) fn width(self, font: &FontConfig) -> f32 {
         match self.icons {
-            StatusIcons::Dots => STATUS_WIDTH,
+            StatusIcons::Dots => scaled(font, STATUS_WIDTH),
             StatusIcons::Tiles => tile_size(font),
             _ => icon_size(font),
         }
@@ -404,15 +406,17 @@ pub(super) fn status_mark(
     }
     // Upstream dots: blocked/done filled, idle hollow, unknown a small dot.
     // Working spins instead, so busy agents read apart from settled ones.
+    // They grow with the font, as upstream's dot glyphs do.
+    let dot = indicators.width(font);
     let (diameter, filled) = match status {
-        AgentStatus::Unknown => (STATUS_DOT_UNKNOWN, true),
-        AgentStatus::Idle => (STATUS_WIDTH, false),
-        _ => (STATUS_WIDTH, true),
+        AgentStatus::Unknown => (unknown_dot(dot), true),
+        AgentStatus::Idle => (dot, false),
+        _ => (dot, true),
     };
     div()
-        .w(px(indicators.width(font)))
-        .h(px(STATUS_WIDTH))
-        .mt(px((line_height(font) - STATUS_WIDTH) / 2.))
+        .w(px(dot))
+        .h(px(dot))
+        .mt(px((line_height(font) - dot) / 2.))
         .flex_none()
         .row()
         .items_center()
@@ -421,7 +425,7 @@ pub(super) fn status_mark(
             slot.child(icon_mark(
                 StatusIcons::Dots,
                 status,
-                STATUS_WIDTH,
+                dot,
                 color,
                 indicators.fade(),
             ))
@@ -429,7 +433,7 @@ pub(super) fn status_mark(
         .when(status != AgentStatus::Working, |slot| {
             slot.child(
                 div()
-                    .size(px(if bold { STATUS_WIDTH } else { diameter }))
+                    .size(px(if bold { dot } else { diameter }))
                     .rounded_full()
                     .border_1()
                     .when(bold, |dot| dot.border_2())
@@ -590,6 +594,7 @@ pub(crate) fn state_label<'a>(
 /// dot the same color in both clients whatever terminal theme is loaded, where
 /// ANSI slots would drift: Xcode Dark paints its cyan purple. Mocha's pastels
 /// vanish on light chrome, so [`Theme::ink`] darkens them there, keeping hue.
+/// The diameter is the default size's, which callers scale to their font.
 pub(super) fn status_style(status: AgentStatus, theme: &Theme) -> (f32, bool, u32) {
     let (diameter, filled, color) = match status {
         AgentStatus::Working => (STATUS_WIDTH, true, 0xf9e2af),

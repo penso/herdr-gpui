@@ -3,7 +3,7 @@
 //! checkout and plain folders keep the theme as drawn.
 use super::*;
 use crate::{
-    config::{Density, LayoutMode, Style},
+    config::{Density, LayoutMode, StatusIcons, Style},
     sidebar::{STATUS_WIDTH, layout::SidebarMetrics},
     worktree_identity::{Surface, Worktrees},
 };
@@ -42,6 +42,18 @@ fn draw_rows<'a>(
     repository_icons: bool,
     rows: Option<&str>,
 ) -> &'a mut gpui::VisualTestContext {
+    draw_with(cx, mode, worktrees, repository_icons, rows, |_| {})
+}
+
+/// [`draw_rows`], with `configure` applied to the window's config last.
+fn draw_with<'a>(
+    cx: &'a mut gpui::TestAppContext,
+    mode: LayoutMode,
+    worktrees: Worktrees,
+    repository_icons: bool,
+    rows: Option<&str>,
+    configure: impl FnOnce(&mut crate::config::Config),
+) -> &'a mut gpui::VisualTestContext {
     let (_, cx) = cx.add_window_view(|window, cx| {
         let view = cx.new(|cx| {
             let mut view = fixture_window(window, cx);
@@ -52,6 +64,7 @@ fn draw_rows<'a>(
             }
             view.config.worktrees = worktrees;
             view.config.show_repository_icons = repository_icons;
+            configure(&mut view.config);
             let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
             let alone = &mut snapshot.workspaces[2];
             alone.label = ALONE.into();
@@ -150,6 +163,60 @@ fn guides_run_from_the_main_checkout_to_each_childs_leading_mark(cx: &mut gpui::
             let guide = probe(cx, format!("tree-{key}")).unwrap();
             assert_eq!((guide.top(), guide.bottom()), (row.top(), row.bottom()));
             assert!(guide.right() < probe(cx, format!("name-{key}")).unwrap().left());
+        }
+    }
+}
+
+/// A larger `[sidebar] size` or a wider indicator set widens the status
+/// slot, which moves the parent's name along, and children step in as far,
+/// so no layout loses a guide to it: each keeps the width the dots give it
+/// at the default size, short of the child's name. With dots, Minimal's
+/// still runs from the parent's name to the child's dot.
+#[gpui::test]
+fn guides_keep_their_room_at_large_sidebar_sizes(app: &mut gpui::TestAppContext) {
+    let keys = [FIRST, LAST];
+    let default = crate::config::Config::default().sidebar.size;
+    let cases = [(StatusIcons::Dots, 24.), (StatusIcons::Dots, 48.)]
+        .into_iter()
+        .chain(StatusIcons::ALL.iter().map(|&icons| (icons, default)));
+    let cases: Vec<_> = cases.collect();
+    for mode in layouts() {
+        let widths = {
+            let cx = draw(app, mode, Worktrees::default(), true);
+            keys.map(|key| probe(cx, format!("tree-{key}")).unwrap().size.width)
+        };
+        for &(icons, size) in &cases {
+            let case = format!("{mode} with {icons:?} at {size}");
+            let cx = draw_with(app, mode, Worktrees::default(), true, None, |config| {
+                config.status_icons = icons;
+                config.sidebar.size = size;
+            });
+            for (key, width) in keys.into_iter().zip(widths) {
+                let guide = probe(cx, format!("tree-{key}"))
+                    .unwrap_or_else(|| panic!("{case}: no guide for {key}"));
+                assert!(
+                    (guide.size.width - width).abs() <= px(0.5),
+                    "{case}: {key} is {:?}, {width:?} with dots at the default",
+                    guide.size.width
+                );
+                let name = probe(cx, format!("name-{key}")).unwrap();
+                assert!(guide.right() < name.left(), "{case}: {key}");
+            }
+            if mode == LayoutMode::Minimal && icons == StatusIcons::Dots {
+                let font = crate::config::FontConfig {
+                    size,
+                    ..crate::config::Config::default().sidebar
+                };
+                let dot = crate::sidebar::scaled(&font, STATUS_WIDTH);
+                let gap = SidebarMetrics::for_mode(mode).gap;
+                let parent = probe(cx, format!("name-{MAIN}")).unwrap().left();
+                for key in keys {
+                    let guide = probe(cx, format!("tree-{key}")).unwrap();
+                    let dot_left = probe(cx, format!("name-{key}")).unwrap().left() - px(dot + gap);
+                    assert!((guide.left() - parent).abs() <= px(0.5), "{case}: {key}");
+                    assert!((guide.right() - dot_left).abs() <= px(0.5), "{case}: {key}");
+                }
+            }
         }
     }
 }

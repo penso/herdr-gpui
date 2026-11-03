@@ -9,7 +9,7 @@ use crate::{
     config::corners,
     i18n::fl,
     search_input::SearchInput,
-    sidebar::{layout::SidebarLook, line_height},
+    sidebar::{layout::SidebarLook, line_height, scaled},
 };
 use gpui::{prelude::*, *};
 
@@ -100,10 +100,16 @@ impl HerdrWindow {
             input.set_label(&heading.name(), cx);
             input.set_placeholder(&placeholder, cx);
         });
+        // The heading's glyphs grow with its text. Its padding does not, so
+        // the clear button grows only as far as the field's border, which
+        // its hover fill would otherwise cross in the tighter densities.
+        let icon = scaled(font, 12.);
+        let height = line_height(font) + 2. * look.density.header_padding();
+        let clear = scaled(font, 20.).min(height - 2.);
         let magnifier = || {
             svg()
                 .path("icons/search.svg")
-                .size(px(12.))
+                .size(px(icon))
                 .flex_none()
                 .text_color(rgb(theme.muted))
         };
@@ -145,7 +151,7 @@ impl HerdrWindow {
                         .role(Role::Button)
                         .aria_label(fl!("sidebar-search-clear"))
                         .flex_none()
-                        .size(px(20.))
+                        .size(px(clear))
                         .flex()
                         .items_center()
                         .justify_center()
@@ -158,7 +164,7 @@ impl HerdrWindow {
                         .child(
                             svg()
                                 .path("icons/x.svg")
-                                .size(px(12.))
+                                .size(px(icon))
                                 .text_color(rgb(theme.muted)),
                         ),
                 )
@@ -167,7 +173,7 @@ impl HerdrWindow {
             div()
                 .debug_selector(move || format!("header-{}", heading.key()))
                 .flex_none()
-                .h(px(line_height(font) + 2. * look.density.header_padding()))
+                .h(px(height))
                 .px(px(look.inset()))
                 .flex()
                 .items_center()

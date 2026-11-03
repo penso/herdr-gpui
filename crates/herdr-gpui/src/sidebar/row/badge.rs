@@ -91,7 +91,7 @@ impl RowBadge {
         let number = self.pr.as_ref().map_or(0, |pr| pr.number.chars().count());
         let pr = (glyph * number as f32).ceil();
         // Reserve the icon and the gap before the PR number, even at small fonts.
-        let mark = line_height(font).min(18.) + glyph;
+        let mark = line_height(font) + glyph;
         let marks = [
             self.dirty && !self.chipped(layout),
             self.teleported,
@@ -148,7 +148,7 @@ impl RowBadge {
                     .overflow_hidden()
                     .when(muted, |line| {
                         line.child(
-                            crate::icons::muted(theme, (line_height(font) * 0.75).round().min(15.))
+                            crate::icons::muted(theme, (line_height(font) * 0.75).round())
                                 .debug_selector(|| format!("muted-{key}")),
                         )
                     })
@@ -156,16 +156,13 @@ impl RowBadge {
                     // button marks it.
                     .when(teleported, |line| {
                         line.child(
-                            crate::icons::teleported(
-                                theme,
-                                (line_height(font) * 0.75).round().min(15.),
-                            )
-                            .debug_selector(|| format!("teleported-{key}")),
+                            crate::icons::teleported(theme, (line_height(font) * 0.75).round())
+                                .debug_selector(|| format!("teleported-{key}")),
                         )
                     })
                     .when(noted, |line| {
                         line.child(
-                            crate::icons::note(theme, (line_height(font) * 0.75).round().min(15.))
+                            crate::icons::note(theme, (line_height(font) * 0.75).round())
                                 .debug_selector(|| format!("note-{key}")),
                         )
                     })
@@ -173,11 +170,8 @@ impl RowBadge {
                         line.child(
                             // Well under the line height, so marks on
                             // neighbouring rows keep a visible gap.
-                            crate::icons::uncommitted(
-                                theme,
-                                (line_height(font) * 0.75).round().min(15.),
-                            )
-                            .debug_selector(|| format!("dirty-{key}")),
+                            crate::icons::uncommitted(theme, (line_height(font) * 0.75).round())
+                                .debug_selector(|| format!("dirty-{key}")),
                         )
                     })
                     .when_some(pr.as_ref(), |line, badge| {
@@ -337,7 +331,7 @@ impl Counts {
 /// The pencil inside a local counts chip, a little smaller than the bare
 /// mark's so the chip keeps a line's height.
 pub(in crate::sidebar) fn chip_icon(font: &FontConfig) -> f32 {
-    (line_height(font) * 0.6).round().min(12.)
+    (line_height(font) * 0.6).round()
 }
 
 /// How far the checked-out branch has drifted from its upstream, as the

@@ -8,6 +8,7 @@ use super::{
     layout::SidebarLook,
     line_height,
     row::removing_dot,
+    scaled,
     sticky::{self, HostHeader},
     wash,
 };
@@ -60,9 +61,11 @@ impl HerdrWindow {
         let layout = look.density;
         let content_x = look.content_x();
         let host_gap = layout.host_gap();
-        // The label yields room to the arrow and to the trailing status dot.
+        // The label yields room to the arrow and to the trailing status dot,
+        // which grow with the font as the label does.
+        let (arrow_width, dot) = (scaled(font, HOST_ARROW_WIDTH), scaled(font, STATUS_WIDTH));
         let host_label_width =
-            (look.content_width(width) - HOST_ARROW_WIDTH - 2. * host_gap - STATUS_WIDTH).max(0.);
+            (look.content_width(width) - arrow_width - 2. * host_gap - dot).max(0.);
         let prefix = if pinned { "sticky-" } else { "" };
         let endpoint_id = endpoint.id.clone();
         let collapse_id = endpoint_id.clone();
@@ -110,11 +113,7 @@ impl HerdrWindow {
         // The removal pulse, the count, and the gauges take their room from
         // the label, not from the status.
         let label_width = (host_label_width
-            - if removing {
-                STATUS_WIDTH + host_gap
-            } else {
-                0.
-            }
+            - if removing { dot + host_gap } else { 0. }
             - working_width
             - gauges.as_ref().map_or(0., |(width, ..)| width + host_gap))
         .max(0.);
@@ -248,7 +247,7 @@ impl HerdrWindow {
                                     format!("{prefix}collapse-host-{endpoint_id}")
                                 })
                             })
-                            .w(px(HOST_ARROW_WIDTH))
+                            .w(px(arrow_width))
                             .flex_none()
                             .child(label_text(if endpoint.collapsed {
                                 crate::direction::glyph("\u{25b8}")
@@ -274,7 +273,7 @@ impl HerdrWindow {
                         ))
                     })
                     .when(removing, |row| {
-                        row.child(removing_dot("host-removing", theme))
+                        row.child(removing_dot("host-removing", font, theme))
                     })
                     .child(
                         div()
@@ -316,7 +315,7 @@ impl HerdrWindow {
                     .child(
                         div()
                             .debug_selector(|| format!("{prefix}host-status-{endpoint_id}"))
-                            .size(px(STATUS_WIDTH))
+                            .size(px(dot))
                             .flex_none()
                             .rounded_full()
                             .bg(rgb(if endpoint.live.status.is_connected() {
@@ -335,7 +334,7 @@ impl HerdrWindow {
                         .h(px(line_height(font)))
                         .row()
                         .items_center()
-                        .ps(px(HOST_ARROW_WIDTH + host_gap + icon_room))
+                        .ps(px(arrow_width + host_gap + icon_room))
                         .overflow_hidden()
                         .child(crate::system_load::line(
                             reading,
@@ -356,7 +355,7 @@ impl HerdrWindow {
                         .h(px(line_height(font)))
                         .row()
                         .items_center()
-                        .ps(px(HOST_ARROW_WIDTH + host_gap + icon_room))
+                        .ps(px(arrow_width + host_gap + icon_room))
                         .overflow_hidden()
                         .child(line)
                         .tooltip(crate::system_load::tooltip(reading, &host, theme)),

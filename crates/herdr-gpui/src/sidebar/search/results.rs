@@ -10,7 +10,7 @@ use crate::{
         agents::{Indicators, status_indicator},
         label_text,
         layout::SidebarLook,
-        line_height,
+        line_height, scaled,
     },
 };
 use gpui::{prelude::*, *};
@@ -75,7 +75,7 @@ impl HerdrWindow {
                         Kind::Note => "icons/note.svg",
                         Kind::Worktree | Kind::Branch => "icons/git-branch.svg",
                     })
-                    .size(px(indicators.width(font).max(12.)))
+                    .size(px(indicators.width(font).max(scaled(font, 12.))))
                     .flex_none()
                     .text_color(rgb(theme.subtext()))
                     .into_any_element(),

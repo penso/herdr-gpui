@@ -27,8 +27,9 @@ fn status_colors_keep_upstream_literals_where_they_already_read() {
     }
 }
 
-/// Dots keep upstream's narrow slot; every drawn set takes the same slot at
-/// each font size, so switching sets never shifts a row's text.
+/// Dots take a slot as wide as the dot at that font size; every drawn set
+/// takes the same slot at each font size, so switching sets never shifts a
+/// row's text.
 #[test]
 fn status_slots_are_fixed_for_each_set_and_font_size() {
     use gpui::{Styled, px};
@@ -46,7 +47,7 @@ fn status_slots_are_fixed_for_each_set_and_font_size() {
             let indicators = Indicators::new(None, icons, false, false, &Theme::default());
             let width = indicators.width(&font);
             if icons == StatusIcons::Dots {
-                assert_eq!(width, STATUS_WIDTH);
+                assert_eq!(width, crate::sidebar::scaled(&font, STATUS_WIDTH));
             } else {
                 assert_eq!(width, drawn, "{icons:?} at {size}");
             }
