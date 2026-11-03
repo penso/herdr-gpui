@@ -7,12 +7,22 @@ use super::{
     Error, Result, SourceKey, SyncState, Worker, github,
     schedule::{self, ChecksRead},
 };
+use crate::Checkpoint;
 use chrono::Utc;
 use herdr_github::Tokens;
 use std::{
     sync::{Arc, atomic::Ordering},
     time::Instant,
 };
+
+/// A GitHub listing shown but not stored, and where its next sync continues.
+#[derive(Debug)]
+pub(super) struct Remembered {
+    checkpoint: Checkpoint,
+    /// Whether the listing was complete: a capped one stays capped through
+    /// its incremental syncs (see [`schedule::complete`]).
+    complete: bool,
+}
 
 impl Worker {
     pub(super) fn github_listing(&mut self, key: &SourceKey, tokens: &Tokens) -> Result<SyncState> {
@@ -28,13 +38,10 @@ impl Worker {
         // A listing shown from memory continues from its own checkpoint;
         // else what the last complete sync stored, which a read-only store
         // cannot give.
-        let remembered = self
-            .uncached
-            .get(key)
-            .zip(self.remembered.get(key))
-            .map(|(items, checkpoint)| (Some(checkpoint.clone()), Some(items.clone())));
+        let remembered = self.uncached.get(key).zip(self.remembered.get(key));
+        let continued_complete = remembered.map(|(_, remembered)| remembered.complete);
         let (previous, cached) = match remembered {
-            Some(remembered) => remembered,
+            Some((items, remembered)) => (Some(remembered.checkpoint.clone()), Some(items.clone())),
             None => {
                 let previous = store.checkpoint(key)?;
                 let cached = match (&previous, writable) {
@@ -69,12 +76,19 @@ impl Worker {
             &mut self.cooldown,
         )?;
         let count = listing.items.len();
+        let complete = schedule::complete(listing.complete, listing.full, continued_complete);
         self.read_checks(key, token, &listing.items)?;
         self.resume.insert(key.clone(), listing.resume);
-        if !listing.complete || !writable {
-            self.remembered.insert(key.clone(), listing.checkpoint);
+        if !complete || !writable {
+            self.remembered.insert(
+                key.clone(),
+                Remembered {
+                    checkpoint: listing.checkpoint,
+                    complete,
+                },
+            );
             self.uncached.insert(key.clone(), listing.items);
-            return Ok(if listing.complete {
+            return Ok(if complete {
                 SyncState::Synced {
                     at: Utc::now(),
                     count,

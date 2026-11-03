@@ -78,10 +78,24 @@ pub(super) fn checks_due(
     let Some(last) = last else {
         return true;
     };
+    // Each check, not the summary: a failed check outranks a running one
+    // there, and the running one still finishes.
     let running = statuses.iter().any(|((shown, _), status)| {
-        shown == repository && status.checks_state() == Some(CheckState::Pending)
+        shown == repository
+            && status
+                .checks
+                .iter()
+                .any(|check| check.state == CheckState::Pending)
     });
     running || last.open != open || now.duration_since(last.at) >= CHECKS_EVERY
+}
+
+/// Whether a listing is complete. One continued from a capped listing in
+/// memory holds only what that listing read, so it may count no more than
+/// [`crate::github::MAX_OPEN`] open items while GitHub has more: it stays
+/// capped until a full listing reads them all.
+pub(super) fn complete(complete: bool, full: bool, continued_complete: Option<bool>) -> bool {
+    complete && (full || continued_complete != Some(false))
 }
 
 #[cfg(test)]

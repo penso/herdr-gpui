@@ -4,8 +4,8 @@
 //! mailbox on its tick; it never waits on this thread.
 
 use super::{
-    Access, CheckState, Checkpoint, Error, HerdrSession, Item, PrStatus, Provider, Result, Run,
-    SourceKey, Store,
+    Access, CheckState, Error, HerdrSession, Item, PrStatus, Provider, Result, Run, SourceKey,
+    Store,
     actions::{Action, Site},
     beads, database_path, github, gitlab,
     location::{database_path_in, legacy_path, legacy_path_in},
@@ -339,7 +339,7 @@ struct Worker {
     /// When each GitHub source's checks were last read, and what was open.
     checks: HashMap<SourceKey, schedule::ChecksRead>,
     /// The checkpoint of each GitHub listing in `uncached`.
-    remembered: HashMap<SourceKey, Checkpoint>,
+    remembered: HashMap<SourceKey, github_source::Remembered>,
     /// Each source's failures in a row, which lengthen its wait.
     failures: HashMap<SourceKey, u32>,
 }
@@ -364,9 +364,7 @@ impl Worker {
             let wait = reload.min(next_sync.saturating_duration_since(Instant::now()));
             match commands.recv_timeout(wait) {
                 Ok(Command::Refresh(token)) => {
-                    self.request.token = token;
-                    self.gitlab_token = None;
-                    self.retry.clear();
+                    self.refreshed(token);
                     let token = self.request.token.clone();
                     self.sync(token.as_ref());
                     last_sync = Instant::now();
@@ -408,6 +406,16 @@ impl Worker {
                 Err(RecvTimeoutError::Disconnected) => return,
             }
         }
+    }
+
+    /// Forgets what spaced out the next sync, so Refresh (or a new account)
+    /// reads everything again: the token looked up, the sources' waits, and
+    /// when their checks were last read, which a re-run check may not move.
+    fn refreshed(&mut self, token: Option<Tokens>) {
+        self.request.token = token;
+        self.gitlab_token = None;
+        self.retry.clear();
+        self.checks.clear();
     }
 
     /// Starts `action` on a thread of its own, at most [`MAX_ACTIONS`] at once.

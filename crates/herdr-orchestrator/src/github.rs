@@ -148,7 +148,12 @@ impl Resume {
 pub struct Listing {
     pub items: Vec<Item>,
     pub checkpoint: Checkpoint,
+    /// No open listing stopped at [`MAX_OPEN`]. An incremental sync only
+    /// counts the items it holds, so it cannot tell a capped listing it
+    /// continued from a complete one: see `full`.
     pub complete: bool,
+    /// Read in full rather than as the changes since the last sync.
+    pub full: bool,
     pub resume: Resume,
 }
 
@@ -292,6 +297,7 @@ pub fn full(
         items,
         checkpoint,
         complete,
+        full: true,
         resume,
     })
 }
@@ -373,6 +379,7 @@ pub fn changes(
         items,
         checkpoint,
         complete,
+        full: false,
         resume,
     }))
 }

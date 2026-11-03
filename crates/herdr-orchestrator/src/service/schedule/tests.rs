@@ -150,6 +150,23 @@ fn checks_are_read_again_only_when_they_may_have_moved() {
         now
     ));
 
+    let mut mixed = status(CheckState::Failed);
+    mixed.checks.push(Check {
+        name: "lint".into(),
+        state: CheckState::Pending,
+    });
+    let failing_and_running = HashMap::from([(("penso/herdr-gpui".to_owned(), 1), mixed)]);
+    assert!(
+        checks_due(
+            Some(&fresh),
+            &open,
+            "penso/herdr-gpui",
+            &failing_and_running,
+            now
+        ),
+        "a failed check does not hide one still running"
+    );
+
     let later = now + CHECKS_EVERY;
     assert!(checks_due(
         Some(&fresh),
@@ -158,4 +175,19 @@ fn checks_are_read_again_only_when_they_may_have_moved() {
         &none,
         later
     ));
+}
+
+#[test]
+fn a_capped_listing_stays_capped_until_a_full_listing() {
+    // Continued from a capped listing: its count alone proves nothing.
+    assert!(!complete(true, false, Some(false)));
+    assert!(
+        complete(true, true, Some(false)),
+        "a full listing read it all"
+    );
+    // Continued from a stored or complete listing, or from nothing.
+    assert!(complete(true, false, Some(true)));
+    assert!(complete(true, false, None));
+    assert!(!complete(false, true, None));
+    assert!(!complete(false, false, Some(true)));
 }
