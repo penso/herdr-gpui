@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod origin;
 mod script;
 
 fn accepted() -> CodeConfig {
@@ -75,7 +76,7 @@ fn the_scripts_exit_codes_name_what_went_wrong() {
 #[test]
 fn hosts_get_servers_only_when_the_app_starts_vs_code() {
     let address = CodeConfig {
-        url: Some(crate::browser::WebUrl::try_from("http://127.0.0.1:8000/?tkn=x").unwrap()),
+        url: Some(WebUrl::try_from("http://127.0.0.1:8000/?tkn=x").unwrap()),
         ..accepted()
     };
     assert!(!serves(&address), "an address serves every workspace");

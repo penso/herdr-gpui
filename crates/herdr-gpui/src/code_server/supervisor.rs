@@ -473,7 +473,12 @@ where
                 port
             }
         };
-        let url = WebUrl::try_from(format!("http://127.0.0.1:{port}/?tkn={}", token.as_str()))?;
+        let host = self
+            .plan
+            .host
+            .as_deref()
+            .map_or_else(|| "127.0.0.1".to_owned(), super::host::page_host);
+        let url = WebUrl::try_from(format!("http://{host}:{port}/?tkn={}", token.as_str()))?;
         let address = Address { port, url };
         self.shared.publish(|slot| {
             slot.status = Some(Status::Starting);

@@ -25,7 +25,7 @@ use super::{
     token,
 };
 use crate::{
-    browser::EMBEDDED,
+    browser::{EMBEDDED, WebUrl},
     config::{CodeConfig, CodeMode},
 };
 use gpui::{App, Global};
@@ -70,6 +70,26 @@ fn port_of(target: &str) -> NonZeroU16 {
     let span = u64::from(PORTS.end - PORTS.start);
     let offset = u16::try_from(fingerprint(target) % span).unwrap_or_default();
     NonZeroU16::new(PORTS.start + offset).unwrap_or(NonZeroU16::MIN)
+}
+
+/// The name `target`'s VS Code pages load its server at. Browsers keep
+/// cookies by name, not by port, so on `127.0.0.1` every server's
+/// `vscode-tkn` cookie would go to every other: a host would be sent the
+/// token of the server on this computer, or of another host. Each host gets
+/// a name of its own under `.localhost`, which is always this computer, and
+/// the same one each launch, since VS Code keeps a page's state by origin.
+pub(super) fn page_host(target: &str) -> String {
+    format!("vscode-{:016x}.localhost", fingerprint(target))
+}
+
+/// Asks a host's server for its version on `127.0.0.1`, where its port
+/// listens, rather than at its page's name: what the system's resolver
+/// makes of `.localhost` names, unlike a browser's, varies.
+fn version(url: &WebUrl) -> crate::Result<super::Server> {
+    let loopback = url
+        .loopback_port()
+        .and_then(|port| url.at_local_port(port.get()));
+    super::version(loopback.as_ref().unwrap_or(url))
 }
 
 /// `target`'s own port, when it is free right now; else any free one is used.
@@ -120,7 +140,7 @@ fn start(plan: Plan) -> crate::Result<Supervisor> {
         plan,
         command,
         // Never the token: the app gave the server its token itself.
-        super::version,
+        version,
         // The port is the host's own; nothing is saved.
         |_| Ok(()),
         Timing::default(),
