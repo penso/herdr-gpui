@@ -152,7 +152,7 @@ x509-parser          = { default-features = false, version = "0.18" }
 roxmltree            = "0.21"
 rusqlite             = { features = ["bundled"], version = "0.40" }
 rodio                = { default-features = false, features = ["playback", "symphonia-mp3", "tracing"], version = "0.22.2" }
-rustix               = { features = ["event", "fs", "process", "pty", "termios"], version = "=1.1.5" }
+rustix               = { features = ["event", "fs", "process", "pty", "termios"], version = "=1.1.6" }
 secrecy              = { features = ["serde"], version = "=0.10.3" }
 security-framework   = "=3.7.0"
 serde                = { features = ["derive"], version = "1" }
