@@ -28,6 +28,17 @@ pub(super) fn identity(
         cancel,
     )?;
     let identity = signing_identity(&text)?;
+    let executable = output(
+        herdr_client::new_command("/usr/bin/plutil")
+            .args(["-extract", "CFBundleExecutable", "raw", "-o", "-"])
+            .arg(bundle.join("Contents/Info.plist")),
+        cancel,
+    )?;
+    if !super::bundle::accepts_executable(executable.trim())
+        || super::bundle::executable(bundle)?.file_name() != Some(executable.trim().as_ref())
+    {
+        return Err(Error::BundleNotExecutable);
+    }
     for key in ["CFBundleShortVersionString", "CFBundleVersion"] {
         let actual = output(
             herdr_client::new_command("/usr/bin/plutil")

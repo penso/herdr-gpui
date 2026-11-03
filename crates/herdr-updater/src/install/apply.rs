@@ -198,13 +198,15 @@ fn helper(stage: &Path) -> Result<()> {
         let backup = stage.join("previous-installation");
         let args: Vec<OsString> = request.args.into_iter().map(OsString::from_vec).collect();
         let cwd = PathBuf::from(OsString::from_vec(request.cwd));
+        let executable =
+            replacement_executable(&installation.destination, &candidate, installation.mode)?;
         let result = replace(
             &installation.destination,
             &candidate,
             &backup,
             installation.mode,
             || {
-                herdr_client::new_command(&installation.executable)
+                herdr_client::new_command(&executable)
                     .args(args)
                     .current_dir(cwd)
                     .stdin(Stdio::null())
@@ -227,5 +229,22 @@ fn helper(stage: &Path) -> Result<()> {
         }),
         (Err(error), _) => Err(error),
         (Ok(()), recorded) => recorded,
+    }
+}
+
+/// Select from the validated candidate before moving it. The existing bundle
+/// directory stays put, but its internal executable can change during rebrand.
+pub(super) fn replacement_executable(
+    destination: &Path,
+    candidate: &Path,
+    mode: Mode,
+) -> Result<PathBuf> {
+    match mode {
+        Mode::Linux => Ok(destination.to_owned()),
+        Mode::Mac => {
+            let executable = super::bundle::executable(candidate)?;
+            let name = executable.file_name().ok_or(Error::BundleNotExecutable)?;
+            Ok(destination.join("Contents/MacOS").join(name))
+        }
     }
 }

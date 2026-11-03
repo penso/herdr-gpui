@@ -12,5 +12,6 @@ use super::signing::signing_identity;
 mod archives;
 mod guard;
 mod locations;
+mod migration;
 mod replacement;
 mod signing;

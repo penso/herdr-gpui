@@ -31,6 +31,7 @@ use tempfile::TempDir;
 
 mod apply;
 mod archive;
+pub(crate) mod bundle;
 mod location;
 mod signing;
 
@@ -194,21 +195,36 @@ fn candidate(
     offer: &release::Offer,
     cancel: &AtomicBool,
 ) -> Result<(TempDir, PathBuf)> {
+    candidate_with(stage, installation, offer, cancel, |bundle, version| {
+        identity(bundle, version, cancel)
+    })
+}
+
+fn candidate_with(
+    stage: &Path,
+    installation: &Installation,
+    offer: &release::Offer,
+    cancel: &AtomicBool,
+    mut identity: impl FnMut(&Path, &str) -> Result<(String, String)>,
+) -> Result<(TempDir, PathBuf)> {
     let archive = stage.join("archive.tar.gz");
     owned(&archive, installation.uid, false)?;
     release::verify_archive(&archive, &offer.asset, cancel)?;
     let tree = private_directory(stage)?;
-    let name = format!(
-        "herdr-gpui-{}-{}",
-        offer.manifest.version, offer.asset.target
-    );
-    let path = extract(&archive, tree.path(), installation.mode, &name, cancel)?;
+    // The signed archive name fixes the single Linux entry, including its
+    // legacy/future prefix. macOS extraction independently bounds one app root.
+    let name = offer
+        .asset
+        .name
+        .strip_suffix("-update.tar.gz")
+        .unwrap_or("");
+    let path = extract(&archive, tree.path(), installation.mode, name, cancel)?;
     if installation.mode == Mode::Mac {
-        if owned(&path.join("Contents/MacOS/Herdr"), installation.uid, false)?.mode() & 0o111 == 0 {
+        if owned(&bundle::executable(&path)?, installation.uid, false)?.mode() & 0o111 == 0 {
             return Err(Error::BundleNotExecutable);
         }
-        let old = identity(&installation.destination, crate::APP_VERSION, cancel)?;
-        if identity(&path, &offer.manifest.version, cancel)? != old {
+        let old = identity(&installation.destination, crate::APP_VERSION)?;
+        if identity(&path, &offer.manifest.version)? != old {
             return Err(Error::SigningIdentityChanged);
         }
     }

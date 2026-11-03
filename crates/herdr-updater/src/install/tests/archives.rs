@@ -1,6 +1,6 @@
 use super::*;
 
-fn archive(root: &Path, entries: &[(&str, u8, &str)]) -> anyhow::Result<PathBuf> {
+pub(super) fn archive(root: &Path, entries: &[(&str, u8, &str)]) -> anyhow::Result<PathBuf> {
     let path = root.join("fixture.tar.gz");
     let encoder = GzEncoder::new(File::create(&path)?, Compression::fast());
     let mut archive = tar::Builder::new(encoder);

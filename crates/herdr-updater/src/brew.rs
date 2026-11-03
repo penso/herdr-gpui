@@ -34,6 +34,7 @@ use std::{
 };
 
 const TOKEN: &str = "herdr-gpui";
+#[cfg(test)]
 const BUNDLE: &str = "Herdr.app";
 /// Homebrew's two standard prefixes. `PATH` is not consulted: a writable
 /// directory earlier in a user's `PATH` must not decide what the app executes.
@@ -112,9 +113,11 @@ fn owned_bundle(prefix: &Path, bundle: &Path) -> bool {
         return false;
     };
     entries.filter_map(std::result::Result::ok).any(|entry| {
-        let link = entry.path().join(BUNDLE);
-        fs::symlink_metadata(&link).is_ok_and(|meta| meta.file_type().is_symlink())
-            && fs::read_link(&link).is_ok_and(|target| target == bundle)
+        crate::install::bundle::ROOTS.iter().any(|name| {
+            let link = entry.path().join(name);
+            fs::symlink_metadata(&link).is_ok_and(|meta| meta.file_type().is_symlink())
+                && fs::read_link(&link).is_ok_and(|target| target == bundle)
+        })
     })
 }
 
@@ -437,14 +440,9 @@ pub(super) fn relaunch(cask: &Cask) -> Result<()> {
 /// Fail while this instance can still say so: once it quits, a missing app
 /// would leave the user with nothing running.
 fn runnable(bundle: &Path) -> Result<()> {
-    let executable = bundle.join(EXECUTABLE);
-    let ready =
-        fs::metadata(&executable).is_ok_and(|meta| meta.is_file() && meta.mode() & 0o111 != 0);
-    if ready {
-        Ok(())
-    } else {
-        Err(Error::RelaunchMissing(executable))
-    }
+    crate::install::bundle::executable(bundle)
+        .map(|_| ())
+        .map_err(|_| Error::RelaunchMissing(bundle.join(EXECUTABLE)))
 }
 
 /// `search_path` is the waiter's whole `PATH`; tests put stand-ins first.

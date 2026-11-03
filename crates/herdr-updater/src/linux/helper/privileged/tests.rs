@@ -4,6 +4,8 @@ use std::{cell::Cell, os::unix::fs::symlink};
 
 const PAYLOAD: &[u8] = b"authenticated release package";
 
+mod migration;
+
 fn asset() -> release::Asset {
     release::Asset {
         target: "x86_64-unknown-linux-gnu".into(),

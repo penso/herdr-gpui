@@ -1,6 +1,28 @@
 //! The installed format chooses the signed asset, never the host distribution.
 use super::{Error, Result};
 
+/// Publication still emits Herdr names. These are the only future aliases an
+/// installed compatibility client accepts; manifests retain their schemas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Naming {
+    Herdr,
+    Sheprd,
+}
+
+impl Naming {
+    pub(crate) const ALL: &[Self] = &[Self::Herdr, Self::Sheprd];
+
+    pub(crate) fn name(self, legacy: String) -> String {
+        match self {
+            Self::Herdr => legacy,
+            Self::Sheprd => legacy
+                .replacen("herdr-gpui-", "sheprd-", 1)
+                .replacen("Herdr-", "Sheprd-", 1)
+                .replacen("herdr-remote-control-", "sheprd-remote-control-", 1),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum Format {
     Archive,
@@ -16,6 +38,30 @@ pub(crate) enum Format {
 pub(crate) const WINDOWS_TARGETS: [&str; 2] = ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"];
 
 impl Format {
+    pub(crate) fn accepts(self, version: &str, target: &str, name: &str) -> bool {
+        self.name(version, target).is_ok_and(|legacy| {
+            Naming::ALL
+                .iter()
+                .any(|naming| naming.name(legacy.clone()) == name)
+        })
+    }
+
+    /// The manifest has already rejected duplicate format/target slots, even
+    /// when one uses the legacy spelling and the other the future spelling.
+    pub(crate) fn select<'a>(
+        self,
+        manifest: &'a super::Manifest,
+        target: &str,
+    ) -> Result<&'a super::Asset> {
+        manifest
+            .assets
+            .iter()
+            .find(|asset| {
+                asset.target == target && self.accepts(&manifest.version, target, &asset.name)
+            })
+            .ok_or(Error::MissingPlatformAsset)
+    }
+
     pub(crate) fn name(self, version: &str, target: &str) -> Result<String> {
         match self {
             Self::Archive => super::asset_name(version, target),

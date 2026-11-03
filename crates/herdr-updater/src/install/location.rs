@@ -122,8 +122,14 @@ fn uid(cancel: &AtomicBool) -> Result<u32> {
 /// delegation and standalone installation must agree on what "this app" is.
 pub(crate) fn mac_bundle(executable: &Path) -> Result<PathBuf> {
     let root = executable.ancestors().nth(3).ok_or(Error::NotHerdrBundle)?;
-    if root.file_name() != Some("Herdr.app".as_ref())
-        || executable != root.join("Contents/MacOS/Herdr")
+    if !super::bundle::ROOTS
+        .iter()
+        .any(|name| root.file_name() == Some(name.as_ref()))
+        || executable
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !super::bundle::accepts_executable(name))
+        || executable.parent() != Some(root.join("Contents/MacOS").as_path())
     {
         return Err(Error::NotHerdrBundle);
     }

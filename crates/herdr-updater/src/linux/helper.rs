@@ -104,13 +104,7 @@ fn decode_request(
 fn apply_request(stage: &Path, key: &str) -> Result<()> {
     let (request, manifest) = request(stage, key, crate::APP_VERSION)?;
     let target = release::target().ok_or(Error::UnsupportedTarget)?;
-    let name = request.format.name(&request.version, target)?;
-    let asset = manifest
-        .assets
-        .iter()
-        .find(|asset| asset.target == target && asset.name == name)
-        .ok_or(Error::MissingPlatformAsset)?
-        .clone();
+    let asset = request.format.select(&manifest, target)?.clone();
     let package = Package {
         format: request.format,
         executable: request.executable,

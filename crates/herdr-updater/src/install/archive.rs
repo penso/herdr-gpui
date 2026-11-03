@@ -48,6 +48,7 @@ pub(super) fn extract(
     let mut seen = HashSet::new();
     let mut distribution_directories = HashSet::new();
     let mut links = Vec::new();
+    let mut bundle_root = None;
     let mut expanded = 0u64;
     let mut directories = fs::DirBuilder::new();
     directories.recursive(true).mode(0o700);
@@ -73,8 +74,16 @@ pub(super) fn extract(
             if path != Path::new(name) || !kind.is_file() {
                 return Err(Error::LinuxPayload);
             }
-        } else if !path.starts_with("Herdr.app") {
-            return Err(Error::OutsideBundle);
+        } else {
+            let name = super::bundle::ROOTS
+                .iter()
+                .copied()
+                .find(|name| path.starts_with(name))
+                .ok_or(Error::OutsideBundle)?;
+            if bundle_root.is_some_and(|root| root != name) {
+                return Err(Error::OutsideBundle);
+            }
+            bundle_root = Some(name);
         }
         expanded = expanded
             .checked_add(entry.size())
@@ -176,14 +185,17 @@ pub(super) fn extract(
     }
     // Also reject escape through a chain of individually relative links.
     for (path, _) in links {
-        if !fs::canonicalize(root.join(path))
-            .map_err(io)?
-            .starts_with(fs::canonicalize(root.join("Herdr.app")).map_err(io)?)
-        {
+        if !fs::canonicalize(root.join(path)).map_err(io)?.starts_with(
+            fs::canonicalize(root.join(bundle_root.ok_or(Error::EmptyArchive)?)).map_err(io)?,
+        ) {
             return Err(Error::SymlinkEscape);
         }
     }
-    let candidate = root.join(if mode == Mode::Mac { "Herdr.app" } else { name });
+    let candidate = root.join(if mode == Mode::Mac {
+        bundle_root.ok_or(Error::EmptyArchive)?
+    } else {
+        name
+    });
     if seen.is_empty() || !candidate.exists() {
         return Err(Error::EmptyArchive);
     }

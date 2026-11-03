@@ -133,12 +133,7 @@ pub(super) fn apply_request(stage: &Path, key: &str) -> Result<()> {
         crate::APP_VERSION,
     )?;
     let target = release::target().ok_or(Error::UnsupportedTarget)?;
-    let name = request.format.name(&manifest.version, target)?;
-    let asset = manifest
-        .assets
-        .iter()
-        .find(|asset| asset.target == target && asset.name == name)
-        .ok_or(Error::MissingPlatformAsset)?;
+    let asset = request.format.select(&manifest, target)?;
     let cancel = AtomicBool::new(false);
     let package = locate(Path::new(SYSTEM_EXECUTABLE), |command| {
         install::output(command, &cancel)

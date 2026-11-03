@@ -336,6 +336,14 @@ The maintainer has to:
 
 ## Updater Signing
 
+The preparatory [Sheprd compatibility contract](../../docs/updating.md#sheprd-compatibility-rollout)
+adds acceptance of the successor repository and precise future asset names to
+installed clients. These packaging and publication scripts still emit the legacy
+names. Ship the compatibility client before any repository transfer or renamed
+publication; preserve keys and installed identities. The linked contract lists
+the additional Homebrew, Linux-package, Windows-installer and missed-client
+requirements for the later rebrand.
+
 Configure `HERDR_UPDATE_PUBLIC_KEY` as a repository Actions variable (64 lowercase
 hex characters). Store the Ed25519 PEM `HERDR_UPDATE_SIGNING_KEY` only in the
 protected `release` environment, not in repository secrets. Only the manifest
