@@ -8,16 +8,18 @@ use std::sync::{Mutex, atomic::AtomicBool};
 
 #[test]
 fn images_are_tagged_by_project_and_key() {
-    let project = Project {
-        id: "0123456789abcdef".into(),
-        label: "Sheprd".into(),
-    };
     let key = "a".repeat(64);
-    assert_eq!(
-        name(&project, &key),
-        "herdr-herdr-gpui-01234567:aaaaaaaaaaaa"
-    );
-    assert!(crate::cloud::names::image_reference(&name(&project, &key)));
+    for (label, expected) in [
+        ("Herdr GPUI", "herdr-herdr-gpui-01234567:aaaaaaaaaaaa"),
+        ("Sheprd", "herdr-sheprd-01234567:aaaaaaaaaaaa"),
+    ] {
+        let project = Project {
+            id: "0123456789abcdef".into(),
+            label: label.into(),
+        };
+        assert_eq!(name(&project, &key), expected);
+        assert!(crate::cloud::names::image_reference(&name(&project, &key)));
+    }
 }
 
 #[test]
