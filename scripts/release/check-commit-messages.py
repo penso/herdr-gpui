@@ -27,6 +27,9 @@ SUBJECT = re.compile(
 # Git's own generated subjects, and marks that disappear before the branch lands.
 EXEMPT = re.compile(r"^(Merge |Revert \"|fixup! |squash! |amend! )")
 SCISSORS = "# ------------------------ >8 ------------------------"
+# GitHub's squash merge appends the pull request number to a title the pull
+# request's own checks already measured, so it is not counted against the limit.
+PULL_REQUEST_SUFFIX = re.compile(r" \(#\d+\)$")
 MAX_SUBJECT = 80
 MIN_DESCRIPTION = 8
 
@@ -68,8 +71,9 @@ def problems(message):
         if len(description) < MIN_DESCRIPTION:
             found.append(f"Say what changed in at least {MIN_DESCRIPTION} characters; "
                          "the subject is all a user reads.")
-    if len(subject) > MAX_SUBJECT:
-        found.append(f"The subject is {len(subject)} characters; keep it within {MAX_SUBJECT}.")
+    length = len(PULL_REQUEST_SUFFIX.sub("", subject))
+    if length > MAX_SUBJECT:
+        found.append(f"The subject is {length} characters; keep it within {MAX_SUBJECT}.")
     if len(lines) > 1 and lines[1].strip():
         found.append("Leave line 2 blank: everything below it is the body, which users never see.")
     for line in lines[1:]:
