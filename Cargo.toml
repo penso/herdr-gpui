@@ -76,6 +76,8 @@ futures-util         = { default-features = false, features = ["sink"], version 
 getrandom            = "0.4.3"
 gpui                 = { package = "gpui-pre", version = "=0.3.6" }
 gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
+# The adapter GPUI's macOS backend links; its window focus forwarder.
+accesskit_macos      = "=0.26.3"
 # Reads local repositories for the orchestrator without starting `git`:
 # discovery, config with its includes and URL rewrites, refs, and rev-parse.
 gix                  = { default-features = false, features = ["sha1"], version = "0.90" }
