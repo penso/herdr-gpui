@@ -77,6 +77,12 @@ final class AppModel {
     var pairing = false
     /// Home's unpaired cards are on screen, so the toast need not repeat them.
     var unpairedCardsShown = false
+    /// Connection notices the person closed, until each computer is online
+    /// again (`LinkNotice`).
+    var dismissedNotices: Set<LinkNotice.Key> = []
+    /// Chats and terminals on screen: their input is at the bottom, where
+    /// the connection toast would cover it.
+    var typingScreens = 0
     private let paths = NWPathMonitor()
 
     init() {

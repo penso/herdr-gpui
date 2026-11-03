@@ -36,6 +36,7 @@ struct ChatScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(removing: width == .regular ? .title : nil)
         .toolbar(.hidden, for: .tabBar)
+        .hidesConnectionToast()
         .toolbar {
             // On an iPad the bar's middle also spans the terminal
             // inspector, so the header leads there instead.

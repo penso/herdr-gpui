@@ -114,6 +114,7 @@ struct TerminalScreen: View {
         .navigationTitle(LockState.shared.hidesNames ? "Herdr Remote" : name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        .hidesConnectionToast()
         .toolbar {
             // `PasteButton` draws its own tinted fill and greys out with
             // nothing to paste, so it stands apart from the glass group and
