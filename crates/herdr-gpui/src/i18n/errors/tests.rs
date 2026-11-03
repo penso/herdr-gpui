@@ -53,6 +53,7 @@ mod security;
 #[cfg(unix)]
 mod setup_relay;
 mod sound;
+mod status_priority;
 mod system_load;
 mod terminal_attach;
 mod updater;
