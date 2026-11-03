@@ -11,6 +11,7 @@ fn closing_the_view_does_not_cancel_an_accepted_action() {
         cancelled: cancelled.clone(),
         mailbox: Arc::default(),
         notices: Arc::default(),
+        visible: Arc::default(),
     };
     let (started, starting) = mpsc::sync_channel(1);
     let (resume, resumed) = mpsc::sync_channel(1);

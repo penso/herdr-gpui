@@ -6,8 +6,9 @@
 //!
 //! Between full listings a sync reads only what changed since the last one:
 //! issues GitHub filters by update time, and pull requests newest first until
-//! one is older. A quiet repository then costs two small requests a minute
-//! however many items it has, instead of a page per hundred.
+//! one is older. Both first pages come in one request, so a quiet repository
+//! costs one small request a sync however many items it has, instead of a
+//! page per hundred.
 
 use super::{Activity, Checkpoint, Error, Item, ItemKey, PullRequest, Result, SourceKey};
 use chrono::{DateTime, TimeDelta, Utc};
@@ -67,6 +68,37 @@ const CHANGED_ISSUES: &str = r#"query($owner: String!, $repo: String!, $after: S
 const PULL_REQUESTS: &str = r#"query($owner: String!, $repo: String!, $after: String, $states: [PullRequestState!], $count: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequests(first: $count, after: $after, states: $states, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number title body state isDraft url createdAt updatedAt
+        author { login }
+        labels(first: 20) { nodes { name } }
+        comments { totalCount }
+        commits { totalCount }
+        additions deletions baseRefName headRefName baseRefOid headRefOid
+        headRepository { nameWithOwner }
+      }
+    }
+  }
+}"#;
+
+/// The first page of both incremental listings in one request: GitHub
+/// charges a point for each query however small, and a quiet repository's
+/// changes fit in one page of each. The `issues` and `pullRequests` arguments
+/// match [`CHANGED_ISSUES`] and [`PULL_REQUESTS`], so their cursors continue
+/// there.
+const CHANGES: &str = r#"query($owner: String!, $repo: String!, $since: DateTime!, $count: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issues(first: $count, filterBy: {since: $since, states: [OPEN, CLOSED]}, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number title body state url createdAt updatedAt
+        author { login }
+        labels(first: 20) { nodes { name } }
+        comments { totalCount }
+      }
+    }
+    pullRequests(first: $count, states: [OPEN, CLOSED, MERGED], orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
         number title body state isDraft url createdAt updatedAt
@@ -189,7 +221,7 @@ pub fn full(
     let mut after = Value::Null;
     loop {
         let page: Page<IssueNode> = connection(
-            fetch(
+            &fetch(
                 ISSUES,
                 json!({"owner": owner, "repo": repo, "after": after}),
             )?,
@@ -225,7 +257,7 @@ pub fn full(
             }
             response => response?,
         };
-        let page: Page<PullRequestNode> = connection(response, "pullRequests")?;
+        let page: Page<PullRequestNode> = connection(&response, "pullRequests")?;
         items.extend(page.nodes.into_iter().map(|node| node.into_item(source)));
         match next(&page.page_info, items.len() - issues) {
             Next::Page(cursor) => after = cursor,
@@ -242,7 +274,7 @@ pub fn full(
         "states": ["CLOSED", "MERGED"], "count": RECENTLY_CLOSED,
     });
     let closed: Page<PullRequestNode> =
-        connection(fetch(PULL_REQUESTS, variables)?, "pullRequests")?;
+        connection(&fetch(PULL_REQUESTS, variables)?, "pullRequests")?;
     items.extend(closed.nodes.into_iter().map(|node| node.into_item(source)));
 
     // Not from the newest change seen: the open and closed pull requests are
@@ -265,8 +297,10 @@ pub fn full(
 }
 
 /// The cached listing with what changed since `since` applied, or `None`
-/// when so much changed that a full listing is the cheaper read.
-fn changes(
+/// when so much changed that a full listing is the cheaper read. The first
+/// page of each listing comes in one [`CHANGES`] request; only a listing
+/// with more continues on its own query.
+pub fn changes(
     source: &SourceKey,
     (owner, repo): (&str, &str),
     since: Resume,
@@ -274,29 +308,30 @@ fn changes(
     previous: &Checkpoint,
     fetch: &mut impl FnMut(&str, Value) -> Result<Value>,
 ) -> Result<Option<Listing>> {
+    let first = fetch(
+        CHANGES,
+        json!({
+            "owner": owner, "repo": repo, "since": since.issues.to_rfc3339(),
+            "count": CHANGED_PAGE,
+        }),
+    )?;
     let mut changed = Vec::new();
-    let mut after = Value::Null;
+    let mut page: Page<IssueNode> = connection(&first, "issues")?;
     loop {
+        changed.extend(page.nodes.into_iter().map(|node| node.into_item(source)));
+        let after = match next(&page.page_info, changed.len()) {
+            Next::Page(cursor) => cursor,
+            Next::Done => break,
+            Next::Capped => return Ok(None),
+        };
         let variables = json!({
             "owner": owner, "repo": repo, "after": after, "since": since.issues.to_rfc3339(),
         });
-        let page: Page<IssueNode> = connection(fetch(CHANGED_ISSUES, variables)?, "issues")?;
-        changed.extend(page.nodes.into_iter().map(|node| node.into_item(source)));
-        match next(&page.page_info, changed.len()) {
-            Next::Page(cursor) => after = cursor,
-            Next::Done => break,
-            Next::Capped => return Ok(None),
-        }
+        page = connection(&fetch(CHANGED_ISSUES, variables)?, "issues")?;
     }
     let issues = changed.len();
-    let mut after = Value::Null;
+    let mut page: Page<PullRequestNode> = connection(&first, "pullRequests")?;
     'pages: loop {
-        let variables = json!({
-            "owner": owner, "repo": repo, "after": after,
-            "states": ["OPEN", "CLOSED", "MERGED"], "count": CHANGED_PAGE,
-        });
-        let page: Page<PullRequestNode> =
-            connection(fetch(PULL_REQUESTS, variables)?, "pullRequests")?;
         for node in page.nodes {
             let item = node.into_item(source);
             if item.updated_at.is_some_and(|at| at < since.pulls) {
@@ -304,11 +339,16 @@ fn changes(
             }
             changed.push(item);
         }
-        match next(&page.page_info, changed.len() - issues) {
-            Next::Page(cursor) => after = cursor,
+        let after = match next(&page.page_info, changed.len() - issues) {
+            Next::Page(cursor) => cursor,
             Next::Done => break,
             Next::Capped => return Ok(None),
-        }
+        };
+        let variables = json!({
+            "owner": owner, "repo": repo, "after": after,
+            "states": ["OPEN", "CLOSED", "MERGED"], "count": CHANGED_PAGE,
+        });
+        page = connection(&fetch(PULL_REQUESTS, variables)?, "pullRequests")?;
     }
     let resume = Resume {
         issues: advance(since.issues, &changed[..issues]),
@@ -405,18 +445,17 @@ fn next(info: &PageInfo, read: usize) -> Next {
 
 /// The `repository.<field>` connection of a GraphQL response.
 pub fn connection<T: serde::de::DeserializeOwned>(
-    response: Value,
+    response: &Value,
     field: &'static str,
 ) -> Result<Page<T>> {
     let value = response
         .get("data")
         .and_then(|data| data.get("repository"))
         .and_then(|repository| repository.get(field))
-        .cloned()
         .ok_or(Error::Output {
             operation: "Reading GitHub",
         })?;
-    serde_json::from_value(value).map_err(|source| Error::OutputJson {
+    Page::<T>::deserialize(value).map_err(|source| Error::OutputJson {
         operation: "Reading GitHub",
         source,
     })
