@@ -20,6 +20,7 @@ mod linked_pictures;
 mod media;
 mod permissions;
 mod prompt_titles;
+mod resume;
 mod settings;
 
 type Reports = Rc<RefCell<Vec<Activity>>>;
@@ -28,6 +29,8 @@ type TestSession = Session<Box<dyn FnMut(Update)>>;
 
 struct Harness {
     agent: Receiver<Vec<u8>>,
+    /// The session ids the session reported opening.
+    opened: Prompts,
     /// The prompts passed on for Herdr.
     prompts: Prompts,
     reports: Reports,
@@ -42,6 +45,7 @@ fn config() -> Config {
         load: None,
         login_hint: Some("run `claude` and use /login".to_owned()),
         pane: Some("p_1".to_owned()),
+        require_load: false,
     }
 }
 
@@ -49,17 +53,21 @@ fn harness_with(config: Config) -> Harness {
     let (sender, agent) = bounded(64);
     let reports: Reports = Rc::default();
     let prompts: Prompts = Rc::default();
+    let opened: Prompts = Rc::default();
     let (sink, prompt_sink) = (Rc::clone(&reports), Rc::clone(&prompts));
+    let opened_sink = Rc::clone(&opened);
     let session = Session::new(
         config,
         Outbox(sender),
         Box::new(move |update| match update {
             Update::Activity(activity) => sink.borrow_mut().push(activity),
+            Update::Opened(id) => opened_sink.borrow_mut().push(id),
             Update::Prompt(prompt) => prompt_sink.borrow_mut().push(prompt),
         }) as Box<dyn FnMut(Update)>,
     );
     Harness {
         agent,
+        opened,
         prompts,
         reports,
         session,

@@ -106,6 +106,7 @@ impl HerdrWindow {
             self.locate_chat_program(cx);
             self.probe_chat_agents(cx);
         }
+        self.poll_chat_restore(enabled, route.as_ref());
         self.poll_chat_start(cx);
         let mut changed = self.chats.reconcile(targets, now, connect) || discovered;
         // A layout saved from Settings or the command line arrives here.

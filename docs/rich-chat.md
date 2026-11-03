@@ -74,6 +74,92 @@ view. Mirror tabs only watch, so they show the terminal rather than a chat.
 A `herdr-acp` started by hand in a Herdr 2 pane has no label, so it also
 keeps its terminal view.
 
+## Chats after a reboot
+
+When Herdr restores its panes after a reboot or a server restart, a pane that
+ran a chat comes back as a shell in the chat's folder: Herdr keeps neither the
+`herdr-acp` that ran there nor the token Herdr UI found it by. Herdr UI
+continues those chats itself. Each chat writes a restore record (see the
+[`herdr-acp` README](../crates/herdr-acp/README.md#what-it-tells-herdr)) and
+removes it when the user quits it, and Herdr UI types
+`herdr-acp --resume <session> <agent>` into the restored shell. The program
+continues the agent's session, announces itself, and the chat view attaches
+as for any chat. Herdr itself is unchanged.
+
+To type into the right shell, and only once, Herdr UI continues a record
+only when all of these hold:
+
+- a Herdr UI saw the chat live under an earlier boot of the daemon, and never
+  under the current one, so a chat that died while Herdr kept running is not
+  started again;
+- the record names this Herdr session (by its socket) and a pane it has, with
+  no agent or chat reported in that pane, and no other record names the pane;
+- nothing listens on the chat's old endpoint;
+- `herdr pane process-info` reports the pane's shell itself in the
+  foreground, in the record's folder; an answer that does not name both the
+  shell and the foreground job counts as busy;
+- this window claimed the record first (an atomic rename), so several windows
+  or Herdr UI processes never start the chat twice;
+- when the line is typed, at most ten seconds after the check, the window
+  still shows the same daemon boot and connection, chats are still on, and
+  the pane is still free. Otherwise the claim is given back.
+
+The check runs for each daemon boot and connection a window sees: at once,
+then up to five more times, five seconds apart, for shells still starting.
+Each run asks Herdr about at most 16 panes and reads on from where the last
+run stopped, so no record is passed over for good. Its last run removes
+records seen under an earlier boot whose pane no longer exists, and records
+no window ever saw live once they are a week old.
+
+Typing a line only queues it, so the record stays claimed until a chat shows
+in its pane, and is removed only then. If the daemon restarts, the
+connection drops or is replaced, chats are turned off, or no chat shows
+within a minute, the claim is given back. Since the pane's shell is busy
+while a chat starts, a given-back record is never typed twice into one
+running chat. A window that closes gives back what it holds, and a claim an
+exited or crashed app left behind is given back after five minutes.
+
+While connected, Herdr UI also watches the chats it saw live. One that stays
+missing for 30 seconds while the daemon keeps running (its pane was closed,
+or the program was killed) has ended, and its record is removed, so a pane
+that later reuses its id is never handed the old chat. Missing chats are not
+counted across a restart or a reconnect, which is what continuing them is
+for. A chat newly live in a pane replaces any older record of this Herdr
+session that names the same pane. Records of other Herdr sessions on the
+machine never block or replace this one's.
+
+With `--resume`, an agent that cannot continue a session stops with an
+error instead of starting a new one, and a session Claude, Codex, or an ACP
+agent no longer has fails the same way. Pi without its adapter is given the
+id as `pi --session`; what it does with an id it does not have is up to Pi.
+
+Limitations:
+
+- Only Herdr 1 on this machine, on macOS and Linux, where the `herdr` CLI
+  answers `pane process-info`. Windows, SSH hosts, WSL, cloud machines, and a
+  daemon behind a custom socket are not continued.
+- Herdr 2 (herdr-core) is not continued yet. Its chats run `herdr-acp` as the
+  terminal's own program, which records nothing there, and herdr-core shows no
+  boot identity to tell a restart from a chat that ended.
+- A chat Herdr UI never saw live (started and ended while no window was
+  connected) is not continued, because nothing says which boot it ran under.
+- A pane identity can still be reused: a chat whose pane was closed while no
+  Herdr UI was connected keeps its record. If Herdr, after a restart, gives a
+  new workspace the closed one's id, a new idle pane with that id in the same
+  folder could be handed the old chat.
+- A chat whose shell folder differs from the chat's own (started with
+  `--cwd`) is not continued.
+- Only the built-in agents (`claude`, `codex`, `copilot`, `gemini`,
+  `opencode`, `pi`) started without extra agent arguments. Custom commands
+  are not continued.
+- `[chat.env]` variables are not set again: typing their values into a shell
+  would show them on screen. The restored shell has Herdr's own environment.
+- The line is typed with the shell at its prompt; text the user starts
+  typing in that instant is mixed with it, as with Herdr's own agent resume.
+- On a Linux shutdown, where chats may die before their daemon, a window
+  still connected 30 seconds later counts them as ended, and they are not
+  continued.
+
 ## Sub-agents and background shells
 
 When the agent hands a task to a sub-agent or leaves a command running in the

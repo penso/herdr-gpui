@@ -507,6 +507,8 @@ pub(crate) struct Chats {
     raw: HashSet<EndpointId>,
     /// Textures of panes no longer attached, for the window to drop.
     released: Vec<std::sync::Arc<gpui::RenderImage>>,
+    /// Chats being continued in the panes Herdr restored.
+    pub(super) restore: super::restore::Restore,
     /// The second a running turn's timer last redrew at.
     pub(crate) ticked: u64,
     /// A new chat whose tab is being made.

@@ -93,6 +93,8 @@ pub(crate) enum Activity {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Update {
     Activity(Activity),
+    /// The agent's session opened with this id, new or continued.
+    Opened(String),
     /// A prompt just sent to the agent, as the transcript shows it, which
     /// names the pane and its tab.
     Prompt(String),
@@ -106,6 +108,9 @@ pub(crate) struct Config {
     pub load: Option<String>,
     pub login_hint: Option<String>,
     pub pane: Option<String>,
+    /// Fail rather than start a new session when the agent cannot continue
+    /// `load`.
+    pub require_load: bool,
 }
 
 #[derive(Debug)]

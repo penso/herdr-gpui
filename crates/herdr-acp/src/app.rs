@@ -39,8 +39,7 @@ fn agent(options: &Options) -> Agent {
                 std::env::var_os("PATH").as_deref(),
                 std::env::home_dir().as_deref(),
             );
-            let adapter = options.adapter
-                || std::env::var_os(ADAPTER_VARIABLE).is_some_and(|value| value == "1");
+            let adapter = adapter(options);
             let (program, mut args, reach): (_, _, Box<dyn Reach>) =
                 match crate::agents::launch(agent, Some(&path), adapter) {
                     Launch::Native(program) => {
@@ -70,6 +69,11 @@ fn agent(options: &Options) -> Agent {
             reach: Box::new(Acp),
         },
     }
+}
+
+/// Whether the chat reaches a built-in agent through its ACP adapter.
+fn adapter(options: &Options) -> bool {
+    options.adapter || std::env::var_os(ADAPTER_VARIABLE).is_some_and(|value| value == "1")
 }
 
 /// The arguments that start `agent`'s own program, and the translator that
@@ -132,6 +136,14 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         (None, None)
     };
     let target = Target::from_env();
+    let keeper = crate::restore::Keeper::new(
+        herdr_chat_protocol::restore::restore_dir(),
+        target.as_ref(),
+        endpoint.as_ref(),
+        &options.agent,
+        adapter(&options),
+        &cwd,
+    );
     let reporter = match &target {
         Some(target) => Some(Reporter::start(
             target.clone(),
@@ -141,6 +153,7 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         None => None,
     };
     let report = reporter.as_ref().map(Reporter::handle);
+    let session_keeper = keeper.clone();
 
     let config = Config {
         agent: agent.display,
@@ -149,17 +162,26 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         load: options.load,
         login_hint: agent.login_hint,
         pane: target.map(|target| target.pane),
+        require_load: options.require_load,
     };
     let session_thread = thread::Builder::new()
         .name("acp-session".to_owned())
         .spawn(move || {
-            let mut session = Session::new(config, outbox, move |update| {
-                let Some(report) = &report else {
-                    return;
-                };
-                match update {
-                    Update::Activity(activity) => report.report(activity),
-                    Update::Prompt(prompt) => report.prompt(prompt),
+            let mut session = Session::new(config, outbox, move |update| match update {
+                Update::Opened(id) => {
+                    if let Some(keeper) = &session_keeper {
+                        keeper.opened(&id);
+                    }
+                }
+                Update::Activity(activity) => {
+                    if let Some(report) = &report {
+                        report.report(activity);
+                    }
+                }
+                Update::Prompt(prompt) => {
+                    if let Some(report) = &report {
+                        report.prompt(prompt);
+                    }
                 }
             });
             for (level, text) in notices {
@@ -182,6 +204,10 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         result
     };
     let _ = session_thread.join();
+    // Ending here, not killed, the chat is over: nothing restores it.
+    if let Some(keeper) = &keeper {
+        keeper.ended();
+    }
     agent_process.stop();
     if let Some(reporter) = reporter {
         reporter.close();

@@ -62,6 +62,9 @@ pub(crate) struct Options {
     pub load: Option<String>,
     /// The display name for a custom command.
     pub name: Option<String>,
+    /// Stop rather than start a new session when the agent cannot continue
+    /// `load`, as `--resume` asks.
+    pub require_load: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -126,6 +129,8 @@ Options:
                  (also HERDR_ACP_ADAPTER=1)
   --cwd DIR      Run the session in DIR instead of the current directory
   --load ID      Continue the agent's session ID instead of starting a new one
+  --resume ID    Continue session ID, and stop rather than start a new one
+                 when the agent cannot (Herdr UI restores chats with it)
   --name NAME    The name to show for a custom command
   --headless     Draw nothing; clients such as Herdr UI drive the session
   --no-attach    Do not listen for Herdr UI
@@ -187,6 +192,7 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
         headless: false,
         load: None,
         name: None,
+        require_load: false,
     };
     let mut agent = None;
     while let Some(arg) = args.next() {
@@ -200,6 +206,10 @@ pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Parsed, 
                 options.cwd = Some(args.next().ok_or(Error::MissingValue("--cwd"))?.into());
             }
             Some("--load") => options.load = Some(utf8(args.next(), "--load")?),
+            Some("--resume") => {
+                options.load = Some(utf8(args.next(), "--resume")?);
+                options.require_load = true;
+            }
             Some("--name") => options.name = Some(utf8(args.next(), "--name")?),
             Some("--") => {
                 let rest: Vec<OsString> = args.by_ref().collect();

@@ -112,3 +112,17 @@ fn non_utf8_paths_are_accepted_where_paths_go() {
         Err(Error::NotUtf8("--load"))
     );
 }
+
+#[test]
+fn resume_loads_a_session_and_requires_it() {
+    let options = run(&["--resume", "abc", "--acp", "claude"]);
+    assert_eq!(options.load.as_deref(), Some("abc"));
+    assert!(options.require_load);
+    assert!(options.adapter);
+    let options = run(&["--load", "abc", "claude"]);
+    assert!(!options.require_load);
+    assert_eq!(
+        parse(args(&["claude", "--resume"])),
+        Err(Error::MissingValue("--resume"))
+    );
+}
