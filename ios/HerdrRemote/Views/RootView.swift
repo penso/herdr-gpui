@@ -14,6 +14,7 @@ struct RootView: View {
     @State private var workspacesPath = NavigationPath()
     @State private var selection: Route?
     @State private var windowWidth: CGFloat = 0
+    @State private var window = WindowState()
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     /// The width from which a window gets the split view. An unfolded
@@ -28,13 +29,14 @@ struct RootView: View {
             if wide {
                 // The split view collapses to one column in a compact size
                 // class, and the chat lays out its header by it.
-                IPadRoot(pairing: Bindable(model).pairing, selection: $selection)
+                IPadRoot(pairing: $window.pairing, selection: $selection)
                     .environment(\.horizontalSizeClass, .regular)
             } else {
                 tabs
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
+        .environment(window)
         // Along the top edge on every screen; sheets carry their own.
         .overlay(alignment: .top) { SyncBar().ignoresSafeArea(edges: .top) }
         // Folding or unfolding keeps the open chat or terminal open.
@@ -47,7 +49,8 @@ struct RootView: View {
                 homePath = [route]
             }
         }
-        .sheet(isPresented: Bindable(model).pairing) { PairView() }
+        // The split view presents it itself, over whichever sheet is open.
+        .sheet(isPresented: Binding(get: { window.pairing && !wide }, set: { window.pairing = $0 })) { PairView() }
         .alert("Not sent", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
         } message: {
             Text(model.notice ?? "")
@@ -70,7 +73,7 @@ struct RootView: View {
         .animation(.spring(duration: 0.4), value: model.nearbyOffer?.id)
         // Bluetooth looks for computers only while pairing is likely, so
         // its permission prompt comes when the person is pairing.
-        .onChange(of: model.pairing || model.computers.isEmpty, initial: true) { _, looking in
+        .onChange(of: window.pairing || model.computers.isEmpty, initial: true) { _, looking in
             if looking { model.bluetooth.start() } else { model.bluetooth.stop() }
         }
         #if DEBUG
@@ -97,18 +100,18 @@ struct RootView: View {
         TabView(selection: $tab) {
             Tab("Home", systemImage: "house", value: RootTab.home) {
                 NavigationStack(path: $homePath) {
-                    HomeTab(pairing: Bindable(model).pairing).withRoutes()
+                    HomeTab(pairing: $window.pairing).withRoutes()
                 }
-                .connectionToast(pairing: Bindable(model).pairing)
+                .connectionToast(pairing: $window.pairing)
             }
             .badge(model.fleet.waiting)
             Tab("Workspaces", systemImage: "square.stack.3d.up", value: RootTab.workspaces) {
-                NavigationStack(path: $workspacesPath) { WorkspacesTab(pairing: Bindable(model).pairing).withRoutes() }
-                    .connectionToast(pairing: Bindable(model).pairing)
+                NavigationStack(path: $workspacesPath) { WorkspacesTab(pairing: $window.pairing).withRoutes() }
+                    .connectionToast(pairing: $window.pairing)
             }
             Tab("Settings", systemImage: "gearshape", value: RootTab.settings) {
                 NavigationStack { SettingsView() }
-                    .connectionToast(pairing: Bindable(model).pairing)
+                    .connectionToast(pairing: $window.pairing)
             }
         }
     }

@@ -60,8 +60,12 @@ struct IPadRoot: View {
                 }
             }
             .connectionToast(pairing: $pairing)
+            // Pair Again from Settings or a computer's page: over this
+            // sheet, as the split view's own would open behind it.
+            .sheet(isPresented: $pairing) { PairView() }
             .presentationSizing(.page)
         }
+        .sheet(isPresented: Binding(get: { pairing && showing == nil }, set: { pairing = $0 })) { PairView() }
     }
 }
 

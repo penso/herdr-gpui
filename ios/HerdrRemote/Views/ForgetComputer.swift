@@ -41,21 +41,26 @@ enum ForgetCopy {
     }
 }
 
-/// A card on Home for each computer that unpaired this phone: forget it,
-/// or pair again. The connection toast says the same on other screens.
+/// Home's first section: a card for each computer that unpaired this
+/// phone, to forget it or pair again. Rows of the list, so any number of
+/// them scroll with the chats. The connection toast says the same on
+/// other screens.
 struct UnpairedCards: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
     @State private var forgetting: Computer?
 
     var body: some View {
         let revoked = model.fleet.machines.filter { $0.status == .revoked }.map(\.computer)
-        VStack(spacing: 8) {
-            ForEach(revoked) { computer in card(computer) }
+        Section {
+            ForEach(revoked) { computer in
+                card(computer)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
         }
-        .padding(.horizontal, 16)
         .forgetConfirmation($forgetting)
-        .onAppear { model.unpairedCardsShown = true }
-        .onDisappear { model.unpairedCardsShown = false }
     }
 
     private func card(_ computer: Computer) -> some View {
@@ -68,7 +73,7 @@ struct UnpairedCards: View {
             HStack {
                 Button("Forget", role: .destructive) { forgetting = computer }
                     .buttonStyle(.glass).tint(.red)
-                Button("Pair Again") { model.pairing = true }
+                Button("Pair Again") { window?.pairing = true }
                     .buttonStyle(.glassProminent)
             }
             .controlSize(.small)

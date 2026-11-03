@@ -331,6 +331,7 @@ extension Home.PullRequest.Tone {
 /// What a computer's header menu and long press offer.
 private struct MachineActions: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
     var machine: Fleet.Machine
     var details: () -> Void
     var forget: () -> Void
@@ -343,7 +344,7 @@ private struct MachineActions: View {
         ))
         Button("Computer Details", systemImage: "info.circle", action: details)
         if machine.status == .revoked {
-            Button("Pair Again", systemImage: "arrow.triangle.2.circlepath") { model.pairing = true }
+            Button("Pair Again", systemImage: "arrow.triangle.2.circlepath") { window?.pairing = true }
         }
         Divider()
         Button("Forget \(model.displayName(computer))…", systemImage: "trash", role: .destructive, action: forget)

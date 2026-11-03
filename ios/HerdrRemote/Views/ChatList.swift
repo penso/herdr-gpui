@@ -14,6 +14,7 @@ struct ChatList: View {
         let items = model.fleet.chatItems
         let agents = model.fleet.agentTerminals
         List {
+            UnpairedCards()
             section("Needs you", items.filter(\.needsYou), agents.filter(\.needsYou))
             section("Working", items.filter(\.working), agents.filter(\.working))
             section("Recent", items.filter { !$0.needsYou && !$0.working }, agents.filter { !$0.needsYou && !$0.working })

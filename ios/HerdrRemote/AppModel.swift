@@ -73,16 +73,9 @@ final class AppModel {
     private let spotlight = SpotlightChats()
     /// Nearby computers the person closed the card for, this launch.
     var dismissedNearby: Set<String> = []
-    /// Whether the pair sheet is open; Pair Again opens it from anywhere.
-    var pairing = false
-    /// Home's unpaired cards are on screen, so the toast need not repeat them.
-    var unpairedCardsShown = false
     /// Connection notices the person closed, until each computer is online
     /// again (`LinkNotice`).
     var dismissedNotices: Set<LinkNotice.Key> = []
-    /// Chats and terminals on screen: their input is at the bottom, where
-    /// the connection toast would cover it.
-    var typingScreens = 0
     private let paths = NWPathMonitor()
 
     init() {

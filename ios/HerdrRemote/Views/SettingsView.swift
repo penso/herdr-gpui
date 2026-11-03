@@ -6,6 +6,7 @@ import UIKit
 /// Settings A: one grouped list.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
     @State private var cacheSize = 0
     @State private var forgetting: Computer?
     @State private var editMode = EditMode.inactive
@@ -27,7 +28,7 @@ struct SettingsView: View {
                     }
                 }
                 .onDelete { offsets in forgetting = offsets.first.map { model.computers[$0] } }
-                Button("Pair a Computer", systemImage: "plus") { model.pairing = true }
+                Button("Pair a Computer", systemImage: "plus") { window?.pairing = true }
             } header: {
                 HStack {
                     Text("Computers")

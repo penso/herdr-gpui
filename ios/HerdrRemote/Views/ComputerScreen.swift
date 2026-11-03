@@ -6,6 +6,7 @@ import SwiftUI
 /// Workspaces header menu open it.
 struct ComputerScreen: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
     @Environment(\.dismiss) private var dismiss
     let device: String
     @State private var forgetting: Computer?
@@ -22,6 +23,8 @@ struct ComputerScreen: View {
     private func page(_ computer: Computer) -> some View {
         let name = model.displayName(computer)
         let status = model.fleet.machines.first { $0.id == device }?.status
+        let addresses = Self.addresses(computer)
+        let connected: String? = if case let .online(origin) = status, addresses.contains(where: { $0.origin == origin }) { origin } else { nil }
         return List {
             Section {
                 VStack(spacing: 6) {
@@ -34,15 +37,25 @@ struct ComputerScreen: View {
                 .listRowBackground(Color.clear)
             }
             Section {
-                ForEach(Self.addresses(computer), id: \.origin) { address in
-                    LabeledContent(address.kind.label) {
+                ForEach(addresses, id: \.origin) { address in
+                    LabeledContent {
                         Text(address.host).textSelection(.enabled)
+                    } label: {
+                        if address.origin == connected {
+                            Label(address.kind.label, systemImage: "checkmark.circle.fill")
+                                .labelStyle(.titleAndIcon).foregroundStyle(.green)
+                                .accessibilityLabel("\(address.kind.label), connected")
+                        } else {
+                            Text(address.kind.label)
+                        }
                     }
                 }
             } header: {
                 Text("Addresses")
             } footer: {
-                Text("This phone tries them in this order.")
+                if connected != nil {
+                    Text("Connected through the checked address. When it stops answering, this phone tries the others.")
+                }
             }
             if let vouching = model.vouching(computer) {
                 Section {
@@ -63,7 +76,7 @@ struct ComputerScreen: View {
             }
             Section {
                 if status == .revoked {
-                    Button("Pair Again") { model.pairing = true }
+                    Button("Pair Again") { window?.pairing = true }
                 }
                 Button("Forget This Computer", role: .destructive) { forgetting = computer }
             } footer: {

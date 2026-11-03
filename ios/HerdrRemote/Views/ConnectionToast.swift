@@ -13,6 +13,7 @@ import UIKit
 /// changes or the app comes back, so it offers no Retry.
 struct ConnectionToast: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
     @Binding var pairing: Bool
     /// Whether connecting has lasted long enough to mention.
     @State private var patient = false
@@ -25,12 +26,12 @@ struct ConnectionToast: View {
         let machines = model.fleet.machines
         let connecting = machines.filter { $0.status == .connecting }.map(\.id)
         let online = Set(machines.filter { if case .online = $0.status { true } else { false } }.map(\.id))
-        let notice = keyboard || model.typingScreens > 0 ? nil : LinkNotice.worst(
+        let notice = keyboard || (window?.typing ?? 0) > 0 ? nil : LinkNotice.worst(
             machines.map { ($0.id, $0.status) },
             patient: patient,
             dismissed: model.dismissedNotices,
             // Home's cards ask about unpaired computers instead.
-            skipping: model.unpairedCardsShown ? [.revoked] : []
+            skipping: window?.home == true ? [.revoked] : []
         )
         Group {
             if let notice {
@@ -134,19 +135,19 @@ extension View {
         safeAreaInset(edge: .bottom) { ConnectionToast(pairing: pairing) }
     }
 
-    /// For a screen with its own input at the bottom: the connection toast
-    /// stays away while it shows.
+    /// For a screen with its own input at the bottom: its window's
+    /// connection toast stays away while it shows.
     func hidesConnectionToast() -> some View {
         modifier(HidesConnectionToast())
     }
 }
 
 private struct HidesConnectionToast: ViewModifier {
-    @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
 
     func body(content: Content) -> some View {
         content
-            .onAppear { model.typingScreens += 1 }
-            .onDisappear { model.typingScreens = max(0, model.typingScreens - 1) }
+            .onAppear { window?.typing += 1 }
+            .onDisappear { window.map { $0.typing = max(0, $0.typing - 1) } }
     }
 }
