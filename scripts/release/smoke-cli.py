@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Run a built herdr-gpui executable's windowless CLI paths, without Cargo.
+"""Run a built sheprd executable's windowless CLI paths, without Cargo.
 
 The release jobs check the exact bytes they ship. `cargo test --release --test
 cli` cannot: it rebuilds the binary with dev-dependency features (gpui's
 test-support) and overwrites the one `cargo build` produced. CI's full CLI
-suite (crates/herdr-gpui/tests/cli.rs) covers the rest on the same commit.
+suite (crates/sheprd-gpui/tests/cli.rs) covers the rest on the same commit.
 """
 import argparse
 import os
@@ -63,7 +63,7 @@ def check_usage_error(executable, state, args, message):
     result = run(executable, args, state)
     stderr = text(result.stderr)
     # An abort or a window failing to open is not a parser rejection.
-    if result.returncode != 2 or result.stdout or message not in stderr or "Usage: herdr-gpui" not in stderr:
+    if result.returncode != 2 or result.stdout or message not in stderr or "Usage: sheprd" not in stderr:
         raise SmokeError(f"{args}: exit {result.returncode}, expected usage error {message!r}: {stderr}")
 
 

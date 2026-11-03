@@ -10,21 +10,21 @@ prerelease/build suffixes, or leading zeros.
 
 Packaging and `just bundle` require Python 3 and read a versioned identity record
 embedded in the supplied executable, never the packaging checkout's Git state.
-On Linux, linked-worktree binaries select `assets/icons/herdr-linux-worktree.svg`;
-other builds select `assets/icons/herdr-linux.svg`. Both circular variants are
-installed as `share/icons/hicolor/scalable/apps/herdr-gpui.svg`, so manual archives
+On Linux, linked-worktree binaries select `assets/icons/sheprd-linux-worktree.svg`;
+other builds select `assets/icons/sheprd-linux.svg`. Both circular variants are
+installed as `share/icons/hicolor/scalable/apps/sheprd.svg`, so manual archives
 and distribution packages use the same layout without a pixmaps fallback.
 Regenerate both SVGs with `just icons-linux`; see the
 [icon guide](../../assets/icons/README.md#linux-desktops) for the composition and
 desktop lookup behavior. On macOS, linked-worktree binaries select
-`assets/icons/Herdr-worktree.icns` and `Herdr-worktree.car`; other builds use
-`Herdr.icns` and `Herdr.car`. The installed icons keep their standard filenames.
+`assets/icons/Sheprd-worktree.icns` and `Sheprd-worktree.car`; other builds use
+`Sheprd.icns` and `Sheprd.car`. The installed icons keep their standard filenames.
 No binary is executed, so foreign
 Linux architectures and both macOS slices work on the packaging host. macOS
 inputs must have identical identities (branch and PR included). Missing, malformed,
 or conflicting records fail closed; older binaries must be rebuilt.
 
-`herdr-gpui --build-info` prints three newline-terminated `key=value` lines:
+`sheprd --build-info` prints three newline-terminated `key=value` lines:
 `worktree=0|1`, `branch=...`, and `pr=...`, before any GUI or daemon startup.
 The same record is retained in optimized binaries for packaging. This metadata is
 an identity hint, not a signature or proof of provenance; supply trusted binaries.
@@ -67,19 +67,19 @@ release builds overlap CI; `sign`, `windows-sign`, and everything after them
 wait behind `ci-gate`, so nothing is signed or published before CI passes. CI
 never cancels a run on `main`, so a later merge cannot strand a release commit
 without one. For documentation-only commits, start a full run with
-`gh workflow run ci.yml --repo penso/herdr-gpui --ref main` before releasing.
+`gh workflow run ci.yml --repo sheprd-labs/sheprd --ref main` before releasing.
 
 ```sh
 cargo install cargo-about --version 0.9.2 --locked --features cli
 python3 scripts/release/generate-notices.py OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/package-macos.sh VERSION ARM64_BINARY X86_64_BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
-bash scripts/release/sign-macos.sh VERSION OUTPUT_DIR/Herdr.app OUTPUT_DIR
+bash scripts/release/sign-macos.sh VERSION OUTPUT_DIR/Sheprd.app OUTPUT_DIR
 bash scripts/release/package-linux.sh VERSION TARGET BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/render-cask.sh VERSION SHA256 > /path/to/rendered/herdr-gpui.rb
 ```
 
 macOS assembly requires Apple command-line tools. It produces unsigned
-`Herdr.app`, containing the universal GUI, plist, icon, root `LICENSE` and `NOTICE`,
+`Sheprd.app`, containing the universal GUI, plist, icon, root `LICENSE` and `NOTICE`,
 protocol license/attribution, Octicons license, and third-party notices.
 Both plist versions are set to the supplied version.
 The package floor is macOS 14.2 (`LSMinimumSystemVersion`; Homebrew can only
@@ -121,18 +121,18 @@ SIGKILL/power loss cannot be cleaned up. Apple security tools receive passwords
 as arguments, so the runner must not have untrusted local users. No GUI executable
 is run, including for version probing. Signing works on a copy of the input app.
 
-The bundle holds four universal executables: `Contents/MacOS/Herdr`, the
-`herdr-acp` the app starts chats with, `herdr-remote-control`, the remote
-control daemon it runs as a user service, and `herdr-automate`, the automation
-daemon; `package-macos.sh` takes the last three from beside each architecture's
-`herdr-gpui`. Those three are signed first, without the
-app's entitlements, then `Herdr`, then the bundle, all with hardened runtime and secure
+The bundle holds `Contents/MacOS/sheprd`, the `sheprd-acp` chat runner,
+`sheprd-remote-control`, `sheprd-automate`, `sheprd-nearby`, and the pinned
+upstream `herdr-core`. Packaging takes the helpers from beside each architecture's
+`sheprd` and includes real legacy `herdr-*` helper copies for saved service paths.
+All helpers and their compatibility copies are signed first without the
+app's entitlements, then `sheprd`, then the bundle, all with hardened runtime and secure
 timestamps. The zipped app must receive JSON status `Accepted`, then the app is
-stapled and validated. The DMG contains `Herdr.app` and an `/Applications` symlink;
+stapled and validated. The DMG contains `Sheprd.app` and an `/Applications` symlink;
 it is signed, separately notarized, stapled, and checked with codesign and
 Gatekeeper before publishing the local output filename:
-`Herdr-VERSION-universal-apple-darwin.dmg`. Any failed operation aborts.
-The signer also emits `herdr-gpui-VERSION-macos-universal.app.tar.gz` using the
+`Sheprd-VERSION-universal-apple-darwin.dmg`. Any failed operation aborts.
+The signer also emits `sheprd-VERSION-macos-universal.app.tar.gz` using the
 updater's bounded USTAR packager. It archives the complete **signed, stapled copy**
 used for the DMG, including signature, ticket, resources and notices, before the
 temporary directory is removed. The caller's unsigned app is never repackaged
@@ -146,15 +146,17 @@ consumer verification cover both. The SBOM unions both Linux, both macOS, and
 the Windows target graphs, each the app's joined with those of the programs shipped beside it (`SHIPPED` in
 `generate-sbom.py`). No separate per-platform manifest or publication job is used.
 The caller must supply the matching release binary; packaging does not cross-build
-or resolve shared libraries. Output is `Herdr-VERSION-TARGET.tar.gz`, with a
-same-named root containing `bin/herdr-gpui`, `bin/herdr-acp`,
-`bin/herdr-remote-control`, `bin/herdr-automate`, and `bin/herdr-nearby`, the
+or resolve shared libraries. Output is `Sheprd-VERSION-TARGET.tar.gz`, with a
+same-named root containing `bin/sheprd`, `bin/sheprd-acp`,
+`bin/sheprd-remote-control`, `bin/sheprd-automate`, and `bin/sheprd-nearby`, the
 Bluetooth helper for nearby pairing and presence (all taken from beside the binary), a scalable SVG icon, desktop entry, license and
-notice under `share/`. Install that tree into a chosen prefix with its `bin` on
+notice under `share/`, plus `herdr-gpui -> sheprd` and real legacy helper copies.
+The relative main-command symlink follows standalone updates to `sheprd`.
+Install that tree into a chosen prefix with its `bin` on
 PATH. Archives are not promised to be bit-for-bit reproducible.
 
 `scripts/release/package-linux-distro.py VERSION TARGET ARCHIVE OUTPUT_DIR
---nfpm NFPM` then repackages that manual archive as `Herdr-VERSION-TARGET.deb`,
+--nfpm NFPM` then repackages that manual archive as `Sheprd-VERSION-TARGET.deb`,
 `.rpm` and `.pkg.tar.zst`. It extracts only the expected regular files, installs
 them under `/usr`, and builds all three formats before publishing any, so every
 Linux format ships the tarball's exact bytes. nfpm is the only packaging tool;
@@ -168,15 +170,15 @@ stamped with the release date, and the release host name is kept out of the
 RPM header, so repackaging one release produces identical bytes.
 `scripts/release/smoke-linux-packages.sh VERSION TARGET DIST_DIR` then installs
 each package into digest-pinned Ubuntu 24.04, Debian 13 and Fedora 42 containers,
-plus Arch Linux on x86_64 (no official ARM64 image exists), runs `herdr-gpui --help`
+plus Arch Linux on x86_64 (no official ARM64 image exists), runs both `sheprd --help` and `herdr-gpui --help`
 and the shipped programs' `--help` or `--version`,
 fails if `ldd` reports a missing library or a dlopened loader is absent, and removes
 the package again. When packaged dependencies change, update `DEPENDS` in
 `package-linux-distro.py` and rerun the smoke script.
 
-The workflow separately packages `herdr-gpui-VERSION-TARGET-update.tar.gz` with
+The workflow separately packages `sheprd-VERSION-TARGET-update.tar.gz` with
 `scripts/update-manifest.py package-linux`. This bounded USTAR contains exactly
-one regular executable named `herdr-gpui-VERSION-TARGET`, mode 0755; it does not
+one regular executable named `sheprd-VERSION-TARGET`, mode 0755; it does not
 replace or alter the manual archive's desktop/icon/license tree. Both native
 Linux builds and both macOS builds embed `HERDR_UPDATE_PUBLIC_KEY` and the
 validated `HERDR_RELEASE_VERSION` before packaging.
@@ -186,31 +188,36 @@ The Windows targets are `x86_64-pc-windows-msvc` and
 `windows-11-arm` after clippy, the protocol/client suites and the CLI tests pass
 there. `scripts/release/package-windows.py VERSION TARGET BINARY LAUNCHER
 OUTPUT_DIR THIRD_PARTY_NOTICES` (standard-library Python, since the runner has no
-zip tool) writes one `Herdr-VERSION-TARGET.zip` per target with a same-named root
-containing `herdr-gpui.exe`, the windowed `herdr-gpui-launcher.exe` that the
-installer's Start menu shortcut opens, `herdr-acp.exe`, which the app starts
-chats with, `herdr-remote-control.exe`, the remote control daemon it runs as a
-scheduled task, `herdr-automate.exe`, the automation daemon, and
-`herdr-nearby.exe`, the Bluetooth helper for nearby pairing and presence (all
-taken from beside `BINARY`), and `licenses/` holding the same license
+zip tool) writes one `Sheprd-VERSION-TARGET.zip` per target with a same-named root
+containing `sheprd.exe`, the windowed `sheprd-launcher.exe` that the
+installer's Start menu shortcut opens, `sheprd-acp.exe`, which the app starts
+chats with, `sheprd-remote-control.exe`, the remote control daemon it runs as a
+scheduled task, `sheprd-automate.exe`, the automation daemon, and
+`sheprd-nearby.exe`, the Bluetooth helper for nearby pairing and presence (all
+taken from beside `BINARY`), the pinned `herdr-core.exe`, real legacy executable
+and helper copies, and `licenses/` holding the same license
 and notice files as the Linux tree. Entries carry a fixed timestamp.
 
 `scripts/release/windows-installer.py` then installs the pinned Inno Setup
 compiler (`install-iscc`, checked against its SHA-256), compiles
-`herdr-gpui.iss` over the extracted zip tree into
-`Herdr-VERSION-TARGET-setup.exe` (`build`), and installs and uninstalls it on
-the runner (`smoke`), checking the files, their subsystems, `herdr-gpui.exe`'s
+`sheprd.iss` over the extracted zip tree into
+`Sheprd-VERSION-TARGET-setup.exe` (`build`), and installs and uninstalls it on
+the runner (`smoke`), checking the files, their subsystems, `sheprd.exe`'s
 output, the Start menu shortcut's target (the launcher) and AppUserModelID,
 the user `PATH` entry, and the Settings entry, and that an update and the
-uninstaller stop a running `herdr-automate.exe` daemon (the update starts the
+uninstaller stop a running automation daemon under either name (the update starts the
 new copy again) rather than failing to replace it. CI's `windows-package` job runs the same
 optimized build, packaging, installer build, and install/uninstall check on
 `windows-2025` for any pull request that changes their inputs
 (`scripts/ci-changes.sh` lists them), and the required gate then requires it. The installer is per-user (no elevation),
 installs to `%LOCALAPPDATA%\Programs\Herdr UI` as `site/install.ps1` does, adds
 that directory to the user `PATH`, and creates the Start menu shortcut to the
-launcher. Both stop the installed automation daemon with `herdr-automate
+launcher. Both stop the installed automation daemon with `sheprd-automate
 shutdown`, which lets its runs finish, before replacing or removing its files.
+The smoke test seeds a disabled `Herdr UI` startup entry targeting the legacy
+launcher and requires the command and `StartupApproved` bytes to survive the
+upgrade unchanged. Setup renames only shortcuts targeting this installation;
+it preserves a preexisting desktop shortcut even without a new desktop task.
 Both zips and both
 installers are mandatory in the asset manifest and receive checksums, Sigstore
 sidecars and provenance like every other asset, after the Authenticode signing
@@ -224,7 +231,7 @@ by manual download, or through winget.
 
 The `windows` job's zip and installer are unsigned, and so are every local and
 pull request build: `windows-installer.py build` signs only when given `--sign`,
-and `herdr-gpui.iss` only sets `SignTool` when ISCC receives one. The release
+and `sheprd.iss` only sets `SignTool` when ISCC receives one. The release
 workflow then signs in `windows-sign`, one job per target on `windows-2025`,
 gated by the protected **`release`** environment like `sign`.
 
@@ -240,9 +247,9 @@ fails instead of falling back to unsigned. When signing is on:
 
 1. `windows-signing.py unpack` extracts the tested zip without running anything.
 2. `azure/login` signs in to Azure with the job's OIDC token, and
-   `azure/artifact-signing-action` signs `herdr-gpui.exe`,
-   `herdr-gpui-launcher.exe`, `herdr-acp.exe`, `herdr-remote-control.exe`,
-   `herdr-automate.exe`, `herdr-nearby.exe`, and `herdr-core.exe` with SHA-256 and an RFC 3161 timestamp from
+   `azure/artifact-signing-action` signs `sheprd.exe`,
+   `sheprd-launcher.exe`, `sheprd-acp.exe`, `sheprd-remote-control.exe`,
+   `sheprd-automate.exe`, `sheprd-nearby.exe`, and `herdr-core.exe` with SHA-256 and an RFC 3161 timestamp from
    `http://timestamp.acs.microsoft.com`.
 3. `windows-signing.py repack` refuses unless the tree holds exactly the zip's
    files and each executable differs from the tested one only by its appended
@@ -272,7 +279,7 @@ Signing needs this one-time Azure setup, which only the maintainer can do:
    completed identity validation and a public-trust certificate profile.
 2. A Microsoft Entra app registration with a federated credential for issuer
    `https://token.actions.githubusercontent.com` and subject
-   `repo:penso/herdr-gpui:environment:release`, holding the **Artifact Signing
+   `repo:sheprd-labs/sheprd:environment:release`, holding the **Artifact Signing
    Certificate Profile Signer** role on the certificate profile and nothing
    else. No client secret: only an OIDC token from a job in the protected
    `release` environment can use it.
@@ -316,7 +323,7 @@ Betas never reach winget.
 
 `Penso.HerdrUI` and the publisher must never change: winget matches installed
 copies and upgrades by them. `winget.py` holds both, and its tests tie them to
-`herdr-gpui.iss`.
+`sheprd.iss`.
 
 The maintainer has to:
 
@@ -330,19 +337,60 @@ The maintainer has to:
    update needs an existing version to start from. Run
    `komac new Penso.HerdrUI --version VERSION --urls URL_X64 URL_ARM64` with
    the two published `-setup.exe` URLs, check that it detects `inno` and
-   `user` scope, set the publisher and package name to `Herdr UI`, the license
+   `user` scope, retain publisher `Herdr UI`, set package name to `Sheprd`, the license
    and URLs, and submit. Until that version is merged, the job only prints a
    warning.
 
 ## Updater Signing
 
-The preparatory [Sheprd compatibility contract](../../docs/updating.md#sheprd-compatibility-rollout)
-adds acceptance of the successor repository and precise future asset names to
-installed clients. These packaging and publication scripts still emit the legacy
-names. Ship the compatibility client before any repository transfer or renamed
-publication; preserve keys and installed identities. The linked contract lists
-the additional Homebrew, Linux-package, Windows-installer and missed-client
-requirements for the later rebrand.
+These scripts publish the exact Sheprd names accepted by the deployed
+[compatibility bridge](../../docs/updating.md#sheprd-compatibility-rollout).
+Ship that bridge before transferring the repository or publishing these renamed
+assets. Ordinary CI accepts both `penso/herdr-gpui` and `sheprd-labs/sheprd` so
+the rename can be validated before transfer; release/promotion dispatch and
+publication are restricted to `sheprd-labs/sheprd`, with the same `penso` owner
+checks and protected environments. Before publication, configure the successor's
+environment approvals, secrets, Azure OIDC federation and provenance trust policy.
+This source change performs no transfer or deployment. Netlify's Git integration
+and the root `netlify.toml` now own website publication; there is no Cloudflare
+Actions deploy job.
+
+The compatibility exceptions are intentional:
+
+- macOS bundles are `Sheprd.app`, with **only** `Contents/MacOS/sheprd` as the
+  main executable. Keep signing ID `so.pen.herdr-gpui` (and `.dev` locally),
+  Developer ID team and all signing keys. There is no `Herdr` executable alias.
+  The updater replaces the existing bundle directory in place.
+- Homebrew retains `penso/tap/herdr-gpui`; the cask installs `Sheprd.app` to
+  **`Herdr.app`**, so an old running updater can reopen it. The cask exposes
+  `sheprd` on PATH. Moving that target or cask token needs a separate migration.
+- Linux packages retain package ownership **`herdr-gpui`**, version `VERSION-1`,
+  desktop ID `so.pen.herdr-gpui`, and a real root-owned `/usr/bin/herdr-gpui`.
+  They also install `/usr/bin/sheprd` and both names of each owned helper.
+  These are regular copies, not shell shims or symlinks.
+  Distro packaging accepts only the standalone tree's exact `bin/herdr-gpui ->
+  sheprd` symlink and materializes it as a regular file; other archive links
+  are rejected. Signed single-executable update archives still reject symlinks.
+  Nix provides legacy main/helper command symlinks in `$out/bin`, with the main
+  alias targeting the final wrapped `sheprd`; Nix owns updates to those paths.
+- Windows retains AppId `{7FA70894-4FC0-4923-BDCB-B05F7475610A}`,
+  `%LOCALAPPDATA%\Programs\Herdr UI`, AppUserModelID `so.pen.herdr-gpui`,
+  winget `Penso.HerdrUI`, publisher `Herdr UI`, and the configured Authenticode
+  subject. ZIPs and installers ship both `sheprd.exe` / `sheprd-launcher.exe`
+  and the legacy executable/helper copies; **all copies are signed**. Shortcuts
+  and Explorer text show Sheprd, and both `sheprd://` and `herdr-gpui://` work.
+  Setup gracefully stops automation running under either executable name.
+- Runtime service/state identities and the upstream `herdr-core` / `hc` and
+  `herdr` command remain compatible. The `HERDR_*` signing/build variables and
+  local `herdr_sign` hook keep their deployed names. iOS module names change,
+  but bundle IDs, app groups and signing/APNs identities do not.
+
+`scripts/verify-release.sh --legacy` explicitly selects the old immutable asset
+names and exact `penso/herdr-gpui` Sigstore/provenance identity for historical
+releases. Default verification requires the successor identity; neither mode
+falls back to another trust identity. The manifest generator's corresponding
+option is `--legacy-names`. Old offline clients that missed the bridge still
+need the recovery process in the compatibility rollout document.
 
 Configure `HERDR_UPDATE_PUBLIC_KEY` as a repository Actions variable (64 lowercase
 hex characters). Store the Ed25519 PEM `HERDR_UPDATE_SIGNING_KEY` only in the
@@ -357,8 +405,8 @@ raw 64-byte Ed25519 `update-manifest.sig`, plus `package-manifest.json` and
 `package-manifest.sig` for the six Linux packages, `windows-manifest.json` and
 `windows-manifest.sig` for the two signed Windows installers, and
 `host-manifest.json` and `host-manifest.sig` (schema 4) for the two static
-`herdr-remote-control-VERSION-ARCH-unknown-linux-musl` host builds. Each Linux
-job builds its host build with `build-host.sh`; Herdr UI copies it onto SSH and
+`sheprd-remote-control-VERSION-ARCH-unknown-linux-musl` host builds. Each Linux
+job builds its host build with `build-host.sh`; Sheprd copies it onto SSH and
 cloud machines of that architecture to pair a phone with them
 (`docs/remote-control-plan.md`, "Other machines"). All base files receive SHA-256 and Sigstore sidecars and GitHub
 provenance in the separate protected OIDC job. The raw signature is not overwritten:
@@ -392,7 +440,7 @@ Rendering is deterministic, normalizes hexadecimal to lowercase, and writes only
 stdout. Do not redirect onto the input template. The rendered cask belongs at
 `Casks/herdr-gpui.rb` in `penso/homebrew-tap`; install as
 `brew install penso/tap/herdr-gpui`. Downloads use repository
-`penso/herdr-gpui`, tag `vVERSION`, and the exact DMG filename above.
+`sheprd-labs/sheprd`, tag `vVERSION`, and the exact DMG filename above.
 
 `bash scripts/release/update-homebrew.sh VERSION RENDERED_CASK` publishes that cask
 to the resolved default branch of `penso/homebrew-tap`. Run only after the
@@ -522,10 +570,10 @@ not when sourcing `.envrc`; never put literal credentials in shell history or th
 file. This direct environment interface does not require the machine-local Ruby
 helper.
 
-Output is an unsigned assembly at `target/distribution/VERSION/Herdr.app` and the
+Output is an unsigned assembly at `target/distribution/VERSION/Sheprd.app` and the
 signed, notarized
-`Herdr-VERSION-universal-apple-darwin.dmg` and
-`herdr-gpui-VERSION-macos-universal.app.tar.gz` in the same directory when using
+`Sheprd-VERSION-universal-apple-darwin.dmg` and
+`sheprd-VERSION-macos-universal.app.tar.gz` in the same directory when using
 `sign-macos.sh`. Local packaging does not sign an Ed25519 update manifest or
 publish anything. An existing version
 directory (including a symlink) is refused before building and checked again before

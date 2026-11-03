@@ -1,13 +1,13 @@
 # Rich chat
 
-Herdr UI renders Markdown, equations, code and native interactive cards in ACP
+Sheprd renders Markdown, equations, code and native interactive cards in ACP
 chats. It can also show existing Codex and Claude CLI conversations above their
 original terminal input, without restarting, resuming or replacing the agent.
 
 ## Enable and configure
 
 Enable **ACP chats** in Settings > General, or set the following in the
-[GUI configuration](../crates/herdr-gpui/README.md#configuration):
+[GUI configuration](../crates/sheprd-gpui/README.md#configuration):
 
 ```toml
 [features]
@@ -28,7 +28,7 @@ until you point at them.
 Select a layout directly with:
 
 ```sh
-herdr-gpui config set chat.layout bubbles
+sheprd config set chat.layout bubbles
 ```
 
 In **Settings > General**, turn on **Full-width chat** to use the available
@@ -41,9 +41,9 @@ the whole column; a width you choose is followed as set. This applies to every
 layout, including **Terminal**. The equivalent commands are:
 
 ```sh
-herdr-gpui config set chat.max_width 0     # full width
-herdr-gpui config set chat.max_width 1200  # custom width
-herdr-gpui config unset chat.max_width    # restore the default
+sheprd config set chat.max_width 0     # full width
+sheprd config set chat.max_width 1200  # custom width
+sheprd config unset chat.max_width    # restore the default
 ```
 
 The Terminal layout keeps its composer controls on one row below the input.
@@ -52,8 +52,8 @@ leave room for context usage and Send/Stop. In exceptionally narrow panes,
 the settings scroll horizontally while context usage and Send/Stop stay visible.
 
 The Terminal layout still renders chat. The terminal button and
-`herdr-gpui chat hide` show the agent's actual terminal;
-`herdr-gpui chat show` restores the chat view. These commands change presentation
+`sheprd chat hide` show the agent's actual terminal;
+`sheprd chat show` restores the chat view. These commands change presentation
 without starting or stopping the agent. See the [CLI guide](cli.md#existing-agent-rendering).
 
 ## Chats in Herdr 2 panes
@@ -61,35 +61,35 @@ without starting or stopping the agent. See the [CLI guide](cli.md#existing-agen
 In a Herdr 2 (herdr-core) tab, starting a chat from the tab strip's launcher
 or the group menu splits the pane in use and runs the chat beside it. A tab
 can hold several chats side by side, each in its own pane, along with plain
-terminals. The window picks the chat's endpoint before `herdr-acp` starts:
+terminals. The window picks the chat's endpoint before `sheprd-acp` starts:
 it passes the id in `HERDR_ACP_ENDPOINT` and labels the terminal `acp=<id>`
 in herdr-core. Because herdr-core keeps the label, the chat view comes back
 after a restart and appears in every window that shows the pane.
-`herdr-acp` reports its status to herdr-core with OSC 7501, so the pane's
+`sheprd-acp` reports its status to herdr-core with OSC 7501, so the pane's
 activity dot behaves as it does in Herdr.
 
 The window only attaches to terminals of the herdr-core on this machine. A
 chat in a terminal on another machine that core added keeps its terminal
 view. Mirror tabs only watch, so they show the terminal rather than a chat.
-A `herdr-acp` started by hand in a Herdr 2 pane has no label, so it also
+A `sheprd-acp` started by hand in a Herdr 2 pane has no label, so it also
 keeps its terminal view.
 
 ## Chats after a reboot
 
 When Herdr restores its panes after a reboot or a server restart, a pane that
 ran a chat comes back as a shell in the chat's folder: Herdr keeps neither the
-`herdr-acp` that ran there nor the token Herdr UI found it by. Herdr UI
+`sheprd-acp` that ran there nor the token Sheprd found it by. Sheprd
 continues those chats itself. Each chat writes a restore record (see the
-[`herdr-acp` README](../crates/herdr-acp/README.md#what-it-tells-herdr)) and
-removes it when the user quits it, and Herdr UI types
-`herdr-acp --resume <session> <agent>` into the restored shell. The program
+[`sheprd-acp` README](../crates/sheprd-acp/README.md#what-it-tells-herdr)) and
+removes it when the user quits it, and Sheprd types
+`sheprd-acp --resume <session> <agent>` into the restored shell. The program
 continues the agent's session, announces itself, and the chat view attaches
 as for any chat. Herdr itself is unchanged.
 
-To type into the right shell, and only once, Herdr UI continues a record
+To type into the right shell, and only once, Sheprd continues a record
 only when all of these hold:
 
-- a Herdr UI saw the chat live under an earlier boot of the daemon, and never
+- a Sheprd instance saw the chat live under an earlier boot of the daemon, and never
   under the current one, so a chat that died while Herdr kept running is not
   started again;
 - the record names this Herdr session (by its socket) and a pane it has, with
@@ -99,7 +99,7 @@ only when all of these hold:
   foreground, in the record's folder; an answer that does not name both the
   shell and the foreground job counts as busy;
 - this window claimed the record first (an atomic rename), so several windows
-  or Herdr UI processes never start the chat twice;
+  or Sheprd processes never start the chat twice;
 - when the line is typed, at most ten seconds after the check, the window
   still shows the same daemon boot and connection, chats are still on, and
   the pane is still free. Otherwise the claim is given back.
@@ -119,7 +119,7 @@ while a chat starts, a given-back record is never typed twice into one
 running chat. A window that closes gives back what it holds, and a claim an
 exited or crashed app left behind is given back after five minutes.
 
-While connected, Herdr UI also watches the chats it saw live. One that stays
+While connected, Sheprd also watches the chats it saw live. One that stays
 missing for 30 seconds while the daemon keeps running (its pane was closed,
 or the program was killed) has ended, and its record is removed, so a pane
 that later reuses its id is never handed the old chat. Missing chats are not
@@ -138,13 +138,13 @@ Limitations:
 - Only Herdr 1 on this machine, on macOS and Linux, where the `herdr` CLI
   answers `pane process-info`. Windows, SSH hosts, WSL, cloud machines, and a
   daemon behind a custom socket are not continued.
-- Herdr 2 (herdr-core) is not continued yet. Its chats run `herdr-acp` as the
+- Herdr 2 (herdr-core) is not continued yet. Its chats run `sheprd-acp` as the
   terminal's own program, which records nothing there, and herdr-core shows no
   boot identity to tell a restart from a chat that ended.
-- A chat Herdr UI never saw live (started and ended while no window was
+- A chat Sheprd never saw live (started and ended while no window was
   connected) is not continued, because nothing says which boot it ran under.
 - A pane identity can still be reused: a chat whose pane was closed while no
-  Herdr UI was connected keeps its record. If Herdr, after a restart, gives a
+  Sheprd was connected keeps its record. If Herdr, after a restart, gives a
   new workspace the closed one's id, a new idle pane with that id in the same
   folder could be handed the old chat.
 - A chat whose shell folder differs from the chat's own (started with
@@ -174,7 +174,7 @@ A sub-agent's call is marked **Sub-agent** in the conversation, with the number
 of steps it took; open it to list them. Its steps stay in its card rather than
 in the conversation. A call that started a background shell says `running`
 until the shell ends, even though the call itself is done. Which agents report
-this, and how, is in the [`herdr-acp` README](../crates/herdr-acp/README.md#behaviour).
+this, and how, is in the [`sheprd-acp` README](../crates/sheprd-acp/README.md#behaviour).
 
 ## Messages and controls
 
@@ -224,8 +224,8 @@ original terminal input; the historical question cards below are read-only.
 
 A closed `herdr-ui` fence can render native cards, metrics, choices, toggles,
 sliders, inputs, tables, bar charts and prompt actions. See the
-[catalog](../crates/herdr-gpui/src/chat/widgets/README.md) and
-[example](../crates/herdr-gpui/src/chat/widgets/example.json). Editing a control
+[catalog](../crates/sheprd-gpui/src/chat/widgets/README.md) and
+[example](../crates/sheprd-gpui/src/chat/widgets/example.json). Editing a control
 only changes local state. An explicit action with `mode: "draft"` adds the
 selected values to the composer for review; `mode: "send"` uses the normal
 prompt flow. Rendering or editing a native card cannot run code, submit a
@@ -260,7 +260,7 @@ terminal. Goal status stays in the original CLI interface; it is not inferred
 from conversation text.
 
 Observation requires a Linux agent host, its Herdr CLI metadata API, and a
-matching `herdr-acp` helper. Local helpers are paired with the GUI; SSH observers
+matching `sheprd-acp` helper. Local helpers are paired with the GUI; SSH observers
 run on the agent's host through the existing encrypted connection. Remote helper
 installation is explicit. Observation creates no listening port or persistent
 service. Closing the GUI stops its observer children and leaves agents running.
@@ -274,7 +274,7 @@ entries, 2 MiB of text and 8 MiB of image data retained. Older history remains
 with the original agent. Model, thinking level and context usage appear only
 when reported in the retained tail; missing values stay unknown. Activity comes
 from Herdr's live snapshot. Historical permissions never become actionable
-buttons. `herdr-gpui chat status --json` reports the input mode and session ID.
+buttons. `sheprd chat status --json` reports the input mode and session ID.
 
 System activity becomes a compact notice only when transcript metadata verifies
 its origin. Notice details remain inert, expandable and copyable; oversized
@@ -296,8 +296,8 @@ readable without opening a same-named local file.
 
 ## Implementation and bounds
 
-Rich parsing lives in [`chat/rich`](../crates/herdr-gpui/src/chat/rich.rs), with
-native layout in [`chat/view/rich.rs`](../crates/herdr-gpui/src/chat/view/rich.rs).
+Rich parsing lives in [`chat/rich`](../crates/sheprd-gpui/src/chat/rich.rs), with
+native layout in [`chat/view/rich.rs`](../crates/sheprd-gpui/src/chat/view/rich.rs).
 Math rasterization and syntax highlighting use the bounded visual worker queue;
 discarded streamed revisions retain their worker slots until completion.
 
@@ -329,7 +329,7 @@ cache; system-wide packages remain visible.
 For native visual checks on Linux, install Xvfb and ImageMagick, then run:
 
 ```sh
-cargo build --locked -p herdr-gpui --features integration-test
+cargo build --locked -p sheprd-gpui --features integration-test
 python3 scripts/check-rich-chat-native.py
 ```
 
@@ -356,7 +356,7 @@ checks user-message contrast and wrapping in a narrow light-theme bubble.
 To move a debug fixture binary to another machine, embed the RaTeX fonts:
 
 ```sh
-cargo build --locked -p herdr-gpui --features integration-test \
+cargo build --locked -p sheprd-gpui --features integration-test \
   --config 'profile.dev.package."ratex-katex-fonts".debug-assertions=false' \
   --config 'profile.dev.package."rust-embed".debug-assertions=false'
 ```

@@ -21,11 +21,11 @@ concurrency:
 jobs:
   zizmor:
     if: >-
-      github.repository == 'penso/herdr-gpui' &&
+      (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       ((github.event_name == 'pull_request' &&
         github.event.pull_request.user.login == 'penso' &&
-        github.event.pull_request.head.repo.full_name == 'penso/herdr-gpui') ||
+        github.event.pull_request.head.repo.full_name == github.repository) ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
          github.event_name == 'schedule') && github.ref == 'refs/heads/main'))
     name: Supply Chain Workflow Security
@@ -44,11 +44,11 @@ jobs:
 
   cargo-deny:
     if: >-
-      github.repository == 'penso/herdr-gpui' &&
+      (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       ((github.event_name == 'pull_request' &&
         github.event.pull_request.user.login == 'penso' &&
-        github.event.pull_request.head.repo.full_name == 'penso/herdr-gpui') ||
+        github.event.pull_request.head.repo.full_name == github.repository) ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
          github.event_name == 'schedule') && github.ref == 'refs/heads/main'))
     name: cargo-deny (${{ matrix.check }})

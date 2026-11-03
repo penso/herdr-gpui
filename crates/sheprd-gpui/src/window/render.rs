@@ -1,0 +1,973 @@
+//! Painting the window from prepared state. Render reads bounded caches and
+//! the latest projection only: it never queries the daemon, touches disk, or
+//! starts a process.
+
+use super::{
+    PressedLink, SheprdWindow,
+    tab_strip::{Reach, native_page},
+};
+use crate::direction::Logical;
+use crate::{
+    CheckForUpdates, Minimize, PlaySound, RunCommand, ShowHerdrNotDetected, ShowUpdatePreview,
+    ZoomWindow,
+    actions::{RingBellPreview, ShowToastPreview},
+    browser::Shown,
+    config::ClipboardToastPosition,
+    fonts::StyledFont,
+    terminal::*,
+    terminal_painter::{self, Ground, ImageTarget, PlacedImages},
+};
+use gpui::{prelude::*, *};
+use sheprd_client::ConnectOptions;
+
+impl SheprdWindow {
+    /// Config warnings, then the daemon's announcement, stacked over the
+    /// top-right of the terminal area below the tab strip, whose buttons stay
+    /// reachable. A menu page owns the window's attention, and zen mode keeps
+    /// the window clear; they wait behind either.
+    fn render_notices(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.notices_allowed() {
+            return None;
+        }
+        let mut cards = self.config_diagnostic_cards(cx);
+        cards.extend(self.announcement_card(cx));
+        if cards.is_empty() {
+            return None;
+        }
+        // Spans the terminal area so a narrow window shrinks the cards rather
+        // than pushing them off the left edge. Each card sits in its own row:
+        // a column only shrinks its children along its height, so a card with
+        // a long line kept its full width there. The stack ends above the
+        // window's foot, and a card that scrolls gives up height so the cards
+        // under it stay on screen; the rest keep theirs. Neither the stack nor
+        // a row takes the pointer, so the terminal around the cards scrolls
+        // and selects as before.
+        Some(
+            div()
+                .absolute()
+                .top(px(self.tab_strip_height() + 8.))
+                .bottom(px(8.))
+                .left(px(8.))
+                .right(px(8.))
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .children(cards.into_iter().map(|Notice { card, shrinks }| {
+                    div()
+                        .flex()
+                        .justify_end()
+                        .map(|row| match shrinks {
+                            true => row.min_h_0(),
+                            false => row.flex_none(),
+                        })
+                        .child(card)
+                }))
+                .into_any_element(),
+        )
+    }
+}
+
+/// One card in the notice stack, and whether it scrolls, so it can give up
+/// height to keep the stack inside the window.
+pub(super) struct Notice {
+    pub(super) card: AnyElement,
+    pub(super) shrinks: bool,
+}
+
+impl SheprdWindow {
+    fn notices_allowed(&self) -> bool {
+        self.menu.page.is_none() && !self.zen_active()
+    }
+
+    /// Whether [`Self::render_notices`] draws a card, so the keyboard can
+    /// reach the cards as a region of their own.
+    pub(super) fn notices_shown(&self) -> bool {
+        self.notices_allowed()
+            && (self.gui_config_diagnostic.visible().is_some()
+                || self.icon_font_notice.visible().is_some()
+                || self
+                    .endpoints
+                    .get(self.selected_endpoint)
+                    .is_some_and(|endpoint| endpoint.config_diagnostic.visible().is_some())
+                || self.live.product_announcement().is_some())
+    }
+}
+
+impl Render for SheprdWindow {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.restore_menu_focus(window, cx);
+        self.leave_vanished_region(window, cx);
+        self.sync_backdrop(window, cx);
+        self.tick_chrome(window, cx);
+        self.tick_menu_appear(window);
+        self.tick_sidebar_slide(window, cx);
+        if self
+            .chats
+            .glide(crate::motion::now(), self.config.chat.glide)
+        {
+            window.request_animation_frame();
+        }
+        self.sync_device_themes(cx);
+        let fill = self.fill();
+        let ground = self.ground();
+        self.viewport_width = f32::from(window.viewport_size().width);
+        let font = self.config.terminal.font();
+        // Parked groups paint with the same face as the window's terminal.
+        let parked_font = font.clone();
+        let cell_height = self.config.terminal.line_height();
+        self.painter.borrow_mut().set_appearance(
+            self.config.terminal.size,
+            cell_height,
+            self.terminal_theme().clone(),
+        );
+        self.cell_width = self.painter.borrow_mut().cell_width(&font, window, cx);
+        // Registers the window for surface-only redraws; see `redraw_terminal`.
+        self.surface_signal.read(cx);
+        let sidebar = self
+            .sidebar_column_width(f32::from(window.viewport_size().width))
+            .map(|width| {
+                (
+                    crate::sidebar::cached_view(&self.sidebar_view, width),
+                    width,
+                )
+            });
+        // The tab strip reserves its moving marks afresh; a hidden sidebar
+        // leaves none behind.
+        if let Some(marks) = crate::mark_layer::Marks::of(window, cx) {
+            marks.begin_frame(cx.entity_id());
+            if sidebar.is_none() {
+                marks.forget(self.sidebar_view.entity_id());
+            }
+        }
+        // Paints the frame on screen, which during a focus change is the one
+        // presented before it: the terminal area never blanks between two
+        // projections. What the client knows to be current stays in `live`.
+        let picture = self.presentation.picture(&self.live);
+        let surface = picture.as_ref().map(|picture| picture.frame.clone());
+        let images = picture.as_ref().map(|picture| picture.images.clone());
+        // A group picking the tab another shows paints this same frame.
+        let window_frame = picture;
+        let entity = cx.entity();
+        let paint_entity = entity.clone();
+        let focus = self.focus.clone();
+        let menu_open = self.menu.page.is_some();
+        let cell_width = self.cell_width;
+        let painter = self.painter.clone();
+        // The highlight is grid coordinates, so it paints with the frame that
+        // owns the cells rather than being recomputed from the pointer here.
+        let selection_rows = |owned: bool| -> Vec<_> {
+            surface
+                .as_deref()
+                .zip(self.selection.as_ref().filter(|_| owned))
+                .into_iter()
+                .flat_map(|(surface, selection)| selection.rows(surface, cell_width, cell_height))
+                .map(|(row, columns)| terminal_painter::Highlight {
+                    row,
+                    columns,
+                    tint: terminal_painter::Tint::Selection,
+                })
+                .collect()
+        };
+        // The highlight belongs to the frame that owns the cells, so only one
+        // of the panes and the popup paints it.
+        let popup_highlights = surface
+            .as_deref()
+            .and_then(|surface| surface.popup.as_ref())
+            .map(|popup| {
+                selection_rows(
+                    self.selection
+                        .as_ref()
+                        .is_some_and(|selection| selection.in_popup(&popup.terminal_id)),
+                )
+            })
+            .unwrap_or_default();
+        let pane_selection = selection_rows(
+            self.selection
+                .as_ref()
+                .is_some_and(|selection| selection.in_panes()),
+        );
+        // Like the highlight, the link underline paints with the frame that
+        // owns its cells, and only while that frame shows the content the
+        // daemon resolved it from. Without one, the local reading under the
+        // pointer is underlined instead, on every row it covers.
+        let link_rows: Vec<_> = surface
+            .as_deref()
+            .zip(self.hovered_daemon_link())
+            .filter(|(surface, link)| link.cell.current(surface))
+            .map(|(_, link)| link.frame_rows().collect())
+            .or_else(|| Some(self.hovered_local_link()?.rows().collect()))
+            .unwrap_or_default();
+        // Search matches, mapped onto the frame on screen, tint below the
+        // selection, which reads as chosen over them. A popup covers the
+        // panes, so their matches stay under it.
+        let mut highlights = surface
+            .as_deref()
+            .map(|surface| {
+                let mut highlights = self.find_highlights(surface);
+                highlights.extend(self.copy_mode_highlights(surface));
+                highlights
+            })
+            .unwrap_or_default();
+        highlights.extend(pane_selection);
+        let look = super::regions::Look {
+            font: font.clone(),
+            font_size: self.config.terminal.size,
+            cell_width,
+            cell_height,
+            theme: self.terminal_theme().clone(),
+            ground,
+        };
+        if !self.slides_allowed() {
+            self.presentation.scroll.clear();
+        }
+        let now = crate::motion::now();
+        let slide = self.presentation.scroll.slide(now);
+        // A link in a pane drawn mid-row underlines where its text is drawn.
+        let link_shift = link_rows.first().and_then(|(row, columns)| {
+            self.shift_at(point(
+                px(f32::from(columns.start) * cell_width),
+                px(f32::from(*row) * cell_height),
+            ))
+        });
+        if self.presentation.scroll.moving(now) {
+            // Advance the drawing on the next refresh through the surface
+            // signal: notifying this view would also rebuild the cached sidebar.
+            let signal = self.surface_signal.clone();
+            window.on_next_frame(move |_, cx| signal.update(cx, |_, cx| cx.notify()));
+        }
+        let regions = self.terminal_regions(surface.as_ref(), &highlights, slide, &look, cx);
+        // Without regions the canvas paints the whole grid, images included.
+        let whole = regions.is_empty();
+        // A chat's page panel lies beneath the window's drawing on macOS,
+        // over the cells of the chat's pane, so the cells paint around it.
+        #[cfg(target_os = "macos")]
+        let drawn_pages = self.browser.drawn_pages();
+        // The IME composition paints inline at the input cursor; a menu's
+        // text field shows its own.
+        // It anchors to the live surface, as the IME's candidate window does,
+        // so a retained frame never separates the text from the window.
+        let marked = (!menu_open && !self.marked.is_empty()).then(|| {
+            (
+                self.marked.clone(),
+                self.live.surface.clone(),
+                self.ime_shift(),
+            )
+        });
+        self.hovered_terminal_link =
+            self.terminal_link_hovered(window.mouse_position(), window.modifiers());
+        self.split_cursor = self.split_cursor_at(window.mouse_position());
+        // Pad the terminal itself: the canvas bounds that painting, hit testing,
+        // and IME placement all read then already exclude the padding. Only a
+        // group that draws a terminal or stands in for one takes it: every
+        // other kind of tab pads its own content.
+        let padding = self.config.terminal_padding;
+        self.ensure_layout();
+        self.forget_gone_strips();
+        let slots = self.drawn_group_slots();
+        let shown: Vec<Shown> = slots
+            .iter()
+            .map(|slot| self.group_shown(slot.id, cx))
+            .collect();
+        // On Windows a divider's grip keeps off a native page, which would
+        // cover it. A folding group stands between two groups without a
+        // divider.
+        let pages: Vec<bool> = if self.folding_groups().is_empty() {
+            shown.iter().map(|shown| native_page(shown, cx)).collect()
+        } else {
+            Vec::new()
+        };
+        // The window's own terminal, with its input, goes to the group holding
+        // its connection; other terminal groups paint parked connections.
+        let primary = self.primary_group();
+        let terminal_slot = slots
+            .iter()
+            .zip(&shown)
+            .find(|(slot, shown)| {
+                **shown == Shown::Terminal && primary.is_none_or(|group| group == slot.id)
+            })
+            .map(|(slot, _)| *slot);
+        let find_bar = self.render_find_bar(surface.as_deref(), cx);
+        let terminal_note = self.render_terminal_note(surface.as_deref(), cx);
+        let copy_badge = self.render_copy_mode_badge(surface.as_deref(), cx);
+        let chats = self.render_chats(surface.as_deref(), cx);
+        let terminal = padding
+            .pad(div())
+            .id("terminal")
+            .debug_selector(|| "terminal".into())
+            .when(self.hovered_terminal_link, |terminal| {
+                terminal.cursor_pointer()
+            })
+            .when_some(self.split_cursor, |terminal, cursor| {
+                terminal.cursor(cursor)
+            })
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, cx| {
+                this.pane_pointer_moved(event, window, cx);
+            }))
+            // Holding the link modifier over a link in a mouse-reporting
+            // application changes what a click does, so the pointer follows.
+            .on_modifiers_changed(
+                cx.listener(|this, event: &ModifiersChangedEvent, window, cx| {
+                    this.hover_link(window.mouse_position(), event.modifiers, cx);
+                    let hovered =
+                        this.terminal_link_hovered(window.mouse_position(), event.modifiers);
+                    if hovered != this.hovered_terminal_link {
+                        this.hovered_terminal_link = hovered;
+                        cx.notify();
+                    }
+                }),
+            )
+            .on_click(cx.listener(Self::open_terminal_link))
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .overflow_hidden()
+            // On macOS a chat's page panel shows from beneath the window's
+            // drawing, so the terminal's background paints around it.
+            .when(!cfg!(target_os = "macos"), |terminal| {
+                terminal.bg(fill.base(self.terminal_theme().background))
+            })
+            .children(self.terminal_ground(fill.base(self.terminal_theme().background)))
+            .map(|terminal| self.accessible_terminal(terminal, window, cx))
+            .capture_key_down(cx.listener(Self::chat_zoom_key))
+            .on_key_down(cx.listener(Self::key_down))
+            .on_key_up(cx.listener(Self::key_up))
+            // The terminal has nothing for Cut to act on, and Copy only while
+            // a released selection is still highlighted.
+            .on_action(cx.listener(|this, _: &crate::actions::Paste, _, cx| this.paste(cx)))
+            .on_action(cx.listener(|this, _: &crate::actions::SelectAll, _, cx| {
+                this.select_all(cx);
+            }))
+            .when(self.selection_retained(), |terminal| {
+                terminal.on_action(cx.listener(|this, _: &crate::actions::Copy, _, cx| {
+                    this.copy_retained_selection(cx);
+                }))
+            })
+            .on_scroll_wheel(cx.listener(Self::scroll_wheel))
+            .on_drop(cx.listener(Self::drop_terminal_files))
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    this.terminal_mouse_down(event, window, cx);
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    if this.terminal_mouse_down(event, window, cx) {
+                        return;
+                    }
+                    cx.stop_propagation();
+                    this.open_pane_menu_at(event.position, window, cx);
+                    this.menu.opening_right_click = this.menu.page == Some(crate::menu::Page::Pane);
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    this.note_input();
+                    if this.scrollbar_mouse_down(event, cx)
+                        || this.split_mouse_down(event, cx)
+                        || this.terminal_mouse_down(event, window, cx)
+                    {
+                        return;
+                    }
+                    this.pressed_terminal_link =
+                        this.terminal_link_press(event.position, event.modifiers);
+                    if this.menu.page.is_some() {
+                        return;
+                    }
+                    // A press on a link may still turn into a drag across it,
+                    // so the selection starts either way; the click that opens
+                    // the link is the one that never left its half-cell.
+                    this.begin_selection(
+                        event.position,
+                        event.click_count,
+                        event.modifiers.shift,
+                        cx,
+                    );
+                    if this.pressed_terminal_link.is_some() {
+                        cx.stop_propagation();
+                        return;
+                    }
+                    window.focus(&this.focus, cx);
+                    if this.input_ready()
+                        && let Some(surface) = &this.live.surface
+                    {
+                        let pane = pane_at(
+                            surface,
+                            this.bounds,
+                            event.position,
+                            this.cell_width,
+                            this.config.terminal.line_height(),
+                        )
+                        .map(str::to_owned);
+                        if let Some(id) = pane {
+                            this.focus_clicked_pane(&id, cx);
+                        }
+                    }
+                }),
+            )
+            // The cached regions paint the cells; the canvas above them takes
+            // input and paints what changes without them. Both fill this box,
+            // so every region shares the canvas's bounds. What is laid over
+            // the cells sits in the same box, inside the terminal's padding.
+            // A frame the daemon has not resized yet may be larger than the
+            // box, so the box clips it and the padding stays clear.
+            .child({
+                let cells = div()
+                    .relative()
+                    .size_full()
+                    .overflow_hidden()
+                    .children(regions)
+                    .child(
+                        canvas(
+                            move |bounds, _, cx| {
+                                entity.update(cx, |this, _| {
+                                    this.bounds = bounds;
+                                    this.options = ConnectOptions {
+                                        surface_size: viewport(
+                                            bounds.size.width.to_f64() as f32,
+                                            bounds.size.height.to_f64() as f32,
+                                            cell_width,
+                                            cell_height,
+                                        ),
+                                        cell_width_px: cell_width.round().max(1.) as u32,
+                                        cell_height_px: cell_height.round().max(1.) as u32,
+                                    };
+                                    this.resize();
+                                });
+                            },
+                            move |bounds, _, window, cx| {
+                                // Capture movement outside the terminal too, before any
+                                // element can stop propagation of a drag-away event.
+                                let entity = paint_entity.clone();
+                                window.on_mouse_event(
+                                    move |event: &MouseMoveEvent, phase, _, cx| {
+                                        if phase == DispatchPhase::Capture {
+                                            entity.update(cx, |this, cx| {
+                                                // Window-wide, so leaving the terminal
+                                                // drops the underline too.
+                                                this.hover_link(
+                                                    event.position,
+                                                    event.modifiers,
+                                                    cx,
+                                                );
+                                                if this.scrollbar_mouse_move(event, cx)
+                                                    || this.split_mouse_move(event, cx)
+                                                    || this.terminal_mouse_move(event, cx)
+                                                {
+                                                    cx.stop_propagation();
+                                                    return;
+                                                }
+                                                if this.pressed_terminal_link.as_ref().is_some_and(
+                                                    |PressedLink { position, .. }| {
+                                                        (event.position.x - position.x).abs()
+                                                            > px(4.)
+                                                            || (event.position.y - position.y).abs()
+                                                                > px(4.)
+                                                    },
+                                                ) {
+                                                    this.pressed_terminal_link = None;
+                                                }
+                                                // A drag that leaves the terminal keeps
+                                                // selecting, and hover work elsewhere stays
+                                                // out of the gesture.
+                                                if this.extend_selection(event.position, cx) {
+                                                    cx.stop_propagation();
+                                                }
+                                            });
+                                        }
+                                    },
+                                );
+                                let released = paint_entity.clone();
+                                window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+                                    if phase == DispatchPhase::Capture {
+                                        released.update(cx, |this, cx| {
+                                            // Global: the overlay occludes the opener, and release
+                                            // may also precede the overlay's first frame.
+                                            if matches!(
+                                                event.button,
+                                                MouseButton::Left | MouseButton::Right
+                                            ) {
+                                                this.menu.opening_right_click = false;
+                                            }
+                                            if this.scrollbar_mouse_up(event, cx)
+                                                || this.split_mouse_up(event, cx)
+                                                || this.terminal_mouse_up(event, cx)
+                                                || (event.button == MouseButton::Left
+                                                    && !cx.has_active_drag()
+                                                    && this.release_selection(cx))
+                                            {
+                                                cx.stop_propagation();
+                                            }
+                                        });
+                                    }
+                                });
+                                window.handle_input(
+                                    &focus,
+                                    crate::input::TerminalInputHandler::new(
+                                        bounds,
+                                        paint_entity.clone(),
+                                        menu_open,
+                                    ),
+                                    cx,
+                                );
+                                if let Some(surface) = &surface {
+                                    if whole {
+                                        let paint = |window: &mut Window, cx: &mut App| {
+                                            painter.borrow_mut().paint_frame(
+                                                &surface.frame,
+                                                bounds.origin,
+                                                Some(bounds.size),
+                                                ground,
+                                                cell_width,
+                                                &font,
+                                                &highlights,
+                                                &surface.panes,
+                                                None,
+                                                images.as_deref().map(|images| PlacedImages {
+                                                    placements: &surface.graphics.placements,
+                                                    images,
+                                                    target: ImageTarget::Main,
+                                                }),
+                                                window,
+                                                cx,
+                                            );
+                                        };
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            let pages: Vec<Bounds<Pixels>> = drawn_pages
+                                                .borrow()
+                                                .values()
+                                                .copied()
+                                                .filter(|page| page.intersects(&bounds))
+                                                .collect();
+                                            if pages.is_empty() {
+                                                paint(window, cx);
+                                            } else {
+                                                for piece in
+                                                    crate::browser::around_pages(bounds, pages)
+                                                {
+                                                    window.with_content_mask(
+                                                        Some(ContentMask { bounds: piece }),
+                                                        |window| paint(window, cx),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        #[cfg(not(target_os = "macos"))]
+                                        paint(window, cx);
+                                    } else {
+                                        // Regions place no images, so nothing
+                                        // else releases the ones that went away.
+                                        painter.borrow_mut().release_idle_images(window);
+                                    }
+                                    let paint_link = |window: &mut Window, shift| {
+                                        painter.borrow().paint_link(
+                                            &surface.frame,
+                                            bounds.origin + point(px(0.), shift),
+                                            cell_width,
+                                            &link_rows,
+                                            window,
+                                        )
+                                    };
+                                    match link_shift {
+                                        Some((pane, shift)) => window.with_content_mask(
+                                            Some(ContentMask {
+                                                bounds: Bounds::new(
+                                                    bounds.origin + pane.origin,
+                                                    pane.size,
+                                                ),
+                                            }),
+                                            |window| paint_link(window, shift),
+                                        ),
+                                        None => paint_link(window, px(0.)),
+                                    }
+                                    if let Some(popup) = &surface.popup {
+                                        let offset = popup_origin(
+                                            &surface.frame,
+                                            &popup.frame,
+                                            cell_width,
+                                            cell_height,
+                                        );
+                                        painter.borrow_mut().paint_frame(
+                                            &popup.frame,
+                                            bounds.origin + offset,
+                                            None,
+                                            Ground::Opaque,
+                                            cell_width,
+                                            &font,
+                                            &popup_highlights,
+                                            &[],
+                                            None,
+                                            images.as_deref().map(|images| PlacedImages {
+                                                placements: &surface.graphics.placements,
+                                                images,
+                                                target: ImageTarget::Popup(&popup.terminal_id),
+                                            }),
+                                            window,
+                                            cx,
+                                        );
+                                    }
+                                }
+                                if let Some((marked, live, shift)) = &marked {
+                                    let live = live.as_deref();
+                                    painter.borrow().paint_composition(
+                                        marked,
+                                        input_cursor_bounds(
+                                            live,
+                                            bounds.origin,
+                                            cell_width,
+                                            cell_height,
+                                        )
+                                        .origin
+                                            + point(px(0.), *shift),
+                                        input_area(live, bounds, cell_width, cell_height),
+                                        &font,
+                                        window,
+                                    );
+                                }
+                            },
+                        )
+                        .size_full(),
+                    );
+                cells
+                    .children(chats)
+                    .children(self.render_reconnecting(cx))
+                    .when_some(find_bar, |terminal, bar| terminal.child(bar))
+                    .when_some(terminal_note, |terminal, note| terminal.child(note))
+                    .when_some(copy_badge, |terminal, badge| terminal.child(badge))
+                    // Direct feedback for the user's own gesture, not a daemon notice:
+                    // it sits over the cells it copied and needs no dismissing.
+                    .when_some(self.flash_shown(), |terminal, (flash, shown)| {
+                        use ClipboardToastPosition::*;
+                        let position = self.config.clipboard_toast.position;
+                        // It comes in from the edge it sits by and goes back to it.
+                        let edge = px(12. - (1. - shown) * super::flash::SLIDE);
+                        terminal.child(
+                            div()
+                                .absolute()
+                                .opacity(shown)
+                                .map(|row| match position {
+                                    TopLeft | TopCenter | TopRight => row.top(edge),
+                                    BottomLeft | BottomCenter | BottomRight => row.bottom(edge),
+                                })
+                                .map(|row| match position {
+                                    TopLeft | BottomLeft => row.justify_start(),
+                                    TopCenter | BottomCenter => row.justify_center(),
+                                    TopRight | BottomRight => row.justify_end(),
+                                })
+                                // The flash spans the cells, so centering centers on
+                                // them and a corner is the corner of the grid.
+                                .left_0()
+                                .right_0()
+                                .px(px(12.))
+                                .flex()
+                                .overflow_hidden()
+                                .child(
+                                    div()
+                                        .debug_selector(|| "flash".into())
+                                        .min_w_0()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .px(px(12.))
+                                        .py(px(6.))
+                                        .rounded(px(crate::config::corners::CONTROL))
+                                        .border_1()
+                                        .border_color(rgb(flash.accent(&self.theme)))
+                                        .bg(rgb(self.theme.surface))
+                                        .text_color(rgb(self.theme.foreground))
+                                        .child(
+                                            div()
+                                                .size(px(6.))
+                                                .flex_none()
+                                                .rounded_full()
+                                                .bg(rgb(flash.accent(&self.theme))),
+                                        )
+                                        .child(div().truncate().child(flash.text.clone())),
+                                ),
+                        )
+                    })
+            });
+        // A focus handle belongs to one element: the terminal when drawn,
+        // otherwise the group in use.
+        let keyboard = terminal_slot
+            .is_none()
+            .then(|| self.active_group())
+            .flatten();
+        let mut terminal = Some(terminal);
+        // An activity bar section takes the body; its title bar is the
+        // window's own, with no group's tab strip in it.
+        let section = self.render_activity_section(window, cx);
+        let merged = section.is_none()
+            && slots
+                .first()
+                .is_some_and(|first| self.tabs_in_titlebar(first.id, cx));
+        let count = slots.len();
+        let mut groups = Vec::with_capacity(count);
+        for (slot, shown) in slots.into_iter().zip(shown) {
+            let owns_keyboard = keyboard == Some(slot.id);
+            let tab = match &shown {
+                Shown::Page(id) => cx
+                    .try_global::<crate::browser::Store>()
+                    .and_then(|store| store.get(*id))
+                    .cloned(),
+                _ => None,
+            };
+            let body = match (&shown, tab) {
+                // No Herdr 1 is installed: herdr-core's shell stands in.
+                (Shown::Terminal, _)
+                    if terminal_slot == Some(slot) && self.core_fallback_view().is_some() =>
+                {
+                    self.core_fallback_view()
+                        .map(IntoElement::into_any_element)
+                        .unwrap_or_else(|| div().into_any_element())
+                }
+                (Shown::Terminal, _) if terminal_slot == Some(slot) => terminal
+                    .take()
+                    .map(IntoElement::into_any_element)
+                    .unwrap_or_else(|| div().into_any_element()),
+                (Shown::Terminal, _) if self.shows_parked_terminal(slot.id, cx) => {
+                    self.render_parked_terminal(slot, parked_font.clone(), cell_height, cx)
+                }
+                // Orchestrator tabs are dropped on load and never opened.
+                (Shown::Page(_), Some(tab))
+                    if matches!(
+                        tab.location,
+                        Some(crate::browser::Location::Orchestrator { .. })
+                    ) =>
+                {
+                    div().into_any_element()
+                }
+                (Shown::Page(_), Some(tab))
+                    if tab
+                        .location
+                        .as_ref()
+                        .is_some_and(|location| !location.is_page()) =>
+                {
+                    match tab.location {
+                        Some(crate::browser::Location::Code { .. }) => {
+                            self.render_code_tab(slot, &tab, cx)
+                        }
+                        Some(crate::browser::Location::Devices) => {
+                            self.render_devices_tab(slot, &tab, cx)
+                        }
+                        Some(crate::browser::Location::CoreTerminal { .. }) => {
+                            self.render_core_terminal_tab(slot, &tab, cx)
+                        }
+                        _ => self.render_review_tab(slot, &tab, cx),
+                    }
+                }
+                (Shown::Page(_), Some(tab)) => self.render_browser(slot, &tab, owns_keyboard, cx),
+                (Shown::Elsewhere(tab), _) => match self.live_frame_of(tab, window_frame.clone()) {
+                    Some(frame) => self.render_terminal_mirror(
+                        slot,
+                        Some(frame),
+                        parked_font.clone(),
+                        cell_height,
+                        cx,
+                    ),
+                    None => self.render_stand_in(slot, &shown, owns_keyboard, cx),
+                },
+                _ => self.render_stand_in(slot, &shown, owns_keyboard, cx),
+            };
+            let ends = merged.then(|| crate::titlebar::Ends::of(slot.index, count));
+            let reach = Reach::of(&pages, slot.index);
+            groups.push(self.render_group(slot, body, ends, reach, window, cx));
+        }
+        let content = self.render_groups(groups, window, cx);
+        let content =
+            section.unwrap_or_else(|| self.with_mod_panel(self.zen_column(content), window, cx));
+        // Not `||`: asking forgets group motion that has finished.
+        if self.groups_moving()
+            | self.tabs_growing()
+            | self.annotations_moving()
+            | self.chrome_sliding()
+            | self.flash_moving()
+        {
+            window.request_animation_frame();
+        }
+        // On Windows a menu that just opened hides the pages it covers once
+        // it is laid out, a frame later.
+        if self.present_browser(cx) {
+            window.request_animation_frame();
+        }
+        // Zen mode keeps toasts and menus: they carry errors and what the
+        // user asked for, not chrome.
+        let zen = self.zen_layout();
+        let root = div()
+            .capture_key_down(cx.listener(Self::application_menu_shortcut))
+            .capture_key_down(cx.listener(Self::chrome_focus_key))
+            .on_modifiers_changed(cx.listener(Self::double_shift_modifiers))
+            .capture_any_mouse_down(cx.listener(|this, _, _, _| this.shift_taps.cancel()))
+            .child({
+                let entity = cx.weak_entity();
+                let menu_bounds = self.menu.application_bar.content.clone();
+                canvas(
+                    move |bounds, _, _| menu_bounds.set(bounds),
+                    move |_, _, window, _| {
+                        let scroll_entity = entity.clone();
+                        window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
+                            if phase == DispatchPhase::Capture {
+                                let _ =
+                                    scroll_entity.update(cx, |this, _| this.shift_taps.cancel());
+                            }
+                        });
+                        let entity = entity.clone();
+                        window.on_mouse_event(move |_: &MouseMoveEvent, phase, _, cx| {
+                            if phase == DispatchPhase::Capture {
+                                let _ = entity.update(cx, |this, _| this.shift_taps.cancel());
+                            }
+                        });
+                    },
+                )
+                .absolute()
+                .size_full()
+            })
+            .on_action(
+                cx.listener(|this, action: &crate::actions::SetLayout, _, cx| {
+                    this.set_layout(action.mode, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this, action: &crate::actions::SetTabLayout, _, cx| {
+                    this.set_tab_layout(action.mode, cx);
+                }),
+            )
+            .on_action(cx.listener(|this, action: &RunCommand, window, cx| {
+                this.command(action.command, window, cx);
+            }))
+            .on_action(cx.listener(|_, _: &Minimize, window, _| {
+                window.minimize_window();
+            }))
+            .on_action(cx.listener(|_, _: &ZoomWindow, window, _| {
+                window.zoom_window();
+            }))
+            .on_action(cx.listener(|this, _: &ShowHerdrNotDetected, window, cx| {
+                this.show_install_modal(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CheckForUpdates, window, cx| {
+                this.open_app_update(false, window, cx);
+                this.updater.check();
+            }))
+            .on_action(cx.listener(|this, _: &ShowUpdatePreview, window, cx| {
+                this.open_app_update(true, window, cx);
+            }))
+            .on_action(cx.listener(
+                |this, _: &crate::actions::ShowUpdateDownloadPreview, window, cx| {
+                    this.open_update_progress_preview(
+                        crate::updater::State::Downloading {
+                            received: 50_000_000,
+                            total: 100_000_000,
+                        },
+                        window,
+                        cx,
+                    );
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::actions::ShowUpdateHomebrewPreview, window, cx| {
+                    this.open_update_progress_preview(
+                        crate::updater::State::Upgrading {
+                            detail: crate::updater::Progress::Refreshing,
+                        },
+                        window,
+                        cx,
+                    );
+                },
+            ))
+            .on_action(cx.listener(|this, action: &ShowToastPreview, _, cx| {
+                this.show_toast_preview(action.kind, cx);
+            }))
+            .on_action(cx.listener(
+                |this, _: &crate::actions::ShowSystemNotificationPreview, window, cx| {
+                    this.show_system_notification_preview(window, cx);
+                },
+            ))
+            .on_action(cx.listener(|this, _: &PlaySound, _, _| {
+                this.sound.preview();
+            }))
+            .on_action(cx.listener(|this, _: &RingBellPreview, window, cx| {
+                this.preview_bell(window, cx);
+            }))
+            // A mouse's side buttons walk the focus trail, as they do pages
+            // in a browser or folders in a file manager.
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Back),
+                cx.listener(|this, _, window, cx| {
+                    this.command(crate::controls::Command::Back, window, cx);
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Forward),
+                cx.listener(|this, _, window, cx| {
+                    this.command(crate::controls::Command::Forward, window, cx);
+                }),
+            )
+            .size_full()
+            .relative()
+            .flex()
+            .flex_col()
+            .map(|root| self.with_backdrop(root))
+            .text_color(rgb(self.theme.foreground))
+            .text_font(&self.config.ui)
+            .text_size(px(self.config.ui.size))
+            // Text sets from the side it starts, the right in Hebrew; the
+            // terminal paints its own cells and never follows.
+            .text_start()
+            .when(crate::menus::IN_WINDOW && !zen, |root| {
+                root.child(self.render_application_bar(window, cx))
+            })
+            .when(!merged && !zen, |root| {
+                root.child(self.render_titlebar(window, cx))
+            })
+            .when(zen, |root| {
+                root.children(crate::titlebar::zen_inset(fill.ground(), window))
+            })
+            .child(
+                div()
+                    .debug_selector(|| "window-body".into())
+                    // The sidebar leads, on the right in a right-to-left
+                    // language; the terminal area beside it never mirrors.
+                    .row()
+                    .flex_1()
+                    .min_h_0()
+                    .relative()
+                    .children(sidebar.map(|(sidebar, width)| {
+                        let column = match merged {
+                            true => self.sidebar_column(sidebar, window, cx).into_any_element(),
+                            false => sidebar.into_any_element(),
+                        };
+                        self.sliding_sidebar(column, width)
+                    }))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .relative()
+                            .child(content)
+                            .children(self.render_notices(cx))
+                            .children(self.zen_status_bar(cx)),
+                    ),
+            )
+            // After the body, whose rows reserve the marks it draws, and under
+            // everything that covers the body.
+            .child(AnyView::from(self.mark_layer.clone()))
+            // At the window's foot in every layout: under the traffic lights
+            // it would hide them, and one place is easier to find.
+            .when(!zen, |root| root.children(self.render_worktree_banner()))
+            .children(self.render_tab_ghost(cx))
+            .children(self.render_toasts(window, cx))
+            .children(self.render_file_transfer(window, cx))
+            .children(self.render_menu_leaving(window, cx))
+            .when(self.menu.page.is_some(), |root| {
+                root.child(self.render_menu(window, cx))
+            });
+        crate::titlebar::frame(window, self.theme.active, root)
+    }
+}

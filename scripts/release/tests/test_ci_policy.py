@@ -18,10 +18,10 @@ PR_JOBS = ("zizmor", "commits", "checks", "windows", "windows-native", "build-ma
 PR_ONLY_JOBS = ("build-macos",)
 
 
-def condition_matches(job, context):
+def condition_matches(job, context, jobs=JOBS):
     # Interpret only the boolean/equality subset used by these job conditions.
     # Unsupported syntax fails rather than executing workflow text as Python.
-    expression = re.search(r"^    if: >-\n((?:      .+\n)+)", JOBS[job], re.M)[1]
+    expression = re.search(r"^    if: >-\n((?:      .+\n)+)", jobs[job], re.M)[1]
     expression = " ".join(expression.split()).replace("&&", "and").replace("||", "or")
 
     def evaluate(node):
@@ -48,7 +48,7 @@ def condition_matches(job, context):
 class CiPolicy(unittest.TestCase):
     def context(self, **overrides):
         return {
-            "github.repository": "penso/herdr-gpui",
+            "github.repository": "sheprd-labs/sheprd",
             "github.event_name": "pull_request",
             "github.ref": "refs/pull/456/merge",
             "github.actor": "larry0x",
@@ -74,7 +74,7 @@ class CiPolicy(unittest.TestCase):
         context = self.context(**{
             "github.actor": "penso", "github.triggering_actor": "penso",
             "github.event.pull_request.user.login": "penso",
-            "github.event.pull_request.head.repo.full_name": "penso/herdr-gpui",
+            "github.event.pull_request.head.repo.full_name": "sheprd-labs/sheprd",
         })
         for job in PR_JOBS:
             self.assertTrue(condition_matches(job, context), job)
@@ -105,6 +105,30 @@ class CiPolicy(unittest.TestCase):
             })
             for job in JOBS:
                 self.assertFalse(condition_matches(job, context), (job, event))
+
+    def test_pretransfer_repository_still_runs_pull_request_checks(self):
+        context = self.context(**{"github.repository": "penso/herdr-gpui"})
+        for job in PR_JOBS:
+            self.assertTrue(condition_matches(job, context), job)
+
+    def test_owner_only_workflows_allow_both_repository_locations_but_not_forks(self):
+        for workflow in ("nix.yml", "supply-chain.yml"):
+            text = (ROOT / ".github/workflows" / workflow).read_text()
+            sections = re.split(r"^  ([a-z-]+):\n", text.split("\njobs:\n", 1)[1], flags=re.M)
+            jobs = dict(zip(sections[1::2], sections[2::2]))
+            for repository, head in itertools.product(
+                    ("penso/herdr-gpui", "sheprd-labs/sheprd", "other/sheprd"),
+                    ("penso/herdr-gpui", "sheprd-labs/sheprd", "other/sheprd")):
+                context = self.context(**{
+                    "github.repository": repository, "github.actor": "penso",
+                    "github.triggering_actor": "penso",
+                    "github.event.pull_request.user.login": "penso",
+                    "github.event.pull_request.head.repo.full_name": head,
+                })
+                expected = repository != "other/sheprd" and head == repository
+                for job in jobs:
+                    with self.subTest(workflow=workflow, job=job, repository=repository, head=head):
+                        self.assertEqual(condition_matches(job, context, jobs), expected)
 
     def test_path_selection_only_skips_platform_jobs(self):
         for code in ("false", ""):

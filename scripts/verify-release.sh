@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
     cat <<'EOF'
 Usage: bash scripts/verify-release.sh --version vYYYYMMDD.COUNTER [--directory DIR] [--sha SHA]
-       [--gpg-key PUBLIC_KEY_FILE --gpg-fingerprint FULL_SIGNING_FINGERPRINT]
+       [--gpg-key PUBLIC_KEY_FILE --gpg-fingerprint FULL_SIGNING_FINGERPRINT] [--legacy]
 
 Without --directory, download the release into a temporary directory.
 Verify the exact asset set, both checksums, Sigstore, and GitHub provenance.
@@ -12,10 +12,12 @@ Verify the exact asset set, both checksums, Sigstore, and GitHub provenance.
 Optional supplemental .asc files must be in DIR/gpg/; GPG uses an isolated keyring
 and requires the full fingerprint of the actual signing key, including subkeys.
 Requires Python 3.11+, gh, and cosign 2.x; optional GPG verification requires gpg.
+--legacy verifies an immutable pre-rebrand release with its original asset names
+and exact penso/herdr-gpui provenance identity. There is no automatic trust fallback.
 EOF
 }
 
-version='' directory='' sha='' gpg_key='' fingerprint=''
+version='' directory='' sha='' gpg_key='' fingerprint='' legacy=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --version|--directory|--sha|--gpg-key|--gpg-fingerprint)
@@ -29,6 +31,7 @@ while [[ $# -gt 0 ]]; do
             esac
             shift 2 ;;
         -h|--help) usage; exit 0 ;;
+        --legacy) legacy=true; shift ;;
         *) usage >&2; exit 1 ;;
     esac
 done
@@ -38,7 +41,12 @@ if [[ -n $gpg_key || -n $fingerprint ]]; then
     [[ -f $gpg_key && $fingerprint =~ ^([0-9A-F]{40}|[0-9A-F]{64})$ ]] || exit 1
 fi
 scripts=$(cd -- "$(dirname -- "$0")" && pwd)
-repo=penso/herdr-gpui
+repo=sheprd-labs/sheprd
+manifest_options=()
+if $legacy; then
+    repo=penso/herdr-gpui
+    manifest_options=(--legacy-names)
+fi
 identity="https://github.com/$repo/.github/workflows/release.yml@refs/heads/main"
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
@@ -51,13 +59,13 @@ mkdir "$tmp/assets-to-check"
 while IFS= read -r name; do
     [[ -f $directory/$name && ! -L $directory/$name ]] || exit 1
     cp "$directory/$name" "$tmp/assets-to-check/$name"
-done < <(python3 "$scripts/release/artifact-manifest.py" names "$version" "$directory")
+done < <(python3 "$scripts/release/artifact-manifest.py" names "$version" "$directory" ${manifest_options[@]+"${manifest_options[@]}"})
 shopt -s dotglob nullglob
 for path in "$directory"/*; do
     [[ $path == "$directory/gpg" && -d $path && ! -L $path ]] && continue
     [[ -f $tmp/assets-to-check/${path##*/} && ! -L $path ]] || exit 1
 done
-python3 "$scripts/release/artifact-manifest.py" verify "$version" "$tmp/assets-to-check"
+python3 "$scripts/release/artifact-manifest.py" verify "$version" "$tmp/assets-to-check" ${manifest_options[@]+"${manifest_options[@]}"}
 tag_sha=$(gh api "repos/$repo/git/ref/tags/v$version" --jq '.object | select(.type == "commit") | .sha')
 [[ $tag_sha =~ ^[0-9a-f]{40}$ && ( -z $sha || $sha == "$tag_sha" ) ]] || exit 1
 sha=$tag_sha
@@ -88,5 +96,5 @@ while IFS= read -r name; do
             END { exit !(count == 1 && valid == 1) }
         ' "$tmp/gpg-status"
     fi
-done < <(python3 "$scripts/release/artifact-manifest.py" base-names "$version" "$directory")
+done < <(python3 "$scripts/release/artifact-manifest.py" base-names "$version" "$directory" ${manifest_options[@]+"${manifest_options[@]}"})
 echo "Verified v$version at $sha (checksums, Sigstore, provenance)."

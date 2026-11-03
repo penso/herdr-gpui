@@ -8,6 +8,7 @@
 <body class="hk">
 <main class="hk-page wide">
   <h1>Remote control — mobile mockups</h1>
+  <p class="hint">Historical remote-control design exploration for Sheprd. Workspace labels and lettermark placeholders retain their original sample data; these are not current app screenshots or a selection for the new website design.</p>
   <p class="callout-picked">Final picks: <b>home F</b> (needs-you strip + grouped by computer) · <b>workspaces and tabs D</b> (attention board) · <b>chat C</b> (focus) · <b>questions A</b> (bottom sheet).</p>
   <p class="lede">Static mockups of the PWA in <code>docs/remote-control-plan.md</code>. Pick one variant per row, then press <b>Send picks</b> at the bottom. Data is placeholder. Theme toggle: <button class="hk-button" id="theme">Light / dark</button></p>
 
@@ -79,7 +80,7 @@
             </div>
             <div class="g-head big"><span>Working</span><span class="cnt green-bg">2</span></div>
             <div class="g-list">
-              <div class="g-row tall"><span class="g-ic codex">◎</span><span class="g-t">Split equalize tests<small>cargo test -p herdr-remote-control · 3m</small></span><span class="g-busy">•••</span></div>
+              <div class="g-row tall"><span class="g-ic codex">◎</span><span class="g-t">Split equalize tests<small>cargo test -p sheprd-remote-control · 3m</small></span><span class="g-busy">•••</span></div>
               <div class="g-row tall"><span class="g-ic claude">✳</span><span class="g-t">Terraform plan<small>devbox · infra · 1m</small></span><span class="g-busy">•••</span></div>
             </div>
             <div class="g-head big"><span>Finished recently</span></div>
@@ -129,7 +130,7 @@
           <div class="scroll">
             <p class="section">Chats</p>
             <div class="card-tab"><div class="ct-top"><span class="agent claude">C</span><b>remote plan</b><span class="pill amber">Needs answer</span></div><p>Can I run <code>just ci</code> in the worktree?</p><small>Claude Opus · 41% context · $0.82</small></div>
-            <div class="card-tab"><div class="ct-top"><span class="agent codex">X</span><b>split tests</b><span class="pill green">Working</span></div><p>Running cargo test -p herdr-remote-control…</p><small>Codex · 12% context · 3m</small></div>
+            <div class="card-tab"><div class="ct-top"><span class="agent codex">X</span><b>split tests</b><span class="pill green">Working</span></div><p>Running cargo test -p sheprd-remote-control…</p><small>Codex · 12% context · 3m</small></div>
             <p class="section">Terminals</p>
             <div class="tab term boxed"><span class="ti">›_</span><span class="t">zsh</span><small>Not available yet</small></div>
             <div class="tab term boxed"><span class="ti">›_</span><span class="t">cargo watch</span><small>Not available yet</small></div>
@@ -139,12 +140,12 @@
       </figure>
 
       <figure data-variant="C">
-        <figcaption><b>C · Drawer like the desktop</b><span>Sidebar slides in over the last chat; mirrors Herdr UI.</span></figcaption>
+        <figcaption><b>C · Drawer like the desktop</b><span>Sidebar slides in over the last chat; mirrors Sheprd.</span></figcaption>
         <div class="phone"><div class="screen">
           <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
           <div class="drawer-wrap">
             <aside class="drawer">
-              <div class="drawer-head"><b>Herdr</b><small>MacBook · LAN</small></div>
+              <div class="drawer-head"><b>Sheprd</b><small>MacBook · LAN</small></div>
               <p class="section">Workspaces</p>
               <div class="dw on"><span class="ws-icon">h</span>herdr-gpui<span class="badge amber">1</span></div>
               <div class="dw-tabs">
@@ -167,12 +168,12 @@
         <figcaption><b>D · Attention board</b><span>Everything grouped by state, workspace as a label.</span></figcaption>
         <div class="phone"><div class="screen">
           <div class="status"><span>9:41</span><span>●●● 5G ▮</span></div>
-          <header class="bar"><h3>Herdr</h3><button class="icon">▤</button><button class="icon plus">＋</button></header>
+          <header class="bar"><h3>Sheprd</h3><button class="icon">▤</button><button class="icon plus">＋</button></header>
           <div class="scroll">
             <p class="section amber-t">Needs you · 1</p>
             <div class="board amber-b"><b>Claude · remote plan</b><small>herdr-gpui</small><p>Run <code>just ci</code>?</p><div class="mini-btns"><span>Allow once</span><span>Deny</span></div></div>
             <p class="section green-t">Working · 1</p>
-            <div class="board"><b>Codex · split tests</b><small>herdr-gpui</small><p>cargo test -p herdr-remote-control</p><div class="progress"><i></i></div></div>
+            <div class="board"><b>Codex · split tests</b><small>herdr-gpui</small><p>cargo test -p sheprd-remote-control</p><div class="progress"><i></i></div></div>
             <p class="section">Idle · 2</p>
             <div class="board dim"><b>Claude · landing copy</b><small>site</small></div>
             <div class="board dim"><b>Pi · bincode audit</b><small>moltis</small></div>
@@ -252,7 +253,7 @@
   <!-- ───────────── 3. Questions ───────────── -->
   <section>
     <h2>3. Agent questions</h2>
-    <p class="hint">A permission request from <code>herdr-acp</code>. "Always" options set apart.</p>
+    <p class="hint">A permission request from <code>sheprd-acp</code>. "Always" options set apart.</p>
     <div class="row" data-group="question">
 
       <figure data-variant="A">
@@ -339,7 +340,7 @@
           <div class="pair">
             <div class="steps-h"><span class="ok">1 Certificate</span><span class="ok">2 Name</span><span class="cur">3 Approve</span><span>4 Install</span></div>
             <h3>Confirm on your Mac</h3>
-            <p class="muted">Check the code matches the one in Herdr UI.</p>
+            <p class="muted">Check the code matches the one in Sheprd.</p>
             <div class="code">428 913</div>
             <div class="kv"><span>Device</span><b>Fabien's iPhone</b><span>Computer</span><b>MacBook Pro</b><span>CA</span><b class="mono">5F:2A:…:C1:9E</b></div>
             <div class="wait"><i></i> Waiting for approval…</div>
@@ -348,7 +349,7 @@
       </figure>
 
       <figure>
-        <figcaption><b>Pairing · desktop</b><span>Herdr UI dialog: QR, then the approval step.</span></figcaption>
+        <figcaption><b>Pairing · desktop</b><span>Sheprd dialog: QR, then the approval step.</span></figcaption>
         <div class="desk">
           <div class="dlg">
             <div class="dlg-head"><b>Remote control</b><span class="x">✕</span></div>
@@ -376,7 +377,7 @@
           <div class="lock-time">9:41<small>Thursday 22 October</small></div>
           <div class="notif"><span class="app">H</span><div><b>Claude needs an answer</b><small>herdr-gpui · remote plan</small></div><em>now</em></div>
           <div class="notif"><span class="app">H</span><div><b>Codex finished</b><small>herdr-gpui · split tests · 4m 10s · $0.34</small></div><em>2m</em></div>
-          <div class="notif stack"><span class="app">H</span><div><b>2 more from Herdr</b></div></div>
+          <div class="notif stack"><span class="app">S</span><div><b>2 more from Sheprd</b></div></div>
         </div></div>
       </figure>
     </div>

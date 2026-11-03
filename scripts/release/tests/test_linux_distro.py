@@ -22,6 +22,7 @@ EXTENSIONS = ("deb", "rpm", "pkg.tar.zst")
 # packager named in FAKE_NFPM_FAIL.
 FAKE_NFPM = """#!/usr/bin/env python3
 import json, os, sys
+from pathlib import Path
 args = sys.argv[1:]
 config = json.load(open(args[args.index("--config") + 1]))
 packager = args[args.index("--packager") + 1]
@@ -31,6 +32,9 @@ if os.environ.get("FAKE_NFPM_FAIL") == packager:
     sys.exit(1)
 for entry in config["contents"]:
     open(entry["src"], "rb").close()
+    assert not Path(entry["src"]).is_symlink(), entry
+sources = {entry["dst"]: Path(entry["src"]) for entry in config["contents"]}
+assert sources["/usr/bin/herdr-gpui"].read_bytes() == sources["/usr/bin/sheprd"].read_bytes()
 open(args[args.index("--target") + 1], "w").write(packager)
 """
 
@@ -48,10 +52,10 @@ class LinuxDistroTests(unittest.TestCase):
         self.binary = self.work / "herdr-gpui"
         # package-linux.sh reads the release build identity the binary embeds.
         self.binary.write_bytes(b"not executable\0HERDR_BUILD_IDENTITY_V1\nworktree=0\nbranch=\npr=\n\0")
-        (self.work / "herdr-acp").write_bytes(b"chat program")
-        (self.work / "herdr-remote-control").write_bytes(b"remote control daemon")
-        (self.work / "herdr-automate").write_bytes(b"automation daemon")
-        (self.work / "herdr-nearby").write_bytes(b"bluetooth helper")
+        (self.work / "sheprd-acp").write_bytes(b"chat program")
+        (self.work / "sheprd-remote-control").write_bytes(b"remote control daemon")
+        (self.work / "sheprd-automate").write_bytes(b"automation daemon")
+        (self.work / "sheprd-nearby").write_bytes(b"bluetooth helper")
         (self.work / "herdr-core").write_bytes(b"herdr-core daemon")
         self.notices = self.work / "notices.txt"
         self.notices.write_text("Third-party license text\n")
@@ -73,7 +77,7 @@ class LinuxDistroTests(unittest.TestCase):
         return result
 
     def outputs(self, target, directory):
-        return [directory / f"Herdr-{VERSION}-{target}.{extension}" for extension in EXTENSIONS]
+        return [directory / f"Sheprd-{VERSION}-{target}.{extension}" for extension in EXTENSIONS]
 
     def test_packages_install_the_manual_tree_under_usr(self):
         for target, arch in zip(TARGETS, ("amd64", "arm64")):
@@ -89,16 +93,14 @@ class LinuxDistroTests(unittest.TestCase):
                                  ("herdr-gpui", arch, VERSION, "1"))
                 self.assertEqual(config["mtime"], "2026-09-20T00:00:00Z")
                 with tarfile.open(archive) as source:
-                    expected = {m.name.split("/", 1)[1] for m in source.getmembers() if m.isfile()}
+                    expected = {m.name.split("/", 1)[1] for m in source.getmembers() if m.isfile() or m.issym()}
                 self.assertEqual({entry["dst"] for entry in config["contents"]},
                                  {f"/usr/{relative}" for relative in expected})
                 modes = {entry["dst"]: entry["file_info"]["mode"] for entry in config["contents"]}
-                self.assertEqual(modes.pop("/usr/bin/herdr-gpui"), 0o755)
-                self.assertEqual(modes.pop("/usr/bin/herdr-acp"), 0o755)
-                self.assertEqual(modes.pop("/usr/bin/herdr-remote-control"), 0o755)
-                self.assertEqual(modes.pop("/usr/bin/herdr-automate"), 0o755)
-                self.assertEqual(modes.pop("/usr/bin/herdr-nearby"), 0o755)
-                self.assertEqual(modes.pop("/usr/bin/herdr-core"), 0o755)
+                for path in [path for path in modes if path.startswith("/usr/bin/")]:
+                    self.assertEqual(modes.pop(path), 0o755, path)
+                for entry in config["contents"]:
+                    self.assertEqual((entry["file_info"]["owner"], entry["file_info"]["group"]), ("root", "root"))
                 self.assertEqual(set(modes.values()), {0o644})
                 depends = {packager: override["depends"] for packager, override in config["overrides"].items()}
                 self.assertIn("libc6 (>= 2.39)", depends["deb"])
@@ -154,7 +156,7 @@ class LinuxDistroTests(unittest.TestCase):
 
     def test_rejects_unexpected_archive_entries(self):
         target = TARGETS[0]
-        prefix = f"Herdr-{VERSION}-{target}"
+        prefix = f"Sheprd-{VERSION}-{target}"
         with tarfile.open(self.archive(target)) as source:
             members = [(m, source.extractfile(m).read() if m.isfile() else None) for m in source.getmembers()]
 

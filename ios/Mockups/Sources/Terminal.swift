@@ -17,11 +17,11 @@ private let dim = Color(white: 0.55)
 private let yellow = Color(red: 0.95, green: 0.8, blue: 0.4)
 
 private let screen: [[Run]] = [
-    [Run(text: "~/code/herdr-gpui ", color: cyan), Run(text: "mobile-app ", color: .purple), Run(text: "❯ ", color: green), Run(text: "just ci")],
+    [Run(text: "~/code/sheprd ", color: cyan), Run(text: "mobile-app ", color: .purple), Run(text: "❯ ", color: green), Run(text: "just ci")],
     [Run(text: "cargo fmt --all -- --check", color: dim)],
     [Run(text: "cargo clippy --workspace --all-targets --locked", color: dim)],
-    [Run(text: "    Checking ", color: green, bold: true), Run(text: "herdr-commands v0.42.0")],
-    [Run(text: "    Checking ", color: green, bold: true), Run(text: "herdr-gpui v0.42.0")],
+    [Run(text: "    Checking ", color: green, bold: true), Run(text: "sheprd-commands v0.42.0")],
+    [Run(text: "    Checking ", color: green, bold: true), Run(text: "sheprd-gpui v0.42.0")],
     [Run(text: "    Finished ", color: green, bold: true), Run(text: "`dev` profile in 41.82s")],
     [Run(text: "cargo nextest run --workspace --locked", color: dim)],
     [Run(text: "    Starting ", color: green, bold: true), Run(text: "2184 tests across 31 binaries")],
@@ -34,7 +34,7 @@ private let screen: [[Run]] = [
     [Run(text: " right: ", color: dim), Run(text: "Some(\"cmd-alt-=\")", color: green)],
     [Run(text: "     Summary ", color: red, bold: true), Run(text: "2184 run: 2183 passed, 1 failed")],
     [Run(text: "error", color: red, bold: true), Run(text: ": Recipe `test` failed with exit code 100")],
-    [Run(text: "~/code/herdr-gpui ", color: cyan), Run(text: "mobile-app ", color: .purple), Run(text: "❯ ", color: red), Run(text: "█", color: Color(white: 0.8))],
+    [Run(text: "~/code/sheprd ", color: cyan), Run(text: "mobile-app ", color: .purple), Run(text: "❯ ", color: red), Run(text: "█", color: Color(white: 0.8))],
 ]
 
 /// The pane's screen, fit to the phone's width.
@@ -88,7 +88,7 @@ private struct TerminalHeader: ToolbarContent {
         ToolbarItem(placement: .principal) {
             VStack(spacing: 0) {
                 Text("zsh — just ci").font(.headline)
-                Text("MacBook Pro · herdr-gpui").font(.caption).foregroundStyle(.secondary)
+                Text("MacBook Pro · sheprd").font(.caption).foregroundStyle(.secondary)
             }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
@@ -147,7 +147,7 @@ struct TerminalLine: View {
                     VStack(spacing: 8) {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
-                                ForEach(["just ci", "git status", "cargo nextest run -p herdr-gpui keymap", "git diff"], id: \.self) { command in
+                                ForEach(["just ci", "git status", "cargo nextest run -p sheprd-gpui keymap", "git diff"], id: \.self) { command in
                                     Text(command).font(.caption.monospaced())
                                         .padding(.horizontal, 10).padding(.vertical, 6)
                                         .glassEffect(.regular.interactive(), in: .capsule)
@@ -159,7 +159,7 @@ struct TerminalLine: View {
                         HStack(spacing: 8) {
                             HStack {
                                 Text("❯").foregroundStyle(.green)
-                                Text("cargo nextest run -p herdr-gpui equalize").font(.subheadline.monospaced())
+                                Text("cargo nextest run -p sheprd-gpui equalize").font(.subheadline.monospaced())
                                     .lineLimit(1)
                                 Spacer()
                             }

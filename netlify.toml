@@ -1,0 +1,43 @@
+# Plain static site; no package manager, framework, or build tool required.
+[build]
+  command = ""
+  publish = "site"
+
+# Scope the canonical redirect to www so deploy previews remain usable.
+[[redirects]]
+  from = "https://www.sheprd.org/*"
+  to = "https://sheprd.org/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "http://www.sheprd.org/*"
+  to = "https://sheprd.org/:splat"
+  status = 301
+  force = true
+
+# Netlify does not honor Cloudflare's .assetsignore. Force 404s for internal
+# documentation/checks and retired deployment paths, even if files exist.
+[[redirects]]
+  from = "/README.md"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/tests/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/worker/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/wrangler.jsonc"
+  to = "/404.html"
+  status = 404
+  force = true

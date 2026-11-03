@@ -16,7 +16,7 @@
       The manifest check alone, over Komac's OUTPUT_DIR.
 
 Komac carries the publisher, name, scope and descriptions forward from the
-previous version, so the first submission fixes them. IDENTIFIER and
+previous version; submit refreshes the visible name and project URLs. IDENTIFIER and
 PUBLISHER must never change: winget matches installed apps and upgrades by
 them. Pure standard library.
 """
@@ -35,10 +35,10 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 IDENTIFIER = "Penso.HerdrUI"
-# AppPublisher and AppId in herdr-gpui.iss; Inno's uninstall key appends _is1.
+# AppPublisher and AppId in sheprd.iss; Inno's uninstall key appends _is1.
 PUBLISHER = "Herdr UI"
 PRODUCT_CODE = "{7FA70894-4FC0-4923-BDCB-B05F7475610A}_is1"
-RELEASES = "https://github.com/penso/herdr-gpui/releases"
+RELEASES = "https://github.com/sheprd-labs/sheprd/releases"
 # winget's architecture for each release target; arm64 is listed when its
 # installer is part of the release.
 ARCHITECTURES = {"x86_64-pc-windows-msvc": "x64", "aarch64-pc-windows-msvc": "arm64"}
@@ -68,7 +68,7 @@ def installers(version, sums):
         digests[match[2]] = match[1]
     found = {}
     for target, architecture in ARCHITECTURES.items():
-        name = f"Herdr-{version}-{target}-setup.exe"
+        name = f"Sheprd-{version}-{target}-setup.exe"
         if name in digests:
             found[architecture] = (f"{RELEASES}/download/v{version}/{name}", digests[name])
         elif target == REQUIRED:
@@ -125,6 +125,8 @@ def check(version, sums, output):
     publishers += [fields["Publisher"] for fields in by_type.get("locale", []) if "Publisher" in fields]
     if set(publishers) != {PUBLISHER}:
         raise ValueError(f"Publisher changed to {publishers!r}")
+    if by_type["defaultLocale"][0].get("PackageName") != "Sheprd":
+        raise ValueError("PackageName must show Sheprd while retaining the deployed publisher")
     fields, entries = manifests[f"{IDENTIFIER}.installer.yaml"]
     found = {}
     for entry in entries:
@@ -190,6 +192,14 @@ def submit(version, sums, komac, output):
     common = [str(komac), "update", IDENTIFIER, "--version", version, "--urls", *urls,
               "--release-notes-url", f"{RELEASES}/tag/v{version}"]
     subprocess.run([*common, "--dry-run", "--output", str(output)], check=True, timeout=900)
+    # Komac carries the previous locale's display name forward. Update visible
+    # branding only; publisher, identifier and product code remain pinned below.
+    for manifest in output.rglob("*.yaml"):
+        text = manifest.read_text()
+        text = re.sub(r"^PackageName: .+$", "PackageName: Sheprd", text, flags=re.M)
+        text = text.replace("https://herdrui.dev", "https://sheprd.org")
+        text = text.replace("https://github.com/penso/herdr-gpui", "https://github.com/sheprd-labs/sheprd")
+        manifest.write_text(text)
     directory = check(version, sums, output)
     subprocess.run([str(komac), "submit", "--yes", str(directory)], check=True, timeout=900)
 
