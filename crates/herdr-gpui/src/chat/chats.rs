@@ -392,24 +392,47 @@ impl ChatPane {
             self.text_geometry.clear();
             self.text_drag = Default::default();
             self.widgets.clear();
-            self.list.reset(keys.len());
-            self.glide.reset(&self.list);
+            self.restart_list(&keys);
         } else {
             match list::splices(&self.list_keys, &keys) {
                 Some(splices) => {
+                    if self.list_keys.last() != keys.last() {
+                        self.glide.note_output();
+                    }
                     for Splice { range, count } in splices {
                         super::glide::splice_in_place(&self.list, range, count);
                     }
                 }
-                None => {
-                    self.list.reset(keys.len());
-                    self.glide.reset(&self.list);
-                }
+                None => self.restart_list(&keys),
             }
         }
         self.list_keys = keys;
         self.refresh_text();
         self.widgets.retain(&self.prepared);
+    }
+
+    /// Starts the list over for `keys`: at its end, unless the user left it
+    /// above the end and the entry they were reading is still there, as it
+    /// is when a reconnect sends the same transcript again.
+    fn restart_list(&mut self, keys: &[(EntryId, u64)]) {
+        let last = |keys: &[(EntryId, u64)]| keys.last().map(|(id, _)| *id);
+        let top = self.list.logical_scroll_top();
+        let place = self
+            .glide
+            .stopped()
+            .then(|| self.list_keys.get(top.item_ix))
+            .flatten()
+            .and_then(|(reading, _)| keys.iter().position(|(id, _)| id == reading));
+        self.list.reset(keys.len());
+        match place {
+            Some(item_ix) => {
+                self.list.scroll_to(gpui::ListOffset { item_ix, ..top });
+                if last(&self.list_keys) != last(keys) {
+                    self.glide.note_output();
+                }
+            }
+            None => self.glide.reset(&self.list),
+        }
     }
 
     /// Redraws one entry, such as a thought folding open.

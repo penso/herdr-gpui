@@ -50,11 +50,13 @@ fn scrolling_up_stops_following_until_back_at_the_end() {
     let step = glide.step(0., 100., 600., now).unwrap();
     // The user scrolled up.
     glide.scrolled.set(true);
+    settle(&glide.following, &glide.scrolled, 130. - step);
     assert_eq!(glide.step(step - 30., 100., 600., now), None);
     // New output does not pull the list down while the user reads.
     assert_eq!(glide.step(step - 30., 400., 600., now), None);
     // The user scrolled back to the end: it follows again.
     glide.scrolled.set(true);
+    settle(&glide.following, &glide.scrolled, 0.);
     assert_eq!(glide.step(400., 400., 600., now), None);
     assert!(glide.step(400., 450., 600., now).is_some());
 }

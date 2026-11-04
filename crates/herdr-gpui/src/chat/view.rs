@@ -9,6 +9,7 @@ mod copy;
 mod disclosure;
 mod embeds;
 mod entries;
+mod jump;
 mod layout;
 mod panels;
 mod rail;
@@ -431,12 +432,13 @@ impl HerdrWindow {
                                     .when_some(chat.text_focus.as_ref(), |view, focus| {
                                         view.track_focus(focus)
                                     })
-                                    .child(entries),
+                                    .child(entries)
+                                    .children(self.render_chat_jump(chat, cx)),
                             )
-                            .when(
-                                chat.selection.is_empty() && !chat.selection.is_selecting(),
-                                |view| view.child(chat.glide.watch(&chat.list)),
-                            )
+                            .child(chat.glide.watch(
+                                &chat.list,
+                                !chat.selection.is_empty() || chat.selection.is_selecting(),
+                            ))
                             .children(
                                 self.render_chat_working(chat, cx)
                                     .map(|content| self.chat_column(content)),

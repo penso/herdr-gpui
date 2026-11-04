@@ -30,6 +30,8 @@ chat-needs-input = Needs input
 chat-watching = { $count } watching
 chat-reconnecting = Reconnecting…
 chat-show-chat = Chat
+chat-jump-to-end = Scroll to the latest message
+chat-jump-waiting = New output below
 
 # The composer.
 chat-composer-placeholder = Message the agent — / for commands, Shift-Enter for a new line
