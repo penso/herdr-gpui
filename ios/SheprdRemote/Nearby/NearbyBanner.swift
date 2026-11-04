@@ -57,15 +57,14 @@ private struct NearbyCard: ViewModifier {
         let offer = shown ? window?.nearby : nil
         content
             .overlay(alignment: .bottom) {
-                if let offer {
+                if let offer, let window {
                     ZStack(alignment: .bottom) {
                         Color.black.opacity(0.25).ignoresSafeArea()
-                        ProximityCard(computer: offer) {
+                        ProximityCard(computer: offer, pairing: window.nearbyPairing) {
                             model.dismissedNearby.insert(offer.fingerprintPrefix)
-                            window?.nearby = nil
+                            window.nearby = nil
                         }
                         .id(offer.id)
-                        .environment(window)
                     }
                 }
             }
@@ -74,8 +73,7 @@ private struct NearbyCard: ViewModifier {
 }
 
 extension View {
-    /// Draws `window`'s proximity card here. Each window draws it in one
-    /// place only: two would each run their own pairing.
+    /// Draws `window`'s proximity card here, in one place per window.
     func nearbyCard(_ window: WindowState?, when shown: Bool = true) -> some View {
         modifier(NearbyCard(window: window, shown: shown))
     }

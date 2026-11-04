@@ -7,10 +7,9 @@ import UIKit
 /// no computers yet; after that, from `NearbyBanner`.
 struct ProximityCard: View {
     @Environment(AppModel.self) private var model
-    @Environment(WindowState.self) private var window: WindowState?
     let computer: NearbyComputer
+    let pairing: PairingModel
     let onClose: () -> Void
-    @State private var pairing = PairingModel()
 
     var body: some View {
         VStack(spacing: 16) {
@@ -66,20 +65,11 @@ struct ProximityCard: View {
         .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 44))
         .padding(10)
         .sensoryFeedback(.success, trigger: pairing.step) { _, step in if case .code = step { true } else { false } }
-        .onChange(of: exchanging) { _, exchanging in window?.exchanging = exchanging }
-        .onDisappear { window?.exchanging = false }
         .transition(.move(edge: .bottom).combined(with: .opacity))
         #if DEBUG
         // `-nearbyPair YES` presses Pair, for the simulator loop.
-        .task { if UserDefaults.standard.bool(forKey: "nearbyPair") { start() } }
+        .task { if UserDefaults.standard.bool(forKey: "nearbyPair"), pairing.step == .idle { start() } }
         #endif
-    }
-
-    private var exchanging: Bool {
-        switch pairing.step {
-        case .working, .code: true
-        case .idle, .paired, .failed: false
-        }
     }
 
     private var viaSymbol: String {
