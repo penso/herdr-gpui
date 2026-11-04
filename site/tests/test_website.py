@@ -80,6 +80,19 @@ class WebsiteTests(unittest.TestCase):
             with self.subTest(leftover=leftover):
                 self.assertNotIn(leftover, html)
 
+    def test_hidden_attribute_beats_author_display_rules(self):
+        for base in (WEBSITE, ROOT / "design/sheprd-website"):
+            with self.subTest(base=base.name):
+                css = (base / "assets/base.css").read_text()
+                self.assertIn("[hidden] { display: none !important; }", css)
+
+    def test_credential_copy_keeps_the_teleport_exception(self):
+        for base in (WEBSITE, ROOT / "design/sheprd-website"):
+            with self.subTest(base=base.name):
+                data = (base / "assets/features.js").read_text()
+                self.assertNotIn("never leave", data)
+                self.assertIn("Teleport can lend your GitHub CLI token", data)
+
 
 if __name__ == "__main__":
     unittest.main()

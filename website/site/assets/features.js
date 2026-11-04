@@ -27,7 +27,7 @@
     { id: "look", name: "Look & feel", blurb: "Themes, layouts, fonts and keyboard control." },
     { id: "extend", name: "Mods, automations & CLI", blurb: "Extend the app; let agents drive it." },
     { id: "phone", name: "Phone, tablet & watch", blurb: "Answer your agents away from the desk." },
-    { id: "trust", name: "Updates & trust", blurb: "Signed updates, local secrets, nothing uploaded." }
+    { id: "trust", name: "Updates & trust", blurb: "Signed updates, keychain secrets, logs that stay local." }
   ];
 
   // [area, name, description, status, where]
@@ -96,7 +96,7 @@
     ["phone", "Nearby pairing", "Pair a phone nearby over Bonjour or Bluetooth, no camera needed.", "experimental", "Bluetooth needs device testing"],
     ["phone", "Android app", "Android uses the web app today; a native app is not built.", "planned", ""],
     ["trust", "Signed in-app updates", "Ed25519-signed manifests, separate download and install approvals, Homebrew, APT, DNF and pacman aware.", "shipped", "Windows: when signed"],
-    ["trust", "Secrets stay local", "Keychain, Secret Service or Credential Manager; tokens never leave your computer.", "shipped", ""],
+    ["trust", "Secrets in your OS keychain", "Keychain, Secret Service or Credential Manager, or a private file if you opt in. Teleport can lend your GitHub CLI token to a destination that cannot reach GitHub, and its review says so first.", "shipped", ""],
     ["trust", "Logs and crash reports", "A local log window and redacted diagnostic bundles. Nothing is uploaded.", "shipped", ""],
     ["trust", "Verifiable releases", "Checksums, Sigstore signatures, build provenance and an SBOM on every release.", "shipped", ""]
   ];

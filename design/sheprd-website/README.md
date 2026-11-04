@@ -77,7 +77,7 @@ Recommended default: the first one. It is concrete, true today, and leaves
 6. **Native and cross-platform**: Rust + GPUI on macOS, Linux and Windows,
    x86_64 and ARM64.
 7. **Open and verifiable**: Apache-2.0, signed updates, Sigstore, SBOM,
-   secrets in the OS keychain, nothing uploaded.
+   secrets in the OS keychain, logs and crash reports kept local.
 
 Supporting depth: 26 Rust crates, ~380k lines of production Rust, 8,000+
 tests (method in the inventory). Use as a footnote, never as the pitch.

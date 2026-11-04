@@ -198,7 +198,7 @@ Rust and 8,000+ tests" — always next to what those crates *do*.
 | Security section | Private vulnerability reports (titles and metadata only) and Dependabot alerts across your github.com repositories, most severe first. | CLI:71, 150-151, FTL `security.ftl` | Shipped (needs GitHub App security permissions, GR:4064-4066). Not described in GR |
 | GitHub sign-in | Device flow through the "Herdr GPUI" GitHub App, a GitHub CLI token, or a PAT. Extra accounts (for example EMU) and a separate account per device. Tokens stay on this computer. | GR:4003-4128 | Shipped |
 | GitLab sign-in | OAuth device code or a pasted PAT. Reads tokens from `.envrc`, `glab`, and self-managed instances. | GR:2491-2513 | Shipped |
-| Credentials store | macOS Keychain (signed builds), Linux Secret Service, Windows Credential Manager, or an opt-in private `0600` file. | GR:4069-4112, 4890-4912, AGENTS.md (`herdr-credentials`) | Shipped (plaintext file is opt-in on Linux, default on macOS dev builds) |
+| Credentials store | macOS Keychain (signed builds), Linux Secret Service, Windows Credential Manager, or an opt-in private `0600` file. | GR:4069-4112, 4890-4912, AGENTS.md (`herdr-credentials`) | Shipped (plaintext file is opt-in on Linux, default on macOS dev builds). Teleport can copy the `gh` token to a destination that cannot reach GitHub, stored in `.git/herdr/github-token` there (GR:2218-2228) |
 
 ---
 
