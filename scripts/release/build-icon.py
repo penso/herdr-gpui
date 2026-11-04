@@ -40,13 +40,13 @@ def main():
     # macOS: the flattened .icns for CFBundleIconFile, then the Icon Composer
     # asset catalog for CFBundleIconName, which macOS 26 and later prefer.
     if sys.argv[1] == "macos":
-        name = "Herdr-worktree" if worktree == b"1" else "Herdr"
+        name = "Sheprd-worktree" if worktree == b"1" else "Sheprd"
         print(icons / f"{name}.icns", icons / f"{name}.car", sep="\n")
     # Linux: both palettes use scalable artwork with a circular silhouette.
     # Desktop shells need not supply their own shape mask or PNG fallback.
     else:
-        name = "herdr-linux-worktree.svg" if worktree == b"1" else "herdr-linux.svg"
-        print(icons / name, "share/icons/hicolor/scalable/apps/herdr-gpui.svg", sep="\n")
+        name = "sheprd-linux-worktree.svg" if worktree == b"1" else "sheprd-linux.svg"
+        print(icons / name, "share/icons/hicolor/scalable/apps/sheprd.svg", sep="\n")
 
 
 if __name__ == "__main__":

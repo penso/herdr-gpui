@@ -71,7 +71,7 @@ struct LockStepStack: View {
     var body: some View {
         Wallpaper {
             VStack(alignment: .leading, spacing: 10) {
-                ActivityHeader(agent: .claude, title: "Equalize splits command", subtitle: "MacBook Pro · herdr-gpui",
+                ActivityHeader(agent: .claude, title: "Equalize splits command", subtitle: "MacBook Pro · sheprd",
                                trailing: "4:12 · $0.84", amber: false)
                 VStack(spacing: 4) {
                     StackCard(text: "Edit commands.rs", symbol: "pencil").scaleEffect(0.9).opacity(0.35)

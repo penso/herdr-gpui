@@ -133,7 +133,7 @@ def capture(args, case, theme, width, root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=Path("target/debug/herdr-gpui"))
+    parser.add_argument("--binary", type=Path, default=Path("target/debug/sheprd"))
     parser.add_argument("--xvfb", type=Path, default=Path("/usr/bin/Xvfb"))
     parser.add_argument("--vulkan-library", type=Path)
     parser.add_argument("--output", type=Path, default=Path("target/rich-chat-native"))

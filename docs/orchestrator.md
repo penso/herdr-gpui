@@ -1,6 +1,6 @@
 # Orchestrator
 
-The orchestrator (`crates/herdr-gpui/src/orchestrator/`) lists a repository's
+The orchestrator (`crates/sheprd-gpui/src/orchestrator/`) lists a repository's
 issues, pull requests, and the agent runs dispatched for them in the activity
 bar's Pull requests and Issues sections, and dispatches new ones through the
 Herdr CLI. User-facing behavior is in the crate README's "Orchestrator"
@@ -20,7 +20,8 @@ which added each open pull request's last read review and checks):
   is copied in, if there is one, so its items and runs come along. Nothing
   is written back to it afterwards.
 - Runs keep their `runs.owner` (`agent-launcher` or `herdr-gpui`); only
-  herdr-gpui's own runs are stopped, messaged, or removed.
+  Sheprd's own runs are stopped, messaged, or removed. The persisted owner token
+  stays `herdr-gpui` across the rename.
 - A source's issues are replaced only with a complete listing. A capped
   listing, or one made while the schema is newer than this build knows, is
   shown and not written. A newer schema opens read-only, with a banner.
@@ -41,9 +42,9 @@ agent-launcher wrote it and check that migration keeps its rows.
 | --- | --- |
 | `model.rs`, `location.rs`, `store.rs` | Records in the database's shapes, its path, and SQLite access. |
 | `repo.rs` | Finding a checkout's repository, main checkout, Beads, and remote on its host. |
-| `github.rs`, `gitlab.rs`, `beads.rs` | The sources: a full listing each. GitHub reads only what changed since the last sync, with a full listing again every 30 minutes; GitLab lists its open issues and merge requests in full on every sync. |
-| `review.rs` | Each open pull request's review decision, review requests, and checks, read after every GitHub sync and kept in the database, so a restart shows the last ones until the first sync. |
-| `service.rs` | The worker thread per open view: sync, reload, and the action queue. |
+| `github.rs`, `gitlab.rs`, `beads.rs` | The sources: a full listing each. GitHub reads only what changed since the last sync, both listings' first pages in one request, with a full listing again every 30 minutes; a listing larger than 2,000 open items is shown, not stored, and continues from memory the same way, staying capped until a full listing reads it all. GitLab lists its open issues and merge requests in full on every sync. |
+| `review.rs` | Each open pull request's review decision, review requests, and checks, kept in the database, so a restart shows the last ones until the first sync. A GitHub sync reads them again only when an open pull request's head or update time moved, a check is still running, five minutes passed, or the user pressed Refresh. |
+| `service.rs` | The worker thread per open view: sync, reload, and the action queue. Sources sync every minute while the Pull requests or Issues section is shown and every ten minutes otherwise (`service/schedule.rs`); a source failing again waits twice as long each time, up to 30 minutes unless the provider asks for longer. |
 | `actions.rs` | Dispatch, stop, send, remove, delete: each on its own thread. |
 | `prompt.rs` | Prompt profiles, agent-launcher's built-in and review prompts. |
 | `naming.rs` | agent-launcher's branch names, and runs found from branches. |
@@ -176,7 +177,7 @@ save succeeds, and saving or forgetting one makes every view sync again.
 (`gitlab/oauth.rs`), as GitHub's sign-in does: GitLab issues a code, the page
 shows it with **Open GitLab** and **Copy code**, and polls `/oauth/token` on
 timers until the user approves it there. The application is public, so only
-its ID is sent: gitlab.com uses Herdr UI's own, and a self-managed instance
+its ID is sent: gitlab.com uses Sheprd's own, and a self-managed instance
 gets Connect once `[gitlab] applications` names one for it. The approval page
 must be an HTTPS page on the instance, or nothing opens. The granted pair is
 checked with `/api/v4/user`, then kept like a pasted token. GitLab's access

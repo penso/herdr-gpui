@@ -1,13 +1,13 @@
 ---
 name: gpui-mockup
-description: Explore visual directions for a herdr-gpui UI element as real GPUI code. Write 3–4 variants in one Rust file, show them side by side in a native mockup window in the user's own theme and fonts, capture the window to check your work, and iterate on the picks and notes the user sends back. Use instead of the HTML `mockup` skill when the design is for this app, so the variant the user picks is the code that ships.
+description: Explore visual directions for a Sheprd UI element as real GPUI code. Write 3–4 variants in one Rust file, show them side by side in a native mockup window in the user's own theme and fonts, capture the window to check your work, and iterate on the picks and notes the user sends back. Use instead of the HTML `mockup` skill when the design is for this app, so the variant the user picks is the code that ships.
 disable-model-invocation: false
-argument-hint: <what to mock up: a row, tab, popup, panel, or screen of herdr-gpui>
+argument-hint: <what to mock up: a row, tab, popup, panel, or screen of Sheprd>
 ---
 
 # GPUI mockup
 
-Build several variants of a herdr-gpui UI element as GPUI code, compile them
+Build several variants of a Sheprd UI element as GPUI code, compile them
 into the app's dev-only `--mockup` window, check a capture yourself, and
 iterate with the user until they settle on one. Then move it into the real
 module.
@@ -31,7 +31,7 @@ style details.
    dir=$(mktemp -d /tmp/gpui-mockup.XXXXXX)
    ```
    Write `$dir/mockup.rs`, starting from
-   `crates/herdr-gpui/src/mockup/demo.rs`, the built-in example. The rules are
+   `crates/sheprd-gpui/src/mockup/demo.rs`, the built-in example. The rules are
    under [Writing variants](#writing-variants).
 4. **Build and open it** in the background, keeping the log:
    ```sh
@@ -61,8 +61,8 @@ style details.
      ones) and frame width (Narrow, Design, Wide). Keys `1`–`9` show one
      variant and `0` shows all. `Esc` leaves a note field.
 
-   Where the notes go: in a Herdr pane (`HERDR_PANE_ID` is set) with Herdr
-   GPUI running, Send hands them to Herdr UI, which types them into your
+   Where the notes go: in a Herdr pane (`HERDR_PANE_ID` is set) with
+   Sheprd running, Send hands them to Sheprd, which types them into your
    pane as your next prompt once you are idle, the way browser page notes
    arrive. If no agent is detected, the app keeps them for `browser feedback`
    and reports that. If the app cannot accept the send (including an older
@@ -81,7 +81,7 @@ style details.
    ```
    It prints the notes and exits 0, or exits 4 if none arrived. With `0`
    seconds it only checks. In a Herdr pane it waits through
-   `herdr-gpui browser feedback --wait`, which takes the notes instead of
+   `sheprd browser feedback --wait`, which takes the notes instead of
    letting them be typed into your pane, so they arrive once. It also watches
    the fallback file while waiting, including with an older running app.
    Each file send is consumed: the file is moved to `feedback.md.N`, so the next
@@ -182,5 +182,5 @@ Once the user settles on a direction:
   the variants instead, or use the HTML `mockup` skill.
 - `--capture` uses GPUI's renderer readback, which works on macOS. Elsewhere it
   reports `capture failed`.
-- `just mockup` writes `target/debug/herdr-gpui` with the `mockup` feature
+- `just mockup` writes `target/debug/sheprd` with the `mockup` feature
   enabled. `just run-debug` and tests rebuild their own binaries.

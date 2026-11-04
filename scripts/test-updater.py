@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test the real updater without compiling GPUI (Python 3.11+, Rust via rustup).
 
-The updater is its own crate, `herdr-updater`, so this builds and tests only
+The updater is its own crate, `sheprd-updater`, so this builds and tests only
 that crate and its dependencies, from the workspace lock with --locked, and
 checks that GPUI is not among them. Its `harness` example is the fixture
 executable: the real update helper plus commands to sign fixtures and report a
@@ -35,7 +35,7 @@ import tomllib
 # Public half of the deliberately public [42; 32] unit-test signing seed.
 PUBLIC_KEY = "197f6b23e16c8532c6abc838facd5ea789be0c76b2920334039bfa8b3d368d61"
 VERSION = "20260920.1"
-PACKAGE = "herdr-updater"
+PACKAGE = "sheprd-updater"
 
 
 def linux_helper_tests(binary, parent):
@@ -55,7 +55,7 @@ def linux_helper_tests(binary, parent):
             stage = Path(tempfile.mkdtemp(prefix=".herdr-update-", dir=home))
             marker = home / "restarted.json"
             environment = {"HOME": str(home), "PATH": "/usr/bin:/bin", "LC_ALL": "C"}
-            payload_name = f"herdr-gpui-20260920.2-{target}"
+            payload_name = f"sheprd-20260920.2-{target}"
             buffer = io.BytesIO()
             with tarfile.open(fileobj=buffer, mode="w", format=tarfile.USTAR_FORMAT) as archive:
                 entry = tarfile.TarInfo(payload_name)
@@ -154,7 +154,7 @@ def main():
         parser.error("Linux helper tests require a non-root user; do not run with sudo")
     root = Path(__file__).resolve().parents[1]
     channel = tomllib.loads((root / "rust-toolchain.toml").read_text())["toolchain"]["channel"]
-    with tempfile.TemporaryDirectory(prefix="herdr-updater-tests-") as directory:
+    with tempfile.TemporaryDirectory(prefix="sheprd-updater-tests-") as directory:
         temporary = Path(directory).resolve()
         environment = dict(os.environ)
         environment.pop("RUSTFLAGS", None)
@@ -174,7 +174,7 @@ def main():
         tree = run(["tree", "-p", PACKAGE, "--edges", "normal,build", "--prefix", "none",
                     "--target", "all"], capture_output=True, text=True).stdout
         names = {line.split()[0] for line in tree.splitlines() if line.strip()}
-        assert not any(name.startswith("gpui") for name in names), "herdr-updater depends on GPUI"
+        assert not any(name.startswith("gpui") for name in names), "sheprd-updater depends on GPUI"
         run(["build", "-p", PACKAGE, "--example", "harness"])
         binary = temporary / "target/debug/examples/harness"
         identity = json.loads(subprocess.run([binary, "--harness-identity"], capture_output=True,

@@ -1,13 +1,13 @@
 # macOS window-close crash (#290)
 
-Investigation as of 2026-10-26, against Herdr UI `d4a48831`.
+Investigation as of 2026-10-26, against Sheprd (then Herdr UI) `d4a48831`.
 **Unresolved in this checkout.** The dependency still contains the faulty
 teardown. The upstream fix and its tests have been reviewed as source, but
-neither the crash nor a fixed Herdr build has been run on macOS here.
+neither the crash nor a fixed Sheprd build has been run on macOS here.
 
 ## Evidence and root cause
 
-[Issue #290](https://github.com/penso/herdr-gpui/issues/290) and all four comments
+[Issue #290](https://github.com/sheprd-labs/sheprd/issues/290) and all four comments
 report a window-close crash on Intel and Apple Silicon Touch Bar Macs. The
 Settings crash reaches AppKit's `_NSTouchBarFinderObservation invalidate`,
 which tries to remove a `nextResponder` key-value observer that is no longer
@@ -31,7 +31,7 @@ There is now independent upstream evidence:
   published October 25, contains that fix.
 
 This establishes a dependency defect matching the reported exception, not a
-local reproduction proving that it explains every Herdr close failure.
+local reproduction proving that it explains every Sheprd close failure.
 
 ### What this checkout actually runs
 
@@ -46,7 +46,7 @@ comment. Inspection of the published 0.26.3 source still finds the unconditional
 `object_setClass(view, prev_class)` in `SubclassingAdapter::drop`. The downloaded
 0.26.3 and GPUI 0.3.6 archives' SHA-256 hashes match `Cargo.lock`.
 
-Herdr uses `gpui_platform::application()` in `crates/herdr-gpui/src/app.rs`.
+Sheprd uses `gpui_platform::application()` in `crates/sheprd-gpui/src/app.rs`.
 GPUI installs `SubclassingAdapter::for_window` on the native content view.
 `MacWindow::drop` explicitly drops that adapter **before** scheduling the
 native window's `close()` and `autorelease()`. These are the same dependency
@@ -54,18 +54,18 @@ operations implicated by the upstream reproducer.
 
 The application close paths converge on that backend:
 
-- `crates/herdr-gpui/src/settings_window.rs`: `on_window_should_close` calls
+- `crates/sheprd-gpui/src/settings_window.rs`: `on_window_should_close` calls
   `should_close`; pending edits finish before `finish_close` removes the
   window. Keyboard close goes through `close` and the same save policy.
-- `crates/herdr-gpui/src/titlebar.rs` and `window/commands.rs`: main-window
+- `crates/sheprd-gpui/src/titlebar.rs` and `window/commands.rs`: main-window
   close calls `window.remove_window()`.
-- `crates/herdr-gpui/src/app.rs`: Quit calls `cx.quit()`; closing the last
+- `crates/sheprd-gpui/src/app.rs`: Quit calls `cx.quit()`; closing the last
   window also requests quit. A hidden window would still count as open.
 
-The related merged Herdr PRs [#323](https://github.com/penso/herdr-gpui/pull/323)
-(Settings save/reload) and [#516](https://github.com/penso/herdr-gpui/pull/516)
+The related merged Sheprd PRs [#323](https://github.com/sheprd-labs/sheprd/pull/323)
+(Settings save/reload) and [#516](https://github.com/sheprd-labs/sheprd/pull/516)
 (Close Window command) do not repair this dependency teardown. Searches of
-open and merged Herdr PRs found no fix for this signature.
+open and merged project PRs found no fix for this signature.
 
 ## Adoption blocker
 
@@ -116,12 +116,12 @@ rejecting a view observed before adapter installation. Carry these tests with
 any compatible backport; a test of a Rust-only close-state model cannot catch
 the Objective-C failure.
 
-Herdr already has headless close/save coverage, useful when adopting a fix:
+Sheprd already has headless close/save coverage, useful when adopting a fix:
 
 ```sh
-cargo test --locked -p herdr-gpui settings_window::tests::window_lifecycle
-cargo test --locked -p herdr-gpui settings_window::tests::quit_saves
-cargo test --locked -p herdr-gpui window::tests::close_window
+cargo test --locked -p sheprd-gpui settings_window::tests::window_lifecycle
+cargo test --locked -p sheprd-gpui settings_window::tests::quit_saves
+cargo test --locked -p sheprd-gpui window::tests::close_window
 ```
 
 These use GPUI's test platform, not AppKit, and cannot establish that #290 is
@@ -150,6 +150,6 @@ are active. Run:
 
 Inspect macOS's `~/Library/Logs/DiagnosticReports` and the app's unified log
 after a failed run. This is a foreign Objective-C exception, so the absence of
-a Herdr Rust panic report does not establish a clean exit. Preserve the
+a Sheprd Rust panic report does not establish a clean exit. Preserve the
 exception reason and relevant frames; redact user/device identifiers before
 sharing reports.

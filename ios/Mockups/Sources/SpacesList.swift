@@ -323,11 +323,11 @@ struct SpacesFolded: View {
                     .listRowBackground(Color.clear)
                 }
                 Section("Needs you") {
-                    NavigationLink(value: 0) { spaceLine(SpaceSample.detail, repo: "herdr-gpui") }
+                    NavigationLink(value: 0) { spaceLine(SpaceSample.detail, repo: "sheprd") }
                 }
                 Section("m4max") {
                     ForEach(SpaceSample.local.repos) { repo in
-                        DisclosureGroup(isExpanded: .constant(repo.name == "herdr-gpui")) {
+                        DisclosureGroup(isExpanded: .constant(repo.name == "sheprd")) {
                             NavigationLink(value: 0) { spaceLine(repo.main, repo: nil) }
                             ForEach(repo.worktrees) { space in
                                 NavigationLink(value: 0) { spaceLine(space, repo: nil) }
