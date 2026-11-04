@@ -181,6 +181,36 @@ The phone in 07 and 11 is a hand-drawn illustration, not an iOS screenshot.
 A real capture from the app's `-sample YES` mode should replace it before
 launch.
 
+## herdrui.dev rename page
+
+`herdrui-rename/index.html` is a mockup of the notice for the old domain: one
+self-contained file that says Herdr UI is now Sheprd, then opens the same path
+on sheprd.org after five seconds. Visitors can stop it, it still moves on
+without JavaScript, and away from herdrui.dev it stops at zero for review.
+
+Before it replaces the `herdrui-site` Cloudflare Worker:
+
+- sheprd.org must be live, or every visitor is sent to a parked domain.
+- `/install.sh`, `/install.ps1` and `/llms.txt` must never return this page.
+  Keep serving them, or answer with a permanent redirect, so `curl | sh` and
+  `irm | iex` from old docs keep working.
+- `site/README.md` plans a permanent redirect instead. This page trades that
+  for a visible notice, so search engines get a weaker signal; it sets
+  `noindex` and a canonical link to compensate.
+
+## Launch order
+
+1. Publish a Sheprd-named release. `site/install.sh` and `site/install.ps1` on
+   main look for `Sheprd-*` assets, and the latest release, `v20261103.1`, only
+   has `Herdr-*` assets, so they fail until then.
+2. Promote The Guide into `site/`. Merging `design/` publishes nothing, because
+   Netlify serves `site/`, and `site/tests/test_site.py` must keep passing.
+3. In Netlify, connect `sheprd-labs/sheprd`, then remove `build.ignore` from
+   `netlify.toml` and update `site/tests/test_netlify_pause.py`, which requires it.
+4. Add `sheprd.org` and `www.sheprd.org` in Netlify and point the Namecheap DNS
+   at it. The domain still resolves to Namecheap's parking page.
+5. Replace herdrui.dev with the rename page last.
+
 ## Recommendation
 
 Written after building and checking all ten:
