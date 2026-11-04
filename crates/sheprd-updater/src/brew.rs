@@ -33,6 +33,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// `herdr-gpui` from `penso/tap`, kept for existing installs, and `sheprd` from
+/// `sheprd-labs/tap`. A bundle belongs to whichever cask's Caskroom links to it.
+const TOKENS: &[&str] = &["herdr-gpui", "sheprd"];
+#[cfg(test)]
 const TOKEN: &str = "herdr-gpui";
 #[cfg(test)]
 const BUNDLE: &str = "Herdr.app";
@@ -53,6 +57,7 @@ pub(super) struct Cask {
     prefix: PathBuf,
     bundle: PathBuf,
     home: OsString,
+    token: &'static str,
 }
 
 /// Executables and their directories must not be writable by anyone but their
@@ -90,15 +95,19 @@ fn locate(
 ) -> Option<Cask> {
     for prefix in prefixes {
         let brew = prefix.join("bin/brew");
-        let owns = trusted(&prefix, uid, true).is_ok()
-            && trusted(&brew, uid, false).is_ok_and(|meta| meta.mode() & 0o111 != 0)
-            && owned_bundle(&prefix, bundle);
-        if owns {
+        let safe = trusted(&prefix, uid, true).is_ok()
+            && trusted(&brew, uid, false).is_ok_and(|meta| meta.mode() & 0o111 != 0);
+        let owner = TOKENS
+            .iter()
+            .copied()
+            .find(|token| safe && owned_bundle(&prefix, token, bundle));
+        if let Some(token) = owner {
             return Some(Cask {
                 brew,
                 prefix,
                 bundle: bundle.to_owned(),
                 home,
+                token,
             });
         }
     }
@@ -107,8 +116,8 @@ fn locate(
 
 /// Homebrew moves an `app` artifact to its target and leaves a symlink to it in
 /// the Caskroom. That link, not a version string, is what proves ownership.
-fn owned_bundle(prefix: &Path, bundle: &Path) -> bool {
-    let caskroom = prefix.join("Caskroom").join(TOKEN);
+fn owned_bundle(prefix: &Path, token: &str, bundle: &Path) -> bool {
+    let caskroom = prefix.join("Caskroom").join(token);
     let Ok(entries) = fs::read_dir(&caskroom) else {
         return false;
     };
@@ -283,14 +292,14 @@ enum Ended {
 /// The version Homebrew currently records as installed for the cask.
 fn installed(cask: &Cask, timeout: Duration) -> Result<String> {
     let mut command = command(cask);
-    command.args(["list", "--cask", "--versions", TOKEN]);
+    command.args(["list", "--cask", "--versions", cask.token]);
     let lines = run(command, timeout.min(QUERY), None, |_| ())?;
     lines
         .iter()
         .rev()
         .find_map(|line| {
             let (name, version) = line.split_once(char::is_whitespace)?;
-            (name == TOKEN)
+            (name == cask.token)
                 .then(|| version.split_whitespace().next_back())
                 .flatten()
                 .map(str::to_owned)
@@ -333,7 +342,7 @@ pub(super) fn upgrade(
         if refreshed {
             upgrade.env("HOMEBREW_NO_AUTO_UPDATE", "1");
         }
-        upgrade.args(["upgrade", "--cask", TOKEN]);
+        upgrade.args(["upgrade", "--cask", cask.token]);
         run(upgrade, remaining(), None, &mut |line| {
             progress(Progress::Homebrew(line));
         })?;

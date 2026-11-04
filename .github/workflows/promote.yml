@@ -169,6 +169,7 @@ jobs:
             --pattern "Sheprd-$VERSION-universal-apple-darwin.dmg" --pattern SHA256SUMS
           checksum=$(python3 scripts/release/artifact-manifest.py dmg "$VERSION" final)
           bash scripts/release/render-cask.sh "$VERSION" "$checksum" > rendered-cask.rb
+          bash scripts/release/render-cask.sh "$VERSION" "$checksum" sheprd > rendered-sheprd-cask.rb
       - name: Commit only the tap cask using its dedicated deploy key
         env:
           HOMEBREW_TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
@@ -176,7 +177,7 @@ jobs:
       - name: Commit only the Sheprd tap cask using its dedicated deploy key
         env:
           HOMEBREW_TAP_SSH_KEY: ${{ secrets.SHEPRD_TAP_SSH_KEY }}
-        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-cask.rb sheprd-labs/homebrew-tap
+        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-sheprd-cask.rb sheprd-labs/homebrew-tap
 
   # Keep these steps identical in release.yml and promote.yml. Betas never
   # reach winget: promote.yml submits one when it is promoted. Neither do

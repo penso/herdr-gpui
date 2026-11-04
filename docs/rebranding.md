@@ -23,7 +23,7 @@ Existing screenshots remain historical captures, not evidence of refreshed UI.
 | --- | --- |
 | Update trust | Same Ed25519 key; manifest/signature filenames, schemas 1–4, target/count/size bounds and platform verification remain unchanged. Both `penso/herdr-gpui` and `sheprd-labs/sheprd` are accepted repository identities. |
 | macOS | Bundle ID `so.pen.herdr-gpui`, installed signing team/Developer ID requirement and in-place update path. A new `Sheprd.app` payload can replace `/Applications/Herdr.app` without moving that directory. |
-| Homebrew | Stable token `herdr-gpui`, published to `sheprd-labs/tap` for new installs and to `penso/tap` for existing ones, which Homebrew will not move automatically; visible name Sheprd; `app "Sheprd.app", target: "Herdr.app"`. No cask-token or destination migration. |
+| Homebrew | New installs use `sheprd` in `sheprd-labs/tap`, installing `Sheprd.app`. Existing installs keep token `herdr-gpui` in `penso/tap`, which Homebrew will not move automatically; visible name Sheprd; `app "Sheprd.app", target: "Herdr.app"`. No cask-token or destination migration. |
 | Linux packages | Internal owner/name `herdr-gpui`, version `VERSION-1`, and a real root-owned `/usr/bin/herdr-gpui` for the existing privileged verifier/restart contract, alongside canonical `sheprd`. |
 | Linux standalone | The manual archive links `bin/herdr-gpui` to `sheprd`, so replacing the resolved executable updates both command names. Distro packages materialize the regular legacy executable required above. |
 | Nix | Existing `herdr-gpui` package/overlay attributes and legacy main/helper commands remain aliases. The main command alias targets the final wrapped `sheprd` executable. |

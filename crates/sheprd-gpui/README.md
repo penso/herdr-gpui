@@ -146,7 +146,7 @@ Updates...**. Background offers change the status version label without taking
 focus. **Download** and **Install Update** are separate approvals; closing the
 panel does not cancel work. Explicit **Cancel** requests cancellation.
 The panel shows archive download progress and an animated bar for work without a
-known percentage. Homebrew-managed installs use `brew upgrade --cask herdr-gpui`;
+known percentage. Homebrew-managed installs use `brew upgrade --cask` on their cask;
 if the installed version is behind the offer, `brew update` refreshes metadata
 before one retry. Linux distribution installs download the signed package matching
 the owning package manager and invoke APT, DNF, or pacman through PolicyKit.

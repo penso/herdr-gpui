@@ -24,7 +24,7 @@ class HomebrewTests(unittest.TestCase):
         }
         successes = ("publish", "legacy-tap", "unchanged", "upgrade-counter", "upgrade-date",
                      "upgrade-old-date", "upgrade-numeric", "legacy-semver")
-        for case in ("publish", "legacy-tap", "unknown-tap", "unchanged", "missing-key", "bad-version", "symlink",
+        for case in ("publish", "legacy-tap", "unknown-tap", "wrong-cask", "unchanged", "missing-key", "bad-version", "symlink",
                      "curl", "clone", "push", "bad-meta", "directory", "diff-error",
                      "version-mismatch", "missing-cask", "changed-checksum", "changed-content",
                      "missing-version", "duplicate-version", "ruby-version", *existing_versions):
@@ -35,6 +35,8 @@ class HomebrewTests(unittest.TestCase):
                 temporary = work / "temporary"
                 temporary.mkdir()
                 tap = "penso/homebrew-tap" if case == "legacy-tap" else "sheprd-labs/homebrew-tap"
+                token = "herdr-gpui" if case == "legacy-tap" else "sheprd"
+                path = "Casks/" + token + ".rb"
                 env = {"PATH": str(tools) + os.pathsep + os.environ["PATH"], "TAP": tap,
                        "HOME": directory, "GIT_CONFIG_NOSYSTEM": "1",
                        "RUNNER_TEMP": str(temporary), "CASE": case,
@@ -51,7 +53,7 @@ class HomebrewTests(unittest.TestCase):
                 git("init", "--initial-branch=trunk", seed)
                 (seed / "README.md").write_text("Preserve this file\n")
                 cask = work / "rendered.rb"
-                cask.write_text('cask "herdr-gpui" do\n  version "20260920.3"\n  sha256 "' + "a" * 64 + '"\nend\n')
+                cask.write_text('cask "' + token + '" do\n  version "20260920.3"\n  sha256 "' + "a" * 64 + '"\nend\n')
                 if case in existing_versions or case in (
                         "unchanged", "changed-checksum", "changed-content", "missing-version",
                         "duplicate-version", "ruby-version"):
@@ -69,15 +71,17 @@ class HomebrewTests(unittest.TestCase):
                         content += '  version "20260920.3"\n'
                     elif case == "ruby-version":
                         content = content.replace('"20260920.3"', '`touch "' + str(work / "executed") + '"`')
-                    (seed / "Casks/herdr-gpui.rb").write_text(content)
+                    (seed / path).write_text(content)
                 version = "20260920.10" if case == "upgrade-numeric" else "20260920.3"
                 if case == "upgrade-numeric":
                     cask.write_text(cask.read_text().replace('"20260920.3"', '"20260920.10"'))
                 if case == "symlink":
                     (seed / "Casks").symlink_to(".")
                 if case == "directory":
-                    (seed / "Casks/herdr-gpui.rb").mkdir(parents=True)
-                    (seed / "Casks/herdr-gpui.rb/keep").touch()
+                    (seed / path).mkdir(parents=True)
+                    (seed / path / "keep").touch()
+                if case == "wrong-cask":
+                    cask.write_text(cask.read_text().replace('"sheprd"', '"herdr-gpui"'))
                 if case == "version-mismatch":
                     cask.write_text('  version "20260920.9"\n')
                 if case == "missing-cask":
@@ -133,6 +137,8 @@ sys.exit(subprocess.call([os.environ["REAL_GIT"], *args]))
                 self.assertEqual(result.returncode == 0, case in successes, result.stderr)
                 if case in ("old-job-rerun", "lower-date", "lower-counter", "large-component"):
                     self.assertIn("Refusing Homebrew downgrade", result.stderr)
+                if case == "wrong-cask":
+                    self.assertIn("does not belong to this tap", result.stderr)
                 if case == "unknown-tap":
                     self.assertIn("Unknown Homebrew tap repository", result.stderr)
                 if case == "legacy-semver":
@@ -148,6 +154,6 @@ sys.exit(subprocess.call([os.environ["REAL_GIT"], *args]))
                 self.assertEqual(before == after, case not in successes or case == "unchanged")
                 if case in successes and case != "unchanged":
                     self.assertEqual(git("--git-dir", remote, "diff-tree", "--no-commit-id",
-                                         "--name-only", "-r", "HEAD").strip(), "Casks/herdr-gpui.rb")
+                                         "--name-only", "-r", "HEAD").strip(), path)
                     self.assertEqual(git("--git-dir", remote, "log", "-1", "--format=%s").strip(),
-                                     "chore: release herdr-gpui " + version)
+                                     "chore: release " + token + " " + version)

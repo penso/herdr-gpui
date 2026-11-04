@@ -443,7 +443,7 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
   <section class="get" id="get" aria-labelledby="get-h">
     <div class="wrap">
       <h2 id="get-h">Get Sheprd.</h2>
-      <p class="get-lede">Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
+      <p class="get-lede">Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Existing Homebrew installs from <code>penso/tap</code> keep upgrading there.</p>
       <div class="get-tabs" role="tablist" aria-label="Choose your platform">
       <button role="tab" id="t-mac" aria-controls="p-mac" aria-selected="true">macOS</button>
       <button role="tab" id="t-linux" aria-controls="p-linux" aria-selected="false" tabindex="-1">Linux</button>
@@ -451,7 +451,7 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
       <button role="tab" id="t-nix" aria-controls="p-nix" aria-selected="false" tabindex="-1">Nix</button>
       <button role="tab" id="t-phone" aria-controls="p-phone" aria-selected="false" tabindex="-1">Phone</button>
     </div>
-      <div class="get-panel" role="tabpanel" id="p-mac" aria-labelledby="t-mac"><pre><code>brew install sheprd-labs/tap/herdr-gpui</code></pre><p>macOS 14.2 or newer, universal app. Current channel.</p></div>
+      <div class="get-panel" role="tabpanel" id="p-mac" aria-labelledby="t-mac"><pre><code>brew install sheprd-labs/tap/sheprd</code></pre><p>macOS 14.2 or newer, universal app. Current channel.</p></div>
     <div class="get-panel" role="tabpanel" id="p-linux" aria-labelledby="t-linux" hidden><pre><code>curl -fsSL https://sheprd.org/install.sh | sh</code></pre><p>x86_64 and ARM64; APT, DNF or pacman. Current channel.</p></div>
     <div class="get-panel" role="tabpanel" id="p-win" aria-labelledby="t-win" hidden><pre><code>irm https://sheprd.org/install.ps1 | iex</code></pre><p>x86_64 and ARM64, per-user, no admin rights. Current channel.</p></div>
     <div class="get-panel" role="tabpanel" id="p-nix" aria-labelledby="t-nix" hidden><pre><code>nix run github:sheprd-labs/sheprd</code></pre><p>Builds from source on x86_64 and ARM64 Linux. Current channel.</p></div>

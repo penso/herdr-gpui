@@ -19,7 +19,7 @@ fail() {
 
 case $(uname -s) in
   Linux) ;;
-  Darwin) fail 'on macOS, run: brew install sheprd-labs/tap/herdr-gpui' ;;
+  Darwin) fail 'on macOS, run: brew install sheprd-labs/tap/sheprd' ;;
   *) fail "unsupported system $(uname -s); see https://github.com/$repo#install" ;;
 esac
 

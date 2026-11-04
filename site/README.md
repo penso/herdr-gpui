@@ -63,8 +63,8 @@ not automatically migrated, and closing the window leaves them running.
 ## Install compatibility
 
 Release assets use `Sheprd-VERSION-TARGET` and the primary command is `sheprd`.
-The Homebrew cask is `sheprd-labs/tap/herdr-gpui`, with `Herdr.app` retained
-for the update bridge (`open -a Herdr`). Linux's package name and legacy
+The Homebrew cask is `sheprd-labs/tap/sheprd`; `penso/tap/herdr-gpui` installs keep
+`Herdr.app` for the update bridge (`open -a Herdr`). Linux's package name and legacy
 `/usr/bin/herdr-gpui` entrypoint remain compatible. Windows keeps
 `%LOCALAPPDATA%\Programs\Herdr UI`, `so.pen.herdr-gpui`, legacy executable
 aliases, and both `sheprd://` and `herdr-gpui://` registrations. These strings

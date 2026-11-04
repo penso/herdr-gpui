@@ -263,11 +263,12 @@ Installation contracts, beyond accepting a filename:
   rename/spawn failure. Moving the installed directory to `Sheprd.app` is a
   separate future migration, not an implicit side effect of this update.
 - **Homebrew stable:** ownership still requires an artifact receipt symlink to
-  this exact running bundle under `Caskroom/herdr-gpui/VERSION`. Either
-  `Herdr.app` or `Sheprd.app` may name that receipt; the cask token remains
-  `herdr-gpui`. Relaunch accepts either executable at the original bundle path.
-  The renamed cask displays Sheprd but keeps its install target at
-  `Herdr.app` (`app "Sheprd.app", target: "Herdr.app"`) and is published to `sheprd-labs/tap` and `penso/tap`.
+  this exact running bundle under `Caskroom/TOKEN/VERSION`, for the `herdr-gpui`
+  or `sheprd` token, and that token is what the updater upgrades. Either
+  `Herdr.app` or `Sheprd.app` may name that receipt. Relaunch accepts either executable at the original bundle path.
+  `sheprd` in `sheprd-labs/tap` installs `Sheprd.app`. `herdr-gpui` in `penso/tap`
+  displays Sheprd but keeps its install target at `Herdr.app`
+  (`app "Sheprd.app", target: "Herdr.app"`) for existing installs.
   Changing that needs an explicit cask-token/destination migration. The bridge cannot
   follow a cask that removes its old target and installs only at a new path.
 - **Linux standalone:** the single regular executable inside the updater tar

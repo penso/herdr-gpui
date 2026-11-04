@@ -67,6 +67,14 @@ class RebrandCompatibility(unittest.TestCase):
             self.assertIn(line, rendered)
         self.assertIn("https://github.com/sheprd-labs/sheprd/releases/", rendered)
 
+    def test_sheprd_cask_installs_under_the_new_name(self):
+        rendered = subprocess.run(["bash", str(SCRIPTS / "render-cask.sh"), "20261103.1", "a" * 64, "sheprd"],
+                                  capture_output=True, text=True, check=True).stdout
+        for line in ('cask "sheprd" do', 'app "Sheprd.app"',
+                     'binary "#{appdir}/Sheprd.app/Contents/MacOS/sheprd"'):
+            self.assertIn(line, rendered)
+        self.assertNotIn("Herdr", rendered)
+
     def test_installer_keeps_upgrade_and_startup_identities(self):
         text = INSTALLER.SCRIPT.read_text()
         for line in ('#define AppName "Sheprd"', '#define StartupName "Herdr UI"',
