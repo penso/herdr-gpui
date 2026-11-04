@@ -216,6 +216,8 @@ pub enum Error {
     NotificationMutes(#[from] crate::notification_mutes::Error),
     #[error("The current directory is not in a Git checkout.")]
     NotInCheckout,
+    #[error(transparent)]
+    Orchestrator(#[from] crate::orchestrator::Error),
     #[error("Could not read the orchestrator's database: {0}")]
     OrchestratorItems(#[source] crate::orchestrator::Error),
     #[error(transparent)]
