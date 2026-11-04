@@ -1,10 +1,13 @@
 # Sheprd website
 
-The landing page for <https://sheprd.org>, with Netlify publishing configured
-from `site/`. Automatic Netlify builds are paused: root `netlify.toml` sets
-`build.ignore = "exit 0"` for production, branches, and pull requests. Remove
-that setting to resume publishing. The site is plain HTML, CSS and JavaScript:
-no dependency install or build tool is needed.
+The landing page that stays with herdrui.dev. The sheprd.org page is separate:
+see [`website/README.md`](../website/README.md). The Netlify project for
+sheprd.org uses base directory `website` and reads `website/netlify.toml`.
+
+The root `netlify.toml` still names `site/` and keeps automatic builds paused
+with `build.ignore = "exit 0"`, for production, branches, and pull requests.
+The site is plain HTML, CSS and JavaScript: no dependency install or build tool
+is needed.
 
 The ignore command skips Git-triggered builds; it does not disconnect the
 Netlify GitHub integration, remove existing failed checks, or stop build-hook
