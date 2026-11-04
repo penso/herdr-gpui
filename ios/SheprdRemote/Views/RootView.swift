@@ -16,6 +16,7 @@ struct RootView: View {
     @State private var windowWidth: CGFloat = 0
     @State private var window = WindowState()
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
 
     /// The width from which a window gets the split view. An unfolded
     /// iPhone can report a compact size class while it has an iPad mini's
@@ -61,23 +62,25 @@ struct RootView: View {
             case let .chat(device, workspace, label, agent): NewChatSheet(device: device, workspace: workspace, label: label, agent: agent)
             }
         }
-        .overlay(alignment: .bottom) {
-            if let offer = model.nearbyOffer {
-                ZStack(alignment: .bottom) {
-                    Color.black.opacity(0.25).ignoresSafeArea()
-                    ProximityCard(computer: offer) { model.dismissedNearby.insert(offer.id) }
-                        .id(offer.id)
-                }
-            }
+        // A panel's sheet draws it instead, as here it would be behind it.
+        .nearbyCard(window, when: !window.panelOpen)
+        // A first computer gets the card at once; later ones, the banner.
+        .onChange(of: model.nearbyOffer?.id, initial: true) {
+            if model.computers.isEmpty, window.nearby == nil { window.nearby = model.nearbyOffer }
         }
-        .animation(.spring(duration: 0.4), value: model.nearbyOffer?.id)
         .onChange(of: model.offeredNearby) { _, offered in
             model.dismissedNearby.formIntersection(offered)
+            // Its dialog closed there. Once paired, the card finishes first.
+            if let shown = window.nearby, !offered.contains(shown.fingerprintPrefix),
+               !model.computers.contains(where: { shown.matches($0.fingerprint) }) {
+                window.nearby = nil
+            }
         }
-        // Bluetooth looks for computers only while pairing is likely, so
-        // its permission prompt comes when the person is pairing.
-        // Shared by every window: each says whether it wants it.
-        .onChange(of: window.pairing || model.computers.isEmpty, initial: true) { _, looking in
+        // Bluetooth looks for computers while pairing is likely, so its
+        // permission prompt comes when the person is pairing, and once
+        // allowed, whenever the app is in front, to offer new ones. Shared
+        // by every window: each says whether it wants it.
+        .onChange(of: lookingOverBluetooth, initial: true) { _, looking in
             model.bluetooth.look(looking, for: window)
         }
         .onDisappear { model.bluetooth.look(false, for: window) }
@@ -101,6 +104,15 @@ struct RootView: View {
         }
     }
 
+    private var lookingOverBluetooth: Bool {
+        NearbyScan(
+            pairingLikely: window.pairing || model.computers.isEmpty,
+            exchanging: window.exchanging,
+            foreground: scenePhase == .active,
+            allowed: NearbyBluetooth.allowed
+        ).looking
+    }
+
     private var tabs: some View {
         TabView(selection: $tab) {
             Tab("Home", systemImage: "house", value: RootTab.home) {
@@ -111,7 +123,7 @@ struct RootView: View {
             }
             .badge(model.fleet.waiting)
             Tab("Workspaces", systemImage: "square.stack.3d.up", value: RootTab.workspaces) {
-                NavigationStack(path: $workspacesPath) { WorkspacesTab(pairing: $window.pairing).withRoutes() }
+                NavigationStack(path: $workspacesPath) { WorkspacesTab().withRoutes() }
                     .connectionToast(pairing: $window.pairing)
             }
             Tab("Settings", systemImage: "gearshape", value: RootTab.settings) {
