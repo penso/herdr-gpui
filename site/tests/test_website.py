@@ -115,6 +115,13 @@ class WebsiteTests(unittest.TestCase):
         description = re.search(r'<meta name="description" content="([^"]*)"', html).group(1)
         self.assertLessEqual(len(description), 160)
 
+    def test_social_image_url_is_versioned_the_same_everywhere(self):
+        html = (WEBSITE / "index.html").read_text()
+        urls = re.findall(r'(?:property="og:image"|name="twitter:image") content="([^"]*)"', html)
+        self.assertEqual(len(urls), 2)
+        self.assertEqual(urls[0], urls[1], "bump ?v= on both tags")
+        self.assertRegex(urls[0], r"\?v=\d+$")
+
 
 if __name__ == "__main__":
     unittest.main()
