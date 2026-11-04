@@ -47,7 +47,39 @@ extension NearbyComputer {
     }
 }
 
+/// The proximity card over a window's content, on its scrim.
+private struct NearbyCard: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let window: WindowState?
+    let shown: Bool
+
+    func body(content: Content) -> some View {
+        let offer = shown ? window?.nearby : nil
+        content
+            .overlay(alignment: .bottom) {
+                if let offer {
+                    ZStack(alignment: .bottom) {
+                        Color.black.opacity(0.25).ignoresSafeArea()
+                        ProximityCard(computer: offer) {
+                            model.dismissedNearby.insert(offer.fingerprintPrefix)
+                            window?.nearby = nil
+                        }
+                        .id(offer.id)
+                        .environment(window)
+                    }
+                }
+            }
+            .animation(.spring(duration: 0.4), value: offer?.id)
+    }
+}
+
 extension View {
+    /// Draws `window`'s proximity card here. Each window draws it in one
+    /// place only: two would each run their own pairing.
+    func nearbyCard(_ window: WindowState?, when shown: Bool = true) -> some View {
+        modifier(NearbyCard(window: window, shown: shown))
+    }
+
     /// Offers a computer ready to pair above this list, staying in view
     /// as the list scrolls.
     func nearbyBanner() -> some View {

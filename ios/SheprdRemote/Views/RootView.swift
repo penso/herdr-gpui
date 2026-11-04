@@ -62,19 +62,8 @@ struct RootView: View {
             case let .chat(device, workspace, label, agent): NewChatSheet(device: device, workspace: workspace, label: label, agent: agent)
             }
         }
-        .overlay(alignment: .bottom) {
-            if let offer = window.nearby {
-                ZStack(alignment: .bottom) {
-                    Color.black.opacity(0.25).ignoresSafeArea()
-                    ProximityCard(computer: offer) {
-                        model.dismissedNearby.insert(offer.fingerprintPrefix)
-                        window.nearby = nil
-                    }
-                    .id(offer.id)
-                }
-            }
-        }
-        .animation(.spring(duration: 0.4), value: window.nearby?.id)
+        // A panel's sheet draws it instead, as here it would be behind it.
+        .nearbyCard(window, when: !window.panelOpen)
         // A first computer gets the card at once; later ones, the banner.
         .onChange(of: model.nearbyOffer?.id, initial: true) {
             if model.computers.isEmpty, window.nearby == nil { window.nearby = model.nearbyOffer }
@@ -116,8 +105,12 @@ struct RootView: View {
     }
 
     private var lookingOverBluetooth: Bool {
-        window.pairing || window.nearby != nil || model.computers.isEmpty
-            || (scenePhase == .active && NearbyBluetooth.allowed)
+        NearbyScan(
+            pairingLikely: window.pairing || model.computers.isEmpty,
+            exchanging: window.exchanging,
+            foreground: scenePhase == .active,
+            allowed: NearbyBluetooth.allowed
+        ).looking
     }
 
     private var tabs: some View {

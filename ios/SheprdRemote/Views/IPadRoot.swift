@@ -7,6 +7,7 @@ import SwiftUI
 /// A foldable iPhone opened flat gets it too (`RootView.wideWidth`).
 struct IPadRoot: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
     @Binding var pairing: Bool
     @Binding var selection: Route?
     @State private var query = ""
@@ -57,6 +58,9 @@ struct IPadRoot: View {
                 }
             }
             .connectionToast(pairing: $pairing)
+            .nearbyCard(window)
+            .onAppear { window?.panelOpen = true }
+            .onDisappear { window?.panelOpen = false }
             // Pair Again from Settings or a computer's page: over this
             // sheet, as the split view's own would open behind it.
             .sheet(isPresented: $pairing) { PairView() }

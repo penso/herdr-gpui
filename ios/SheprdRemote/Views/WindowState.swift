@@ -12,6 +12,10 @@ final class WindowState {
     var pairing = false
     /// The computer nearby whose proximity card is open.
     var nearby: NearbyComputer?
+    /// That card's pairing has started and has not finished.
+    var exchanging = false
+    /// A Workspaces or Settings sheet covers an iPad window.
+    var panelOpen = false
     /// Chats and terminals on screen: their input is at the bottom, where
     /// the connection toast would cover it.
     var typing = 0
