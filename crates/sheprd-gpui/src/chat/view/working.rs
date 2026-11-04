@@ -1,17 +1,27 @@
 //! The sign that the agent is still on a turn, under the conversation in
-//! every layout: a pulsing dot, what the agent is doing now, and how long
-//! the turn has run. It sits outside the list, so it shows however far the
-//! conversation is scrolled back.
+//! every layout: a pulsing dot, what the agent is doing now, how long that
+//! step and the turn have run, and on a click every step running, in full.
+//! It sits outside the list, so it shows however far the conversation is
+//! scrolled back.
 
-use super::layout::Look;
-use crate::i18n::fl;
-use crate::motion;
+use super::{layout::Look, rail::short_path};
+use crate::{HerdrWindow, chat::chats::ChatPane, i18n::fl, motion};
 use gpui::{prelude::*, *};
-use sheprd_chat_protocol::{EntryKind, Status, ToolStatus, Transcript};
+use sheprd_chat_protocol::{EntryKind, Status, Tool, ToolKind, ToolStatus, Transcript};
 use std::time::Duration;
 
 /// One beat of the dot's pulse.
 const PULSE: Duration = Duration::from_millis(1200);
+
+/// Steps the open list keeps; more than this at once are only counted.
+const MAX_STEPS: usize = 16;
+
+/// Characters of one step the open list draws: a command can carry a whole
+/// script, and this is drawn every frame.
+const MAX_STEP_TEXT: usize = 2000;
+
+/// Lines the open list shows before it scrolls.
+const LINES: f32 = 6.;
 
 /// What the agent is doing while a turn runs.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,6 +30,23 @@ pub(super) struct Working {
     pub(super) doing: String,
     /// How long the turn has run, once it is a second or more.
     pub(super) elapsed: Option<String>,
+    /// How many other steps run beside the one `doing` names. A sub-agent
+    /// is not one of them: the running row counts those.
+    pub(super) more: usize,
+    /// Whether the steps show in full under the row, which the pane knows.
+    pub(super) open: bool,
+    /// How long the step `doing` names has run, once it is a second or more.
+    pub(super) step: Option<String>,
+    /// Every step running, the one `doing` names first.
+    pub(super) steps: Vec<Step>,
+}
+
+/// A running step, in full.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Step {
+    /// How long it has run, once it is a second or more.
+    pub(super) elapsed: Option<String>,
+    pub(super) text: String,
 }
 
 impl Working {
@@ -29,38 +56,121 @@ impl Working {
         if transcript.status != Status::Working {
             return None;
         }
-        let doing = match transcript.entries.last().map(|entry| &entry.kind) {
-            Some(EntryKind::Tool(tool))
-                if matches!(tool.status, ToolStatus::Pending | ToolStatus::InProgress) =>
-            {
-                step_title(&tool.title)
+        let running = running_steps(transcript);
+        let doing = match (running.first(), transcript.entries.last()) {
+            (Some(tool), _) => step_doing(tool),
+            (None, Some(entry)) if matches!(entry.kind, EntryKind::Agent { .. }) => {
+                fl!("chat-working-writing")
             }
-            Some(EntryKind::Agent { .. }) => fl!("chat-working-writing"),
             _ => fl!("chat-working-thinking"),
         };
-        let elapsed = transcript
-            .turn
-            .map(|turn| now_ms.saturating_sub(turn.started_ms))
-            .filter(|elapsed| *elapsed >= 1000)
-            .map(crate::chat::text::duration);
-        Some(Self { doing, elapsed })
+        let since = |started_ms: u64| {
+            Some(now_ms.saturating_sub(started_ms))
+                .filter(|elapsed| *elapsed >= 1000)
+                .map(crate::chat::text::duration)
+        };
+        let step_since = |tool: &Tool| tool.started_ms.and_then(since);
+        Some(Self {
+            doing,
+            elapsed: transcript.turn.and_then(|turn| since(turn.started_ms)),
+            more: running
+                .iter()
+                .filter(|tool| tool.kind != ToolKind::Subagent)
+                .count()
+                .saturating_sub(1),
+            open: false,
+            step: running.first().and_then(|tool| step_since(tool)),
+            steps: running
+                .iter()
+                .take(MAX_STEPS)
+                .map(|tool| Step {
+                    elapsed: step_since(tool),
+                    text: step_text(tool),
+                })
+                .collect(),
+        })
     }
 }
 
-/// A step's title as one plain line: an agent often wraps a command in
-/// code ticks.
+/// The steps of this turn still running, newest first, sub-agents last: one
+/// waits on its own steps, which say more. An earlier turn's unfinished call
+/// does not count, as the agent will not finish it.
+fn running_steps(transcript: &Transcript) -> Vec<&Tool> {
+    let (mut steps, subagents): (Vec<&Tool>, Vec<&Tool>) = transcript
+        .entries
+        .iter()
+        .rev()
+        .take_while(|entry| !matches!(entry.kind, EntryKind::User { .. } | EntryKind::Turn(_)))
+        .filter_map(|entry| match &entry.kind {
+            EntryKind::Tool(tool)
+                if matches!(tool.status, ToolStatus::Pending | ToolStatus::InProgress) =>
+            {
+                Some(tool)
+            }
+            _ => None,
+        })
+        .partition(|tool| tool.kind != ToolKind::Subagent);
+    steps.extend(subagents);
+    steps
+}
+
+/// A step in a few words: what it does to the file it names, which a long
+/// title would cut off, or else its title. A command's locations are where
+/// it runs, not what it works on.
+fn step_doing(tool: &Tool) -> String {
+    let Some(target) = tool.locations.first().map(|path| short_path(path)) else {
+        return step_title(&tool.title);
+    };
+    match tool.kind {
+        ToolKind::Delete => fl!("chat-working-deleting", target = target),
+        ToolKind::Edit => fl!("chat-working-editing", target = target),
+        ToolKind::Move => fl!("chat-working-moving", target = target),
+        ToolKind::Read => fl!("chat-working-reading", target = target),
+        ToolKind::Search => fl!("chat-working-searching", target = target),
+        _ => step_title(&tool.title),
+    }
+}
+
+/// A step as the open list shows it: its whole title, with the files it
+/// touches unless the title names them.
+fn step_text(tool: &Tool) -> String {
+    let title = plain(&tool.title);
+    let mut text = if title.is_empty() {
+        fl!("chat-working")
+    } else {
+        title.to_owned()
+    };
+    if tool.kind != ToolKind::Execute {
+        for location in &tool.locations {
+            if !text.contains(short_path(location)) {
+                text.push('\n');
+                text.push_str(location);
+            }
+        }
+    }
+    match text.char_indices().nth(MAX_STEP_TEXT) {
+        Some((end, _)) => text[..end].to_owned(),
+        None => text,
+    }
+}
+
+/// A step's title as one plain line.
 fn step_title(title: &str) -> String {
-    let line = title.lines().next().unwrap_or_default().trim();
-    let line = line
-        .strip_prefix('`')
-        .and_then(|inner| inner.strip_suffix('`'))
-        .filter(|inner| !inner.contains('`'))
-        .unwrap_or(line);
+    let line = plain(title.lines().next().unwrap_or_default());
     if line.is_empty() {
         fl!("chat-working")
     } else {
         line.to_owned()
     }
+}
+
+/// `text` without the code ticks an agent often wraps a command in.
+fn plain(text: &str) -> &str {
+    let text = text.trim();
+    text.strip_prefix('`')
+        .and_then(|inner| inner.strip_suffix('`'))
+        .filter(|inner| !inner.contains('`'))
+        .unwrap_or(text)
 }
 
 /// A dot in the theme's accent that pulses while the agent works.
@@ -108,13 +218,120 @@ pub(super) fn row(working: Option<&Working>, look: &Look<'_>) -> Div {
                         .text_color(rgb(theme.subtext()))
                         .child(fl!("chat-working-doing", doing = working.doing.as_str())),
                 )
+                .children(working.step.clone().map(|step| {
+                    div()
+                        .flex_none()
+                        .text_color(rgb(theme.muted))
+                        .child(format!("\u{b7} {step}"))
+                }))
+                .when(working.more > 0, |row| {
+                    row.child(
+                        div()
+                            .flex_none()
+                            .text_color(rgb(theme.muted))
+                            .child(fl!("chat-working-more", count = working.more)),
+                    )
+                })
+                .child(
+                    svg()
+                        .flex_none()
+                        .size(px(10.))
+                        .path(if working.open {
+                            "icons/chevron-down.svg"
+                        } else {
+                            "icons/chevron-right.svg"
+                        })
+                        .text_color(rgb(theme.muted)),
+                )
                 .children(working.elapsed.clone().map(|elapsed| {
                     div()
                         .flex_none()
+                        .ml_auto()
                         .text_color(rgb(theme.muted))
                         .child(elapsed)
                 })),
         })
+}
+
+impl HerdrWindow {
+    /// The steps running now, in full, opened from the working row; it
+    /// grows in and shrinks out, from where it is when turned around. It
+    /// stays open between steps, saying what the agent does instead, so it
+    /// does not jump as each one ends.
+    pub(super) fn render_chat_working_steps(&self, chat: &ChatPane) -> Option<AnyElement> {
+        let now = motion::now();
+        let shown = chat.steps.shown(now);
+        if shown <= 0. {
+            return None;
+        }
+        let working = Working::of(chat.session.transcript(), crate::chat::now_ms())?;
+        let look = self.chat_look();
+        let theme = look.theme;
+        let size = (look.text - 1.).max(10.);
+        let height = size * 1.6 * LINES;
+        let steps = if working.steps.is_empty() {
+            vec![Step {
+                elapsed: None,
+                text: working.doing,
+            }]
+        } else {
+            working.steps
+        };
+        let rows = steps.into_iter().enumerate().map(|(index, step)| {
+            div()
+                .debug_selector(move || format!("chat-step-{index}"))
+                .flex()
+                .items_start()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_color(rgb(theme.foreground))
+                        .child(step.text),
+                )
+                .children(step.elapsed.map(|elapsed| {
+                    div()
+                        .flex_none()
+                        .text_color(rgb(theme.muted))
+                        .child(elapsed)
+                }))
+        });
+        Some(
+            div()
+                .overflow_hidden()
+                .max_h(px((height + 8.) * shown))
+                .opacity(shown)
+                .child(
+                    div()
+                        .id("chat-steps")
+                        .debug_selector(|| "chat-steps".into())
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .mx(px(16.))
+                        .py(px(4.))
+                        .max_h(px(height + 8.))
+                        .overflow_y_scroll()
+                        .border_t_1()
+                        .border_color(rgb(theme.active))
+                        .text_size(px(size))
+                        .children(rows),
+                )
+                .when(chat.steps.moving(now), |frame| {
+                    // Draws the next frame while it is still moving.
+                    frame.child(
+                        canvas(
+                            |_, window, _| window.request_animation_frame(),
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .size_0(),
+                    )
+                })
+                .into_any_element(),
+        )
+    }
 }
 
 #[cfg(test)]

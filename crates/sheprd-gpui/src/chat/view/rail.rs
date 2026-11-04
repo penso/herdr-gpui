@@ -20,7 +20,7 @@ pub(super) fn fits(bounds: Bounds<Pixels>) -> bool {
 }
 
 /// The last two parts of a path, which name a file well enough in the rail.
-fn short_path(path: &str) -> &str {
+pub(super) fn short_path(path: &str) -> &str {
     let mut cuts = path.rmatch_indices(['/', '\\']).map(|(index, _)| index);
     cuts.nth(1).map_or(path, |cut| &path[cut + 1..])
 }

@@ -213,6 +213,7 @@ impl Projector {
             kind: ToolKind::Other,
             locations: Vec::new(),
             parent: None,
+            started_ms: None,
             status: ToolStatus::Pending,
             title: call_id.to_owned(),
         };
@@ -251,6 +252,11 @@ impl Projector {
             let change = self.tool(transcript, call_id, |tool| {
                 update(tool);
                 tag.mark(tool);
+                // History replays calls already finished, whose start is
+                // not now.
+                if matches!(tool.status, ToolStatus::Pending | ToolStatus::InProgress) {
+                    tool.started_ms.get_or_insert(now);
+                }
             });
             if let Change::Push { entry } | Change::Replace { entry } = &change
                 && let EntryKind::Tool(found) = &entry.kind
@@ -266,6 +272,7 @@ impl Projector {
                 kind: ToolKind::Other,
                 locations: Vec::new(),
                 parent: None,
+                started_ms: None,
                 status: ToolStatus::Pending,
                 title: call_id.to_owned(),
             };

@@ -12,6 +12,7 @@ fn call(title: &str, parent: Option<&str>) -> Entry {
             kind: ToolKind::Read,
             locations: Vec::new(),
             parent: parent.map(str::to_owned),
+            started_ms: None,
             status: ToolStatus::Completed,
             title: title.to_owned(),
         }),
