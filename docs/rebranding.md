@@ -23,7 +23,7 @@ Existing screenshots remain historical captures, not evidence of refreshed UI.
 | --- | --- |
 | Update trust | Same Ed25519 key; manifest/signature filenames, schemas 1–4, target/count/size bounds and platform verification remain unchanged. Both `penso/herdr-gpui` and `sheprd-labs/sheprd` are accepted repository identities. |
 | macOS | Bundle ID `so.pen.herdr-gpui`, installed signing team/Developer ID requirement and in-place update path. A new `Sheprd.app` payload can replace `/Applications/Herdr.app` without moving that directory. |
-| Homebrew | Stable token `herdr-gpui` in `penso/tap`; visible name Sheprd; `app "Sheprd.app", target: "Herdr.app"`. No cask-token or destination migration. |
+| Homebrew | Stable token `herdr-gpui`, moved from `penso/tap` to `sheprd-labs/tap` by a `tap_migrations.json` entry; visible name Sheprd; `app "Sheprd.app", target: "Herdr.app"`. No cask-token or destination migration. |
 | Linux packages | Internal owner/name `herdr-gpui`, version `VERSION-1`, and a real root-owned `/usr/bin/herdr-gpui` for the existing privileged verifier/restart contract, alongside canonical `sheprd`. |
 | Linux standalone | The manual archive links `bin/herdr-gpui` to `sheprd`, so replacing the resolved executable updates both command names. Distro packages materialize the regular legacy executable required above. |
 | Nix | Existing `herdr-gpui` package/overlay attributes and legacy main/helper commands remain aliases. The main command alias targets the final wrapped `sheprd` executable. |
@@ -77,7 +77,7 @@ These are release-owner tasks, not claims of completed validation or deployment.
   OIDC/provenance policy, webhooks and redirects. Reuse the existing signing keys.
 - [ ] Deploy `sheprd.org` install scripts/download links and preserve or redirect
   legacy domain URLs. Verify external repository/domain changes separately.
-- [ ] Update the stable cask in `penso/tap` with its legacy token and install target;
+- [ ] Update the stable cask in `sheprd-labs/tap` with its legacy token and install target;
   retain winget `Penso.HerdrUI`. Do not rename package-manager identities implicitly.
 - [ ] Exercise signed two-version upgrades from the bridge on both macOS
   architectures: standalone, Homebrew stable and beta; confirm preserved path,

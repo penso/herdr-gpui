@@ -368,7 +368,7 @@ The compatibility exceptions are intentional:
   main executable. Keep signing ID `so.pen.herdr-gpui` (and `.dev` locally),
   Developer ID team and all signing keys. There is no `Herdr` executable alias.
   The updater replaces the existing bundle directory in place.
-- Homebrew retains `penso/tap/herdr-gpui`; the cask installs `Sheprd.app` to
+- Homebrew publishes `sheprd-labs/tap/herdr-gpui`; the cask installs `Sheprd.app` to
   **`Herdr.app`**, so an old running updater can reopen it. The cask exposes
   `sheprd` on PATH. Moving that target or cask token needs a separate migration.
 - Linux packages retain package ownership **`herdr-gpui`**, version `VERSION-1`,
@@ -446,12 +446,12 @@ See [beta releases and promotion](../../docs/updating.md#beta-releases-and-promo
 unverified release. Render with the final stapled DMG's SHA-256 (64 hex digits).
 Rendering is deterministic, normalizes hexadecimal to lowercase, and writes only
 stdout. Do not redirect onto the input template. The rendered cask belongs at
-`Casks/herdr-gpui.rb` in `penso/homebrew-tap`; install as
-`brew install penso/tap/herdr-gpui`. Downloads use repository
+`Casks/herdr-gpui.rb` in `sheprd-labs/homebrew-tap`; install as
+`brew install sheprd-labs/tap/herdr-gpui`. Downloads use repository
 `sheprd-labs/sheprd`, tag `vVERSION`, and the exact DMG filename above.
 
 `bash scripts/release/update-homebrew.sh VERSION RENDERED_CASK` publishes that cask
-to the resolved default branch of `penso/homebrew-tap`. Run only after the
+to the resolved default branch of `sheprd-labs/homebrew-tap`. Run only after the
 published DMG checksum has been verified. It requires `git`, `ssh`, `curl`, `jq`,
 and the literal private deploy key in `HOMEBREW_TAP_SSH_KEY`, supplied only to the
 approved Homebrew workflow step. It uses HTTPS GitHub metadata for strict SSH host

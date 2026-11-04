@@ -24,7 +24,7 @@ jq -er '.ssh_keys | select(type == "array" and length > 0) | .[] | "github.com "
 export GIT_SSH_COMMAND="ssh -F /dev/null -i '$temp/key' -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile='$temp/known_hosts' -o GlobalKnownHostsFile=/dev/null"
 export GIT_TERMINAL_PROMPT=0
 git -c core.hooksPath=/dev/null clone --depth=1 --single-branch \
-    git@github.com:penso/homebrew-tap.git "$temp/tap"
+    git@github.com:sheprd-labs/homebrew-tap.git "$temp/tap"
 branch=$(git -C "$temp/tap" symbolic-ref --short HEAD)
 git check-ref-format "refs/heads/$branch"
 [[ ! -L $temp/tap/Casks && ! -L $temp/tap/Casks/herdr-gpui.rb ]] || fail 'Refusing symlink cask path'

@@ -109,7 +109,7 @@ if "clone" in args:
                    "BatchMode=yes", "-F /dev/null", "GlobalKnownHostsFile=/dev/null"]:
         assert option in ssh
     assert (temp / "known_hosts").read_text() == "github.com ssh-ed25519 dummy\\n"
-    assert args[-2] == "git@github.com:penso/homebrew-tap.git"
+    assert args[-2] == "git@github.com:sheprd-labs/homebrew-tap.git"
     if case == "clone": sys.exit(1)
     args[-2] = str(work / "remote.git")
 if "push" in args:

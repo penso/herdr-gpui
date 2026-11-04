@@ -159,7 +159,7 @@ Then install the latest stable release:
 
 | Platform | Command |
 | --- | --- |
-| macOS | `brew install penso/tap/herdr-gpui` |
+| macOS | `brew install sheprd-labs/tap/herdr-gpui` |
 | Linux (APT, DNF or pacman) | `curl -fsSL https://sheprd.org/install.sh \| sh` |
 | Windows (PowerShell) | `irm https://sheprd.org/install.ps1 \| iex` |
 
@@ -177,7 +177,7 @@ Requires [Homebrew](https://brew.sh/) and macOS 14.2 Sonoma or newer, on Apple
 Silicon or Intel. The cask installs the signed, notarized universal app.
 
 ```sh
-brew install penso/tap/herdr-gpui
+brew install sheprd-labs/tap/herdr-gpui
 open /Applications/Herdr.app
 ```
 
@@ -185,14 +185,14 @@ open /Applications/Herdr.app
 later, or to install by its short name, tap once first:
 
 ```sh
-brew tap penso/tap
+brew tap sheprd-labs/tap
 brew install herdr-gpui
 ```
 
-The stable cask token remains `herdr-gpui` in `penso/tap`. It displays **Sheprd**
+The stable cask token remains `herdr-gpui` in `sheprd-labs/tap`. It displays **Sheprd**
 and installs the `Sheprd.app` payload at the legacy `Herdr.app` target so existing
 clients can restart in place. The cask is published from the
-[tap](https://github.com/penso/homebrew-tap) by the
+[tap](https://github.com/sheprd-labs/homebrew-tap) by the
 release workflow. A cask install updates itself through Homebrew: the in-app
 updater detects that Homebrew owns the bundle and runs `brew upgrade --cask
 herdr-gpui` for you, so Homebrew's records stay correct. If its metadata is stale,
