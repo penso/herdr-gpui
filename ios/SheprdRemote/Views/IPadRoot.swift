@@ -12,6 +12,7 @@ struct IPadRoot: View {
     @Binding var selection: Route?
     @State private var query = ""
     @State private var showing: Panel?
+    @AppStorage(HomeRow.sortKey) private var sort = AgentSort.priority
 
     enum Panel: String, Identifiable {
         case workspaces, settings
@@ -26,6 +27,7 @@ struct IPadRoot: View {
                 .searchable(text: $query, placement: .sidebar, prompt: "Chats, messages, terminals")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) { AgentSortMenu(sort: $sort) }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("New Workspace", systemImage: "plus") { model.creating = .workspace(device: nil) }
                             .keyboardShortcut("n", modifiers: .command)
@@ -73,10 +75,11 @@ struct IPadRoot: View {
     }
 }
 
-/// The sidebar: what needs you, what works, the rest, then terminals.
+/// The sidebar: the agents in the order the person chose, then terminals.
 private struct AttentionList: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+    @AppStorage(HomeRow.sortKey) private var sort = AgentSort.priority
     @Binding var selection: Route?
     let query: String
     @State private var messages: [MessageHit] = []
@@ -88,9 +91,9 @@ private struct AttentionList: View {
         let agents = terminals.filter { $0.agent != nil }
         let shells = terminals.filter { $0.agent == nil }
         List(selection: $selection) {
-            section("Needs you", chats.filter(\.needsYou), agents.filter(\.needsYou))
-            section("Working", chats.filter(\.working), agents.filter(\.working))
-            section("Recent", chats.filter { !$0.needsYou && !$0.working }, agents.filter { !$0.needsYou && !$0.working })
+            ForEach(HomeRow.sections(sort, chats: chats, agents: agents)) { section in
+                Section(section.title) { ForEach(section.items) { row($0) } }
+            }
             if !query.isEmpty, !messages.isEmpty {
                 Section("Messages") {
                     ForEach(messages) { hit in
@@ -123,18 +126,14 @@ private struct AttentionList: View {
     }
 
     @ViewBuilder
-    private func section(_ title: String, _ items: [ChatItem], _ agents: [TerminalItem]) -> some View {
-        if !items.isEmpty || !agents.isEmpty {
-            Section(title) {
-                ForEach(items) { item in
-                    let route = Route.chat(item.key, title: item.chat.title)
-                    ChatRowLabel(item: item).tag(route).contextMenu { windowButton(route) }
-                }
-                ForEach(agents) { item in
-                    if let route = item.route {
-                        AgentTerminalRowLabel(item: item).tag(route).contextMenu { windowButton(route) }
-                    }
-                }
+    private func row(_ row: HomeRow) -> some View {
+        switch row {
+        case let .chat(item):
+            let route = Route.chat(item.key, title: item.chat.title)
+            ChatRowLabel(item: item).tag(route).contextMenu { windowButton(route) }
+        case let .agent(item):
+            if let route = item.route {
+                AgentTerminalRowLabel(item: item).tag(route).contextMenu { windowButton(route) }
             }
         }
     }

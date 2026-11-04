@@ -136,6 +136,7 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   "connected": true,
   "waiting": 1,
   "load": {"cores": 10, "cpu": 47, "load5_tenths": 42, "memory": 67},
+  "working": 2,
   "workspaces": [{
     "id": "w1", "label": "sheprd", "branch": "main", "cwd": "/Users/me/code/sheprd",
     "worktree": {"key": "/Users/me/code/sheprd/.git", "label": "sheprd", "is_linked_worktree": false},
@@ -731,6 +732,8 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
   name, and + for a new worktree of it). Rows show the most pressing
   agent's mark, the checkout's branch or the worktree's name, its agent
   and terminal counts, and the pull request's number in its tone.
+- Home sorts its agents by a menu at the top left, newest first in each
+  section: Priority (the desktop's status order), Recent, or Workspace.
 - A workspace opens on its own screen: branch, pull request, and place on
   top, its tabs (chats, agents in terminals, terminals) below, and under
   them large buttons that start a terminal or the agent last started
