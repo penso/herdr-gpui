@@ -93,7 +93,7 @@ impl Hub {
     pub(crate) fn start(
         socket: Option<PathBuf>,
         chat_dir: Option<PathBuf>,
-        core_endpoint: Option<sheprd_core_client::Endpoint>,
+        core_endpoint: crate::core_target::CoreTarget,
         state_dir: &Path,
     ) -> std::io::Result<Arc<Self>> {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));

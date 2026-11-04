@@ -31,7 +31,7 @@ pub struct Options {
     /// resolves it from this process's environment.
     pub chat_dir: Option<PathBuf>,
     /// The desktop endpoint, when explicitly passed by its service plan.
-    pub core_endpoint: Option<sheprd_core_client::Endpoint>,
+    pub core_endpoint: crate::core_target::CoreTarget,
     /// How long a device may stay away before it is forgotten; `None`
     /// keeps it until revoked.
     pub device_idle: Option<Duration>,
@@ -97,6 +97,8 @@ Options:
   --herdr-socket PATH      The Herdr daemon's client socket (default: discovered)
   --core-socket PATH --core-session NAME
                            The desktop core endpoint (default: discovered)
+  --core-invalid-session HEX | --core-no-home
+                           Preserve a desktop core setup failure for this source
   --chat-dir DIR           Where chat sockets live (default: discovered)
   --privacy generic|excerpt
                            Whether notifications may quote the chat (default generic)
@@ -131,6 +133,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let mut idle_days = DEFAULT_IDLE_DAYS;
     let (mut herdr_socket, mut chat_dir) = (None, None);
     let (mut core_socket, mut core_session) = (None, None);
+    let mut core_failure = None;
     let mut bonjour = true;
     while let Some(arg) = args.next() {
         let name = arg.to_str().unwrap_or_default().to_owned();
@@ -164,6 +167,18 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
             "--core-session" => {
                 core_session = Some(text(value("--core-session")?, "--core-session")?)
             }
+            "--core-invalid-session" => {
+                core_failure = Some(
+                    crate::core_target::CoreTarget::invalid_session(&text(
+                        value("--core-invalid-session")?,
+                        "--core-invalid-session",
+                    )?)
+                    .ok_or(ParseError::Value {
+                        option: "--core-invalid-session",
+                    })?,
+                )
+            }
+            "--core-no-home" => core_failure = Some(crate::core_target::CoreTarget::NoHome),
             "--chat-dir" => chat_dir = Some(PathBuf::from(value("--chat-dir")?)),
             "--privacy" => {
                 privacy = match text(value("--privacy")?, "--privacy")?.as_str() {
@@ -195,9 +210,15 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         (Some(cert), Some(key)) => Certificate::Files { cert, key },
         _ => return Err(ParseError::CertificatePair),
     };
-    let core_endpoint = match (core_socket, core_session) {
-        (None, None) => None,
-        (Some(socket), Some(session)) => Some(sheprd_core_client::Endpoint { socket, session }),
+    let core_endpoint = match (core_socket, core_session, core_failure) {
+        (None, None, None) => crate::core_target::CoreTarget::Discover,
+        (None, None, Some(failure)) => failure,
+        (Some(socket), Some(session), None) => {
+            crate::core_target::CoreTarget::Endpoint(sheprd_core_client::Endpoint {
+                socket,
+                session,
+            })
+        }
         _ => return Err(ParseError::CorePair),
     };
     Ok(Invocation::Serve(Options {

@@ -80,3 +80,11 @@ fn frame_errors_use_the_chat_protocols_messages() {
         control::Error::Frame(sheprd_chat_protocol::Error::Io(io())),
     ]);
 }
+
+#[test]
+fn core_setup_errors_have_localized_messages() {
+    assert_localized(&[
+        app::Error::Core(sheprd_core_client::Error::Session("bad/name".into())),
+        app::Error::Core(sheprd_core_client::Error::NoHome),
+    ]);
+}

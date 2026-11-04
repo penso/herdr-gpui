@@ -1,6 +1,7 @@
 use super::*;
 use crate::hub::{Hub, layout};
 use serde_json::json;
+use sheprd_core_client::Endpoint;
 
 fn record(address: &str) -> Value {
     json!({"address": address, "cols": 80, "rows": 24, "cwd": "/code/app",
@@ -202,7 +203,7 @@ mod socket {
         .unwrap();
         let source = Arc::new(Source {
             connected: AtomicBool::new(false),
-            endpoint: None,
+            endpoint: Default::default(),
             scope: None,
             state: Mutex::new(State {
                 core: Some(core),
@@ -330,3 +331,17 @@ mod socket {
 }
 
 mod state_context;
+
+#[test]
+fn a_failed_desktop_resolution_stays_with_the_core_source() {
+    let source = Source {
+        connected: AtomicBool::new(false),
+        endpoint: crate::core_target::CoreTarget::InvalidSession("bad/name".into()),
+        scope: None,
+        state: Mutex::new(State::default()),
+        tabs: None,
+    };
+    assert!(
+        matches!(source.poll(), Err(HubError::Core(Error::Client(sheprd_core_client::Error::Session(name)))) if name == "bad/name")
+    );
+}

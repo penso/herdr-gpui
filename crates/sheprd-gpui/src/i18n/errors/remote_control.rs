@@ -16,7 +16,28 @@ impl Localize for app::Error {
                 fl!("error-remote-control-certificate-path", key = *which)
             }
             Self::Control(error) => error.localize(),
-            Self::Core(error) => error.to_string(),
+            Self::Core(error) => match error {
+                sheprd_core_client::Error::Session(session) => fl!(
+                    "error-remote-control-core-session",
+                    session = format!("{session:?}")
+                ),
+                sheprd_core_client::Error::NoHome => fl!("error-remote-control-core-no-home"),
+                sheprd_core_client::Error::Backend(_)
+                | sheprd_core_client::Error::Busy
+                | sheprd_core_client::Error::Compat(_)
+                | sheprd_core_client::Error::Connect { .. }
+                | sheprd_core_client::Error::Frame(_)
+                | sheprd_core_client::Error::Invalid(..)
+                | sheprd_core_client::Error::Io(_)
+                | sheprd_core_client::Error::Json(_)
+                | sheprd_core_client::Error::Lost
+                | sheprd_core_client::Error::Protocol(_)
+                | sheprd_core_client::Error::Refused { .. }
+                | sheprd_core_client::Error::Start { .. }
+                | sheprd_core_client::Error::StartFailed { .. }
+                | sheprd_core_client::Error::StartTimeout(_)
+                | sheprd_core_client::Error::Timeout(_) => error.to_string(),
+            },
             Self::Enroll(error) => error.localize(),
             Self::IdleDays => fl!("error-remote-control-idle-days"),
             Self::Io {

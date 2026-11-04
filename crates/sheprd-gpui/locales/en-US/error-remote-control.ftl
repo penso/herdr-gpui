@@ -40,3 +40,6 @@ error-remote-control-enroll-no-home = this host has no home directory
 error-remote-control-enroll-not-started = the remote control daemon on this host did not start
 error-remote-control-enroll-outdated = the remote control daemon on this host is older than Sheprd; update it
 error-remote-control-enroll-unexpected = the remote control daemon gave an answer of the wrong kind
+
+error-remote-control-core-session = HC_SESSION { $session } cannot be a folder name
+error-remote-control-core-no-home = no home folder to find herdr-core in

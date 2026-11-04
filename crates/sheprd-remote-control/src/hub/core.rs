@@ -9,7 +9,7 @@ use super::Error as HubError;
 use super::{ApiMethod, Layout};
 pub use error::Error;
 use serde_json::Value;
-use sheprd_core_client::{Core, Endpoint, wire::Terminal};
+use sheprd_core_client::{Core, wire::Terminal};
 use std::{
     collections::HashMap,
     sync::{
@@ -35,7 +35,7 @@ impl From<sheprd_core_client::Error> for HubError {
 
 pub(super) struct Source {
     connected: AtomicBool,
-    endpoint: Option<Endpoint>,
+    endpoint: crate::core_target::CoreTarget,
     scope: Option<String>,
     state: Mutex<State>,
     tabs: Option<std::path::PathBuf>,
@@ -56,7 +56,7 @@ impl Source {
     pub(super) fn start(
         layout: watch::Sender<Arc<Layout>>,
         target: &sheprd_client::ConnectTarget,
-        endpoint: Option<Endpoint>,
+        endpoint: crate::core_target::CoreTarget,
         state_dir: &std::path::Path,
     ) -> std::io::Result<Arc<Self>> {
         let source = Arc::new(Self {
@@ -85,10 +85,7 @@ impl Source {
         if state.core.as_ref().is_none_or(Core::is_lost) {
             state.screens.clear();
             state.core = None;
-            let endpoint = match &self.endpoint {
-                Some(endpoint) => endpoint.clone(),
-                None => Endpoint::resolve(sheprd_client::login_env::var)?,
-            };
+            let endpoint = self.endpoint.endpoint()?;
             state.core = Some(Core::connect(&endpoint)?);
         }
         let core = state.core.as_ref().ok_or(Error::Disconnected)?;
