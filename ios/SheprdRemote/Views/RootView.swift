@@ -109,14 +109,14 @@ struct RootView: View {
         }
     }
 
-    /// Puts the workspace where the open tab was, so Back from it returns
-    /// to Home, or back to it when it is already in the stack.
+    /// Goes back to the workspace when it is in the stack, else makes it
+    /// the whole stack, so Back from it returns to Home whatever was open.
     private func showWorkspace(_ key: WorkspaceKey) {
         let route = Route.workspace(key)
         if let index = homePath.firstIndex(of: route) {
             homePath.removeSubrange((index + 1)...)
-        } else if !homePath.isEmpty {
-            homePath[homePath.count - 1] = route
+        } else {
+            homePath = [route]
         }
     }
 
