@@ -93,6 +93,17 @@ class WebsiteTests(unittest.TestCase):
                 self.assertNotIn("never leave", data)
                 self.assertIn("Teleport can lend your GitHub CLI token", data)
 
+    def test_herdrui_worker_keeps_old_installers_and_the_notice(self):
+        worker = ROOT / "website/herdrui"
+        self.assertEqual((worker / "public/index.html").read_bytes(),
+                         (ROOT / "design/sheprd-website/herdrui-rename/index.html").read_bytes())
+        source = (worker / "worker.js").read_text()
+        for name in ("install.sh", "install.ps1", "llms.txt"):
+            with self.subTest(file=name):
+                self.assertIn(f"'/{name}'", source)
+                self.assertTrue((worker / "public" / name).is_file())
+        self.assertIn("Herdr-$version", (worker / "public/install.sh").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()
