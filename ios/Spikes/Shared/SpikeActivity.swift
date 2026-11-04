@@ -1,7 +1,7 @@
 import ActivityKit
 import AppIntents
 import Foundation
-import HerdrRemoteCore
+import SheprdRemoteCore
 import Security
 
 struct SpikeActivityAttributes: ActivityAttributes {

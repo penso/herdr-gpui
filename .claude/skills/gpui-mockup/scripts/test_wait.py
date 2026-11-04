@@ -56,7 +56,7 @@ class WaitTests(unittest.TestCase):
         self.script = self.root / ".claude/skills/gpui-mockup/scripts/wait.sh"
         self.script.parent.mkdir(parents=True)
         shutil.copyfile(Path(__file__).with_name("wait.sh"), self.script)
-        app = self.root / "target/debug/herdr-gpui"
+        app = self.root / "target/debug/sheprd"
         app.parent.mkdir(parents=True)
         fake = app.with_name("fake_app.py")
         fake.write_text(

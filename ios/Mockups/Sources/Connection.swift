@@ -30,7 +30,7 @@ private struct ConnectionHome<Extra: ToolbarContent>: View {
                         .padding(.horizontal, 16)
                     }
                     .background(Color(.systemGroupedBackground))
-                    .navigationTitle("Herdr")
+                    .navigationTitle("Sheprd")
                     .navigationSubtitle(subtitle ?? Text(""))
                     .toolbar {
                         extra()
@@ -152,7 +152,7 @@ struct ConnectionQuiet: View {
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Can't reach \(computer)").font(.subheadline.weight(.semibold))
-                Text("Chats below are from 9:38. Herdr keeps trying; answers wait until it is back.")
+                Text("Chats below are from 9:38. Sheprd keeps trying; answers wait until it is back.")
                     .font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     Button("Retry") {}.buttonStyle(.glassProminent).controlSize(.small)

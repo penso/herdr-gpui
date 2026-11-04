@@ -20,7 +20,7 @@ class WindowsManifest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     updater.create(root, "20261017.1", windows=True)
                 self.assertFalse((root / "windows-manifest.json").exists())
-                name = f"Herdr-20261017.1-{target}-setup.exe"
+                name = f"Sheprd-20261017.1-{target}-setup.exe"
                 data = name.encode()
                 (root / name).write_bytes(data)
                 expected.append(dict(target=target, name=name, size=len(data), sha256=hashlib.sha256(data).hexdigest()))
@@ -39,7 +39,7 @@ class WindowsManifest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for target in updater.WINDOWS_TARGETS:
-                (root / f"Herdr-20261017.1-{target}-setup.exe").touch()
+                (root / f"Sheprd-20261017.1-{target}-setup.exe").touch()
             with self.assertRaises(ValueError):
                 updater.create(root, "20261017.1", windows=True)
 

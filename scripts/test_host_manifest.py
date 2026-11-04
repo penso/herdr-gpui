@@ -20,7 +20,7 @@ class HostManifest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     updater.create(root, "20261017.1", hosts=True)
                 self.assertFalse((root / "host-manifest.json").exists())
-                name = f"herdr-remote-control-20261017.1-{target}"
+                name = f"sheprd-remote-control-20261017.1-{target}"
                 data = name.encode()
                 (root / name).write_bytes(data)
                 expected.append(dict(target=target, name=name, size=len(data), sha256=hashlib.sha256(data).hexdigest()))
@@ -40,7 +40,7 @@ class HostManifest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for target in updater.HOST_TARGETS:
-                (root / f"herdr-remote-control-20261017.1-{target}").touch()
+                (root / f"sheprd-remote-control-20261017.1-{target}").touch()
             with self.assertRaises(ValueError):
                 updater.create(root, "20261017.1", hosts=True)
 

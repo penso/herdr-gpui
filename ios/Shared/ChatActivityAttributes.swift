@@ -1,6 +1,6 @@
 import ActivityKit
 import Foundation
-import HerdrRemoteCore
+import SheprdRemoteCore
 
 /// A chat's running turn as a Live Activity. Compiled into both the app and
 /// the widget extension; the daemon starts it with push-to-start, naming
@@ -11,11 +11,11 @@ import HerdrRemoteCore
 /// ```json
 /// "attributes": { "agent": "Claude", "chatTitle": "remote plan",
 ///                 "computer": "studio", "computerId": "AB12…(64 hex)",
-///                 "pane": "w1-p3", "workspace": "herdr-gpui" }
+///                 "pane": "w1-p3", "workspace": "sheprd" }
 /// ```
 ///
 /// The fields are decoded flat through `ChatActivityFacts`, so the keys are
-/// declared once, in `HerdrRemoteCore`, where `swift test` checks them
+/// declared once, in `SheprdRemoteCore`, where `swift test` checks them
 /// against the daemon's fixtures.
 struct ChatActivityAttributes: ActivityAttributes {
     typealias ContentState = ChatActivityState

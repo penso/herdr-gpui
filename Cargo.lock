@@ -460,9 +460,9 @@ dependencies = [
 
 [[package]]
 name = "async-executor"
-version = "1.14.0"
+version = "1.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c96bf972d85afc50bf5ab8fe2d54d1586b4e0b46c97c50a0c9e71e2f7bcd812a"
+checksum = "f426a31126c735126297bc5ea7a521263c9faff4f63ca415267ee625651c4f37"
 dependencies = [
  "async-task",
  "concurrent-queue",
@@ -4792,534 +4792,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "herdr-acp"
-version = "0.1.0"
-dependencies = [
- "agent-client-protocol-schema",
- "anyhow",
- "base64 0.23.1",
- "chrono",
- "crossbeam-channel",
- "crossterm",
- "herdr-chat-protocol",
- "herdr-client",
- "ratatui",
- "rustix",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "unicode-width",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "herdr-automate"
-version = "0.1.0"
-dependencies = [
- "herdr-automation",
- "herdr-client",
- "jiff",
- "rusqlite",
- "rustix",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "sysinfo 0.39.6",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.1.6+spec-1.1.0",
-]
-
-[[package]]
-name = "herdr-automation"
-version = "0.1.0"
-dependencies = [
- "herdr-luau",
- "jiff",
- "mlua",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "unicode-properties",
-]
-
-[[package]]
-name = "herdr-backend"
-version = "0.1.0"
-dependencies = [
- "herdr-protocol",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "herdr-chat-protocol"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "uuid",
-]
-
-[[package]]
-name = "herdr-client"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "crossbeam-channel",
- "herdr-protocol",
- "interprocess",
- "nix",
- "rustix",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "herdr-commands"
-version = "0.1.0"
-dependencies = [
- "gpui-pre",
- "herdr-client",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "herdr-control-protocol"
-version = "0.1.0"
-dependencies = [
- "herdr-client",
- "herdr-remote-control",
- "interprocess",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "herdr-core-client"
-version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "herdr-backend",
- "herdr-client",
- "herdr-protocol",
- "herdr-terminal",
- "rustix",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.1.6+spec-1.1.0",
- "tracing",
-]
-
-[[package]]
-name = "herdr-credentials"
-version = "0.1.0"
-dependencies = [
- "futures-lite",
- "oo7",
- "rustix",
- "secrecy",
- "security-framework",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "windows-sys 0.61.2",
- "zeroize",
-]
-
-[[package]]
-name = "herdr-diagnostics"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "herdr-client",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "tracing-subscriber",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "herdr-github"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "getrandom 0.4.3",
- "herdr-client",
- "herdr-credentials",
- "herdr-updater",
- "rustix",
- "secrecy",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "ureq",
- "zeroize",
-]
-
-[[package]]
-name = "herdr-gpui"
-version = "0.1.0"
-dependencies = [
- "ammonia",
- "anyhow",
- "base64 0.23.1",
- "block2 0.6.2",
- "chrono",
- "clipboard-win",
- "cocoa 0.27.0",
- "config",
- "core-graphics 0.25.0",
- "dispatch2",
- "flate2",
- "fluent-syntax",
- "fontdb 0.24.0",
- "foreign-types",
- "futures-lite",
- "getrandom 0.4.3",
- "gix",
- "gpui-pre",
- "gpui-pre-platform",
- "herdr-automation",
- "herdr-backend",
- "herdr-chat-protocol",
- "herdr-client",
- "herdr-commands",
- "herdr-control-protocol",
- "herdr-core-client",
- "herdr-credentials",
- "herdr-diagnostics",
- "herdr-github",
- "herdr-i18n",
- "herdr-mods",
- "herdr-orchestrator",
- "herdr-remote",
- "herdr-remote-control",
- "herdr-updater",
- "herdr-usage",
- "herdr-vcs",
- "if-addrs",
- "image",
- "keepawake",
- "lb-wry",
- "mdns-sd",
- "mermaid-rs-renderer",
- "nix",
- "nucleo-matcher",
- "objc",
- "objc2 0.6.5",
- "objc2-app-kit 0.3.2",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
- "objc2-user-notifications",
- "objc2-web-kit",
- "oo7",
- "percent-encoding",
- "pulldown-cmark",
- "ratex-layout",
- "ratex-parser",
- "ratex-render",
- "ratex-types",
- "raw-window-handle",
- "rodio",
- "rustix",
- "secrecy",
- "serde",
- "serde_ignored",
- "serde_json",
- "sha2 0.11.1",
- "skrifa 0.49.0",
- "socket2",
- "syntect",
- "sysinfo 0.39.6",
- "tempfile",
- "test-case",
- "thiserror 2.0.21",
- "toml 1.1.6+spec-1.1.0",
- "toml_edit 0.25.15+spec-1.1.0",
- "tracing",
- "tracing-subscriber",
- "unicode-bidi",
- "unicode-properties",
- "unicode-segmentation",
- "unicode-width",
- "ureq",
- "url",
- "uuid",
- "windows 0.62.2",
- "windows-registry 0.100.0",
- "windows-result 0.100.0",
- "windows-sys 0.61.2",
- "winresource",
- "zed-font-kit",
-]
-
-[[package]]
-name = "herdr-gpui-launcher"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.21",
- "windows-sys 0.61.2",
- "winresource",
-]
-
-[[package]]
-name = "herdr-i18n"
-version = "0.1.0"
-dependencies = [
- "fluent",
- "fluent-langneg 0.14.2",
- "i18n-embed",
- "serde",
- "serde_json",
- "sys-locale",
- "thiserror 2.0.21",
- "unic-langid",
-]
-
-[[package]]
-name = "herdr-luau"
-version = "0.1.0"
-dependencies = [
- "mlua",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "herdr-mods"
-version = "0.1.0"
-dependencies = [
- "herdr-commands",
- "herdr-luau",
- "mlua",
- "serde",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.1.6+spec-1.1.0",
-]
-
-[[package]]
-name = "herdr-nearby"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "windows 0.62.2",
- "zbus",
-]
-
-[[package]]
-name = "herdr-orchestrator"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "gix",
- "herdr-client",
- "herdr-credentials",
- "herdr-github",
- "herdr-remote",
- "rusqlite",
- "rustix",
- "secrecy",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "ureq",
- "url",
- "uuid",
- "zeroize",
-]
-
-[[package]]
-name = "herdr-protocol"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "bincode 2.0.1",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "herdr-remote"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "chrono",
- "getrandom 0.4.3",
- "herdr-client",
- "herdr-control-protocol",
- "herdr-credentials",
- "nix",
- "percent-encoding",
- "rustix",
- "rustls",
- "secrecy",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tar",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.1.6+spec-1.1.0",
- "tracing",
- "tungstenite 0.30.0",
- "ureq",
- "url",
- "uuid",
- "webpki-roots",
- "zeroize",
-]
-
-[[package]]
-name = "herdr-remote-control"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "axum",
- "base64 0.23.1",
- "futures-lite",
- "futures-util",
- "getrandom 0.4.3",
- "herdr-chat-protocol",
- "herdr-client",
- "herdr-github",
- "hkdf 0.13.0",
- "http-body-util",
- "hyper",
- "hyper-util",
- "if-addrs",
- "maud",
- "mdns-sd",
- "p256",
- "pulldown-cmark",
- "qrcode",
- "rcgen",
- "roxmltree 0.21.1",
- "rustix",
- "rustls",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "socket2",
- "sysinfo 0.39.6",
- "tempfile",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tokio-rustls",
- "tokio-tungstenite 0.30.0",
- "toml 1.1.6+spec-1.1.0",
- "toml_edit 0.25.15+spec-1.1.0",
- "tower",
- "tracing",
- "tracing-subscriber",
- "ureq",
- "url",
- "uuid",
- "webpki-roots",
- "x509-parser",
-]
-
-[[package]]
-name = "herdr-terminal"
-version = "0.1.0"
-dependencies = [
- "alacritty_terminal",
- "herdr-backend",
- "herdr-protocol",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "herdr-updater"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "ed25519-dalek",
- "flate2",
- "herdr-client",
- "rustix",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tar",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
- "ureq",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "herdr-usage"
-version = "0.1.0"
-dependencies = [
- "aes 0.9.3",
- "cbc 0.2.1",
- "chrono",
- "herdr-client",
- "pbkdf2 0.13.0",
- "rusqlite",
- "secrecy",
- "serde",
- "serde_json",
- "sha1 0.11.0",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.1.6+spec-1.1.0",
- "tracing",
- "unicode-normalization",
- "ureq",
- "url",
- "uuid",
- "zeroize",
-]
-
-[[package]]
-name = "herdr-vcs"
-version = "0.1.0"
-dependencies = [
- "herdr-client",
- "herdr-github",
- "herdr-usage",
- "secrecy",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5823,9 +5295,9 @@ dependencies = [
 
 [[package]]
 name = "interprocess"
-version = "2.4.6"
+version = "2.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7529951166d4dd4d2a6b9f0bb97919b810623f75eeb76e81ee9e6644886cae37"
+checksum = "a4a4fff6c51dece332bdbf3af5fe376c49cfc8dced782725e95be0bb489e35d7"
 dependencies = [
  "doctest-file",
  "libc",
@@ -6552,9 +6024,9 @@ dependencies = [
 
 [[package]]
 name = "mdns-sd"
-version = "0.21.5"
+version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "127d3355da0615643c88c885e29a1ccb29ca4b1ca1f2e44b3caed2e728a796aa"
+checksum = "e6743ed743ff2bada2b8651ef298d3f98addb0b74844f19cdd57137d8bd0219e"
 dependencies = [
  "fastrand",
  "flume 0.12.0",
@@ -8355,9 +7827,9 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.13.5"
+version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb"
+checksum = "3db2be46835f013dd3f4fa7f5f7402c537787b54ebb6fe2b94bbdd7e2669bb7b"
 dependencies = [
  "bitflags 2.13.2",
  "memchr",
@@ -9095,9 +8567,9 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "roxmltree"
-version = "0.21.1"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
 dependencies = [
  "memchr",
 ]
@@ -9200,9 +8672,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags 2.13.2",
  "errno",
@@ -9721,6 +9193,538 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "sheprd-acp"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol-schema",
+ "anyhow",
+ "base64 0.23.1",
+ "chrono",
+ "crossbeam-channel",
+ "crossterm",
+ "ratatui",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sheprd-chat-protocol",
+ "sheprd-client",
+ "tempfile",
+ "thiserror 2.0.21",
+ "unicode-width",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "sheprd-automate"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "rusqlite",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sheprd-automation",
+ "sheprd-client",
+ "sysinfo 0.39.6",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
+]
+
+[[package]]
+name = "sheprd-automation"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "mlua",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sheprd-luau",
+ "tempfile",
+ "thiserror 2.0.21",
+ "unicode-properties",
+]
+
+[[package]]
+name = "sheprd-backend"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sheprd-protocol",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "sheprd-chat-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "uuid",
+]
+
+[[package]]
+name = "sheprd-client"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "crossbeam-channel",
+ "interprocess",
+ "nix",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sheprd-protocol",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "sheprd-commands"
+version = "0.1.0"
+dependencies = [
+ "gpui-pre",
+ "serde",
+ "serde_json",
+ "sheprd-client",
+]
+
+[[package]]
+name = "sheprd-control-protocol"
+version = "0.1.0"
+dependencies = [
+ "interprocess",
+ "serde",
+ "serde_json",
+ "sheprd-client",
+ "sheprd-github",
+ "sheprd-remote-control",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "sheprd-core-client"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sheprd-backend",
+ "sheprd-client",
+ "sheprd-protocol",
+ "sheprd-terminal",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
+ "tracing",
+]
+
+[[package]]
+name = "sheprd-credentials"
+version = "0.1.0"
+dependencies = [
+ "futures-lite",
+ "oo7",
+ "rustix",
+ "secrecy",
+ "security-framework",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "windows-sys 0.61.2",
+ "zeroize",
+]
+
+[[package]]
+name = "sheprd-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sheprd-client",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "tracing-subscriber",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "sheprd-github"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "getrandom 0.4.3",
+ "rustix",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sheprd-client",
+ "sheprd-credentials",
+ "sheprd-updater",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "ureq",
+ "zeroize",
+]
+
+[[package]]
+name = "sheprd-gpui"
+version = "0.1.0"
+dependencies = [
+ "ammonia",
+ "anyhow",
+ "base64 0.23.1",
+ "block2 0.6.2",
+ "chrono",
+ "clipboard-win",
+ "cocoa 0.27.0",
+ "config",
+ "core-graphics 0.25.0",
+ "dispatch2",
+ "flate2",
+ "fluent-syntax",
+ "fontdb 0.24.0",
+ "foreign-types",
+ "futures-lite",
+ "getrandom 0.4.3",
+ "gix",
+ "gpui-pre",
+ "gpui-pre-platform",
+ "if-addrs",
+ "image",
+ "keepawake",
+ "lb-wry",
+ "mdns-sd",
+ "mermaid-rs-renderer",
+ "nix",
+ "nucleo-matcher",
+ "objc",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "objc2-user-notifications",
+ "objc2-web-kit",
+ "oo7",
+ "percent-encoding",
+ "pulldown-cmark",
+ "ratex-layout",
+ "ratex-parser",
+ "ratex-render",
+ "ratex-types",
+ "raw-window-handle",
+ "rodio",
+ "rustix",
+ "secrecy",
+ "serde",
+ "serde_ignored",
+ "serde_json",
+ "sha2 0.11.1",
+ "sheprd-automation",
+ "sheprd-backend",
+ "sheprd-chat-protocol",
+ "sheprd-client",
+ "sheprd-commands",
+ "sheprd-control-protocol",
+ "sheprd-core-client",
+ "sheprd-credentials",
+ "sheprd-diagnostics",
+ "sheprd-github",
+ "sheprd-i18n",
+ "sheprd-mods",
+ "sheprd-orchestrator",
+ "sheprd-remote",
+ "sheprd-remote-control",
+ "sheprd-updater",
+ "sheprd-usage",
+ "sheprd-vcs",
+ "skrifa 0.49.0",
+ "socket2",
+ "syntect",
+ "sysinfo 0.39.6",
+ "tempfile",
+ "test-case",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
+ "toml_edit 0.25.15+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-bidi",
+ "unicode-properties",
+ "unicode-segmentation",
+ "unicode-width",
+ "ureq",
+ "url",
+ "uuid",
+ "windows 0.62.2",
+ "windows-registry 0.100.0",
+ "windows-result 0.100.0",
+ "windows-sys 0.61.2",
+ "winresource",
+ "zed-font-kit",
+]
+
+[[package]]
+name = "sheprd-i18n"
+version = "0.1.0"
+dependencies = [
+ "fluent",
+ "fluent-langneg 0.14.2",
+ "i18n-embed",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "thiserror 2.0.21",
+ "unic-langid",
+]
+
+[[package]]
+name = "sheprd-launcher"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "thiserror 2.0.21",
+ "windows-sys 0.61.2",
+ "winresource",
+]
+
+[[package]]
+name = "sheprd-luau"
+version = "0.1.0"
+dependencies = [
+ "mlua",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "sheprd-mods"
+version = "0.1.0"
+dependencies = [
+ "mlua",
+ "serde",
+ "sha2 0.11.1",
+ "sheprd-commands",
+ "sheprd-luau",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
+]
+
+[[package]]
+name = "sheprd-nearby"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "windows 0.62.2",
+ "zbus",
+]
+
+[[package]]
+name = "sheprd-orchestrator"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "gix",
+ "rusqlite",
+ "rustix",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sheprd-client",
+ "sheprd-credentials",
+ "sheprd-github",
+ "sheprd-remote",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "ureq",
+ "url",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "sheprd-protocol"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "bincode 2.0.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "sheprd-remote"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "getrandom 0.4.3",
+ "nix",
+ "percent-encoding",
+ "rustix",
+ "rustls",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sheprd-client",
+ "sheprd-control-protocol",
+ "sheprd-credentials",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
+ "tracing",
+ "tungstenite 0.30.0",
+ "ureq",
+ "url",
+ "uuid",
+ "webpki-roots",
+ "zeroize",
+]
+
+[[package]]
+name = "sheprd-remote-control"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "axum",
+ "base64 0.23.1",
+ "futures-lite",
+ "futures-util",
+ "getrandom 0.4.3",
+ "hkdf 0.13.0",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "if-addrs",
+ "maud",
+ "mdns-sd",
+ "p256",
+ "pulldown-cmark",
+ "qrcode",
+ "rcgen",
+ "roxmltree 0.21.2",
+ "rustix",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sheprd-chat-protocol",
+ "sheprd-client",
+ "sheprd-github",
+ "socket2",
+ "sysinfo 0.39.6",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite 0.30.0",
+ "toml 1.1.6+spec-1.1.0",
+ "toml_edit 0.25.15+spec-1.1.0",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+ "url",
+ "uuid",
+ "webpki-roots",
+ "x509-parser",
+]
+
+[[package]]
+name = "sheprd-terminal"
+version = "0.1.0"
+dependencies = [
+ "alacritty_terminal",
+ "sheprd-backend",
+ "sheprd-protocol",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "sheprd-updater"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "ed25519-dalek",
+ "flate2",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "sheprd-client",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "ureq",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "sheprd-usage"
+version = "0.1.0"
+dependencies = [
+ "aes 0.9.3",
+ "cbc 0.2.1",
+ "chrono",
+ "pbkdf2 0.13.0",
+ "rusqlite",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha1 0.11.0",
+ "sha2 0.11.1",
+ "sheprd-client",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
+ "tracing",
+ "unicode-normalization",
+ "ureq",
+ "url",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "sheprd-vcs"
+version = "0.1.0"
+dependencies = [
+ "secrecy",
+ "serde_json",
+ "sheprd-client",
+ "sheprd-github",
+ "sheprd-usage",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]
@@ -10482,7 +10486,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -11247,9 +11251,9 @@ checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
 
 [[package]]
 name = "ureq"
-version = "3.4.2"
+version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a7ac20be9b7726e0bbdbf974c059676d9acb1cd414961f570a4e8231cacd7fc"
+checksum = "e7be76686bdf7198002062423ca0d8cf9b75a27c8e1de804513b97e97b555d9d"
 dependencies = [
  "base64 0.23.1",
  "flate2",
@@ -11264,9 +11268,9 @@ dependencies = [
 
 [[package]]
 name = "ureq-proto"
-version = "0.6.4"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f86fd172ccca569e458f61b6bdd6220965a9ef36e672a6852953b51a0e1583be"
+checksum = "622dce33c252115466d83f63e9744a18f12b4406aae51a01c15ad8fcf1185eb3"
 dependencies = [
  "base64 0.23.1",
  "http",
@@ -11300,7 +11304,7 @@ dependencies = [
  "kurbo",
  "log",
  "pico-args",
- "roxmltree 0.21.1",
+ "roxmltree 0.21.2",
  "rustybuzz",
  "simplecss",
  "siphasher 1.0.3",
@@ -11333,9 +11337,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.28.0"
+version = "1.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
+checksum = "4a0e2d11620c50695fe12bbbfde96b3477fe606e7284c22d505c12ce51214514"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
@@ -11728,9 +11732,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.10"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9"
+checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
 ]

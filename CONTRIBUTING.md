@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for looking at Herdr UI. This file covers the mechanics; the
+Thanks for looking at Sheprd. This file covers the mechanics; the
 engineering rules that actually govern changes live in
 [AGENTS.md](AGENTS.md) — architecture boundaries, Rust conventions, and
 verification expectations. Read it before a non-trivial change. It applies to
@@ -11,14 +11,15 @@ human and agent contributors alike.
 - **macOS, Linux, and Windows builds.** GPUI uses Metal on macOS, Vulkan
   with X11/Wayland on Linux, and DirectX on Windows. CI and release builds
   cover x86_64 and ARM64 on Linux and Windows.
-- **You need Herdr installed.** This repository is a client of the
-  daemon from [herdrdev/herdr](https://github.com/herdrdev/herdr). Normal local
-  launches may start it if absent; explicit sockets remain attach-only. The GUI
-  never installs, stops, or upgrades it. Bugs in the daemon, its session
-  model, or its socket handling belong upstream, not here.
-- **Open an issue first for anything large.** The README's *Next Milestones*
-  section is the roadmap. A PR that lands a milestone differently than planned
-  is more likely to stall than a short issue discussing it.
+- **Choose a terminal backend.** Sheprd connects to existing
+  [Herdr 1](https://github.com/herdrdev/herdr) sessions and to herdr-core.
+  Releases bundle a pinned herdr-core; source builds need a usable core binary
+  to exercise that backend. Without Herdr 1, local launches use herdr-core.
+  Existing Herdr 1 sessions are never automatically migrated. Daemon process,
+  session or socket bugs belong upstream; `sheprd-terminal` emulation and
+  native presentation bugs belong here.
+- **Open an issue first for anything large.** Agree on the scope and approach
+  before starting a substantial implementation.
 
 ## Setup
 
@@ -36,8 +37,11 @@ just run          # optimized build; use this for anything interactive
 just run-debug    # unoptimized, notably slower with a dense terminal
 ```
 
-On macOS these launch `target/<profile>/Herdr.app`, so the running app is named
-**Herdr** rather than the `herdr-gpui` executable a bare `cargo run` produces.
+On macOS these launch `target/<profile>/Sheprd.app`; the visible app is
+**Sheprd** and its executable is lowercase `sheprd`.
+
+Naming changes must preserve the [compatibility inventory](docs/rebranding.md),
+including installed identities, saved data and managed skill identifiers.
 
 ## Verifying a Change
 
@@ -56,9 +60,9 @@ their release CLI without a desktop. Run `just test-build` for linking or
 packaging changes and `just release-check` for archive/release changes. The latter
 runs the release packaging/security tests and workflow audits; see
 [release tooling](scripts/release/README.md) for prerequisites. Owner-authored
-internal PRs run audit/test jobs; optimized release builds run only on `main`.
-Outside-contributor and Dependabot PR jobs are skipped, not considered validated;
-see the [CI policy](README.md#continuous-integration).
+and contributor PRs run the applicable checks; external contributors require
+GitHub workflow approval. See the
+[contributor CI policy](scripts/release/README.md#contributor-ci-approval).
 
 Some tests are opt-in because they need resources CI does not have:
 

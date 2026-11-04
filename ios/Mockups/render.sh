@@ -18,6 +18,8 @@ case "$round" in
      ipad="" ;;
   mix) phone="spaces-Mix-0 spaces-Mix-1"
      ipad="" ;;
+  forget) phone="forget-A-0 forget-A-1 forget-B-0 forget-B-1 forget-C-0 forget-C-1 forget-D-0 forget-D-1"
+     ipad="" ;;
   *) echo "unknown round $round" >&2; exit 2 ;;
 esac
 
@@ -29,13 +31,13 @@ udid_of() {
 render() {
   device="$1"; shift
   udid=$(udid_of "$device")
-  xcodebuild -project HerdrMockups.xcodeproj -scheme HerdrMockups \
+  xcodebuild -project SheprdMockups.xcodeproj -scheme SheprdMockups \
     -destination "platform=iOS Simulator,id=$udid" -derivedDataPath build -quiet build
   xcrun simctl boot "$udid" 2>/dev/null || true
   xcrun simctl bootstatus "$udid" >/dev/null
   xcrun simctl ui "$udid" appearance "$appearance"
   xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
-  xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/HerdrMockups.app
+  xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/SheprdMockups.app
   for shot in "$@"; do
     screen=${shot%%-*}; rest=${shot#*-}; variant=${rest%%-*}; state=${rest#*-}
     xcrun simctl launch --terminate-running-process "$udid" so.pen.herdr-mockups \

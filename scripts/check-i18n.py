@@ -397,7 +397,7 @@ def main() -> int:
     )
     errors.extend(
         platform(
-            [ftl for ftl in files if ftl.path.parts[:2] == ("crates", "herdr-gpui")],
+            [ftl for ftl in files if ftl.path.parts[:2] == ("crates", "sheprd-gpui")],
             plistlib.loads(INFO_PLIST.read_bytes()),
             translations,
             DESKTOP_ENTRY.read_text(encoding="utf-8"),

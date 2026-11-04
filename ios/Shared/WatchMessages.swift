@@ -1,5 +1,5 @@
 import Foundation
-import HerdrRemoteCore
+import SheprdRemoteCore
 
 /// What the Watch asks the phone over WatchConnectivity. The Watch holds no
 /// keys: the phone checks each request against the chats it last saw and

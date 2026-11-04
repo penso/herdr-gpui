@@ -1,0 +1,540 @@
+//! Painting the new worktree dialog: the shared search, the tab strip, and the
+//! listings behind it. Rows are drawn from the prepared filter, never from a
+//! query made while rendering.
+
+// i18n: migrated
+use super::{
+    Page, WorkspaceAction,
+    worktree_source::{Row, Tab, signed_out_hint},
+};
+use crate::{
+    SheprdWindow,
+    i18n::fl,
+    repo_items::{Kind, Origin},
+};
+use gpui::{prelude::*, *};
+
+/// The branch form's text fields, in the order they are drawn and Tab visits
+/// them. The host picker is pointer only, so it is not one of them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Field {
+    Search,
+    Name,
+    Branch,
+}
+
+impl Field {
+    const ALL: &[Self] = &[Self::Search, Self::Name, Self::Branch];
+}
+
+impl SheprdWindow {
+    /// The search every tab shares, then the tab strip. Each listed tab counts
+    /// what the search kept in it, so a match elsewhere is visible from any
+    /// tab. The GitHub tabs are inert until an account is connected, because
+    /// neither listing can be fetched without one, and look it; hovering one
+    /// says where to sign in.
+    pub(super) fn render_worktree_tabs(&self, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        let connected = self.pr_profile().is_some();
+        let Some(source) = &self.menu.worktree else {
+            return div();
+        };
+        let busy = source.busy();
+        let (foreground, surface) = (theme.foreground, theme.surface);
+        let mut strip = div()
+            .id("worktree-tabs")
+            .debug_selector(|| "worktree-tabs".into())
+            .role(Role::TabList)
+            .aria_label(fl!("worktree-source-tabs"))
+            .flex()
+            .gap(px(4.))
+            .px(px(16.))
+            .pt(px(10.));
+        for tab in Tab::ALL {
+            let (key, label) = (tab.key(), tab.label());
+            let enabled = connected || tab.kind().is_none();
+            let selected = tab == source.tab;
+            // A tab that cannot be opened drops its outline and fades, so it
+            // never reads as one more button to press.
+            let inert = !selected && (!enabled || busy);
+            let hits = source.hits(tab).filter(|_| enabled);
+            strip = strip.child(
+                div()
+                    .id(key)
+                    .debug_selector(move || format!("worktree-tab-{key}"))
+                    .role(Role::Tab)
+                    .aria_label(match hits {
+                        Some(hits) => SharedString::from(fl!(
+                            "worktree-source-tab-hits",
+                            tab = label.as_str(),
+                            hits = hits
+                        )),
+                        None => SharedString::from(label.clone()),
+                    })
+                    .aria_selected(selected)
+                    .flex()
+                    .flex_none()
+                    .gap(px(5.))
+                    .px(px(10.))
+                    .py(px(5.))
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .border_1()
+                    .border_color(if inert {
+                        transparent_black()
+                    } else if selected {
+                        rgb(theme.foreground).into()
+                    } else {
+                        rgb(theme.active).into()
+                    })
+                    .when(selected, |button| button.bg(rgb(theme.active)))
+                    .text_color(rgb(if selected {
+                        theme.foreground
+                    } else {
+                        theme.muted
+                    }))
+                    .when(inert, |button| {
+                        button.opacity(0.4).cursor(CursorStyle::OperationNotAllowed)
+                    })
+                    .when_some(tab.kind().filter(|_| !enabled), |button, kind| {
+                        button.tooltip(move |_, cx| {
+                            cx.new(|_| crate::usage::Hint {
+                                text: signed_out_hint(kind).into(),
+                                foreground,
+                                surface,
+                            })
+                            .into()
+                        })
+                    })
+                    .when(enabled && !busy, |button| {
+                        button
+                            .cursor_pointer()
+                            .hover(|button| button.bg(rgb(theme.active)))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.select_worktree_tab(tab, window, cx);
+                            }))
+                    })
+                    .child(label)
+                    .when_some(hits, |button, hits| {
+                        button.child(
+                            div()
+                                .debug_selector(move || format!("worktree-tab-count-{key}"))
+                                .text_color(rgb(theme.muted))
+                                .child(hits.to_string()),
+                        )
+                    }),
+            );
+        }
+        div()
+            .flex_none()
+            .child(
+                div()
+                    .debug_selector(|| "worktree-search".into())
+                    .px(px(16.))
+                    .pt(px(10.))
+                    .child(source.search.clone()),
+            )
+            .child(strip)
+    }
+
+    /// The open listing: how much of it the search kept, the rows themselves,
+    /// and whatever its source last had to say.
+    pub(super) fn render_worktree_items(&self, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        let font = &self.config.ui;
+        let Some(source) = &self.menu.worktree else {
+            return div();
+        };
+        let (shown, total) = source.counts();
+        let rows = source.filtered.len();
+        let (count, loading, message, empty) = match source.tab {
+            Tab::New => return div(),
+            Tab::Existing => (
+                fl!(
+                    "worktree-source-count-existing",
+                    shown = shown,
+                    total = total
+                ),
+                source.checkouts.request.is_some(),
+                source.checkouts.message.as_ref(),
+                if total > 0 {
+                    fl!("worktree-source-no-matching-checkouts")
+                } else {
+                    fl!("worktree-source-all-checkouts-open")
+                },
+            ),
+            Tab::Branches => (
+                fl!(
+                    "worktree-source-count-branches",
+                    shown = shown,
+                    total = total
+                ),
+                source.branches.loading,
+                source.branches.message.as_ref(),
+                if total > 0 {
+                    fl!("worktree-source-no-matching-branches")
+                } else {
+                    fl!("worktree-source-all-branches-checked-out")
+                },
+            ),
+            Tab::Items(Kind::PullRequest) => (
+                fl!(
+                    "worktree-source-count-pull-requests",
+                    shown = shown,
+                    total = total
+                ),
+                source.lookup.loading,
+                source.lookup.message.as_ref(),
+                fl!("worktree-source-no-pull-requests"),
+            ),
+            Tab::Items(Kind::Issue) => (
+                fl!("worktree-source-count-issues", shown = shown, total = total),
+                source.lookup.loading,
+                source.lookup.message.as_ref(),
+                fl!("worktree-source-no-issues"),
+            ),
+        };
+        let message = self.menu.error.as_ref().or(message);
+        let status = if let Some(pending) = &source.pending {
+            // Dismissing only closes the panel; the daemon keeps queued work,
+            // as the branch tab's own waiting note says.
+            if pending.opens() {
+                fl!("worktree-source-opening", name = pending.label())
+            } else {
+                fl!("worktree-source-creating", name = pending.label())
+            }
+        } else if let Some(error) = message {
+            error.clone()
+        } else if loading {
+            fl!("worktree-source-loading")
+        } else {
+            match source.tab {
+                Tab::Existing => fl!("worktree-source-existing-note"),
+                Tab::Branches => fl!("worktree-source-branch-note"),
+                _ => source
+                    .lookup
+                    .origin
+                    .as_ref()
+                    .map(Origin::slug)
+                    .unwrap_or_default(),
+            }
+        };
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .child(
+                div()
+                    .debug_selector(|| "worktree-count".into())
+                    .flex_none()
+                    .px(px(16.))
+                    .pt(px(8.))
+                    .text_color(rgb(theme.muted))
+                    .child(count),
+            )
+            .when(rows == 0, |panel| {
+                panel.child(
+                    div()
+                        .debug_selector(|| "worktree-empty".into())
+                        .flex_1()
+                        .px(px(16.))
+                        .py(px(12.))
+                        .text_color(rgb(theme.muted))
+                        .child(if loading {
+                            fl!("worktree-source-loading")
+                        } else {
+                            empty
+                        }),
+                )
+            })
+            .when(rows > 0, |panel| {
+                panel.child(
+                    uniform_list(
+                        "worktree-items",
+                        rows,
+                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                            range.map(|row| this.render_worktree_row(row, cx)).collect()
+                        }),
+                    )
+                    .track_scroll(&source.scroll)
+                    .flex_1()
+                    .min_h_0(),
+                )
+            })
+            .child(
+                div()
+                    .id("worktree-status")
+                    .debug_selector(|| "worktree-status".into())
+                    .flex_none()
+                    .h(px(font.line_height() * 2. + 16.))
+                    .overflow_y_scroll()
+                    .px(px(16.))
+                    .py(px(8.))
+                    .border_t_1()
+                    .border_color(rgb(theme.active))
+                    .text_color(rgb(theme.muted))
+                    .when(message.is_some(), |status| {
+                        status.text_color(super::danger(theme))
+                    })
+                    .child(
+                        div()
+                            .when(message.is_some(), |text| {
+                                text.debug_selector(|| "dialog-error".into())
+                            })
+                            .child(status),
+                    ),
+            )
+    }
+
+    fn render_worktree_row(&self, row: usize, cx: &mut Context<Self>) -> AnyElement {
+        let theme = &self.theme;
+        let font = &self.config.ui;
+        let Some(source) = &self.menu.worktree else {
+            return div().into_any_element();
+        };
+        let Some(listed) = source.row(row) else {
+            return div().into_any_element();
+        };
+        // A row is a title line with an optional muted tag, and a detail line
+        // when there is more to say than the title. A branch is only its name.
+        let (number, title, tag, detail) = match listed {
+            Row::Checkout(entry) => (
+                None,
+                entry.branch.clone().unwrap_or_else(|| entry.label.clone()),
+                entry.is_detached.then(|| fl!("worktree-source-detached")),
+                Some(entry.path.clone()),
+            ),
+            Row::Branch(branch) => (None, branch.name.clone(), None, None),
+            Row::Item(item) => (
+                Some(format!("#{}", item.number)),
+                item.title.clone(),
+                item.draft.then(|| fl!("worktree-source-draft")),
+                // A fork's head branch has no ref on `origin`, so the row says
+                // why it cannot be picked rather than failing once it is.
+                Some(if item.fork_owner.is_some() {
+                    fl!("worktree-source-from-fork")
+                } else {
+                    let branch = item.branch();
+                    match item.author.is_empty() {
+                        true => branch,
+                        false => format!("{} - {branch}", item.author),
+                    }
+                }),
+            ),
+        };
+        let lines = if detail.is_some() { 2. } else { 1. };
+        let selected = row == source.selected;
+        div()
+            .id(row)
+            .debug_selector(move || format!("worktree-row-{row}"))
+            .w_full()
+            .h(px(font.line_height() * lines + 14.))
+            .px(px(16.))
+            .py(px(5.))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .cursor_pointer()
+            .when(selected, |row| row.bg(rgb(theme.active)))
+            .hover(|row| row.bg(rgb(theme.active)))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(6.))
+                    .min_w_0()
+                    .when_some(number, |line, number| {
+                        line.child(div().flex_none().text_color(rgb(theme.muted)).child(number))
+                    })
+                    .child(div().flex_1().min_w_0().truncate().child(title))
+                    .when_some(tag, |line, tag| {
+                        line.child(div().flex_none().text_color(rgb(theme.muted)).child(tag))
+                    }),
+            )
+            .when_some(detail, |row, detail| {
+                row.child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(rgb(theme.muted))
+                        .child(detail),
+                )
+            })
+            .on_hover(cx.listener(move |this, hovered, _, cx| {
+                if *hovered && let Some(source) = &mut this.menu.worktree {
+                    source.selected = row;
+                    cx.notify();
+                }
+            }))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.pick_worktree_row(row, cx);
+            }))
+            .into_any_element()
+    }
+
+    /// Whether the shared search field is mid-composition, in which case the
+    /// platform owns every key until the composition commits.
+    pub(super) fn worktree_source_composing(&self, cx: &Context<Self>) -> bool {
+        self.menu
+            .worktree
+            .as_ref()
+            .is_some_and(|source| source.search.read(cx).is_composing())
+    }
+
+    /// Move to the next tab of the strip, or the previous one, skipping the
+    /// GitHub tabs while no account is connected.
+    fn step_worktree_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let current = self
+            .menu
+            .worktree
+            .as_ref()
+            .map_or(Tab::New, |source| source.tab);
+        let connected = self.pr_profile().is_some();
+        let tabs: Vec<Tab> = Tab::ALL
+            .into_iter()
+            .filter(|tab| tab.kind().is_none() || connected)
+            .collect();
+        if let Some(index) = tabs.iter().position(|tab| *tab == current) {
+            let next = if forward {
+                (index + 1) % tabs.len()
+            } else {
+                (index + tabs.len() - 1) % tabs.len()
+            };
+            self.select_worktree_tab(tabs[next], window, cx);
+        }
+    }
+
+    /// Move typing to the branch form's next field, or the previous one, in
+    /// the order they are drawn, wrapping at either end. The field Tab lands
+    /// in has its text selected, as a native field's is.
+    fn step_worktree_field(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let current = self.worktree_field(window, cx);
+        let Some(source) = &self.menu.worktree else {
+            return;
+        };
+        let fields = Field::ALL;
+        let index = fields
+            .iter()
+            .position(|field| *field == current)
+            .unwrap_or_default();
+        let next = fields[if forward {
+            (index + 1) % fields.len()
+        } else {
+            (index + fields.len() - 1) % fields.len()
+        }];
+        let field = match next {
+            Field::Search => Some(source.search.clone()),
+            Field::Name => Some(source.name.clone()),
+            Field::Branch => None,
+        };
+        match field {
+            Some(field) => {
+                let focus = field.read(cx).focus.clone();
+                window.focus(&focus, cx);
+                field.update(cx, |field, cx| field.select_all(cx));
+            }
+            None => {
+                window.focus(&self.menu.focus, cx);
+                if let Some(input) = &mut self.menu.input {
+                    input.selection = 0..input.text.len();
+                    input.reversed = false;
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    /// The branch form's field that has typing. The branch is the dialog's
+    /// own focus, so it is the answer whenever neither other field has it.
+    fn worktree_field(&self, window: &Window, cx: &App) -> Field {
+        if self.worktree_search_focused(window, cx) {
+            Field::Search
+        } else if self.worktree_name_focused(window, cx) {
+            Field::Name
+        } else {
+            Field::Branch
+        }
+    }
+
+    /// Keys the new worktree dialog owns beyond typing: Tab between the
+    /// form's fields, Ctrl-Tab through the strip, and the listings' rows.
+    /// Reports whether the key was consumed, so the branch form keeps its
+    /// existing handling untouched.
+    pub(super) fn worktree_source_key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.menu.page != Some(Page::Dialog(WorkspaceAction::NewWorktree)) {
+            return false;
+        }
+        if self
+            .menu
+            .input
+            .as_ref()
+            .is_some_and(|input| input.marked.is_some())
+        {
+            return false;
+        }
+        // A composition in either text field owns Tab until it commits.
+        if self.menu.worktree.as_ref().is_some_and(|source| {
+            source.search.read(cx).is_composing() || source.name.read(cx).is_composing()
+        }) {
+            return false;
+        }
+        let modifiers = event.keystroke.modifiers;
+        let mut key = event.keystroke.key.as_str();
+        if key == "tab" {
+            if modifiers.alt || modifiers.platform {
+                return false;
+            }
+            let forward = !modifiers.shift;
+            // Tab moves between fields, as in every form; Ctrl-Tab steps
+            // through the strip, as it steps through the palette's filters
+            // and the add device rail.
+            if modifiers.control {
+                self.step_worktree_tab(forward, window, cx);
+                return true;
+            }
+            if self.worktree_listing() {
+                // A listing has one field, so Tab moves its selection, as it
+                // moves the palette's.
+                key = if forward { "down" } else { "up" };
+            } else {
+                self.step_worktree_field(forward, window, cx);
+                return true;
+            }
+        }
+        let search_focused = self.worktree_search_focused(window, cx);
+        let Some(source) = &mut self.menu.worktree else {
+            return false;
+        };
+        if source.tab == Tab::New {
+            // From the shared search, the branch form has no rows to move
+            // through and nothing for Enter to pick.
+            return search_focused && matches!(key, "up" | "down" | "enter");
+        }
+        let rows = source.filtered.len();
+        match key {
+            "up" | "down" if rows > 0 => {
+                source.selected = match key {
+                    "up" => (source.selected + rows - 1) % rows,
+                    _ => (source.selected + 1) % rows,
+                };
+                let selected = source.selected;
+                source.scroll.scroll_to_item(selected, ScrollStrategy::Top);
+                cx.notify();
+                true
+            }
+            "up" | "down" => true,
+            "enter" => {
+                let selected = source.selected;
+                self.pick_worktree_row(selected, cx);
+                true
+            }
+            _ => false,
+        }
+    }
+}

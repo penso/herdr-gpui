@@ -1,0 +1,20 @@
+# The sheprd.org Netlify project: base directory `website`. Netlify reads this
+# file before the root netlify.toml, which stays paused for `site/`.
+[build]
+command = ""
+publish = "site"
+# Always build, even if the root file's `ignore = "exit 0"` is inherited.
+ignore = "exit 1"
+
+# Scope the canonical redirect to www so deploy previews remain usable.
+[[redirects]]
+force  = true
+from   = "https://www.sheprd.org/*"
+status = 301
+to     = "https://sheprd.org/:splat"
+
+[[redirects]]
+force  = true
+from   = "http://www.sheprd.org/*"
+status = 301
+to     = "https://sheprd.org/:splat"

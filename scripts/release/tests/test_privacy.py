@@ -1,4 +1,4 @@
-"""Herdr.app starts the herdr server, so macOS holds the app responsible for
+"""Sheprd.app starts the herdr server, so macOS holds the app responsible for
 every program in a pane. A privacy-protected resource is denied without a
 prompt, and Herdr never appears under Privacy & Security, unless the bundle
 carries the resource's usage description and, under the hardened runtime that
@@ -81,7 +81,7 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual(declared - known, set())
 
     def test_release_entitlements_grant_every_resource(self):
-        entitlements = load("Herdr.entitlements")
+        entitlements = load("Sheprd.entitlements")
         self.assertEqual(entitlements, dict.fromkeys(ENTITLED, True))
 
 

@@ -101,8 +101,8 @@ struct PairCard: View {
         ZStack(alignment: .bottom) {
             NavigationStack {
                 ContentUnavailableView("No computers yet", systemImage: "desktopcomputer",
-                                       description: Text("Bring your phone near a Mac running Herdr."))
-                    .navigationTitle("Herdr")
+                                       description: Text("Bring your phone near a Mac running Sheprd."))
+                    .navigationTitle("Sheprd")
             }
             .blur(radius: 2)
             Color.black.opacity(0.25).ignoresSafeArea()
@@ -116,7 +116,7 @@ struct PairCard: View {
                     .padding(.vertical, 6)
                 Text(state == 0 ? "MacBook Pro" : "Is this your code?").font(.title2.bold())
                 if state == 0 {
-                    Text("Herdr is asking to pair. Your chats, terminals, and notifications will come to this iPhone.")
+                    Text("Sheprd is asking to pair. Your chats, terminals, and notifications will come to this iPhone.")
                         .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     ViaBadge(bluetooth: true)
                     Button {} label: { Text("Pair").font(.headline).frame(maxWidth: .infinity) }
@@ -145,8 +145,8 @@ struct PairSteps: View {
             if state == 0 {
                 List {
                     Section {
-                        NearbyRow(name: "MacBook Pro", detail: "Fabien's MacBook Pro · Herdr 0.42", symbol: "laptopcomputer", bluetooth: true, bars: 3)
-                        NearbyRow(name: "studio", detail: "Mac Studio · Herdr 0.42", symbol: "macstudio", bluetooth: false, bars: 2)
+                        NearbyRow(name: "MacBook Pro", detail: "Fabien's MacBook Pro · Sheprd 0.42", symbol: "laptopcomputer", bluetooth: true, bars: 3)
+                        NearbyRow(name: "studio", detail: "Mac Studio · Sheprd 0.42", symbol: "macstudio", bluetooth: false, bars: 2)
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
                             Text("Looking for more").font(.footnote).foregroundStyle(.secondary)

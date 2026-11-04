@@ -1,7 +1,17 @@
-# Herdr Remote for iOS
+# Sheprd for iOS
 
-The native app for Herdr's remote control (`docs/ios-app-plan.md`).
-- **What it shows:** the chats and terminal tabs running in Herdr on every
+Sheprd is the display name on iPhone, iPad, Apple Watch, widgets, and the share
+sheet. The Xcode targets and Swift modules use `SheprdRemote*`.
+
+**Update compatibility:** production keeps `so.pen.herdr.remote` and its
+extension suffixes, `group.so.pen.herdr.remote`, Keychain services and access
+groups, APNs topics, `_herdr-remote._tcp`, Bluetooth UUIDs, signed-message labels,
+and `herdr-remote://` links. These are deployed identities, not display branding.
+Do not rename them when preparing an update to the existing App Store app.
+The bundle-ID changes below are for an independently signed fork only.
+
+The native app for Sheprd's remote control (`docs/ios-app-plan.md`).
+- **What it shows:** the chats and terminal tabs running in Sheprd on every
   paired computer, merged into one list, with what needs you first.
 - **What you can do:** answer questions in place, open a chat or a terminal,
   and send prompts.
@@ -12,10 +22,10 @@ The native app for Herdr's remote control (`docs/ios-app-plan.md`).
 
 | Path | What |
 | --- | --- |
-| `project.yml` | XcodeGen spec for the `HerdrRemote` app and the `HerdrRemoteWidgets` extension: iOS 26, Swift 6 with complete concurrency checking, iPhone and iPad |
-| `HerdrRemoteCore/` | Swift package with no UIKit: the transcript model and its reducer, the v2 API's messages, `ComputerLink` (address racing, resubscription, backoff), pairing links, fingerprints, session signatures, sealed notifications |
-| `HerdrRemote/` | The app: `Fleet` (one link per computer), `Cache`, the pinned HTTPS and WebSocket client, pairing, Keychain, and `Views/` |
-| `HerdrRemoteWidgets/` | The lock screen and Dynamic Island layouts |
+| `project.yml` | XcodeGen spec for the `SheprdRemote` app and the `SheprdRemoteWidgets` extension: iOS 26, Swift 6 with complete concurrency checking, iPhone and iPad |
+| `SheprdRemoteCore/` | Swift package with no UIKit: the transcript model and its reducer, the v2 API's messages, `ComputerLink` (address racing, resubscription, backoff), pairing links, fingerprints, session signatures, sealed notifications |
+| `SheprdRemote/` | The app: `Fleet` (one link per computer), `Cache`, the pinned HTTPS and WebSocket client, pairing, Keychain, and `Views/` |
+| `SheprdRemoteWidgets/` | The lock screen and Dynamic Island layouts |
 | `Shared/` | The Live Activity's attributes, compiled into both targets |
 | `Mockups/` | The SwiftUI mockups the screens were picked from (`just ios-mockups`) |
 | `Spikes/` | Phase 0 spikes (`docs/ios-spikes.md`) |
@@ -28,12 +38,13 @@ Requires Xcode 26 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 ```sh
 just ios-test      # Swift package tests on the Mac, no simulator
 just ios-build     # unsigned simulator build of the app and its extensions
-just ios-generate  # then open ios/HerdrRemote.xcodeproj
+just ios-generate  # then open ios/SheprdRemote.xcodeproj
+python3 ios/tools/test_branding.py  # generated names and stable deployed identities
 ```
 
 - **Fixtures:** the package tests decode the JSON fixtures that the
   daemon's Rust tests write from its own types
-  (`HerdrRemoteCore/Tests/HerdrRemoteCoreTests/Fixtures/v2`). The reducer is
+  (`SheprdRemoteCore/Tests/SheprdRemoteCoreTests/Fixtures/v2`). The reducer is
   checked against the same change sequences on both sides, so the two
   cannot drift apart.
 - **Generated files:** the `.xcodeproj`, Info.plists, and entitlements are
@@ -48,12 +59,12 @@ and nothing goes through your phone.
    paths are limited:
 
    ```sh
-   cargo build -p herdr-remote-control --locked
+   cargo build -p sheprd-remote-control --locked
    state=$(mktemp -d /tmp/hrc.XXXXXX)
-   ./target/debug/herdr-remote-control serve --state-dir "$state" --port 7543 2> "$state/daemon.log" &
+   ./target/debug/sheprd-remote-control serve --state-dir "$state" --port 7543 2> "$state/daemon.log" &
    ```
 
-   - It reads the local Herdr's workspaces.
+    - It reads the local Herdr daemon's workspaces.
    - The macOS firewall blocks an unsigned debug daemon on LAN and
      Tailscale addresses, so the simulator uses `127.0.0.1`.
 2. **Pair without the camera.** Build signed to run locally, so the app
@@ -62,7 +73,7 @@ and nothing goes through your phone.
    fail with "A required entitlement isn't present"):
 
    ```sh
-   cd ios && xcodebuild -project HerdrRemote.xcodeproj -scheme HerdrRemote \
+   cd ios && xcodebuild -project SheprdRemote.xcodeproj -scheme SheprdRemote \
      -destination 'platform=iOS Simulator,id=DEVICE' -derivedDataPath build \
      CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build
    ```
@@ -136,7 +147,7 @@ app, once the repository's `testflight` environment holds these secrets:
 
 ## Pair
 
-1. In Herdr, open Remote control > Pair device.
+1. In Sheprd, open Remote control > Pair device.
 2. In the app, tap +, and scan the QR (or paste its link).
 3. Compare the 6-digit code with the computer's dialog and choose Allow
    there.
@@ -151,21 +162,22 @@ While the pairing dialog is open, the computer can also be found nearby:
 
 - **Same network:** `_herdr-remote._tcp` with `pairing=1` in its TXT
   record.
-  - On macOS, the `herdr-nearby` helper advertises it through the system.
+  - On macOS, the `sheprd-nearby` helper advertises it through the system.
   - Elsewhere, the daemon advertises it.
-- **Bluetooth:** the `herdr-nearby` helper beside Herdr advertises the
+- **Bluetooth:** the `sheprd-nearby` helper beside Sheprd advertises the
   nearby service. On macOS it is the Swift helper; on Linux (BlueZ) and
-  Windows (WinRT) it is the Rust crate `crates/herdr-nearby`.
+  Windows (WinRT) it is the Rust crate `crates/sheprd-nearby`.
 
-The app shows a card for it (or lists it in the pair sheet). Tap Pair,
-compare the six digits with the computer's dialog, and choose Allow
+A phone with no computers yet shows a card for it. After that, a banner
+at the top of Home and Workspaces offers it, and tapping it opens the card
+(the pair sheet in Settings lists it too). Tap Pair, compare the six digits with the computer's dialog, and choose Allow
 there. The code comes from a commitment-based exchange
 (`docs/ios-app-plan.md`, "Nearby pairing, exactly"), so it also vouches
 for the CA fingerprint the claim then pins.
 
 ## APNs key for the daemon
 
-The daemon (`herdr-remote-control`) sends Live Activity pushes with your own
+The daemon (`sheprd-remote-control`) sends Live Activity pushes with your own
 APNs token key. Without it everything else works, and the app's token upload
 is answered 503.
 
@@ -197,7 +209,7 @@ is answered 503.
    - `key_id` is the key's ID.
    - `topic` is the app's bundle identifier. The daemon adds
      `.push-type.liveactivity` itself.
-4. **Restart.** Restart remote control in Herdr, so the daemon reads them at
+4. **Restart.** Restart remote control in Sheprd, so the daemon reads them at
    start.
 
 `STATE_DIR` is the remote control daemon's private state directory (its
@@ -218,7 +230,7 @@ The two must match, so switch both together.
 
 With the APNs key installed, questions, finished turns, and errors reach
 the phone as APNs alerts instead of Web Push. These alerts are sealed to
-the phone: Apple sees only "Herdr", "New activity", and ciphertext.
+the phone: Apple sees only "Sheprd", "New activity", and ciphertext.
 
 1. **Registration.** The app asks to show alerts after the first pairing.
    It then registers its APNs token with each computer, along with the
@@ -230,7 +242,7 @@ the phone: Apple sees only "Herdr", "New activity", and ciphertext.
    - So one paired computer cannot send an alert whose actions reach
      another.
 2. **Opening.** The Notification Service Extension
-   (`HerdrRemoteNotifications`) opens each alert. It shows the chat's
+   (`SheprdRemoteNotifications`) opens each alert. It shows the chat's
    title and text, groups the alert with the chat's other notifications,
    and adds the actions.
 3. **Actions.**
@@ -266,14 +278,14 @@ extension. For the simulator loop:
     rewrites as homes change.
   - The file is readable after the first unlock, so lock screen widgets
     draw. The full cache stays readable only while unlocked.
-- **Controls:** Herdr Chats and New Herdr Workspace, for Control Center,
+- **Controls:** Sheprd Chats and New Sheprd Workspace, for Control Center,
   the Lock Screen, and the Action button.
 - **Siri and Shortcuts:**
   - What needs me, Ask a chat, Stop a chat, and Open the chats.
   - Asking and stopping need an unlocked phone.
   - Chats are `ChatEntity`s that Spotlight indexes. Tapping one opens the
     chat.
-- **Share sheet:** "Herdr" sends text, a link, or up to four pictures to
+- **Share sheet:** "Sheprd" sends text, a link, or up to four pictures to
   a chat as a prompt. It signs in like the app does, because the paired
   computers' keychain item lives in the App Group's keychain group. An
   item from before moves there on first launch.
@@ -303,9 +315,9 @@ extension. For the simulator loop:
 
 ## What the daemon sends
 
-Live Activity payloads follow `ChatActivityState` (`HerdrRemoteCore`) and
-`crates/herdr-remote-control/src/apns/payload.rs`; both sides test the
-fixtures under `HerdrRemoteCore/Tests/HerdrRemoteCoreTests/Fixtures`.
+Live Activity payloads follow `ChatActivityState` (`SheprdRemoteCore`) and
+`crates/sheprd-remote-control/src/apns/payload.rs`; both sides test the
+fixtures under `SheprdRemoteCore/Tests/SheprdRemoteCoreTests/Fixtures`.
 
 - **Start:** a turn starting sends `start` through the push-to-start token.
 - **Update:** tool calls, plan steps, and questions send `update`. Questions

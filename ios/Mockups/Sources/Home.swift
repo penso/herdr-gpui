@@ -36,7 +36,7 @@ struct HomeGrouped: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Herdr")
+            .navigationTitle("Sheprd")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {} label: { Image(systemName: "magnifyingglass") }
@@ -123,7 +123,7 @@ struct AttentionList: View {
                     .padding(.horizontal, 16)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Herdr")
+            .navigationTitle("Sheprd")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {} label: { Image(systemName: "plus") }
@@ -267,7 +267,7 @@ struct HomeFiltered: View {
                     }
                 }
             }
-            .navigationTitle("Herdr")
+            .navigationTitle("Sheprd")
             .navigationSubtitle("3 computers · 2 need you")
             .searchable(text: .constant(""), prompt: "Chats, workspaces, computers")
             .toolbar {

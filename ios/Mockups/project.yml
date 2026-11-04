@@ -1,7 +1,7 @@
-# Native screen mockups for the Herdr Remote app (docs/ios-app-plan.md).
+# Native screen mockups for the Sheprd app (docs/ios-app-plan.md).
 # `render.sh` builds this, runs each variant in a headless simulator, and
 # writes screenshots plus a picking page. Not shipped.
-name: HerdrMockups
+name: SheprdMockups
 
 options:
   bundleIdPrefix: so.pen
@@ -16,14 +16,14 @@ settings:
     CODE_SIGNING_ALLOWED: NO
 
 targets:
-  HerdrMockups:
+  SheprdMockups:
     type: application
     platform: iOS
     sources: [Sources]
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: Herdr Mockups
+        CFBundleDisplayName: Sheprd Mockups
         UILaunchScreen: {}
     settings:
       base:

@@ -19,7 +19,7 @@ version=${1#v} output=$2 fingerprint=$3
 [[ ! -e $output && ! -L $output ]] || { echo 'Output already exists' >&2; exit 1; }
 scripts=$(cd -- "$(dirname -- "$0")" && pwd)
 mkdir -m 700 -- "$output"
-gh release download "v$version" --repo penso/herdr-gpui --dir "$output"
+gh release download "v$version" --repo sheprd-labs/sheprd --dir "$output"
 bash "$scripts/verify-release.sh" --version "$version" --directory "$output"
 mkdir -m 700 "$output/gpg"
 while IFS= read -r name; do

@@ -95,7 +95,7 @@ enum SpaceSample {
             Repo(name: "butler", avatar: .green, main: Space(name: "butler", branch: "main"), worktrees: [
                 Space(name: "priority-5 web & polish", branch: "priority-5", pr: SpacePR(number: 22, tone: .open)),
             ]),
-            Repo(name: "herdr-gpui", avatar: .green, main: Space(name: "herdr-gpui", branch: "main"), worktrees: [
+            Repo(name: "sheprd", avatar: .green, main: Space(name: "sheprd", branch: "main"), worktrees: [
                 Space(name: "browser agent", branch: "worktree/browser", note: true),
                 Space(name: "Phone push notifications", branch: "push", pr: SpacePR(number: 256, tone: .failing)),
                 Space(name: "i18n 5 platform", branch: "i18n-5", mark: .unread, pr: SpacePR(number: 908, tone: .failing), agents: 1),
@@ -118,14 +118,14 @@ enum SpaceSample {
 
     static let tabs: [SpaceTab] = [
         SpaceTab(title: "Spaces tab mockups", agent: .claude, status: .needsYou,
-                 detail: "Allow `xcodebuild -project HerdrMockups…`?",
+                 detail: "Allow `xcodebuild -project SheprdMockups…`?",
                  preview: ["Write Sources/Spaces.swift", "Run ./render.sh dark spaces"]),
         SpaceTab(title: "iOS reconnect backoff", agent: .codex, status: .working, detail: "Running swift test",
                  elapsed: "2:41", preview: ["Edit LiveSocket.swift +31 −8", "Run swift test"]),
         SpaceTab(title: "zsh", agent: .terminal, status: .idle, detail: "~/…/worktree-mobile-app-preview",
                  preview: ["$ just ci", "test result: ok. 412 passed"]),
-        SpaceTab(title: "just run", agent: .terminal, status: .idle, detail: "herdr-gpui · release",
-                 preview: ["Finished `release` profile", "Running target/release/herdr-gpui"]),
+        SpaceTab(title: "just run", agent: .terminal, status: .idle, detail: "sheprd · release",
+                 preview: ["Finished `release` profile", "Running target/release/sheprd"]),
     ]
 }
 

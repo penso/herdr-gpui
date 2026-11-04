@@ -20,7 +20,7 @@ INSTALLER = load("windows_installer", SCRIPTS / "windows-installer.py")
 PACKAGE = load("package_windows", SCRIPTS / "package-windows.py")
 VERSION = "20260920.3"
 TARGET = "x86_64-pc-windows-msvc"
-ROOT = f"Herdr-{VERSION}-{TARGET}"
+ROOT = f"Sheprd-{VERSION}-{TARGET}"
 OPTIONAL = 0x40 + 24
 CHECKSUM = OPTIONAL + 64
 SECURITY = OPTIONAL + 112 + 4 * 8
@@ -107,13 +107,15 @@ class RepackTests(unittest.TestCase):
         self.core = executable(length=0x30C)
         self.archive = self.work / f"{ROOT}.zip"
         with zipfile.ZipFile(self.archive, "w") as release:
-            PACKAGE.add(release, f"{ROOT}/herdr-gpui.exe", self.app)
-            PACKAGE.add(release, f"{ROOT}/herdr-gpui-launcher.exe", self.launcher)
-            PACKAGE.add(release, f"{ROOT}/herdr-acp.exe", self.acp)
-            PACKAGE.add(release, f"{ROOT}/herdr-remote-control.exe", self.remote_control)
-            PACKAGE.add(release, f"{ROOT}/herdr-automate.exe", self.automate)
-            PACKAGE.add(release, f"{ROOT}/herdr-nearby.exe", self.nearby)
+            PACKAGE.add(release, f"{ROOT}/sheprd.exe", self.app)
+            PACKAGE.add(release, f"{ROOT}/sheprd-launcher.exe", self.launcher)
+            PACKAGE.add(release, f"{ROOT}/sheprd-acp.exe", self.acp)
+            PACKAGE.add(release, f"{ROOT}/sheprd-remote-control.exe", self.remote_control)
+            PACKAGE.add(release, f"{ROOT}/sheprd-automate.exe", self.automate)
+            PACKAGE.add(release, f"{ROOT}/sheprd-nearby.exe", self.nearby)
             PACKAGE.add(release, f"{ROOT}/herdr-core.exe", self.core)
+            for alias, canonical in PACKAGE.ALIASES.items():
+                PACKAGE.add(release, f"{ROOT}/{alias}", release.read(f"{ROOT}/{canonical}"))
             PACKAGE.add(release, f"{ROOT}/licenses/LICENSE", b"license")
         self.output = self.work / "signed"
         self.output.mkdir()
@@ -121,13 +123,15 @@ class RepackTests(unittest.TestCase):
     def signed_tree(self):
         root = SIGNING.unpack(self.archive, self.work / "tree")
         self.assertEqual(root, (self.work / "tree" / ROOT).resolve())
-        (root / "herdr-gpui.exe").write_bytes(sign(self.app))
-        (root / "herdr-gpui-launcher.exe").write_bytes(sign(self.launcher))
-        (root / "herdr-acp.exe").write_bytes(sign(self.acp))
-        (root / "herdr-remote-control.exe").write_bytes(sign(self.remote_control))
-        (root / "herdr-automate.exe").write_bytes(sign(self.automate))
-        (root / "herdr-nearby.exe").write_bytes(sign(self.nearby))
+        (root / "sheprd.exe").write_bytes(sign(self.app))
+        (root / "sheprd-launcher.exe").write_bytes(sign(self.launcher))
+        (root / "sheprd-acp.exe").write_bytes(sign(self.acp))
+        (root / "sheprd-remote-control.exe").write_bytes(sign(self.remote_control))
+        (root / "sheprd-automate.exe").write_bytes(sign(self.automate))
+        (root / "sheprd-nearby.exe").write_bytes(sign(self.nearby))
         (root / "herdr-core.exe").write_bytes(sign(self.core))
+        for alias, canonical in PACKAGE.ALIASES.items():
+            (root / alias).write_bytes((root / canonical).read_bytes())
         return root
 
     def test_repacks_the_signed_tree_in_the_zips_order(self):
@@ -137,27 +141,29 @@ class RepackTests(unittest.TestCase):
         with zipfile.ZipFile(self.archive) as unsigned, zipfile.ZipFile(output) as signed:
             self.assertEqual(signed.namelist(), unsigned.namelist())
             self.assertEqual([i.date_time for i in signed.infolist()], [PACKAGE.TIMESTAMP] * len(unsigned.infolist()))
-            self.assertEqual(signed.read(f"{ROOT}/herdr-gpui.exe"), sign(self.app))
-            self.assertEqual(signed.read(f"{ROOT}/herdr-gpui-launcher.exe"), sign(self.launcher))
-            self.assertEqual(signed.read(f"{ROOT}/herdr-acp.exe"), sign(self.acp))
-            self.assertEqual(signed.read(f"{ROOT}/herdr-remote-control.exe"), sign(self.remote_control))
-            self.assertEqual(signed.read(f"{ROOT}/herdr-automate.exe"), sign(self.automate))
+            self.assertEqual(signed.read(f"{ROOT}/sheprd.exe"), sign(self.app))
+            self.assertEqual(signed.read(f"{ROOT}/sheprd-launcher.exe"), sign(self.launcher))
+            self.assertEqual(signed.read(f"{ROOT}/sheprd-acp.exe"), sign(self.acp))
+            self.assertEqual(signed.read(f"{ROOT}/sheprd-remote-control.exe"), sign(self.remote_control))
+            self.assertEqual(signed.read(f"{ROOT}/sheprd-automate.exe"), sign(self.automate))
             self.assertEqual(signed.read(f"{ROOT}/herdr-core.exe"), sign(self.core))
             self.assertEqual(signed.read(f"{ROOT}/licenses/LICENSE"), b"license")
+            for alias, canonical in PACKAGE.ALIASES.items():
+                self.assertEqual(signed.read(f"{ROOT}/{alias}"), signed.read(f"{ROOT}/{canonical}"))
         with self.assertRaisesRegex(ValueError, "Output already exists"):
             SIGNING.repack(self.archive, self.work / "tree", self.output)
 
     def test_refuses_a_tree_that_is_not_the_signed_zip(self):
         root = self.signed_tree()
         for name, change, undo in [
-            ("unsigned launcher", lambda: (root / "herdr-gpui-launcher.exe").write_bytes(self.launcher),
-             lambda: (root / "herdr-gpui-launcher.exe").write_bytes(sign(self.launcher))),
-            ("unsigned herdr-acp", lambda: (root / "herdr-acp.exe").write_bytes(self.acp),
-             lambda: (root / "herdr-acp.exe").write_bytes(sign(self.acp))),
-            ("unsigned herdr-remote-control", lambda: (root / "herdr-remote-control.exe").write_bytes(self.remote_control),
-             lambda: (root / "herdr-remote-control.exe").write_bytes(sign(self.remote_control))),
-            ("unsigned herdr-automate", lambda: (root / "herdr-automate.exe").write_bytes(self.automate),
-             lambda: (root / "herdr-automate.exe").write_bytes(sign(self.automate))),
+            ("unsigned launcher", lambda: (root / "sheprd-launcher.exe").write_bytes(self.launcher),
+             lambda: (root / "sheprd-launcher.exe").write_bytes(sign(self.launcher))),
+            ("unsigned sheprd-acp", lambda: (root / "sheprd-acp.exe").write_bytes(self.acp),
+             lambda: (root / "sheprd-acp.exe").write_bytes(sign(self.acp))),
+            ("unsigned sheprd-remote-control", lambda: (root / "sheprd-remote-control.exe").write_bytes(self.remote_control),
+             lambda: (root / "sheprd-remote-control.exe").write_bytes(sign(self.remote_control))),
+            ("unsigned sheprd-automate", lambda: (root / "sheprd-automate.exe").write_bytes(self.automate),
+             lambda: (root / "sheprd-automate.exe").write_bytes(sign(self.automate))),
             ("unsigned herdr-core", lambda: (root / "herdr-core.exe").write_bytes(self.core),
              lambda: (root / "herdr-core.exe").write_bytes(sign(self.core))),
             ("changed license", lambda: (root / "licenses/LICENSE").write_bytes(b"other"),
@@ -176,7 +182,7 @@ class RepackTests(unittest.TestCase):
         (self.work / "tree").mkdir()
         with self.assertRaisesRegex(ValueError, "already exists"):
             SIGNING.unpack(self.archive, self.work / "tree")
-        foreign = self.work / f"Herdr-{VERSION}-aarch64-pc-windows-msvc.zip"
+        foreign = self.work / f"Sheprd-{VERSION}-aarch64-pc-windows-msvc.zip"
         self.archive.rename(foreign)
         with self.assertRaisesRegex(ValueError, "outside its root"):
             SIGNING.unpack(foreign, self.work / "other")

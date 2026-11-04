@@ -1,6 +1,6 @@
 import CryptoKit
 import Foundation
-import HerdrRemoteCore
+import SheprdRemoteCore
 import UserNotifications
 
 /// Opens `sealed` (base64url) with the key the app stored, and shows the
