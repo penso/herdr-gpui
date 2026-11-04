@@ -6,7 +6,8 @@ import Observation
 /// Computers whose pairing dialog is open nearby, found over Bluetooth:
 /// the Mac's `sheprd-nearby` helper advertises only then. Scans while the
 /// pair sheet is open or no computer is paired, so the Bluetooth prompt
-/// comes when the person is pairing. Callbacks arrive on the main queue
+/// comes when the person is pairing, and once allowed, while the app is in
+/// front (`RootView`). Callbacks arrive on the main queue
 /// (`queue: nil`); the preconcurrency conformances check that at run time.
 @MainActor
 @Observable
@@ -49,6 +50,9 @@ final class NearbyBluetooth: NSObject {
             }
         }
     }
+
+    /// The person has allowed Bluetooth, so scanning prompts for nothing.
+    static var allowed: Bool { CBManager.authorization == .allowedAlways }
 
     /// Whether `window` wants scanning. One window closing its pair sheet
     /// leaves another that is still pairing scanning.

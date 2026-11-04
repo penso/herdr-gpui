@@ -18,7 +18,6 @@ struct WorkspaceKey: Hashable {
 /// index on its edge, as Contacts has.
 struct WorkspacesTab: View {
     @Environment(AppModel.self) private var model
-    @Binding var pairing: Bool
     @State private var query = ""
     /// The computer whose page is open from its header menu.
     @State private var details: String?
@@ -55,12 +54,8 @@ struct WorkspacesTab: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("New Workspace", systemImage: "folder.badge.plus") { model.creating = .workspace(device: nil) }
-                        .disabled(model.fleet.machines.isEmpty)
-                    Button("Pair a Computer", systemImage: "laptopcomputer.and.iphone") { pairing = true }
-                } label: { Image(systemName: "plus") }
-                .accessibilityLabel("New")
+                Button("New Workspace", systemImage: "plus") { model.creating = .workspace(device: nil) }
+                    .disabled(model.fleet.machines.isEmpty)
             }
         }
     }
@@ -97,14 +92,18 @@ struct WorkspacesTab: View {
                     .sectionIndexLabel("•")
                 }
             }
-            Section {
-                Button { pairing = true } label: { Label("Add a computer", systemImage: "plus") }
-            }
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(14)
         .listSectionIndexVisibility(openWorkspaces >= Self.indexedFrom ? .visible : .hidden)
         .refreshable { model.fleet.networkChanged() }
+        .nearbyBanner()
+        .overlay {
+            if model.computers.isEmpty {
+                ContentUnavailableView("No computers yet", systemImage: "desktopcomputer",
+                                       description: Text("Pair one in Settings to see its workspaces here."))
+            }
+        }
     }
 
     private var openWorkspaces: Int {

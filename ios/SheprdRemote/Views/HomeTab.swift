@@ -9,6 +9,7 @@ struct HomeTab: View {
 
     var body: some View {
         ChatList()
+            .nearbyBanner()
             .navigationBarTitleDisplayMode(.inline)
             .onAppear { window?.home = true }
             .onDisappear { window?.home = false }

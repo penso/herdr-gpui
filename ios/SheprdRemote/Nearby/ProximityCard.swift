@@ -2,8 +2,9 @@ import SheprdRemoteCore
 import SwiftUI
 import UIKit
 
-/// Pairing B: a card that rises when a computer nearby has its pairing
-/// dialog open, and turns into the code to compare.
+/// Pairing B: a card for a computer nearby with its pairing dialog open,
+/// which turns into the code to compare. It rises by itself on a phone with
+/// no computers yet; after that, from `NearbyBanner`.
 struct ProximityCard: View {
     @Environment(AppModel.self) private var model
     let computer: NearbyComputer
@@ -27,7 +28,7 @@ struct ProximityCard: View {
                 Text(computer.name).font(.title2.bold())
                 Text("Sheprd is ready to pair. Its chats, terminals, and notifications will come to this \(UIDevice.current.model).")
                     .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Label(via, systemImage: viaSymbol).font(.caption.weight(.semibold))
+                Label(computer.routeName, systemImage: viaSymbol).font(.caption.weight(.semibold))
                     .padding(.horizontal, 10).padding(.vertical, 4).background(.fill.tertiary, in: .capsule)
                 Button { start() } label: { Text("Pair").font(.headline).frame(maxWidth: .infinity) }
                     .buttonStyle(.glassProminent).controlSize(.extraLarge)
@@ -69,10 +70,6 @@ struct ProximityCard: View {
         // `-nearbyPair YES` presses Pair, for the simulator loop.
         .task { if UserDefaults.standard.bool(forKey: "nearbyPair") { start() } }
         #endif
-    }
-
-    private var via: String {
-        if case .bluetooth = computer.route { "Bluetooth" } else { "Same network" }
     }
 
     private var viaSymbol: String {

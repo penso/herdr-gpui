@@ -1,3 +1,4 @@
+import SheprdRemoteCore
 import SwiftUI
 
 /// What belongs to one window rather than the whole app: its pair sheet,
@@ -9,6 +10,8 @@ import SwiftUI
 final class WindowState {
     /// The pair sheet is open; Pair Again opens it from any screen.
     var pairing = false
+    /// The computer nearby whose proximity card is open.
+    var nearby: NearbyComputer?
     /// Chats and terminals on screen: their input is at the bottom, where
     /// the connection toast would cover it.
     var typing = 0

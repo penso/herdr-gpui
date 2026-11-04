@@ -177,19 +177,20 @@ final class AppModel {
         pendingRoute = .chat(PaneKey(device: computer.device, pane: link.pane), title: title ?? "Chat")
     }
 
-    /// The computers nearby whose pairing dialog is open now. A dismissed
-    /// offer stays dismissed only while it is here: one that closes and
-    /// opens its dialog again offers again.
+    /// The computers nearby whose pairing dialog is open now, by
+    /// fingerprint, as one can be found over both routes. A dismissed offer
+    /// stays dismissed only while it is here: one that closes and opens its
+    /// dialog again offers again.
     var offeredNearby: Set<String> {
-        Set((nearby.computers + bluetooth.computers).filter(\.pairing).map(\.id))
+        Set((nearby.computers + bluetooth.computers).filter(\.pairing).map(\.fingerprintPrefix))
     }
 
     /// A computer nearby with its pairing dialog open that this phone has
-    /// not paired, for the proximity card.
+    /// not paired, for the proximity card and its banner.
     var nearbyOffer: NearbyComputer? {
         // The network first when a computer is found both ways: it is faster.
         (nearby.computers + bluetooth.computers).first { candidate in
-            candidate.pairing && !dismissedNearby.contains(candidate.id)
+            candidate.pairing && !dismissedNearby.contains(candidate.fingerprintPrefix)
                 && !computers.contains { candidate.matches($0.fingerprint) }
         }
     }
