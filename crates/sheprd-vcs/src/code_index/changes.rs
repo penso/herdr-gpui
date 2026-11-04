@@ -24,11 +24,12 @@ pub struct Change {
 /// paths as records of their own. A binary file counts `-`.
 pub(super) fn numstat(output: &[u8]) -> HashMap<String, Option<(u32, u32)>> {
     let mut counts = HashMap::new();
-    let mut records = output
-        .split(|byte| *byte == 0)
-        .filter_map(|record| std::str::from_utf8(record).ok());
+    // Records are split as bytes and a path decoded only once its rename's
+    // records are consumed: skipping an undecodable one earlier would shift
+    // every record after it.
+    let mut records = output.split(|byte| *byte == 0);
     while let Some(record) = records.next() {
-        let mut fields = record.splitn(3, '\t');
+        let mut fields = record.splitn(3, |byte| *byte == b'\t');
         let (Some(added), Some(removed), Some(path)) =
             (fields.next(), fields.next(), fields.next())
         else {
@@ -44,10 +45,18 @@ pub(super) fn numstat(output: &[u8]) -> HashMap<String, Option<(u32, u32)>> {
         } else {
             path
         };
-        let parsed = added.parse().ok().zip(removed.parse().ok());
+        let Ok(path) = std::str::from_utf8(path) else {
+            continue;
+        };
+        let parsed = count(added).zip(count(removed));
         counts.insert(path.to_owned(), parsed);
     }
     counts
+}
+
+/// A numstat count; `None` for a binary file's `-`.
+fn count(field: &[u8]) -> Option<u32> {
+    std::str::from_utf8(field).ok()?.parse().ok()
 }
 
 /// The changes among `files`, newest first: those `counts` names, and those
