@@ -24,6 +24,7 @@ fn tool(
             kind,
             locations: Vec::new(),
             parent: parent.map(str::to_owned),
+            started_ms: None,
             status,
             title: title.into(),
         }),

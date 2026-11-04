@@ -81,7 +81,8 @@ for image in "$ubuntu" "$debian"; do
         bash -c \"\$REMOVED\""
 done
 run "$name.rpm" "$fedora" "
-    dnf install -q -y --setopt=install_weak_deps=False /dist/$name.rpm >/dev/null
+    # The minimal Fedora image lacks cmp, used to verify compatibility copies.
+    dnf install -q -y --setopt=install_weak_deps=False diffutils /dist/$name.rpm >/dev/null
     bash -c \"\$CHECK\"
     test \"\$(rpm -q --qf '%{VERSION}-%{RELEASE}' herdr-gpui)\" = '$1-1'
     test \"\$(rpm -qf --qf '%{NAME}' /usr/bin/herdr-gpui)\" = herdr-gpui
@@ -91,7 +92,8 @@ if [[ $2 == x86_64-unknown-linux-gnu ]]; then
     run "$name.pkg.tar.zst" "$arch" "
         # pacman 7 drops to a seccomp-sandboxed download user, which some
         # container runtimes refuse; this throwaway container needs neither.
-        pacman -Syu --noconfirm --needed --disable-sandbox >/dev/null
+        # Like Fedora, the minimal Arch image needs diffutils for cmp.
+        pacman -Syu --noconfirm --needed --disable-sandbox diffutils >/dev/null
         pacman -U --noconfirm --disable-sandbox /dist/$name.pkg.tar.zst >/dev/null
         bash -c \"\$CHECK\"
         test \"\$(pacman -Q herdr-gpui)\" = 'herdr-gpui $1-1'

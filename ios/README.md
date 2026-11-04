@@ -168,8 +168,9 @@ While the pairing dialog is open, the computer can also be found nearby:
   nearby service. On macOS it is the Swift helper; on Linux (BlueZ) and
   Windows (WinRT) it is the Rust crate `crates/sheprd-nearby`.
 
-The app shows a card for it (or lists it in the pair sheet). Tap Pair,
-compare the six digits with the computer's dialog, and choose Allow
+A phone with no computers yet shows a card for it. After that, a banner
+at the top of Home and Workspaces offers it, and tapping it opens the card
+(the pair sheet in Settings lists it too). Tap Pair, compare the six digits with the computer's dialog, and choose Allow
 there. The code comes from a commitment-based exchange
 (`docs/ios-app-plan.md`, "Nearby pairing, exactly"), so it also vouches
 for the CA fingerprint the claim then pins.

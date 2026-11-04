@@ -160,6 +160,8 @@ pub(crate) struct ChatPane {
     /// the composer changes, since typing does not redraw the window.
     pub(crate) send: SendButton,
     pub(crate) session: Session,
+    /// Whether the steps running now show in full under the working row.
+    pub(crate) steps: crate::motion::Toggle,
     pub(crate) target: Target,
     /// Expose more of an existing agent's original editor and dialogs inline.
     pub(crate) terminal_size: super::terminal::InputSize,
@@ -264,6 +266,7 @@ impl ChatPane {
             selection: Default::default(),
             send: SendButton::Off,
             session: Session::default(),
+            steps: Default::default(),
             target,
             terminal_size: Default::default(),
             text_drag: Default::default(),

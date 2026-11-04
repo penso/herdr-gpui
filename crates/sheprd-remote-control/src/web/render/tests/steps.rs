@@ -10,6 +10,7 @@ fn call(id: u64, call: &str, title: &str, parent: Option<&str>) -> Entry {
             kind: ToolKind::Subagent,
             locations: Vec::new(),
             parent: parent.map(str::to_owned),
+            started_ms: None,
             status: ToolStatus::InProgress,
             title: title.into(),
         }),

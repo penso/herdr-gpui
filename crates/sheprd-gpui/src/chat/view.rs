@@ -444,6 +444,10 @@ impl SheprdWindow {
                                     .map(|content| self.chat_column(content)),
                             )
                             .children(
+                                self.render_chat_working_steps(chat)
+                                    .map(|content| self.chat_column(content)),
+                            )
+                            .children(
                                 self.render_chat_running_table(chat)
                                     .map(|content| self.chat_column(content)),
                             )
@@ -474,9 +478,27 @@ impl SheprdWindow {
     /// The layout's sign that the agent is working on a turn, with what it
     /// left running said after it.
     fn render_chat_working(&self, chat: &ChatPane, cx: &mut Context<Self>) -> Option<Div> {
-        let working = working::Working::of(chat.session.transcript(), super::now_ms());
+        let open = chat.steps.is_open();
+        let working = working::Working::of(chat.session.transcript(), super::now_ms())
+            .map(|working| working::Working { open, ..working });
         let row = layout::layout_for(self.config.chat.layout)
-            .working(working.as_ref(), &self.chat_look());
+            .working(working.as_ref(), &self.chat_look())
+            .map(|row| {
+                if working.is_none() {
+                    return row;
+                }
+                let pane = chat.target.pane_id.clone();
+                row.cursor_pointer().on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _: &MouseDownEvent, _, cx| {
+                        if let Some(chat) = this.chats.pane_mut(&pane) {
+                            let open = !chat.steps.is_open();
+                            chat.steps.set(open, crate::motion::now(), false);
+                        }
+                        cx.notify();
+                    }),
+                )
+            });
         self.render_chat_running_row(chat, row, working.is_none(), cx)
     }
 

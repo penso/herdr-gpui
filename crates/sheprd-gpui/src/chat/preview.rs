@@ -27,6 +27,7 @@ use crate::{SheprdWindow, config::ChatLayoutMode};
 mod input_resize;
 mod running;
 mod selection;
+mod steps;
 
 const PANE: &str = "rich-chat-preview";
 const WAIT: Duration = Duration::from_secs(20);
@@ -124,10 +125,12 @@ impl Options {
                 | "turns"
                 | "running"
                 | "running-open"
+                | "steps"
+                | "steps-open"
                 | "all"
         ) {
             bail!(
-                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, jump, conversation, existing, input-resize, tools, turns, running, running-open, or all"
+                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, jump, conversation, existing, input-resize, tools, turns, running, running-open, steps, steps-open, or all"
             );
         }
         let hold = std::env::var("HERDR_TEST_RICH_CHAT_HOLD_MS")
@@ -433,6 +436,9 @@ fn install(
     if options.case == "tools" {
         transcript.entries = tool_entries();
     }
+    if options.case.starts_with("steps") {
+        transcript.entries = steps::entries(super::now_ms());
+    }
     if options.case.starts_with("running") {
         transcript.entries = running::entries();
         transcript.activities = running::activities(super::now_ms());
@@ -517,6 +523,12 @@ fn install(
     {
         pane.expanded.insert(EntryId(3));
         pane.running.set(true, crate::motion::now(), true);
+    }
+    // Every running step in full, from the working row.
+    if options.case == "steps-open"
+        && let Some(pane) = view.chats.pane_mut(PANE)
+    {
+        pane.steps.set(true, crate::motion::now(), true);
     }
     // One call's output open, the rest folded, as a reader leaves them.
     if options.case == "tools"
@@ -766,6 +778,7 @@ fn tool_entries() -> Vec<Entry> {
             kind,
             locations: locations.iter().map(|path| (*path).to_owned()).collect(),
             parent: None,
+            started_ms: None,
             status,
             title: title.into(),
         }),

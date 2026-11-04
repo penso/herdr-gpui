@@ -105,6 +105,7 @@ fn tool(status: ToolStatus) -> Tool {
         kind: ToolKind::Execute,
         locations: vec!["src/splits.rs".into()],
         parent: None,
+        started_ms: None,
         status,
         title: "Run just ci".into(),
     }

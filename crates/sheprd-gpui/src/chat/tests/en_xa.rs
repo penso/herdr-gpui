@@ -47,6 +47,7 @@ fn working() -> ServerMessage {
                 kind: ToolKind::Execute,
                 locations: Vec::new(),
                 parent: None,
+                started_ms: None,
                 status: ToolStatus::Completed,
                 title: TITLE.into(),
             }),

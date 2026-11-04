@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -44,6 +45,11 @@ class LinuxSmokeTests(unittest.TestCase):
                 if architecture == "x86_64":
                     expected.append("archlinux")
                 self.assertEqual(images, expected)
+                for image in ("fedora", "archlinux"):
+                    if image in images:
+                        commands = calls[images.index(image)][-1]
+                        setup = commands.split('bash -c "$CHECK"', 1)[0]
+                        self.assertIn("diffutils", shlex.split(setup, comments=True), image)
                 checks = [args[args.index('-e') + 1][6:] for args in calls]
                 for check in checks:
                     self.assertEqual(check, checks[0])

@@ -36,6 +36,7 @@ pub(super) fn conversation(plan: bool) -> ServerMessage {
                 kind: ToolKind::Edit,
                 locations: Vec::new(),
                 parent: None,
+                started_ms: None,
                 status: ToolStatus::Completed,
                 title: "Edit view.rs".into(),
             }),
