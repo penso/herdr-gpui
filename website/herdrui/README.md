@@ -11,6 +11,11 @@ www.herdrui.dev. It is not part of the sheprd.org site: Netlify publishes only
 - Every other path shows the rename notice, `public/index.html`, which opens
   the same path on sheprd.org after five seconds.
 
+- `/assets/rename-social.png` is the card shown when herdrui.dev is shared. Its
+  source is `rename-social.svg`: render it with
+  `rsvg-convert rename-social.svg -o public/assets/rename-social.png`, then
+  raise `?v=` on `og:image` and `twitter:image` so crawlers fetch it again.
+
 The notice must stay identical to
 `design/sheprd-website/herdrui-rename/index.html`; `site/tests/test_website.py`
 checks that.

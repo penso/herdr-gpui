@@ -3,6 +3,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 import re
+import struct
 import subprocess
 import tomllib
 import unittest
@@ -121,6 +122,21 @@ class WebsiteTests(unittest.TestCase):
         self.assertEqual(len(urls), 2)
         self.assertEqual(urls[0], urls[1], "bump ?v= on both tags")
         self.assertRegex(urls[0], r"\?v=\d+$")
+
+    def test_herdrui_notice_announces_the_rename_when_shared(self):
+        worker = ROOT / "website/herdrui"
+        html = (worker / "public/index.html").read_text()
+        urls = re.findall(r'(?:property="og:image"|name="twitter:image") content="([^"]*)"', html)
+        self.assertEqual(len(urls), 2)
+        self.assertEqual(urls[0], urls[1], "bump ?v= on both tags")
+        parsed = urlsplit(urls[0])
+        self.assertEqual(parsed.netloc, "herdrui.dev")
+        self.assertRegex(parsed.query, r"^v=\d+$")
+        self.assertIn(f"'{parsed.path}'", (worker / "worker.js").read_text())
+        data = (worker / "public" / parsed.path.lstrip("/")).read_bytes()
+        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", data[16:24]), (1200, 630))
+        self.assertIn('property="og:url" content="https://herdrui.dev/"', html)
 
 
 if __name__ == "__main__":
