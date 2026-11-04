@@ -4,9 +4,8 @@ The Cloudflare Worker `herdrui-site`, which answers herdrui.dev and
 www.herdrui.dev. It is not part of the sheprd.org site: Netlify publishes only
 `website/site`.
 
-- `/install.sh`, `/install.ps1` and `/llms.txt` keep serving the pre-rename
-  copies in `public/`, which work with `Herdr-*` releases, so old install
-  commands keep working.
+- `/install.sh`, `/install.ps1` and `/llms.txt` serve the same files as
+  sheprd.org, so install commands from old docs get the Sheprd release.
 - `www.herdrui.dev` redirects to herdrui.dev, keeping the path.
 - Every other path shows the rename notice, `public/index.html`, which opens
   the same path on sheprd.org after five seconds.
@@ -20,8 +19,8 @@ The notice must stay identical to
 `design/sheprd-website/herdrui-rename/index.html`; `site/tests/test_website.py`
 checks that.
 
-After a Sheprd-named stable release ships, these install scripts can be
-replaced with the ones in `website/site`.
+The scripts must also match `website/site`, which the same test checks. After
+changing them, deploy this Worker again.
 
 ## Deploy
 
