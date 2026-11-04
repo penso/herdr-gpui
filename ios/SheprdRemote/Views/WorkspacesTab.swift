@@ -11,7 +11,11 @@ struct WorkspaceKey: Hashable {
 /// with its load, then its repositories, each with its own checkout and
 /// its linked worktrees. A workspace opens on a screen of its own with its
 /// tabs (`WorkspaceScreen`). Search covers workspaces, chats, their
-/// messages, and terminals on every computer.
+/// messages, and terminals on every computer, collapsed or not.
+///
+/// With many computers the list gets long, so each collapses to its header,
+/// all of them at once from the toolbar, and a long list gets a section
+/// index on its edge, as Contacts has.
 struct WorkspacesTab: View {
     @Environment(AppModel.self) private var model
     @Binding var pairing: Bool
@@ -19,6 +23,10 @@ struct WorkspacesTab: View {
     /// The computer whose page is open from its header menu.
     @State private var details: String?
     @State private var forgetting: Computer?
+
+    /// Workspaces open at once before the list needs its index: about a
+    /// screenful on a phone.
+    private static let indexedFrom = 12
 
     var body: some View {
         Group {
@@ -34,6 +42,18 @@ struct WorkspacesTab: View {
         .task { if UserDefaults.standard.bool(forKey: "openComputer") { details = model.computers.first?.device } }
         #endif
         .toolbar {
+            if query.isEmpty, model.fleet.machines.count > 1 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    let shown = model.fleet.machines.map(\.id)
+                    let folded = model.collapsed.computers.allCollapsed(shown)
+                    Button(
+                        folded ? "Expand All" : "Collapse All",
+                        systemImage: folded ? "rectangle.expand.vertical" : "rectangle.compress.vertical"
+                    ) {
+                        withAnimation(.snappy) { model.collapsed.computers.toggleAll(shown) }
+                    }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("New Workspace", systemImage: "folder.badge.plus") { model.creating = .workspace(device: nil) }
@@ -48,17 +68,21 @@ struct WorkspacesTab: View {
     private var list: some View {
         List {
             ForEach(model.fleet.machines) { machine in
+                let collapsed = model.collapsed.computers.contains(machine.id)
                 Section {
-                    HostRows(computer: machine.computer)
+                    if !collapsed { HostRows(computer: machine.computer) }
                 } header: {
-                    MachineHeader(machine: machine) {
+                    MachineHeader(machine: machine, collapsed: collapsed, toggle: {
+                        withAnimation(.snappy) { model.collapsed.computers.toggle(machine.id) }
+                    }) {
                         MachineActions(machine: machine, details: { details = machine.id }, forget: { forgetting = machine.computer })
                     }
                     .contextMenu {
                         MachineActions(machine: machine, details: { details = machine.id }, forget: { forgetting = machine.computer })
                     }
                 }
-                ForEach(machine.home?.repositories ?? []) { repository in
+                .sectionIndexLabel(model.displayName(machine.computer).first.map { String($0).uppercased() })
+                ForEach(collapsed ? [] : machine.home?.repositories ?? []) { repository in
                     Section {
                         ForEach(repository.workspaces) { workspace in
                             NavigationLink(value: WorkspaceKey(device: machine.id, workspace: workspace.id)) {
@@ -68,6 +92,9 @@ struct WorkspacesTab: View {
                     } header: {
                         RepositoryHeader(repository: repository, device: machine.id)
                     }
+                    // A dot, as repositories repeat across computers: the
+                    // letters say where each computer starts.
+                    .sectionIndexLabel("•")
                 }
             }
             Section {
@@ -76,20 +103,56 @@ struct WorkspacesTab: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(14)
+        .listSectionIndexVisibility(openWorkspaces >= Self.indexedFrom ? .visible : .hidden)
         .refreshable { model.fleet.networkChanged() }
+    }
+
+    private var openWorkspaces: Int {
+        model.fleet.machines
+            .filter { !model.collapsed.computers.contains($0.id) }
+            .reduce(0) { $0 + ($1.home?.workspaces.count ?? 0) }
     }
 }
 
 /// A computer above its repositories: its name, how the phone reaches it,
-/// whether it is connected, and its CPU and memory.
+/// whether it is connected, and its CPU and memory. A tap on it collapses
+/// or opens the computer; collapsed, it says what it holds, and its status
+/// still says when an agent needs you.
 private struct MachineHeader<Actions: View>: View {
     @Environment(AppModel.self) private var model
     var machine: Fleet.Machine
+    var collapsed: Bool
+    var toggle: () -> Void
     @ViewBuilder var actions: Actions
 
     var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            summary
+                .contentShape(.rect)
+                .onTapGesture(perform: toggle)
+            // Beside the tap, not inside it: a tap here would do both.
+            Menu { actions } label: {
+                Image(systemName: "ellipsis.circle").font(.title3)
+            }
+            .foregroundStyle(.primary)
+            .accessibilityLabel("\(model.displayName(machine.computer)) actions")
+        }
+        .textCase(nil)
+        .padding(.vertical, 4)
+    }
+
+    private var summary: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
+                // The header's tap is for touch; this is what VoiceOver finds.
+                Button(action: toggle) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(collapsed ? 0 : 90))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(collapsed ? "Expand" : "Collapse") \(model.displayName(machine.computer))")
                 Image(systemName: machine.computer.via == nil ? "laptopcomputer" : "server.rack")
                 Text(model.displayName(machine.computer)).font(.headline).lineLimit(1)
                 if let vouching = model.vouching(machine.computer) {
@@ -97,21 +160,24 @@ private struct MachineHeader<Actions: View>: View {
                 }
                 Spacer()
                 MachineStatus(machine: machine)
-                Menu { actions } label: {
-                    Image(systemName: "ellipsis.circle").font(.title3)
-                }
-                .accessibilityLabel("\(model.displayName(machine.computer)) actions")
             }
             .foregroundStyle(.primary)
-            if let load = machine.home?.load {
-                HStack(spacing: 12) {
+            HStack(spacing: 12) {
+                if let load = machine.home?.load {
                     LoadGauge(label: "CPU", percent: load.cpu)
                     LoadGauge(label: "MEM", percent: load.memory)
                 }
+                if collapsed, let held {
+                    Spacer(minLength: 0)
+                    Text(held).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
         }
-        .textCase(nil)
-        .padding(.vertical, 4)
+    }
+
+    private var held: String? {
+        guard let count = machine.home?.workspaces.count, count > 0 else { return nil }
+        return count == 1 ? "1 workspace" : "\(count) workspaces"
     }
 }
 

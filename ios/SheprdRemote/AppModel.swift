@@ -66,6 +66,7 @@ final class AppModel {
     /// Pairing with the hosts each computer's Sheprd knows.
     let hostLinks: HostLinks
     let nearby = NearbyBrowser()
+    let collapsed = CollapsedStore()
     let shortcuts = ShortcutStore()
     let bluetooth = NearbyBluetooth()
     /// Bluetooth presence with the computers that have it on.
@@ -150,6 +151,7 @@ final class AppModel {
         save()
         try? NotifyKey.forget(computer.fingerprint)
         hostLinks.forget(computer)
+        collapsed.computers.forget(computer.device)
         Task { await sessions.forget(computer) }
     }
 
