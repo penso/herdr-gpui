@@ -87,3 +87,24 @@ fn a_gitlab_project_lists_no_pull_requests_even_signed_in(cx: &mut gpui::TestApp
         });
     });
 }
+
+/// A pull request tab opened before the listing found a GitLab remote can
+/// no longer be used once it has; Ctrl-Tab still moves from it, either way.
+#[gpui::test]
+fn ctrl_tab_leaves_a_pull_request_tab_gitlab_does_not_have(cx: &mut gpui::TestAppContext) {
+    for (keys, landed) in [
+        ("ctrl-tab", Tab::Items(Kind::Issue)),
+        ("ctrl-shift-tab", Tab::Branches),
+    ] {
+        let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+        cx.simulate_resize(gpui::size(gpui::px(900.), gpui::px(700.)));
+        open_dialog(&view, cx, true, Tab::Items(Kind::PullRequest));
+        view.update(cx, |view, _| {
+            let source = view.menu.worktree.as_mut().unwrap();
+            source.install(gitlab(), vec![issue()]);
+        });
+        assert_eq!(tab(&view, cx), Tab::Items(Kind::PullRequest));
+        cx.simulate_keystrokes(keys);
+        assert_eq!(tab(&view, cx), landed, "{keys}");
+    }
+}

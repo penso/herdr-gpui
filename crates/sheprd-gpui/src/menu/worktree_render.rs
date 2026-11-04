@@ -384,24 +384,31 @@ impl SheprdWindow {
     }
 
     /// Move to the next tab of the strip, or the previous one, skipping the
-    /// tabs that cannot be opened.
+    /// tabs that cannot be opened. It steps from the open tab's place in the
+    /// strip, so it still moves when that tab itself can no longer be opened.
     fn step_worktree_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let current = self
             .menu
             .worktree
             .as_ref()
             .map_or(Tab::New, |source| source.tab);
-        let tabs: Vec<Tab> = Tab::ALL
-            .into_iter()
-            .filter(|tab| self.worktree_tab_enabled(*tab))
-            .collect();
-        if let Some(index) = tabs.iter().position(|tab| *tab == current) {
-            let next = if forward {
-                (index + 1) % tabs.len()
-            } else {
-                (index + tabs.len() - 1) % tabs.len()
-            };
-            self.select_worktree_tab(tabs[next], window, cx);
+        let count = Tab::ALL.len();
+        let at = Tab::ALL
+            .iter()
+            .position(|tab| *tab == current)
+            .unwrap_or_default();
+        let next = (1..count)
+            .map(|step| {
+                let index = if forward {
+                    at + step
+                } else {
+                    at + count - step
+                };
+                Tab::ALL[index % count]
+            })
+            .find(|tab| self.worktree_tab_enabled(*tab));
+        if let Some(tab) = next {
+            self.select_worktree_tab(tab, window, cx);
         }
     }
 

@@ -810,6 +810,19 @@ impl SheprdWindow {
         if !source.lookup.poll() {
             return;
         }
+        // The listing can show that the open tab is one this repository does
+        // not have, as a GitLab project's pull request tab: its issues open
+        // instead, typed into by the same search field.
+        let current = source.tab;
+        let issues = Tab::Items(Kind::Issue);
+        let moved = (!self.worktree_tab_enabled(current) && self.worktree_tab_enabled(issues))
+            .then_some(issues);
+        let Some(source) = &mut self.menu.worktree else {
+            return;
+        };
+        if let Some(tab) = moved {
+            source.tab = tab;
+        }
         let ready = source.lookup.ready.take();
         source.refresh();
         let pending = match (ready, &source.pending) {
