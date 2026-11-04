@@ -163,20 +163,18 @@ fn a_running_step_shows_even_when_a_later_one_finished_first() {
 
 #[core::prelude::v1::test]
 fn steps_beside_the_newest_are_counted_and_listed() {
-    let shown = Working::of(
-        &working(vec![
-            prompt(),
-            step("first", ToolStatus::InProgress),
-            step("done", ToolStatus::Completed),
-            step("second", ToolStatus::Pending),
-            step("third", ToolStatus::InProgress),
-        ]),
-        0,
-    )
-    .unwrap();
+    let transcript = working(vec![
+        prompt(),
+        step("first", ToolStatus::InProgress),
+        step("done", ToolStatus::Completed),
+        step("second", ToolStatus::Pending),
+        step("third", ToolStatus::InProgress),
+    ]);
+    let shown = Working::of(&transcript, 0).unwrap();
     assert_eq!(shown.doing, "third");
     assert_eq!(shown.more, 2);
-    let texts: Vec<_> = shown.steps.iter().map(|step| step.text.as_str()).collect();
+    let steps = Step::running(&transcript, 0);
+    let texts: Vec<_> = steps.iter().map(|step| step.text.as_str()).collect();
     assert_eq!(texts, ["third", "second", "first"]);
 }
 
@@ -185,17 +183,14 @@ fn a_sub_agent_gives_way_to_a_step_and_is_not_counted() {
     let agent = EntryKind::Tool(tool(ToolKind::Subagent, "Review", ToolStatus::InProgress));
     let waiting = Working::of(&working(vec![prompt(), agent.clone()]), 0).unwrap();
     assert_eq!((waiting.doing.as_str(), waiting.more), ("Review", 0));
-    let stepping = Working::of(
-        &working(vec![
-            prompt(),
-            step("cargo test", ToolStatus::InProgress),
-            agent,
-        ]),
-        0,
-    )
-    .unwrap();
+    let transcript = working(vec![
+        prompt(),
+        step("cargo test", ToolStatus::InProgress),
+        agent,
+    ]);
+    let stepping = Working::of(&transcript, 0).unwrap();
     assert_eq!((stepping.doing.as_str(), stepping.more), ("cargo test", 0));
-    assert_eq!(stepping.steps.len(), 2);
+    assert_eq!(Step::running(&transcript, 0).len(), 2);
 }
 
 #[core::prelude::v1::test]
@@ -218,27 +213,17 @@ fn each_step_keeps_its_own_time_from_the_first_second() {
     let mut fresh = tool(ToolKind::Execute, "fresh", ToolStatus::InProgress);
     fresh.started_ms = Some(41_500);
     let unknown = tool(ToolKind::Execute, "unknown", ToolStatus::InProgress);
-    let shown = Working::of(
-        &working(vec![
-            EntryKind::Tool(unknown),
-            EntryKind::Tool(slow),
-            EntryKind::Tool(fresh),
-        ]),
-        42_000,
-    )
-    .unwrap();
+    let transcript = working(vec![
+        EntryKind::Tool(unknown),
+        EntryKind::Tool(slow),
+        EntryKind::Tool(fresh),
+    ]);
+    let shown = Working::of(&transcript, 42_000).unwrap();
     assert_eq!(shown.step, None, "the newest has not run a second yet");
-    assert_eq!(shown.steps[0].elapsed, None);
-    assert!(
-        shown.steps[1]
-            .elapsed
-            .as_ref()
-            .is_some_and(|e| e.contains("41"))
-    );
-    assert_eq!(
-        shown.steps[2].elapsed, None,
-        "an older program sent no start"
-    );
+    let steps = Step::running(&transcript, 42_000);
+    assert_eq!(steps[0].elapsed, None);
+    assert!(steps[1].elapsed.as_ref().is_some_and(|e| e.contains("41")));
+    assert_eq!(steps[2].elapsed, None, "an older program sent no start");
 }
 
 #[core::prelude::v1::test]
@@ -266,7 +251,35 @@ fn the_list_is_bounded_but_the_count_is_not() {
     let entries = (0..MAX_STEPS + 4)
         .map(|index| step(&format!("step {index}"), ToolStatus::InProgress))
         .collect();
-    let shown = Working::of(&working(entries), 0).unwrap();
-    assert_eq!(shown.steps.len(), MAX_STEPS);
-    assert_eq!(shown.more, MAX_STEPS + 3);
+    let transcript = working(entries);
+    assert_eq!(Step::running(&transcript, 0).len(), MAX_STEPS);
+    assert_eq!(Working::of(&transcript, 0).unwrap().more, MAX_STEPS + 3);
+}
+
+#[core::prelude::v1::test]
+fn an_agents_text_loses_controls_and_direction_overrides_but_not_its_lines() {
+    assert_eq!(step_title("rm\u{202e}gpj.txt\u{7}"), "rmgpj.txt");
+    assert_eq!(step_title("\u{202e}\u{7}"), "Working");
+    let mut edit = tool(
+        ToolKind::Edit,
+        "one\u{202e}\ntwo\u{1b}",
+        ToolStatus::InProgress,
+    );
+    edit.locations = vec!["src/\u{202e}b.rs".into()];
+    assert_eq!(step_text(&edit), "one\ntwo\nsrc/b.rs");
+    let doing = step_doing(&edit).replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(doing, "Editing src/b.rs");
+    let blank = tool(ToolKind::Execute, "\u{202e}", ToolStatus::InProgress);
+    assert_eq!(step_text(&blank), "Working");
+}
+
+#[core::prelude::v1::test]
+fn a_steps_files_are_capped_as_well_as_its_title() {
+    let mut edit = tool(ToolKind::Edit, "Edit", ToolStatus::InProgress);
+    edit.locations = (0..MAX_STEP_LOCATIONS + 50)
+        .map(|index| format!("dir/{index}/{}", "x".repeat(MAX_LINE * 2)))
+        .collect();
+    let text = step_text(&edit);
+    assert_eq!(text.lines().count(), MAX_STEP_LOCATIONS + 1);
+    assert!(text.lines().all(|line| line.chars().count() <= MAX_LINE));
 }

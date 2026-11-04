@@ -5,7 +5,7 @@
 //! scrolled back.
 
 use super::{layout::Look, rail::short_path};
-use crate::{HerdrWindow, chat::chats::ChatPane, i18n::fl, motion};
+use crate::{SheprdWindow, chat::chats::ChatPane, i18n::fl, motion, notifications::safe_text};
 use gpui::{prelude::*, *};
 use sheprd_chat_protocol::{EntryKind, Status, Tool, ToolKind, ToolStatus, Transcript};
 use std::time::Duration;
@@ -16,9 +16,15 @@ const PULSE: Duration = Duration::from_millis(1200);
 /// Steps the open list keeps; more than this at once are only counted.
 const MAX_STEPS: usize = 16;
 
-/// Characters of one step the open list draws: a command can carry a whole
-/// script, and this is drawn every frame.
+/// Characters of one step's title the open list draws: a command can carry
+/// a whole script, and this is drawn every frame.
 const MAX_STEP_TEXT: usize = 2000;
+
+/// Files of one step the open list names.
+const MAX_STEP_LOCATIONS: usize = 8;
+
+/// Characters of a file or of the row's one line, as a tool's card shows them.
+const MAX_LINE: usize = 300;
 
 /// Lines the open list shows before it scrolls.
 const LINES: f32 = 6.;
@@ -37,8 +43,6 @@ pub(super) struct Working {
     pub(super) open: bool,
     /// How long the step `doing` names has run, once it is a second or more.
     pub(super) step: Option<String>,
-    /// Every step running, the one `doing` names first.
-    pub(super) steps: Vec<Step>,
 }
 
 /// A running step, in full.
@@ -47,6 +51,28 @@ pub(super) struct Step {
     /// How long it has run, once it is a second or more.
     pub(super) elapsed: Option<String>,
     pub(super) text: String,
+}
+
+impl Step {
+    /// Every step running, the one [`Working`] names first. Only the open
+    /// list asks, as this is more than a closed row needs each frame.
+    pub(super) fn running(transcript: &Transcript, now_ms: u64) -> Vec<Self> {
+        running_steps(transcript)
+            .into_iter()
+            .take(MAX_STEPS)
+            .map(|tool| Self {
+                elapsed: tool.started_ms.and_then(|started| since(started, now_ms)),
+                text: step_text(tool),
+            })
+            .collect()
+    }
+}
+
+/// How long ago `started_ms` was, once it is a second or more.
+fn since(started_ms: u64, now_ms: u64) -> Option<String> {
+    Some(now_ms.saturating_sub(started_ms))
+        .filter(|elapsed| *elapsed >= 1000)
+        .map(crate::chat::text::duration)
 }
 
 impl Working {
@@ -64,30 +90,21 @@ impl Working {
             }
             _ => fl!("chat-working-thinking"),
         };
-        let since = |started_ms: u64| {
-            Some(now_ms.saturating_sub(started_ms))
-                .filter(|elapsed| *elapsed >= 1000)
-                .map(crate::chat::text::duration)
-        };
-        let step_since = |tool: &Tool| tool.started_ms.and_then(since);
         Some(Self {
             doing,
-            elapsed: transcript.turn.and_then(|turn| since(turn.started_ms)),
+            elapsed: transcript
+                .turn
+                .and_then(|turn| since(turn.started_ms, now_ms)),
             more: running
                 .iter()
                 .filter(|tool| tool.kind != ToolKind::Subagent)
                 .count()
                 .saturating_sub(1),
             open: false,
-            step: running.first().and_then(|tool| step_since(tool)),
-            steps: running
-                .iter()
-                .take(MAX_STEPS)
-                .map(|tool| Step {
-                    elapsed: step_since(tool),
-                    text: step_text(tool),
-                })
-                .collect(),
+            step: running
+                .first()
+                .and_then(|tool| tool.started_ms)
+                .and_then(|started| since(started, now_ms)),
         })
     }
 }
@@ -118,9 +135,15 @@ fn running_steps(transcript: &Transcript) -> Vec<&Tool> {
 /// title would cut off, or else its title. A command's locations are where
 /// it runs, not what it works on.
 fn step_doing(tool: &Tool) -> String {
-    let Some(target) = tool.locations.first().map(|path| short_path(path)) else {
+    let target = tool
+        .locations
+        .first()
+        .map(|path| safe_text(short_path(path), MAX_LINE))
+        .filter(|target| !target.is_empty());
+    let Some(target) = target else {
         return step_title(&tool.title);
     };
+    let target = target.as_str();
     match tool.kind {
         ToolKind::Delete => fl!("chat-working-deleting", target = target),
         ToolKind::Edit => fl!("chat-working-editing", target = target),
@@ -131,36 +154,42 @@ fn step_doing(tool: &Tool) -> String {
     }
 }
 
-/// A step as the open list shows it: its whole title, with the files it
-/// touches unless the title names them.
+/// A step as the open list shows it: its title, with the files it touches
+/// unless the title names them. An agent's text is untrusted and unbounded,
+/// so each line is cleaned on its own, which keeps the line breaks, and the
+/// title is cut before anything is done with it.
 fn step_text(tool: &Tool) -> String {
     let title = plain(&tool.title);
-    let mut text = if title.is_empty() {
-        fl!("chat-working")
-    } else {
-        title.to_owned()
-    };
+    let title = title
+        .char_indices()
+        .nth(MAX_STEP_TEXT)
+        .map_or(title, |(end, _)| &title[..end]);
+    let mut lines: Vec<String> = title
+        .lines()
+        .map(|line| safe_text(line, MAX_STEP_TEXT))
+        .collect();
+    if lines.iter().all(String::is_empty) {
+        lines = vec![fl!("chat-working")];
+    }
     if tool.kind != ToolKind::Execute {
-        for location in &tool.locations {
-            if !text.contains(short_path(location)) {
-                text.push('\n');
-                text.push_str(location);
-            }
-        }
+        lines.extend(
+            tool.locations
+                .iter()
+                .take(MAX_STEP_LOCATIONS)
+                .filter(|location| !title.contains(short_path(location)))
+                .map(|location| safe_text(location, MAX_LINE)),
+        );
     }
-    match text.char_indices().nth(MAX_STEP_TEXT) {
-        Some((end, _)) => text[..end].to_owned(),
-        None => text,
-    }
+    lines.join("\n")
 }
 
-/// A step's title as one plain line.
+/// A step's title as one plain, clean line.
 fn step_title(title: &str) -> String {
-    let line = plain(title.lines().next().unwrap_or_default());
+    let line = safe_text(plain(title.lines().next().unwrap_or_default()), MAX_LINE);
     if line.is_empty() {
         fl!("chat-working")
     } else {
-        line.to_owned()
+        line
     }
 }
 
@@ -253,7 +282,7 @@ pub(super) fn row(working: Option<&Working>, look: &Look<'_>) -> Div {
         })
 }
 
-impl HerdrWindow {
+impl SheprdWindow {
     /// The steps running now, in full, opened from the working row; it
     /// grows in and shrinks out, from where it is when turned around. It
     /// stays open between steps, saying what the agent does instead, so it
@@ -264,19 +293,20 @@ impl HerdrWindow {
         if shown <= 0. {
             return None;
         }
-        let working = Working::of(chat.session.transcript(), crate::chat::now_ms())?;
+        let transcript = chat.session.transcript();
+        let now_ms = crate::chat::now_ms();
+        let working = Working::of(transcript, now_ms)?;
         let look = self.chat_look();
         let theme = look.theme;
         let size = (look.text - 1.).max(10.);
         let height = size * 1.6 * LINES;
-        let steps = if working.steps.is_empty() {
-            vec![Step {
+        let mut steps = Step::running(transcript, now_ms);
+        if steps.is_empty() {
+            steps.push(Step {
                 elapsed: None,
                 text: working.doing,
-            }]
-        } else {
-            working.steps
-        };
+            });
+        }
         let rows = steps.into_iter().enumerate().map(|(index, step)| {
             div()
                 .debug_selector(move || format!("chat-step-{index}"))
