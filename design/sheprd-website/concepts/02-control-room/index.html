@@ -21,7 +21,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 02 · Control Room</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 02 · Control Room</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <header class="topbar">
   <a class="brand" href="#main" aria-label="Sheprd, back to top"><img src="../../assets/paw.svg" alt="" width="26" height="26"><span>sheprd</span></a>
@@ -42,7 +42,7 @@
       <p class="lede">Sheprd is a native control room for coding agents. Claude Code, Codex, Gemini, OpenCode, Copilot and any other agent CLI run side by side in their own worktrees, on your laptop, your SSH boxes or cloud machines, and every one of them reports in.</p>
       <div class="ctas">
         <a class="btn" href="#install">Install</a>
-        <a class="btn btn-line" href="https://github.com/sheprd-labs">GitHub</a>
+        <a class="btn btn-line" href="https://github.com/sheprd-labs/sheprd">GitHub</a>
       </div>
       <ul class="agents" aria-label="Agents with native icons">
         <li><img src="../../assets/agent-claude.svg" alt="Claude Code" width="20" height="20"></li>
@@ -99,7 +99,7 @@
     </div>
     <figure class="shot">
       <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" loading="lazy" alt="The Sheprd window: workspaces with nested worktrees, an agents list with Claude, Codex and Pi, an editor pane and terminals showing git log and a passing test run.">
-      <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Demo repositories: ledger-api, pixel-forge, harbor-docs.</figcaption>
+      <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Demo repositories: ledger-api, pixel-forge, harbor-docs.</figcaption>
     </figure>
   </section>
 
@@ -132,7 +132,7 @@
       <article class="panel">
         <h3><span>05</span> Roll back</h3>
         <p>A hidden Git checkpoint at every agent turn, newest 50 per branch. Diff any of them, restore one in a click.</p>
-        <p class="kv"><span>cmd</span> herdr-gpui checkpoint list|diff|restore</p>
+        <p class="kv"><span>cmd</span> sheprd checkpoint list|diff|restore</p>
       </article>
       <article class="panel">
         <h3><span>06</span> Answer from anywhere</h3>
@@ -209,13 +209,13 @@
     <div class="sec-head">
       <p class="idx">[05]</p>
       <h2 id="install-h">Install</h2>
-      <p>Current channel: releases are still published as Herdr UI from penso/herdr-gpui. Sheprd-named releases at <em>github.com/sheprd-labs/sheprd (future)</em> come next.</p>
+      <p>Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
     </div>
     <div class="cmds">
       <div class="cmd"><p class="os">macOS 14.2+ <small>universal</small></p><pre><code>brew install penso/tap/herdr-gpui</code></pre><button type="button" class="copy">Copy</button></div>
-      <div class="cmd"><p class="os">Linux <small>x86_64 · ARM64 · APT, DNF, pacman</small></p><pre><code>curl -fsSL https://herdrui.dev/install.sh | sh</code></pre><button type="button" class="copy">Copy</button></div>
-      <div class="cmd"><p class="os">Windows <small>x86_64 · ARM64 · PowerShell</small></p><pre><code>irm https://herdrui.dev/install.ps1 | iex</code></pre><button type="button" class="copy">Copy</button></div>
-      <div class="cmd"><p class="os">Nix</p><pre><code>nix run github:penso/herdr-gpui</code></pre><button type="button" class="copy">Copy</button></div>
+      <div class="cmd"><p class="os">Linux <small>x86_64 · ARM64 · APT, DNF, pacman</small></p><pre><code>curl -fsSL https://sheprd.org/install.sh | sh</code></pre><button type="button" class="copy">Copy</button></div>
+      <div class="cmd"><p class="os">Windows <small>x86_64 · ARM64 · PowerShell</small></p><pre><code>irm https://sheprd.org/install.ps1 | iex</code></pre><button type="button" class="copy">Copy</button></div>
+      <div class="cmd"><p class="os">Nix</p><pre><code>nix run github:sheprd-labs/sheprd</code></pre><button type="button" class="copy">Copy</button></div>
     </div>
     <p class="phones"><b>iPhone &amp; iPad:</b> TestFlight beta, no public link yet; or build from source. <b>Any phone:</b> the remote-control web app your computer serves once you enable it.</p>
     <p class="sr-only" aria-live="polite" id="copy-status"></p>
@@ -226,7 +226,7 @@
   <div>
     <p class="brand"><img src="../../assets/paw.svg" alt="" width="22" height="22"><span>sheprd</span></p>
     <p>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (<code>herdr server</code> and herdr-core). It is not made, endorsed or supported by the Herdr project. About Herdr: <a href="https://herdr.dev">herdr.dev</a>.</p>
-    <p><a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a> · <em>github.com/sheprd-labs/sheprd (future)</em> · <a href="../../FEATURE-INVENTORY.md">source-backed inventory</a></p>
+    <p><a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a> · <a href="../../FEATURE-INVENTORY.md">source-backed inventory</a></p>
     <p class="fine">Numbers: 8,493 Rust test functions and ~380k lines of production Rust across 26 crates, measured with tokei over tracked first-party files at commit 8e03793da.</p>
   </div>
 </footer>

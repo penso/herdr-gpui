@@ -53,7 +53,7 @@
     ["parallel", "Smart Dispatch", "Ranks connected machines by spare cores and load, then creates the worktree on the best one.", "shipped", "macOS and Linux clients"],
     ["parallel", "Fan-out", "One prompt across several agents and machines; compare the results, keep one, clean up the rest.", "shipped", "macOS and Linux clients"],
     ["parallel", "Teleport", "Move a worktree, its tabs, running programs and agent sessions to another machine, and back.", "shipped", "macOS and Linux clients"],
-    ["parallel", "Agent checkpoints", "A hidden Git snapshot at every agent turn, newest 50 per branch; diff or restore any of them.", "shipped", ""],
+    ["parallel", "Agent checkpoints", "A hidden Git snapshot at every agent turn, newest 50 per branch; diff or restore any of them.", "shipped", "Windows clients: not for SSH hosts"],
     ["parallel", "Move panes between devices", "Move a pane to a new tab, workspace or another machine with its agent session.", "shipped", "macOS and Linux clients"],
     ["git", "Review Changes", "PR-style diff of uncommitted or branch changes, unified or split, with notes you send to the agent.", "shipped", "Local checkouts"],
     ["git", "Commit, push, open the PR", "The title-bar Git menu commits, pushes, creates and merges pull requests and shows checks.", "shipped", ""],

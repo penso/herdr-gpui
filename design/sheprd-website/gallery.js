@@ -19,7 +19,7 @@
   var RECOMMEND = [
     ["03-the-loop", "Best homepage. The issue to PR rail gives a newcomer the whole product in one interaction, and its six steps carry real screenshots and caveats. It stays clean at every width, and its type and grid are the easiest to keep consistent as features grow."],
     ["10-keynote", "Best first impression. Real screenshots do the persuading, the sticky window makes it feel like a native app, and it still ends in the full directory. It works well for a launch, but costs the most to keep current."],
-    ["04-atlas", "Best companion page whichever homepage wins. Make it sheprd.org/features: search, status and platform filters, and the platform matrix answer “does it do X on my OS?” honestly. It also fits the brief to list everything."]
+    ["04-atlas", "Best companion site whichever homepage wins, now planned as docs.sheprd.org: search, status and platform filters, and the platform matrix answer “does it do X on my OS?” honestly. It also fits the brief to list everything."]
   ];
 
   var grid = document.getElementById("grid");
@@ -150,7 +150,7 @@
     var summary = (picked ? "Picked " + name(picked) : "Shortlisted " + shortlist.map(name).join(", ")) + (note ? ": " + note : "");
     var data = { picked: picked, shortlist: shortlist.slice(), note: note };
     var status = document.getElementById("status");
-    // Herdr UI injects window.herdr into local pages; elsewhere copy the result instead.
+    // The app injects window.herdr into local pages; elsewhere copy the result instead.
     if (window.herdr && typeof window.herdr.send === "function") {
       window.herdr.send(summary, data);
       status.textContent = "Added to notes. Press Send to agent.";

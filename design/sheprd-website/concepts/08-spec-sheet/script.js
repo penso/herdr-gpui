@@ -44,7 +44,7 @@
       tdS.appendChild(S.badge(f.status));
       tr.appendChild(tdS);
       var tdW = document.createElement("td");
-      tdW.textContent = f.where || "All desktop platforms";
+      tdW.textContent = f.where || (f.area === "phone" ? "—" : "All desktop platforms");
       tr.appendChild(tdW);
       tr._f = f;
       tr._text = (id + " " + f.name + " " + f.desc + " " + f.where + " " + areaName[f.area]).toLowerCase();

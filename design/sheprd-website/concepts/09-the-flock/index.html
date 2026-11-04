@@ -20,7 +20,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 09 · The Flock</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 09 · The Flock</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <svg width="0" height="0" class="sr-only" aria-hidden="true" focusable="false">
   <symbol id="paw" viewBox="0 0 100 100">
@@ -132,7 +132,7 @@
         </div>
         <figure class="shot">
           <img src="../../assets/shots/workspaces.jpg" alt="Sheprd window: a sidebar of workspaces with nested worktrees and an agent list, beside an editor and two terminal panes running git log and tests." width="1800" height="1125">
-          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
         </figure>
       </li>
 
@@ -145,7 +145,7 @@
         </div>
         <figure class="shot">
           <img src="../../assets/shots/review.jpg" alt="The Review Changes tab: a file list, a coloured diff of ledger.rs and two numbered review notes with a Send to agent button." width="1800" height="1125" loading="lazy">
-          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
         </figure>
       </li>
 
@@ -158,7 +158,7 @@
         </div>
         <figure class="shot">
           <img src="../../assets/shots/browser-annotate.jpg" alt="A browser tab showing a docs page with two numbered annotations pinned to a button and a card, and a notes panel on the right." width="1800" height="1125" loading="lazy">
-          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
         </figure>
       </li>
 
@@ -171,7 +171,7 @@
         </div>
         <figure class="shot shot-small">
           <img src="../../assets/shots/teleport.png" alt="The Teleport dialog listing two SSH machines, build-box and gpu-runner, as destinations for the feat-multi-currency worktree." width="1180" height="640" loading="lazy">
-          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
         </figure>
       </li>
 
@@ -184,7 +184,7 @@
         </div>
         <figure class="shot shot-small">
           <img src="../../assets/shots/usage.png" alt="A usage panel for Codex showing 97 percent of the weekly limit left, reset credits and a credit balance." width="1000" height="800" loading="lazy">
-          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
         </figure>
       </li>
 
@@ -197,7 +197,7 @@
         </div>
         <figure class="shot">
           <img src="../../assets/shots/layouts.jpg" alt="Five sidebar layouts side by side: comfortable-rounded, compact, superset, orca and minimal." width="1800" height="1162" loading="lazy">
-          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
         </figure>
       </li>
     </ol>
@@ -263,7 +263,7 @@
     <div class="section-head">
       <p class="kicker">Open the gate</p>
       <h2 id="install-title">Get Sheprd</h2>
-      <p>Today's builds are still published as Herdr UI; these are the current channels. Sheprd-named downloads from <span class="future">github.com/sheprd-labs/sheprd (future)</span> will replace them.</p>
+      <p>Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
     </div>
     <div class="install-grid">
       <article class="card">
@@ -274,20 +274,20 @@
       </article>
       <article class="card">
         <h3>Linux</h3><p class="req">x86_64 &amp; ARM64 · APT, DNF, pacman</p>
-        <pre><code>curl -fsSL https://herdrui.dev/install.sh | sh</code></pre>
-        <button class="copy" type="button" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">Copy</button>
+        <pre><code>curl -fsSL https://sheprd.org/install.sh | sh</code></pre>
+        <button class="copy" type="button" data-copy="curl -fsSL https://sheprd.org/install.sh | sh">Copy</button>
         <p class="chan">Current channel</p>
       </article>
       <article class="card">
         <h3>Windows</h3><p class="req">x86_64 &amp; ARM64 · PowerShell</p>
-        <pre><code>irm https://herdrui.dev/install.ps1 | iex</code></pre>
-        <button class="copy" type="button" data-copy="irm https://herdrui.dev/install.ps1 | iex">Copy</button>
+        <pre><code>irm https://sheprd.org/install.ps1 | iex</code></pre>
+        <button class="copy" type="button" data-copy="irm https://sheprd.org/install.ps1 | iex">Copy</button>
         <p class="chan">Current channel</p>
       </article>
       <article class="card">
         <h3>Nix</h3><p class="req">x86_64 &amp; ARM64 Linux, from source</p>
-        <pre><code>nix run github:penso/herdr-gpui</code></pre>
-        <button class="copy" type="button" data-copy="nix run github:penso/herdr-gpui">Copy</button>
+        <pre><code>nix run github:sheprd-labs/sheprd</code></pre>
+        <button class="copy" type="button" data-copy="nix run github:sheprd-labs/sheprd">Copy</button>
         <p class="chan">Current channel</p>
       </article>
       <article class="card card-soft">
@@ -301,14 +301,14 @@
         <span class="st st-optin">Opt-in</span>
       </article>
     </div>
-    <p class="gh"><a class="btn btn-ghost" href="https://github.com/sheprd-labs">Sheprd on GitHub</a></p>
+    <p class="gh"><a class="btn btn-ghost" href="https://github.com/sheprd-labs/sheprd">Sheprd on GitHub</a></p>
   </section>
 </main>
 
 <footer class="foot">
   <div class="foot-brand"><img src="../../assets/paw.svg" alt="" width="28" height="28"><strong>Sheprd</strong><span>sheprd.org</span></div>
   <p class="attrib">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
-  <p class="small">Screenshots show the current build, still branded Herdr UI, with demo projects.</p>
+  <p class="small">Screenshots predate the rename and still show Herdr UI branding, with demo projects.</p>
 </footer>
 </body>
 </html>

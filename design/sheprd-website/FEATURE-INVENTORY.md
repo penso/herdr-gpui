@@ -5,6 +5,11 @@ commit `8e03793da` (2026-11-02, latest release `v20261102.2`) on 2026-11-03.
 The mockups' feature directory (`assets/features.js`) is a condensed view of
 this file; every row there maps to a row here.
 
+**Rename note:** main later renamed the product (#1021). Crates moved from
+`crates/herdr-*` to `crates/sheprd-*`, the repository to `sheprd-labs/sheprd`,
+and the CLI to `sheprd`. Paths, names and install commands below describe
+`8e03793da`; see `README.md` "Install and CTAs" for the current ones.
+
 Source abbreviations: **R** = `README.md`, **GR** = `crates/herdr-gpui/README.md`,
 **CLI** = `docs/cli.md`, **EX** = `crates/herdr-gpui/config-gpui.example.toml`,
 **FTL** = `crates/herdr-gpui/locales/en-US/*.ftl`. Line numbers are at `8e03793da`.

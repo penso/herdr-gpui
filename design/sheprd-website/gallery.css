@@ -34,6 +34,14 @@ body { background: var(--paper); color: var(--ink); line-height: 1.55; }
 .g-rec li span { font-size: .92rem; color: #f2e4d8; }
 .g-rec a { color: #ffd2b0; }
 
+.g-syn { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1.75rem; align-items: center; background: var(--card); border: 2px solid var(--orange); border-radius: 22px; padding: 1.5rem; margin-bottom: 2rem; }
+.g-syn-shot img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+.g-syn-kicker { margin: 0; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #b8501f; }
+.g-syn h2 { margin: .15rem 0 .35rem; font-size: 1.6rem; letter-spacing: -.01em; }
+.g-syn p { margin: 0 0 .6rem; }
+.g-syn ul { margin: 0 0 .8rem; padding-left: 1.1rem; font-size: .92rem; }
+@media (max-width: 800px) { .g-syn { grid-template-columns: minmax(0, 1fr); padding: 1.1rem; } }
+
 .g-tools { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; justify-content: space-between; margin: 0 0 1rem; }
 .g-tools h2 { margin: 0; font-size: 1.4rem; }
 .g-view { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--card); }

@@ -21,7 +21,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 05 · Bento</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 05 · Bento</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <header class="top">
   <a class="brand" href="#main" aria-label="Sheprd home">
@@ -33,7 +33,7 @@
       <li><a href="#tiles">Features</a></li>
       <li><a href="#flows">Workflows</a></li>
       <li><a href="#directory">Directory</a></li>
-      <li><a href="https://github.com/sheprd-labs">GitHub</a></li>
+      <li><a href="https://github.com/sheprd-labs/sheprd">GitHub</a></li>
     </ul>
   </nav>
   <a class="btn btn-small" href="#install">Install</a>
@@ -60,7 +60,7 @@
     </div>
     <figure class="hero-shot">
       <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" alt="Sheprd window: a sidebar of workspaces and worktrees with agent status dots, an editor pane and test output on the right.">
-      <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+      <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
       <div class="float float-a" aria-hidden="true"><span class="sd sd-done"></span> fix/rounding · done</div>
       <div class="float float-b" aria-hidden="true"><span class="sd sd-blocked"></span> claude needs you</div>
     </figure>
@@ -249,7 +249,7 @@ herdr.at(<span class="s">"03:00"</span>, { tz = <span class="s">"Europe/Paris"</
   <section id="install" class="install" aria-labelledby="install-title">
     <div class="section-head">
       <h2 id="install-title">Install</h2>
-      <p>These are today's channels, still published as Herdr UI. Sheprd-named downloads from <span class="future">github.com/sheprd-labs/sheprd (future)</span> will replace them.</p>
+      <p>Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
     </div>
     <div class="install-grid">
       <div class="inst">
@@ -259,17 +259,17 @@ herdr.at(<span class="s">"03:00"</span>, { tz = <span class="s">"Europe/Paris"</
       </div>
       <div class="inst">
         <h3>Linux <small>x86_64, ARM64</small></h3>
-        <div class="cmd"><code>curl -fsSL https://herdrui.dev/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">Copy</button></div>
+        <div class="cmd"><code>curl -fsSL https://sheprd.org/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://sheprd.org/install.sh | sh">Copy</button></div>
         <p class="chan">Current channel · APT, DNF, pacman</p>
       </div>
       <div class="inst">
         <h3>Windows <small>x86_64, ARM64</small></h3>
-        <div class="cmd"><code>irm https://herdrui.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://herdrui.dev/install.ps1 | iex">Copy</button></div>
+        <div class="cmd"><code>irm https://sheprd.org/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://sheprd.org/install.ps1 | iex">Copy</button></div>
         <p class="chan">Current channel · PowerShell</p>
       </div>
       <div class="inst">
         <h3>Nix</h3>
-        <div class="cmd"><code>nix run github:penso/herdr-gpui</code><button type="button" class="copy" data-copy="nix run github:penso/herdr-gpui">Copy</button></div>
+        <div class="cmd"><code>nix run github:sheprd-labs/sheprd</code><button type="button" class="copy" data-copy="nix run github:sheprd-labs/sheprd">Copy</button></div>
         <p class="chan">Current channel · builds from source</p>
       </div>
       <div class="inst inst-soft">
@@ -290,7 +290,7 @@ herdr.at(<span class="s">"03:00"</span>, { tz = <span class="s">"Europe/Paris"</
     <img src="../../assets/paw.svg" alt="" width="40" height="40">
     <div>
       <strong>Sheprd</strong>
-      <p>Apache-2.0 · <a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a> · <span class="future">github.com/sheprd-labs/sheprd (future)</span></p>
+      <p>Apache-2.0 · <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a></p>
     </div>
   </div>
   <p class="attr">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the Herdr project. <a href="https://herdr.dev">herdr.dev</a></p>

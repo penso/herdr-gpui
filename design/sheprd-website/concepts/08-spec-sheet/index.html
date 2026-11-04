@@ -21,7 +21,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 08 · Spec Sheet</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 08 · Spec Sheet</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <header class="mast">
   <div class="sheet mast-in">
@@ -53,7 +53,7 @@
     <div class="hero-cta">
       <a class="btn" href="#s6">Install</a>
       <a class="btn btn-line" href="#s7">Read the feature table</a>
-      <a class="btn btn-line" href="https://github.com/sheprd-labs">GitHub</a>
+      <a class="btn btn-line" href="https://github.com/sheprd-labs/sheprd">GitHub</a>
     </div>
   </section>
 
@@ -70,7 +70,7 @@
             <tr><th scope="row">Implementation</th><td>Rust 1.96 · GPUI 0.3 · native cell painting, no embedded emulator</td></tr>
             <tr><th scope="row">Terminal servers</th><td>Herdr 1 (<code>herdr server</code>) and Herdr 2 (herdr-core); a pinned herdr-core 0.1.13 is bundled</td></tr>
             <tr><th scope="row">Agents</th><td>Any terminal agent CLI; brand icons for about 25; ACP chat for Claude, Codex, Copilot, Gemini, OpenCode, Pi <span class="st st-optin">Opt-in</span></td></tr>
-            <tr><th scope="row">Companions</th><td><code>herdr-acp</code> · <code>herdr-remote-control</code> · <code>herdr-automate</code> · <code>herdr-nearby</code></td></tr>
+            <tr><th scope="row">Companions</th><td><code>sheprd-acp</code> · <code>sheprd-remote-control</code> · <code>sheprd-automate</code> · <code>sheprd-nearby</code></td></tr>
             <tr><th scope="row">Mobile</th><td>Remote-control web app <span class="st st-optin">Opt-in</span> · iPhone/iPad <span class="st st-testflight">TestFlight beta</span></td></tr>
             <tr><th scope="row">License</th><td>Apache-2.0</td></tr>
             <tr><th scope="row">Versioning</th><td>Calendar, <code>YYYYMMDD.N</code>; stable and beta channels</td></tr>
@@ -79,7 +79,7 @@
       </div>
       <figure class="fig">
         <img src="../../assets/shots/review.jpg" width="1800" height="1125" alt="Review Changes tab: a unified diff of src/ledger.rs with two numbered notes in a side panel and a Send to agent button.">
-        <figcaption><span class="figno">Fig. 1</span> Review Changes with notes queued for the agent. <span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span></figcaption>
+        <figcaption><span class="figno">Fig. 1</span> Review Changes with notes queued for the agent. <span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
       </figure>
     </div>
   </section>
@@ -147,22 +147,22 @@
       <div class="arch-grid">
         <div class="layer">
           <p class="layer-name">Interface</p>
-          <ul><li class="hot">herdr-gpui</li><li>herdr-commands</li><li>herdr-i18n</li><li>herdr-mods</li><li>herdr-luau</li><li>herdr-automation</li></ul>
+          <ul><li class="hot">sheprd-gpui</li><li>sheprd-commands</li><li>sheprd-i18n</li><li>sheprd-mods</li><li>sheprd-luau</li><li>sheprd-automation</li></ul>
         </div>
         <div class="arrow" aria-hidden="true">↓</div>
         <div class="layer">
           <p class="layer-name">Services</p>
-          <ul><li>herdr-vcs</li><li>herdr-github</li><li>herdr-orchestrator</li><li>herdr-remote</li><li>herdr-usage</li><li>herdr-credentials</li><li>herdr-updater</li><li>herdr-diagnostics</li><li>herdr-control-protocol</li></ul>
+          <ul><li>sheprd-vcs</li><li>sheprd-github</li><li>sheprd-orchestrator</li><li>sheprd-remote</li><li>sheprd-usage</li><li>sheprd-credentials</li><li>sheprd-updater</li><li>sheprd-diagnostics</li><li>sheprd-control-protocol</li></ul>
         </div>
         <div class="arrow" aria-hidden="true">↓</div>
         <div class="layer">
           <p class="layer-name">Connection</p>
-          <ul><li>herdr-client</li><li>herdr-core-client</li><li>herdr-backend</li><li>herdr-terminal</li></ul>
+          <ul><li>sheprd-client</li><li>sheprd-core-client</li><li>sheprd-backend</li><li>sheprd-terminal</li></ul>
         </div>
         <div class="arrow" aria-hidden="true">↓</div>
         <div class="layer">
           <p class="layer-name">Wire</p>
-          <ul><li>herdr-protocol</li><li>herdr-chat-protocol</li></ul>
+          <ul><li>sheprd-protocol</li><li>sheprd-chat-protocol</li></ul>
         </div>
         <div class="arrow" aria-hidden="true">↕</div>
         <div class="layer external">
@@ -174,11 +174,11 @@
       <div class="companions">
         <p class="layer-name">Companion binaries, shipped beside the app</p>
         <ul>
-          <li><b>herdr-acp</b> runs an ACP agent inside a pane and serves its chat</li>
-          <li><b>herdr-remote-control</b> HTTPS daemon for phones, own CA, Web Push</li>
-          <li><b>herdr-automate</b> schedules approved automation scripts per host</li>
-          <li><b>herdr-nearby</b> Bluetooth helper for nearby pairing (Linux, Windows; Swift on macOS)</li>
-          <li><b>herdr-gpui-launcher</b> windowed launcher on Windows</li>
+          <li><b>sheprd-acp</b> runs an ACP agent inside a pane and serves its chat</li>
+          <li><b>sheprd-remote-control</b> HTTPS daemon for phones, own CA, Web Push</li>
+          <li><b>sheprd-automate</b> schedules approved automation scripts per host</li>
+          <li><b>sheprd-nearby</b> Bluetooth helper for nearby pairing (Linux, Windows; Swift on macOS)</li>
+          <li><b>sheprd-launcher</b> windowed launcher on Windows</li>
         </ul>
       </div>
       <figcaption id="arch-cap"><span class="figno">Fig. 2</span> Crate layers, from AGENTS.md. <span class="tag-illustration">Diagram</span></figcaption>
@@ -221,16 +221,16 @@
 
   <section id="s6" class="sec" aria-labelledby="s6-title">
     <h2 id="s6-title"><span class="secno">§6</span> Distribution and release integrity</h2>
-    <p class="note">Releases are published today as Herdr UI from <code>penso/herdr-gpui</code>; every command below is the <b>current channel</b>. <code>github.com/sheprd-labs/sheprd</code> is a future destination.</p>
+    <p class="note">Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
     <div class="table-wrap" tabindex="0" role="region" aria-label="Install commands, scrolls horizontally">
       <table class="grid install">
         <caption class="sr-only">Install commands by platform</caption>
         <thead><tr><th scope="col">Platform</th><th scope="col">Command (current channel)</th><th scope="col">Artifacts</th></tr></thead>
         <tbody>
           <tr><th scope="row">macOS</th><td><code>brew install penso/tap/herdr-gpui</code></td><td>Signed, notarized universal .dmg</td></tr>
-          <tr><th scope="row">Linux</th><td><code>curl -fsSL https://herdrui.dev/install.sh | sh</code></td><td>.deb · .rpm · Arch · tarball</td></tr>
-          <tr><th scope="row">Windows</th><td><code>irm https://herdrui.dev/install.ps1 | iex</code></td><td>.zip · per-user -setup.exe</td></tr>
-          <tr><th scope="row">Nix</th><td><code>nix run github:penso/herdr-gpui</code></td><td>Flake, built from source</td></tr>
+          <tr><th scope="row">Linux</th><td><code>curl -fsSL https://sheprd.org/install.sh | sh</code></td><td>.deb · .rpm · Arch · tarball</td></tr>
+          <tr><th scope="row">Windows</th><td><code>irm https://sheprd.org/install.ps1 | iex</code></td><td>.zip · per-user -setup.exe</td></tr>
+          <tr><th scope="row">Nix</th><td><code>nix run github:sheprd-labs/sheprd</code></td><td>Flake, built from source</td></tr>
           <tr><th scope="row">iPhone / iPad</th><td>TestFlight beta (internal testers), or build from source</td><td>iOS 26</td></tr>
           <tr><th scope="row">Any phone</th><td>Enable remote control; scan the pairing QR</td><td>Installable web app</td></tr>
         </tbody>
@@ -243,7 +243,7 @@
       <li><b>SBOM</b> per release</li>
       <li><b>Ed25519</b> update manifest</li>
     </ul>
-    <p class="gh"><a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a> <span class="future">github.com/sheprd-labs/sheprd (future)</span></p>
+    <p class="gh"><a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a></p>
   </section>
 
   <section id="s7" class="sec" aria-labelledby="s7-title">
@@ -278,7 +278,7 @@
   <div class="sheet foot-in">
     <p class="foot-mark"><img src="../../assets/paw.svg" alt="" width="24" height="24"> SHEPRD · SH-001 · Apache-2.0</p>
     <p class="attrib">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
-    <p class="foot-links"><a href="https://github.com/sheprd-labs">GitHub</a> · <a href="#s7">Features</a> · <a href="../../index.html">Gallery</a></p>
+    <p class="foot-links"><a href="https://github.com/sheprd-labs/sheprd">GitHub</a> · <a href="#s7">Features</a> · <a href="../../index.html">Gallery</a></p>
   </div>
 </footer>
 </body>

@@ -11,7 +11,7 @@
 <meta property="og:image" content="../../assets/paw-512.png">
 <!-- Social card direction (Atlas): an index card. Off-white background, a
      faint grid, the 13 area names in two monospaced columns with their feature
-     counts, small paw tile and "sheprd.org/features" in the corner. -->
+     counts, small paw tile and "docs.sheprd.org" in the corner. -->
 <link rel="icon" href="../../assets/paw.svg">
 <link rel="stylesheet" href="../../assets/base.css">
 <link rel="stylesheet" href="style.css">
@@ -20,7 +20,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 04 · Atlas</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 04 · Atlas</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <header class="bar">
   <a class="brand" href="#main" aria-label="Sheprd Atlas home">
@@ -36,7 +36,7 @@
   <nav class="bar-links" aria-label="Site">
     <a href="#matrix">Platforms</a>
     <a href="#install">Install</a>
-    <a href="https://github.com/sheprd-labs">GitHub</a>
+    <a href="https://github.com/sheprd-labs/sheprd">GitHub</a>
   </nav>
 </header>
 
@@ -54,7 +54,7 @@
 
   <main id="main" class="content">
     <section class="intro" aria-labelledby="intro-title">
-      <p class="crumb">sheprd.org / features</p>
+      <p class="crumb">docs.sheprd.org (future)</p>
       <h1 id="intro-title">Every agent. Every worktree. Every machine. <span>One window.</span></h1>
       <p class="lede">Sheprd is an open-source desktop app for running a team of coding agents on macOS, Linux and Windows. This atlas lists everything it does today, what is opt-in or still in beta, and where each piece runs.</p>
       <dl class="stats" id="stats" aria-label="Feature counts"></dl>
@@ -94,12 +94,12 @@
 
     <section id="install" class="ref" aria-labelledby="install-title">
       <h2 id="install-title">Install</h2>
-      <p class="ref-lede">Releases are still published as Herdr UI from the current repository. Sheprd-named builds will come from <code class="future">github.com/sheprd-labs/sheprd</code> <span class="st st-planned">future</span>.</p>
+      <p class="ref-lede">Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
       <div class="install-grid">
         <article class="inst"><h3>macOS</h3><p class="inst-meta">Universal · signed and notarized · current channel</p><pre><code>brew install penso/tap/herdr-gpui</code></pre><button type="button" class="copy" data-copy="brew install penso/tap/herdr-gpui">Copy command</button></article>
-        <article class="inst"><h3>Linux</h3><p class="inst-meta">APT, DNF or pacman · current channel</p><pre><code>curl -fsSL https://herdrui.dev/install.sh | sh</code></pre><button type="button" class="copy" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">Copy command</button></article>
-        <article class="inst"><h3>Windows</h3><p class="inst-meta">PowerShell, per-user · current channel</p><pre><code>irm https://herdrui.dev/install.ps1 | iex</code></pre><button type="button" class="copy" data-copy="irm https://herdrui.dev/install.ps1 | iex">Copy command</button></article>
-        <article class="inst"><h3>Nix</h3><p class="inst-meta">Builds from source · current channel</p><pre><code>nix run github:penso/herdr-gpui</code></pre><button type="button" class="copy" data-copy="nix run github:penso/herdr-gpui">Copy command</button></article>
+        <article class="inst"><h3>Linux</h3><p class="inst-meta">APT, DNF or pacman · current channel</p><pre><code>curl -fsSL https://sheprd.org/install.sh | sh</code></pre><button type="button" class="copy" data-copy="curl -fsSL https://sheprd.org/install.sh | sh">Copy command</button></article>
+        <article class="inst"><h3>Windows</h3><p class="inst-meta">PowerShell, per-user · current channel</p><pre><code>irm https://sheprd.org/install.ps1 | iex</code></pre><button type="button" class="copy" data-copy="irm https://sheprd.org/install.ps1 | iex">Copy command</button></article>
+        <article class="inst"><h3>Nix</h3><p class="inst-meta">Builds from source · current channel</p><pre><code>nix run github:sheprd-labs/sheprd</code></pre><button type="button" class="copy" data-copy="nix run github:sheprd-labs/sheprd">Copy command</button></article>
         <article class="inst inst-soft"><h3>iPhone and iPad</h3><p class="inst-meta"><span class="st st-testflight">TestFlight beta</span></p><p>Native app for iOS 26, with internal TestFlight builds today. You can also build it from source with your own Apple team.</p></article>
         <article class="inst inst-soft"><h3>Any phone</h3><p class="inst-meta"><span class="st st-optin">Opt-in</span></p><p>Turn on Remote control in Settings. Your computer serves an installable web app; pair it by scanning a QR code and approving on both screens.</p></article>
       </div>
@@ -121,9 +121,9 @@
 
 <footer class="foot">
   <div class="foot-in">
-    <p class="foot-brand"><img src="../../assets/paw.svg" alt="" width="22" height="22"> Sheprd · Apache-2.0 · <a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a></p>
+    <p class="foot-brand"><img src="../../assets/paw.svg" alt="" width="22" height="22"> Sheprd · Apache-2.0 · <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a></p>
     <p>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (<code>herdr server</code> and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
-    <p class="fine">Statuses reflect release v20261102.2. Screenshots show the current build, still branded Herdr UI, with sample projects.</p>
+    <p class="fine">Statuses reflect release v20261102.2. Screenshots predate the rename and still show Herdr UI branding, with sample projects.</p>
   </div>
 </footer>
 </body>

@@ -93,23 +93,23 @@ tests (method in the inventory). Use as a footnote, never as the pitch.
 5. **Away from the desk**: phone notification → answer the agent's question.
 6. **Make it yours**: themes and layouts, a mod in Luau, a nightly automation.
 
-## Install and CTAs (what is true today)
+## Install and CTAs
 
-Downloads are still published as Herdr UI from `penso/herdr-gpui`:
+Updated after merging main's rename (#1021). The repository moved to
+`sheprd-labs/sheprd`; `penso/herdr-gpui` redirects there.
 
-| Platform | Today |
-| --- | --- |
-| macOS 14.2+ (universal) | `brew install penso/tap/herdr-gpui` |
-| Linux x86_64/ARM64 (APT, DNF, pacman) | `curl -fsSL https://herdrui.dev/install.sh \| sh` |
-| Windows x86_64/ARM64 | `irm https://herdrui.dev/install.ps1 \| iex` |
-| Nix | `nix run github:penso/herdr-gpui` |
-| iPhone/iPad | TestFlight beta (internal), or build from source |
-| Any phone | The remote-control web app served by your computer |
+| Platform | Command | State on 2026-11-03 |
+| --- | --- | --- |
+| macOS 14.2+ (universal) | `brew install penso/tap/herdr-gpui` | Works. Main keeps this tap and token for upgrades; no `sheprd-labs` tap exists |
+| Linux x86_64/ARM64 (APT, DNF, pacman) | `curl -fsSL https://sheprd.org/install.sh \| sh` | Needs sheprd.org live; the domain is still parked |
+| Windows x86_64/ARM64 | `irm https://sheprd.org/install.ps1 \| iex` | Needs sheprd.org live |
+| Nix | `nix run github:sheprd-labs/sheprd` | From main |
+| iPhone/iPad | TestFlight beta (internal), or build from source | No public link |
+| Any phone | The remote-control web app served by your computer | Opt-in |
 
-The concepts show these commands and label them "current channel". Links to
-`github.com/sheprd-labs/sheprd`, `sheprd.org/install.sh` and a Sheprd cask are
-marked as **future destinations**; the updater already accepts
-`sheprd-labs/sheprd` releases, but no Sheprd-named release exists yet.
+The rename is not in a release yet: `v20261103.1` still ships `Herdr-*` assets,
+and the tap's cask still names `Herdr.app`. The CLI on main is `sheprd`, with
+`herdr-gpui` kept as a compatibility entry point on Linux and Windows.
 
 ## Attribution line (every concept carries it)
 
@@ -119,12 +119,10 @@ marked as **future destinations**; the updater already accepts
 
 ## Facts requiring confirmation before launch
 
-1. **Names**: which of `Herdr.app`, `herdr-gpui` CLI, `herdr-acp`,
-   `herdr-remote-control`, config paths, bundle IDs, the winget ID and the
-   "Herdr Remote" iOS app change under Sheprd. The mockups say "Sheprd"
-   throughout but show today's real commands.
-2. **Download URLs**: final domain for install scripts, Homebrew tap/cask
-   name, and when `sheprd-labs/sheprd` publishes its first release.
+1. **Homebrew**: main keeps `penso/tap/herdr-gpui`. If a `sheprd-labs` tap is
+   planned, its name and migration need deciding; the mockups show main's command.
+2. **Launch order**: sheprd.org must serve `install.sh` and `install.ps1`, and a
+   Sheprd-named release must ship, before these pages can go live.
 3. **Attribution wording** given that releases bundle Herdr's herdr-core.
 4. **Experimental cloud providers**: README and Settings disagree (README:
    Boat, Daytona, Sprites, OpenSandbox, Railway; Settings tags only
@@ -162,6 +160,27 @@ the gallery: cream paw on orange for the brand-led concepts, a cropped real
 screenshot with headline for the product-led ones. No card images are
 generated yet.
 
+## Direction after review
+
+The shortlist was 01 Field Guide, 03 The Loop and 07 Everywhere, and
+`concepts/11-the-guide/` combines the marked parts:
+
+| Part | From |
+| --- | --- |
+| Style: serif, cream paper, chapters | 01 Field Guide |
+| Tagged agent board | 02 Control Room |
+| Six-step issue to PR rail | 03 The Loop |
+| Tilted hero window | 05 Bento |
+| Headline, machines, phone, platform list | 07 Everywhere |
+| Feature table and directory, shared filters | 08 Spec Sheet and 10 Keynote |
+| Get Sheprd ending | 10 Keynote |
+
+04 Atlas becomes the documentation companion at `docs.sheprd.org` (future).
+
+The phone in 07 and 11 is a hand-drawn illustration, not an iOS screenshot.
+A real capture from the app's `-sample YES` mode should replace it before
+launch.
+
 ## Recommendation
 
 Written after building and checking all ten:
@@ -173,7 +192,7 @@ Written after building and checking all ten:
 2. **10 Keynote** if launch impact matters more than upkeep. Real screenshots
    carry it and the sticky window reads "native app", but it is the most
    expensive to keep current.
-3. **04 Atlas** as `sheprd.org/features` whichever homepage wins. It is the
+3. **04 Atlas** as the docs companion at `docs.sheprd.org` whichever homepage wins. It is the
    honest answer to "list everything we do": search, status and platform
    filters, and the platform matrix.
 

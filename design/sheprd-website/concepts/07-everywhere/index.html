@@ -21,7 +21,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 07 · Everywhere</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 07 · Everywhere</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <header class="top">
   <div class="wrap top-in">
@@ -134,7 +134,7 @@
       </div>
       <figure class="shot">
         <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" alt="Sheprd window: a sidebar of workspaces and nested worktrees with agent status dots, an editor pane and two terminal panes running git log and tests.">
-        <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Workspaces, nested worktrees and agents with demo projects.</figcaption>
+        <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Workspaces, nested worktrees and agents with demo projects.</figcaption>
       </figure>
     </div>
   </section>
@@ -192,7 +192,7 @@
           </div>
           <figure class="shot shot-small">
             <img src="../../assets/shots/system-load.png" width="1388" height="280" loading="lazy" alt="Status bar showing a CPU sparkline and memory meter for the selected machine.">
-            <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Load per machine feeds the ranking.</figcaption>
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Load per machine feeds the ranking.</figcaption>
           </figure>
         </div>
         <div role="tabpanel" id="panel-fanout" aria-labelledby="tab-fanout" class="move-panel" hidden>
@@ -214,7 +214,7 @@
           </div>
           <figure class="shot shot-small">
             <img src="../../assets/shots/teleport.png" width="1180" height="640" loading="lazy" alt="Teleport dialog moving the feat-multi-currency worktree from Local, listing build-box and gpu-runner reached over SSH.">
-            <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Choosing a destination.</figcaption>
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Choosing a destination.</figcaption>
           </figure>
         </div>
       </div>
@@ -281,7 +281,7 @@
     <div class="wrap">
       <p class="kicker"><span class="num">05</span> Install</p>
       <h2 id="install-title">Pick the device in front of you.</h2>
-      <p class="section-lede">Releases are still published under the Herdr UI name from the current channel below. Sheprd-named downloads at <code>github.com/sheprd-labs/sheprd</code> are a future destination.</p>
+      <p class="section-lede">Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
       <div class="install">
         <div class="os-tabs" role="tablist" aria-label="Choose a platform">
           <button role="tab" id="os-mac" aria-controls="os-mac-p" aria-selected="true">macOS</button>
@@ -296,21 +296,21 @@
         </div>
         <div role="tabpanel" id="os-linux-p" aria-labelledby="os-linux" class="os-panel" hidden>
           <p class="req">x86_64 and ARM64; installs a .deb, .rpm or Arch package. Needs glibc 2.39+ and a Vulkan driver. <span class="chan">Current channel</span></p>
-          <div class="cmd"><code>curl -fsSL https://herdrui.dev/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">Copy</button></div>
+          <div class="cmd"><code>curl -fsSL https://sheprd.org/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://sheprd.org/install.sh | sh">Copy</button></div>
         </div>
         <div role="tabpanel" id="os-win-p" aria-labelledby="os-win" class="os-panel" hidden>
           <p class="req">x86_64 and ARM64, per-user, no administrator rights. PowerShell: <span class="chan">Current channel</span></p>
-          <div class="cmd"><code>irm https://herdrui.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://herdrui.dev/install.ps1 | iex">Copy</button></div>
+          <div class="cmd"><code>irm https://sheprd.org/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://sheprd.org/install.ps1 | iex">Copy</button></div>
         </div>
         <div role="tabpanel" id="os-nix-p" aria-labelledby="os-nix" class="os-panel" hidden>
           <p class="req">Builds from source with the flake, x86_64 and ARM64 Linux. Never updates itself. <span class="chan">Current channel</span></p>
-          <div class="cmd"><code>nix run github:penso/herdr-gpui</code><button type="button" class="copy" data-copy="nix run github:penso/herdr-gpui">Copy</button></div>
+          <div class="cmd"><code>nix run github:sheprd-labs/sheprd</code><button type="button" class="copy" data-copy="nix run github:sheprd-labs/sheprd">Copy</button></div>
         </div>
         <div role="tabpanel" id="os-phone-p" aria-labelledby="os-phone" class="os-panel" hidden>
           <p class="req"><strong>Any phone:</strong> enable Settings › Remote control on your computer, scan the QR code and approve on both screens. The web app installs to your home screen.</p>
           <p class="req"><strong>iPhone and iPad:</strong> native app in TestFlight beta for internal testers; no public link yet. Or build it from source with your own Apple team.</p>
         </div>
-        <p class="gh"><a class="btn btn-ghost" href="https://github.com/sheprd-labs">GitHub · sheprd-labs</a> <span class="future">github.com/sheprd-labs/sheprd (future)</span></p>
+        <p class="gh"><a class="btn btn-ghost" href="https://github.com/sheprd-labs/sheprd">GitHub · sheprd-labs/sheprd</a></p>
       </div>
     </div>
   </section>
@@ -329,7 +329,7 @@
   <div class="wrap foot-in">
     <div class="foot-brand"><img src="../../assets/paw.svg" alt="" width="28" height="28"><span>Sheprd</span></div>
     <p class="attrib">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
-    <p class="foot-links"><a href="https://github.com/sheprd-labs">GitHub</a> · <a href="#features">Features</a> · <a href="#install">Install</a> · <a href="../../index.html">Gallery</a></p>
+    <p class="foot-links"><a href="https://github.com/sheprd-labs/sheprd">GitHub</a> · <a href="#features">Features</a> · <a href="#install">Install</a> · <a href="../../index.html">Gallery</a></p>
   </div>
 </footer>
 </body>

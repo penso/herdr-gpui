@@ -19,7 +19,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 03 · The Loop</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 03 · The Loop</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <header class="top">
   <div class="wrap top-in">
@@ -35,7 +35,7 @@
         <li><a href="#install">Install</a></li>
       </ul>
     </nav>
-    <a class="btn btn-ghost top-gh" href="https://github.com/sheprd-labs">GitHub</a>
+    <a class="btn btn-ghost top-gh" href="https://github.com/sheprd-labs/sheprd">GitHub</a>
   </div>
 </header>
 
@@ -56,7 +56,7 @@
       </ol>
       <figure class="hero-shot">
         <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" alt="Sheprd window: a sidebar of workspaces with nested worktrees and their agents (claude, codex, pi) with status dots, an editor split beside a git log and a passing test run, and a status bar with plan usage, CPU and memory.">
-        <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Workspaces, worktrees and agents in one window. Sample projects, no private data.</figcaption>
+        <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Workspaces, worktrees and agents in one window. Sample projects, no private data.</figcaption>
       </figure>
     </div>
   </section>
@@ -119,7 +119,7 @@
           </div>
           <figure class="panel-fig">
             <img src="../../assets/shots/layouts.jpg" width="1800" height="1162" loading="lazy" alt="Five sidebar layouts side by side, each showing the ledger-api checkout with its feat/multi-currency and fix/rounding worktrees nested beneath it, plus build-box and gpu-runner machines.">
-            <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Worktrees nest under their checkout, in any of the sidebar layouts.</figcaption>
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Worktrees nest under their checkout, in any of the sidebar layouts.</figcaption>
           </figure>
         </section>
 
@@ -139,7 +139,7 @@
           </div>
           <figure class="panel-fig">
             <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" loading="lazy" alt="Agents sidebar listing ledger-api, pixel-forge and harbor-docs with claude, codex and pi agents and colored status dots, beside an editor and a test run.">
-            <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> The Agents list groups every running agent with its status dot.</figcaption>
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> The Agents list groups every running agent with its status dot.</figcaption>
           </figure>
         </section>
 
@@ -156,7 +156,7 @@
           </div>
           <figure class="panel-fig">
             <img src="../../assets/shots/review.jpg" width="1800" height="1125" loading="lazy" alt="Review changes tab for feat/multi-currency: a diff of src/ledger.rs with two numbered notes in a side panel and a Send to agent button.">
-            <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> Two notes on the diff, ready to send to Claude.</figcaption>
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Two notes on the diff, ready to send to Claude.</figcaption>
           </figure>
         </section>
 
@@ -165,10 +165,10 @@
             <p class="step-kicker">Step 5 · Keep a way back</p>
             <h3>A checkpoint at every agent turn. On by default.</h3>
             <p>Each time an agent starts or finishes a turn, Sheprd snapshots the worktree into hidden Git refs, keeping the newest 50 per branch. Diff any two, or restore one from the workspace menu or the command line.</p>
-            <pre class="cmd"><code>herdr-gpui checkpoint list
-herdr-gpui checkpoint diff &lt;id&gt;
-herdr-gpui checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></pre>
-            <p class="caveat">The CLI is still named <code>herdr-gpui</code> today. Checkpoints are unavailable from Windows clients for SSH hosts; WSL works.</p>
+            <pre class="cmd"><code>sheprd checkpoint list
+sheprd checkpoint diff &lt;id&gt;
+sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></pre>
+            <p class="caveat">Checkpoints are unavailable from Windows clients for SSH hosts; WSL works.</p>
           </div>
           <figure class="panel-fig">
             <div class="mock mock-timeline" aria-hidden="true">
@@ -267,7 +267,7 @@ herdr-gpui checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code
       </div>
       <figure class="wide-shot">
         <img src="../../assets/shots/browser-annotate.jpg" width="1800" height="1125" loading="lazy" alt="Browser tab beside the terminals showing a local docs page with two pinned notes on a button and a card, listed in a Notes panel with Send to agent.">
-        <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> A local preview with two notes for the agent. macOS and Windows.</figcaption>
+        <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> A local preview with two notes for the agent. macOS and Windows.</figcaption>
       </figure>
     </div>
   </section>
@@ -291,19 +291,19 @@ herdr-gpui checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code
         <p class="sec-num">04</p>
         <div>
           <h2 id="install-title">Install</h2>
-          <p>Builds are published under the Herdr UI name today. Sheprd-named releases will come from <span class="future">github.com/sheprd-labs/sheprd (future)</span>.</p>
+          <p>Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
         </div>
       </div>
       <div class="install-table" role="table" aria-label="Install commands">
         <div class="ir" role="row"><div role="cell" class="ip">macOS 14.2+<small>universal</small></div><div role="cell" class="ic"><code>brew install penso/tap/herdr-gpui</code><button type="button" class="copy" data-copy="brew install penso/tap/herdr-gpui">Copy</button></div><div role="cell" class="itag">current channel</div></div>
-        <div class="ir" role="row"><div role="cell" class="ip">Linux<small>x86_64, ARM64 · APT, DNF, pacman</small></div><div role="cell" class="ic"><code>curl -fsSL https://herdrui.dev/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://herdrui.dev/install.sh | sh">Copy</button></div><div role="cell" class="itag">current channel</div></div>
-        <div class="ir" role="row"><div role="cell" class="ip">Windows<small>x86_64, ARM64 · PowerShell</small></div><div role="cell" class="ic"><code>irm https://herdrui.dev/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://herdrui.dev/install.ps1 | iex">Copy</button></div><div role="cell" class="itag">current channel</div></div>
-        <div class="ir" role="row"><div role="cell" class="ip">Nix<small>builds from source</small></div><div role="cell" class="ic"><code>nix run github:penso/herdr-gpui</code><button type="button" class="copy" data-copy="nix run github:penso/herdr-gpui">Copy</button></div><div role="cell" class="itag">current channel</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">Linux<small>x86_64, ARM64 · APT, DNF, pacman</small></div><div role="cell" class="ic"><code>curl -fsSL https://sheprd.org/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://sheprd.org/install.sh | sh">Copy</button></div><div role="cell" class="itag">current channel</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">Windows<small>x86_64, ARM64 · PowerShell</small></div><div role="cell" class="ic"><code>irm https://sheprd.org/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://sheprd.org/install.ps1 | iex">Copy</button></div><div role="cell" class="itag">current channel</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">Nix<small>builds from source</small></div><div role="cell" class="ic"><code>nix run github:sheprd-labs/sheprd</code><button type="button" class="copy" data-copy="nix run github:sheprd-labs/sheprd">Copy</button></div><div role="cell" class="itag">current channel</div></div>
         <div class="ir" role="row"><div role="cell" class="ip">iPhone, iPad</div><div role="cell" class="ic"><span>Native app in TestFlight beta, or build from source</span></div><div role="cell" class="itag itag-beta">beta</div></div>
         <div class="ir" role="row"><div role="cell" class="ip">Any phone</div><div role="cell" class="ic"><span>Turn on Remote control; your computer serves the web app</span></div><div role="cell" class="itag">opt-in</div></div>
       </div>
       <p class="note">Sheprd starts a terminal server for you: an installed <code>herdr server</code>, or the pinned herdr-core that ships with the app. Closing Sheprd leaves your terminals running.</p>
-      <p class="ctas"><a class="btn btn-solid" href="https://github.com/sheprd-labs">github.com/sheprd-labs</a></p>
+      <p class="ctas"><a class="btn btn-solid" href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a></p>
     </div>
   </section>
 </main>
@@ -312,7 +312,7 @@ herdr-gpui checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code
   <div class="wrap foot-in">
     <div class="foot-brand"><img src="../../assets/paw.svg" alt="" width="28" height="28"><span>Sheprd</span></div>
     <p class="attr">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (<code>herdr server</code> and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
-    <p class="small">Screenshots show the current build, still branded Herdr UI, with sample projects.</p>
+    <p class="small">Screenshots predate the rename and still show Herdr UI branding, with sample projects.</p>
   </div>
 </footer>
 </body>

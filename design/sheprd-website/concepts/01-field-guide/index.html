@@ -20,7 +20,7 @@
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<div class="concept-ribbon"><span><strong>Concept 01 · Field Guide</strong> — mockup, not the live site.</span><span>Install commands are today's Herdr UI channels; sheprd-labs/sheprd downloads are future destinations.</span><a href="../../index.html">Back to gallery</a></div>
+<div class="concept-ribbon"><span><strong>Concept 01 · Field Guide</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
 
 <header class="masthead">
   <div class="masthead-inner">
@@ -51,7 +51,7 @@
       <p class="byline">Five chapters, an appendix of <span data-feature-count>68</span> features, about twelve minutes. Or <a href="#install">skip to the install</a>.</p>
       <figure class="plate plate-hero">
         <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" alt="The Sheprd window: a sidebar of workspaces with nested worktrees and their agents, an editor pane and two terminal panes showing git history and passing tests, a status bar with plan usage, CPU and memory.">
-        <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> <b>Plate 1.</b> One window, three repositories, five agents. Worktrees nest under their checkout; each row carries the agent's status dot.</figcaption>
+        <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> <b>Plate 1.</b> One window, three repositories, five agents. Worktrees nest under their checkout; each row carries the agent's status dot.</figcaption>
       </figure>
     </header>
 
@@ -75,7 +75,7 @@
         </div>
         <figure class="plate plate-small">
           <img src="../../assets/shots/usage.png" width="1000" height="800" loading="lazy" alt="A usage panel for Codex: weekly limit 97 percent left, resets in four days, reserve and credit balances, with Refresh, Usage Dashboard and Status Page actions.">
-          <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> <b>Plate 2.</b> Click a provider in the status bar for its limits and reset time.</figcaption>
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> <b>Plate 2.</b> Click a provider in the status bar for its limits and reset time.</figcaption>
         </figure>
       </div>
       <figure class="plate plate-strip">
@@ -106,7 +106,7 @@
       <p class="chapter-dek">Review like a pull request, before there is a pull request.</p>
       <figure class="plate">
         <img src="../../assets/shots/review.jpg" width="1800" height="1125" loading="lazy" alt="The Review changes tab: a file tree, a unified diff of src/ledger.rs with added and removed lines, two numbered notes in a side panel and a Send to agent button.">
-        <figcaption><span class="tag-screenshot">Real screenshot · current build, Herdr UI branding</span> <b>Plate 4.</b> Click a line, write a note, send all notes to the agent in one message.</figcaption>
+        <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> <b>Plate 4.</b> Click a line, write a note, send all notes to the agent in one message.</figcaption>
       </figure>
       <div class="cols">
         <div>
@@ -181,20 +181,20 @@
   <section class="install" id="install" aria-labelledby="install-h">
     <p class="chapter-num">Appendix B</p>
     <h2 id="install-h">Getting Sheprd</h2>
-    <p>Downloads are still published under the app's current name, Herdr UI. These are the <b>current channels</b>; Sheprd-named releases at <span class="future">github.com/sheprd-labs/sheprd (future)</span> will replace them.</p>
+    <p>Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
     <table class="install-table">
       <caption class="sr-only">Install commands by platform</caption>
       <thead><tr><th scope="col">Platform</th><th scope="col">Current channel</th></tr></thead>
       <tbody>
         <tr><th scope="row">macOS 14.2+ <small>universal</small></th><td><code>brew install penso/tap/herdr-gpui</code></td></tr>
-        <tr><th scope="row">Linux <small>x86_64, ARM64</small></th><td><code>curl -fsSL https://herdrui.dev/install.sh | sh</code></td></tr>
-        <tr><th scope="row">Windows <small>x86_64, ARM64</small></th><td><code>irm https://herdrui.dev/install.ps1 | iex</code></td></tr>
-        <tr><th scope="row">Nix</th><td><code>nix run github:penso/herdr-gpui</code></td></tr>
+        <tr><th scope="row">Linux <small>x86_64, ARM64</small></th><td><code>curl -fsSL https://sheprd.org/install.sh | sh</code></td></tr>
+        <tr><th scope="row">Windows <small>x86_64, ARM64</small></th><td><code>irm https://sheprd.org/install.ps1 | iex</code></td></tr>
+        <tr><th scope="row">Nix</th><td><code>nix run github:sheprd-labs/sheprd</code></td></tr>
         <tr><th scope="row">iPhone &amp; iPad</th><td>TestFlight beta (no public link yet), or build from source</td></tr>
         <tr><th scope="row">Any phone</th><td>The remote-control web app your computer serves, once enabled</td></tr>
       </tbody>
     </table>
-    <p class="install-links"><a class="btn" href="https://github.com/sheprd-labs">Sheprd on GitHub</a> <a class="btn btn-ghost" href="../../FEATURE-INVENTORY.md">Read the source-backed inventory</a></p>
+    <p class="install-links"><a class="btn" href="https://github.com/sheprd-labs/sheprd">Sheprd on GitHub</a> <a class="btn btn-ghost" href="../../FEATURE-INVENTORY.md">Read the source-backed inventory</a></p>
   </section>
 </main>
 
@@ -204,7 +204,7 @@
     <div>
       <p><b>Colophon.</b> Sheprd is written in Rust on GPUI: 26 crates, roughly 380,000 lines of production Rust and more than 8,000 tests, measured from tracked first-party sources at commit 8e03793da. Apache-2.0.</p>
       <p>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (<code>herdr server</code> and herdr-core). It is not made, endorsed or supported by the Herdr project. Learn about Herdr at <a href="https://herdr.dev">herdr.dev</a>.</p>
-      <p><a href="https://github.com/sheprd-labs">github.com/sheprd-labs</a> · <span class="future">github.com/sheprd-labs/sheprd (future)</span> · sheprd.org</p>
+      <p><a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a> · sheprd.org</p>
     </div>
   </div>
 </footer>
