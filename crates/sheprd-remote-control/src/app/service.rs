@@ -49,12 +49,14 @@ pub struct Plan {
     /// `XDG_STATE_HOME`.
     pub herdr_socket: Option<PathBuf>,
     pub chat_dir: Option<PathBuf>,
+    /// The core endpoint resolved in the desktop process.
+    pub core_endpoint: Option<sheprd_core_client::Endpoint>,
 }
 
 impl Plan {
     /// `serve --state-dir DIR --port N --bind ADDR [--cert F --key F]
     /// --privacy generic|excerpt --device-idle-days N [--herdr-socket P]
-    /// [--chat-dir D]`.
+    /// [--chat-dir D] [--core-socket P --core-session S]`.
     pub fn args(&self) -> Vec<OsString> {
         let config = &self.config;
         let mut args: Vec<OsString> = vec![
@@ -85,6 +87,14 @@ impl Plan {
         }
         if let Some(dir) = &self.chat_dir {
             args.extend(["--chat-dir".into(), dir.clone().into()]);
+        }
+        if let Some(endpoint) = &self.core_endpoint {
+            args.extend([
+                "--core-socket".into(),
+                endpoint.socket.clone().into(),
+                "--core-session".into(),
+                endpoint.session.clone().into(),
+            ]);
         }
         args
     }
@@ -383,6 +393,9 @@ fn write_definition(config: &RemoteConfig, host: &Host) -> Result<bool> {
         config: config.clone(),
         herdr_socket: sheprd_client::ConnectTarget::Local.socket_path().ok(),
         chat_dir: sheprd_chat_protocol::endpoint_dir(),
+        core_endpoint: Some(sheprd_core_client::Endpoint::resolve(
+            sheprd_client::login_env::var,
+        )?),
     };
     let text = host.manager.text(&plan)?;
     let bytes = host.manager.bytes(&text);

@@ -16,6 +16,7 @@ impl Localize for app::Error {
                 fl!("error-remote-control-certificate-path", key = *which)
             }
             Self::Control(error) => error.localize(),
+            Self::Core(error) => error.to_string(),
             Self::Enroll(error) => error.localize(),
             Self::IdleDays => fl!("error-remote-control-idle-days"),
             Self::Io {

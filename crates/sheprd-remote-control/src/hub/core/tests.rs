@@ -85,6 +85,8 @@ mod socket {
         time::Instant,
     };
 
+    mod recovery;
+
     struct Fake {
         _dir: tempfile::TempDir,
         inputs: mpsc::Receiver<Vec<u8>>,
@@ -111,6 +113,10 @@ mod socket {
     }
 
     fn fake() -> (Arc<Source>, Fake) {
+        fake_with_close(false)
+    }
+
+    fn fake_with_close(close: bool) -> (Arc<Source>, Fake) {
         let dir = tempfile::Builder::new()
             .prefix("rc")
             .tempdir_in("/tmp")
@@ -132,12 +138,16 @@ mod socket {
                 "methods": Method::ALL.iter().map(|method| method.as_str()).collect::<Vec<_>>()}});
             writeln!(socket, "{response}").unwrap();
             let mut decoder = Decoder::default();
+            let mut channel = 6;
             while let Some(frame) = receive(&mut socket, &mut decoder) {
                 if frame.kind != Kind::Data {
                     continue;
                 }
                 if frame.channel != 0 {
                     sent.send(frame.payload).unwrap();
+                    if close {
+                        assert_eq!(frame.channel, 8);
+                    }
                     socket
                         .write_all(&encode(7, Kind::Data, b"\r\x1b[2Kreceived").unwrap())
                         .unwrap();
@@ -149,7 +159,10 @@ mod socket {
                     "terminal.attach" => {
                         assert_eq!(request["params"]["terminal"], "t1");
                         assert_eq!(request["params"]["cols"], 80);
-                        json!({"channel": 7, "terminal": record("t1")})
+                        {
+                            channel += 1;
+                            json!({"channel": channel, "terminal": record("t1")})
+                        }
                     }
                     method => panic!("unexpected method {method}"),
                 };
@@ -162,8 +175,22 @@ mod socket {
                 if request["method"] == "terminal.attach" {
                     socket
                         .write_all(
-                            &encode(7, Kind::Data, b"\x1b[31mhello\x1b[0m\x1b[?2004h").unwrap(),
+                            &encode(
+                                channel,
+                                Kind::Data,
+                                if channel == 7 {
+                                    b"\x1b[31mhello\x1b[0m\x1b[?2004h"
+                                } else {
+                                    b"recovered"
+                                },
+                            )
+                            .unwrap(),
                         )
+                        .unwrap();
+                }
+                if close && request["method"] == "terminal.attach" && channel == 7 {
+                    socket
+                        .write_all(&encode(7, Kind::Close, b"").unwrap())
                         .unwrap();
                 }
             }
@@ -175,6 +202,7 @@ mod socket {
         .unwrap();
         let source = Arc::new(Source {
             connected: AtomicBool::new(false),
+            endpoint: None,
             scope: None,
             state: Mutex::new(State {
                 core: Some(core),
@@ -300,3 +328,5 @@ mod socket {
         fake.server.join().unwrap();
     }
 }
+
+mod state_context;

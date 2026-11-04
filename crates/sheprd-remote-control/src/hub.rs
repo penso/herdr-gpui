@@ -93,6 +93,8 @@ impl Hub {
     pub(crate) fn start(
         socket: Option<PathBuf>,
         chat_dir: Option<PathBuf>,
+        core_endpoint: Option<sheprd_core_client::Endpoint>,
+        state_dir: &Path,
     ) -> std::io::Result<Arc<Self>> {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));
         let api = api::Api::new(socket.clone());
@@ -100,7 +102,7 @@ impl Hub {
         let (daemon_sender, daemon_layout) = watch::channel(Arc::new(Layout::default()));
         let daemon = daemon::Daemon::start(daemon_sender, target.clone())?;
         let (core_sender, core_layout) = watch::channel(Arc::new(Layout::default()));
-        let core = core::Source::start(core_sender, &target)?;
+        let core = core::Source::start(core_sender, &target, core_endpoint, state_dir)?;
         tokio::spawn(core::merge_sources(sender, daemon_layout, core_layout));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         let hub = Arc::new(Self {

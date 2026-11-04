@@ -13,6 +13,7 @@ fn plan() -> Plan {
         },
         herdr_socket: None,
         chat_dir: None,
+        core_endpoint: None,
     }
 }
 
@@ -486,3 +487,5 @@ fn a_failed_load_is_reported_with_its_cause() {
 
 mod release;
 mod restart;
+
+mod core_endpoint;

@@ -32,7 +32,6 @@ server = [
     "dep:rcgen",
     "dep:rustls",
     "dep:sha2",
-    "dep:sheprd-core-client",
     "dep:sheprd-terminal",
     "dep:socket2",
     "dep:sysinfo",
@@ -87,7 +86,7 @@ pulldown-cmark = { optional = true, workspace = true }
 rcgen          = { optional = true, workspace = true }
 rustls         = { optional = true, workspace = true }
 sha2           = { optional = true, workspace = true }
-sheprd-core-client = { optional = true, workspace = true }
+sheprd-core-client.workspace = true
 sheprd-terminal = { optional = true, workspace = true }
 socket2        = { optional = true, workspace = true }
 # This computer's CPU and memory, shown above its workspaces on a phone.

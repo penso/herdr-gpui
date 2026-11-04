@@ -91,7 +91,7 @@ impl Screen {
             let chunk = self.attachment.read(Duration::ZERO)?;
             self.emulator.feed(&chunk.bytes);
             bytes += chunk.bytes.len();
-            if matches!(chunk.end, Some(End::Lost)) {
+            if matches!(chunk.end, Some(End::Lost | End::Closed(_))) {
                 self.lost = true;
             }
             if chunk.bytes.is_empty() || chunk.end.is_some() || bytes >= 1024 * 1024 {

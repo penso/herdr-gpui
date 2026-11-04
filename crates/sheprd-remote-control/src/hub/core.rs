@@ -35,6 +35,7 @@ impl From<sheprd_core_client::Error> for HubError {
 
 pub(super) struct Source {
     connected: AtomicBool,
+    endpoint: Option<Endpoint>,
     scope: Option<String>,
     state: Mutex<State>,
     tabs: Option<std::path::PathBuf>,
@@ -55,15 +56,18 @@ impl Source {
     pub(super) fn start(
         layout: watch::Sender<Arc<Layout>>,
         target: &sheprd_client::ConnectTarget,
+        endpoint: Option<Endpoint>,
+        state_dir: &std::path::Path,
     ) -> std::io::Result<Arc<Self>> {
         let source = Arc::new(Self {
             connected: AtomicBool::new(false),
+            endpoint,
             scope: target
                 .socket_path()
                 .ok()
                 .map(|path| format!("local:{}", path.display())),
             state: Mutex::new(State::default()),
-            tabs: sheprd_client::local_path::state_dir().map(|dir| dir.join("browser-tabs.json")),
+            tabs: tabs_path(state_dir),
         });
         let weak = Arc::downgrade(&source);
         thread::Builder::new()
@@ -81,7 +85,10 @@ impl Source {
         if state.core.as_ref().is_none_or(Core::is_lost) {
             state.screens.clear();
             state.core = None;
-            let endpoint = Endpoint::resolve(sheprd_client::login_env::var)?;
+            let endpoint = match &self.endpoint {
+                Some(endpoint) => endpoint.clone(),
+                None => Endpoint::resolve(sheprd_client::login_env::var)?,
+            };
             state.core = Some(Core::connect(&endpoint)?);
         }
         let core = state.core.as_ref().ok_or(Error::Disconnected)?;
@@ -117,6 +124,12 @@ impl Source {
             .ok_or(HubError::Response)?;
         let State { core, screens, .. } = &mut *state;
         let core = core.as_ref().ok_or(Error::Disconnected)?;
+        if screens
+            .get(&terminal.address)
+            .is_some_and(screen::Screen::expired)
+        {
+            screens.remove(&terminal.address);
+        }
         if !screens.contains_key(&terminal.address) {
             // Bound emulators and attachments even when a phone visits many panes.
             if screens.len() >= 16 {
@@ -216,6 +229,10 @@ pub(super) async fn merge_sources(
             () = sender.closed() => return,
         }
     }
+}
+
+fn tabs_path(state_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    state_dir.parent().map(|dir| dir.join("browser-tabs.json"))
 }
 
 #[cfg(test)]

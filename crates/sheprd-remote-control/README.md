@@ -12,14 +12,20 @@ or upgrades a Herdr daemon.
 ## Herdr 2 terminals
 
 The daemon lists terminals from both Herdr 1 and a running herdr-core.
-It finds herdr-core with the same endpoint resolution as the desktop:
+The managed service receives the socket and session resolved by the desktop,
+so it joins the same core even when its service environment differs.
+A foreground daemon discovers herdr-core through
 `HC_SOCKET`, the core's configured socket, or its default session socket.
-`HC_SESSION` selects the session. Remote control only joins an existing core.
+`HC_SESSION` selects the session. Explicit `--core-socket PATH --core-session NAME`
+arguments override discovery. Remote control only joins an existing core.
 It never starts the bundled core or runs `hc server start`.
 
 Herdr 1 workspaces and chats keep their existing behavior. Saved local
 Herdr 2 tabs in Sheprd's `browser-tabs.json` keep their workspace and split
-membership. Only tabs for the selected local Herdr 1 endpoint are used.
+membership. The file is read beside the explicit remote `--state-dir`
+(for example, `gpui/browser-tabs.json` beside `gpui/remote`), using the
+desktop state context instead of the service environment. Only tabs for the
+selected local Herdr 1 endpoint are used.
 Other core terminals appear in a **Herdr 2** workspace, including terminals
 created by `hc` and the desktop's shell when Herdr 1 is absent. Status comes
 from the core's terminal records. The phone reports **Herdr not running**

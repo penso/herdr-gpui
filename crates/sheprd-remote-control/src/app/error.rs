@@ -10,6 +10,8 @@ pub enum Error {
     #[error(transparent)]
     Control(#[from] crate::control::Error),
     #[error(transparent)]
+    Core(#[from] sheprd_core_client::Error),
+    #[error(transparent)]
     Enroll(#[from] super::enroll::Error),
     #[error("remote.device_idle_days must be between 0 (never) and 365")]
     IdleDays,
