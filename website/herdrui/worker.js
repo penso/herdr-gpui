@@ -1,6 +1,6 @@
-// herdrui.dev after the rename. The install scripts and llms.txt keep working;
+// herdrui.dev after the rename. The install scripts, llms.txt and social card stay;
 // every other path gets the notice, which forwards to the same path on sheprd.org.
-const KEEP = new Set(['/install.sh', '/install.ps1', '/llms.txt']);
+const KEEP = new Set(['/install.sh', '/install.ps1', '/llms.txt', '/assets/rename-social.png']);
 
 export default {
   fetch(request, env) {

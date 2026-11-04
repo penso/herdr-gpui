@@ -253,6 +253,49 @@ tr[data-s="idle"] .s { box-shadow: inset 0 0 0 1.5px var(--idle); }
   .matrix td.y::before, .matrix td.n::before, .matrix td.p::before, .matrix td.na::before { content: attr(data-os) ": "; color: var(--ink-2); font-weight: 500; }
 }
 
+/* Install at the top of the page */
+.hero-more { margin: .9rem 0 0; font: 400 .85rem/1.5 var(--sans); color: var(--ink-2); }
+.ins-os { display: inline-flex; gap: .15rem; padding: .2rem; margin-bottom: .6rem; border: 1px solid var(--rule); border-radius: 999px; background: #fffdf9; font-family: var(--sans); }
+.ins-os button { border: 0; background: none; padding: .36rem .8rem; border-radius: 999px; cursor: pointer; font: 600 .82rem/1.2 var(--sans); color: var(--ink-2); }
+.ins-os button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.ins-cmd { display: flex; align-items: stretch; min-width: 0; border: 1px solid var(--ink); border-radius: 10px; overflow: hidden; background: #fffdf9; }
+.ins-cmd code { flex: 1; min-width: 0; display: block; padding: .85rem 1rem; font: .95rem/1.4 var(--mono); white-space: nowrap; overflow-x: auto; scrollbar-width: none; background: none; border-radius: 0; }
+.ins-cmd code::before { content: "$ "; color: var(--orange); }
+.ins-copy { flex: none; border: 0; padding: 0 1.1rem; background: var(--ink); color: var(--paper); font: 600 .85rem/1 var(--sans); cursor: pointer; }
+.ins-copy:hover { background: var(--orange); color: #fff; }
+.ins-req { margin: .55rem 0 0; font: 400 .82rem/1.45 var(--sans); color: var(--ink-2); }
+
+/* The loop: steps look like buttons, and the way forward is spelled out. */
+.rail { border-top: 0; gap: .55rem; margin-bottom: 1.8rem; }
+.rail button { position: relative; display: flex; align-items: center; gap: .55rem; margin: 0; padding: .65rem .7rem; border: 1px solid #cdbba6; border-radius: 12px; background: #fffdf9; color: var(--ink); cursor: pointer; box-shadow: 0 2px 0 #e3d5c2; transition: transform .14s ease, box-shadow .14s ease, background .14s ease, border-color .14s ease; }
+.rail button:hover { transform: translateY(-2px); border-color: var(--orange); box-shadow: 0 5px 0 #e9c9b0; }
+.rail button:active { transform: translateY(1px); box-shadow: 0 1px 0 #e3d5c2; }
+.rail .n { flex: none; display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--paper-2); color: var(--orange); font: 700 .78rem/1 var(--sans); letter-spacing: 0; }
+.rail .l { min-width: 0; font: 600 .95rem/1.2 var(--serif); }
+.rail button[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); box-shadow: 0 2px 0 var(--orange); }
+.rail button[aria-selected="true"] .n { background: var(--orange); color: #fff; }
+.loop-nav { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: 1.8rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-family: var(--sans); }
+.loop-count { margin-right: auto; font: 500 .85rem/1.3 var(--sans); color: var(--ink-2); }
+.loop-nav button { border: 1px solid var(--ink); border-radius: 999px; padding: .6rem 1.05rem; background: transparent; color: var(--ink); font: 600 .9rem/1.1 var(--sans); cursor: pointer; }
+.loop-nav .loop-next { background: var(--ink); color: var(--paper); }
+.loop-nav .loop-next:hover { background: var(--orange); border-color: var(--orange); color: #fff; }
+.loop-nav .loop-prev:hover { background: var(--paper-2); }
+.loop-nav button[hidden] { display: none; }
+
+/* Stack the hero a little earlier, so the command box keeps its width. */
+@media (max-width: 72rem) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 40rem) {
+  .ins-os button { padding: .36rem .62rem; }
+  .rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Copy moves under the command, so the whole line has the box to itself. */
+  .ins-cmd { flex-direction: column; }
+  .ins-cmd code { flex: none; padding: .8rem .7rem; }
+  .ins-cmd code::before { content: none; }
+  .ins-copy { padding: .6rem; }
+}
+
 /* Hand-built illustrations */
 .mock { background: #17171a; color: #e9e6e2; border-radius: 10px; padding: 1rem; font-size: 14px; box-shadow: 0 24px 50px -28px rgba(20,20,20,.5); font-family: var(--sans); }
 .mock-bar { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: .8rem; }

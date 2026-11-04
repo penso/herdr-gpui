@@ -151,6 +151,102 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   if (S) features();
 
+  /* Install at the top: the visitor's system, one line, one click to copy. */
+  function heroInstall() {
+    var root = document.getElementById("hero-install");
+    if (!root) return;
+    var OS = {
+      macOS: { cmd: "brew install penso/tap/herdr-gpui", req: "macOS 14.2 or newer, Apple silicon or Intel." },
+      Linux: { cmd: "curl -fsSL https://sheprd.org/install.sh | sh", req: "x86_64 and ARM64, with APT, DNF or pacman." },
+      Windows: { cmd: "irm https://sheprd.org/install.ps1 | iex", req: "x86_64 and ARM64, in PowerShell. No admin rights needed." }
+    };
+    var current = /Windows/.test(ua) ? "Windows" : /Linux|X11/.test(ua) && !/Android/.test(ua) ? "Linux" : "macOS";
+    var os = el("div", "ins-os");
+    os.setAttribute("role", "group");
+    os.setAttribute("aria-label", "Your system");
+    var cmd = el("div", "ins-cmd");
+    var code = el("code");
+    var copy = el("button", "ins-copy", "Copy");
+    var req = el("p", "ins-req");
+    copy.type = "button";
+    cmd.appendChild(code);
+    cmd.appendChild(copy);
+
+    // Keep the command whole on one line: shrink it to its box, down to a readable floor.
+    function fit() {
+      code.style.fontSize = "";
+      var style = getComputedStyle(code);
+      var pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      var text = code.scrollWidth - pad;
+      var room = code.clientWidth - pad;
+      if (text > room) code.style.fontSize = Math.max(10.5, Math.floor(parseFloat(style.fontSize) * room / text * 10) / 10) + "px";
+    }
+    var buttons = Object.keys(OS).map(function (name) {
+      var b = el("button", null, name);
+      b.type = "button";
+      b.addEventListener("click", function () { current = name; draw(); });
+      os.appendChild(b);
+      return b;
+    });
+    function draw() {
+      code.textContent = OS[current].cmd;
+      req.textContent = OS[current].req;
+      buttons.forEach(function (b) { b.setAttribute("aria-pressed", b.textContent === current ? "true" : "false"); });
+      fit();
+    }
+    copy.addEventListener("click", function () {
+      var text = OS[current].cmd;
+      if (!navigator.clipboard) { status.textContent = "Clipboard unavailable; select the command instead."; return; }
+      navigator.clipboard.writeText(text).then(function () {
+        copy.textContent = "Copied";
+        status.textContent = "Copied: " + text;
+        setTimeout(function () { copy.textContent = "Copy"; }, 1500);
+      }, function () { status.textContent = "Copy failed; select the command instead."; });
+    });
+    root.textContent = "";
+    root.appendChild(os);
+    root.appendChild(cmd);
+    root.appendChild(req);
+    draw();
+    window.addEventListener("resize", fit);
+  }
+  heroInstall();
+
+  /* The loop: an explicit way forward under the panels. */
+  function loopNav() {
+    var steps = Array.prototype.slice.call(document.querySelectorAll('.rail [role="tab"]'));
+    var panels = document.querySelector(".panels");
+    if (!steps.length || !panels) return;
+    var nav = el("div", "loop-nav");
+    var count = el("span", "loop-count");
+    var prev = el("button", "loop-prev");
+    var next = el("button", "loop-next");
+    count.setAttribute("aria-live", "polite");
+    prev.type = next.type = "button";
+    nav.appendChild(count);
+    nav.appendChild(prev);
+    nav.appendChild(next);
+    panels.parentNode.insertBefore(nav, panels.nextSibling);
+    function name(tab) { return tab.querySelector(".l").textContent; }
+    function at() { return steps.findIndex(function (t) { return t.getAttribute("aria-selected") === "true"; }); }
+    function sync() {
+      var i = at();
+      count.textContent = "Step " + (i + 1) + " of " + steps.length + ": " + name(steps[i]);
+      prev.hidden = i === 0;
+      next.hidden = i === steps.length - 1;
+      if (i > 0) prev.textContent = "← " + name(steps[i - 1]);
+      if (i < steps.length - 1) next.textContent = "Next: " + name(steps[i + 1]) + " →";
+    }
+    prev.addEventListener("click", function () { steps[at() - 1].click(); sync(); });
+    next.addEventListener("click", function () { steps[at() + 1].click(); sync(); });
+    steps.forEach(function (t) {
+      t.addEventListener("click", function () { setTimeout(sync, 0); });
+      t.addEventListener("keydown", function () { setTimeout(sync, 0); });
+    });
+    sync();
+  }
+  loopNav();
+
   /* Illustrative board: statuses loop. With reduced motion it stays still and says so. */
   var note = document.getElementById("motion-note");
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {

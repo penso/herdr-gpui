@@ -3,6 +3,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 import re
+import struct
 import subprocess
 import tomllib
 import unittest
@@ -94,7 +95,7 @@ class WebsiteTests(unittest.TestCase):
                 self.assertNotIn("never leave", data)
                 self.assertIn("Teleport can lend your GitHub CLI token", data)
 
-    def test_herdrui_worker_keeps_old_installers_and_the_notice(self):
+    def test_herdrui_worker_serves_current_installers_and_the_notice(self):
         worker = ROOT / "website/herdrui"
         self.assertEqual((worker / "public/index.html").read_bytes(),
                          (ROOT / "design/sheprd-website/herdrui-rename/index.html").read_bytes())
@@ -102,8 +103,7 @@ class WebsiteTests(unittest.TestCase):
         for name in ("install.sh", "install.ps1", "llms.txt"):
             with self.subTest(file=name):
                 self.assertIn(f"'/{name}'", source)
-                self.assertTrue((worker / "public" / name).is_file())
-        self.assertIn("Herdr-$version", (worker / "public/install.sh").read_text())
+                self.assertEqual((worker / "public" / name).read_bytes(), (WEBSITE / name).read_bytes())
 
     def test_social_metadata_is_complete(self):
         html = (WEBSITE / "index.html").read_text()
@@ -121,6 +121,33 @@ class WebsiteTests(unittest.TestCase):
         self.assertEqual(len(urls), 2)
         self.assertEqual(urls[0], urls[1], "bump ?v= on both tags")
         self.assertRegex(urls[0], r"\?v=\d+$")
+
+    def test_herdrui_notice_announces_the_rename_when_shared(self):
+        worker = ROOT / "website/herdrui"
+        html = (worker / "public/index.html").read_text()
+        urls = re.findall(r'(?:property="og:image"|name="twitter:image") content="([^"]*)"', html)
+        self.assertEqual(len(urls), 2)
+        self.assertEqual(urls[0], urls[1], "bump ?v= on both tags")
+        parsed = urlsplit(urls[0])
+        self.assertEqual(parsed.netloc, "herdrui.dev")
+        self.assertRegex(parsed.query, r"^v=\d+$")
+        self.assertIn(f"'{parsed.path}'", (worker / "worker.js").read_text())
+        data = (worker / "public" / parsed.path.lstrip("/")).read_bytes()
+        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", data[16:24]), (1200, 630))
+        self.assertIn('property="og:url" content="https://herdrui.dev/"', html)
+
+    def test_hero_commands_match_the_get_sheprd_section(self):
+        html = (WEBSITE / "index.html").read_text()
+        script = (WEBSITE / "assets/site.js").read_text()
+        self.assertIn('id="hero-install"', html)
+        self.assertIn('href="#get"', html)
+        for command in ("brew install penso/tap/herdr-gpui",
+                        "curl -fsSL https://sheprd.org/install.sh | sh",
+                        "irm https://sheprd.org/install.ps1 | iex"):
+            with self.subTest(command=command):
+                self.assertIn(command, script)
+                self.assertIn(command, html)
 
 
 if __name__ == "__main__":
