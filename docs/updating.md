@@ -267,7 +267,7 @@ Installation contracts, beyond accepting a filename:
   `Herdr.app` or `Sheprd.app` may name that receipt; the cask token remains
   `herdr-gpui`. Relaunch accepts either executable at the original bundle path.
   The renamed cask displays Sheprd but keeps its install target at
-  `Herdr.app` (`app "Sheprd.app", target: "Herdr.app"`) and is published from `sheprd-labs/tap`.
+  `Herdr.app` (`app "Sheprd.app", target: "Herdr.app"`) and is published to `sheprd-labs/tap` and `penso/tap`.
   Changing that needs an explicit cask-token/destination migration. The bridge cannot
   follow a cask that removes its old target and installs only at a new path.
 - **Linux standalone:** the single regular executable inside the updater tar

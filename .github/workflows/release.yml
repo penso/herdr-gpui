@@ -959,7 +959,11 @@ jobs:
       - name: Commit only the tap cask using its dedicated deploy key
         env:
           HOMEBREW_TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
-        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-cask.rb
+        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-cask.rb penso/homebrew-tap
+      - name: Commit only the Sheprd tap cask using its dedicated deploy key
+        env:
+          HOMEBREW_TAP_SSH_KEY: ${{ secrets.SHEPRD_TAP_SSH_KEY }}
+        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-cask.rb sheprd-labs/homebrew-tap
 
   # Keep these steps identical in release.yml and promote.yml. Betas never
   # reach winget: promote.yml submits one when it is promoted. Neither do

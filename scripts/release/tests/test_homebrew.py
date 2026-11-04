@@ -22,9 +22,9 @@ class HomebrewTests(unittest.TestCase):
             "legacy-semver": "0.1.0", "legacy-leading-zero": "01.2.3",
             "invalid-existing": "garbage",
         }
-        successes = ("publish", "unchanged", "upgrade-counter", "upgrade-date",
+        successes = ("publish", "legacy-tap", "unchanged", "upgrade-counter", "upgrade-date",
                      "upgrade-old-date", "upgrade-numeric", "legacy-semver")
-        for case in ("publish", "unchanged", "missing-key", "bad-version", "symlink",
+        for case in ("publish", "legacy-tap", "unknown-tap", "unchanged", "missing-key", "bad-version", "symlink",
                      "curl", "clone", "push", "bad-meta", "directory", "diff-error",
                      "version-mismatch", "missing-cask", "changed-checksum", "changed-content",
                      "missing-version", "duplicate-version", "ruby-version", *existing_versions):
@@ -34,7 +34,8 @@ class HomebrewTests(unittest.TestCase):
                 tools.mkdir()
                 temporary = work / "temporary"
                 temporary.mkdir()
-                env = {"PATH": str(tools) + os.pathsep + os.environ["PATH"],
+                tap = "penso/homebrew-tap" if case == "legacy-tap" else "sheprd-labs/homebrew-tap"
+                env = {"PATH": str(tools) + os.pathsep + os.environ["PATH"], "TAP": tap,
                        "HOME": directory, "GIT_CONFIG_NOSYSTEM": "1",
                        "RUNNER_TEMP": str(temporary), "CASE": case,
                        "HOMEBREW_TAP_SSH_KEY": "dummy-private-key",
@@ -109,7 +110,7 @@ if "clone" in args:
                    "BatchMode=yes", "-F /dev/null", "GlobalKnownHostsFile=/dev/null"]:
         assert option in ssh
     assert (temp / "known_hosts").read_text() == "github.com ssh-ed25519 dummy\\n"
-    assert args[-2] == "git@github.com:sheprd-labs/homebrew-tap.git"
+    assert args[-2] == "git@github.com:" + os.environ["TAP"] + ".git"
     if case == "clone": sys.exit(1)
     args[-2] = str(work / "remote.git")
 if "push" in args:
@@ -126,11 +127,14 @@ sys.exit(subprocess.call([os.environ["REAL_GIT"], *args]))
                 if case == "missing-key":
                     del env["HOMEBREW_TAP_SSH_KEY"]
                 result = subprocess.run(
-                    ["bash", str(SCRIPT), "020260920.3" if case == "bad-version" else version, str(cask)],
+                    ["bash", str(SCRIPT), "020260920.3" if case == "bad-version" else version, str(cask),
+                     "someone/homebrew-tap" if case == "unknown-tap" else tap],
                     env=env, text=True, capture_output=True, timeout=30)
                 self.assertEqual(result.returncode == 0, case in successes, result.stderr)
                 if case in ("old-job-rerun", "lower-date", "lower-counter", "large-component"):
                     self.assertIn("Refusing Homebrew downgrade", result.stderr)
+                if case == "unknown-tap":
+                    self.assertIn("Unknown Homebrew tap repository", result.stderr)
                 if case == "legacy-semver":
                     self.assertIn("Replacing pre-calendar cask version 0.1.0", result.stdout)
                 if case in ("changed-checksum", "changed-content"):

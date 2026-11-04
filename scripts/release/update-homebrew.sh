@@ -2,10 +2,17 @@
 set +x
 set -euo pipefail
 source "$(dirname -- "$0")/common.sh"
-[[ $# == 2 ]] || fail 'Usage: bash update-homebrew.sh VERSION RENDERED_CASK'
+[[ $# == 3 ]] || fail 'Usage: bash update-homebrew.sh VERSION RENDERED_CASK TAP_REPOSITORY'
 version_check "$1"
 [[ -f $2 && ! -L $2 && -s $2 ]] || fail 'Rendered cask must be a nonempty regular file'
 grep -Fxq "  version \"$1\"" "$2" || fail 'Rendered cask version does not match'
+# New installs use the Sheprd tap. Existing installs stay on the legacy tap:
+# Homebrew will not follow a tap_migrations.json entry to an untrusted tap, so
+# they only keep upgrading if every release lands there too.
+case $3 in
+    penso/homebrew-tap|sheprd-labs/homebrew-tap) ;;
+    *) fail 'Unknown Homebrew tap repository' ;;
+esac
 [[ -n ${HOMEBREW_TAP_SSH_KEY:-} ]] || fail 'HOMEBREW_TAP_SSH_KEY is required'
 
 umask 077
@@ -24,7 +31,7 @@ jq -er '.ssh_keys | select(type == "array" and length > 0) | .[] | "github.com "
 export GIT_SSH_COMMAND="ssh -F /dev/null -i '$temp/key' -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile='$temp/known_hosts' -o GlobalKnownHostsFile=/dev/null"
 export GIT_TERMINAL_PROMPT=0
 git -c core.hooksPath=/dev/null clone --depth=1 --single-branch \
-    git@github.com:sheprd-labs/homebrew-tap.git "$temp/tap"
+    "git@github.com:$3.git" "$temp/tap"
 branch=$(git -C "$temp/tap" symbolic-ref --short HEAD)
 git check-ref-format "refs/heads/$branch"
 [[ ! -L $temp/tap/Casks && ! -L $temp/tap/Casks/herdr-gpui.rb ]] || fail 'Refusing symlink cask path'

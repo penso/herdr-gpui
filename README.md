@@ -189,7 +189,8 @@ brew tap sheprd-labs/tap
 brew install herdr-gpui
 ```
 
-The stable cask token remains `herdr-gpui` in `sheprd-labs/tap`. It displays **Sheprd**
+The stable cask token remains `herdr-gpui`. Installs from the older `penso/tap` keep
+upgrading there, as every release publishes to both taps. It displays **Sheprd**
 and installs the `Sheprd.app` payload at the legacy `Herdr.app` target so existing
 clients can restart in place. The cask is published from the
 [tap](https://github.com/sheprd-labs/homebrew-tap) by the
