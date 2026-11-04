@@ -181,6 +181,22 @@ final class TermStore {
     func apply(_ screen: TermScreen) { self.screen = screen }
 }
 
+/// The computers collapsed in the Workspaces tab, kept on this phone and
+/// shared by its windows.
+@MainActor
+@Observable
+final class CollapsedStore {
+    private static let key = "collapsedComputers"
+
+    var computers: CollapsedComputers {
+        didSet { UserDefaults.standard.set(computers.devices.sorted(), forKey: Self.key) }
+    }
+
+    init() {
+        computers = CollapsedComputers(UserDefaults.standard.stringArray(forKey: Self.key) ?? [])
+    }
+}
+
 /// The composer's text shortcuts, kept on this phone.
 @MainActor
 @Observable
