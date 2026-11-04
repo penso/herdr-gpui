@@ -5,6 +5,7 @@ fn rows_carry_the_words_a_search_matches() {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![workspace(vec![row("p1")])],
     };
     let summaries = HashMap::new();

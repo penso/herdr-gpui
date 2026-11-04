@@ -9,6 +9,7 @@ fn with_terminal(dir: &std::path::Path) -> Shared {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![Workspace {
             id: "w1".into(),
             label: "app".into(),

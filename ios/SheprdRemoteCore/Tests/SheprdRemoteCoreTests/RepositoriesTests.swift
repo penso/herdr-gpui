@@ -8,6 +8,9 @@ struct RepositoriesTests {
     @Test func decodesLoadAndWorktrees() throws {
         guard case let .home(home) = try WireTests.event("home") else { Issue.record("not home"); return }
         #expect(home.load == Home.Load(cores: 10, cpu: 47, load5Tenths: 42, memory: 67))
+        #expect(home.working == 2)
+        let agents = home.workspaces.flatMap(\.terminals).compactMap(\.agent)
+        #expect(agents.contains { $0.changedMs == 1_770_000_000_000 })
         #expect(home.workspaces[0].worktree == Home.Worktree(key: "/work/.git", label: "work", linked: false))
         #expect(home.workspaces[1].worktree == nil)
         #expect(home.workspaces[2].worktree?.linked == true)

@@ -155,6 +155,7 @@ fn write_preview_pages() {
         status: AgentStatus::Blocked,
         pane: "p9".into(),
         title: None,
+        changed_ms: None,
     });
     let mut shell = crate::hub::layout_terminal("t8", "cargo watch");
     shell.cwd = Some("/code/herdr-gpui".into());
@@ -168,6 +169,7 @@ fn write_preview_pages() {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![first, other],
     };
     let summaries = HashMap::from([

@@ -45,6 +45,12 @@ struct LeastBusyTests {
         #expect(Self.order([busy, Self.candidate("b", cpu: 20)]) == ["b", "a"])
     }
 
+    @Test func theComputersOwnCountBeatsWhatItsTabsShow() {
+        var split = Self.candidate("a", cpu: 10)
+        split.home.working = 8
+        #expect(Self.order([split, Self.candidate("b", cpu: 20)]) == ["b", "a"])
+    }
+
     @Test func tightMemoryHalvesTheSpareCores() {
         let tight = Self.candidate("a", cpu: 10, memory: 90)
         #expect(Self.order([tight, Self.candidate("b", cpu: 50)]) == ["b", "a"])

@@ -100,6 +100,7 @@ async fn an_answer_streams_to_the_phone_as_it_is_written() {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![Workspace {
             id: "w1".into(),
             label: "Work".into(),
