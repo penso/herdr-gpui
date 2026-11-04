@@ -25,13 +25,18 @@ struct NewWorkspaceSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var device: String?
+    /// The computer was chosen for its load. It stays the one chosen, as
+    /// the desktop's ranking settles, so the form does not move under the
+    /// person with every sample.
+    @State private var automatic = false
     @State private var options: NewOptions?
     /// The computer `options` came from. The form reappears after the
     /// folder picker, which restarts `load`; this keeps the chosen folder.
     @State private var loadedFrom: String?
     @State private var folder: String?
     @State private var worktree = false
-    @State private var branch = ""
+    /// Proposed up front, as on the desktop, so Create needs no typing.
+    @State private var branch = NewWorkspaceRequest.proposedBranch()
     @State private var agent = "claude"
     @State private var prompt = ""
     @State private var problem: String?
@@ -50,13 +55,22 @@ struct NewWorkspaceSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Computer") {
-                    Picker("Computer", selection: $device) {
+                Section {
+                    Picker("Computer", selection: computerChoice) {
+                        if offersLeastBusy {
+                            Text(leastBusyName).tag(String?.none)
+                        }
                         ForEach(model.fleet.machines) { machine in
                             Text(model.displayName(machine.computer)).tag(Optional(machine.id))
                         }
                     }
                     .pickerStyle(.menu)
+                } header: {
+                    Text("Computer")
+                } footer: {
+                    if automatic, let load = model.fleet.machines.first(where: { $0.id == device })?.home?.load {
+                        Text("Chosen for its room: \(load.spareCores, format: .number.precision(.fractionLength(0...1))) cores spare, \(load.memory)% memory in use.")
+                    }
                 }
                 Section("Project") {
                     NavigationLink {
@@ -105,11 +119,49 @@ struct NewWorkspaceSheet: View {
                 }
             }
             .onAppear {
-                if device == nil { device = model.fleet.machines.first { if case .online = $0.status { true } else { false } }?.id }
+                guard device == nil else { return }
+                let online = model.fleet.machines.filter { if case .online = $0.status { true } else { false } }
+                device = online.first { $0.id == model.recentDevice }?.id ?? online.first?.id
             }
             .task(id: device) { await load() }
         }
         .interactiveDismissDisabled(creating)
+    }
+
+    /// The online computers that can take a workspace, best first.
+    private var ranked: [Home.Candidate] {
+        let candidates = model.fleet.machines.compactMap { machine -> Home.Candidate? in
+            guard case .online = machine.status, let home = machine.home else { return nil }
+            return Home.Candidate(id: machine.id, label: model.displayName(machine.computer), home: home)
+        }
+        return Home.leastBusy(candidates, current: device, repository: repository)
+    }
+
+    /// The repository of the chosen folder, by the name every computer
+    /// knows it by, else the folder's own name.
+    private var repository: String? {
+        guard let folder else { return nil }
+        let homes = model.fleet.machines.lazy.compactMap(\.home)
+        return homes.compactMap { $0.workspaces.first { $0.cwd == folder }?.worktree?.label }.first
+            ?? URL(filePath: folder).lastPathComponent
+    }
+
+    /// One computer alone is no choice.
+    private var offersLeastBusy: Bool { ranked.count > 1 }
+
+    private var leastBusyName: String {
+        guard automatic, let machine = model.fleet.machines.first(where: { $0.id == device }) else { return "Least busy" }
+        return "Least busy: \(model.displayName(machine.computer))"
+    }
+
+    /// The picker's selection: a computer, or nil for the least busy one.
+    private var computerChoice: Binding<String?> {
+        Binding {
+            automatic && offersLeastBusy ? nil : device
+        } set: { choice in
+            automatic = choice == nil
+            if let chosen = choice ?? ranked.first?.id { device = chosen }
+        }
     }
 
     private var ready: Bool {
@@ -127,6 +179,10 @@ struct NewWorkspaceSheet: View {
         // Choosing the computer here would change the task's id and
         // cancel this load; `onAppear` chooses it first.
         guard let device, device != loadedFrom else { return }
+        // Moving to another computer keeps the project when it has it;
+        // paths differ between computers.
+        let project = repository
+        let name = folder.map { URL(filePath: $0).lastPathComponent }
         options = nil
         folder = nil
         problem = nil
@@ -134,7 +190,12 @@ struct NewWorkspaceSheet: View {
             let loaded = try await model.fleet.call(device) { client, token in try await client.newOptions(bearer: token) }
             options = loaded
             loadedFrom = device
-            folder = (preset?.device == device ? preset?.folder : nil) ?? loaded.recent.first
+            let home = model.fleet.machines.first { $0.id == device }?.home
+            let checkout = project.flatMap { home?.checkout(ofRepository: $0) }
+            folder = (preset?.device == device ? preset?.folder : nil)
+                ?? checkout.flatMap { loaded.folders.contains($0) ? $0 : nil }
+                ?? loaded.folders.first { URL(filePath: $0).lastPathComponent == name }
+                ?? loaded.recent.first
             if !loaded.agents.contains(where: { $0.id == agent }), let first = loaded.agents.first { agent = first.id }
         } catch where !Task.isCancelled {
             problem = error.localizedDescription
@@ -157,6 +218,7 @@ struct NewWorkspaceSheet: View {
                 let created = try await model.fleet.call(device) { client, token in
                     try await client.createWorkspace(request, bearer: token)
                 }
+                model.recentAgent = request.agent
                 dismiss()
                 model.opened(created, prompt: request.prompt, device: device, title: title)
             } catch {
@@ -228,6 +290,7 @@ struct NewChatSheet: View {
                 let created = try await model.fleet.call(device) { client, token in
                     try await client.startChat(request, workspace: workspace, bearer: token)
                 }
+                model.recentAgent = request.agent
                 dismiss()
                 model.opened(created, prompt: request.prompt, device: device, title: title)
             } catch {

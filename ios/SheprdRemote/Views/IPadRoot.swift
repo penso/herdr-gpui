@@ -44,6 +44,9 @@ struct IPadRoot: View {
                 ChatWithTerminal(key: key, title: title).id(key)
             case let .term(key, title)?:
                 NavigationStack { TerminalScreen(key: key, title: title) }.id(key)
+            case let .workspace(key)?:
+                // Unfolding a phone that was showing one.
+                NavigationStack { WorkspaceScreen(key: key).withRoutes() }.id(key)
             case nil:
                 ContentUnavailableView("Pick a chat", systemImage: "bubble.left.and.text.bubble.right",
                                        description: Text("What needs you is at the top of the list."))

@@ -20,6 +20,8 @@ case "$round" in
      ipad="" ;;
   forget) phone="forget-A-0 forget-A-1 forget-B-0 forget-B-1 forget-C-0 forget-C-1 forget-D-0 forget-D-1"
      ipad="" ;;
+  newtab) phone="newtab-A-0 newtab-B-0 newtab-B-1 newtab-C-0 newtab-C-1 newtab-D-0 newtab-D-1"
+     ipad="" ;;
   *) echo "unknown round $round" >&2; exit 2 ;;
 esac
 

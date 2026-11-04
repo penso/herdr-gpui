@@ -102,6 +102,22 @@ struct RootView: View {
             }
             model.pendingRoute = nil
         }
+        .onChange(of: model.pendingWorkspace) { _, key in
+            guard let key else { return }
+            showWorkspace(key)
+            model.pendingWorkspace = nil
+        }
+    }
+
+    /// Puts the workspace where the open tab was, so Back from it returns
+    /// to Home, or back to it when it is already in the stack.
+    private func showWorkspace(_ key: WorkspaceKey) {
+        let route = Route.workspace(key)
+        if let index = homePath.firstIndex(of: route) {
+            homePath.removeSubrange((index + 1)...)
+        } else if !homePath.isEmpty {
+            homePath[homePath.count - 1] = route
+        }
     }
 
     private var lookingOverBluetooth: Bool {
@@ -119,11 +135,14 @@ struct RootView: View {
                 NavigationStack(path: $homePath) {
                     HomeTab(pairing: $window.pairing).withRoutes()
                 }
+                .environment(\.offersWorkspace, true)
+                .slidesTabBar(hidden: !homePath.isEmpty)
                 .connectionToast(pairing: $window.pairing)
             }
             .badge(model.fleet.waiting)
             Tab("Workspaces", systemImage: "square.stack.3d.up", value: RootTab.workspaces) {
                 NavigationStack(path: $workspacesPath) { WorkspacesTab().withRoutes() }
+                    .slidesTabBar(hidden: !workspacesPath.isEmpty)
                     .connectionToast(pairing: $window.pairing)
             }
             Tab("Settings", systemImage: "gearshape", value: RootTab.settings) {
@@ -189,6 +208,14 @@ extension View {
     func withRoutes() -> some View {
         navigationDestination(for: Route.self) { $0.screen }
     }
+
+    /// Slides a tab's bar in and out with its stack. The screens pushed on
+    /// the stack hide the bar themselves; on their own, it snaps back when
+    /// they go.
+    func slidesTabBar(hidden: Bool) -> some View {
+        toolbar(hidden ? .hidden : .visible, for: .tabBar)
+            .animation(.default, value: hidden)
+    }
 }
 
 extension Route {
@@ -196,6 +223,7 @@ extension Route {
         switch self {
         case let .chat(key, title): ChatScreen(key: key, title: title)
         case let .term(key, title): TerminalScreen(key: key, title: title)
+        case let .workspace(key): WorkspaceScreen(key: key)
         }
     }
 }

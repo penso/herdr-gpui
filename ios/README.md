@@ -93,6 +93,7 @@ and nothing goes through your phone.
      (a newline presses Enter).
    - `-tab workspaces|settings` opens that tab, and `-openWorkspace ID`
      opens that workspace's screen in it.
+   - `-otherAgents YES` unfolds a workspace's other agents.
    - `-newWorkspace YES` opens the new workspace form.
    - `-syncBar waiting|failed` shows the sync bar as if a change were on
      its way or had failed.
@@ -292,7 +293,7 @@ extension. For the simulator loop:
 - **Face ID:**
   - Optional: Settings > Privacy locks the app and hides it in the app
     switcher.
-  - "Always" answers and auto-accept ask either way.
+  - "Always" answers ask either way.
 
 ## iPad and Apple Watch
 
