@@ -415,7 +415,7 @@ impl ChatPane {
     /// above the end and the entry they were reading is still there, as it
     /// is when a reconnect sends the same transcript again.
     fn restart_list(&mut self, keys: &[(EntryId, u64)]) {
-        let last = |keys: &[(EntryId, u64)]| keys.last().map(|(id, _)| *id);
+        let tail_changed = self.session.take_tail_changed();
         let top = self.list.logical_scroll_top();
         let place = self
             .glide
@@ -427,7 +427,9 @@ impl ChatPane {
         match place {
             Some(item_ix) => {
                 self.list.scroll_to(gpui::ListOffset { item_ix, ..top });
-                if last(&self.list_keys) != last(keys) {
+                if tail_changed
+                    || self.list_keys.last().map(|key| key.0) != keys.last().map(|key| key.0)
+                {
                     self.glide.note_output();
                 }
             }

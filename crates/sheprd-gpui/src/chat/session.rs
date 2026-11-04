@@ -41,6 +41,9 @@ pub(crate) struct Session {
     revision: u64,
     /// Snapshots applied, so the view starts its list over after one.
     snapshots: u64,
+    /// Whether a snapshot brought a different last entry than the session
+    /// held, until the view takes it.
+    tail_changed: bool,
     transcript: Transcript,
     /// Whether the current connection has greeted.
     welcomed: bool,
@@ -104,6 +107,13 @@ impl Session {
 
     pub(crate) fn snapshots(&self) -> u64 {
         self.snapshots
+    }
+
+    /// Whether a snapshot changed the last entry since this was last asked.
+    /// A snapshot drops the revisions, so only it can tell a reply that grew
+    /// while the connection was down from the same reply sent again.
+    pub(crate) fn take_tail_changed(&mut self) -> bool {
+        std::mem::take(&mut self.tail_changed)
     }
 
     /// Each entry with the revision it last changed at. A sub-agent's call
@@ -191,6 +201,7 @@ impl Session {
             }
             _ if !self.welcomed => Err(Error::Handshake),
             ServerMessage::Snapshot { cursor, transcript } => {
+                self.tail_changed |= self.transcript.entries.last() != transcript.entries.last();
                 self.transcript = *transcript;
                 self.cursor = Some(cursor);
                 self.revisions.clear();

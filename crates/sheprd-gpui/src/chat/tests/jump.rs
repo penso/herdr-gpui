@@ -183,6 +183,31 @@ fn a_selection_holding_the_list_shows_the_button_that_still_reaches_the_end(
     cx.simulate_click(button.center(), Modifiers::none());
     redraw(&view, cx);
     assert!(behind(&view, cx) <= 1.);
+
+    // Asking for the end lets go of the selection, so the list follows.
+    let later = "A later reply.\n\n".repeat(8);
+    send(
+        &mut stream,
+        &change(
+            Change::Push {
+                entry: agent(42, &later),
+            },
+            cursor(1, 2),
+        ),
+    );
+    wait_until(|| {
+        poll(&view, &program, cx);
+        view.read_with(cx, |view, _| {
+            let pane = view.chats.pane("w1:p1").unwrap();
+            pane.session.transcript().entries.len() == 42
+        })
+    });
+    redraw(&view, cx);
+    redraw(&view, cx);
+    assert!(behind(&view, cx) <= 1., "following again");
+    assert!(view.read_with(cx, |view, _| {
+        view.chats.pane("w1:p1").unwrap().selection.is_empty()
+    }));
 }
 
 #[gpui::test]
@@ -267,4 +292,68 @@ fn a_snapshot_sent_again_keeps_a_reader_where_they_are(cx: &mut TestAppContext) 
         (top.item_ix, top.offset_in_item)
     );
     assert!(cx.debug_bounds("chat-jump-waiting").is_some());
+}
+
+#[gpui::test]
+fn a_reply_that_grew_across_a_reconnect_says_it_is_waiting(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let mut stream = opened(&view, &program, cx);
+    wheel(200., cx);
+    redraw(&view, cx);
+    assert!(cx.debug_bounds("chat-jump-waiting").is_none());
+
+    // The same entries, with the last reply longer than it was.
+    let entries = (1..=40)
+        .map(|id| {
+            let text = if id == 40 {
+                "A line of an earlier reply, and what came after it."
+            } else {
+                "A line of an earlier reply."
+            };
+            agent(id, text)
+        })
+        .collect();
+    send(&mut stream, &snapshot(cursor(2, 0), entries));
+    wait_until(|| {
+        poll(&view, &program, cx);
+        view.read_with(cx, |view, _| {
+            let pane = view.chats.pane("w1:p1").unwrap();
+            matches!(&pane.session.transcript().entries[39].kind,
+                EntryKind::Agent { text } if text.contains("what came after"))
+        })
+    });
+    redraw(&view, cx);
+    redraw(&view, cx);
+    assert!(cx.debug_bounds("chat-jump-waiting").is_some());
+}
+
+#[gpui::test]
+fn the_same_transcript_sent_again_waits_for_nothing(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let mut stream = opened(&view, &program, cx);
+    wheel(200., cx);
+    redraw(&view, cx);
+
+    let before = view.read_with(cx, |view, _| {
+        view.chats.pane("w1:p1").unwrap().session.snapshots()
+    });
+    let entries = (1..=40)
+        .map(|id| agent(id, "A line of an earlier reply."))
+        .collect();
+    send(&mut stream, &snapshot(cursor(2, 0), entries));
+    wait_until(|| {
+        poll(&view, &program, cx);
+        view.read_with(cx, |view, _| {
+            view.chats.pane("w1:p1").unwrap().session.snapshots() > before
+        })
+    });
+    redraw(&view, cx);
+    redraw(&view, cx);
+    assert!(
+        cx.debug_bounds("chat-jump").is_some(),
+        "still above the end"
+    );
+    assert!(cx.debug_bounds("chat-jump-waiting").is_none());
 }
