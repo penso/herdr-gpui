@@ -183,8 +183,17 @@ pub(crate) enum Route {
 
 /// Folders a remote `herdr-acp` is looked for in before the remote `PATH`,
 /// which a noninteractive SSH shell often leaves short. `~/.herdr/bin` is
-/// where `cargo install --root ~/.herdr` puts it.
-const REMOTE_PROGRAM_DIRS: [&str; 3] = ["$HOME/.herdr/bin", "$HOME/.cargo/bin", "$HOME/.local/bin"];
+/// where `cargo install --root ~/.herdr` puts it. A Mac has it only inside the
+/// app bundle, which never joins `PATH`, under either name the updater accepts.
+const REMOTE_PROGRAM_DIRS: &[&str] = &[
+    "$HOME/.herdr/bin",
+    "$HOME/.cargo/bin",
+    "$HOME/.local/bin",
+    "$HOME/Applications/Herdr.app/Contents/MacOS", // i18n: data
+    "$HOME/Applications/Sheprd.app/Contents/MacOS", // i18n: data
+    "/Applications/Herdr.app/Contents/MacOS",      // i18n: data
+    "/Applications/Sheprd.app/Contents/MacOS",     // i18n: data
+];
 
 /// The remote `/bin/sh` script that runs the first `herdr-acp` found with
 /// `args`, or says where it looked and exits 127. `args` must be
