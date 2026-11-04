@@ -6,7 +6,9 @@
     "connected": true,
     "waiting": 1,
     "load": {
+      "cores": 10,
       "cpu": 47,
+      "load5_tenths": 42,
       "memory": 67
     },
     "workspaces": [

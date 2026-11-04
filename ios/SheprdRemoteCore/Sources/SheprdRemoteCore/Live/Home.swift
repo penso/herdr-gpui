@@ -23,10 +23,20 @@ public struct Home: Codable, Hashable, Sendable {
         self.workspaces = workspaces
     }
 
-    /// Whole percentages, 0 to 100.
+    /// CPU and memory in whole percentages, 0 to 100. Older computers
+    /// send neither `cores` nor `load5Tenths`, and a computer whose OS
+    /// keeps no load average leaves that out.
     public struct Load: Codable, Hashable, Sendable {
+        public var cores: Int?
         public var cpu: Int
+        /// The 5 minute load average, in tenths.
+        public var load5Tenths: Int?
         public var memory: Int
+
+        enum CodingKeys: String, CodingKey {
+            case cores, cpu, memory
+            case load5Tenths = "load5_tenths"
+        }
     }
 
     public struct Workspace: Codable, Hashable, Sendable, Identifiable {
