@@ -294,6 +294,7 @@ impl Projection {
             kind: ToolKind::Other,
             locations: Vec::new(),
             parent: None,
+            started_ms: None,
             status: ToolStatus::Pending,
             title: limited(name, MAX_TITLE),
         };

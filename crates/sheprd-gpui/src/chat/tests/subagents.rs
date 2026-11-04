@@ -18,6 +18,7 @@ fn tool(id: u64, call: &str, title: &str, kind: ToolKind, parent: Option<&str>) 
             kind,
             locations: Vec::new(),
             parent: parent.map(str::to_owned),
+            started_ms: None,
             status: ToolStatus::Completed,
             title: title.into(),
         }),

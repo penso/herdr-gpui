@@ -75,6 +75,19 @@ chat-working-writing = Writing
 chat-working-thinking = Thinking
 # What the agent is doing now: one of the words above, or the step it runs.
 chat-working-doing = { $doing }…
+# What a running step works on, when it names a file.
+chat-working-deleting = Deleting { $target }
+chat-working-editing = Editing { $target }
+chat-working-moving = Moving { $target }
+chat-working-reading = Reading { $target }
+chat-working-searching = Searching { $target }
+# Steps running beside the one the working row names.
+chat-working-more = +{ $count } more
+# Steps running that the open list of them has no room for.
+chat-working-hidden = { $count ->
+    [one] { $count } more step not shown
+   *[other] { $count } more steps not shown
+}
 chat-answer-cut = The rest of this answer is too long to show here; Copy takes all of it.
 
 # Copy buttons and what their flash says.
