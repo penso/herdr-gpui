@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Herdr UI is now Sheprd</title>
+<meta name="description" content="Herdr UI has a new name and a new home at sheprd.org.">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://sheprd.org/">
+<!-- Without JavaScript, the browser still moves on after five seconds. -->
+<noscript><meta http-equiv="refresh" content="5; url=https://sheprd.org/"></noscript>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23d65f2a'/%3E%3Cg fill='%23fff8f0'%3E%3Cpath d='M50 50C60 50 70 60 72 68C74 76 68 80 61 79C56 78 54 76 50 76C46 76 44 78 39 79C32 80 26 76 28 68C30 60 40 50 50 50Z'/%3E%3Cellipse cx='27' cy='45' rx='7' ry='9'/%3E%3Cellipse cx='41' cy='31' rx='7' ry='10'/%3E%3Cellipse cx='59' cy='31' rx='7' ry='10'/%3E%3Cellipse cx='73' cy='45' rx='7' ry='9'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  /* Self-contained: this one file is all herdrui.dev has to serve. */
+  :root { --paper: #fbf6ee; --paper-2: #f4ece0; --ink: #23180f; --ink-2: #5b4b3d; --rule: #e3d5c2; --orange: #b04518; }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; background: var(--paper); color: var(--ink); font: 400 1.125rem/1.65 "Iowan Old Style", "Palatino Linotype", Palatino, Charter, Georgia, serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--orange); text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid #d65f2a; outline-offset: 3px; border-radius: 4px; }
+  .preview { margin: 0; padding: .45rem 1rem; background: var(--ink); color: #fff8f0; text-align: center; font: 600 12px/1.4 ui-sans-serif, system-ui, sans-serif; }
+  main { width: min(36rem, 100% - 2.5rem); margin: auto; padding: 3rem 0; }
+  .paw { display: block; width: 72px; height: 72px; border-radius: 16px; box-shadow: 0 10px 24px -10px rgba(214, 95, 42, .7); margin-bottom: 1.8rem; }
+  .kicker { margin: 0 0 .8rem; font: 600 .75rem/1.3 ui-sans-serif, system-ui, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: var(--orange); }
+  h1 { margin: 0 0 1rem; font-weight: 600; font-size: clamp(2.5rem, 8vw, 3.8rem); line-height: 1.05; letter-spacing: -.025em; text-wrap: balance; }
+  .dek { margin: 0 0 1.6rem; font-size: 1.25rem; line-height: 1.5; font-style: italic; color: var(--ink-2); }
+  ul { margin: 0 0 2rem; padding: 0; list-style: none; border-top: 1px solid var(--rule); font: 400 .98rem/1.5 ui-sans-serif, system-ui, sans-serif; }
+  li { padding: .7rem 0; border-bottom: 1px dotted var(--rule); color: var(--ink-2); }
+  li b { color: var(--ink); }
+  .go { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+  .btn { display: inline-block; padding: .85rem 1.3rem; border: 0; border-radius: 999px; background: var(--ink); color: var(--paper); font: 600 .95rem/1 ui-sans-serif, system-ui, sans-serif; text-decoration: none; cursor: pointer; }
+  .btn:hover { background: var(--orange); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .btn-ghost:hover { background: var(--paper-2); color: var(--ink); }
+  .status { margin: 1rem 0 .6rem; font: 500 .88rem/1.4 ui-sans-serif, system-ui, sans-serif; color: var(--ink-2); }
+  .bar { height: 3px; border-radius: 3px; background: var(--rule); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--orange); transform-origin: left; animation: fill 5s linear forwards; }
+  .is-stopped .bar { visibility: hidden; }
+  @keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  footer { width: min(36rem, 100% - 2.5rem); margin: 0 auto; padding: 0 0 1.6rem; font: 400 .8rem/1.55 ui-sans-serif, system-ui, sans-serif; color: var(--ink-2); }
+  @media (prefers-reduced-motion: reduce) { .bar { display: none; } }
+</style>
+</head>
+<body>
+<p class="preview" id="preview" hidden>Mockup: on herdrui.dev this page moves on by itself. Here it stops at zero.</p>
+<main id="main">
+  <svg class="paw" viewBox="0 0 100 100" role="img" aria-label="Sheprd paw mark">
+    <defs><linearGradient id="g" x1="0" y1="0" x2=".35" y2="1"><stop offset="0" stop-color="#f39a5a"/><stop offset="1" stop-color="#d65f2a"/></linearGradient></defs>
+    <rect width="100" height="100" fill="url(#g)"/>
+    <g fill="#fff8f0"><path d="M50 50C60 50 70 60 72 68C74 76 68 80 61 79C56 78 54 76 50 76C46 76 44 78 39 79C32 80 26 76 28 68C30 60 40 50 50 50Z"/><ellipse cx="27" cy="45" rx="7" ry="9" transform="rotate(-25 27 45)"/><ellipse cx="41" cy="31" rx="7" ry="10" transform="rotate(-8 41 31)"/><ellipse cx="59" cy="31" rx="7" ry="10" transform="rotate(8 59 31)"/><ellipse cx="73" cy="45" rx="7" ry="9" transform="rotate(25 73 45)"/></g>
+  </svg>
+  <p class="kicker">We have a new name</p>
+  <h1>Herdr UI is now Sheprd.</h1>
+  <p class="dek">Same app, new name, and a new home at <a id="home" href="https://sheprd.org/">sheprd.org</a>.</p>
+  <ul>
+    <li><b>Your install keeps working.</b> The in-app updater follows the rename, and your settings stay where they are.</li>
+    <li><b>Your sessions are untouched.</b> Terminals and agents keep running through the rename.</li>
+    <li><b>The code moved too.</b> It now lives at <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>.</li>
+  </ul>
+  <div class="go">
+    <a class="btn" id="go" href="https://sheprd.org/">Go to sheprd.org</a>
+    <button class="btn btn-ghost" id="stay" type="button" hidden>Stay on this page</button>
+  </div>
+  <div id="timer" hidden>
+    <p class="status" id="status" aria-live="off"></p>
+    <div class="bar" aria-hidden="true"><i></i></div>
+  </div>
+</main>
+<footer>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers. It is not made, endorsed or supported by the Herdr project.</footer>
+<script>
+(function () {
+  "use strict";
+  var SECONDS = 5;
+  // Keep the visitor's path, so an old deep link lands on its new page.
+  var target = "https://sheprd.org" + location.pathname + location.search + location.hash;
+  var live = location.hostname === "herdrui.dev" || location.hostname === "www.herdrui.dev";
+  var go = document.getElementById("go");
+  var stay = document.getElementById("stay");
+  var timer = document.getElementById("timer");
+  var status = document.getElementById("status");
+  if (live) { go.href = target; document.getElementById("home").href = target; }
+  else document.getElementById("preview").hidden = false;
+
+  var left = SECONDS;
+  function say() { status.textContent = "Taking you to sheprd.org in " + left + (left === 1 ? " second…" : " seconds…"); }
+  timer.hidden = false;
+  stay.hidden = false;
+  say();
+  var tick = setInterval(function () {
+    left -= 1;
+    if (left > 0) { say(); return; }
+    clearInterval(tick);
+    if (live) { location.replace(target); return; }
+    status.textContent = "Mockup stopped here. The live page would open " + target;
+    stay.hidden = true;
+    timer.classList.add("is-stopped");
+  }, 1000);
+
+  stay.addEventListener("click", function () {
+    clearInterval(tick);
+    timer.classList.add("is-stopped");
+    status.textContent = "Staying here. Use the button whenever you are ready.";
+    stay.hidden = true;
+    go.focus();
+  });
+})();
+</script>
+</body>
+</html>

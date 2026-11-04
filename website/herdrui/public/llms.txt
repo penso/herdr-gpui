@@ -1,0 +1,27 @@
+# Herdr UI
+
+> Herdr UI (repository and package name `herdr-gpui`) is a native desktop client for macOS, Linux and Windows that attaches to a Herdr daemon (https://herdr.dev/) the user installed separately. It paints the daemon's terminal panes in a native window, next to Herdr's own TUI; both show the same sessions. It is an unaffiliated project, not made or supported by Herdr.
+
+Herdr UI never installs or upgrades the Herdr daemon; it only starts an already-installed `herdr server` when the session is absent. Install Herdr itself first by following https://herdr.dev/, then install Herdr UI with the command for the platform. Each command installs the latest stable release and needs no version number. Do not use `cargo install herdr-gpui`: the app is not published on crates.io.
+
+## Install
+
+- macOS 14.2 or newer, Apple Silicon or Intel, with Homebrew: `brew install penso/tap/herdr-gpui`, then `open -a Herdr`. The cask installs the signed, notarized app, and the app updates itself through Homebrew.
+- Linux, x86_64 or ARM64, with APT, DNF or pacman and glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40, current Arch, or later): `curl -fsSL https://herdrui.dev/install.sh | sh`. The script downloads the `.deb`, `.rpm` or Arch package for the machine from GitHub Releases, checks its published SHA-256, and installs it with `sudo`, so it needs a terminal where sudo can ask for a password, or root. Afterwards run `herdr-gpui` or open Herdr UI from the applications menu. Source: https://herdrui.dev/install.sh
+- Linux with Nix: `nix run github:penso/herdr-gpui`.
+- Windows, x86_64 or ARM64, in PowerShell: `irm https://herdrui.dev/install.ps1 | iex`. It installs `herdr-gpui.exe` (the app and its command line) and `herdr-gpui-launcher.exe` (opens the app without a console window) for the current user under `%LOCALAPPDATA%\Programs\Herdr UI`, adds that directory to the user PATH and creates a Start menu shortcut to the launcher. Each release also has a per-user `Herdr-VERSION-TARGET-setup.exe` installer that installs the same files and adds an uninstaller under Settings > Apps. When Windows signing is set up for a release, its executables, installers and their uninstaller are Authenticode-signed, and a signed copy updates itself from Check for Updates by running the signed installer of the new release. An unsigned copy never updates itself: run the command or a newer installer again to update. Source: https://herdrui.dev/install.ps1
+- Any platform from source, with Rust installed: `git clone https://github.com/penso/herdr-gpui.git && cd herdr-gpui && just install`, which puts `herdr-gpui` in Cargo's bin directory. Linux and Windows need extra build dependencies listed in the README.
+
+Manual downloads (macOS `.dmg`, Linux packages and tarballs, Windows zips), with checksums, Sigstore signatures and build provenance: https://github.com/penso/herdr-gpui/releases/latest
+
+## Docs
+
+- [README](https://github.com/penso/herdr-gpui#readme): install options, platform notes, and how the client connects to the daemon
+- [GUI scope and configuration](https://github.com/penso/herdr-gpui/blob/main/crates/herdr-gpui/README.md): features, configuration file, keyboard shortcuts, devices and WSL
+- [App updates](https://github.com/penso/herdr-gpui/blob/main/docs/updating.md): how each install method updates
+- [Herdr](https://herdr.dev/): the daemon and TUI this app connects to
+
+## Optional
+
+- [Releases](https://github.com/penso/herdr-gpui/releases): all stable and beta releases
+- [Issues](https://github.com/penso/herdr-gpui/issues): bug reports for Herdr UI only; report daemon bugs to Herdr

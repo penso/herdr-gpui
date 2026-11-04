@@ -13,6 +13,9 @@ project uses base directory `website`, so it reads `website/netlify.toml`, which
 publishes `website/site`. Only that folder is deployed, so this README and the
 config stay private.
 
+`herdrui/` is the separate Cloudflare Worker for herdrui.dev, and is not
+published by Netlify; see [`herdrui/README.md`](herdrui/README.md).
+
 `site/install.sh`, `site/install.ps1` and `site/llms.txt` here must match the
 copies in the root `site/`,
 and `site/tests/test_website.py` checks that. Keep `site/assets/features.js` in step
