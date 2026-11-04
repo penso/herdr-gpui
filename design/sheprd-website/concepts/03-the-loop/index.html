@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheprd: from issue to merged PR, with agents doing the typing</title>
+<meta name="description" content="Sheprd is an open-source desktop app for running a team of coding agents: issues, worktrees, agents, review, checkpoints and pull requests in one native window on macOS, Linux and Windows.">
+<meta property="og:title" content="Sheprd: from issue to merged PR, with agents doing the typing">
+<meta property="og:description" content="Issue → worktree → agent → review → checkpoint → PR, in one native window. Open source, macOS, Linux and Windows.">
+<meta property="og:image" content="../../assets/paw-512.png">
+<!-- Social card direction (The Loop): white card, the six step labels as a thin
+     orange rail across the bottom, headline in heavy black sans top-left, small
+     paw tile top-right. No screenshot: the rail is the recognisable motif. -->
+<link rel="icon" href="../../assets/paw.svg">
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/features.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Concept 03 · The Loop</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="#main" aria-label="Sheprd home">
+      <img src="../../assets/paw.svg" alt="" width="32" height="32">
+      <span>Sheprd</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul>
+        <li><a href="#loop">The loop</a></li>
+        <li><a href="#around">Around it</a></li>
+        <li><a href="#features">All features</a></li>
+        <li><a href="#install">Install</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-ghost top-gh" href="https://github.com/sheprd-labs/sheprd">GitHub</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Open source desktop app · macOS · Linux · Windows</p>
+      <h1>From issue to merged&nbsp;PR, with agents doing the&nbsp;typing.</h1>
+      <div class="hero-grid">
+        <p class="lede">Sheprd runs a team of coding agents in parallel worktrees, on this computer, your SSH machines or the cloud. It keeps the whole loop in one native window: pick the work, start the agent, review the diff, keep a checkpoint, ship the pull request.</p>
+        <div class="hero-cta">
+          <a class="btn btn-solid" href="#install">Install Sheprd</a>
+          <a class="btn btn-ghost" href="#loop">Walk the loop</a>
+        </div>
+      </div>
+      <ol class="mini-rail" aria-label="The six steps">
+        <li>Issue</li><li>Worktree</li><li>Agent</li><li>Review</li><li>Checkpoint</li><li>PR</li>
+      </ol>
+      <figure class="hero-shot">
+        <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" alt="Sheprd window: a sidebar of workspaces with nested worktrees and their agents (claude, codex, pi) with status dots, an editor split beside a git log and a passing test run, and a status bar with plan usage, CPU and memory.">
+        <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Workspaces, worktrees and agents in one window. Sample projects, no private data.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="loop" id="loop" aria-labelledby="loop-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="sec-num">01</p>
+        <div>
+          <h2 id="loop-title">The loop</h2>
+          <p>Six steps, one window. Use the arrow keys or click a step.</p>
+        </div>
+      </div>
+
+      <div class="rail" role="tablist" aria-label="Issue to pull request">
+        <button role="tab" id="t-issue" aria-controls="p-issue" aria-selected="true"><span class="n">1</span><span class="l">Issue</span></button>
+        <button role="tab" id="t-tree" aria-controls="p-tree" aria-selected="false" tabindex="-1"><span class="n">2</span><span class="l">Worktree</span></button>
+        <button role="tab" id="t-agent" aria-controls="p-agent" aria-selected="false" tabindex="-1"><span class="n">3</span><span class="l">Agent</span></button>
+        <button role="tab" id="t-review" aria-controls="p-review" aria-selected="false" tabindex="-1"><span class="n">4</span><span class="l">Review</span></button>
+        <button role="tab" id="t-check" aria-controls="p-check" aria-selected="false" tabindex="-1"><span class="n">5</span><span class="l">Checkpoint</span></button>
+        <button role="tab" id="t-pr" aria-controls="p-pr" aria-selected="false" tabindex="-1"><span class="n">6</span><span class="l">Pull request</span></button>
+      </div>
+
+      <div class="panels">
+        <section class="panel" role="tabpanel" id="p-issue" aria-labelledby="t-issue" tabindex="0">
+          <div class="panel-text">
+            <p class="step-kicker">Step 1 · Pick the work</p>
+            <h3>Every open issue, from every repository in the window.</h3>
+            <p>The Issues section lists GitHub, GitLab and Beads issues across the repositories your workspaces hold. Filter by label, author or text, sort by recency, and press <strong>Start agent</strong> on the one you want done.</p>
+            <ul class="facts">
+              <li>GitHub, GitLab (self-managed too) and Beads <code>.beads</code></li>
+              <li>Up to 32 repositories per window</li>
+              <li>Imports agent-launcher prompt profiles</li>
+            </ul>
+            <p class="caveat">Sign in to GitHub or GitLab to read their issues. Beads needs <code>bd</code> on the host.</p>
+          </div>
+          <figure class="panel-fig">
+            <div class="mock mock-issues" aria-hidden="true">
+              <div class="mock-bar"><span class="pill">GitHub · 4</span><span class="pill">GitLab · 2</span><span class="pill">Beads · 1</span><span class="mock-search">Filter: title, label…</span></div>
+              <div class="mock-row"><span class="dot"></span><span class="mt">Reject zero-amount postings</span><span class="ml">ledger-api · bug</span><span class="mbtn">Start agent</span></div>
+              <div class="mock-row is-hot"><span class="dot"></span><span class="mt">Support multiple currencies</span><span class="ml">ledger-api · feature</span><span class="mbtn">Start agent</span></div>
+              <div class="mock-row"><span class="dot"></span><span class="mt">Paginate the docs index</span><span class="ml">harbor-docs</span><span class="mbtn">Start agent</span></div>
+              <div class="mock-row"><span class="dot"></span><span class="mt">Sprite sheet export is slow</span><span class="ml">pixel-forge · perf</span><span class="mbtn">Start agent</span></div>
+            </div>
+            <figcaption><span class="tag-illustration">Illustration</span> Simplified issue list with sample data.</figcaption>
+          </figure>
+        </section>
+
+        <section class="panel" role="tabpanel" id="p-tree" aria-labelledby="t-tree" tabindex="0" hidden>
+          <div class="panel-text">
+            <p class="step-kicker">Step 2 · Give it a place</p>
+            <h3>A fresh worktree per task, on the machine with room.</h3>
+            <p>Dispatch names a branch like <code>agent/42-multi-currency-1a2b</code>, creates a linked worktree and nests it under its checkout in the sidebar. Smart Dispatch ranks your connected machines by spare cores and load and puts the worktree on the best one.</p>
+            <ul class="facts">
+              <li>Check out PRs (forks too) or issues as branches</li>
+              <li>Trusted setup scripts run in a visible tab</li>
+              <li>Safe close refuses to drop unpushed work</li>
+            </ul>
+            <p class="caveat">Smart Dispatch to other machines: macOS and Linux clients.</p>
+          </div>
+          <figure class="panel-fig">
+            <img src="../../assets/shots/layouts.jpg" width="1800" height="1162" loading="lazy" alt="Five sidebar layouts side by side, each showing the ledger-api checkout with its feat/multi-currency and fix/rounding worktrees nested beneath it, plus build-box and gpu-runner machines.">
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Worktrees nest under their checkout, in any of the sidebar layouts.</figcaption>
+          </figure>
+        </section>
+
+        <section class="panel" role="tabpanel" id="p-agent" aria-labelledby="t-agent" tabindex="0" hidden>
+          <div class="panel-text">
+            <p class="step-kicker">Step 3 · Let it work</p>
+            <h3>Your agent CLI, in a native pane, with status you can trust.</h3>
+            <p>Claude Code, Codex, Gemini, OpenCode, Copilot and the rest run as they do in your terminal. Sheprd paints their panes natively and shows idle, working, blocked and done from the terminal server's own snapshot, so every client agrees. The Overview lists what needs you.</p>
+            <ul class="agents" aria-label="Agents with brand icons">
+              <li><img src="../../assets/agent-claude.svg" alt="" width="20" height="20">Claude Code</li>
+              <li><img src="../../assets/agent-codex.svg" alt="" width="20" height="20">Codex</li>
+              <li><img src="../../assets/agent-gemini.svg" alt="" width="20" height="20">Gemini</li>
+              <li><img src="../../assets/agent-opencode.svg" alt="" width="20" height="20">OpenCode</li>
+              <li><img src="../../assets/agent-copilot.svg" alt="" width="20" height="20">Copilot</li>
+            </ul>
+            <p class="caveat">Native ACP chat view (Claude, Codex, Copilot, Gemini, OpenCode, Pi) is opt-in today, for local and SSH hosts.</p>
+          </div>
+          <figure class="panel-fig">
+            <img src="../../assets/shots/workspaces.jpg" width="1800" height="1125" loading="lazy" alt="Agents sidebar listing ledger-api, pixel-forge and harbor-docs with claude, codex and pi agents and colored status dots, beside an editor and a test run.">
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> The Agents list groups every running agent with its status dot.</figcaption>
+          </figure>
+        </section>
+
+        <section class="panel" role="tabpanel" id="p-review" aria-labelledby="t-review" tabindex="0" hidden>
+          <div class="panel-text">
+            <p class="step-kicker">Step 4 · Read what it wrote</p>
+            <h3>A pull-request style review, before there is a pull request.</h3>
+            <p>Review Changes shows uncommitted or branch changes as a diff, unified or side by side, with a file tree and word-level highlights. Click any line to leave a note; <strong>Send to agent</strong> hands every note back to the agent that wrote the code.</p>
+            <ul class="facts">
+              <li>"Viewed" marks, search, huge-diff handling</li>
+              <li>Annotate terminal output the same way</li>
+            </ul>
+            <p class="caveat">Review works on local checkouts.</p>
+          </div>
+          <figure class="panel-fig">
+            <img src="../../assets/shots/review.jpg" width="1800" height="1125" loading="lazy" alt="Review changes tab for feat/multi-currency: a diff of src/ledger.rs with two numbered notes in a side panel and a Send to agent button.">
+            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Two notes on the diff, ready to send to Claude.</figcaption>
+          </figure>
+        </section>
+
+        <section class="panel" role="tabpanel" id="p-check" aria-labelledby="t-check" tabindex="0" hidden>
+          <div class="panel-text">
+            <p class="step-kicker">Step 5 · Keep a way back</p>
+            <h3>A checkpoint at every agent turn. On by default.</h3>
+            <p>Each time an agent starts or finishes a turn, Sheprd snapshots the worktree into hidden Git refs, keeping the newest 50 per branch. Diff any two, or restore one from the workspace menu or the command line.</p>
+            <pre class="cmd"><code>sheprd checkpoint list
+sheprd checkpoint diff &lt;id&gt;
+sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></pre>
+            <p class="caveat">Checkpoints are unavailable from Windows clients for SSH hosts; WSL works.</p>
+          </div>
+          <figure class="panel-fig">
+            <div class="mock mock-timeline" aria-hidden="true">
+              <p class="mt-head">feat/multi-currency · checkpoints</p>
+              <ol>
+                <li><span class="tdot"></span><b>Turn 6 finished</b><span>+38 −16 · 2 files</span><em>now</em></li>
+                <li><span class="tdot"></span><b>Turn 6 started</b><span>+22 −12</span><em>4 min</em></li>
+                <li class="is-sel"><span class="tdot"></span><b>Turn 5 finished</b><span>+22 −12 · tests pass</span><em>9 min</em></li>
+                <li><span class="tdot"></span><b>Turn 4 finished</b><span>+9 −3</span><em>21 min</em></li>
+              </ol>
+              <div class="mt-actions"><span class="mbtn">Diff</span><span class="mbtn mbtn-solid">Restore</span></div>
+            </div>
+            <figcaption><span class="tag-illustration">Illustration</span> Conceptual checkpoint timeline; the app restores from the workspace menu.</figcaption>
+          </figure>
+        </section>
+
+        <section class="panel" role="tabpanel" id="p-pr" aria-labelledby="t-pr" tabindex="0" hidden>
+          <div class="panel-text">
+            <p class="step-kicker">Step 6 · Ship it</p>
+            <h3>Commit, push and open the pull request from the title bar.</h3>
+            <p>The Git menu summarises the working tree, then commits, pushes, creates the pull request and later merges it. Each worktree carries a PR badge colored by checks, reviews and merge state; the Pull requests board groups PRs by what they wait on.</p>
+            <ul class="facts">
+              <li>Comment and merge in place</li>
+              <li>"Review with agent" runs a read-only PR review</li>
+              <li>Linked worktrees can be removed once merged (opt-in)</li>
+            </ul>
+            <p class="caveat">Needs a GitHub sign-in. GitLab merge requests and GitHub Enterprise on the board: not yet.</p>
+          </div>
+          <figure class="panel-fig">
+            <div class="mock mock-git" aria-hidden="true">
+              <div class="mg-top"><span>feat/multi-currency</span><span class="add">+38</span><span class="del">−16</span><span class="badge-pr">#42</span></div>
+              <ul>
+                <li>Commit…</li>
+                <li>Push</li>
+                <li class="is-hot">Create pull request</li>
+                <li class="sep">Open PR #42 · checks passing</li>
+                <li>Comment…</li>
+                <li>Merge…</li>
+              </ul>
+            </div>
+            <figcaption><span class="tag-illustration">Illustration</span> Title-bar Git menu, simplified. Labels match the app.</figcaption>
+          </figure>
+        </section>
+      </div>
+      <div class="rail-nav">
+        <button type="button" class="btn btn-ghost" data-step="-1">← Previous step</button>
+        <button type="button" class="btn btn-ghost" data-step="1">Next step →</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="around" id="around" aria-labelledby="around-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="sec-num">02</p>
+        <div>
+          <h2 id="around-title">Around the loop</h2>
+          <p>What keeps many loops running at once.</p>
+        </div>
+      </div>
+      <div class="grid">
+        <article class="card card-wide">
+          <div>
+            <h3>Run it wider</h3>
+            <p><strong>Fan-out</strong> sends one prompt to several agents and machines; compare, keep one, and the rest are cleaned up. <strong>Teleport</strong> moves a worktree with its tabs, running programs and agent sessions to another machine, and back.</p>
+            <p class="caveat">macOS and Linux clients. Destinations: local, SSH and cloud hosts.</p>
+          </div>
+          <figure><img src="../../assets/shots/teleport.png" width="1180" height="640" loading="lazy" alt="Teleport dialog moving feat-multi-currency from Local to build-box or gpu-runner over SSH."><figcaption><span class="tag-screenshot">Real screenshot</span></figcaption></figure>
+        </article>
+        <article class="card">
+          <h3>Any machine</h3>
+          <p>Saved SSH hosts, WSL distributions, Docker or Podman containers per agent, Coder and Azure, in one sidebar with load per host.</p>
+          <p class="caveat">Cloud devices and containers: macOS and Linux clients. Daytona, Sprites, Boat, Railway, OpenSandbox are experimental.</p>
+        </article>
+        <article class="card">
+          <h3>Previews with notes</h3>
+          <p>Agents open their pages beside the terminal. Pin notes to elements, text or regions and send them back.</p>
+          <p class="caveat">Browser tabs: macOS and Windows. Linux opens the system browser.</p>
+        </article>
+        <article class="card card-wide">
+          <div>
+            <h3>Know your headroom</h3>
+            <p>Plan usage for 85+ AI services sits in the status bar, closest to its limit first. CPU, memory, disk and uptime per machine, read over SSH for remote hosts.</p>
+          </div>
+          <figure><img src="../../assets/shots/usage.png" width="1000" height="800" loading="lazy" alt="Codex usage panel: weekly 97% left, resets in 4 days 6 hours, limit reset credits and a credit balance."><figcaption><span class="tag-screenshot">Real screenshot</span></figcaption></figure>
+        </article>
+        <article class="card">
+          <h3>From your phone</h3>
+          <p>An installable web app served by your computer shows chats and lets you answer agents, with pairing approved on both screens.</p>
+          <p class="caveat">Opt-in. Native iPhone and iPad app: TestFlight beta.</p>
+        </article>
+        <article class="card">
+          <h3>Make it yours</h3>
+          <p>Hundreds of themes, seven sidebar layouts, Luau mods, approved automations, and a CLI of about 60 commands agents can drive.</p>
+        </article>
+      </div>
+      <figure class="wide-shot">
+        <img src="../../assets/shots/browser-annotate.jpg" width="1800" height="1125" loading="lazy" alt="Browser tab beside the terminals showing a local docs page with two pinned notes on a button and a card, listed in a Notes panel with Send to agent.">
+        <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> A local preview with two notes for the agent. macOS and Windows.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="features" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="sec-num">03</p>
+        <div>
+          <h2 id="features-title">Every feature, with its status</h2>
+          <p>Search or filter. Badges say what ships, what is opt-in, and what is still beta or planned.</p>
+        </div>
+      </div>
+      <div id="directory" class="directory"></div>
+    </div>
+  </section>
+
+  <section class="install" id="install" aria-labelledby="install-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="sec-num">04</p>
+        <div>
+          <h2 id="install-title">Install</h2>
+          <p>Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
+        </div>
+      </div>
+      <div class="install-table" role="table" aria-label="Install commands">
+        <div class="ir" role="row"><div role="cell" class="ip">macOS 14.2+<small>universal</small></div><div role="cell" class="ic"><code>brew install penso/tap/herdr-gpui</code><button type="button" class="copy" data-copy="brew install penso/tap/herdr-gpui">Copy</button></div><div role="cell" class="itag">current channel</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">Linux<small>x86_64, ARM64 · APT, DNF, pacman</small></div><div role="cell" class="ic"><code>curl -fsSL https://sheprd.org/install.sh | sh</code><button type="button" class="copy" data-copy="curl -fsSL https://sheprd.org/install.sh | sh">Copy</button></div><div role="cell" class="itag">current channel</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">Windows<small>x86_64, ARM64 · PowerShell</small></div><div role="cell" class="ic"><code>irm https://sheprd.org/install.ps1 | iex</code><button type="button" class="copy" data-copy="irm https://sheprd.org/install.ps1 | iex">Copy</button></div><div role="cell" class="itag">current channel</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">Nix<small>builds from source</small></div><div role="cell" class="ic"><code>nix run github:sheprd-labs/sheprd</code><button type="button" class="copy" data-copy="nix run github:sheprd-labs/sheprd">Copy</button></div><div role="cell" class="itag">current channel</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">iPhone, iPad</div><div role="cell" class="ic"><span>Native app in TestFlight beta, or build from source</span></div><div role="cell" class="itag itag-beta">beta</div></div>
+        <div class="ir" role="row"><div role="cell" class="ip">Any phone</div><div role="cell" class="ic"><span>Turn on Remote control; your computer serves the web app</span></div><div role="cell" class="itag">opt-in</div></div>
+      </div>
+      <p class="note">Sheprd starts a terminal server for you: an installed <code>herdr server</code>, or the pinned herdr-core that ships with the app. Closing Sheprd leaves your terminals running.</p>
+      <p class="ctas"><a class="btn btn-solid" href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a></p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-brand"><img src="../../assets/paw.svg" alt="" width="28" height="28"><span>Sheprd</span></div>
+    <p class="attr">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (<code>herdr server</code> and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
+    <p class="small">Screenshots predate the rename and still show Herdr UI branding, with sample projects.</p>
+  </div>
+</footer>
+</body>
+</html>

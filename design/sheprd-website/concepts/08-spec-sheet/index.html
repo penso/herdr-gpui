@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheprd · Datasheet</title>
+<meta name="description" content="Sheprd datasheet: a native, open-source workbench for coding agents. Architecture, platforms, trust model, release integrity and the full feature table.">
+<!-- Social card direction (Spec Sheet): off-white paper, black monospace header
+     "SHEPRD / DATASHEET SH-001", a thick orange rule, a four-row spec block
+     (Platforms · License · Runtime · Tests) and the paw tile top-right. 1200×630,
+     no screenshot. Image not generated yet; the paw is a placeholder. -->
+<meta property="og:title" content="Sheprd · Datasheet">
+<meta property="og:description" content="A native, open-source workbench for coding agents. Read the spec.">
+<meta property="og:image" content="../../assets/paw-512.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="../../assets/paw.svg">
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/features.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Concept 08 · Spec Sheet</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
+
+<header class="mast">
+  <div class="sheet mast-in">
+    <a class="mark" href="#main"><img src="../../assets/paw.svg" alt="" width="40" height="40"><span>SHEPRD</span></a>
+    <dl class="docid">
+      <div><dt>Doc</dt><dd>SH-001</dd></div>
+      <div><dt>Rev</dt><dd>2026.11</dd></div>
+      <div><dt>Ref</dt><dd data-metric="commit">8e03793da</dd></div>
+    </dl>
+    <nav aria-label="Sections">
+      <ol class="toc">
+        <li><a href="#s1">Overview</a></li>
+        <li><a href="#s2">Workflows</a></li>
+        <li><a href="#s3">Architecture</a></li>
+        <li><a href="#s4">Measurements</a></li>
+        <li><a href="#s5">Trust</a></li>
+        <li><a href="#s6">Distribution</a></li>
+        <li><a href="#s7">Features</a></li>
+      </ol>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="sheet">
+  <section class="hero" aria-labelledby="hero-title">
+    <p class="label">Product datasheet</p>
+    <h1 id="hero-title">Run a team of coding agents from one native window.</h1>
+    <p class="lede">Sheprd is an open-source desktop application for running coding agents in parallel worktrees, across local, SSH and cloud machines, with review, checkpoints and pull requests built in.</p>
+    <div class="hero-cta">
+      <a class="btn" href="#s6">Install</a>
+      <a class="btn btn-line" href="#s7">Read the feature table</a>
+      <a class="btn btn-line" href="https://github.com/sheprd-labs/sheprd">GitHub</a>
+    </div>
+  </section>
+
+  <section id="s1" class="sec" aria-labelledby="s1-title">
+    <h2 id="s1-title"><span class="secno">§1</span> Overview</h2>
+    <div class="ov">
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Key specifications">
+        <table class="spec">
+          <caption class="sr-only">Key specifications</caption>
+          <tbody>
+            <tr><th scope="row">Type</th><td>Desktop application and command line for coding-agent work</td></tr>
+            <tr><th scope="row">Platforms</th><td>macOS 14.2+ · Linux (glibc 2.39+, Vulkan) · Windows 10/11</td></tr>
+            <tr><th scope="row">Architectures</th><td>x86_64 · ARM64 (macOS universal)</td></tr>
+            <tr><th scope="row">Implementation</th><td>Rust 1.96 · GPUI 0.3 · native cell painting, no embedded emulator</td></tr>
+            <tr><th scope="row">Terminal servers</th><td>Herdr 1 (<code>herdr server</code>) and Herdr 2 (herdr-core); a pinned herdr-core 0.1.13 is bundled</td></tr>
+            <tr><th scope="row">Agents</th><td>Any terminal agent CLI; brand icons for about 25; ACP chat for Claude, Codex, Copilot, Gemini, OpenCode, Pi <span class="st st-optin">Opt-in</span></td></tr>
+            <tr><th scope="row">Companions</th><td><code>sheprd-acp</code> · <code>sheprd-remote-control</code> · <code>sheprd-automate</code> · <code>sheprd-nearby</code></td></tr>
+            <tr><th scope="row">Mobile</th><td>Remote-control web app <span class="st st-optin">Opt-in</span> · iPhone/iPad <span class="st st-testflight">TestFlight beta</span></td></tr>
+            <tr><th scope="row">License</th><td>Apache-2.0</td></tr>
+            <tr><th scope="row">Versioning</th><td>Calendar, <code>YYYYMMDD.N</code>; stable and beta channels</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="fig">
+        <img src="../../assets/shots/review.jpg" width="1800" height="1125" alt="Review Changes tab: a unified diff of src/ledger.rs with two numbered notes in a side panel and a Send to agent button.">
+        <figcaption><span class="figno">Fig. 1</span> Review Changes with notes queued for the agent. <span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="s2" class="sec" aria-labelledby="s2-title">
+    <h2 id="s2-title"><span class="secno">§2</span> Operating procedures</h2>
+    <p class="note">Six workflows the application is built around. Steps reference shipped features unless marked.</p>
+    <div class="procs">
+      <article class="proc">
+        <h3><span>2.1</span> Issue to pull request</h3>
+        <ol>
+          <li>Open Issues: GitHub, GitLab and Beads across every repository in the window.</li>
+          <li>Dispatch agent: choose agent, model and branch; a worktree is created and the agent starts.</li>
+          <li>Review Changes: leave line notes, Send to agent.</li>
+          <li>Git menu: Commit, Push, Create pull request, Merge.</li>
+        </ol>
+      </article>
+      <article class="proc">
+        <h3><span>2.2</span> Fan-out and compare</h3>
+        <ol>
+          <li>One prompt to several agents and lanes, optionally across hosts.</li>
+          <li>Compare results; keep one; the rest are removed.</li>
+          <li>State persists across a crash.</li>
+        </ol>
+        <p class="caveat">macOS and Linux clients</p>
+      </article>
+      <article class="proc">
+        <h3><span>2.3</span> Move the work</h3>
+        <ol>
+          <li>Smart Dispatch ranks hosts by spare cores and load.</li>
+          <li>Teleport moves commits, changes, tabs, programs and agent sessions; and back.</li>
+          <li>Ports are tunnelled back to a browser tab.</li>
+        </ol>
+        <p class="caveat">macOS and Linux clients</p>
+      </article>
+      <article class="proc">
+        <h3><span>2.4</span> Roll back an agent</h3>
+        <ol>
+          <li>A hidden Git checkpoint is written at every agent turn (newest 50 per branch).</li>
+          <li>Diff any checkpoint; restore from the workspace menu or CLI.</li>
+        </ol>
+      </article>
+      <article class="proc">
+        <h3><span>2.5</span> Answer away from the desk</h3>
+        <ol>
+          <li>Enable remote control; pair with QR plus matching code; Allow on desktop.</li>
+          <li>Web Push arrives; answer the question from the phone.</li>
+        </ol>
+        <p class="caveat"><span class="st st-optin">Opt-in</span></p>
+      </article>
+      <article class="proc">
+        <h3><span>2.6</span> Automate the routine</h3>
+        <ol>
+          <li>Write a Luau automation: pull, test, start agents, notify.</li>
+          <li>Approve the exact script; it runs on its schedule within its caps.</li>
+        </ol>
+      </article>
+    </div>
+  </section>
+
+  <section id="s3" class="sec" aria-labelledby="s3-title">
+    <h2 id="s3-title"><span class="secno">§3</span> Architecture</h2>
+    <p class="note">Dependencies point downward: interface → services → connection → wire. Protocol and client crates never depend on the UI toolkit. Crate names keep their current <code>herdr-</code> prefix.</p>
+    <figure class="arch" aria-labelledby="arch-cap">
+      <div class="arch-grid">
+        <div class="layer">
+          <p class="layer-name">Interface</p>
+          <ul><li class="hot">sheprd-gpui</li><li>sheprd-commands</li><li>sheprd-i18n</li><li>sheprd-mods</li><li>sheprd-luau</li><li>sheprd-automation</li></ul>
+        </div>
+        <div class="arrow" aria-hidden="true">↓</div>
+        <div class="layer">
+          <p class="layer-name">Services</p>
+          <ul><li>sheprd-vcs</li><li>sheprd-github</li><li>sheprd-orchestrator</li><li>sheprd-remote</li><li>sheprd-usage</li><li>sheprd-credentials</li><li>sheprd-updater</li><li>sheprd-diagnostics</li><li>sheprd-control-protocol</li></ul>
+        </div>
+        <div class="arrow" aria-hidden="true">↓</div>
+        <div class="layer">
+          <p class="layer-name">Connection</p>
+          <ul><li>sheprd-client</li><li>sheprd-core-client</li><li>sheprd-backend</li><li>sheprd-terminal</li></ul>
+        </div>
+        <div class="arrow" aria-hidden="true">↓</div>
+        <div class="layer">
+          <p class="layer-name">Wire</p>
+          <ul><li>sheprd-protocol</li><li>sheprd-chat-protocol</li></ul>
+        </div>
+        <div class="arrow" aria-hidden="true">↕</div>
+        <div class="layer external">
+          <p class="layer-name">External · by the Herdr project</p>
+          <ul><li>herdr server (Herdr 1)</li><li>herdr-core (Herdr 2)</li></ul>
+          <p class="ext-note">Owns terminal processes and session state. Not part of Sheprd.</p>
+        </div>
+      </div>
+      <div class="companions">
+        <p class="layer-name">Companion binaries, shipped beside the app</p>
+        <ul>
+          <li><b>sheprd-acp</b> runs an ACP agent inside a pane and serves its chat</li>
+          <li><b>sheprd-remote-control</b> HTTPS daemon for phones, own CA, Web Push</li>
+          <li><b>sheprd-automate</b> schedules approved automation scripts per host</li>
+          <li><b>sheprd-nearby</b> Bluetooth helper for nearby pairing (Linux, Windows; Swift on macOS)</li>
+          <li><b>sheprd-launcher</b> windowed launcher on Windows</li>
+        </ul>
+      </div>
+      <figcaption id="arch-cap"><span class="figno">Fig. 2</span> Crate layers, from AGENTS.md. <span class="tag-illustration">Diagram</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="s4" class="sec" aria-labelledby="s4-title">
+    <h2 id="s4-title"><span class="secno">§4</span> Measurements</h2>
+    <div class="metrics">
+      <div class="metric"><p class="mv" data-metric="crates">26</p><p class="ml">first-party Rust crates</p></div>
+      <div class="metric"><p class="mv" data-metric="rustProdLoc">378,965</p><p class="ml">lines of production Rust</p></div>
+      <div class="metric"><p class="mv" data-metric="rustTests">8,493</p><p class="ml">test functions</p></div>
+      <div class="metric"><p class="mv" data-metric="rustTestLoc">224,291</p><p class="ml">lines of Rust tests</p></div>
+      <div class="metric"><p class="mv" data-metric="swiftLoc">18,900</p><p class="ml">lines of Swift (iOS, helpers)</p></div>
+      <div class="metric"><p class="mv" data-metric="usageProviders">87</p><p class="ml">plan-usage providers</p></div>
+    </div>
+    <p class="method"><b>Method.</b> <code>tokei</code> over git-tracked first-party files at commit <code data-metric="commit">8e03793da</code>; code lines exclude blanks and comments; site, docs, generated files, assets and third-party dependencies are excluded; tests are files under <code>tests/</code>, <code>tests.rs</code> and test-support. The commands to reproduce are in the feature inventory.</p>
+    <p class="method warn"><b>Caveat.</b> Counts are not the product. They show that the workflows above are backed by real engineering and tests, nothing more.</p>
+  </section>
+
+  <section id="s5" class="sec" aria-labelledby="s5-title">
+    <h2 id="s5-title"><span class="secno">§5</span> Trust model</h2>
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Trust model, scrolls horizontally">
+      <table class="grid">
+        <caption class="sr-only">Trust model</caption>
+        <thead><tr><th scope="col">Ref</th><th scope="col">Concern</th><th scope="col">Behaviour</th></tr></thead>
+        <tbody>
+          <tr><td>5.1</td><th scope="row">Updates</th><td>Ed25519-signed release manifests; separate download and install approvals; Homebrew, APT, DNF and pacman installs update through their package manager. Windows updates require signed builds.</td></tr>
+          <tr><td>5.2</td><th scope="row">Secrets</th><td>Tokens in the macOS Keychain, Linux Secret Service or Windows Credential Manager; a private <code>0600</code> file only when chosen. Tokens stay on this computer.</td></tr>
+          <tr><td>5.3</td><th scope="row">Logs and crashes</th><td>Logs and crash reports stay on this computer and are never uploaded; diagnostic bundles are redacted and shared only by you.</td></tr>
+          <tr><td>5.4</td><th scope="row">Automations</th><td>Run only after a person approves the exact script text, within required caps on agents, tokens per day and wall time.</td></tr>
+          <tr><td>5.5</td><th scope="row">Agent CLI</th><td>Destructive or outward actions requested over the control socket open the app's own confirmation dialog. The socket is per user (Unix socket, or a named pipe restricted to your SID).</td></tr>
+          <tr><td>5.6</td><th scope="row">Phone pairing</th><td>QR plus a matching six-digit code on both screens, then Allow on the desktop. TLS from the daemon's own certificate authority, pinned by fingerprint; works by LAN IP or Tailscale.</td></tr>
+          <tr><td>5.7</td><th scope="row">Terminal content</th><td>Treated as untrusted: escapes are never executed, untrusted link schemes ask first, OSC 52 clipboard accepts bounded UTF-8 text only.</td></tr>
+          <tr><td>5.8</td><th scope="row">Sessions</th><td>The terminal server owns processes. Closing, detaching or updating the app leaves agents running; closing a workspace with unpushed work asks you to type <code>close</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="s6" class="sec" aria-labelledby="s6-title">
+    <h2 id="s6-title"><span class="secno">§6</span> Distribution and release integrity</h2>
+    <p class="note">Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Install commands, scrolls horizontally">
+      <table class="grid install">
+        <caption class="sr-only">Install commands by platform</caption>
+        <thead><tr><th scope="col">Platform</th><th scope="col">Command (current channel)</th><th scope="col">Artifacts</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">macOS</th><td><code>brew install penso/tap/herdr-gpui</code></td><td>Signed, notarized universal .dmg</td></tr>
+          <tr><th scope="row">Linux</th><td><code>curl -fsSL https://sheprd.org/install.sh | sh</code></td><td>.deb · .rpm · Arch · tarball</td></tr>
+          <tr><th scope="row">Windows</th><td><code>irm https://sheprd.org/install.ps1 | iex</code></td><td>.zip · per-user -setup.exe</td></tr>
+          <tr><th scope="row">Nix</th><td><code>nix run github:sheprd-labs/sheprd</code></td><td>Flake, built from source</td></tr>
+          <tr><th scope="row">iPhone / iPad</th><td>TestFlight beta (internal testers), or build from source</td><td>iOS 26</td></tr>
+          <tr><th scope="row">Any phone</th><td>Enable remote control; scan the pairing QR</td><td>Installable web app</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="integrity">
+      <li><b>SHA-256</b> checksums</li>
+      <li><b>Sigstore</b> signatures</li>
+      <li><b>Build provenance</b></li>
+      <li><b>SBOM</b> per release</li>
+      <li><b>Ed25519</b> update manifest</li>
+    </ul>
+    <p class="gh"><a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a></p>
+  </section>
+
+  <section id="s7" class="sec" aria-labelledby="s7-title">
+    <h2 id="s7-title"><span class="secno">§7</span> Feature table</h2>
+    <p class="note">Every capability, its status and its platform caveat. Status legend: <span class="st st-shipped">Shipped</span> in releases, on by default · <span class="st st-optin">Opt-in</span> in releases, off by default · <span class="st st-experimental">Experimental</span> · <span class="st st-testflight">TestFlight beta</span> · <span class="st st-planned">Planned</span>.</p>
+    <div class="ft-controls">
+      <label class="ft-field"><span>Filter</span><input id="ft-q" type="search" placeholder="e.g. teleport, ssh, phone" autocomplete="off"></label>
+      <label class="ft-field"><span>Status</span>
+        <select id="ft-status">
+          <option value="all">All</option>
+          <option value="shipped">Shipped</option>
+          <option value="optin">Opt-in</option>
+          <option value="experimental">Experimental</option>
+          <option value="testflight">TestFlight beta</option>
+          <option value="planned">Planned</option>
+        </select>
+      </label>
+      <label class="ft-field"><span>Area</span><select id="ft-area"><option value="all">All areas</option></select></label>
+      <p id="ft-count" class="ft-count" aria-live="polite"></p>
+    </div>
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Feature table, scrolls horizontally">
+      <table class="grid ft">
+        <caption class="sr-only">All Sheprd features</caption>
+        <thead><tr><th scope="col">ID</th><th scope="col">Area</th><th scope="col">Feature</th><th scope="col">Description</th><th scope="col">Status</th><th scope="col">Platform note</th></tr></thead>
+        <tbody id="ft-body"><tr><td colspan="6">Loading the feature table…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="sheet foot-in">
+    <p class="foot-mark"><img src="../../assets/paw.svg" alt="" width="24" height="24"> SHEPRD · SH-001 · Apache-2.0</p>
+    <p class="attrib">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
+    <p class="foot-links"><a href="https://github.com/sheprd-labs/sheprd">GitHub</a> · <a href="#s7">Features</a> · <a href="../../index.html">Gallery</a></p>
+  </div>
+</footer>
+</body>
+</html>
