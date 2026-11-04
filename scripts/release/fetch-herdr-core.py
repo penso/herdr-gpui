@@ -4,7 +4,7 @@
     python3 scripts/release/fetch-herdr-core.py aarch64-apple-darwin target/aarch64-apple-darwin/release
 
 Every release bundles this binary beside the app's executable, as a companion
-like herdr-acp, so Herdr 2 terminals work with nothing else installed. The
+like sheprd-acp, so Herdr 2 terminals work with nothing else installed. The
 target is herdr-core's own name for it or the Rust target the app was built
 for. The version and checksums live in herdr-core.json beside this script; a
 mismatch fails instead of bundling the download. Its licenses, as the pinned

@@ -1,122 +1,71 @@
-# Herdr Icon
+# Sheprd icons
 
-The application icons combine Herdr's ram and terminal prompt with flat ivory
-and graphite colors, without window controls, gradients, or shadows. The ram path is adapted from
-[Herdr's logo](https://github.com/herdrdev/herdr/blob/HEAD/assets/logo.svg),
-licensed under Apache-2.0. Changes include placement, scaling, flat colors,
-and the surrounding tile or circle. See the root [NOTICE](../../NOTICE)
-and [LICENSE](../../LICENSE) for distribution attribution and license terms.
-Transparent margins keep the artwork aligned with other desktop icons.
+## Canonical paw and organization avatar
 
-| macOS / About box | Linux |
+`sheprd-avatar.svg` is the finalized source: a cream paw (`#fff8f0`) on the
+orange gradient `#f39a5a` → `#d65f2a`. Its geometry is shared by every app icon,
+installer, GitHub App logo, and social card. It is original Sheprd artwork,
+distributed under this project's Apache-2.0 license. Attribution for remaining
+upstream code and service marks stays in [NOTICE](../../NOTICE).
+
+`sheprd-avatar.png` is the 1024×1024 avatar uploaded to `sheprd-labs` on GitHub.
+The full-bleed background lets GitHub apply its circular crop without transparent
+corners; the entire paw fits inside that circle. To regenerate only this export:
+
+```sh
+rsvg-convert -w 1024 -h 1024 assets/icons/sheprd-avatar.svg \
+  -o assets/icons/sheprd-avatar.png
+```
+
+## Platform artwork
+
+| macOS / About | Linux |
 | --- | --- |
-| <img src="herdr-ui-icon-clean.png" width="128" height="128" alt="Rounded Herdr icon"> | <img src="herdr-linux.svg" width="128" height="128" alt="Circular Herdr icon"> |
+| <img src="sheprd-icon.png" width="128" height="128" alt="Sheprd cream paw on an orange rounded tile"> | <img src="sheprd-linux.svg" width="128" height="128" alt="Sheprd cream paw on an orange circle"> |
 
-`herdr-ui-icon-clean.svg` is the rounded tile source artwork;
-`herdr-icon-square-clean.svg` is the legacy full-square variant. It remains an
-input to `scripts/generate-icons.swift`, which regenerates its normal and red
-PNG exports; Linux packaging no longer installs those square assets.
-The rounded 1024x1024 PNG export serves the About box; Linux packages install
-`herdr-linux.svg`, a circular composition of the same ram, as the scalable icon.
-On macOS, install the SVG renderer with
-`brew install librsvg` and Xcode 26 or later, then run `just icons` after
-changing the source SVG.
-The generator uses `rsvg-convert` to rasterize the vector artwork directly at
-each iconset resolution, rather than downsampling a PNG, and Apple's `iconutil`
-to package `Herdr.icns`. It also compiles `Herdr.car` (see below) and
-regenerates the PNG exports.
-Assets are checked in, so ordinary builds do not require Swift, librsvg, or Xcode.
+| Output | Use |
+| --- | --- |
+| `sheprd-icon.{svg,png}` | Rounded desktop tile and About image |
+| `sheprd-icon-badge.{svg,png}` | README tile with a notification badge |
+| `sheprd-icon-square.{svg,png}` | Full-bleed square artwork |
+| `sheprd-github-app.{svg,png}`, `sheprd-github-app-200.png` | GitHub App uploads; orange background included |
+| `sheprd-linux{,-worktree}.svg` | Circular Linux desktop icons |
+| `Sheprd{,-worktree}.icns` | Multi-resolution macOS icons |
+| `Sheprd{,-worktree}.car` | macOS 26+ Icon Composer catalogs |
+| `Sheprd{,-worktree}.ico` | Windows executable / installer icons |
+| `sheprd-worktree-1024.png`, `sheprd-square-worktree-1024.png` | Development About / square exports |
+| `windows/wizard{-small,}-*.png` | Inno Setup page artwork |
 
-### GitHub App
+Worktree builds use a visibly distinct berry-red gradient (`#df4b62` →
+`#991f43`) with the same cream paw. Recoloring only the background preserves
+foreground contrast. There is no luminance remapping of the rendered icon.
 
-Upload `herdr-github-app.png` for the GitHub App logo. This 1024x1024 PNG
-uses a centered, redrawn ram head with transparent cutouts and no tile or cropped
-body. Set GitHub's badge background color to `#f4f1e9` (ivory) or `#ffffff`
-(white) for contrast with the graphite mark.
+### Regeneration
 
-The editable source is `herdr-github-app.svg`. Regenerate the upload with:
-
-```sh
-rsvg-convert -w 1024 -h 1024 assets/icons/herdr-github-app.svg \
-  -o assets/icons/herdr-github-app.png
-```
-
-`herdr-github-app-200.png` is an alternative 200x200 upload, rendered directly
-from the vector source rather than resized from the larger PNG:
+Install `librsvg` (`brew install librsvg`) and Xcode 26 or newer on macOS,
+then run `just icons`. Assets are checked in; ordinary builds need no renderer.
+The individual steps, in order, are:
 
 ```sh
-rsvg-convert -w 200 -h 200 assets/icons/herdr-github-app.svg \
-  -o assets/icons/herdr-github-app-200.png
+python3 scripts/generate-linux-icons.py
+python3 scripts/generate-windows-icons.py
+python3 scripts/generate-installer-images.py
+swift scripts/generate-icons.swift
+swift scripts/check-icons.swift
+python3 assets/icons/test_artwork.py
 ```
 
-GitHub controls thumbnail sizing; a crisp source does not guarantee that its
-badge preview will remain sharp when enlarged or viewed at browser zoom.
+The Python SVG generator derives rounded, circular, square, badge, and GitHub
+App artwork directly from `sheprd-avatar.svg`. The Swift generator renders each
+native resolution from vectors, packages the macOS files, and updates the
+iPhone/iPad and Watch `AppIcon.png` catalogs. Do not edit derived artwork by hand.
+Social sources and exports are generated by `python3 assets/branding/generate.py`.
 
-### Linux desktops
+### macOS sizing and catalogs
 
-The tarball, Debian, RPM, Arch, and Nix packages install the circular SVG at
-`share/icons/hicolor/scalable/apps/herdr-gpui.svg`. The circle and transparent
-margins are part of the artwork: the desktop need not mask a square image.
-The ram is smaller and centered, retaining the full silhouette inside the circle
-rather than cropping the macOS composition. The circle is 896px across on a
-1024px canvas, with 64px margins.
-The desktop entry uses `Icon=herdr-gpui`; its filename and `StartupWMClass` match
-the app's `so.pen.herdr-gpui` identity for Wayland and X11 window association.
-Linked-worktree packages select the circular red `herdr-linux-worktree.svg`
-instead, installed at the same scalable icon path.
+The flattened `.icns` follows Apple's macOS Sequoia production template:
 
-Run `just icons-linux` on any platform to regenerate both Linux SVGs from the ram
-path and attribution in `herdr-ui-icon-clean.svg`. It needs only Python's standard
-library; the red palette matches the flat colors of the macOS worktree export.
-`just icons` also runs this generator before generating the macOS assets.
-
-This follows freedesktop icon lookup conventions used by GNOME, KDE Plasma, and
-common launchers on Arch and Omarchy (Hyprland); no distribution-specific artwork
-is needed. SVG support and icon-theme overrides belong to the desktop or launcher,
-so identical rendering on every Linux setup is not guaranteed. A custom theme may
-replace the icon. Tarball users must install the desktop entry and icon under an
-XDG data prefix (such as `~/.local/share`); extracting the archive alone does not
-register it. After replacing an installed icon, the launcher may need its icon
-cache refreshed or a new desktop session before it displays the change.
-
-To try the artwork locally without rebuilding or reinstalling the executable:
-
-```sh
-install -Dm644 assets/icons/herdr-linux.svg \
-  ~/.local/share/icons/hicolor/scalable/apps/herdr-gpui.svg
-gtk-update-icon-cache --force --ignore-theme-index ~/.local/share/icons/hicolor
-```
-
-This user-local icon overrides the packaged icon. Remove that SVG when you want
-future artwork changes to come from package upgrades again, then refresh the cache.
-
-### Windows
-
-`Herdr.ico` holds the rounded tile at 16, 20, 24, 32, 40, 48, 64, and 256 px, each
-a PNG rendered from `herdr-ui-icon-clean.svg`. Linked-worktree builds use the red
-`Herdr-worktree.ico`, with the palette of the Linux worktree SVG. The build script
-(`crates/herdr-gpui/windows_resource.rs`) embeds it in the executable as icon
-resource 1, the one GPUI loads for its windows, so Explorer, the window, and the
-taskbar all show it. Building for Windows therefore needs a resource compiler:
-`rc.exe` from the Windows SDK for MSVC, or mingw's `windres` for the GNU target.
-
-Run `just icons-windows` to regenerate both files. It needs Python's standard
-library and `rsvg-convert` (`apt-get install librsvg2-bin` or
-`brew install librsvg`), so on Windows run it under WSL. `just icons` runs it too.
-
-The Inno Setup installer uses `Herdr.ico` as its own icon, and the same tile at
-each DPI scale for its pages: `windows/wizard-small-*.png` in every page's
-corner, and `windows/wizard-*.png` centered on the welcome and finish pages.
-`just icons-windows` regenerates those too, with
-`scripts/generate-installer-images.py` (`rsvg-convert` or `resvg`).
-
-### macOS sizing
-
-The flattened `.icns` icons follow Apple's
-[macOS Sequoia production template](https://devimages-cdn.apple.com/design/resources/download/macOS-Sequoia-Production-Templates-Sketch.dmg)
-(`Template - Icon - App.sketch`). Its centered tile bounds are:
-
-| Canvas (pixels) | Tile (pixels) | Margin on each side (pixels) |
+| Canvas (px) | Tile (px) | Margin per side (px) |
 | --- | --- | --- |
 | 16 | 14 | 1 |
 | 32 | 28 | 2 |
@@ -126,72 +75,58 @@ The flattened `.icns` icons follow Apple's
 | 512 | 412 | 50 |
 | 1024 | 824 | 100 |
 
-The generator fits the source SVG's 896px rounded tile to these bounds before
-rasterizing. Both the normal and red worktree icons use the same margins,
-including the embedded 1024px PNG used by the About box. The circular Linux
-artwork uses its own composition and margins instead of Apple's sizing.
+Both variants have 1x and Retina 2x representations for logical sizes 16, 32,
+128, 256, and 512. The embedded 1024px About image has the same 100px margin.
+`check-icons.swift` checks every representation after extracting the `.icns`.
 
-All five logical sizes (16, 32, 128, 256, 512) include 1x and Retina 2x
-representations, as described in Apple's
-[high-resolution iconset guidance](https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/Optimizing/Optimizing.html).
-Run `swift scripts/check-icons.swift` on macOS to verify the committed PNGs and
-every representation extracted from both `.icns` files.
+On macOS 26+, bundles ship the selected `.car` as `Contents/Resources/Assets.car`,
+under icon name `Sheprd` for both variants. Icon Composer uses the canonical
+full-bleed gradient and paw SVG as a vector layer, with glass, specular effects,
+translucency, and shadows disabled. macOS supplies the outer mask. The bundle's
+display name is Sheprd and executable is `sheprd`; its deployed
+`so.pen.herdr-gpui` identity is retained for in-place updates.
 
-### macOS 26 and later
+### Linux and Windows
 
-macOS 26 and later redraw a flattened `.icns` with Liquid Glass lighting, which
-softens its edges and shades its flat colors in the Dock. Bundles therefore also
-ship `Herdr.car` as `Contents/Resources/Assets.car`, selected by
-`CFBundleIconName`. The generator builds it from an
-[Icon Composer](https://developer.apple.com/design/human-interface-guidelines/app-icons)
-document: the ivory tile is the document's solid fill, and the ram path from
-`herdr-ui-icon-clean.svg` becomes a full-bleed vector layer. Glass, specular
-highlights, translucency, and shadows are off, preserving the flat design.
-`xcrun actool` compiles the document and its flattened fallbacks for older
-systems, under the icon name `Herdr` for both variants. Test the rendering with
-`NSWorkspace.icon(forFile:)` on a bundle, or in the Dock.
+The Linux circle is 896px across, with a 64px transparent margin on the 1024px
+canvas. Packaging selects the normal or worktree SVG; the `.desktop` entry and
+installed icon lookup name must agree. Desktops may cache or theme the icon.
+`just icons-linux` needs only Python's standard library.
 
-The same generator uses CoreImage to map each rendered image's luminance to a red
-palette, retaining transparency, producing `herdr-worktree-1024.png`,
-`herdr-square-worktree-1024.png`, `Herdr-worktree.icns`, and
-`Herdr-worktree.car`; the catalog's two flat colors pass through the same mapping.
-These derived assets identify linked-worktree builds;
-the normal artwork remains unchanged. macOS development runs select the embedded
-multi-resolution `.icns` at compile time for the Dock, while macOS/Linux packaging reads the executable's build
-identity to select the matching icon, even when packaging in another checkout.
+The Windows `.ico` contains PNG entries at 16, 20, 24, 32, 40, 48, 64, and
+256px, each rendered directly from the rounded vector tile. `just icons-windows`
+regenerates these and the installer images. It needs Python and `rsvg-convert`
+(use WSL on Windows). The installer image generator also supports `resvg`.
 
-`plus.svg` and `close.svg` are original tab-control artwork, reused by the
-workspace menu alongside the original `pencil.svg` (rename), `trash.svg`
-(delete checkout) and `chevron-up.svg` / `chevron-down.svg` (fold and unfold a
-worktree group); `git-branch.svg` is original artwork for the titlebar's Git
-actions button; `sessions.svg` is original artwork for the sidebar footer's local
-session list; `file.svg` is original document-outline artwork for Settings' Configuration section; `teleport.svg` is original artwork for moving a worktree to
-another host, and `teleport-back.svg` its mirror for bringing it back; `zoom.svg` is original artwork marking a zoomed tab in the tab strip; `window-minimize.svg`, `window-maximize.svg`, and `window-restore.svg` are original artwork for the window buttons drawn on Linux when the compositor provides none, beside `close.svg`; `pull-request.svg` and `issue.svg` are original artwork for the activity bar's Pull requests and Issues panels, and `beads.svg` for items from Beads; `user.svg` is an
-original generic silhouette for the future account placeholder, not a personal
-identity or GitHub logo. All of them are embedded through a
-minimal GPUI asset source. GPUI renders them as SVG masks tinted with the current
-theme foreground, rather than fixed-color cached images.
+### iPhone, iPad, and Apple Watch
+
+The `ios/SheprdRemote` and `ios/SheprdRemoteWatch` catalogs receive the opaque,
+full-bleed 1024px avatar. iOS/watchOS apply their own rounded/circular masks;
+desktop margins must not be baked into these images. The paw fits both masks.
+
+## Interface and service marks
+
+`plus.svg`, `close.svg`, `pencil.svg`, `trash.svg`, `chevron-up.svg`,
+`chevron-down.svg`, `git-branch.svg`, `sessions.svg`, `file.svg`, `teleport.svg`,
+`teleport-back.svg`, `zoom.svg`, the `window-*.svg` controls, `pull-request.svg`,
+`issue.svg`, `beads.svg`, and `user.svg` are original interface artwork.
+GPUI renders these as masks tinted by the current theme.
 
 `gitlab.svg` is GitLab's tanuki mark from
-[Simple Icons 15.0.0 `icons/gitlab.svg`](https://github.com/simple-icons/simple-icons/blob/15.0.0/icons/gitlab.svg)
+[Simple Icons 15.0.0](https://github.com/simple-icons/simple-icons/blob/15.0.0/icons/gitlab.svg)
 (CC0-1.0), with its fill set to `currentColor` and its title removed. It
-names GitLab in the title bar's account menu and on GitLab items in the
-Orchestrator; the logo remains GitLab's trademark and identifies the service
-only.
+identifies the service only and remains GitLab's trademark.
 
-`vscode.svg`, `error.svg`, and `pass.svg` are Codicons from Microsoft's
-vscode-codicons, unchanged, under CC BY 4.0; `LICENSE-codicons` has the source
-revision, the license, and the trademark notice. `vscode.svg` marks the VS Code
-panel's title bar button and settings page; `error.svg` and `pass.svg` mark a
-failed or working connection to its server.
+`vscode.svg`, `error.svg`, and `pass.svg` are unchanged Codicons from Microsoft's
+vscode-codicons, under CC BY 4.0; `LICENSE-codicons` has the source revision,
+license, and trademark notice.
 
 ## Sidebar agent marks
 
-Each `agent-<label>.svg` is named after Herdr's canonical `agent_label`
-identifier in `src/detect/mod.rs`, not an editable display label. The
-`agent_icons!` table in `crates/herdr-gpui/src/icons.rs` is the only mapping;
-its test checks that every label Herdr emits has its own mark. Unknown, empty,
-and missing identities use `agent-generic.svg`.
+Each `agent-<label>.svg` is named after the external Herdr daemon's canonical
+`agent_label` identifier, not an editable display label. The `agent_icons!`
+table in `crates/sheprd-gpui/src/icons.rs` maps them; unknown, empty, and missing
+identities use `agent-generic.svg`.
 
 | Label | Source |
 | --- | --- |
@@ -214,15 +149,13 @@ and missing identities use `agent-generic.svg`.
 | `kilo` | Lobe Icons `kilocode.svg` |
 | `qodercli` | Lobe Icons `qoder.svg` |
 | `qwen` | Lobe Icons `qwen.svg` |
-| `muse` | Lobe Icons `meta.svg` (Meta's mark; Muse Code has no redistributable mark of its own) |
-| `omp`, `droid`, `letta`, `maki` | Original lettermark (O, D, L, M) in a rounded square |
+| `muse` | Lobe Icons `meta.svg` (Meta's mark; Muse Code has no redistributable mark) |
+| `omp`, `droid`, `letta`, `maki` | Original lettermarks (O, D, L, M) |
 | generic | Original terminal artwork |
 
-Lobe Icons marks are MIT licensed; source attribution and the full license are
-in the root [NOTICE](../../NOTICE), shipped with releases. Their SVG wrappers
-were reduced to a 24px `currentColor` mask and titles removed; paths are
-unchanged. No redistributable monochrome mark was found for oh-my-pi, Factory
-Droid, Letta, or Maki, so their lettermarks and the generic mark are
-original artwork under this project's Apache-2.0 license, drawn with the same
-2px round stroke as the generic mark. All are embedded SVG masks tinted with
-the adjacent name's theme color.
+Lobe Icons marks are MIT licensed; attribution and the full license are in
+[NOTICE](../../NOTICE), shipped with releases. Their SVG wrappers were reduced
+to 24px `currentColor` masks and titles removed; paths are unchanged. No
+redistributable monochrome mark was found for oh-my-pi, Factory Droid, Letta,
+or Maki, so those lettermarks and the generic mark are original artwork under
+this project's Apache-2.0 license, with the same 2px round stroke.

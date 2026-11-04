@@ -1,5 +1,5 @@
 import ActivityKit
-import HerdrRemoteCore
+import SheprdRemoteCore
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -149,7 +149,7 @@ struct ActivityTab: View {
     private func start() {
         do {
             _ = try Activity.request(
-                attributes: SpikeActivityAttributes(chat: "herdr-gpui · Fix mise discovery"),
+                attributes: SpikeActivityAttributes(chat: "sheprd · Fix mise discovery"),
                 content: .init(state: .init(question: "Run git push origin fix/mise?", result: nil), staleDate: nil)
             )
             result = "started"

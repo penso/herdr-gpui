@@ -1,5 +1,5 @@
 import Foundation
-import HerdrRemoteCore
+import SheprdRemoteCore
 
 /// What widgets, Controls, Siri, Spotlight, and the share extension know of
 /// the computers without a connection: the chats needing you and running,

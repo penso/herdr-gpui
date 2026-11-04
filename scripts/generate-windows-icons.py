@@ -13,14 +13,12 @@ import tempfile
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets/icons"
 SIZES = (16, 20, 24, 32, 40, 48, 64, 256)
-TILE_FILL = 'fill="#f4f1e9" />'
-RAM_FILL = 'fill="#303438" />'
-# The red palette matches the flat colors of the macOS worktree PNG.
+# Keep the cream paw, recoloring only the gradient for development builds.
 VARIANTS = {
-    "Herdr.ico": {},
-    "Herdr-worktree.ico": {
-        TILE_FILL: 'fill="#ea6369" />',
-        RAM_FILL: 'fill="#8e2b38" />',
+    "Sheprd.ico": {},
+    "Sheprd-worktree.ico": {
+        "#f39a5a": "#df4b62",
+        "#d65f2a": "#991f43",
     },
 }
 
@@ -29,7 +27,7 @@ def recolor(source, replacements):
     for old, new in replacements.items():
         count = source.count(old)
         if count != 1:
-            raise SystemExit(f"Expected {old!r} once in herdr-ui-icon-clean.svg, found it {count} times")
+            raise SystemExit(f"Expected {old!r} once in sheprd-icon.svg, found it {count} times")
         source = source.replace(old, new)
     return source
 
@@ -59,7 +57,7 @@ def pack(images):
 def main():
     if shutil.which("rsvg-convert") is None:
         raise SystemExit("rsvg-convert not found: install librsvg (apt-get install librsvg2-bin, brew install librsvg)")
-    source = (ASSETS / "herdr-ui-icon-clean.svg").read_text(encoding="utf-8")
+    source = (ASSETS / "sheprd-icon.svg").read_text(encoding="utf-8")
     with tempfile.TemporaryDirectory() as scratch:
         scratch = Path(scratch)
         for name, replacements in VARIANTS.items():

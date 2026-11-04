@@ -22,7 +22,7 @@ private let machines = [
 ]
 
 /// What forgetting does, said the same way everywhere.
-private let forgetMessage = "Its chats and cached messages leave this iPhone. Herdr keeps running on studio; pair again any time from its Remote control settings."
+private let forgetMessage = "Its chats and cached messages leave this iPhone. Sheprd keeps running on studio; pair again any time from its Remote control settings."
 
 private struct MachineRow: View {
     var machine: PairedMachine
@@ -116,7 +116,7 @@ struct ForgetHeaderMenu: View {
             List {
                 ForEach(machines.prefix(2)) { machine in
                     Section {
-                        Label("herdr-gpui", systemImage: "folder")
+                        Label("sheprd", systemImage: "folder")
                         Label("site", systemImage: "folder")
                     } header: {
                         HStack {
@@ -179,7 +179,7 @@ struct ForgetUnpairedCard: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Label("studio unpaired this iPhone", systemImage: "exclamationmark.triangle.fill")
                             .font(.headline).foregroundStyle(.red)
-                        Text("Someone removed this iPhone in Herdr's Remote control settings on studio. Its chats stop updating here.")
+                        Text("Someone removed this iPhone in Sheprd's Remote control settings on studio. Its chats stop updating here.")
                             .font(.subheadline).foregroundStyle(.secondary)
                         HStack {
                             Button("Forget", role: .destructive) { confirming = true }
@@ -226,7 +226,7 @@ struct ForgetEditList: View {
                         Text(state == 1 ? "Done" : "Edit").textCase(nil).foregroundStyle(.tint)
                     }
                 } footer: {
-                    Text("Forgetting a computer removes its chats from this iPhone. It does not stop Herdr there.")
+                    Text("Forgetting a computer removes its chats from this iPhone. It does not stop Sheprd there.")
                 }
                 Section("Notifications") {
                     Toggle("Questions and permissions", isOn: .constant(true))

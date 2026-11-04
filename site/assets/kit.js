@@ -8,15 +8,15 @@
   const I = (n) => `assets/icon-${n}.svg`;
 
   const FACTS = {
-    disclaimer: 'Unaffiliated project. Not affiliated with, endorsed by, or supported by Herdr or herdr.dev.',
+    disclaimer: 'Independent project, not affiliated with or supported by Herdr or Herdr Code.',
     license: 'Apache-2.0',
-    oneLiner: 'A native window for the Herdr daemon you already run: every agent on every machine, and the tools to dispatch, review and move their work.',
+    oneLiner: 'Sheprd: a native workspace for coding agents, with tools to dispatch, review and move work between machines.',
   };
 
   // The product story. Pages may use all or some.
   const PILLARS = [
     { key: 'dispatch', title: 'Dispatch', line: 'Turn issues, beads and PRs into agent runs. Fan one prompt out to several agents, on the host with the most room, and keep the best.' },
-    { key: 'watch', title: 'Watch', line: 'Every agent on every device: laptop, SSH servers, Coder and Daytona workspaces, WSL. Live status, load, ports, and a two-hour activity heatmap.' },
+    { key: 'watch', title: 'Watch', line: 'Agent status, host load, ports and recent activity. Local and SSH devices, Coder workspaces on macOS/Linux, and WSL on Windows.' },
     { key: 'review', title: 'Review', line: 'Read an agent’s changes side by side, pin line notes and send them back. Checkpoint every turn and rewind a worktree. Review and merge PRs.' },
     { key: 'move', title: 'Move', line: 'Teleport a worktree, its uncommitted work, tabs and running agents to another machine. Forward ports. Pick up where you left off.' },
     { key: 'work', title: 'Work', line: 'GPU-painted terminals, VS Code and browser tabs in editor groups, Go to File and Symbol, annotations on pages and terminal text.' },
@@ -31,29 +31,29 @@
     ['1:08', 'Close it. Still running.'],
   ];
 
-  // Canonical shot list for galleries. only = not in the Herdr TUI.
+  // Canonical capture briefs for Sheprd's gallery.
   const SHOTS = [
-    { id: 'orchestrator', pillar: 'dispatch', only: true, title: 'Orchestrator', cap: 'Issues, beads, PRs and agent runs for a repository, in one tab.', spec: 'Orchestrator tab: Issues list with beads nested, preview pane on the right, "Dispatch agent" button.' },
-    { id: 'dispatch', pillar: 'dispatch', only: true, title: 'Dispatch an agent', cap: 'Prompt, agent, model, branch, and the host with the most room.', spec: 'Dispatch dialog: prompt, agent picker (Claude), model, branch agent/412-..., three host tiles ranked by spare cores.' },
-    { id: 'fanout', pillar: 'dispatch', only: true, title: 'Fan out, keep the best', cap: 'One prompt, several agents, lanes spread across hosts.', spec: 'Fan-out: 4 lanes (Claude, Codex, OpenCode, Gemini) with host chips, diff sizes, "Keep" on the winner.' },
-    { id: 'devices', pillar: 'watch', only: true, title: 'Devices overview', cap: 'Two hours of agent activity and the load of every machine.', spec: 'Devices tab: activity heatmap, totals, device table with dots, CPU, memory, disk, uptime.' },
-    { id: 'sidebar', pillar: 'watch', only: false, title: 'Every host, one sidebar', cap: 'Local and SSH like Herdr, plus Coder, Daytona and WSL, coloured per host.', spec: 'Sidebar: 4 host groups with pinned headers, load bars, ahead/behind counts, worktree notes.' },
-    { id: 'review', pillar: 'review', only: true, title: 'Review with line notes', cap: 'Side-by-side diff; notes go back to the agent.', spec: 'Review tab: file tree, language-coloured split diff, two line notes, "Send to agent".' },
-    { id: 'checkpoints', pillar: 'review', only: true, title: 'Checkpoints', cap: 'Every agent turn saved; restore the worktree to any of them.', spec: 'Checkpoint timeline with clock times and a day break, restore confirmation.' },
-    { id: 'pr', pillar: 'review', only: true, title: 'Pull requests, like GitHub', cap: 'Conversation, checks, review and merge, without leaving.', spec: 'PR page: avatars, review threads folded, checks green, Merge (squash) button.' },
-    { id: 'teleport', pillar: 'move', only: true, title: 'Teleport', cap: 'Move a worktree and its running agents to another machine.', spec: 'Teleport review: branch, 3 unpushed commits, 5 files, panes and agent sessions, destination build-box.' },
-    { id: 'ports', pillar: 'move', only: true, title: 'Ports and tunnels', cap: 'Each workspace’s listening ports, opened locally through SSH.', spec: 'Ports popover: :3000 vite, :5432 postgres on build-box, "Open in tab" via tunnel.' },
-    { id: 'vscode', pillar: 'work', only: true, title: 'VS Code in an editor group', cap: 'Beside the agent, in the same window.', spec: 'Editor groups: VS Code tab left, Claude terminal right, Go to Symbol palette open.' },
-    { id: 'annotate', pillar: 'work', only: true, title: 'Annotate pages and terminal text', cap: 'Pin notes on a page or a terminal selection; the agent gets them.', spec: 'Browser tab with 3 pins + terminal selection with a note bubble.' },
-    { id: 'cells', pillar: 'work', only: false, title: 'GPU-painted cells', cap: 'Joined box drawing, kitty images, smooth scrolling.', spec: 'Macro crop at 2x: TUI borders, a kitty-protocol image, Cmd-F find bar.' },
-    { id: 'usage', pillar: 'watch', only: false, title: 'Usage in the status bar', cap: 'Claude, Codex, ChatGPT and more, before an agent stalls.', spec: 'Status bar meters + provider popover with several Claude accounts.' },
+    { id: 'orchestrator', pillar: 'dispatch', title: 'Orchestrator', cap: 'Issues, beads, PRs and agent runs for a repository, in one tab.', spec: 'Orchestrator tab: Issues list with beads nested, preview pane on the right, "Dispatch agent" button.' },
+    { id: 'dispatch', pillar: 'dispatch', title: 'Dispatch an agent', cap: 'Prompt, agent, model, branch, and host selection.', spec: 'Dispatch dialog: prompt, agent picker (Claude), model, branch agent/412-..., three host tiles ranked by spare cores.' },
+    { id: 'fanout', pillar: 'dispatch', title: 'Fan out, keep the best', cap: 'One prompt, several agents, lanes spread across hosts.', spec: 'Fan-out: 4 lanes (Claude, Codex, OpenCode, Gemini) with host chips, diff sizes, "Keep" on the winner.' },
+    { id: 'devices', pillar: 'watch', title: 'Devices overview', cap: 'Recent agent activity and the load of every machine.', spec: 'Devices tab: activity heatmap, totals, device table with dots, CPU, memory, disk, uptime.' },
+    { id: 'sidebar', pillar: 'watch', title: 'Every host, one sidebar', cap: 'Local and SSH devices, coloured per host, with platform-specific cloud and WSL integrations.', spec: 'Sidebar: 4 host groups with pinned headers, load bars, ahead/behind counts, worktree notes.' },
+    { id: 'review', pillar: 'review', title: 'Review with line notes', cap: 'Side-by-side diff; notes go back to the agent.', spec: 'Review tab: file tree, language-coloured split diff, two line notes, "Send to agent".' },
+    { id: 'checkpoints', pillar: 'review', title: 'Checkpoints', cap: 'Save checkpoints and restore your worktree.', spec: 'Checkpoint timeline with clock times and a day break, restore confirmation.' },
+    { id: 'pr', pillar: 'review', title: 'Pull requests', cap: 'Conversation, checks, review and merge, without leaving.', spec: 'PR page: avatars, review threads folded, checks green, Merge (squash) button.' },
+    { id: 'teleport', pillar: 'move', title: 'Teleport', cap: 'Move a worktree and its agent sessions to another machine.', spec: 'Teleport review: branch, 3 unpushed commits, 5 files, panes and agent sessions, destination build-box.' },
+    { id: 'ports', pillar: 'move', title: 'Ports and tunnels', cap: 'Each workspace’s listening ports, opened locally through SSH.', spec: 'Ports popover: :3000 vite, :5432 postgres on build-box, "Open in tab" via tunnel.' },
+    { id: 'vscode', pillar: 'work', title: 'VS Code in an editor group', cap: 'Beside the agent, in the same window.', spec: 'Editor groups: VS Code tab left, Claude terminal right, Go to Symbol palette open.' },
+    { id: 'annotate', pillar: 'work', title: 'Annotate pages and terminal text', cap: 'Pin notes on a page or a terminal selection; the agent gets them.', spec: 'Browser tab with 3 pins + terminal selection with a note bubble.' },
+    { id: 'cells', pillar: 'work', title: 'GPU-painted cells', cap: 'Pixel-aligned terminal glyphs, joined box drawing and smooth scrolling.', spec: 'Macro crop at 2x: terminal borders and Cmd-F find bar.' },
+    { id: 'usage', pillar: 'watch', title: 'Usage in the status bar', cap: 'Claude, Codex, ChatGPT and more, before an agent stalls.', spec: 'Status bar meters + provider popover with several Claude accounts.' },
   ];
 
   function sidebar() {
     return `<div class="hm-sd">
       <div class="hm-search">⌕ Search devices, worktrees…</div>
       <div class="hm-h"><span style="color:#3dd6d0">● MacBook</span><span>18%<span class="bar"><i style="width:18%"></i></span></span></div>
-      <div class="hm-r on"><b>herdr-gpui</b><span class="s"><span class="cg">↑2</span></span></div>
+      <div class="hm-r on"><b>sheprd</b><span class="s"><span class="cg">↑2</span></span></div>
       <div class="hm-r ind"><img src="${A('claude')}">sidebar-polish<span class="s"><span class="hm-dot work"></span></span></div>
       <div class="hm-r ind"><img src="${A('codex')}">agent/412-ports<span class="s"><span class="hm-dot block"></span></span></div>
       <div class="hm-h"><span style="color:#c792ea">● build-box · ssh</span><span>64%<span class="bar"><i style="width:64%"></i></span></span></div>
@@ -70,7 +70,7 @@
   const TABS = {
     terminal: [['claude', 'sidebar-polish', 1], ['codex', 'agent/412-ports'], [null, '🌐 localhost:3000'], [null, '⧉ VS Code']],
     devices: [[null, '▦ Devices', 1], ['claude', 'sidebar-polish']],
-    orchestrator: [[null, '◎ Orchestrator · herdr-gpui', 1], ['claude', 'sidebar-polish']],
+    orchestrator: [[null, '◎ Orchestrator · sheprd', 1], ['claude', 'sidebar-polish']],
     review: [[null, '± Review · sidebar-polish', 1], ['claude', 'sidebar-polish']],
     checkpoints: [['claude', 'sidebar-polish', 1], [null, '± Review']],
     fanout: [[null, '⑂ Fan-out · "fix flaky ports test"', 1]],
@@ -91,17 +91,17 @@
 <span class="cy">●</span> Bash <span class="cd">just ci</span>
   <span class="cd">⎿ test result: ok. 1,284 passed</span>
 
-<span class="cy">✶ Thinking…</span></div><div class="hm-pn"><span class="cb">herdr-gpui</span> <span class="cg">main</span> <span class="cd">❯</span> just run
-<span class="cd">   Compiling herdr-gpui</span>
+<span class="cy">✶ Thinking…</span></div><div class="hm-pn"><span class="cb">sheprd</span> <span class="cg">main</span> <span class="cd">❯</span> just run
+<span class="cd">   Compiling sheprd-gpui</span>
 <span class="cg">    Finished</span> release
-<span class="cd">     Running</span> herdr-gpui
+<span class="cd">     Running</span> sheprd
 
-<span class="cb">herdr-gpui</span> <span class="cg">main</span> <span class="cd">❯</span> gh pr checks
+<span class="cb">sheprd</span> <span class="cg">main</span> <span class="cd">❯</span> gh pr checks
 <span class="cg">✓</span> Format, lint, and test
 <span class="cg">✓</span> windows
 <span class="cy">●</span> release-dry-run
 
-<span class="cb">herdr-gpui</span> <span class="cg">main</span> <span class="cd">❯</span> <span style="background:var(--fg)"> </span></div></div>`,
+<span class="cb">sheprd</span> <span class="cg">main</span> <span class="cd">❯</span> <span style="background:var(--fg)"> </span></div></div>`,
 
     devices: () => {
       const cell = (i) => { const r = (Math.sin(i * 1.7) + Math.sin(i * .31)) * .5 + .5; return r > .975 ? '#e5484d' : `rgba(61,214,208,${(.12 + r * .75).toFixed(2)})`; };
@@ -135,7 +135,7 @@
         <div style="display:flex;gap:6px"><span class="hm-pill on">▶ Dispatch agent</span><span class="hm-pill">⑂ Fan out</span></div></div></div>`,
 
     review: () => `<div class="hm-view" style="display:grid;grid-template-columns:150px 1fr;gap:12px;padding:12px">
-      <div style="font-size:11.5px;color:var(--dim);line-height:1.9">▾ crates/herdr-gpui<br>&nbsp;&nbsp;▾ sidebar<br>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--fg)">rows.rs</span> <span class="cg">+6</span> <span class="cr">-4</span><br>&nbsp;&nbsp;&nbsp;&nbsp;layout.rs <span class="cg">+2</span><br>&nbsp;&nbsp;▸ status_bar<br>▸ docs</div>
+      <div style="font-size:11.5px;color:var(--dim);line-height:1.9">▾ crates/sheprd-gpui<br>&nbsp;&nbsp;▾ sidebar<br>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--fg)">rows.rs</span> <span class="cg">+6</span> <span class="cr">-4</span><br>&nbsp;&nbsp;&nbsp;&nbsp;layout.rs <span class="cg">+2</span><br>&nbsp;&nbsp;▸ status_bar<br>▸ docs</div>
       <div class="hm-diff"><span class="n"> 88  fn host_row(cx: &amp;RowContext) -&gt; Div {</span>
 <span class="n"> 89      h_flex()</span>
 <span class="d"> 90 -        .gap(px(10.))</span>
@@ -179,7 +179,7 @@
   }
 
   function shot(s) {
-    return `<div class="hm-shot" data-shot="${s.id}"><span class="k">${s.title.toUpperCase()}</span>${s.only ? '<span class="only">GPUI ONLY</span>' : ''}${s.spec}</div>`;
+    return `<div class="hm-shot" data-shot="${s.id}"><span class="k">${s.title.toUpperCase()}</span>${s.spec}</div>`;
   }
 
   // Wire any [data-shot] elements on the page to a shared lightbox, in document order.

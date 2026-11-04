@@ -158,7 +158,7 @@ private struct DiffBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("crates/herdr-commands/src/splits.rs").font(.caption.monospaced()).foregroundStyle(.secondary)
+            Text("crates/sheprd-commands/src/splits.rs").font(.caption.monospaced()).foregroundStyle(.secondary)
                 .padding(.horizontal, 12).padding(.vertical, 8)
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Text("\(line.0) \(line.1)").font(.system(.caption, design: .monospaced))

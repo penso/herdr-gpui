@@ -1,8 +1,0 @@
-.assetsignore
-wrangler.jsonc
-README.md
-worker/
-.wrangler/
-node_modules/
-package.json
-package-lock.json

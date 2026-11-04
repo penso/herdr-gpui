@@ -32,7 +32,7 @@ class BuildMacosTests(unittest.TestCase):
             'set -eu\n[[ ! -e sourced && $# == 5 && -s $5 ]]\n'
             # The fetched herdr-core must sit beside each architecture's binary.
             '[[ -f ${2%/*}/herdr-core && -f ${3%/*}/herdr-core ]]\n'
-            'printf "package\\n" >> calls\nmkdir "$4/Herdr.app"\n'
+            'printf "package\\n" >> calls\nmkdir "$4/Sheprd.app"\n'
             '[[ ${FAIL_PACKAGE:-0} == 0 ]]\n'
         )
         (scripts / "generate-notices.py").write_text(
@@ -79,19 +79,19 @@ class BuildMacosTests(unittest.TestCase):
     def config(self):
         (self.root / ".envrc").write_text(
             'touch sourced\nherdr_sign() {\n'
-            '[[ $1 == 20260920.3 && $2 == "$3/Herdr.app" '
+            '[[ $1 == 20260920.3 && $2 == "$3/Sheprd.app" '
             '&& $3 == "$PWD/target/distribution/.herdr-build."* && -d $2 '
             '&& ! -e target/distribution/20260920.3 ]] || return 1\n'
             'printf "sign\\n" >> calls\n'
             'printf "sign diagnostic\\n"\n'
             '[[ ${MISSING_DMG:-0} == 0 ]] || return 0\n'
-            'printf "mock dmg" > "$3/Herdr-$1-universal-apple-darwin.dmg"\n'
+            'printf "mock dmg" > "$3/Sheprd-$1-universal-apple-darwin.dmg"\n'
             '[[ ${FAIL_SIGN:-0} == 0 ]] || return 1\n'
             'if [[ ${LATE_OUTPUT:-0} == 1 ]]; then\n'
             'mkdir target/distribution/20260920.3\n'
             'printf "preserve" > target/distribution/20260920.3/existing\n'
             'fi\n'
-            'printf "%s\\n" "$3/Herdr-$1-universal-apple-darwin.dmg"\n}\n'
+            'printf "%s\\n" "$3/Sheprd-$1-universal-apple-darwin.dmg"\n}\n'
         )
 
     def run_build(self, version="20260920.3", success=False):
@@ -102,10 +102,10 @@ class BuildMacosTests(unittest.TestCase):
         self.assertEqual(result.returncode == 0, success, result.stderr)
         if success:
             output = self.root / "target/distribution/20260920.3"
-            dmg = output / "Herdr-20260920.3-universal-apple-darwin.dmg"
+            dmg = output / "Sheprd-20260920.3-universal-apple-darwin.dmg"
             self.assertEqual(result.stdout, str(dmg) + "\n")
             self.assertEqual(dmg.read_text(), "mock dmg")
-            self.assertTrue((output / "Herdr.app").is_dir())
+            self.assertTrue((output / "Sheprd.app").is_dir())
             self.assertTrue((output / "THIRD-PARTY-NOTICES.txt").is_file())
             self.assertIn("sign diagnostic", result.stderr)
         self.assertFalse(list((self.root / "target/distribution").glob(".herdr-build.*")))
@@ -132,10 +132,10 @@ class BuildMacosTests(unittest.TestCase):
         # Each target's Rust build, then its Swift Bluetooth helper, then its
         # herdr-core, fetched right after that target's build.
         self.assertEqual(calls[-8:], [
-            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target aarch64-apple-darwin",
+            "build --locked --release --target-dir target -p sheprd-gpui -p sheprd-acp -p sheprd-remote-control -p sheprd-automate --target aarch64-apple-darwin",
             "nearby aarch64-apple-darwin",
             "fetch aarch64-apple-darwin target/aarch64-apple-darwin/release",
-            "build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target x86_64-apple-darwin",
+            "build --locked --release --target-dir target -p sheprd-gpui -p sheprd-acp -p sheprd-remote-control -p sheprd-automate --target x86_64-apple-darwin",
             "nearby x86_64-apple-darwin",
             "fetch x86_64-apple-darwin target/x86_64-apple-darwin/release",
             "package", "sign",

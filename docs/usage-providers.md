@@ -5,9 +5,9 @@ host, and clicking one opens its panel. The service selected in the panel
 comes first, followed by those closest to their limits. Narrowing the window
 hides segments that no longer fit; the panel still lists every available
 service. Compact mode leaves room for more services. Each service is a
-*provider*: one module in `crates/herdr-usage/src/providers/` with a
+*provider*: one module in `crates/sheprd-usage/src/providers/` with a
 unit struct implementing `Service`, listed once in
-`crates/herdr-usage/src/registry.rs`. Providers are ported from
+`crates/sheprd-usage/src/registry.rs`. Providers are ported from
 [CodexBar](https://github.com/steipete/CodexBar) (MIT), whose
 `docs/<id>.md` and `Sources/CodexBarCore/Providers/<Name>/` document each
 service's sign-in, endpoints, and response shapes.
@@ -15,8 +15,8 @@ service's sign-in, endpoints, and response shapes.
 Detection, local and remote fetching, caching, refresh timing, the status
 bar, and the panel all work from the trait. A provider only says how to
 find its sign-in, how to ask its service, and how to read the answer.
-`herdr-usage` has no GPUI; the app draws the status bar and panel in
-`crates/herdr-gpui/src/usage/`.
+`sheprd-usage` has no GPUI; the app draws the status bar and panel in
+`crates/sheprd-gpui/src/usage/`.
 
 ## ChatGPT usage through OpenCode
 
@@ -41,12 +41,12 @@ sign-in; detection is skipped when neither parser is available.
 
 ## Grok prepaid balance
 
-Legacy and unified Grok accounts use the same CLI billing endpoint. Herdr
+Legacy and unified Grok accounts use the same CLI billing endpoint. Sheprd
 reads the quota and wallet independently, including when the server omits
 the `isUnifiedBillingUser` flag; account migration is not required.
 
 Grok's CLI billing response can report a prepaid balance without an included
-usage percentage. Herdr shows that balance in USD (the
+usage percentage. Sheprd shows that balance in USD (the
 [Grok billing contract](https://github.com/xai-org/grok-build/blob/main/crates/codegen/xai-grok-shell/src/extensions/billing.rs)
 sends USD cents),
 including zero balances, and the reported period end in the usage panel.
@@ -165,7 +165,7 @@ could select another account's credentials from a shared file.
 | `command(program, &[arg], timeout)` | `Result<Output>` | Runs a CLI on the host (`~/.local/bin`, Homebrew and similar are on PATH). Its stdout comes back, so only for commands that print no secrets. |
 | `is_remote()`, `is_macos()` | `bool` | Where the probe runs. |
 | `requested()` | `bool` | Whether the provider is listed in `show_providers` rather than only detected. A detected provider must not do anything the user would notice. |
-| `app_data()` | `bool` | Whether the probe may touch another app's own data on this Mac, such as its `~/Library/Application Support` folder, directly or through a command it runs. False for a detected provider on a local Mac, where macOS may ask whether Herdr can access data from other apps; check it before such a read. A listed provider needs no Allow for it, and remote hosts are not gated, since that dialog never reaches the user over SSH. |
+| `app_data()` | `bool` | Whether the probe may touch another app's own data on this Mac, such as its `~/Library/Application Support` folder, directly or through a command it runs. False for a detected provider on a local Mac, where macOS may ask whether Sheprd can access data from other apps; check it before such a read. A listed provider needs no Allow for it, and remote hosts are not gated, since that dialog never reaches the user over SSH. |
 
 `HostPath::home(".codex/auth.json")` is `~/.codex/auth.json` on the host;
 `HostPath::env_or("CODEX_HOME", ".codex", "auth.json")` honors the
@@ -224,8 +224,8 @@ Report::new(Provider(&MyService), Account { email, plan }, windows)
 
 The panel draws windows, balances, and sections for every provider. A
 provider with richer data stores it with `with_detail`, makes its type `pub`
-and re-exports it from `herdr_usage::details`, and the app's
-`crates/herdr-gpui/src/usage/details.rs` draws it, reading it back with
+and re-exports it from `sheprd_usage::details`, and the app's
+`crates/sheprd-gpui/src/usage/details.rs` draws it, reading it back with
 `report.detail::<MyDetail>()` and composing `Ui` pieces:
 `ui.limit(&window)`, `ui.balances(&[..])`, `ui.facts(title, &facts)`,
 `ui.shares(title, &shares)`, `ui.bar(fill, used, None)`, `ui.block()`,

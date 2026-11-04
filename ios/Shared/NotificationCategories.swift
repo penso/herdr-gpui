@@ -1,4 +1,4 @@
-import HerdrRemoteCore
+import SheprdRemoteCore
 import UserNotifications
 
 /// Keys a shown notification's `userInfo` carries once opened.
