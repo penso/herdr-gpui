@@ -83,6 +83,11 @@ chat-working-reading = Reading { $target }
 chat-working-searching = Searching { $target }
 # Steps running beside the one the working row names.
 chat-working-more = +{ $count } more
+# Steps running that the open list of them has no room for.
+chat-working-hidden = { $count ->
+    [one] { $count } more step not shown
+   *[other] { $count } more steps not shown
+}
 chat-answer-cut = The rest of this answer is too long to show here; Copy takes all of it.
 
 # Copy buttons and what their flash says.

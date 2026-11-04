@@ -13,7 +13,7 @@ use std::time::Duration;
 /// One beat of the dot's pulse.
 const PULSE: Duration = Duration::from_millis(1200);
 
-/// Steps the open list keeps; more than this at once are only counted.
+/// Steps the open list keeps; it says how many more run.
 const MAX_STEPS: usize = 16;
 
 /// Characters of one step's title the open list draws: a command can carry
@@ -53,18 +53,32 @@ pub(super) struct Step {
     pub(super) text: String,
 }
 
-impl Step {
-    /// Every step running, the one [`Working`] names first. Only the open
-    /// list asks, as this is more than a closed row needs each frame.
-    pub(super) fn running(transcript: &Transcript, now_ms: u64) -> Vec<Self> {
-        running_steps(transcript)
-            .into_iter()
-            .take(MAX_STEPS)
-            .map(|tool| Self {
-                elapsed: tool.started_ms.and_then(|started| since(started, now_ms)),
-                text: step_text(tool),
-            })
-            .collect()
+/// What the open list shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Steps {
+    /// How many more run than the list keeps, which it says rather than
+    /// look complete.
+    pub(super) hidden: usize,
+    /// The steps running, the one [`Working`] names first.
+    pub(super) list: Vec<Step>,
+}
+
+impl Steps {
+    /// The steps `transcript` has running. Only the open list asks, as this
+    /// is more than a closed row needs each frame.
+    pub(super) fn of(transcript: &Transcript, now_ms: u64) -> Self {
+        let running = running_steps(transcript);
+        Self {
+            hidden: running.len().saturating_sub(MAX_STEPS),
+            list: running
+                .into_iter()
+                .take(MAX_STEPS)
+                .map(|tool| Step {
+                    elapsed: tool.started_ms.and_then(|started| since(started, now_ms)),
+                    text: step_text(tool),
+                })
+                .collect(),
+        }
     }
 }
 
@@ -300,14 +314,14 @@ impl SheprdWindow {
         let theme = look.theme;
         let size = (look.text - 1.).max(10.);
         let height = size * 1.6 * LINES;
-        let mut steps = Step::running(transcript, now_ms);
-        if steps.is_empty() {
-            steps.push(Step {
+        let Steps { hidden, mut list } = Steps::of(transcript, now_ms);
+        if list.is_empty() {
+            list.push(Step {
                 elapsed: None,
                 text: working.doing,
             });
         }
-        let rows = steps.into_iter().enumerate().map(|(index, step)| {
+        let rows = list.into_iter().enumerate().map(|(index, step)| {
             div()
                 .debug_selector(move || format!("chat-step-{index}"))
                 .flex()
@@ -346,7 +360,15 @@ impl SheprdWindow {
                         .border_t_1()
                         .border_color(rgb(theme.active))
                         .text_size(px(size))
-                        .children(rows),
+                        .children(rows)
+                        .when(hidden > 0, |list| {
+                            list.child(
+                                div()
+                                    .debug_selector(|| "chat-steps-hidden".into())
+                                    .text_color(rgb(theme.muted))
+                                    .child(fl!("chat-working-hidden", count = hidden)),
+                            )
+                        }),
                 )
                 .when(chat.steps.moving(now), |frame| {
                     // Draws the next frame while it is still moving.

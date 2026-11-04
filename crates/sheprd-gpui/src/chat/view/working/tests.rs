@@ -173,7 +173,7 @@ fn steps_beside_the_newest_are_counted_and_listed() {
     let shown = Working::of(&transcript, 0).unwrap();
     assert_eq!(shown.doing, "third");
     assert_eq!(shown.more, 2);
-    let steps = Step::running(&transcript, 0);
+    let steps = Steps::of(&transcript, 0).list;
     let texts: Vec<_> = steps.iter().map(|step| step.text.as_str()).collect();
     assert_eq!(texts, ["third", "second", "first"]);
 }
@@ -190,7 +190,7 @@ fn a_sub_agent_gives_way_to_a_step_and_is_not_counted() {
     ]);
     let stepping = Working::of(&transcript, 0).unwrap();
     assert_eq!((stepping.doing.as_str(), stepping.more), ("cargo test", 0));
-    assert_eq!(Step::running(&transcript, 0).len(), 2);
+    assert_eq!(Steps::of(&transcript, 0).list.len(), 2);
 }
 
 #[core::prelude::v1::test]
@@ -220,7 +220,7 @@ fn each_step_keeps_its_own_time_from_the_first_second() {
     ]);
     let shown = Working::of(&transcript, 42_000).unwrap();
     assert_eq!(shown.step, None, "the newest has not run a second yet");
-    let steps = Step::running(&transcript, 42_000);
+    let steps = Steps::of(&transcript, 42_000).list;
     assert_eq!(steps[0].elapsed, None);
     assert!(steps[1].elapsed.as_ref().is_some_and(|e| e.contains("41")));
     assert_eq!(steps[2].elapsed, None, "an older program sent no start");
@@ -247,12 +247,15 @@ fn the_list_keeps_a_steps_whole_title_and_its_files() {
 }
 
 #[core::prelude::v1::test]
-fn the_list_is_bounded_but_the_count_is_not() {
+fn the_list_is_bounded_and_says_what_it_left_out() {
     let entries = (0..MAX_STEPS + 4)
         .map(|index| step(&format!("step {index}"), ToolStatus::InProgress))
         .collect();
     let transcript = working(entries);
-    assert_eq!(Step::running(&transcript, 0).len(), MAX_STEPS);
+    let steps = Steps::of(&transcript, 0);
+    assert_eq!(steps.list.len(), MAX_STEPS);
+    assert_eq!(steps.hidden, 4);
+    assert_eq!(steps.list[0].text, format!("step {}", MAX_STEPS + 3));
     assert_eq!(Working::of(&transcript, 0).unwrap().more, MAX_STEPS + 3);
 }
 
@@ -282,4 +285,12 @@ fn a_steps_files_are_capped_as_well_as_its_title() {
     let text = step_text(&edit);
     assert_eq!(text.lines().count(), MAX_STEP_LOCATIONS + 1);
     assert!(text.lines().all(|line| line.chars().count() <= MAX_LINE));
+}
+
+#[core::prelude::v1::test]
+fn a_list_that_fits_hides_nothing() {
+    let entries = (0..MAX_STEPS)
+        .map(|index| step(&format!("step {index}"), ToolStatus::InProgress))
+        .collect();
+    assert_eq!(Steps::of(&working(entries), 0).hidden, 0);
 }

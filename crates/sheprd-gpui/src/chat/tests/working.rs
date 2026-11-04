@@ -70,22 +70,24 @@ fn the_sign_is_gone_between_turns(cx: &mut TestAppContext) {
     }
 }
 
-fn running_step() -> ServerMessage {
+fn running_steps(count: u64) -> ServerMessage {
     let mut transcript = Transcript::new("Claude");
     transcript.status = Status::Working;
-    transcript.entries = vec![Entry {
-        id: EntryId(1),
-        kind: EntryKind::Tool(Tool {
-            call_id: "call".into(),
-            content: Vec::new(),
-            kind: ToolKind::Execute,
-            locations: Vec::new(),
-            parent: None,
-            started_ms: None,
-            status: ToolStatus::InProgress,
-            title: "sed -i one\nsed -i two".into(),
-        }),
-    }];
+    transcript.entries = (1..=count)
+        .map(|id| Entry {
+            id: EntryId(id),
+            kind: EntryKind::Tool(Tool {
+                call_id: format!("call-{id}"),
+                content: Vec::new(),
+                kind: ToolKind::Execute,
+                locations: Vec::new(),
+                parent: None,
+                started_ms: None,
+                status: ToolStatus::InProgress,
+                title: "sed -i one\nsed -i two".into(),
+            }),
+        })
+        .collect();
     ServerMessage::Snapshot {
         cursor: cursor(1, 0),
         transcript: Box::new(transcript),
@@ -96,7 +98,7 @@ fn running_step() -> ServerMessage {
 fn the_row_opens_and_closes_the_steps_in_full(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
-    let _stream = attach_with(&view, &program, running_step(), cx);
+    let _stream = attach_with(&view, &program, running_steps(1), cx);
     assert!(cx.debug_bounds("chat-steps").is_none());
     let row = cx.debug_bounds("chat-working").unwrap();
     cx.simulate_click(row.center(), Modifiers::default());
@@ -115,10 +117,24 @@ fn the_row_opens_and_closes_the_steps_in_full(cx: &mut TestAppContext) {
     );
     let composer = cx.debug_bounds("chat-composer").unwrap();
     assert!(step.bottom() <= composer.top());
+    assert!(cx.debug_bounds("chat-steps-hidden").is_none());
     let row = cx.debug_bounds("chat-working").unwrap();
     cx.simulate_click(row.center(), Modifiers::default());
     wait_until(|| {
         poll(&view, &program, cx);
         cx.debug_bounds("chat-steps").is_none()
+    });
+}
+
+#[gpui::test]
+fn the_list_says_when_it_has_no_room_for_every_step(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let _stream = attach_with(&view, &program, running_steps(40), cx);
+    let row = cx.debug_bounds("chat-working").unwrap();
+    cx.simulate_click(row.center(), Modifiers::default());
+    wait_until(|| {
+        poll(&view, &program, cx);
+        cx.debug_bounds("chat-steps-hidden").is_some()
     });
 }

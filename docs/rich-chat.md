@@ -167,8 +167,8 @@ A step that names a file says what it does to it (`Editing server/purpose.ts`);
 any other step shows its title, usually the command. After it come how long
 that step has run and how many others run beside it, and the turn's own time
 stays at the far right, as in `Editing server/purpose.ts… · 42s +1 more 11m 10s`.
-Click the row to list every running step in full, each with its own time; click
-again to close the list. A chat from an older `sheprd-acp` has no step times.
+Click the row to list the running steps in full, each with its own time; click
+again to close the list. It keeps the newest 16 and says how many more run. A chat from an older `sheprd-acp` has no step times.
 
 ## Sub-agents and background shells
 
