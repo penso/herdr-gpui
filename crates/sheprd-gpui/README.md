@@ -3427,8 +3427,12 @@ What a chat does is the same in every layout.
 Both views stay live: a prompt or an answer from either
 shows in both, and the first answer to a permission request wins. The view
 attaches through a private local endpoint, a socket on Unix and a named pipe
-on Windows reachable by this user alone, and is never offered for SSH, WSL,
-or cloud hosts. See `crates/sheprd-acp/README.md` for the program itself.
+on Windows reachable by this user alone. A chat on a saved SSH host attaches
+through `sheprd-acp connect` run on that host over SSH, using the `sheprd-acp`
+(or an older host's `herdr-acp`) found in `~/.herdr/bin`, `~/.cargo/bin`,
+`~/.local/bin`, a Mac's installed app, or the host's `PATH`; without one its
+pane keeps the program's terminal view. The view is not offered for WSL or
+cloud hosts. See `crates/sheprd-acp/README.md` for the program itself.
 
 ## VS Code
 

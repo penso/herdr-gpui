@@ -240,3 +240,45 @@ fn the_remote_script_prefers_herdr_bin_and_falls_back_to_path() {
     assert!(script.contains("exec \"$p\" connect 0123456789abcdef0123456789abcdef"));
     assert!(script.ends_with("exit 127"));
 }
+
+/// A Mac keeps the program only inside the app, which no noninteractive SSH
+/// shell has on `PATH`, so the script must find it there by itself. Runs from
+/// `~/Applications`, which comes first, so an installed app cannot answer.
+#[cfg(unix)]
+#[test]
+fn the_remote_script_finds_the_program_inside_a_macs_app() {
+    use std::os::unix::fs::PermissionsExt;
+
+    for app in ["Herdr.app", "Sheprd.app"] {
+        let home = tempfile::tempdir().unwrap();
+        let dir = home
+            .path()
+            .join("Applications")
+            .join(app)
+            .join("Contents/MacOS");
+        std::fs::create_dir_all(&dir).unwrap();
+        let program = dir.join("sheprd-acp");
+        std::fs::write(&program, "#!/bin/sh\necho \"ran $1\"\n").unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", &remote_program_script("connect")])
+            .env("HOME", home.path())
+            .env("PATH", "/usr/bin:/bin")
+            .output()
+            .unwrap();
+
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "ran connect\n");
+        assert!(output.status.success());
+    }
+}
+
+/// A host not yet updated still has the app under its old program name.
+#[test]
+fn the_remote_script_finds_an_older_macs_program() {
+    let script = remote_program_script("connect");
+    assert!(script.contains("\"/Applications/Herdr.app/Contents/MacOS/herdr-acp\""));
+    let new = script.find("/Applications/Sheprd.app/Contents/MacOS/sheprd-acp");
+    let old = script.find("/Applications/Herdr.app/Contents/MacOS/herdr-acp");
+    assert!(new < old);
+}

@@ -92,7 +92,8 @@ if [[ $2 == x86_64-unknown-linux-gnu ]]; then
     run "$name.pkg.tar.zst" "$arch" "
         # pacman 7 drops to a seccomp-sandboxed download user, which some
         # container runtimes refuse; this throwaway container needs neither.
-        pacman -Syu --noconfirm --needed --disable-sandbox >/dev/null
+        # Like Fedora, the minimal Arch image needs diffutils for cmp.
+        pacman -Syu --noconfirm --needed --disable-sandbox diffutils >/dev/null
         pacman -U --noconfirm --disable-sandbox /dist/$name.pkg.tar.zst >/dev/null
         bash -c \"\$CHECK\"
         test \"\$(pacman -Q herdr-gpui)\" = 'herdr-gpui $1-1'
