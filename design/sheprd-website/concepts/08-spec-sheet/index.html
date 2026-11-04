@@ -207,7 +207,7 @@
         <thead><tr><th scope="col">Ref</th><th scope="col">Concern</th><th scope="col">Behaviour</th></tr></thead>
         <tbody>
           <tr><td>5.1</td><th scope="row">Updates</th><td>Ed25519-signed release manifests; separate download and install approvals; Homebrew, APT, DNF and pacman installs update through their package manager. Windows updates require signed builds.</td></tr>
-          <tr><td>5.2</td><th scope="row">Secrets</th><td>Tokens in the macOS Keychain, Linux Secret Service or Windows Credential Manager; a private <code>0600</code> file only when chosen. Tokens stay on this computer.</td></tr>
+          <tr><td>5.2</td><th scope="row">Secrets</th><td>Tokens in the macOS Keychain, Linux Secret Service or Windows Credential Manager; a private <code>0600</code> file only when chosen. Teleport can lend the GitHub CLI token to a destination that cannot reach GitHub, and its review says so first.</td></tr>
           <tr><td>5.3</td><th scope="row">Logs and crashes</th><td>Logs and crash reports stay on this computer and are never uploaded; diagnostic bundles are redacted and shared only by you.</td></tr>
           <tr><td>5.4</td><th scope="row">Automations</th><td>Run only after a person approves the exact script text, within required caps on agents, tokens per day and wall time.</td></tr>
           <tr><td>5.5</td><th scope="row">Agent CLI</th><td>Destructive or outward actions requested over the control socket open the app's own confirmation dialog. The socket is per user (Unix socket, or a named pipe restricted to your SID).</td></tr>
