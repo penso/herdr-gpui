@@ -181,13 +181,10 @@ brew install sheprd-labs/tap/sheprd
 open /Applications/Sheprd.app
 ```
 
-`brew install` resolves casks directly, so `--cask` is not required. To update it
-later, or to install by its short name, tap once first:
-
-```sh
-brew tap sheprd-labs/tap
-brew install sheprd
-```
+`brew install` resolves casks directly, so `--cask` is not required. Use the full
+name: it taps `sheprd-labs/tap` and trusts the cask for you, which Homebrew requires
+for any non-official tap. `brew install sheprd` alone needs `brew trust --cask
+sheprd-labs/tap/sheprd` first.
 
 The cask is published to the [tap](https://github.com/sheprd-labs/homebrew-tap) by
 the release workflow. Installs from the older `penso/tap` keep upgrading as
