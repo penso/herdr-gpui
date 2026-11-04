@@ -81,7 +81,8 @@ for image in "$ubuntu" "$debian"; do
         bash -c \"\$REMOVED\""
 done
 run "$name.rpm" "$fedora" "
-    dnf install -q -y --setopt=install_weak_deps=False /dist/$name.rpm >/dev/null
+    # The minimal Fedora image lacks cmp, used to verify compatibility copies.
+    dnf install -q -y --setopt=install_weak_deps=False diffutils /dist/$name.rpm >/dev/null
     bash -c \"\$CHECK\"
     test \"\$(rpm -q --qf '%{VERSION}-%{RELEASE}' herdr-gpui)\" = '$1-1'
     test \"\$(rpm -qf --qf '%{NAME}' /usr/bin/herdr-gpui)\" = herdr-gpui

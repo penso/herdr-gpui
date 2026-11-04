@@ -7,6 +7,7 @@ import SwiftUI
 /// A foldable iPhone opened flat gets it too (`RootView.wideWidth`).
 struct IPadRoot: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window: WindowState?
     @Binding var pairing: Bool
     @Binding var selection: Route?
     @State private var query = ""
@@ -20,18 +21,15 @@ struct IPadRoot: View {
     var body: some View {
         NavigationSplitView {
             AttentionList(selection: $selection, query: query)
+                .nearbyBanner()
                 .connectionToast(pairing: $pairing)
                 .searchable(text: $query, placement: .sidebar, prompt: "Chats, messages, terminals")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button("New Workspace", systemImage: "folder.badge.plus") { model.creating = .workspace(device: nil) }
-                                .keyboardShortcut("n", modifiers: .command)
-                                .disabled(model.fleet.machines.isEmpty)
-                            Button("Pair a Computer", systemImage: "laptopcomputer.and.iphone") { pairing = true }
-                        } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("New")
+                        Button("New Workspace", systemImage: "plus") { model.creating = .workspace(device: nil) }
+                            .keyboardShortcut("n", modifiers: .command)
+                            .disabled(model.fleet.machines.isEmpty)
                     }
                     ToolbarItemGroup(placement: .bottomBar) {
                         Spacer()
@@ -55,11 +53,14 @@ struct IPadRoot: View {
         .sheet(item: $showing) { panel in
             NavigationStack {
                 switch panel {
-                case .workspaces: WorkspacesTab(pairing: $pairing).withRoutes()
+                case .workspaces: WorkspacesTab().withRoutes()
                 case .settings: SettingsView()
                 }
             }
             .connectionToast(pairing: $pairing)
+            .nearbyCard(window)
+            .onAppear { window?.panelOpen = true }
+            .onDisappear { window?.panelOpen = false }
             // Pair Again from Settings or a computer's page: over this
             // sheet, as the split view's own would open behind it.
             .sheet(isPresented: $pairing) { PairView() }
