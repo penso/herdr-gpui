@@ -107,8 +107,8 @@ fn kind(item: &Item) -> &'static str {
 /// The forge's name, as the note gives it.
 fn forge(origin: &Origin) -> &'static str {
     match origin.forge {
-        Forge::GitHub => "GitHub",
-        Forge::GitLab { .. } => "GitLab",
+        Forge::GitHub => "GitHub",        // i18n: data
+        Forge::GitLab { .. } => "GitLab", // i18n: data
     }
 }
 
