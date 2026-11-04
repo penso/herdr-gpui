@@ -2,6 +2,7 @@
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
+import re
 import subprocess
 import tomllib
 import unittest
@@ -103,6 +104,23 @@ class WebsiteTests(unittest.TestCase):
                 self.assertIn(f"'/{name}'", source)
                 self.assertTrue((worker / "public" / name).is_file())
         self.assertIn("Herdr-$version", (worker / "public/install.sh").read_text())
+
+    def test_social_metadata_is_complete(self):
+        html = (WEBSITE / "index.html").read_text()
+        for tag in ('property="og:site_name"', 'property="og:image:width" content="1200"',
+                    'property="og:image:height" content="630"', 'property="og:image:alt"',
+                    'name="twitter:image"', 'name="twitter:title"', 'name="twitter:description"'):
+            with self.subTest(tag=tag):
+                self.assertIn(tag, html)
+        description = re.search(r'<meta name="description" content="([^"]*)"', html).group(1)
+        self.assertLessEqual(len(description), 160)
+
+    def test_social_image_url_is_versioned_the_same_everywhere(self):
+        html = (WEBSITE / "index.html").read_text()
+        urls = re.findall(r'(?:property="og:image"|name="twitter:image") content="([^"]*)"', html)
+        self.assertEqual(len(urls), 2)
+        self.assertEqual(urls[0], urls[1], "bump ?v= on both tags")
+        self.assertRegex(urls[0], r"\?v=\d+$")
 
 
 if __name__ == "__main__":

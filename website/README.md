@@ -22,4 +22,8 @@ and `site/tests/test_website.py` checks that. Keep `site/assets/features.js` in 
 with `design/sheprd-website/FEATURE-INVENTORY.md`, and describe availability
 honestly: status badges and platform caveats are part of the page.
 
+To update the social card, replace `site/assets/sheprd-social-preview.png` and
+raise the `?v=` number on `og:image` and `twitter:image` in `site/index.html`.
+Crawlers then treat it as a new image rather than using their cached copy.
+
 Tests: `python3 -m unittest discover -s site/tests`.
