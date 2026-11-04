@@ -9,6 +9,31 @@ The daemon is a user service that Sheprd installs when Remote control is
 turned on, and it keeps running when the app quits. It never starts, stops,
 or upgrades a Herdr daemon.
 
+## Herdr 2 terminals
+
+The daemon lists terminals from both Herdr 1 and a running herdr-core.
+It finds herdr-core with the same endpoint resolution as the desktop:
+`HC_SOCKET`, the core's configured socket, or its default session socket.
+`HC_SESSION` selects the session. Remote control only joins an existing core.
+It never starts the bundled core or runs `hc server start`.
+
+Herdr 1 workspaces and chats keep their existing behavior. Saved local
+Herdr 2 tabs in Sheprd's `browser-tabs.json` keep their workspace and split
+membership. Only tabs for the selected local Herdr 1 endpoint are used.
+Other core terminals appear in a **Herdr 2** workspace, including terminals
+created by `hc` and the desktop's shell when Herdr 1 is absent. Status comes
+from the core's terminal records. The phone reports **Herdr not running**
+only when neither source answers.
+
+A phone opens a Herdr 2 pane through the same screen and input endpoints
+as a Herdr 1 pane. The server uses `sheprd-terminal` to emulate raw core
+output and sends complete ANSI screens through the existing stream.
+Keys and pastes use the terminal's current modes, including bracketed paste.
+The pane opens at its current dimensions. Phone-specific sizing, scrolling,
+tab creation, renaming, closing, splitting, and zooming remain Herdr 1 actions.
+The daemon keeps at most 16 shared core attachments and releases each after
+30 seconds without a screen read or input request.
+
 ## Control protocol
 
 `control` is the wire between Sheprd and the daemon: one request and one

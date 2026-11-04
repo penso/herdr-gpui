@@ -19,6 +19,9 @@ impl Hub {
         cols: u16,
         rows: u16,
     ) -> Result<TerminalAttach> {
+        if super::core::owns(&json!({"pane_id": pane})) {
+            return Err(super::core::Error::Unsupported.into());
+        }
         let answer = self
             .api
             .call(ApiMethod::PaneGet, json!({ "pane_id": pane }))

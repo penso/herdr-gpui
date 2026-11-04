@@ -7,6 +7,7 @@
 mod api;
 mod attach;
 mod chat;
+mod core;
 mod daemon;
 mod layout;
 
@@ -43,6 +44,8 @@ pub enum Error {
     Busy,
     #[error("the chat program cannot be reached")]
     ChatUnavailable,
+    #[error(transparent)]
+    Core(#[from] core::Error),
     #[error("Herdr refused: {0}")]
     Daemon(String),
     #[error("Herdr is not running on this computer")]
@@ -71,14 +74,15 @@ pub(crate) struct CreatedWorkspace {
 }
 
 pub(crate) struct Hub {
-    api: api::Api,
     /// Owns the worker that projects the layout; dropping it disconnects.
     _daemon: daemon::Daemon,
-    layout: watch::Receiver<Arc<Layout>>,
-    chats: Mutex<HashMap<String, (EndpointId, Arc<Chat>)>>,
     all: broadcast::Sender<(String, Event)>,
+    api: api::Api,
     /// Where chat sockets live; `None` resolves from the environment.
     chat_dir: Option<PathBuf>,
+    chats: Mutex<HashMap<String, (EndpointId, Arc<Chat>)>>,
+    core: Option<Arc<core::Source>>,
+    layout: watch::Receiver<Arc<Layout>>,
     program: Option<PathBuf>,
 }
 
@@ -93,15 +97,20 @@ impl Hub {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));
         let api = api::Api::new(socket.clone());
         let target = socket.map_or(ConnectTarget::Local, ConnectTarget::Socket);
-        let daemon = daemon::Daemon::start(sender, target)?;
+        let (daemon_sender, daemon_layout) = watch::channel(Arc::new(Layout::default()));
+        let daemon = daemon::Daemon::start(daemon_sender, target.clone())?;
+        let (core_sender, core_layout) = watch::channel(Arc::new(Layout::default()));
+        let core = core::Source::start(core_sender, &target)?;
+        tokio::spawn(core::merge_sources(sender, daemon_layout, core_layout));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         let hub = Arc::new(Self {
-            api,
             _daemon: daemon,
-            layout,
-            chats: Mutex::new(HashMap::new()),
             all,
+            api,
             chat_dir,
+            chats: Mutex::new(HashMap::new()),
+            core: Some(core),
+            layout,
             program: locate_program(),
         });
         let follower = hub.clone();
@@ -141,16 +150,17 @@ impl Hub {
         let (sender, receiver) = watch::channel(Arc::new(layout));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         Self {
+            _daemon: daemon::Daemon::offline(sender),
+            all,
             // No socket answers there unless a test serves one, so a request
             // fails rather than reach a real Herdr.
             api: api::Api::new(Some(
                 client_socket.unwrap_or_else(|| PathBuf::from("/nonexistent/herdr-client.sock")),
             )),
-            _daemon: daemon::Daemon::offline(sender),
-            layout: receiver,
-            chats: Mutex::new(HashMap::new()),
-            all,
             chat_dir,
+            chats: Mutex::new(HashMap::new()),
+            core: None,
+            layout: receiver,
             program: None,
         }
     }
@@ -198,7 +208,6 @@ impl Hub {
             .cwd
             .clone();
         let response = self
-            .api
             .call(
                 ApiMethod::TabCreate,
                 tab_params(workspace, cwd.unwrap_or(&folder), agent, program),
@@ -231,7 +240,6 @@ impl Hub {
     ) -> Result<CreatedWorkspace> {
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         let opened = self
-            .api
             .call(
                 ApiMethod::WorkspaceCreate,
                 json!({"cwd": cwd, "focus": false}),
@@ -244,7 +252,6 @@ impl Hub {
             .to_owned();
         let Some(branch) = branch else {
             let response = self
-                .api
                 .call(
                     ApiMethod::TabCreate,
                     tab_params(&workspace, cwd, agent, program),
@@ -255,7 +262,6 @@ impl Hub {
             return Ok(CreatedWorkspace { workspace, pane });
         };
         let created = self
-            .api
             .call(
                 ApiMethod::WorktreeCreate,
                 json!({"workspace_id": workspace, "branch": branch, "focus": false}),
@@ -281,18 +287,31 @@ impl Hub {
 
     /// Types `line` and Enter into `pane`, as Sheprd starts a chat.
     async fn run_line(&self, pane: &str, line: &str) -> Result<()> {
-        self.api
-            .call(
-                ApiMethod::PaneSendInput,
-                json!({"pane_id": pane, "text": line, "keys": ["Enter"]}),
-            )
-            .await?;
+        self.call(
+            ApiMethod::PaneSendInput,
+            json!({"pane_id": pane, "text": line, "keys": ["Enter"]}),
+        )
+        .await?;
         Ok(())
     }
 
     /// Calls Herdr's public API, for the terminal views.
     pub(crate) async fn call(&self, method: ApiMethod, params: Value) -> Result<Value> {
-        self.api.call(method, params).await
+        if core::owns(&params) {
+            if !self.layout().connected {
+                return Err(Error::NotConnected);
+            }
+            let core = self.core.clone().ok_or(core::Error::Disconnected)?;
+            return tokio::task::spawn_blocking(move || core.call(method, &params))
+                .await
+                .map_err(|_| core::Error::Disconnected)?;
+        }
+        match self.api.call(method, params).await {
+            Err(Error::NotConnected) if self.core.as_ref().is_some_and(|core| core.connected()) => {
+                Err(core::Error::Unsupported.into())
+            }
+            result => result,
+        }
     }
 
     /// Starts connections for new chat panes and closes those whose pane
