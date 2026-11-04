@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   close:
-    if: github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main'
+    if: (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

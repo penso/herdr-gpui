@@ -28,9 +28,14 @@ func check(_ url: URL, pixels: Int, inset: Int) throws {
   precondition(
     minX == inset && minY == inset && maxX == pixels - inset - 1 && maxY == pixels - inset - 1,
     "Wrong tile bounds in \(url.lastPathComponent): \(minX),\(minY)–\(maxX),\(maxY)")
+  // The middle of the paw pad must remain cream even at 16px and in the
+  // worktree variant. This also rejects stale ram artwork with valid margins.
+  let paw = image.colorAt(x: pixels / 2, y: pixels * 5 / 8)!.usingColorSpace(.sRGB)!
+  precondition(paw.redComponent > 0.95 && paw.greenComponent > 0.90 && paw.blueComponent > 0.85,
+               "Missing cream paw: \(url.path)")
 }
 
-for name in ["herdr-ui-icon-clean.png", "herdr-worktree-1024.png"] {
+for name in ["sheprd-icon.png", "sheprd-worktree-1024.png"] {
   try check(assets.appendingPathComponent(name), pixels: 1024, inset: 100)
 }
 
@@ -41,7 +46,7 @@ let representations = [
   (128, 1, 12), (128, 2, 25), (256, 1, 25), (256, 2, 50),
   (512, 1, 50), (512, 2, 100),
 ]
-for name in ["Herdr", "Herdr-worktree"] {
+for name in ["Sheprd", "Sheprd-worktree"] {
   let iconset = temporary.appendingPathComponent("\(name).iconset")
   let process = Process()
   process.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
@@ -56,3 +61,36 @@ for name in ["Herdr", "Herdr-worktree"] {
   print("PASS: \(name).icns — all 10 standard/Retina representations")
 }
 print("PASS: embedded PNG dimensions and transparent margins")
+
+for target in ["SheprdRemote", "SheprdRemoteWatch"] {
+  let url = root.appendingPathComponent("ios/\(target)/Assets.xcassets/AppIcon.appiconset/AppIcon.png")
+  let image = NSBitmapImageRep(data: try Data(contentsOf: url))!
+  precondition(image.pixelsWide == 1024 && image.pixelsHigh == 1024)
+  for y in 0..<1024 {
+    for x in 0..<1024 {
+      precondition(image.colorAt(x: x, y: y)!.alphaComponent == 1, "Mobile icons must be opaque")
+    }
+  }
+}
+print("PASS: iPhone/iPad and Watch catalogs are opaque 1024px icons")
+
+for name in ["Sheprd", "Sheprd-worktree"] {
+  let process = Process()
+  let output = Pipe()
+  process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+  process.arguments = ["assetutil", "--info", assets.appendingPathComponent("\(name).car").path]
+  process.standardOutput = output
+  try process.run()
+  let data = output.fileHandleForReading.readDataToEndOfFile()
+  process.waitUntilExit()
+  precondition(process.terminationStatus == 0, "assetutil failed")
+  let entries = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+  precondition(entries.contains { $0["Name"] as? String == "Sheprd_Assets/paw" && $0["AssetType"] as? String == "Vector" },
+               "Catalog must contain the paw vector")
+  precondition(!entries.contains { ($0["Name"] as? String ?? "").contains("Herdr") }, "Stale catalog branding")
+  for appearance in ["NSAppearanceNameAqua", "NSAppearanceNameDarkAqua"] {
+    precondition(entries.contains { $0["Name"] as? String == "Sheprd" && $0["Appearance"] as? String == appearance },
+                 "Missing \(appearance) catalog variant")
+  }
+}
+print("PASS: both compiled catalogs contain Sheprd paw vectors and light/dark variants")

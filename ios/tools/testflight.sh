@@ -1,5 +1,5 @@
 #!/bin/sh
-# Archives Herdr Remote and uploads it to TestFlight with an App Store
+# Archives Sheprd and uploads it to TestFlight with an App Store
 # Connect API key: Xcode signs automatically with the key (no certificates
 # or profiles in the repository) and uploads the export itself.
 #
@@ -41,10 +41,10 @@ PLIST
 
 echo "Generating the Xcode project…"
 xcodegen -q
-echo "Archiving Herdr Remote, build $build (several minutes; xcodebuild prints only errors)…"
+echo "Archiving Sheprd, build $build (several minutes; xcodebuild prints only errors)…"
 # shellcheck disable=SC2086
-xcodebuild archive -project HerdrRemote.xcodeproj -scheme HerdrRemote \
-    -destination 'generic/platform=iOS' -archivePath "$work/HerdrRemote.xcarchive" \
+xcodebuild archive -project SheprdRemote.xcodeproj -scheme SheprdRemote \
+    -destination 'generic/platform=iOS' -archivePath "$work/SheprdRemote.xcarchive" \
     DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="$build" \
     $auth -quiet
 # The export re-signs with the distribution profile, which sets
@@ -54,7 +54,7 @@ echo "Archived. Signing for distribution and uploading to App Store Connect…"
 # first `rsync` on PATH; Homebrew's rejects the options Apple's passes
 # ("--extended-attributes: unknown option"), so the system PATH only.
 # shellcheck disable=SC2086
-PATH=/usr/bin:/bin:/usr/sbin:/sbin xcodebuild -exportArchive -archivePath "$work/HerdrRemote.xcarchive" \
+PATH=/usr/bin:/bin:/usr/sbin:/sbin xcodebuild -exportArchive -archivePath "$work/SheprdRemote.xcarchive" \
     -exportOptionsPlist "$work/ExportOptions.plist" -exportPath "$work/export" \
     $auth -quiet
 echo "Uploaded build $build. App Store Connect processes it for a few minutes before TestFlight offers it."

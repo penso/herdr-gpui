@@ -29,11 +29,11 @@ cd "$root"
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] || fail 'Release requires a clean working tree (including untracked files)'
 [[ "$(git symbolic-ref --quiet --short HEAD)" == main ]] || fail 'Check out main before releasing'
 case "$(git remote get-url origin)" in
-    git@github.com:penso/herdr-gpui.git|https://github.com/penso/herdr-gpui.git|https://github.com/penso/herdr-gpui|ssh://git@github.com/penso/herdr-gpui.git) ;;
-    *) fail 'origin must be penso/herdr-gpui on github.com' ;;
+    git@github.com:sheprd-labs/sheprd.git|https://github.com/sheprd-labs/sheprd.git|https://github.com/sheprd-labs/sheprd|ssh://git@github.com/sheprd-labs/sheprd.git) ;;
+    *) fail 'origin must be sheprd-labs/sheprd on github.com' ;;
 esac
 export GH_HOST=github.com
-repo=penso/herdr-gpui
+repo=sheprd-labs/sheprd
 [[ "$(gh api user --jq .login)" == penso ]] || fail 'Only penso may dispatch a release'
 sha=$(git rev-parse HEAD)
 [[ "$(gh api "repos/$repo/git/ref/heads/main" --jq .object.sha)" == "$sha" ]] || fail 'HEAD does not match origin main on GitHub; no fetch or checkout was performed'

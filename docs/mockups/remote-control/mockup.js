@@ -1,4 +1,4 @@
-// Picks one variant per row and hands them to the agent through Herdr UI.
+// Picks one variant per row and hands them to the agent through Sheprd.
 const picks = {};
 const label = document.getElementById("picks");
 const describe = () => Object.entries(picks).map(([k, v]) => `${k}: ${v}`).join(" · ");
@@ -25,7 +25,7 @@ document.getElementById("send").addEventListener("click", () => {
   const summary = "Remote control picks: " + (describe() || "none");
   if (window.herdr && window.herdr.send(summary, picks)) return;
   navigator.clipboard?.writeText(summary + " " + JSON.stringify(picks));
-  label.textContent = "Copied to clipboard (not in Herdr UI).";
+  label.textContent = "Copied to clipboard (not in Sheprd).";
 });
 
 document.getElementById("theme").addEventListener("click", () => {

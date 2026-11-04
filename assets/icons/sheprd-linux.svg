@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Sheprd</title>
+  <desc id="desc">Cream paw on a warm orange gradient.</desc>
+  <metadata>Derived from sheprd-avatar.svg; original Sheprd artwork, Apache-2.0.</metadata>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#f39a5a" />
+      <stop offset="1" stop-color="#d65f2a" />
+    </linearGradient>
+  </defs>
+  <circle cx="512" cy="512" r="448" fill="url(#background)" />
+  <g fill="#fff8f0" transform="translate(64 64) scale(8.96)">
+    <path d="M50 50 C60 50 70 60 72 68 C74 76 68 80 61 79 C56 78 54 76 50 76 C46 76 44 78 39 79 C32 80 26 76 28 68 C30 60 40 50 50 50Z" />
+    <ellipse cx="27" cy="45" rx="7" ry="9" transform="rotate(-25 27 45)" />
+    <ellipse cx="41" cy="31" rx="7" ry="10" transform="rotate(-8 41 31)" />
+    <ellipse cx="59" cy="31" rx="7" ry="10" transform="rotate(8 59 31)" />
+    <ellipse cx="73" cy="45" rx="7" ry="9" transform="rotate(25 73 45)" />
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 # Mods
 
-A mod adds to Herdr UI without changing its code: a status bar item, a
+A mod adds to Sheprd without changing its code: a status bar item, a
 sidebar section, a section of the panel on the window's right, palette
 commands, or an app with its own icon in the activity bar. It is a folder of sandboxed Luau that
 describes what to draw as plain tables; the app draws it in your theme.
@@ -22,9 +22,9 @@ Saving a file reloads the mod. The design and what comes next are in
 subfolders and symbolic links are never read. A mod has at most 64 such
 files, 256 KiB each and 1 MiB in all.
 
-`crates/herdr-gpui/mods/agents` (a status bar item),
-`crates/herdr-gpui/mods/workspace` (a mod panel section), and
-`crates/herdr-gpui/mods/dashboard` (an activity bar app) are complete
+`crates/sheprd-gpui/mods/agents` (a status bar item),
+`crates/sheprd-gpui/mods/workspace` (a mod panel section), and
+`crates/sheprd-gpui/mods/dashboard` (an activity bar app) are complete
 examples: copy one into the mods folder to try it.
 
 ### `mod.toml`
@@ -54,7 +54,7 @@ opencode's sidebar sits beside a session. Each mod placed there gets a
 section under its title; clicking the header folds it. A view that returns
 `nil` has no section, so a mod can show itself only when it has something to
 say. The panel shows while any mod has a section; Toggle Mod Panel in the
-palette (`toggle_mod_panel`, bindable to a key) or `herdr-gpui mod panel
+palette (`toggle_mod_panel`, bindable to a key) or `sheprd mod panel
 hide` hides it, and its left edge resizes it. Watch `focus` to describe the
 focused workspace: its `name`, `path`, and IDs to match against `agents` and
 `workspaces`.
@@ -71,7 +71,7 @@ A mod with an `[activity]` table gets an icon after the activity bar's own
 sections; picking it shows the mod's `view` across the window's body, under
 its title, as Overview or Usage show theirs. Draw the icon with
 `currentColor` (as a 24×24 stroke icon) and the bar tints it like its own.
-`herdr-gpui mod open <name>` shows it from a script. Picking another section
+`sheprd mod open <name>` shows it from a script. Picking another section
 leaves it, as does an app command the mod runs or a link it opens in a
 browser tab, so what they open shows; the mod keeps running meanwhile. Many
 app icons scroll in a short window, with Settings kept under them.
@@ -101,12 +101,12 @@ return herdr.mod({
 - `update(state, msg)` runs for each message and returns the new state.
   It may also return a list of effects as a second value:
   - `herdr.run("<command>")` runs a command from the app's catalog, as the
-    palette would (`herdr-gpui commands` lists them). Only a click or a
+    palette would (`sheprd commands` lists them). Only a click or a
     palette command may run one; from a timer it is ignored and logged.
   - `herdr.timer(seconds, msg)` sends `msg` once, after 1 to 86400 seconds.
 - `view(state, app)` returns the tree to draw, or `nil` to draw nothing. It runs when a watched topic
   changes or `update` ran, at most ten times a second.
-- `herdr.log(...)` writes a line that `herdr-gpui mod logs <name>` shows, and
+- `herdr.log(...)` writes a line that `sheprd mod logs <name>` shows, and
   `herdr.now()` gives the time in Unix seconds.
 
 A message is any plain value: nil, a boolean, a number, a string, or a table
@@ -165,20 +165,20 @@ A mod past a limit stops that call with an error and keeps running.
 ## Checking and debugging
 
 ```sh
-herdr-gpui mod check ~/.config/herdr/gpui-mods/agents   # load and draw once
-herdr-gpui mod                                          # what runs, any error
-herdr-gpui mod logs agents
-herdr-gpui mod reload agents
-herdr-gpui mod open dashboard                           # show an app
+sheprd mod check ~/.config/herdr/gpui-mods/agents   # load and draw once
+sheprd mod                                      # what runs, any error
+sheprd mod logs agents
+sheprd mod reload agents
+sheprd mod open dashboard                       # show an app
 ```
 
 A broken save keeps the last working version drawn and shows the error in
-`herdr-gpui mod`. Turn mods off with `[mods] enabled = false`, or one with
+`sheprd mod`. Turn mods off with `[mods] enabled = false`, or one with
 `[mods] disabled = ["agents"]`, in `config-gpui.toml`.
 
 ## For agents
 
-Herdr UI installs a `herdr-mods` skill beside its browser and automations
+Sheprd installs a `herdr-mods` skill beside its browser and automations
 skills (once you agree), so agents in your panes know how to write a mod,
 check it, and read its errors and logs. Its source is
 [`skills/herdr-mods/SKILL.md`](../skills/herdr-mods/SKILL.md).

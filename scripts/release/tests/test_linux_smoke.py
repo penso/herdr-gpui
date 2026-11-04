@@ -39,7 +39,7 @@ class LinuxSmokeTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 calls = [json.loads(line) for line in log.read_text().splitlines()]
-                images = [args[args.index('-e') + 2].split(":")[0] for args in calls]
+                images = [args[args.index('bash') - 1].split(":")[0] for args in calls]
                 expected = ["ubuntu", "debian", "fedora"]
                 if architecture == "x86_64":
                     expected.append("archlinux")

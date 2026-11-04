@@ -1,9 +1,9 @@
 ---
 name: release
-description: Publish a herdr-gpui release. Use when the user asks to cut, push, ship, or publish a release, or to approve or verify one that is already running. Covers `just release`, the protected environments the run stops at, and the local verification step that is not part of CI.
+description: Publish a Sheprd release. Use when the user asks to cut, push, ship, or publish a release, or to approve or verify one that is already running. Covers `just release`, the protected environments the run stops at, and the local verification step that is not part of CI.
 ---
 
-# Releasing herdr-gpui
+# Releasing Sheprd
 
 The owner has given standing authorization to approve the release run's protected
 environments when they ask for a release. Do not wait to be asked again per run.
@@ -34,9 +34,9 @@ failure is not a surprise:
 | --- | --- |
 | Working tree clean **including untracked files** | `git status --porcelain --untracked-files=all` |
 | On `main` | `git symbolic-ref --quiet --short HEAD` |
-| `origin` is `penso/herdr-gpui` | `git remote get-url origin` |
+| `origin` is `sheprd-labs/sheprd` | `git remote get-url origin` |
 | `gh` authenticated as `penso` | `gh api user --jq .login` |
-| Local HEAD == `origin/main` on GitHub | compare `git rev-parse HEAD` with `gh api repos/penso/herdr-gpui/git/ref/heads/main --jq .object.sha` |
+| Local HEAD == `origin/main` on GitHub | compare `git rev-parse HEAD` with `gh api repos/sheprd-labs/sheprd/git/ref/heads/main --jq .object.sha` |
 The release workflow runs no test suites of its own: its `ci-gate` job
 requires a successful owner-triggered push or manual CI run on main with every
 platform check and Linux optimized build completed successfully. A green run
@@ -50,7 +50,7 @@ while `ci-gate` waits. `sign` also waits for the `nix` job, which calls
 commit: its one cargo build of all five packages unifies features that CI's
 builds keep apart, so it can fail where CI passed. Rerun it the same way on a
 flake. For a documentation-only commit whose push CI skipped
-the suites, run `gh workflow run ci.yml --repo penso/herdr-gpui --ref main`
+the suites, run `gh workflow run ci.yml --repo sheprd-labs/sheprd --ref main`
 before dispatching. Apple's notary and stapler calls retry ten times in
 `sign-macos.sh`, so a dropped connection there rarely needs a rerun.
 
@@ -68,7 +68,7 @@ raw log is the fallback when `git-cliff` is not installed locally:
 just changelog-unreleased          # only the commits since the last tag
 just changelog                     # the whole generated changelog
 just changelog-release 20260920.3 out/   # exactly the two files CI publishes
-git log --oneline "$(gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name)"..HEAD
+git log --oneline "$(gh api repos/sheprd-labs/sheprd/releases/latest --jq .tag_name)"..HEAD
 ```
 
 `just changelog*` needs `git-cliff` locally (`cargo install --locked --version
@@ -91,7 +91,7 @@ just release-promote 20261010.1   # dispatch.sh --promote: promote.yml, flips it
 Same preconditions as `just release`, and the same rule: never dispatch either
 unless the owner asked for it. "Ship a beta" means `release-beta`; "promote" means
 `release-promote` with the exact beta version the owner names (list candidates with
-`gh release list --repo penso/herdr-gpui --limit 10`). Promotion rebuilds nothing:
+`gh release list --repo sheprd-labs/sheprd --limit 10`). Promotion rebuilds nothing:
 it refuses anything that is not a published prerelease newer than the latest
 stable, then its `promote` job (environment **`release`**) clears the prerelease
 flag and its `homebrew` job (environment **`homebrew`**) updates the tap. Approve
@@ -123,10 +123,10 @@ Approve a pending gate:
 
 ```sh
 run=<run-id>
-gh api repos/penso/herdr-gpui/actions/runs/$run/pending_deployments \
+gh api repos/sheprd-labs/sheprd/actions/runs/$run/pending_deployments \
   --jq '.[] | "\(.environment.name) id=\(.environment.id) can_approve=\(.current_user_can_approve)"'
 
-gh api repos/penso/herdr-gpui/actions/runs/$run/pending_deployments -X POST --input - <<'JSON'
+gh api repos/sheprd-labs/sheprd/actions/runs/$run/pending_deployments -X POST --input - <<'JSON'
 {"environment_ids":[<id>],"state":"approved","comment":"<why>"}
 JSON
 ```
@@ -148,13 +148,13 @@ server-side**. Never report a failed release on the strength of that exit code.
 Re-check the truth:
 
 ```sh
-gh run view <run-id> --repo penso/herdr-gpui --json status,conclusion,jobs
+gh run view <run-id> --repo sheprd-labs/sheprd --json status,conclusion,jobs
 ```
 
 Because the watcher owns the final summary, losing it also means nothing local
 will print the published tag. Confirm with
-`gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name`. A beta is never
-`latest`; find it with `gh release list --repo penso/herdr-gpui --limit 5`.
+`gh api repos/sheprd-labs/sheprd/releases/latest --jq .tag_name`. A beta is never
+`latest`; find it with `gh release list --repo sheprd-labs/sheprd --limit 5`.
 
 ## The release notes write themselves
 
