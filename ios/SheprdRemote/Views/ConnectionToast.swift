@@ -7,10 +7,10 @@ import UIKit
 /// usually back before anyone could read it; it slides away once live.
 ///
 /// It never stands in the way: it hides while the keyboard is up and on
-/// screens with their own input at the bottom (chats, terminals), and its
-/// close button keeps it away for those computers until each is online
-/// again (`LinkNotice`). Links retry by themselves, sooner when the network
-/// changes or the app comes back, so it offers no Retry.
+/// screens with their own input at the bottom (chats, terminals), and a
+/// tap anywhere on it keeps it away for those computers until each is
+/// online again (`LinkNotice`). Links retry by themselves, sooner when the
+/// network changes or the app comes back, so it offers no Retry.
 struct ConnectionToast: View {
     @Environment(AppModel.self) private var model
     @Environment(WindowState.self) private var window: WindowState?
@@ -93,6 +93,7 @@ struct ConnectionToast: View {
                     Text("\(Self.list(names)) unpaired this phone").font(.subheadline.weight(.medium)).lineLimit(1)
                     Text("Pair again to see its chats").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
+                Spacer(minLength: 8)
                 Button("Pair") { pairing = true }
                     .buttonStyle(.glass).controlSize(.small)
             }
@@ -102,17 +103,16 @@ struct ConnectionToast: View {
     private func capsule(close: @escaping () -> Void, @ViewBuilder content: () -> some View) -> some View {
         HStack(spacing: 10) {
             content()
-            Spacer(minLength: 8)
-            Button(action: close) {
-                Image(systemName: "xmark").font(.caption.weight(.bold)).frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel("Close")
         }
-        .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .capsule)
+        // The whole capsule closes it; a button inside, like Pair, keeps
+        // its own tap.
+        .contentShape(.capsule)
+        .onTapGesture(perform: close)
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: "Close", close)
         .padding(.horizontal, 16).padding(.bottom, 8)
     }
 
