@@ -226,7 +226,7 @@ bundle profile="release" features="":
     # notification authorization fails without a prompt. Ad-hoc sign the
     # assembled bundle so its identity is so.pen.herdr-gpui.dev. Machine tabs
     # need the entitlements: Virtualization refuses a process without its own.
-    codesign --force --sign - --entitlements assets/macos/Herdr.entitlements "$app"
+    codesign --force --sign - --entitlements assets/macos/Sheprd.entitlements "$app"
 
 # Link the actual optimized application and exercise its CLI without a desktop.
 test-build: build-release

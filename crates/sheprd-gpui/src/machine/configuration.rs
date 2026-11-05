@@ -12,13 +12,15 @@ use super::{
 use objc2::{AnyThread as _, rc::Retained};
 use objc2_foundation::{NSArray, NSData, NSString, NSURL};
 use objc2_virtualization::{
-    VZDiskImageStorageDeviceAttachment, VZMacAuxiliaryStorage, VZMacGraphicsDeviceConfiguration,
-    VZMacGraphicsDisplayConfiguration, VZMacHardwareModel, VZMacMachineIdentifier,
-    VZMacOSBootLoader, VZMacPlatformConfiguration, VZNATNetworkDeviceAttachment,
-    VZUSBKeyboardConfiguration, VZUSBScreenCoordinatePointingDeviceConfiguration,
-    VZVirtioBlockDeviceConfiguration, VZVirtioEntropyDeviceConfiguration,
-    VZVirtioNetworkDeviceConfiguration, VZVirtualMachineConfiguration,
+    VZDiskImageStorageDeviceAttachment, VZMACAddress, VZMacAuxiliaryStorage,
+    VZMacGraphicsDeviceConfiguration, VZMacGraphicsDisplayConfiguration, VZMacHardwareModel,
+    VZMacMachineIdentifier, VZMacOSBootLoader, VZMacPlatformConfiguration,
+    VZNATNetworkDeviceAttachment, VZUSBKeyboardConfiguration,
+    VZUSBScreenCoordinatePointingDeviceConfiguration, VZVirtioBlockDeviceConfiguration,
+    VZVirtioEntropyDeviceConfiguration, VZVirtioNetworkDeviceConfiguration,
+    VZVirtualMachineConfiguration,
 };
+use sha2::{Digest as _, Sha256};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -29,6 +31,19 @@ const FIT_WIDTH: u16 = 2560;
 const FIT_HEIGHT: u16 = 1600;
 /// A 2x Retina mode, so text stays sharp.
 const DISPLAY_PPI: isize = 220;
+
+/// The machine's network address, the same at each launch: left to itself the
+/// framework picks a new one, and a saved state then refuses to restore. It
+/// comes from the machine's identity, so it needs no file of its own. Marked
+/// locally administered and unicast, as an address no vendor owns must be.
+fn mac_address(identity: &[u8]) -> String {
+    let digest = Sha256::digest(identity);
+    let first = (digest[0] | 0b10) & !0b1;
+    format!(
+        "{first:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        digest[1], digest[2], digest[3], digest[4], digest[5]
+    ) // i18n: data
+}
 
 /// A machine's files: the small ones read, the large ones found.
 pub(super) struct Bundle {
@@ -110,6 +125,10 @@ impl Bundle {
             let graphics = VZMacGraphicsDeviceConfiguration::new();
             graphics.setDisplays(&NSArray::from_retained_slice(&[display]));
             let network = VZVirtioNetworkDeviceConfiguration::new();
+            let address = NSString::from_str(&mac_address(&self.identity));
+            let address = VZMACAddress::initWithString(VZMACAddress::alloc(), &address)
+                .ok_or(Error::Hardware)?;
+            network.setMACAddress(&address);
             let nat = VZNATNetworkDeviceAttachment::new();
             network.setAttachment(Some(&nat));
 
@@ -160,3 +179,6 @@ fn read(path: &Path) -> Result<Vec<u8>> {
 pub(super) fn file_url(path: &Path) -> Retained<NSURL> {
     NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()))
 }
+
+#[cfg(test)]
+mod tests;

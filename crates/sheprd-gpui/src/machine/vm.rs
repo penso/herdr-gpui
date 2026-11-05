@@ -31,6 +31,7 @@ use std::{
     collections::HashMap,
     path::PathBuf,
     ptr::NonNull,
+    rc::Rc,
 };
 
 type View = Retained<VZVirtualMachineView>;
@@ -119,6 +120,8 @@ struct Entry {
     phase: Phase,
     /// Every tab's view on it, each shown it once it runs.
     views: Vec<View>,
+    /// Its files are going, so nothing may start it.
+    deleting: bool,
 }
 
 impl Default for Entry {
@@ -126,6 +129,7 @@ impl Default for Entry {
         Self {
             phase: Phase::Stopped,
             views: Vec::new(),
+            deleting: false,
         }
     }
 }
@@ -134,6 +138,18 @@ thread_local! {
     static MACHINES: RefCell<HashMap<Name, Entry>> = RefCell::default();
     /// For the framework's callbacks, which arrive with no `App` at hand.
     static APP: OnceCell<AsyncApp> = const { OnceCell::new() };
+    /// Set as the app quits, so no machine starts that the quit does not know.
+    static CLOSED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Starts no machine from now on: the app is quitting.
+pub(super) fn close() {
+    CLOSED.set(true);
+}
+
+/// Whether machine `name` may start.
+fn startable(name: &Name) -> bool {
+    !CLOSED.get() && !with(name, |machine| machine.deleting)
 }
 
 pub(super) fn app() -> Option<AsyncApp> {
@@ -259,7 +275,7 @@ pub(crate) fn start(name: &Name, cx: &mut App) {
     let free = with(name, |machine| {
         matches!(machine.phase, Phase::Stopped | Phase::Failed(_))
     });
-    if !free {
+    if !free || !startable(name) {
         return;
     }
     APP.with(|app| {
@@ -275,6 +291,11 @@ pub(crate) fn start(name: &Name, cx: &mut App) {
     cx.spawn(async move |cx: &mut AsyncApp| {
         let bundle = read.await;
         cx.update(|cx| {
+            // A quit or a delete came while the files were read. Nothing runs
+            // yet, so the start just ends here.
+            if !startable(&name) {
+                return set_phase(&name, Phase::Stopped, cx);
+            }
             if let Err(error) = bundle.and_then(|bundle| build(&name, &bundle, cx)) {
                 fail(&name, &error, cx);
             }
@@ -333,6 +354,31 @@ fn started(name: Name, live: Live) -> impl FnOnce(Option<String>, &mut App) + 's
     }
 }
 
+/// Removes machine `name`'s saved state off the main thread, then calls `then`.
+fn discard(name: Name, cx: &mut App, then: impl FnOnce(Name, Result<()>, &mut App) + 'static) {
+    let removal = cx.background_executor().spawn({
+        let name = name.clone();
+        async move { store::discard_state(&name) }
+    });
+    cx.spawn(async move |cx: &mut AsyncApp| {
+        let removed = removal.await;
+        cx.update(|cx| then(name, removed, cx));
+    })
+    .detach();
+}
+
+/// Gives up on a machine whose saved state cannot be removed. Its guest must
+/// not run while that state remains: the next launch would resume it over a
+/// disk that moved on. Stopped here the two still match.
+fn abandon(name: Name, live: &Live, error: Error, cx: &mut App) {
+    halt(live, cx, move |refusal, cx| {
+        if let Some(message) = refusal {
+            tracing::warn!(%name, %message, "Cannot stop a machine");
+        }
+        fail(&name, &error, cx);
+    });
+}
+
 /// Resumes from `state`. The state goes before the guest runs: resumed twice,
 /// it would no longer match the disk. One that cannot be read boots afresh,
 /// as after a power cut.
@@ -341,15 +387,16 @@ fn restore(name: &Name, live: Live, state: PathBuf, cx: &mut App) {
     let url = file_url(&state);
     let name = name.clone();
     let done = once(cx.to_async(), move |error, cx| {
-        let discard = cx.background_executor().spawn({
-            let name = name.clone();
-            async move { store::discard_state(&name) }
-        });
-        cx.spawn(async move |cx: &mut AsyncApp| {
-            if let Err(error) = discard.await {
-                tracing::warn!(%error, "Cannot remove a machine's saved state");
+        // A quit or a delete came during the restore. The guest has not run,
+        // so the state still matches the disk: it stays for the next launch.
+        if !startable(&name) {
+            return force_stop(&name, &live, cx);
+        }
+        discard(name, cx, move |name, removed, cx| {
+            if let Err(removal) = removed {
+                return abandon(name, &live, removal, cx);
             }
-            cx.update(|cx| match error {
+            match error {
                 None => {
                     let machine = live.machine.clone();
                     let done = once(cx.to_async(), started(name, live));
@@ -361,9 +408,8 @@ fn restore(name: &Name, live: Live, state: PathBuf, cx: &mut App) {
                     tracing::warn!(%name, %message, "Cannot resume a machine; booting it");
                     boot(&name, live, cx);
                 }
-            });
-        })
-        .detach();
+            }
+        });
     });
     // SAFETY: on the machine's queue; the framework copies the block.
     unsafe { machine.restoreMachineStateFromURL_completionHandler(&url, &done) };
@@ -395,21 +441,21 @@ fn save(name: Name, live: Live, state: &std::path::Path, cx: &mut App) {
     let machine = live.machine.clone();
     let url = file_url(state);
     let done = once(cx.to_async(), move |error, cx| {
-        if let Some(message) = error {
-            // Half a state must not be resumed.
-            if let Err(error) = store::discard_state(&name) {
-                tracing::warn!(%error, "Cannot remove a partial machine state");
+        let Some(message) = error else {
+            return force_stop(&name, &live, cx);
+        };
+        // Half a state must not be resumed.
+        discard(name, cx, move |name, removed, cx| {
+            if let Err(removal) = removed {
+                return abandon(name, &live, removal, cx);
             }
             let machine = live.machine.clone();
-            let failed = message.clone();
             let done = once(cx.to_async(), move |_, cx| {
-                refused(&name, &live, &failed, cx);
+                refused(&name, &live, &message, cx);
             });
             // SAFETY: on the machine's queue; the framework copies the block.
             unsafe { machine.resumeWithCompletionHandler(&done) };
-            return;
-        }
-        force_stop(&name, &live, cx);
+        });
     });
     // SAFETY: on the machine's queue; the framework copies the block.
     unsafe { machine.saveMachineStateToURL_completionHandler(&url, &done) };
@@ -420,17 +466,22 @@ fn refused(name: &Name, live: &Live, message: &str, cx: &mut App) {
     set_phase(name, Phase::Running(live.clone()), cx);
 }
 
-/// Stops the machine at once, as a power cut would.
+/// Stops the machine at once, as a power cut would. `then` hears any refusal.
+fn halt(live: &Live, cx: &mut App, then: impl FnOnce(Option<String>, &mut App) + 'static) {
+    let done = once(cx.to_async(), then);
+    // SAFETY: on the machine's queue; the framework copies the block.
+    unsafe { live.machine.stopWithCompletionHandler(&done) };
+}
+
+/// Stops a machine whose state is saved.
 fn force_stop(name: &Name, live: &Live, cx: &mut App) {
     let name = name.clone();
-    let done = once(cx.to_async(), move |error, cx| {
+    halt(live, cx, move |error, cx| {
         if let Some(message) = error {
             tracing::warn!(%name, %message, "Cannot stop a machine");
         }
         set_phase(&name, Phase::Stopped, cx);
     });
-    // SAFETY: on the machine's queue; the framework copies the block.
-    unsafe { live.machine.stopWithCompletionHandler(&done) };
 }
 
 /// Asks the guest to shut down, as its power button would. It may ask its
@@ -445,33 +496,67 @@ pub(crate) fn shut_down(name: &Name) -> Result<()> {
         .map_err(|error| Error::Framework(description(&error)))
 }
 
-/// Stops machine `name` if it runs, then deletes everything it holds.
-/// `done` hears how that went.
+/// Stops machine `name` if it runs, then deletes everything it holds. Nothing
+/// starts it meanwhile. `done` hears how that went.
 pub(crate) fn delete(name: &Name, cx: &mut App, done: impl FnOnce(Result<()>, &mut App) + 'static) {
-    let live = with(name, |machine| machine.phase.live().cloned());
-    if let Some(live) = &live {
-        force_stop(name, live, cx);
-    }
+    with(name, |machine| machine.deleting = true);
     let name = name.clone();
     cx.spawn(async move |cx: &mut AsyncApp| {
-        // The disk stays open until the machine has stopped.
-        while live.is_some() && status(&name) != Status::Stopped {
-            cx.background_executor().timer(quit::POLL).await;
-        }
-        let removed = cx
-            .background_executor()
-            .spawn({
+        let removed = match stop_for_delete(&name, cx).await {
+            Ok(()) => {
                 let name = name.clone();
-                async move { store::delete(&name) }
-            })
-            .await;
+                cx.background_executor()
+                    .spawn(async move { store::delete(&name) })
+                    .await
+            }
+            Err(error) => Err(error),
+        };
         cx.update(|cx| {
-            MACHINES.with(|machines| machines.borrow_mut().remove(&name));
+            if removed.is_ok() {
+                MACHINES.with(|machines| machines.borrow_mut().remove(&name));
+            } else {
+                with(&name, |machine| machine.deleting = false);
+            }
             cx.refresh_windows();
             done(removed, cx);
         });
     })
     .detach();
+}
+
+/// Sees machine `name` stopped, as its disk stays open until then. A start or
+/// a save in progress is waited out: the framework refuses to stop a machine
+/// midway through one, and their completions would write over the phase.
+async fn stop_for_delete(name: &Name, cx: &mut AsyncApp) -> Result<()> {
+    let refusal = Rc::new(Cell::new(None));
+    loop {
+        if let Some(message) = refusal.take() {
+            return Err(Error::Framework(message));
+        }
+        let next = with(name, |machine| match &machine.phase {
+            Phase::Stopped | Phase::Failed(_) => None,
+            Phase::Running(live) => Some(Some(live.clone())),
+            Phase::Starting(_) | Phase::Saving(_) => Some(None),
+        });
+        match next {
+            None => return Ok(()),
+            Some(Some(live)) => cx.update(|cx| {
+                // Saving, so that this stop is asked for once.
+                set_phase(name, Phase::Saving(live.clone()), cx);
+                let name = name.clone();
+                let refusal = refusal.clone();
+                halt(&live.clone(), cx, move |error, cx| {
+                    let phase = match error {
+                        None => Phase::Stopped,
+                        Some(_) => Phase::Running(live),
+                    };
+                    refusal.set(error);
+                    set_phase(&name, phase, cx);
+                });
+            }),
+            Some(None) => cx.background_executor().timer(quit::POLL).await,
+        }
+    }
 }
 
 pub(super) fn description(error: &NSError) -> String {

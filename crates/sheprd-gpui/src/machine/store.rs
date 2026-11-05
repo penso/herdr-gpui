@@ -5,9 +5,10 @@ use super::{Error, Name, Result, Settings};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs,
-    io::ErrorKind,
+    io::{ErrorKind, Write as _},
     os::unix::fs::MetadataExt as _,
     path::{Path, PathBuf},
+    sync::{Mutex, PoisonError},
 };
 
 pub(super) const AUXILIARY: &str = "auxiliary.bin";
@@ -21,6 +22,10 @@ const BOOTED: &str = "booted.json";
 /// The saved state. It exists only while the machine is suspended: a state
 /// resumed once no longer matches the disk.
 const STATE: &str = "state.vzsave";
+
+/// Held across a change to a machine's settings, so that a read and the write
+/// it leads to are one step: the page and the command line both change them.
+static SETTINGS_LOCK: Mutex<()> = Mutex::new(());
 
 /// `stat` counts blocks of this size.
 const BLOCK_BYTES: u64 = 512;
@@ -95,18 +100,29 @@ fn disk_bytes(folder: &Path) -> u64 {
         .sum()
 }
 
-/// What machine `name` boots with next, or the defaults.
-pub(crate) fn settings(name: &Name) -> Result<Settings> {
-    Ok(read_json(&folder(name)?.join(SETTINGS)).unwrap_or_default())
-}
-
 /// Keeps `settings` for machine `name`'s next boot.
 pub(crate) fn save_settings(name: &Name, settings: &Settings) -> Result<()> {
-    let folder = folder(name)?;
+    update_settings(name, |_| Ok(*settings)).map(|_| ())
+}
+
+/// Keeps what `change` makes of machine `name`'s settings for its next boot,
+/// and returns it.
+pub(crate) fn update_settings(
+    name: &Name,
+    change: impl FnOnce(Settings) -> Result<Settings>,
+) -> Result<Settings> {
+    update_in(&folder(name)?, change)
+}
+
+fn update_in(folder: &Path, change: impl FnOnce(Settings) -> Result<Settings>) -> Result<Settings> {
+    let _held = SETTINGS_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     if !folder.join(DISK).is_file() {
-        return Err(Error::NotInstalled(folder));
+        return Err(Error::NotInstalled(folder.to_owned()));
     }
-    write_json(&folder.join(SETTINGS), settings)
+    let path = folder.join(SETTINGS);
+    let settings = change(read_json(&path).unwrap_or_default())?;
+    write_json(&path, &settings)?;
+    Ok(settings)
 }
 
 /// What machine `name` must boot with now: a saved state resumes only as it
@@ -157,16 +173,21 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> Option<T> {
     serde_json::from_slice(&fs::read(path).ok()?).ok()
 }
 
-/// Replaces `path` whole, so a crash leaves the old file or the new one.
+/// Replaces `path` whole, so a crash leaves the old file or the new one. The
+/// temporary file is this write's own: writers cannot meet in it.
 fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     let write_error = |source| Error::Write {
         path: path.to_owned(),
         source,
     };
     let text = serde_json::to_vec_pretty(value).map_err(|source| write_error(source.into()))?;
-    let partial = path.with_extension("tmp");
-    fs::write(&partial, text).map_err(write_error)?;
-    fs::rename(&partial, path).map_err(write_error)
+    let folder = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut partial = tempfile::NamedTempFile::new_in(folder).map_err(write_error)?;
+    partial.write_all(&text).map_err(write_error)?;
+    partial
+        .persist(path)
+        .map(|_| ())
+        .map_err(|error| write_error(error.error))
 }
 
 pub(super) fn read_error(path: &Path, source: std::io::Error) -> Error {

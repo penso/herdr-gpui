@@ -41,6 +41,11 @@ pub(in crate::settings_window) struct MachinesPage {
     deleting: Option<Name>,
     /// What went wrong last, for the user.
     failure: Option<String>,
+    /// The latest choice of each machine still to reach its folder. One write
+    /// runs at a time, so an older click cannot land after a newer one.
+    pending: HashMap<Name, Settings>,
+    /// Whether a write of `pending` runs.
+    saving: bool,
     /// What each machine was doing when last drawn: a change moves its disk
     /// use, so the folders are read again.
     seen: HashMap<Name, Status>,
@@ -97,19 +102,36 @@ impl SettingsWindow {
         {
             listing.settings = settings;
         }
-        let name = name.clone();
+        self.machines.pending.insert(name.clone(), settings);
+        self.save_machine_settings(cx);
+        cx.notify();
+    }
+
+    /// Writes the next pending choice, and those that follow it.
+    fn save_machine_settings(&mut self, cx: &mut Context<Self>) {
+        if self.machines.saving {
+            return;
+        }
+        let Some(name) = self.machines.pending.keys().next().cloned() else {
+            return;
+        };
+        let Some(settings) = self.machines.pending.remove(&name) else {
+            return;
+        };
+        self.machines.saving = true;
         let write = cx
             .background_executor()
             .spawn(async move { machine::save_settings(&name, &settings) });
         cx.spawn(async move |this, cx| {
             let written = write.await;
             let _ = this.update(cx, |this, cx| {
+                this.machines.saving = false;
                 this.machines.failure = written.err().map(|error| error.localize());
+                this.save_machine_settings(cx);
                 cx.notify();
             });
         })
         .detach();
-        cx.notify();
     }
 
     fn forget_machine_state(&mut self, name: &Name, cx: &mut Context<Self>) {

@@ -120,8 +120,7 @@ pub(super) fn set(name: String, changes: Changes, incoming: socket::Incoming, cx
         return;
     };
     let write = cx.background_executor().spawn(async move {
-        let settings = changed(machine::settings(&name)?, changes)?;
-        machine::save_settings(&name, &settings)?;
+        machine::update_settings(&name, |settings| changed(settings, changes))?;
         Ok::<_, machine::Error>(name)
     });
     cx.spawn(async move |_: &mut gpui::AsyncApp| {

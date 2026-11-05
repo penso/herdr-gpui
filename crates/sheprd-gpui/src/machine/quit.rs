@@ -33,6 +33,7 @@ use objc2_app_kit::{NSApplication, NSApplicationTerminateReply};
 use objc2_foundation::NSAppleEventManager;
 use std::{
     cell::Cell,
+    collections::HashSet,
     time::{Duration, Instant},
 };
 
@@ -101,11 +102,7 @@ extern "C-unwind" fn should_terminate(
         Way::Again
     };
     if !WAITING.replace(true) {
-        app.update(|cx| {
-            for name in &running {
-                vm::suspend(name, cx);
-            }
-        });
+        vm::close();
         wait(app, running, way);
     }
     match way {
@@ -123,14 +120,49 @@ enum Way {
     Again,
 }
 
-/// Lets the app go once no machine of `names` is still saving. One whose save
-/// failed or outlasted [`LIMIT`] loses its state rather than the user's quit.
+/// What the quit does about a machine it holds for, given whether it asked
+/// it to save already.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    Done,
+    Suspend,
+    Wait,
+}
+
+fn step(status: &Status, asked: bool) -> Step {
+    match status {
+        // A machine on its way up cannot save yet, and one resuming has
+        // already given up its old state, so it is waited for.
+        Status::Starting | Status::Saving => Step::Wait,
+        Status::Running if !asked => Step::Suspend,
+        Status::Running | Status::Stopped | Status::Failed(_) => Step::Done,
+    }
+}
+
+/// Saves each machine of `names`, which [`vm::close`] keeps from growing, and
+/// lets the app go once none is left to save. One whose save failed or
+/// outlasted [`LIMIT`] loses its state rather than the user's quit.
 fn wait(app: AsyncApp, names: Vec<super::Name>, way: Way) {
     let waiter = app.clone();
     app.spawn(async move |_: &mut AsyncApp| {
         let start = Instant::now();
-        while start.elapsed() < LIMIT && names.iter().any(|name| vm::status(name) == Status::Saving)
-        {
+        let mut asked = HashSet::new();
+        while start.elapsed() < LIMIT {
+            let mut held = false;
+            for name in &names {
+                match step(&vm::status(name), asked.contains(name)) {
+                    Step::Done => {}
+                    Step::Suspend => {
+                        asked.insert(name.clone());
+                        waiter.update(|cx| vm::suspend(name, cx));
+                        held = true;
+                    }
+                    Step::Wait => held = true,
+                }
+            }
+            if !held {
+                break;
+            }
             waiter.background_executor().timer(POLL).await;
         }
         WAITING.set(false);
@@ -146,3 +178,6 @@ fn wait(app: AsyncApp, names: Vec<super::Name>, way: Way) {
     })
     .detach();
 }
+
+#[cfg(test)]
+mod tests;

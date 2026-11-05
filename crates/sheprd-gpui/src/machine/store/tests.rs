@@ -116,3 +116,65 @@ fn deleting_does_not_follow_a_link_out_of_the_folder() {
     delete_folder(&doomed).unwrap();
     assert!(precious.exists());
 }
+
+#[test]
+fn updating_settings_starts_from_what_the_folder_holds() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = installed(root.path(), "work");
+    update_in(&folder, |settings| {
+        Ok(Settings {
+            cpus: 6,
+            ..settings
+        })
+    })
+    .unwrap();
+    let settings = update_in(&folder, |settings| {
+        Ok(Settings {
+            memory_gib: 12,
+            ..settings
+        })
+    })
+    .unwrap();
+    assert_eq!((settings.cpus, settings.memory_gib), (6, 12));
+}
+
+#[test]
+fn a_refused_update_changes_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = installed(root.path(), "work");
+    update_in(&folder, |_| Err(Error::InvalidDisplay)).unwrap_err();
+    assert!(!folder.join(SETTINGS).exists());
+}
+
+#[test]
+fn updating_a_machine_that_is_not_installed_is_refused() {
+    let root = tempfile::tempdir().unwrap();
+    let error = update_in(&root.path().join("none"), Ok).unwrap_err();
+    assert!(matches!(error, Error::NotInstalled(_)));
+}
+
+#[test]
+fn writers_at_once_leave_a_whole_file_and_nothing_else() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = installed(root.path(), "work");
+    let path = folder.join(SETTINGS);
+    std::thread::scope(|scope| {
+        for cpus in 2..10 {
+            let path = &path;
+            scope.spawn(move || {
+                let settings = Settings {
+                    cpus,
+                    ..Settings::default()
+                };
+                write_json(path, &settings).unwrap();
+            });
+        }
+    });
+    assert!(read_json::<Settings>(&path).is_some());
+    let left: Vec<_> = fs::read_dir(&folder)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name())
+        .collect();
+    assert_eq!(left.len(), 2, "{left:?}");
+}

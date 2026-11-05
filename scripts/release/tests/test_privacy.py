@@ -38,6 +38,10 @@ ENTITLED = {
     ],
 }
 
+# Entitlements that grant a capability, not a privacy resource: no usage
+# description goes with them. Virtual Macs need this one to run at all.
+CAPABILITIES = ["com.apple.security.virtualization"]
+
 # Resources that need only a usage description, with no entitlement. Some
 # prompt without one, such as the Desktop folder, but their prompt then cannot
 # say why; every macOS usage key is declared so none depends on that.
@@ -82,7 +86,7 @@ class PrivacyTests(unittest.TestCase):
 
     def test_release_entitlements_grant_every_resource(self):
         entitlements = load("Sheprd.entitlements")
-        self.assertEqual(entitlements, dict.fromkeys(ENTITLED, True))
+        self.assertEqual(entitlements, dict.fromkeys([*ENTITLED, *CAPABILITIES], True))
 
 
 if __name__ == "__main__":
