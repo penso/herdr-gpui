@@ -67,19 +67,6 @@ pub fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// The first line of Sheprd's managed `herdr/config-gpui.toml`, which it
-/// rewrites at every launch and never reads. A file without it is a
-/// personal config from before `config-gpui.local.toml`, which Sheprd moves
-/// into that file. `herdr-remote-control enroll` edits the same files.
-pub const SETTINGS_MANAGED_HEADER: &str = "# DO NOT EDIT -- WILL BE OVERWRITTEN";
-
-/// What Sheprd's first launch writes to `herdr/config-gpui.local.toml`.
-/// Existing overrides and moved personal configs are never rewritten, so
-/// settings placed here reach new installs without changing what current
-/// users see.
-// i18n: data
-pub const SETTINGS_OVERRIDES_SEED: &str = "# Sheprd overrides. Saved changes reload automatically.\n# Unset keys inherit config-gpui.toml; tables merge key by key.\n\n# New installs start with the roomy rounded sidebar. Remove this line for\n# the managed default, or pick another layout listed in config-gpui.toml.\nlayout = \"comfortable-rounded\"\n";
-
 /// Sheprd's own state directory, shared by its preferences, logs, and
 /// saved devices.
 pub fn state_dir() -> Option<PathBuf> {

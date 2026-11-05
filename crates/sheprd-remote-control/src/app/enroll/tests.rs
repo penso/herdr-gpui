@@ -1,6 +1,10 @@
 use super::*;
 use crate::control::DeviceId;
-use sheprd_client::local_path::{SETTINGS_MANAGED_HEADER, SETTINGS_OVERRIDES_SEED};
+use sheprd_client::settings_files::{MANAGED_HEADER, OVERRIDES_SEED};
+
+fn enable(path: &Path) -> crate::app::Result<RemoteConfig> {
+    enable_settings_at(path, Duration::ZERO)
+}
 
 fn apns() -> Apns {
     Apns {
@@ -64,7 +68,7 @@ fn apns_files_are_written_privately_once() {
 fn a_host_without_sheprd_settings_turns_them_on_for_a_later_install() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("herdr/config-gpui.toml");
-    let config = enable_settings_at(&path).unwrap();
+    let config = enable(&path).unwrap();
     assert!(config.enabled);
     assert_eq!(config.port, crate::app::config::DEFAULT_PORT);
     // Sheprd installed here later reads its overrides, finds remote control
@@ -73,7 +77,7 @@ fn a_host_without_sheprd_settings_turns_them_on_for_a_later_install() {
     let local = dir.path().join("herdr/config-gpui.local.toml");
     assert_eq!(
         fs::read_to_string(&local).unwrap(),
-        format!("{SETTINGS_OVERRIDES_SEED}\n[remote]\nenabled = true\n")
+        format!("{OVERRIDES_SEED}\n[remote]\nenabled = true\n")
     );
     assert!(!path.exists());
     #[cfg(unix)]
@@ -88,12 +92,12 @@ fn a_host_without_sheprd_settings_turns_them_on_for_a_later_install() {
 fn a_managed_file_without_overrides_is_left_and_the_overrides_seeded() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config-gpui.toml");
-    let managed = format!("{SETTINGS_MANAGED_HEADER}\n# [remote]\n# enabled = false\n");
+    let managed = format!("{MANAGED_HEADER}\n# [remote]\n# enabled = false\n");
     fs::write(&path, &managed).unwrap();
-    assert!(enable_settings_at(&path).unwrap().enabled);
+    assert!(enable(&path).unwrap().enabled);
     assert_eq!(
         fs::read_to_string(dir.path().join("config-gpui.local.toml")).unwrap(),
-        format!("{SETTINGS_OVERRIDES_SEED}\n[remote]\nenabled = true\n")
+        format!("{OVERRIDES_SEED}\n[remote]\nenabled = true\n")
     );
     assert_eq!(fs::read_to_string(&path).unwrap(), managed);
 }
@@ -102,11 +106,11 @@ fn a_managed_file_without_overrides_is_left_and_the_overrides_seeded() {
 fn current_sheprd_overrides_are_turned_on_not_its_managed_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config-gpui.toml");
-    let managed = format!("{SETTINGS_MANAGED_HEADER}\n# [remote]\n# enabled = false\n");
+    let managed = format!("{MANAGED_HEADER}\n# [remote]\n# enabled = false\n");
     fs::write(&path, &managed).unwrap();
     let local = dir.path().join("config-gpui.local.toml");
     fs::write(&local, "# mine\nlayout = \"compact\"\n").unwrap();
-    assert!(enable_settings_at(&path).unwrap().enabled);
+    assert!(enable(&path).unwrap().enabled);
     assert_eq!(
         fs::read_to_string(&local).unwrap(),
         "# mine\nlayout = \"compact\"\n\n[remote]\nenabled = true\n"
@@ -124,7 +128,7 @@ fn herdr_ui_settings_on_the_host_are_turned_on_and_kept() {
         "# mine\ntheme = \"dark\"\n\n[remote]\nenabled = false\nport = 8443\n",
     )
     .unwrap();
-    let config = enable_settings_at(&path).unwrap();
+    let config = enable(&path).unwrap();
     assert!(config.enabled);
     assert_eq!(config.port, 8443);
     let text = fs::read_to_string(&path).unwrap();
@@ -136,7 +140,7 @@ fn herdr_ui_settings_on_the_host_are_turned_on_and_kept() {
     assert!(!dir.path().join("config-gpui.local.toml").exists());
     // Already on: the file is left as it is.
     fs::write(&path, "[remote]\nenabled = true # on\n").unwrap();
-    assert!(enable_settings_at(&path).unwrap().enabled);
+    assert!(enable(&path).unwrap().enabled);
     assert_eq!(
         fs::read_to_string(&path).unwrap(),
         "[remote]\nenabled = true # on\n"
@@ -153,7 +157,7 @@ fn a_move_sheprd_began_still_finishes() {
     let personal = "theme = \"dark\"\n";
     fs::write(&path, personal).unwrap();
     fs::write(&local, personal).unwrap();
-    assert!(enable_settings_at(&path).unwrap().enabled);
+    assert!(enable(&path).unwrap().enabled);
     // The copy is dropped, so Sheprd moves the changed file again.
     assert!(!local.exists());
     assert_eq!(
@@ -169,7 +173,7 @@ fn a_conflicting_personal_file_and_overrides_are_both_turned_on() {
     let local = dir.path().join("config-gpui.local.toml");
     fs::write(&path, "theme = \"dark\"\n").unwrap();
     fs::write(&local, "theme = \"light\"\n").unwrap();
-    assert!(enable_settings_at(&path).unwrap().enabled);
+    assert!(enable(&path).unwrap().enabled);
     assert_eq!(
         fs::read_to_string(&path).unwrap(),
         "theme = \"dark\"\n\n[remote]\nenabled = true\n"
@@ -181,36 +185,12 @@ fn a_conflicting_personal_file_and_overrides_are_both_turned_on() {
 }
 
 #[test]
-fn settings_wait_for_sheprd_to_finish_its_own_save() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("config-gpui.toml");
-    let local = dir.path().join("config-gpui.local.toml");
-    // Sheprd holds its lock while it saves or moves its settings.
-    let lock = fs::File::create(dir.path().join("config-gpui.lock")).unwrap();
-    lock.lock().unwrap();
-    let enroll = thread::spawn({
-        let path = path.clone();
-        move || enable_settings_at(&path).map(|config| config.enabled)
-    });
-    thread::sleep(Duration::from_millis(200));
-    assert!(!local.exists());
-    fs::write(&local, "theme = \"dark\"\n").unwrap();
-    drop(lock);
-    assert!(enroll.join().unwrap().unwrap());
-    // The save Sheprd finished is kept and turned on.
-    assert_eq!(
-        fs::read_to_string(&local).unwrap(),
-        "theme = \"dark\"\n\n[remote]\nenabled = true\n"
-    );
-}
-
-#[test]
 fn broken_settings_are_reported_not_overwritten() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config-gpui.toml");
     fs::write(&path, "[remote\n").unwrap();
     assert!(matches!(
-        enable_settings_at(&path),
+        enable(&path),
         Err(super::super::Error::Enroll(Error::Config { .. }))
     ));
     assert_eq!(fs::read_to_string(&path).unwrap(), "[remote\n");
@@ -219,9 +199,11 @@ fn broken_settings_are_reported_not_overwritten() {
     fs::write(&path, "theme = \"dark\"\n").unwrap();
     fs::write(&local, "[remote\n").unwrap();
     assert!(matches!(
-        enable_settings_at(&path),
+        enable(&path),
         Err(super::super::Error::Enroll(Error::Config { .. }))
     ));
     assert_eq!(fs::read_to_string(&local).unwrap(), "[remote\n");
     assert_eq!(fs::read_to_string(&path).unwrap(), "theme = \"dark\"\n");
 }
+
+mod settings_order;

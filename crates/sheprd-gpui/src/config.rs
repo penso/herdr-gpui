@@ -145,10 +145,9 @@ pub use updates::{UpdateChannel, UpdatesConfig};
 pub use zen::{Zen, ZenWidth};
 
 const DEFAULT_CONFIG: &str = include_str!("../config-gpui.example.toml");
-// Compare the first line so Windows checkouts and editors can use CRLF.
-const MANAGED_HEADER: &str = sheprd_client::local_path::SETTINGS_MANAGED_HEADER;
+const MANAGED_HEADER: &str = sheprd_client::settings_files::MANAGED_HEADER;
 /// Seeds the overrides file on first launch only.
-const LOCAL_CONFIG: &str = sheprd_client::local_path::SETTINGS_OVERRIDES_SEED;
+const LOCAL_CONFIG: &str = sheprd_client::settings_files::OVERRIDES_SEED;
 
 /// Shared logical-pixel radii for native-style chrome, independent of the
 /// terminal grid. Small badges/keycaps retain a tighter curve than controls.

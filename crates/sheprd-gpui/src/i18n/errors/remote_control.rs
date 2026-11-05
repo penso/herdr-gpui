@@ -81,6 +81,10 @@ impl Localize for enroll::Error {
             Self::NoHome => fl!("error-remote-control-enroll-no-home"),
             Self::NotStarted(_) => fl!("error-remote-control-enroll-not-started"),
             Self::Outdated => fl!("error-remote-control-enroll-outdated"),
+            Self::SettingsLocked { path } => fl!(
+                "error-remote-control-enroll-settings-locked",
+                path = path.display().to_string()
+            ),
             Self::Unexpected => fl!("error-remote-control-enroll-unexpected"),
             // keep-sorted end
         }
