@@ -355,17 +355,15 @@ struct TerminalScreen: View {
     /// The color a row's last run paints, which a full-screen program
     /// fills the rest of the line with.
     static func rowBackground(_ row: [TermScreen.Run]) -> Color? {
-        guard let last = row.last else { return nil }
-        return last.inverse ? (color(last.fg) ?? Color(white: 0.86)) : color(last.bg)
+        TermScreen.fill(row).flatMap(color)
     }
 
     /// The screen's own background: the one most rows end in, so a light
     /// themed program is not framed in dark.
     static func paper(_ screen: TermScreen) -> Color {
         var counts: [String: Int] = [:]
-        for row in screen.rows {
-            guard let last = row.last else { continue }
-            counts[(last.inverse ? last.fg : last.bg) ?? "", default: 0] += 1
+        for row in screen.rows where !row.isEmpty {
+            counts[TermScreen.fill(row) ?? "", default: 0] += 1
         }
         guard let (name, _) = counts.max(by: { $0.value < $1.value }), !name.isEmpty else { return background }
         return color(name) ?? background
