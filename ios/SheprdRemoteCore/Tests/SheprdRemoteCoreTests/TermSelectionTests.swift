@@ -50,6 +50,14 @@ import Testing
         #expect(screen.text(screen.everything) == "one\ntwo words")
     }
 
+    @Test func selectAllEndsAtTheLastRowsText() throws {
+        // A wider row above: the end stays on the last row's own cells,
+        // where its highlight stops, as a text view's end handle does.
+        let screen = try screen(["a wider first row", "❯ 好"])
+        #expect(screen.everything == TermSelection(anchor: at(0, 0), head: at(1, 3)))
+        #expect(screen.text(screen.everything) == "a wider first row\n❯ 好")
+    }
+
     @Test func hiddenTextIsCopiedBlank() throws {
         let screen = try JSONDecoder().decode(TermScreen.self, from: Data(#"""
             {"pane":"p","columns":20,"rows":[[{"text":"pw: "},{"text":"secret","hidden":true},{"text":" ok"}]]}

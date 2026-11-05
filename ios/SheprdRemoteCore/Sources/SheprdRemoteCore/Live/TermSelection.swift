@@ -118,10 +118,11 @@ extension TermScreen {
         return selection.columns(in: position.row, last: last)?.contains(position.column) == true
     }
 
-    /// Every cell on the screen.
+    /// Every cell on the screen, ending at the last row's last cell, where
+    /// its highlight stops.
     public var everything: TermSelection {
-        let widest = rows.map { Self.laidOut($0).reduce(0) { $0 + $1.cells } }.max() ?? 0
-        return TermSelection(anchor: .init(row: 0, column: 0), head: .init(row: max(rows.count - 1, 0), column: max(widest - 1, 0)))
+        let last = rows.last.map { Self.laidOut($0).reduce(0) { $0 + $1.cells } } ?? 0
+        return TermSelection(anchor: .init(row: 0, column: 0), head: .init(row: max(rows.count - 1, 0), column: max(last - 1, 0)))
     }
 
     /// The selected text: a line per row, each without the blanks that
