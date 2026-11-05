@@ -11,6 +11,9 @@ use std::{path::Path, time::SystemTime};
 
 #[derive(Default)]
 pub(super) struct Poller {
+    /// The core `doc` came from: versions count per core, so a wiped core
+    /// can reach the old number with another document.
+    boot: String,
     /// The document's version and its spaces, `None` when it has none.
     doc: Option<(u64, Option<spaces::Spaces>)>,
     names: spaces::Names,
@@ -21,8 +24,17 @@ impl Poller {
     /// Takes the answer to reading the desktop's document. Only a core
     /// that says there is none clears the spaces: a slow answer says
     /// nothing about the document, and dropping them would make every
-    /// space vanish from phones until the next poll.
-    pub(super) fn read_spaces(&mut self, answer: sheprd_core_client::Result<Doc>) -> Result<()> {
+    /// space vanish from phones until the next poll. Another core's spaces
+    /// are never kept: their addresses mean nothing here.
+    pub(super) fn read_spaces(
+        &mut self,
+        boot: &str,
+        answer: sheprd_core_client::Result<Doc>,
+    ) -> Result<()> {
+        if self.boot != boot {
+            boot.clone_into(&mut self.boot);
+            self.doc = None;
+        }
         match answer {
             Ok(doc) => {
                 if self.doc.as_ref().is_none_or(|(at, _)| *at != doc.version) {

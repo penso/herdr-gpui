@@ -7,10 +7,14 @@
 //! the endpoint is chosen here and kept as a label.
 
 use super::{Error, Result, Source, lock, pane_id};
+use crate::hub::Layout;
 use serde_json::{Value, json};
 use sheprd_chat_protocol::{Agent, ENDPOINT_ENV, EndpointId, TOKEN};
 use sheprd_core_client::wire::Run;
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 /// The variable naming the Herdr pane `sheprd-acp` reports to. A core
 /// started from a Herdr pane passes that pane on; a chat must not report
@@ -56,17 +60,22 @@ impl Source {
         Ok(pane)
     }
 
-    /// Ends the one terminal `target` names. A tab of several panes has an
-    /// id of its own and is refused, so nothing closes in bulk.
+    /// Ends the one terminal `target` names: a pane, or a tab holding only
+    /// that pane. A tab of several is refused, so nothing closes in bulk.
     pub(super) fn close(&self, target: &str) -> Result<Value> {
         let (core, address) = {
             let state = lock(&self.state);
             let core = state.core.clone().ok_or(Error::Disconnected)?;
+            let pane = match state.tabs.get(target).map(Vec::as_slice) {
+                Some([pane]) => pane.as_str(),
+                Some(_) => return Err(Error::Unsupported.into()),
+                None => target,
+            };
             let address = state
                 .terminals
                 .iter()
                 .map(|terminal| terminal.address.clone())
-                .find(|address| pane_id(&core.hello().core.id, address) == target)
+                .find(|address| pane_id(&core.hello().core.id, address) == pane)
                 .ok_or(Error::Unsupported)?;
             (core, address)
         };
@@ -78,4 +87,21 @@ impl Source {
             .retain(|terminal| terminal.address != address);
         Ok(json!({}))
     }
+}
+
+/// The panes of each tab in `layout`. A chat is listed apart from its tab's
+/// terminals, so a tab of a chat and a shell still counts as two.
+pub(super) fn tab_panes(layout: &Layout) -> HashMap<String, Vec<String>> {
+    let mut tabs: HashMap<String, Vec<String>> = HashMap::new();
+    for workspace in &layout.workspaces {
+        for terminal in &workspace.terminals {
+            let panes = terminal.panes.iter().map(|pane| pane.pane.clone());
+            tabs.entry(terminal.tab.clone()).or_default().extend(panes);
+        }
+        for chat in &workspace.chats {
+            let panes = tabs.entry(chat.tab.clone()).or_default();
+            panes.push(chat.pane.clone());
+        }
+    }
+    tabs
 }

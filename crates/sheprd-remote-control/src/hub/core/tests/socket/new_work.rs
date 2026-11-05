@@ -180,3 +180,45 @@ fn closing_ends_one_named_terminal_and_refuses_a_tab_of_several() {
     drop(source);
     fake.server.join().unwrap();
 }
+
+fn tab_of(root: Value) -> Value {
+    json!({"spaces": [{"id": "sp", "name": "desk", "folder": "/project",
+        "tabs": [{"id": "tab", "name": "", "root": root}]}]})
+}
+
+fn block(address: &str) -> Value {
+    json!({"type": "block", "content": {"terminal": address}})
+}
+
+#[test]
+fn closing_a_tab_of_one_pane_ends_that_terminal() {
+    let (source, fake) = fake_with_doc(false, tab_of(block("t1")), vec![record("t1")]);
+    let layout = source.poll().unwrap();
+    let tab = layout.terminal(&id("t1")).unwrap().1.tab.clone();
+    source
+        .call(ApiMethod::TabClose, &json!({"tab_id": tab}))
+        .unwrap();
+    assert_eq!(request(&fake)["params"]["terminal"], "t1");
+    drop(source);
+    fake.server.join().unwrap();
+}
+
+#[test]
+fn closing_a_tab_of_a_shell_and_a_chat_ends_neither() {
+    let endpoint = EndpointId::random();
+    let root = json!({"type": "row", "children": [block("t1"), block("t9")]});
+    let records = vec![record("t1"), chat_record("t9", &endpoint)];
+    let (source, fake) = fake_with_doc(false, tab_of(root), records);
+    let layout = source.poll().unwrap();
+    let tab = layout.terminal(&id("t1")).unwrap().1.tab.clone();
+    assert_eq!(layout.chat(&id("t9")).unwrap().1.tab, tab);
+    assert!(matches!(
+        source
+            .call(ApiMethod::TabClose, &json!({"tab_id": tab}))
+            .unwrap_err(),
+        HubError::Core(Error::Unsupported)
+    ));
+    assert!(fake.inputs.try_recv().is_err());
+    drop(source);
+    fake.server.join().unwrap();
+}

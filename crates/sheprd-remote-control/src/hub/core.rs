@@ -64,6 +64,8 @@ pub(super) struct Source {
 struct State {
     core: Option<Arc<Core>>,
     screens: HashMap<String, Arc<Mutex<screen::Screen>>>,
+    /// The panes of each listed tab, chats included, as the last poll saw.
+    tabs: HashMap<String, Vec<String>>,
     terminals: Vec<Terminal>,
 }
 
@@ -122,7 +124,7 @@ impl Source {
         let boot = core.hello().core.id.clone();
         let next = {
             let mut poller = lock(&self.poller);
-            poller.read_spaces(core.doc_get("herdr-app"))?;
+            poller.read_spaces(&boot, core.doc_get("herdr-app"))?;
             let mut next = poller.project(
                 &boot,
                 &terminals,
@@ -132,6 +134,7 @@ impl Source {
             chats::lift(&mut next, &boot, &terminals);
             next
         };
+        let tabs = create::tab_panes(&next);
         let mut state = lock(&self.state);
         // A screen in use is not idle, so it can wait for the next poll.
         state.screens.retain(|address, screen| {
@@ -140,6 +143,7 @@ impl Source {
                     .iter()
                     .any(|terminal| &terminal.address == address)
         });
+        state.tabs = tabs;
         state.terminals = terminals;
         drop(state);
         self.connected.store(true, Ordering::Release);

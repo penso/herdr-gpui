@@ -22,25 +22,28 @@ fn labels(poller: &mut Poller) -> Vec<String> {
 #[test]
 fn a_slow_answer_keeps_the_spaces_and_only_a_refusal_clears_them() {
     let mut poller = Poller::default();
-    poller.read_spaces(doc(1, "desk")).unwrap();
+    poller.read_spaces("fake-core", doc(1, "desk")).unwrap();
     assert_eq!(labels(&mut poller), ["desk"]);
     for error in [CoreError::Timeout(Method::DocGet), CoreError::Busy] {
-        poller.read_spaces(Err(error)).unwrap();
+        poller.read_spaces("fake-core", Err(error)).unwrap();
         assert_eq!(labels(&mut poller), ["desk"]);
     }
     poller
-        .read_spaces(Err(CoreError::Refused {
-            kind: None,
-            message: "no".into(),
-            method: Method::DocGet,
-        }))
+        .read_spaces(
+            "fake-core",
+            Err(CoreError::Refused {
+                kind: None,
+                message: "no".into(),
+                method: Method::DocGet,
+            }),
+        )
         .unwrap();
     assert!(labels(&mut poller).is_empty());
 }
 
 #[test]
 fn a_lost_connection_is_not_mistaken_for_a_slow_answer() {
-    let error = Poller::default().read_spaces(Err(CoreError::Lost));
+    let error = Poller::default().read_spaces("fake-core", Err(CoreError::Lost));
     assert!(matches!(
         error,
         Err(HubError::Core(Error::Client(CoreError::Lost)))
@@ -50,11 +53,25 @@ fn a_lost_connection_is_not_mistaken_for_a_slow_answer() {
 #[test]
 fn the_document_is_parsed_again_only_when_its_version_changes() {
     let mut poller = Poller::default();
-    poller.read_spaces(doc(1, "first")).unwrap();
-    poller.read_spaces(doc(1, "same version")).unwrap();
+    poller.read_spaces("fake-core", doc(1, "first")).unwrap();
+    poller
+        .read_spaces("fake-core", doc(1, "same version"))
+        .unwrap();
     assert_eq!(labels(&mut poller), ["first"]);
-    poller.read_spaces(doc(2, "second")).unwrap();
+    poller.read_spaces("fake-core", doc(2, "second")).unwrap();
     assert_eq!(labels(&mut poller), ["second"]);
+}
+
+#[test]
+fn a_replaced_core_never_shows_the_last_cores_spaces() {
+    let mut poller = Poller::default();
+    poller.read_spaces("old", doc(1, "old")).unwrap();
+    poller.read_spaces("new", doc(1, "new")).unwrap();
+    assert_eq!(labels(&mut poller), ["new"]);
+    poller
+        .read_spaces("other", Err(CoreError::Timeout(Method::DocGet)))
+        .unwrap();
+    assert!(labels(&mut poller).is_empty());
 }
 
 fn write_tab(path: &std::path::Path, workspace: &str, at: SystemTime) {
