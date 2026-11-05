@@ -41,7 +41,8 @@ struct TermSelecting: ViewModifier {
                 }
             }
             .background {
-                TermMenu(at: selection == nil ? nil : menuAt, shows: menuShows) {
+                TermMenu(at: selection == nil ? nil : menuAt, shows: menuShows,
+                         clear: selection.map { TermHandles($0, cell: cell).bounds } ?? .null) {
                     if let selection { UIPasteboard.general.string = screen.text(selection) }
                     selection = nil
                 } selectAll: {
@@ -157,6 +158,8 @@ struct TermMenu: UIViewRepresentable {
     /// shows it again.
     let at: CGPoint?
     let shows: Int
+    /// What it keeps clear of: the selection and its handles.
+    let clear: CGRect
     let copy: () -> Void
     let selectAll: () -> Void
     let paste: () -> Void
@@ -170,6 +173,7 @@ struct TermMenu: UIViewRepresentable {
             UIAction(title: "Paste", image: UIImage(systemName: "doc.on.clipboard"),
                      attributes: UIPasteboard.general.hasStrings ? [] : .disabled) { _ in paste() },
         ]
+        view.clear = clear
         guard let at else {
             view.dismiss()
             return
@@ -183,6 +187,7 @@ struct TermMenu: UIViewRepresentable {
 final class TermMenuView: UIView, @MainActor UIEditMenuInteractionDelegate {
     var items: [UIMenuElement] = []
     var shown = 0
+    var clear = CGRect.null
     private lazy var interaction = UIEditMenuInteraction(delegate: self)
 
     func present(at point: CGPoint) {
@@ -197,5 +202,10 @@ final class TermMenuView: UIView, @MainActor UIEditMenuInteractionDelegate {
     func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
         UIMenu(children: items)
+    }
+
+    /// Above or below the selection, never over a handle.
+    func editMenuInteraction(_ interaction: UIEditMenuInteraction, targetRectFor configuration: UIEditMenuConfiguration) -> CGRect {
+        clear.isNull ? CGRect(origin: configuration.sourcePoint, size: .zero) : clear
     }
 }

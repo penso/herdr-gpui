@@ -50,6 +50,12 @@ public struct TermHandles: Equatable, Sendable {
         return [TermSelection.End.start, .end].filter { target($0).contains(point) }.min { distance($0) < distance($1) }
     }
 
+    /// The selection's rows with both handles, which the copy menu keeps
+    /// clear of so they can still be grabbed.
+    public var bounds: CGRect {
+        bar(.start).union(knob(.start)).union(bar(.end)).union(knob(.end))
+    }
+
     /// Where the copy menu points: above the middle of a one-row
     /// selection, or above the cell the finger last moved to.
     public var menu: CGPoint {

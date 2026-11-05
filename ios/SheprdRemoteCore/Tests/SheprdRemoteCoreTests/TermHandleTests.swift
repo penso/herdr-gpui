@@ -145,6 +145,12 @@ import Testing
         #expect(!screen.highlights(selection, at: at(5, 0)))
     }
 
+    @Test func theMenuKeepsClearOfTheHandles() {
+        let handles = TermHandles(TermSelection(anchor: at(1, 4), head: at(0, 2)), cell: cell)
+        // From the start's knob above row 0 to the end's below row 1.
+        #expect(handles.bounds == CGRect(x: 15, y: -10, width: 40, height: 60))
+    }
+
     @Test func theMenuPointsAboveTheSelection() {
         // One row: above its middle.
         let word = TermHandles(TermSelection(anchor: at(2, 3), head: at(2, 6)), cell: cell)
