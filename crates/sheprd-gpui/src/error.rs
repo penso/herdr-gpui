@@ -192,6 +192,8 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    #[error(transparent)]
+    Machine(#[from] crate::machine::Error),
     #[error("This link's address is not valid, so it opens nothing.")]
     MalformedLink,
     #[error("Reopen the deletion dialog.")]

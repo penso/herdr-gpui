@@ -273,6 +273,10 @@ impl Store {
                 .in_workspace(&tab.scope, &tab.workspace_id)
                 .find(|open| matches!(open.location, Some(Location::Devices)))
                 .map(|open| open.id),
+            Some(Location::Machine { name }) => self
+                .in_workspace(&tab.scope, &tab.workspace_id)
+                .find(|open| matches!(&open.location, Some(Location::Machine { name: existing }) if existing == name))
+                .map(|open| open.id),
             Some(Location::Review { checkout }) => self
                 .in_workspace(&tab.scope, &tab.workspace_id)
                 .find(|open| {

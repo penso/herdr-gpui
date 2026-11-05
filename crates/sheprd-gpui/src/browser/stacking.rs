@@ -56,10 +56,7 @@ use {
     },
     objc2_foundation::{NSPoint, NSProcessInfo, NSRect, NSSize},
     std::cell::Cell,
-    wry::{
-        WebViewExtMacOS as _,
-        raw_window_handle::{HasWindowHandle, RawWindowHandle},
-    },
+    wry::raw_window_handle::{HasWindowHandle, RawWindowHandle},
 };
 
 /// What GPUI's hit test found at the pointer, as a page last heard it.
@@ -358,15 +355,14 @@ impl Router {
     }
 }
 
-/// Moves `page` beneath GPUI's view in `window`, and puts a router for it
+/// Moves `view`, a page's own, beneath GPUI's view in `window`, and puts a router for it
 /// above GPUI's view. The router stays hidden until the page shows, and both
 /// stay where they are until the router places them.
-pub(crate) fn stack(page: &wry::WebView, window: &Window) -> Result<Retained<Router>> {
+pub(crate) fn stack(view: Retained<NSView>, window: &Window) -> Result<Retained<Router>> {
     let mtm = MainThreadMarker::new().ok_or(Error::PageStack)?;
     let gpui = gpui_view(window)?;
     // SAFETY: a property read on GPUI's view, on the main thread.
     let content = unsafe { gpui.superview() }.ok_or(Error::PageStack)?;
-    let view: Retained<NSView> = Retained::into_super(Retained::into_super(page.webview()));
     view.removeFromSuperview();
     content.addSubview_positioned_relativeTo(&view, NSWindowOrderingMode::Below, Some(&gpui));
     let router = Router::new(view, gpui.clone(), mtm);

@@ -224,8 +224,9 @@ bundle profile="release" features="":
     # The linker's ad-hoc signature names the bare executable and binds no
     # Info.plist, so services that trust the bundle ID refuse the app:
     # notification authorization fails without a prompt. Ad-hoc sign the
-    # assembled bundle so its identity is so.pen.herdr-gpui.dev.
-    codesign --force --sign - "$app"
+    # assembled bundle so its identity is so.pen.herdr-gpui.dev. Machine tabs
+    # need the entitlements: Virtualization refuses a process without its own.
+    codesign --force --sign - --entitlements assets/macos/Herdr.entitlements "$app"
 
 # Link the actual optimized application and exercise its CLI without a desktop.
 test-build: build-release

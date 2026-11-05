@@ -60,6 +60,32 @@ pub enum TabOp {
         line: Option<u32>,
     },
     Devices,
+    /// The virtual Mac called `name`, in a tab of the caller's workspace.
+    Machine {
+        name: String,
+    },
+    /// Ask in Settings to delete the virtual Mac called `name`. The user
+    /// confirms there.
+    MachineDelete {
+        name: String,
+    },
+    MachineList,
+    /// What the virtual Mac called `name` boots with next. Fields left out
+    /// keep their value; `display` is `fit` or a size such as `1920x1200`.
+    MachineSet {
+        name: String,
+        #[serde(default)]
+        cpus: Option<u16>,
+        #[serde(default)]
+        memory_gib: Option<u16>,
+        #[serde(default)]
+        display: Option<String>,
+    },
+    /// Save the virtual Mac called `name` and stop it. It resumes when next
+    /// shown.
+    MachineSuspend {
+        name: String,
+    },
     /// The orchestrator of the caller's workspace, or of the checkout at
     /// `repo`.
     Orchestrator {
@@ -78,6 +104,10 @@ impl TabOp {
             Self::Code { .. }
             | Self::Edit { .. }
             | Self::Devices
+            | Self::Machine { .. }
+            | Self::MachineDelete { .. }
+            | Self::MachineList
+            | Self::MachineSet { .. }
             | Self::Orchestrator { .. }
             | Self::Review
             | Self::Px0 => ARRIVE_WAIT_SECONDS,
@@ -87,6 +117,7 @@ impl TabOp {
             | Self::Navigate { .. }
             | Self::Back { .. }
             | Self::Forward { .. }
+            | Self::MachineSuspend { .. }
             | Self::Zoom { .. } => 0,
         }
     }
@@ -114,6 +145,7 @@ impl TabKind {
             Self::Orchestrator => "orchestrator",
             Self::Devices => "devices",
             Self::CoreTerminal => "core_terminal",
+            Self::Machine => "machine",
             Self::Editor => "editor",
         }
     }
@@ -138,6 +170,8 @@ pub enum TabKind {
     CoreTerminal,
     /// The workspace's VS Code tab.
     Editor,
+    /// A virtual Mac.
+    Machine,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +206,50 @@ pub enum Reply {
         id: u64,
         percent: u16,
     },
+    Machines {
+        machines: Vec<MachineInfo>,
+    },
+}
+
+/// What a virtual Mac is doing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MachineState {
+    Stopped,
+    /// Stopped with its state saved: it resumes where it was.
+    Suspended,
+    Starting,
+    Running,
+    Saving,
+    Failed,
+}
+
+impl MachineState {
+    /// The state as `--json` spells it, for the text listing.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Stopped => "stopped",
+            Self::Suspended => "suspended",
+            Self::Starting => "starting",
+            Self::Running => "running",
+            Self::Saving => "saving",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+/// A virtual Mac installed on this computer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MachineInfo {
+    pub name: String,
+    pub state: MachineState,
+    /// What it boots with next.
+    pub cpus: u16,
+    pub memory_gib: u16,
+    /// `fit` or a size such as `1920x1200`.
+    pub display: String,
+    /// What it really takes on disk.
+    pub disk_bytes: u64,
 }
 
 #[cfg(test)]

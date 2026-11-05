@@ -54,6 +54,7 @@ impl SheprdWindow {
                     (_, Some(Location::Orchestrator { .. })) => "icons/pulse.svg",
                     (_, Some(Location::Devices)) => "icons/devices.svg",
                     (_, Some(Location::CoreTerminal { .. })) => "icons/terminal.svg",
+                    (_, Some(Location::Machine { .. })) => "icons/computer.svg",
                     _ => GLOBE,
                 };
                 // A page's own icon stands in for the globe.

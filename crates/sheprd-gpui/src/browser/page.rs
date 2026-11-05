@@ -23,9 +23,16 @@ use {
 /// Pages fill it as they lay out, and the next frame starts it afresh.
 pub(crate) type Drawn = Rc<RefCell<HashMap<TabId, Bounds<Pixels>>>>;
 
+/// What draws a page: a web view, or on macOS, a virtual Mac's display.
+enum Surface {
+    Web(wry::WebView),
+    #[cfg(target_os = "macos")]
+    Machine(objc2::rc::Retained<objc2_virtualization::VZVirtualMachineView>),
+}
+
 /// One tab's native page.
 pub(crate) struct Page {
-    view: wry::WebView,
+    view: Surface,
     /// Read as the page lays out, after the window shows or hides it for
     /// the frame: a hidden page stays where it was moved out of the way.
     shown: Cell<bool>,
@@ -41,7 +48,12 @@ impl Page {
     /// moves beneath the window's drawing.
     pub(crate) fn new(view: wry::WebView, window: &Window) -> crate::Result<Self> {
         #[cfg(target_os = "macos")]
-        let router = crate::browser::stacking::stack(&view, window)?;
+        let router = {
+            use wry::WebViewExtMacOS as _;
+            let web =
+                objc2::rc::Retained::into_super(objc2::rc::Retained::into_super(view.webview()));
+            crate::browser::stacking::stack(web, window)?
+        };
         // Nothing until the window lays it out.
         #[cfg(not(target_os = "macos"))]
         {
@@ -50,7 +62,7 @@ impl Page {
         }
         // Shown only once the window presents it.
         Ok(Self {
-            view,
+            view: Surface::Web(view),
             shown: Cell::new(false),
             zoom: Cell::new(Zoom::default()),
             #[cfg(target_os = "macos")]
@@ -58,13 +70,56 @@ impl Page {
         })
     }
 
-    pub(crate) fn raw(&self) -> &wry::WebView {
-        &self.view
+    /// Takes over a machine's display, as [`Self::new`] does a web view.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn machine(
+        view: objc2::rc::Retained<objc2_virtualization::VZVirtualMachineView>,
+        window: &Window,
+    ) -> crate::Result<Self> {
+        let native = objc2::rc::Retained::into_super(view.clone());
+        native.setHidden(true);
+        let router = crate::browser::stacking::stack(native, window)?;
+        Ok(Self {
+            view: Surface::Machine(view),
+            shown: Cell::new(false),
+            zoom: Cell::new(Zoom::default()),
+            router,
+        })
+    }
+
+    /// The web view that draws the page, unless a machine does.
+    pub(crate) fn web(&self) -> Option<&wry::WebView> {
+        match &self.view {
+            Surface::Web(view) => Some(view),
+            #[cfg(target_os = "macos")]
+            Surface::Machine(_) => None,
+        }
+    }
+
+    /// The view that draws the page.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn native(&self) -> objc2::rc::Retained<objc2_app_kit::NSView> {
+        use objc2::rc::Retained;
+        use wry::WebViewExtMacOS as _;
+        match &self.view {
+            Surface::Web(view) => Retained::into_super(Retained::into_super(view.webview())),
+            Surface::Machine(view) => Retained::into_super(view.clone()),
+        }
+    }
+
+    fn set_visible(&self, visible: bool) {
+        match &self.view {
+            Surface::Web(view) => {
+                let _ = view.set_visible(visible);
+            }
+            #[cfg(target_os = "macos")]
+            Surface::Machine(view) => view.setHidden(!visible),
+        }
     }
 
     pub(crate) fn show(&self) {
         self.shown.set(true);
-        let _ = self.view.set_visible(true);
+        self.set_visible(true);
         #[cfg(target_os = "macos")]
         self.router.set_shown(true);
     }
@@ -79,8 +134,10 @@ impl Page {
             self.router.set_shown(false);
         }
         #[cfg(not(target_os = "macos"))]
-        let _ = self.view.focus_parent();
-        let _ = self.view.set_visible(false);
+        if let Some(view) = self.web() {
+            let _ = view.focus_parent();
+        }
+        self.set_visible(false);
     }
 
     /// Has the page report light, or dark, as its `prefers-color-scheme`,
@@ -121,7 +178,10 @@ impl Page {
         if self.zoom.get() == zoom {
             return;
         }
-        match self.view.zoom(zoom.factor()) {
+        let Some(view) = self.web() else {
+            return;
+        };
+        match view.zoom(zoom.factor()) {
             Ok(()) => self.zoom.set(zoom),
             Err(error) => tracing::debug!(%error, "Browser zoom failed"),
         }
@@ -139,7 +199,9 @@ impl Page {
         #[cfg(target_os = "macos")]
         self.router.focus();
         #[cfg(not(target_os = "macos"))]
-        let _ = self.view.focus();
+        if let Some(view) = self.web() {
+            let _ = view.focus();
+        }
     }
 
     /// Whether the page holds the window's keyboard. Only macOS tells.
@@ -155,7 +217,9 @@ impl Page {
         #[cfg(target_os = "macos")]
         self.router.blur();
         #[cfg(not(target_os = "macos"))]
-        let _ = self.view.focus_parent();
+        if let Some(view) = self.web() {
+            let _ = view.focus_parent();
+        }
     }
 
     /// Refuses drops on the page, or takes them again.
@@ -169,25 +233,34 @@ impl Page {
         #[cfg(target_os = "macos")]
         self.router.place(bounds);
         #[cfg(not(target_os = "macos"))]
-        let _ = self.view.set_bounds(wry::Rect {
-            size: wry::dpi::Size::Logical(wry::dpi::LogicalSize::new(
-                bounds.size.width.into(),
-                bounds.size.height.into(),
-            )),
-            position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(
-                bounds.origin.x.into(),
-                bounds.origin.y.into(),
-            )),
-        });
+        if let Some(view) = self.web() {
+            let _ = view.set_bounds(wry::Rect {
+                size: wry::dpi::Size::Logical(wry::dpi::LogicalSize::new(
+                    bounds.size.width.into(),
+                    bounds.size.height.into(),
+                )),
+                position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(
+                    bounds.origin.x.into(),
+                    bounds.origin.y.into(),
+                )),
+            });
+        }
     }
 }
 
 impl Drop for Page {
     fn drop(&mut self) {
         self.hide();
-        // wry takes the page's own view out of the window as it drops.
+        // wry takes the page's own view out of the window as it drops; a
+        // machine's display has no such owner.
         #[cfg(target_os = "macos")]
-        self.router.remove();
+        {
+            self.router.remove();
+            if let Surface::Machine(view) = &self.view {
+                crate::machine::release(view);
+                view.removeFromSuperview();
+            }
+        }
     }
 }
 

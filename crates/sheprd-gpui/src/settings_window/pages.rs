@@ -5,6 +5,8 @@ mod fonts;
 mod general;
 mod indicators;
 mod language;
+#[cfg(target_os = "macos")]
+pub(in crate::settings_window) mod machines;
 pub(in crate::settings_window) mod notifications;
 pub(in crate::settings_window) mod remote_control;
 mod sidebar;

@@ -314,6 +314,18 @@ impl Pages {
         window: &mut Window,
         cx: &mut Context<SheprdWindow>,
     ) -> crate::Result<()> {
+        // A machine's display takes a page's place, without a web view.
+        #[cfg(target_os = "macos")]
+        if let Some(Location::Machine { name }) = &tab.location {
+            if self.pages.contains_key(&tab.id) {
+                return Ok(());
+            }
+            let view = crate::machine::view(name, cx)?;
+            super::page_keys::install();
+            self.pages
+                .insert(tab.id, Rc::new(Page::machine(view, window)?));
+            return Ok(());
+        }
         // A review tab is drawn by the app; only pages get a web view.
         let Some(location) = tab
             .location
@@ -343,7 +355,8 @@ impl Pages {
             | Location::Code { .. }
             | Location::Orchestrator { .. }
             | Location::Devices
-            | Location::CoreTerminal { .. } => None,
+            | Location::CoreTerminal { .. }
+            | Location::Machine { .. } => None,
         };
         // Only a local page, which the agent wrote, gets `herdr.send`.
         let bridge = if root.is_some() {
@@ -450,7 +463,7 @@ impl Pages {
         #[cfg(target_os = "macos")]
         self.parked
             .entry(id)
-            .or_insert_with(|| super::parking::park(page.raw()));
+            .or_insert_with(|| super::parking::park(&page.native()));
     }
 
     /// Shows tab `id`'s page, back where it was.
@@ -460,7 +473,7 @@ impl Pages {
         };
         #[cfg(target_os = "macos")]
         if let Some(place) = self.parked.remove(&id) {
-            super::parking::unpark(page.raw(), place);
+            super::parking::unpark(&page.native(), place);
         }
         page.show();
     }
@@ -552,7 +565,8 @@ impl Pages {
         }
         let url = location.page_url();
         if let Some(page) = self.pages.get(&id)
-            && let Err(error) = page.raw().load_url(&url)
+            && let Some(view) = page.web()
+            && let Err(error) = view.load_url(&url)
         {
             tracing::debug!(%error, "Browser navigation failed");
         }
@@ -562,7 +576,8 @@ impl Pages {
     /// text: data goes in as JSON.
     pub(crate) fn script(&self, id: TabId, script: &str) {
         if let Some(page) = self.pages.get(&id)
-            && let Err(error) = page.raw().evaluate_script(script)
+            && let Some(view) = page.web()
+            && let Err(error) = view.evaluate_script(script)
         {
             tracing::debug!(%error, "Browser script failed");
         }
@@ -578,7 +593,8 @@ impl Pages {
 
     pub(crate) fn reload(&self, id: TabId) {
         if let Some(page) = self.pages.get(&id)
-            && let Err(error) = page.raw().reload()
+            && let Some(view) = page.web()
+            && let Err(error) = view.reload()
         {
             tracing::debug!(%error, "Browser reload failed");
         }
@@ -594,7 +610,10 @@ impl Pages {
             // The picker measures `rect` in CSS pixels, which a zoomed page
             // draws larger in the view.
             let rect = page.drawn_zoom().view_rect(rect);
-            super::snapshot::capture(page.raw(), rect, move |tiff| {
+            let Some(view) = page.web() else {
+                return false;
+            };
+            super::snapshot::capture(view, rect, move |tiff| {
                 report(&sender, Event::Captured(Source::Tab(id), capture, tiff));
             });
             return true;

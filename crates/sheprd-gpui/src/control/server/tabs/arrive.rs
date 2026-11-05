@@ -267,6 +267,39 @@ pub(super) fn devices(
     );
 }
 
+/// The virtual Mac called `name`, in a tab of the caller's workspace.
+pub(super) fn machine(
+    caller: &Caller,
+    name: String,
+    incoming: socket::Incoming,
+    watches: &mut Watches,
+    cx: &mut App,
+) {
+    let Ok(name) = crate::machine::Name::try_from(name) else {
+        return incoming.respond(Response::error(
+            ErrorCode::InvalidRequest,
+            "A machine name takes letters, digits, '-', and '_', and starts with a letter or digit",
+        ));
+    };
+    open_there(
+        caller,
+        incoming,
+        watches,
+        cx,
+        |_| true,
+        move |view, workspace, window, cx| {
+            view.open_machine(name.clone(), window, cx);
+            opened(
+                view,
+                workspace,
+                "the machine",
+                cx,
+                |location| matches!(location, Location::Machine { name: open } if *open == name),
+            )
+        },
+    );
+}
+
 /// The workspace's issues in the activity bar's Issues section, listing the
 /// repository of `repo`, or of the workspace's focused pane.
 pub(super) fn orchestrator(

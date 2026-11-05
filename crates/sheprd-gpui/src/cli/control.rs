@@ -32,7 +32,7 @@ pub use settings::{
     SoundCommand, ThemeCommand, UpdateCommand,
 };
 use std::ffi::OsString;
-pub use tabs::{CodeCommand, FileAt, Items, OrchestratorCommand, TabCommand};
+pub use tabs::{CodeCommand, FileAt, Items, MachineCommand, OrchestratorCommand, TabCommand};
 pub use work::{CheckpointCommand, FanOut, NotesCommand, WaitFor};
 
 /// What to do, and how the answer is printed.
@@ -64,6 +64,7 @@ pub enum ControlCommand {
     Tab(TabCommand),
     Code(CodeCommand),
     Devices,
+    Machine(MachineCommand),
     Orchestrator(OrchestratorCommand),
     Review,
     Chat(ChatCommand),
@@ -164,6 +165,10 @@ pub const FAMILIES: &[(&str, &str)] = &[
         "Show a file in a code tab or open it in your editor",
     ),
     ("devices", "Open the Devices overview"),
+    (
+        "machine",
+        "Virtual Macs: show, list, set up, suspend, or delete one",
+    ),
     (
         "orchestrator",
         "A repository's issues, pull requests, and runs",
@@ -338,6 +343,7 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
             tabs::open_only(args)?;
             ControlCommand::Devices
         }
+        "machine" => ControlCommand::Machine(tabs::machine(args)?),
         "orchestrator" => ControlCommand::Orchestrator(tabs::orchestrator(args)?),
         "review" => {
             tabs::open_only(args)?;
