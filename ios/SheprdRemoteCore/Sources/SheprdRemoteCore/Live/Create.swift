@@ -15,6 +15,12 @@ public struct NewOptions: Codable, Hashable, Sendable {
         public var id: String { path }
     }
 
+    /// Keeps the chosen agent when offered, otherwise selects the first
+    /// available one. An empty list has no valid selection.
+    public func agent(preferring id: String) -> AgentChoice? {
+        agents.first { $0.id == id } ?? agents.first
+    }
+
     /// Every folder offered, recent ones first, once each.
     public var folders: [String] {
         var seen = Set<String>()

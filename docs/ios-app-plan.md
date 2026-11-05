@@ -284,7 +284,9 @@ app learns the pane it should open:
 - `GET /api/v2/new` answers what the forms offer: `{"agents": [{"id":
   "claude", "name": "Claude"}], "recent": ["/Users/me/code/sheprd"],
   "roots": [{"path": "/Users/me/code", "folders": ["/Users/me/code/a"]}]}`.
-  Agents come in Herdr's order; `id` is what a request names.
+  Agents come in Herdr's order, only those `sheprd-acp agents` finds on
+  this computer (all of them if it finds none or cannot run); `id` is
+  what a request names.
 - `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?}`
   and answers `{"workspace": "w3", "pane": "p7", "prompted": true}`. The
   folder must be one `new` offers, and `branch`, when not blank, opens a

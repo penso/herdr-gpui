@@ -32,11 +32,7 @@ enum LiveSocket {
         // A socket counts as open once its handshake is done, so a daemon
         // that refuses it never shows as online in between.
         do {
-            try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
-                task.sendPing { error in
-                    if let error { done.resume(throwing: error) } else { done.resume() }
-                }
-            }
+            try await firstCompletion { task.sendPing(pongReceiveHandler: $0) }
         } catch {
             task.cancel(with: .goingAway, reason: nil)
             switch (task.response as? HTTPURLResponse)?.statusCode {

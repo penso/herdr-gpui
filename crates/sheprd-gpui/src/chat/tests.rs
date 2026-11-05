@@ -30,6 +30,7 @@ mod file_links;
 mod glide;
 mod ia;
 mod imessage;
+mod jump;
 mod layouts;
 mod link;
 mod list;
