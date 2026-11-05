@@ -96,7 +96,7 @@ struct TerminalScreen: View {
                         Text(reason).font(.footnote).foregroundStyle(.orange).padding(6)
                             .frame(maxWidth: .infinity).background(.bar)
                     }
-                    let echo = typing.echo.text + typing.composing
+                    let echo = typing.echo.text
                     if !echo.isEmpty { TermEchoStrip(text: echo) }
                 }
             }

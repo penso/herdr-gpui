@@ -142,10 +142,16 @@ struct TermKeyRows: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            row {
-                modifier("ctrl", .ctrl)
-                modifier("alt", .alt)
-                ForEach(Self.top, id: \.key) { key in keyButton(key.label) { typing.press(key.key) } }
+            // What an input method composes takes the top row's place, so
+            // it covers no terminal line and the terminal keeps its size.
+            if typing.composing.isEmpty {
+                row {
+                    modifier("ctrl", .ctrl)
+                    modifier("alt", .alt)
+                    ForEach(Self.top, id: \.key) { key in keyButton(key.label) { typing.press(key.key) } }
+                }
+            } else {
+                composing(typing.composing)
             }
             row {
                 keyButton("^C", tint: .red) { typing.press("ctrl+c") }
@@ -175,6 +181,20 @@ struct TermKeyRows: View {
         }
         .buttonStyle(.plain)
         .buttonRepeatBehavior(.enabled)
+    }
+
+    private func composing(_ text: String) -> some View {
+        HStack(spacing: 0) {
+            Text(text).underline(pattern: .dot)
+            Text("▏").foregroundStyle(.tint)
+        }
+        .font(.system(.callout, design: .monospaced))
+        .lineLimit(1)
+        .truncationMode(.head)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Composing: \(text)")
     }
 
     private func modifier(_ label: String, _ flag: TermInput.Modifiers) -> some View {
