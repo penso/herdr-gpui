@@ -895,6 +895,8 @@ release tag; pull requests run only `ios-test` and the unsigned build.
   uploads to TestFlight itself, without fastlane or `altool`.
 - `CURRENT_PROJECT_VERSION` is the workflow's run number;
   `MARKETING_VERSION` follows the app's release version.
+- "What to Test" lists the commits since the previous build, which each
+  build's notes record in a `Source:` line (`ios/README.md`).
 - Secrets (environment `testflight`, required reviewers off for `main`):
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID`. The key is
   written to a temporary file and removed in an `always()` step.
