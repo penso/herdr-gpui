@@ -11,11 +11,16 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sheprd_chat_protocol::{Agent, Command, MAX_PROMPT_SIZE};
-use std::time::Duration;
+use std::{
+    process::Stdio,
+    time::{Duration, Instant},
+};
 
-/// How long the form waits to learn which agents are installed. Finding
-/// them only looks at a few folders, so this bounds a stuck disk.
+/// How long the search for installed agents may run. It only looks at a few
+/// folders, so this bounds a stuck disk.
 const INSTALLED_WAIT: Duration = Duration::from_secs(2);
+/// How often that search is checked on.
+const INSTALLED_POLL: Duration = Duration::from_millis(10);
 
 /// What the new workspace and new chat forms offer.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -120,18 +125,35 @@ pub(crate) async fn new_options(
 /// `None` when it could not say.
 async fn installed_agents(program: Option<&std::path::Path>) -> Option<Vec<Agent>> {
     let program = program?.to_owned();
-    let listing = tokio::task::spawn_blocking(move || list_agents(&program));
-    tokio::time::timeout(INSTALLED_WAIT, listing)
+    tokio::task::spawn_blocking(move || list_agents(&program, INSTALLED_WAIT))
         .await
-        .ok()?
         .ok()?
 }
 
-pub(super) fn list_agents(program: &std::path::Path) -> Option<Vec<Agent>> {
-    let output = sheprd_client::new_command(program)
+/// Runs the search for at most `wait`. One that overruns is killed and
+/// reaped here, so repeated form loads cannot pile up children or threads.
+pub(super) fn list_agents(program: &std::path::Path, wait: Duration) -> Option<Vec<Agent>> {
+    let mut child = sheprd_client::new_command(program)
         .arg("agents")
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
         .ok()?;
+    let deadline = Instant::now() + wait;
+    // The listing is a few short lines, which fit the pipe until it is read.
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(INSTALLED_POLL),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let output = child.wait_with_output().ok()?;
     output
         .status
         .success()
