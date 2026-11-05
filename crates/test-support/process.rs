@@ -5,21 +5,7 @@ use std::mem::size_of;
 pub(crate) fn is_dead(pid: u32) -> io::Result<bool> {
     #[cfg(target_os = "linux")]
     {
-        let stat = match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
-            Ok(stat) => stat,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(true),
-            Err(error) => return Err(error),
-        };
-        let Some(state) = stat
-            .rsplit_once(')')
-            .and_then(|(_, fields)| fields.split_ascii_whitespace().next())
-        else {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "malformed /proc process stat",
-            ));
-        };
-        Ok(state == "Z")
+        linux_stat_dead(std::fs::read_to_string(format!("/proc/{pid}/stat")))
     }
 
     #[cfg(target_os = "macos")]
@@ -50,33 +36,33 @@ pub(crate) fn is_dead(pid: u32) -> io::Result<bool> {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn linux_stat_dead(stat: io::Result<String>) -> io::Result<bool> {
+    let stat = match stat {
+        Ok(stat) => stat,
+        // A process reaped before open gives ENOENT; one reaped between
+        // open and read can give ESRCH from procfs instead.
+        Err(error)
+            if error.kind() == io::ErrorKind::NotFound
+                || error.raw_os_error() == Some(libc::ESRCH) =>
+        {
+            return Ok(true);
+        }
+        Err(error) => return Err(error),
+    };
+    let Some(state) = stat
+        .rsplit_once(')')
+        .and_then(|(_, fields)| fields.split_ascii_whitespace().next())
+    else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "malformed /proc process stat",
+        ));
+    };
+    Ok(state == "Z")
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
-mod tests {
-    use super::is_dead;
-    use std::process::{Child, Command};
-    use std::thread;
-    use std::time::{Duration, Instant};
-
-    fn sleep() -> Child {
-        Command::new("/bin/sleep").arg("60").spawn().unwrap()
-    }
-
-    #[test]
-    fn reports_running_as_alive_and_zombie_and_reaped_as_dead() {
-        let mut child = sleep();
-        let pid = child.id();
-        let running = is_dead(pid);
-
-        child.kill().unwrap();
-        assert!(!running.unwrap());
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while !is_dead(pid).unwrap() {
-            assert!(Instant::now() < deadline, "killed child did not exit");
-            thread::sleep(Duration::from_millis(10));
-        }
-
-        child.wait().unwrap();
-        assert!(is_dead(pid).unwrap());
-    }
-}
+#[path = "process/tests.rs"]
+mod tests;
