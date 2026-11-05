@@ -20,9 +20,7 @@ final class TermTextRange: UITextRange {
 extension TermInputView: UITextInput {
     private var marked: NSString { composition.marked as NSString }
 
-    private func clamped(_ range: NSRange) -> NSRange {
-        NSIntersectionRange(range, NSRange(location: 0, length: marked.length))
-    }
+    private func clamped(_ range: NSRange) -> NSRange { composition.clamped(range) }
 
     // MARK: Marked text
 

@@ -26,6 +26,14 @@ public struct TermComposition: Equatable, Sendable {
         return marked.isEmpty ? nil : marked
     }
 
+    /// `range` inside the marked text, in UTF-16 as UIKit counts. Unlike
+    /// `NSIntersectionRange`, a caret at the end stays there.
+    public func clamped(_ range: NSRange) -> NSRange {
+        let length = (marked as NSString).length
+        let location = min(max(range.location, 0), length)
+        return NSRange(location: location, length: min(max(range.length, 0), length - location))
+    }
+
     /// Whether the pane should get a backspace: while composing, it
     /// deletes from the marked text instead.
     public mutating func deleteBackward() -> Bool {

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SheprdRemoteCore
 
@@ -35,6 +36,19 @@ import Testing
         #expect(composition.marked == "ni")
         composition.mark("")
         #expect(composition.deleteBackward() == true)
+    }
+
+    @Test func rangesAreClampedToTheMarkedTextKeepingACaretAtItsEnd() {
+        var composition = TermComposition()
+        composition.mark("ni")
+        // UIKit counts UTF-16; a caret after the last character is in range.
+        #expect(composition.clamped(NSRange(location: 2, length: 0)) == NSRange(location: 2, length: 0))
+        #expect(composition.clamped(NSRange(location: 1, length: 0)) == NSRange(location: 1, length: 0))
+        #expect(composition.clamped(NSRange(location: 1, length: 5)) == NSRange(location: 1, length: 1))
+        #expect(composition.clamped(NSRange(location: 5, length: 1)) == NSRange(location: 2, length: 0))
+        #expect(composition.clamped(NSRange(location: NSNotFound, length: 0)) == NSRange(location: 2, length: 0))
+        composition.mark("你好")
+        #expect(composition.clamped(NSRange(location: 0, length: 9)) == NSRange(location: 0, length: 2))
     }
 
     @Test func plainTypingPassesStraightThrough() {
