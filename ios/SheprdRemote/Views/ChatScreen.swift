@@ -12,8 +12,6 @@ struct ChatScreen: View {
     let title: String
     @State private var store: ChatStore?
     @State private var showingSession = false
-    /// Why the last new terminal tab did not start.
-    @State private var problem: String?
     @Environment(\.horizontalSizeClass) private var width
     @Environment(\.dismiss) private var dismiss
     @Environment(\.offersWorkspace) private var offersWorkspace
@@ -76,28 +74,11 @@ struct ChatScreen: View {
                 .frame(minWidth: width == .regular ? 280 : 0, maxWidth: 360, alignment: width == .regular ? .leading : .center)
                 .accessibilityHint("Shows the session's settings")
             }
-            if let workspace = item?.workspace {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("New Terminal", systemImage: "apple.terminal") { openTerminal() }
-                        Button("New Chat…", systemImage: "bubble.left.and.text.bubble.right") {
-                            model.creating = .chat(device: key.device, workspace: workspace.id, label: workspace.label)
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("New tab in \(workspace.label)")
-                }
-            }
             if let usage = store?.transcript?.usage {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingSession = true } label: { ContextRing(percent: usage.percent) }
                 }
             }
-        }
-        .alert("The tab did not start", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
-        } message: {
-            Text(problem ?? "")
         }
         .sheet(isPresented: $showingSession) {
             if let store {
@@ -118,22 +99,6 @@ struct ChatScreen: View {
         }
         .onDisappear {
             if let store { model.fleet.closeChat(store) }
-        }
-    }
-
-    /// Sheprd opens a tab in the workspace of the pane an action names, so
-    /// the chat's own pane will do.
-    private func openTerminal() {
-        let (device, pane) = (key.device, key.pane)
-        Task {
-            do {
-                let created = try await model.fleet.call(device) { client, token in
-                    try await client.termAction(.newTab, pane: pane, bearer: token)
-                }
-                if let created { model.pendingRoute = .term(PaneKey(device: device, pane: created), title: "Terminal") }
-            } catch {
-                problem = error.localizedDescription
-            }
         }
     }
 

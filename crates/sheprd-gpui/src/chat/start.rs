@@ -199,7 +199,7 @@ impl SheprdWindow {
         }
     }
 
-    fn chat_route(&self) -> Option<super::Route> {
+    pub(super) fn chat_route(&self) -> Option<super::Route> {
         self.endpoints
             .get(self.selected_endpoint)
             .and_then(|endpoint| super::discovery::route(&endpoint.connection.target, &self.live))

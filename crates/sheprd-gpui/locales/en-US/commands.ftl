@@ -11,6 +11,7 @@ commands-close-tab = Close Tab
 commands-close-window = Close Window
 commands-close-workspace = Close Workspace
 commands-command-palette = Command Palette
+commands-convert-to-chat = Move Agent into Chat
 commands-copy-mode = Copy Mode
 commands-cycle-windows = Cycle Through Windows
 commands-decrease-font-size = Decrease Font Size

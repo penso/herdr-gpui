@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var forgetting: Computer?
     @State private var editMode = EditMode.inactive
     @AppStorage(AppLock.setting, store: AppLock.store) private var requireFaceID = false
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
 
     var body: some View {
         List {
@@ -73,6 +74,17 @@ struct SettingsView: View {
                 #endif
             } header: {
                 Text("Live Activities")
+            }
+            Section {
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("Terminals stay dark either way.")
             }
             Section {
                 Toggle("Require Face ID", isOn: Binding(

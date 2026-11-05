@@ -110,6 +110,11 @@ impl Hub {
         Ok(hub)
     }
 
+    /// The `sheprd-acp` chats start with, when one was found.
+    pub(crate) fn program(&self) -> Option<&Path> {
+        self.program.as_deref()
+    }
+
     /// A hub showing `layout` that never connects to a daemon or a chat,
     /// for tests that must not reach a real Herdr.
     #[cfg(test)]
