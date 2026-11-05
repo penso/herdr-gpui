@@ -17,9 +17,11 @@ public struct OfferedMode: Codable, Hashable, Sendable, Identifiable {
         self.option = option
     }
 
-    /// Whether it runs without asking for permission.
+    /// Whether it runs without asking for permission, by the words agents
+    /// use for it: Claude's Bypass Permissions, Codex's Full Access.
     public var bypasses: Bool {
-        [id, name].contains { $0.localizedCaseInsensitiveContains("bypass") }
+        let words = ["bypass", "full-access", "full access", "yolo"]
+        return [id, name].contains { text in words.contains { text.localizedCaseInsensitiveContains($0) } }
     }
 }
 
@@ -70,6 +72,23 @@ public struct StartChoice: Codable, Hashable, Sendable {
     /// Whether a new chat would run tools without asking.
     public var bypasses: Bool { autoAccept || picked?.bypasses == true }
 
+    /// What a new chat starts with beyond the agent's own default, to show
+    /// beside its name, or `nil` when it starts as the agent does.
+    public var label: String? {
+        let parts = [picked?.name, autoAccept ? "Auto-accept" : nil].compactMap(\.self)
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The setting `command` picks, if it picks one new chats follow.
+    public func setting(of command: ChatCommand) -> StartPicks.Setting? {
+        switch command {
+        case .setMode: .mode
+        case let .setOption(id, _) where offered.contains(where: { $0.option == id }): .mode
+        case .setAutoAccept: .autoAccept
+        default: nil
+        }
+    }
+
     /// Keeps the modes `transcript` lists; a transcript that lists none,
     /// such as one still starting, says nothing about them.
     public mutating func learn(from transcript: Transcript) {
@@ -97,5 +116,34 @@ public struct StartChoice: Codable, Hashable, Sendable {
         let picked = picked
         guard picked != nil || autoAccept else { return nil }
         return ChatStart(mode: picked?.id, option: picked?.option, autoAccept: autoAccept)
+    }
+}
+
+/// Which of an agent's picks is the latest, by when the person made them.
+/// Each pick is its own request and they may finish in any order, so only
+/// the latest of a setting may be saved.
+public struct StartPicks: Sendable {
+    public enum Setting: Hashable, Sendable { case mode, autoAccept }
+
+    private struct Key: Hashable {
+        var agent: String
+        var setting: Setting
+    }
+
+    private var latest: [Key: Int] = [:]
+    private var count = 0
+
+    public init() {}
+
+    /// Notes a pick being made, and returns its place to check later.
+    public mutating func begin(agent: String, setting: Setting) -> Int {
+        count += 1
+        latest[Key(agent: agent, setting: setting)] = count
+        return count
+    }
+
+    /// Whether no later pick of `setting` was made since `pick`.
+    public func isLatest(_ pick: Int, agent: String, setting: Setting) -> Bool {
+        latest[Key(agent: agent, setting: setting)] == pick
     }
 }

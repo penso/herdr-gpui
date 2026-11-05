@@ -298,7 +298,8 @@ app learns the pane it should open:
 - `start` is what the chat begins with, as last picked on the phone:
   `{"mode"?, "option"?, "auto_accept"?}`. `mode` is the mode's id, or the
   choice's when `option` names the agent's mode setting. It goes before the
-  first prompt, asked again for up to 10 s while the session starts, and
+  first prompt, asked again for up to 10 s while the chat's connection and
+  session come up, and
   counts once the transcript shows it, since the agent may still refuse a
   request it was sent. `started` is false otherwise: the prompt is then
   held back, and a chat without its mode does not turn on auto-accept.

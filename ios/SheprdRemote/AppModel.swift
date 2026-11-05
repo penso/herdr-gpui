@@ -50,6 +50,8 @@ final class AppModel {
             UserDefaults.standard.set(saved, forKey: "startChoices")
         }
     }
+    /// Which picks in chats are the latest; see `pickStart`.
+    @ObservationIgnored private var startPicks = StartPicks()
     /// A new workspace or chat being set up, as a sheet over every tab.
     var creating: Creating?
     /// A tab to switch to, from a Control or an intent; the root view
@@ -78,6 +80,19 @@ final class AppModel {
         var choice = startChoice(for: agent)
         change(&choice)
         if choice != startChoices[agent] { startChoices[agent] = choice }
+    }
+
+    /// Notes `command`, sent to a chat with `agent`, as a pick new chats may
+    /// follow, and returns what saves it once the chat took it. Requests
+    /// finish in any order, so a pick the person has since replaced is not
+    /// saved. `nil` when the command is not such a pick.
+    func pickStart(_ command: ChatCommand, agent: String) -> (() -> Void)? {
+        guard let setting = startChoice(for: agent).setting(of: command) else { return nil }
+        let pick = startPicks.begin(agent: agent, setting: setting)
+        return { [weak self] in
+            guard let self, startPicks.isLatest(pick, agent: agent, setting: setting) else { return }
+            updateStart(for: agent) { $0.follow(command) }
+        }
     }
 
     /// Spotlight follows the app lock as soon as it changes, not at the

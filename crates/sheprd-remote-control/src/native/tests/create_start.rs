@@ -3,15 +3,14 @@
 //! shows it. Anything less is reported, so the first prompt waits, and a
 //! chat without its mode does not auto-accept.
 
+use crate::hub;
 use crate::native::create::{Start, apply_start};
 use serde_json::json;
 use sheprd_chat_protocol::{
     Choice, Command, ConfigOption, Mode, Modes, OptionCategory, OptionKind, OptionValue, Rejection,
     Transcript,
 };
-use std::{
-    cell::RefCell, collections::VecDeque, convert::Infallible, future::ready, time::Duration,
-};
+use std::{cell::RefCell, collections::VecDeque, future::ready, time::Duration};
 
 const WAIT: Duration = Duration::from_secs(5);
 
@@ -33,6 +32,16 @@ async fn run_shown(
     answers: Vec<Option<Rejection>>,
     shown: impl FnMut() -> bool,
 ) -> (bool, Vec<Command>) {
+    run_answers(start, wait, answers.into_iter().map(Ok).collect(), shown).await
+}
+
+/// [`run_shown`], with what the chat answers, failures included.
+async fn run_answers(
+    start: &Start,
+    wait: Duration,
+    answers: Vec<hub::Result<Option<Rejection>>>,
+    shown: impl FnMut() -> bool,
+) -> (bool, Vec<Command>) {
     let answers = RefCell::new(VecDeque::from(answers));
     let sent = RefCell::new(Vec::new());
     let took = apply_start(
@@ -40,9 +49,7 @@ async fn run_shown(
         wait,
         |command| {
             sent.borrow_mut().push(command);
-            ready(Ok::<_, Infallible>(
-                answers.borrow_mut().pop_front().flatten(),
-            ))
+            ready(answers.borrow_mut().pop_front().unwrap_or(Ok(None)))
         },
         shown,
     )
@@ -108,6 +115,42 @@ async fn a_session_that_stays_down_past_the_wait_is_a_failure() {
 #[tokio::test]
 async fn a_mode_the_agent_refuses_is_a_failure_without_asking_again() {
     let (took, sent) = run(&plan(), WAIT, vec![Some(Rejection::UnknownMode)]).await;
+    assert!(!took);
+    assert_eq!(sent.len(), 1);
+}
+
+#[tokio::test]
+async fn a_connection_still_coming_up_is_asked_again() {
+    let answers = vec![Err(hub::Error::ChatUnavailable)];
+    let (took, sent) = run_answers(&plan(), WAIT, answers, || true).await;
+    assert!(took);
+    assert_eq!(sent.len(), 2);
+}
+
+#[tokio::test]
+async fn auto_accepting_alone_waits_for_the_connection_too() {
+    let start = Start {
+        auto_accept: true,
+        ..Start::default()
+    };
+    let answers = vec![Err(hub::Error::ChatUnavailable)];
+    let (took, sent) = run_answers(&start, WAIT, answers, || true).await;
+    assert!(took);
+    assert_eq!(sent.len(), 2);
+}
+
+#[tokio::test]
+async fn a_connection_that_stays_down_past_the_wait_is_a_failure() {
+    let answers = vec![Err(hub::Error::ChatUnavailable)];
+    let (took, sent) = run_answers(&plan(), Duration::ZERO, answers, || true).await;
+    assert!(!took);
+    assert_eq!(sent.len(), 1);
+}
+
+#[tokio::test]
+async fn any_other_failure_is_not_asked_again() {
+    let answers = vec![Err(hub::Error::Busy)];
+    let (took, sent) = run_answers(&plan(), WAIT, answers, || true).await;
     assert!(!took);
     assert_eq!(sent.len(), 1);
 }

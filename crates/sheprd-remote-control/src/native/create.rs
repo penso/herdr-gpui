@@ -4,6 +4,7 @@
 //! name the mode and auto-accepting a chat starts with; those go first, so
 //! the first prompt never runs in a mode the person did not pick.
 
+use crate::hub;
 use crate::web::{
     ApiError, Device, NEW_CHAT_WAIT, Shared, check_new_workspace, folders, parse_agent,
 };
@@ -349,30 +350,23 @@ async fn open(state: &Shared, pane: String, start: Option<Start>, prompt: String
 }
 
 /// Sends `start`'s commands through `send`, and says whether the chat took
-/// them all. A session refuses its mode until it is up, so that one is
-/// asked again for up to `wait`. Its acknowledgement only says the request
-/// went to the agent, which may still refuse it, so the mode counts once
-/// `shown` sees it in the transcript. Without its mode a chat does not
-/// auto-accept: that would run tools in a mode nobody picked.
-pub(crate) async fn apply_start<F, E>(
+/// them all. Its acknowledgement of a mode only says the request went to
+/// the agent, which may still refuse it, so the mode counts once `shown`
+/// sees it in the transcript. Without its mode a chat does not auto-accept:
+/// that would run tools in a mode nobody picked. All of it shares `wait`.
+pub(crate) async fn apply_start<F>(
     start: &Start,
     wait: Duration,
     mut send: impl FnMut(Command) -> F,
     mut shown: impl FnMut() -> bool,
 ) -> bool
 where
-    F: Future<Output = Result<Option<Rejection>, E>>,
+    F: Future<Output = hub::Result<Option<Rejection>>>,
 {
     let deadline = Instant::now() + wait;
     if let Some(command) = start.mode_command() {
-        loop {
-            match send(command.clone()).await {
-                Ok(None) => break,
-                Ok(Some(Rejection::NotReady)) if Instant::now() < deadline => {
-                    tokio::time::sleep(START_RETRY).await;
-                }
-                Ok(Some(_)) | Err(_) => return false,
-            }
+        if !send_once_up(command, deadline, &mut send).await {
+            return false;
         }
         while !shown() {
             if Instant::now() >= deadline {
@@ -384,5 +378,30 @@ where
     if !start.auto_accept {
         return true;
     }
-    matches!(send(Command::SetAutoAccept { on: true }).await, Ok(None))
+    send_once_up(Command::SetAutoAccept { on: true }, deadline, &mut send).await
+}
+
+/// Sends `command` until the chat takes it or `deadline` passes. A new chat
+/// is listed before its connection is up, and a session refuses its mode
+/// until it has started; both pass, so they are asked again, which the
+/// mode and auto-accept commands allow. Any other answer is final.
+async fn send_once_up<F>(
+    command: Command,
+    deadline: Instant,
+    send: &mut impl FnMut(Command) -> F,
+) -> bool
+where
+    F: Future<Output = hub::Result<Option<Rejection>>>,
+{
+    loop {
+        match send(command.clone()).await {
+            Ok(None) => return true,
+            Ok(Some(Rejection::NotReady)) | Err(hub::Error::ChatUnavailable)
+                if Instant::now() < deadline =>
+            {
+                tokio::time::sleep(START_RETRY).await;
+            }
+            Ok(Some(_)) | Err(_) => return false,
+        }
+    }
 }
