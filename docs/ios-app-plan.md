@@ -287,12 +287,22 @@ app learns the pane it should open:
   Agents come in Herdr's order, only those `sheprd-acp agents` finds on
   this computer (all of them if it finds none or cannot run); `id` is
   what a request names.
-- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?}`
-  and answers `{"workspace": "w3", "pane": "p7", "prompted": true}`. The
+- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?,
+  "start"?}` and answers `{"workspace": "w3", "pane": "p7", "prompted":
+  true, "started": true}`. The
   folder must be one `new` offers, and `branch`, when not blank, opens a
   worktree.
-- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?}`
-  and answers `{"pane": "p7", "prompted": true}`.
+- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?,
+  "start"?}` and answers `{"pane": "p7", "prompted": true, "started":
+  true}`.
+- `start` is what the chat begins with, as last picked on the phone:
+  `{"mode"?, "option"?, "auto_accept"?}`. `mode` is the mode's id, or the
+  choice's when `option` names the agent's mode setting. It goes before the
+  first prompt, asked again for up to 10 s while the chat's connection and
+  session come up, and
+  counts once the transcript shows it, since the agent may still refuse a
+  request it was sent. `started` is false otherwise: the prompt is then
+  held back, and a chat without its mode does not turn on auto-accept.
 - Both wait up to 10 s for the chat's program to report in, then send the
   first prompt if it is not blank. `pane` is `null` when the chat was not
   listed in time; `prompted` is false when there was no prompt or the

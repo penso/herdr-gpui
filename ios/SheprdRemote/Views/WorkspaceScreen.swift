@@ -118,6 +118,7 @@ struct WorkspaceScreen: View {
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
             .listRowSeparator(.hidden, edges: .bottom)
+            if let recent { StartChoiceRow(agent: recent.name) }
             if !others.isEmpty {
                 Button {
                     withAnimation { showsOthers.toggle() }
@@ -126,6 +127,7 @@ struct WorkspaceScreen: View {
                         Text("Other agents")
                         Spacer()
                         if !showsOthers {
+                            if others.contains(where: { model.startChoice(for: $0.name).bypasses }) { Self.unasked }
                             HStack(spacing: 4) { ForEach(others) { AgentIcon(agent: $0.id, size: 22) } }
                                 .transition(.opacity)
                                 .accessibilityHidden(true)
@@ -144,20 +146,32 @@ struct WorkspaceScreen: View {
                         } label: {
                             HStack(spacing: 12) {
                                 AgentIcon(agent: agent.id, size: 28)
-                                Text(agent.name)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(agent.name)
+                                    if let label = model.startChoice(for: agent.name).label {
+                                        Text(label).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
                                 Spacer()
+                                if model.startChoice(for: agent.name).bypasses { Self.unasked }
                                 if starting == agent.id { ProgressView() }
                             }
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("New \(agent.name) tab")
+                        .accessibilityValue(model.startChoice(for: agent.name).label ?? "")
                         .contextMenu { firstPrompt(agent, in: workspace) }
                     }
                 }
             }
         }
         .disabled(!online || starting != nil)
+    }
+
+    /// Says a new tab would run tools without asking.
+    private static var unasked: some View {
+        Image(systemName: "bolt.shield.fill").foregroundStyle(.red).accessibilityLabel("Runs without asking")
     }
 
     private func firstPrompt(_ agent: AgentChoice, in workspace: Home.Workspace) -> some View {
@@ -187,14 +201,16 @@ struct WorkspaceScreen: View {
 
     private func start(_ agent: AgentChoice, in workspace: Home.Workspace) {
         let (device, id) = (key.device, workspace.id)
+        let start = model.startChoice(for: agent.name).start
         starting = agent.id
         Task {
             defer { starting = nil }
             do {
                 let created = try await model.fleet.call(device) { client, token in
-                    try await client.startChat(NewChatRequest(agent: agent.id), workspace: id, bearer: token)
+                    try await client.startChat(NewChatRequest(agent: agent.id, start: start), workspace: id, bearer: token)
                 }
                 model.recentAgent = agent.id
+                if start != nil, !created.started { model.notice = AppModel.startMissed }
                 if let pane = created.pane { opened = .chat(PaneKey(device: device, pane: pane), title: agent.name) }
             } catch {
                 problem = error.localizedDescription

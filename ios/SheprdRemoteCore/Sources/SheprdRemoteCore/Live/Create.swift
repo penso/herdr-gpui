@@ -42,12 +42,15 @@ public struct NewWorkspaceRequest: Codable, Hashable, Sendable {
     public var agent: String
     /// Sent once the chat is ready; empty sends nothing.
     public var prompt: String
+    /// What the chat starts with, before the prompt goes.
+    public var start: ChatStart?
 
-    public init(cwd: String, branch: String = "", agent: String, prompt: String = "") {
+    public init(cwd: String, branch: String = "", agent: String, prompt: String = "", start: ChatStart? = nil) {
         self.cwd = cwd
         self.branch = branch
         self.agent = agent
         self.prompt = prompt
+        self.start = start
     }
 
     /// The branch proposed for `seed`, the same one the desktop's new
@@ -72,10 +75,13 @@ public struct NewWorkspaceRequest: Codable, Hashable, Sendable {
 public struct NewChatRequest: Codable, Hashable, Sendable {
     public var agent: String
     public var prompt: String
+    /// What the chat starts with, before the prompt goes.
+    public var start: ChatStart?
 
-    public init(agent: String, prompt: String = "") {
+    public init(agent: String, prompt: String = "", start: ChatStart? = nil) {
         self.agent = agent
         self.prompt = prompt
+        self.start = start
     }
 }
 
@@ -86,13 +92,17 @@ public struct Created: Codable, Hashable, Sendable {
     public var pane: String?
     /// Whether the first prompt went to the chat.
     public var prompted: Bool
+    /// Whether the chat took what it was asked to start with. A daemon too
+    /// old to know the request's `start` does not say.
+    public var started: Bool
 
-    enum CodingKeys: String, CodingKey { case workspace, pane, prompted }
+    enum CodingKeys: String, CodingKey { case workspace, pane, prompted, started }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         workspace = try c.decodeIfPresent(String.self, forKey: .workspace)
         pane = try c.decodeIfPresent(String.self, forKey: .pane)
         prompted = try c.decodeIfPresent(Bool.self, forKey: .prompted) ?? false
+        started = try c.decodeIfPresent(Bool.self, forKey: .started) ?? false
     }
 }
