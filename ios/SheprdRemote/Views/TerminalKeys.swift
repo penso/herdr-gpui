@@ -131,7 +131,8 @@ struct TermKeyRows: View {
     @Binding var keyboard: Bool
 
     private static let top: [(key: String, label: String)] = [
-        ("esc", "esc"), ("tab", "⇥"), ("|", "|"), ("slash", "/"), ("minus", "-"), ("~", "~"), ("backtick", "`"), ("up", "↑"),
+        // A new line without Enter: Claude Code and Codex read Ctrl-J as one.
+        ("esc", "esc"), ("tab", "⇥"), ("ctrl+j", "↵"), ("|", "|"), ("slash", "/"), ("minus", "-"), ("~", "~"), ("backtick", "`"), ("up", "↑"),
     ]
     private static let bottom: [(key: String, label: String)] = [
         ("ctrl+d", "^D"), ("ctrl+z", "^Z"), ("ctrl+r", "^R"), ("ctrl+l", "^L"), ("ctrl+a", "^A"), ("ctrl+e", "^E"),
