@@ -52,6 +52,9 @@ pub(super) struct Cask {
     brew: PathBuf,
     prefix: PathBuf,
     bundle: PathBuf,
+    /// The path this app was started from, when the cask has moved it to
+    /// `bundle` and nothing stands there yet.
+    legacy: Option<PathBuf>,
     home: OsString,
 }
 
@@ -73,11 +76,27 @@ fn trusted(path: &Path, uid: u32, directory: bool) -> Result<fs::Metadata> {
 /// A missing or unrelated Homebrew is not an error: the app is then standalone.
 pub(super) fn detect(bundle: &Path, uid: u32) -> Option<Cask> {
     let home = env::var_os("HOME")?;
-    let prefixes = env::var_os("HOMEBREW_PREFIX")
+    locate(bundle, uid, home, prefixes())
+}
+
+fn prefixes() -> impl Iterator<Item = PathBuf> {
+    env::var_os("HOMEBREW_PREFIX")
         .map(PathBuf::from)
         .into_iter()
-        .chain(PREFIXES.iter().map(PathBuf::from));
-    locate(bundle, uid, home, prefixes)
+        .chain(PREFIXES.iter().map(PathBuf::from))
+}
+
+/// Whether Homebrew has a receipt for this bundle, whether or not it is trusted
+/// to run. [`detect`] also refuses an unsafe prefix, but that receipt would
+/// still go stale if the bundle moved out from under it.
+pub(super) fn recorded(bundle: &Path) -> bool {
+    recorded_in(bundle, prefixes())
+}
+
+fn recorded_in(bundle: &Path, prefixes: impl IntoIterator<Item = PathBuf>) -> bool {
+    prefixes
+        .into_iter()
+        .any(|prefix| owned_bundle(&prefix, bundle).is_some())
 }
 
 /// Prefixes and HOME are arguments, not environment reads, so this stays
@@ -90,14 +109,16 @@ fn locate(
 ) -> Option<Cask> {
     for prefix in prefixes {
         let brew = prefix.join("bin/brew");
-        let owns = trusted(&prefix, uid, true).is_ok()
-            && trusted(&brew, uid, false).is_ok_and(|meta| meta.mode() & 0o111 != 0)
-            && owned_bundle(&prefix, bundle);
-        if owns {
+        let safe = trusted(&prefix, uid, true).is_ok()
+            && trusted(&brew, uid, false).is_ok_and(|meta| meta.mode() & 0o111 != 0);
+        if let Some(owned) = owned_bundle(&prefix, bundle).filter(|_| safe) {
+            let legacy = (owned != bundle && fs::symlink_metadata(bundle).is_err())
+                .then(|| bundle.to_owned());
             return Some(Cask {
                 brew,
                 prefix,
-                bundle: bundle.to_owned(),
+                bundle: owned,
+                legacy,
                 home,
             });
         }
@@ -107,18 +128,28 @@ fn locate(
 
 /// Homebrew moves an `app` artifact to its target and leaves a symlink to it in
 /// the Caskroom. That link, not a version string, is what proves ownership.
-fn owned_bundle(prefix: &Path, bundle: &Path) -> bool {
-    let caskroom = prefix.join("Caskroom").join(TOKEN);
-    let Ok(entries) = fs::read_dir(&caskroom) else {
-        return false;
-    };
-    entries.filter_map(std::result::Result::ok).any(|entry| {
-        crate::install::bundle::ROOTS.iter().any(|name| {
-            let link = entry.path().join(name);
-            fs::symlink_metadata(&link).is_ok_and(|meta| meta.file_type().is_symlink())
-                && fs::read_link(&link).is_ok_and(|target| target == bundle)
+///
+/// Returns where the bundle is now. An upgrade can move a running `Herdr.app` to
+/// `Sheprd.app` beside it, so that one receipt also counts, but only once no
+/// real bundle remains at the old path: a separate copy there is not the cask's.
+fn owned_bundle(prefix: &Path, bundle: &Path) -> Option<PathBuf> {
+    let receipts: Vec<PathBuf> = fs::read_dir(prefix.join("Caskroom").join(TOKEN))
+        .ok()?
+        .filter_map(std::result::Result::ok)
+        .flat_map(|entry| {
+            let version = entry.path();
+            crate::install::bundle::ROOTS
+                .iter()
+                .map(move |name| version.join(name))
         })
-    })
+        .filter(|link| fs::symlink_metadata(link).is_ok_and(|meta| meta.file_type().is_symlink()))
+        .filter_map(|link| fs::read_link(link).ok())
+        .collect();
+    if receipts.iter().any(|target| target == bundle) {
+        return Some(bundle.to_owned());
+    }
+    let gone = !fs::symlink_metadata(bundle).is_ok_and(|meta| meta.is_dir());
+    crate::install::bundle::renamed(bundle).filter(|renamed| gone && receipts.contains(renamed))
 }
 
 fn command(cask: &Cask) -> Command {
@@ -428,6 +459,7 @@ const EXECUTABLE: &str = "Contents/MacOS/Herdr";
 /// Arm a detached `open` of the upgraded bundle. The caller quits afterwards.
 pub(super) fn relaunch(cask: &Cask) -> Result<()> {
     runnable(&cask.bundle)?;
+    link_legacy(cask);
     schedule_relaunch(
         std::process::id(),
         &cask.bundle,
@@ -435,6 +467,17 @@ pub(super) fn relaunch(cask: &Cask) -> Result<()> {
         "/usr/bin:/bin",
         RELAUNCH,
     )
+}
+
+/// Keep the path this app was started from working after its cask moved it.
+/// The upgrade has already landed, so a failure must not stop the restart.
+fn link_legacy(cask: &Cask) {
+    let Some(legacy) = &cask.legacy else {
+        return;
+    };
+    if let Err(error) = crate::install::bundle::link_legacy(legacy) {
+        tracing::warn!(category = "updater", %error, "could not link the legacy app path");
+    }
 }
 
 /// Fail while this instance can still say so: once it quits, a missing app
