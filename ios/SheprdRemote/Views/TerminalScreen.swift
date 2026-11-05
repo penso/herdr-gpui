@@ -311,7 +311,8 @@ struct TerminalScreen: View {
     private func coast(_ count: Int) {
         guard count != 0 else { return }
         coasting = Task {
-            for step in 0..<abs(count) where !Task.isCancelled {
+            // A selection stops it, so the text stays under the cells selected.
+            for step in 0..<abs(count) where !Task.isCancelled && selection == nil {
                 notches(count.signum())
                 try? await Task.sleep(for: .milliseconds(25 + step * 6))
             }
