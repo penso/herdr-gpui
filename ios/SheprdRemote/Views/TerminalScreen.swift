@@ -403,16 +403,19 @@ struct TerminalScreen: View {
             let width = cellRatio * size
             var x: CGFloat = 0
             for run in row {
-                let span = CGFloat(run.text.count) * width
+                // A Chinese, Japanese, or Korean character covers two cells.
+                let span = CGFloat(TermScreen.cells(run.text)) * width
                 if let fill = runBackground(run) {
                     context.fill(Path(CGRect(x: x, y: 0, width: span, height: canvas.height)), with: .color(fill))
                 }
                 // Hidden text (SGR 8) keeps its cells but paints nothing.
                 if !run.hidden, run.text.contains(where: { block($0) != nil }) {
                     let ink = foreground(run)
-                    for (index, character) in run.text.enumerated() {
+                    var column = 0
+                    for character in run.text {
+                        defer { column += TermScreen.cells(String(character)) }
                         guard let shape = block(character) else { continue }
-                        let cell = CGRect(x: x + CGFloat(index) * width, y: 0, width: width, height: canvas.height)
+                        let cell = CGRect(x: x + CGFloat(column) * width, y: 0, width: width, height: canvas.height)
                         context.fill(Path(shape.rect(in: cell)), with: .color(ink.opacity(shape.opacity)))
                     }
                 }
