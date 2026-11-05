@@ -12,6 +12,7 @@ private let log = Logger(subsystem: "so.pen.herdr.remote", category: "app")
 enum Route: Codable, Hashable {
     case chat(PaneKey, title: String)
     case term(PaneKey, title: String)
+    case workspace(WorkspaceKey)
 }
 
 /// The app's state: paired computers, their live links, and the tokens
@@ -29,6 +30,19 @@ final class AppModel {
     var message: String?
     /// Set by a deep link; the root view shows it and clears it.
     var pendingRoute: Route?
+    /// The workspace a tab on Home asked to go to; the root view shows it
+    /// and clears it.
+    var pendingWorkspace: WorkspaceKey?
+    /// The computer of the workspace or tab last opened, which a new
+    /// workspace starts on. Kept on this phone across launches.
+    @ObservationIgnored var recentDevice = UserDefaults.standard.string(forKey: "recentDevice") {
+        didSet { UserDefaults.standard.set(recentDevice, forKey: "recentDevice") }
+    }
+    /// The agent last started from this phone, offered first for a new
+    /// tab. Kept across launches.
+    var recentAgent = UserDefaults.standard.string(forKey: "recentAgent") {
+        didSet { UserDefaults.standard.set(recentAgent, forKey: "recentAgent") }
+    }
     /// A new workspace or chat being set up, as a sheet over every tab.
     var creating: Creating?
     /// A tab to switch to, from a Control or an intent; the root view

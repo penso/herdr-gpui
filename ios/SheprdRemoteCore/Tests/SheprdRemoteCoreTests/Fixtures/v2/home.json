@@ -6,9 +6,12 @@
     "connected": true,
     "waiting": 1,
     "load": {
+      "cores": 10,
       "cpu": 47,
+      "load5_tenths": 42,
       "memory": 67
     },
+    "working": 2,
     "workspaces": [
       {
         "id": "w1",
@@ -86,7 +89,8 @@
               "name": "claude",
               "status": "done",
               "pane": "p2",
-              "title": "Fix the build"
+              "title": "Fix the build",
+              "changed_ms": 1770000000000
             }
           }
         ]

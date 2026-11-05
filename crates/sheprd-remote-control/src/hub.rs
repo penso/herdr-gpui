@@ -9,6 +9,7 @@ mod attach;
 mod chat;
 mod daemon;
 mod layout;
+mod recency;
 
 pub(crate) use api::ApiMethod;
 pub(crate) use chat::{Chat, Event, Summary, View};

@@ -12,13 +12,20 @@ struct ChatScreen: View {
     let title: String
     @State private var store: ChatStore?
     @State private var showingSession = false
+    /// Why the last new terminal tab did not start.
+    @State private var problem: String?
     @Environment(\.horizontalSizeClass) private var width
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.offersWorkspace) private var offersWorkspace
+
+    private var item: ChatItem? {
+        model.fleet.chatItems.first { $0.key == key }
+    }
 
     /// The chat's name as the computer last sent it, so a rename shows at
     /// once; the route's title until the home arrives.
     private var name: String {
-        model.fleet.chatItems.first { $0.key == key }?.chat.title ?? title
+        item?.chat.title ?? title
     }
 
     var body: some View {
@@ -38,6 +45,14 @@ struct ChatScreen: View {
         .toolbar(.hidden, for: .tabBar)
         .hidesConnectionToast()
         .toolbar {
+            if offersWorkspace, let workspace = item?.workspace {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { model.pendingWorkspace = WorkspaceKey(device: key.device, workspace: workspace.id) } label: {
+                        Image(systemName: "square.stack.3d.up")
+                    }
+                    .accessibilityLabel("Go to \(workspace.label)")
+                }
+            }
             // On an iPad the bar's middle also spans the terminal
             // inspector, so the header leads there instead.
             ToolbarItem(placement: width == .regular ? .topBarLeading : .principal) {
@@ -56,11 +71,28 @@ struct ChatScreen: View {
                 .frame(minWidth: width == .regular ? 280 : 0, maxWidth: 360, alignment: width == .regular ? .leading : .center)
                 .accessibilityHint("Shows the session's settings")
             }
+            if let workspace = item?.workspace {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("New Terminal", systemImage: "apple.terminal") { openTerminal() }
+                        Button("New Chat…", systemImage: "bubble.left.and.text.bubble.right") {
+                            model.creating = .chat(device: key.device, workspace: workspace.id, label: workspace.label)
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("New tab in \(workspace.label)")
+                }
+            }
             if let usage = store?.transcript?.usage {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingSession = true } label: { ContextRing(percent: usage.percent) }
                 }
             }
+        }
+        .alert("The tab did not start", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+        } message: {
+            Text(problem ?? "")
         }
         .sheet(isPresented: $showingSession) {
             if let store {
@@ -73,6 +105,7 @@ struct ChatScreen: View {
         }
         .onAppear {
             store = model.fleet.openChat(key)
+            model.recentDevice = key.device
             #if DEBUG
             // The simulator loop's `-session YES` opens the session sheet.
             if UserDefaults.standard.bool(forKey: "session") { showingSession = true }
@@ -80,6 +113,22 @@ struct ChatScreen: View {
         }
         .onDisappear {
             if let store { model.fleet.closeChat(store) }
+        }
+    }
+
+    /// Sheprd opens a tab in the workspace of the pane an action names, so
+    /// the chat's own pane will do.
+    private func openTerminal() {
+        let (device, pane) = (key.device, key.pane)
+        Task {
+            do {
+                let created = try await model.fleet.call(device) { client, token in
+                    try await client.termAction(.newTab, pane: pane, bearer: token)
+                }
+                if let created { model.pendingRoute = .term(PaneKey(device: device, pane: created), title: "Terminal") }
+            } catch {
+                problem = error.localizedDescription
+            }
         }
     }
 

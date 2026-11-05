@@ -43,6 +43,23 @@ public struct NewWorkspaceRequest: Codable, Hashable, Sendable {
         self.agent = agent
         self.prompt = prompt
     }
+
+    /// The branch proposed for `seed`, the same one the desktop's new
+    /// worktree dialog proposes (`generated_branch_slug` in
+    /// `sheprd-gpui`'s `worktree.rs`), so the form can be sent as it opens.
+    public static func proposedBranch(seed: UInt64) -> String {
+        let adjectives = ["brave", "calm", "clear", "green", "lucky", "quiet", "rapid", "silver"]
+        let nouns = ["river", "cloud", "field", "forest", "harbor", "meadow", "stone", "valley"]
+        let adjective = adjectives[Int(seed % UInt64(adjectives.count))]
+        let noun = nouns[Int(seed / UInt64(adjectives.count) % UInt64(nouns.count))]
+        let suffix = String(seed & 0xffff, radix: 16)
+        return "worktree/\(adjective)-\(noun)-\(String(repeating: "0", count: 4 - suffix.count))\(suffix)"
+    }
+
+    /// A proposal seeded from the clock in microseconds, as the desktop's is.
+    public static func proposedBranch(at date: Date = Date()) -> String {
+        proposedBranch(seed: UInt64(max(date.timeIntervalSince1970, 0) * 1_000_000))
+    }
 }
 
 /// `POST /api/v2/workspaces/{workspace}/chats`.

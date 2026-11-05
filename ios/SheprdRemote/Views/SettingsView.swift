@@ -91,7 +91,7 @@ struct SettingsView: View {
             } header: {
                 Text("Privacy")
             } footer: {
-                Text("Asks for Face ID when the app opens and hides it in the app switcher. \"Always\" answers and auto-accept ask either way.")
+                Text("Asks for Face ID when the app opens and hides it in the app switcher. \"Always\" answers ask either way.")
             }
             Section("Storage") {
                 LabeledContent("Cached chats and lists", value: ByteCountFormatter.string(fromByteCount: Int64(cacheSize), countStyle: .file))

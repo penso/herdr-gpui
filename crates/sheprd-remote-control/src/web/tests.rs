@@ -41,6 +41,7 @@ pub(crate) fn state(dir: &std::path::Path) -> Shared {
         Hub::offline(Layout {
             connected: true,
             boot: "b".into(),
+            working: 0,
             workspaces: Vec::new(),
         }),
     )

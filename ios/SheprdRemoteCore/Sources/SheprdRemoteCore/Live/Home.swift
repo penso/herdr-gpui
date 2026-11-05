@@ -12,21 +12,35 @@ public struct Home: Codable, Hashable, Sendable {
     /// The computer's CPU and memory; absent until it first read them, and
     /// from older computers.
     public var load: Load?
+    /// Agents working now, counted one by one, as a terminal tab lists only
+    /// its most pressing agent; older computers leave it out.
+    public var working: Int?
     public var workspaces: [Workspace]
 
-    public init(computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, workspaces: [Workspace]) {
+    public init(computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, workspaces: [Workspace]) {
         self.computer = computer
         self.fingerprint = fingerprint
         self.connected = connected
         self.waiting = waiting
         self.load = load
+        self.working = working
         self.workspaces = workspaces
     }
 
-    /// Whole percentages, 0 to 100.
+    /// CPU and memory in whole percentages, 0 to 100. Older computers
+    /// send neither `cores` nor `load5Tenths`, and a computer whose OS
+    /// keeps no load average leaves that out.
     public struct Load: Codable, Hashable, Sendable {
+        public var cores: Int?
         public var cpu: Int
+        /// The 5 minute load average, in tenths.
+        public var load5Tenths: Int?
         public var memory: Int
+
+        enum CodingKeys: String, CodingKey {
+            case cores, cpu, memory
+            case load5Tenths = "load5_tenths"
+        }
     }
 
     public struct Workspace: Codable, Hashable, Sendable, Identifiable {
@@ -141,6 +155,14 @@ public struct Home: Codable, Hashable, Sendable {
             public var pane: String?
             /// What it works on, from its terminal title.
             public var title: String?
+            /// When the computer saw it last change state; unknown until
+            /// it does, and from older computers.
+            public var changedMs: UInt64?
+
+            enum CodingKeys: String, CodingKey {
+                case name, status, pane, title
+                case changedMs = "changed_ms"
+            }
         }
 
         /// The pane a phone opens for the tab's agent: its own, else the
