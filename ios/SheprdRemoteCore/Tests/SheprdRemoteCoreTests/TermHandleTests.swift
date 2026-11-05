@@ -148,7 +148,15 @@ import Testing
     @Test func theMenuKeepsClearOfTheHandles() {
         let handles = TermHandles(TermSelection(anchor: at(1, 4), head: at(0, 2)), cell: cell)
         // From the start's knob above row 0 to the end's below row 1.
-        #expect(handles.bounds == CGRect(x: 15, y: -10, width: 40, height: 60))
+        #expect(handles.bounds == CGRect(x: 16, y: -8, width: 38, height: 56))
+    }
+
+    @Test func aKnobFitsInTheRowsPadding() {
+        // The rows have 8 points around them inside a scroll view that
+        // clips: a knob above row 0 or below the last row shows whole.
+        let handles = TermHandles(TermSelection(anchor: at(0, 0), head: at(1, 3)), cell: cell)
+        #expect(handles.knob(.start).minY >= -8)
+        #expect(handles.knob(.end).maxY <= 2 * cell.height + 8)
     }
 
     @Test func theMenuPointsAboveTheSelection() {

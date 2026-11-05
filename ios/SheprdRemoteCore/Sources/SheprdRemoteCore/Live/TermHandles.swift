@@ -5,8 +5,9 @@ import Foundation
 /// them: a bar a row tall at each end, the start's left of its first cell
 /// with a knob above, the end's right of its last cell with a knob below.
 public struct TermHandles: Equatable, Sendable {
-    /// A knob's diameter.
-    public static let knob: CGFloat = 10
+    /// A knob's diameter: no more than the rows' padding, so a knob above
+    /// the first row or below the last shows whole.
+    public static let knob: CGFloat = 8
     /// The least a handle's touch target measures each way: a fingertip.
     public static let reach: CGFloat = 44
 
