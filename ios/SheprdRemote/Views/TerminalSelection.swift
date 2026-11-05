@@ -193,12 +193,9 @@ struct TermMenu: UIViewRepresentable {
     func makeUIView(context: Context) -> TermMenuView { TermMenuView() }
 
     func updateUIView(_ view: TermMenuView, context: Context) {
-        view.items = [
-            UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in copy() },
-            UIAction(title: "Select All", image: UIImage(systemName: "selection.pin.in.out")) { _ in selectAll() },
-            UIAction(title: "Paste", image: UIImage(systemName: "doc.on.clipboard"),
-                     attributes: UIPasteboard.general.hasStrings ? [] : .disabled) { _ in paste() },
-        ]
+        view.copy = copy
+        view.selectAll = selectAll
+        view.paste = paste
         view.clear = clear
         guard let at else {
             view.dismiss()
@@ -211,7 +208,11 @@ struct TermMenu: UIViewRepresentable {
 }
 
 final class TermMenuView: UIView, @MainActor UIEditMenuInteractionDelegate {
-    var items: [UIMenuElement] = []
+    /// What the menu's items do, set on each update: a menu already
+    /// showing calls through these, so Copy reads the screen as it is now.
+    var copy: () -> Void = {}
+    var selectAll: () -> Void = {}
+    var paste: () -> Void = {}
     var shown = 0
     var clear = CGRect.null
     private lazy var interaction = UIEditMenuInteraction(delegate: self)
@@ -227,7 +228,12 @@ final class TermMenuView: UIView, @MainActor UIEditMenuInteractionDelegate {
 
     func editMenuInteraction(_ interaction: UIEditMenuInteraction, menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
-        UIMenu(children: items)
+        UIMenu(children: [
+            UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in self?.copy() },
+            UIAction(title: "Select All", image: UIImage(systemName: "selection.pin.in.out")) { [weak self] _ in self?.selectAll() },
+            UIAction(title: "Paste", image: UIImage(systemName: "doc.on.clipboard"),
+                     attributes: UIPasteboard.general.hasStrings ? [] : .disabled) { [weak self] _ in self?.paste() },
+        ])
     }
 
     /// Above or below the selection, never over a handle.
