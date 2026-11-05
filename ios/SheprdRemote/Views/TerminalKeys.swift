@@ -154,7 +154,9 @@ struct TermKeyRows: View {
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(.bar)
+        // Under the keyboard too: its rounded top corners would otherwise
+        // show the window's light background beside the dark rows.
+        .background { Rectangle().fill(.bar).ignoresSafeArea() }
         .sensoryFeedback(.selection, trigger: typing.modifiers)
     }
 
