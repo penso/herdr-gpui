@@ -51,6 +51,13 @@ public struct TermHandles: Equatable, Sendable {
         return [TermSelection.End.start, .end].filter { target($0).contains(point) }.min { distance($0) < distance($1) }
     }
 
+    /// Whether `point` is on a handle itself, a knob's width around its bar
+    /// and knob, rather than on the cells its target reaches over: a tap
+    /// there that never moves the handle is a tap on those cells.
+    public func isOnHandle(at point: CGPoint) -> Bool {
+        [TermSelection.End.start, .end].contains { bar($0).union(knob($0)).insetBy(dx: -Self.knob, dy: -Self.knob).contains(point) }
+    }
+
     /// The selection's rows with both handles, which the copy menu keeps
     /// clear of so they can still be grabbed.
     public var bounds: CGRect {
