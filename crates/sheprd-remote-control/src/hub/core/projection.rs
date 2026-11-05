@@ -56,6 +56,7 @@ pub(super) fn project(
     let mut layout = Layout {
         boot: format!("core:{boot}"),
         connected: true,
+        working: working(records),
         workspaces: Vec::new(),
     };
     let mut assigned = HashSet::new();
@@ -129,6 +130,13 @@ fn status(record: &Record) -> AgentStatus {
     }
 }
 
+pub(super) fn working(records: &[Record]) -> usize {
+    records
+        .iter()
+        .filter(|record| status(record) == AgentStatus::Working)
+        .count()
+}
+
 pub(super) fn terminal(
     tab: &str,
     title: &str,
@@ -164,6 +172,7 @@ pub(super) fn terminal(
                 .map(|status| status.title.clone())
                 .filter(|title| !title.is_empty())
                 .or_else(|| record.title.clone()),
+            changed_ms: None,
         });
     Some(Terminal {
         agent,

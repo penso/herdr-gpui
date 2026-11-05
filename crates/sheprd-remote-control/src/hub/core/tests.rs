@@ -65,6 +65,19 @@ fn connectivity_is_the_union_of_the_two_sources() {
 }
 
 #[test]
+fn merge_counts_working_agents_from_both_sources() {
+    let daemon = Layout {
+        working: 2,
+        ..Layout::default()
+    };
+    let core = Layout {
+        working: 3,
+        ..Layout::default()
+    };
+    assert_eq!(merge(&daemon, &core).working, 5);
+}
+
+#[test]
 fn pane_ids_do_not_collide_with_the_herdr_one_namespace_or_remote_paths() {
     assert_ne!(id("box/t1"), id("boxt1"));
     assert!(!id("box/t1").contains('/'));

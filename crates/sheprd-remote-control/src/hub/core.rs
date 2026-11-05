@@ -199,6 +199,7 @@ pub(super) fn owns(params: &Value) -> bool {
 fn merge(daemon: &Layout, core: &Layout) -> Layout {
     let mut merged = daemon.clone();
     merged.connected |= core.connected;
+    merged.working += core.working;
     if !daemon.connected {
         merged.boot = core.boot.clone();
     }

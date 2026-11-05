@@ -35,6 +35,7 @@ fn desktop_spaces_keep_order_tabs_panes_names_and_status() {
         records,
     );
     let layout = source.poll().unwrap();
+    assert_eq!(layout.working, 4);
     assert_eq!(
         layout
             .workspaces
@@ -62,6 +63,7 @@ fn desktop_spaces_keep_order_tabs_panes_names_and_status() {
         tabs[0].agent.as_ref().unwrap().status,
         sheprd_client::protocol::AgentStatus::Blocked
     );
+    assert_eq!(tabs[0].agent.as_ref().unwrap().changed_ms, None);
     assert_eq!(layout.workspaces[1].terminals[0].label, "1");
     assert_eq!(layout.workspaces[2].terminals[0].panes[0].pane, id("t5"));
     assert!(layout.connected);

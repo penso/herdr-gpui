@@ -133,6 +133,7 @@ impl Spaces {
         let mut layout = Layout {
             boot: format!("core:{boot}"),
             connected: true,
+            working: projection::working(records),
             workspaces: Vec::new(),
         };
         let mut assigned = HashSet::new();
