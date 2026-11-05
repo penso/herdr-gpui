@@ -16,6 +16,7 @@ use std::{
 use zeroize::Zeroizing;
 
 pub(super) const LIMIT: u64 = 2 * 1024 * 1024;
+const API: &str = "https://api.github.com";
 
 pub(super) fn agent(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
@@ -244,18 +245,49 @@ pub fn rest<T: DeserializeOwned>(
     if cancelled() {
         return Err(crate::pull_request::Error::Cancelled.into());
     }
-    let reply = agent(timeout)
-        .get(format!("https://api.github.com{path}"))
-        .header("User-Agent", "Sheprd")
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .header("Authorization", authorization(token)?)
-        .call()
-        .map_err(log::network(context))?;
+    let agent = agent(timeout);
+    let read = |url: &str| {
+        agent
+            .get(url)
+            .header("User-Agent", "Sheprd")
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("Authorization", authorization(token)?)
+            .call()
+            .map_err(log::network(context))
+    };
+    let mut reply = read(&format!("{API}{path}"))?;
+    let moved = moved_to(
+        reply.status().as_u16(),
+        reply
+            .headers()
+            .get("location")
+            .and_then(|value| value.to_str().ok()),
+    )
+    .map(str::to_owned);
+    if let Some(url) = moved {
+        if cancelled() {
+            return Err(crate::pull_request::Error::Cancelled.into());
+        }
+        reply = read(&url)?;
+    }
     if cancelled() {
         return Err(crate::pull_request::Error::Cancelled.into());
     }
     response(context, reply)
+}
+
+/// Where GitHub says a moved repository's read continues. A transferred or
+/// renamed repository answers REST under its old name with a redirect, which
+/// is followed once and only within the API: the request carries the token,
+/// so nothing else may be named by a response.
+pub(super) fn moved_to(status: u16, location: Option<&str>) -> Option<&str> {
+    location.filter(|url| {
+        matches!(status, 301 | 302 | 307 | 308)
+            && url
+                .strip_prefix(API)
+                .is_some_and(|path| path.starts_with('/'))
+    })
 }
 
 /// The `owner/repo` a request names, so a refusal can say which repository

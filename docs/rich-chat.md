@@ -74,6 +74,57 @@ view. Mirror tabs only watch, so they show the terminal rather than a chat.
 A `sheprd-acp` started by hand in a Herdr 2 pane has no label, so it also
 keeps its terminal view.
 
+## Moving a terminal agent into a chat
+
+An agent running in its own CLI can move into a chat without leaving its pane
+or its conversation. With the agent's pane focused, run **Move Agent into
+Chat** from the command palette, or:
+
+```sh
+sheprd chat convert [--pane ID]
+```
+
+The agent's CLI stops, `sheprd-acp --resume` continues the same session in the
+shell it leaves, and the chat view attaches. The agent keeps its whole context,
+and the chat opens with the conversation so far and its context window use.
+
+| Agent | Moves | Earlier messages come from |
+| --- | --- | --- |
+| Claude | Yes, with its command line's flags, such as `--model` | Its session log, read by `sheprd-acp` |
+| Codex | Yes | Its rollout log, read by `sheprd-acp` |
+| Copilot | Yes | The agent, through ACP's `session/load` |
+| OpenCode | Yes | The agent, through ACP's `session/load` |
+| Gemini | No: Herdr reports no session for it | |
+| Pi | No: nothing shows its earlier messages yet | |
+
+Herdr must know the agent's session, which takes its integration: run
+`herdr integration install claude` (or `codex`, `copilot`, `opencode`), then
+restart the agent. Without it the move is refused and the agent keeps running.
+
+Only an idle agent moves, since stopping one mid-turn would lose the turn, and
+a refusal leaves it running in its terminal. Everything that can refuse is
+checked before the agent is touched. It stops on Ctrl+C alone, sent until its
+shell is back, so nothing in its input is ever submitted or answered. Text in
+its input is lost, and whatever it ran in the background stops with it. If it
+has not stopped after 30 seconds, the move gives up. Leaving its host,
+losing the connection, or turning chats off during a move ends it at once, and
+no more keys are sent.
+
+Limitations:
+
+- Herdr 1 panes only, on this machine or an SSH host, and not on Windows. A
+  Herdr 2 pane reports no agent session.
+- Permissions follow the chat's own settings. Claude's flags, including
+  `--dangerously-skip-permissions`, carry over; other agents start with their
+  default model and permissions, which the composer can change.
+- A chat that keeps Claude's flags is not continued after a reboot (see
+  [Chats after a reboot](#chats-after-a-reboot)), like any chat started with
+  extra agent arguments.
+- Claude and Codex show the last 8 MiB of their logs, like an existing
+  conversation does. Older messages stay in the agent's context.
+- If `sheprd-acp` cannot continue the session, the pane keeps its error, and
+  the agent's own command (such as `claude --resume ID`) still can.
+
 ## Chats after a reboot
 
 When Herdr restores its panes after a reboot or a server restart, a pane that
@@ -84,7 +135,7 @@ continues those chats itself. Each chat writes a restore record (see the
 removes it when the user quits it, and Sheprd types
 `sheprd-acp --resume <session> <agent>` into the restored shell. The program
 continues the agent's session, announces itself, and the chat view attaches
-as for any chat. Herdr itself is unchanged.
+as for any chat, with its earlier messages. Herdr itself is unchanged.
 
 To type into the right shell, and only once, Sheprd continues a record
 only when all of these hold:

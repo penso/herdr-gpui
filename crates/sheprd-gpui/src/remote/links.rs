@@ -9,7 +9,8 @@
 //!   host lacks this exact build (`crate::host_build`);
 //! - runs `herdr-remote-control enroll` there with the phone's key, this
 //!   computer's name, and this daemon's APNs key, which starts the host's
-//!   daemon when it does not run and adds the phone;
+//!   daemon when it does not run, adds the phone, and then turns on
+//!   `[remote]` in the host's Sheprd settings, creating them when missing;
 //! - hands the host's answer (its fingerprint and addresses) back to this
 //!   daemon, which the phone reads.
 //!
@@ -37,7 +38,8 @@ use std::{sync::atomic::AtomicBool, time::Duration};
 const PROGRAM: &str = "herdr-remote-control";
 /// What `enroll` may print: one JSON answer.
 const ENROLL_OUTPUT: u64 = 64 * 1024;
-/// `enroll` may wait up to 20 s for a daemon it started.
+/// `enroll` may wait up to 20 s for a daemon it started, then 10 s for
+/// Sheprd's settings lock on the host.
 const ENROLL_IDLE: Duration = Duration::from_secs(60);
 
 #[derive(Debug, thiserror::Error)]
