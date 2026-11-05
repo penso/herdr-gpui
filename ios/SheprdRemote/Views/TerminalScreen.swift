@@ -31,6 +31,13 @@ struct TerminalScreen: View {
     @State private var coasting: Task<Void, Never>?
     /// The room the screen has, which sets the terminal's size.
     @State private var space: CGSize = .zero
+    /// What a long press selected, by cell, as terminals select, and the
+    /// word it began on, which a drag extends from.
+    @State private var selection: TermSelection?
+    @State private var pressed: TermSelection?
+    /// Where the copy menu shows, and how many times it has.
+    @State private var menuAt: CGPoint?
+    @State private var menuShows = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -48,11 +55,11 @@ struct TerminalScreen: View {
                     // Sideways only once pinched wider than the screen.
                     ScrollView(.horizontal, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(screen.rows.enumerated()), id: \.offset) { _, row in
+                            ForEach(Array(screen.rows.enumerated()), id: \.offset) { index, row in
                                 // The text is drawn cell by cell behind
                                 // (`cells`), as terminals draw it; this
                                 // copy keeps the line's height and is what
-                                // a long press copies.
+                                // VoiceOver reads.
                                 Text(verbatim: row.map(Self.shown).joined())
                                     .font(.system(size: size, design: .monospaced))
                                     .foregroundStyle(.clear)
@@ -61,13 +68,19 @@ struct TerminalScreen: View {
                                     .frame(minWidth: CGFloat(Self.span(row)) * Self.cellRatio * size, alignment: .leading)
                                     // Backgrounds are cells painted the full
                                     // line height, so blocks have no seams.
-                                    .background(alignment: .leading) { Self.cells(row, size: size) }
+                                    .background(alignment: .leading) {
+                                        Self.cells(row, size: size, selected: selection?.columns(in: index, last: Self.span(row) - 1))
+                                    }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Self.rowBackground(row) ?? paper)
                             }
                         }
+                        // A long press selects by cell and keeps the
+                        // keyboard, as SwiftTerm does; SwiftUI's text
+                        // selection would take the keyboard and select
+                        // text laid out off the cell grid.
+                        .gesture(TermLongPress { state, rows, window in select(state, at: rows, shownAt: window, size: size) })
                         .padding(8)
-                        .textSelection(.enabled)
                     }
                     .scrollDisabled(size <= fitted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -85,8 +98,9 @@ struct TerminalScreen: View {
                         .onEnded { value in zoom = min(3, max(0.5, zoom * value.magnification)) }
                 )
                 .onTapGesture(count: 2) { withAnimation(.snappy) { zoom = 1 } }
-                // A tap types: it brings the keyboard up, and takes it down.
-                .onTapGesture { keyboard.toggle() }
+                // A tap types: it brings the keyboard up, and takes it
+                // down; with a selection, it clears it first.
+                .onTapGesture { if selection != nil { selection = nil } else { keyboard.toggle() } }
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -110,6 +124,18 @@ struct TerminalScreen: View {
         }
         .background(Self.background)
         .background { if let typing { TermKeyboard(typing: typing, shown: $keyboard).frame(width: 1, height: 1).opacity(0) } }
+        .background {
+            TermMenu(at: menuAt, shows: menuShows) {
+                if let selection, let screen = store?.screen { UIPasteboard.general.string = screen.text(selection) }
+                selection = nil
+            } selectAll: {
+                selection = store?.screen?.everything
+                menuShows += 1
+            } paste: {
+                if let text = UIPasteboard.general.string { typing?.paste(text) }
+                selection = nil
+            }
+        }
         .safeAreaInset(edge: .top, spacing: 0) { paneChips }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let typing {
@@ -267,6 +293,8 @@ struct TerminalScreen: View {
     private func swipe(line: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
+                // While a selection shows, a drag extends it instead.
+                guard selection == nil else { return }
                 coasting?.cancel()
                 let target = Int((value.translation.height / line).rounded(.towardZero))
                 notches(target - swiped)
@@ -275,8 +303,32 @@ struct TerminalScreen: View {
             .onEnded { value in
                 let rest = (value.predictedEndTranslation.height - value.translation.height) / line
                 swiped = 0
+                guard selection == nil else { return }
                 coast(max(-Self.coastLimit, min(Self.coastLimit, Int(rest.rounded(.towardZero)))))
             }
+    }
+
+    /// A long press selects the word under it, its drag extends that by
+    /// cell, and letting go shows the copy menu there.
+    private func select(_ state: UIGestureRecognizer.State, at point: CGPoint, shownAt window: CGPoint, size: CGFloat) {
+        guard let screen = store?.screen else { return }
+        let at = TermSelection.Position(row: max(0, Int(point.y / Self.lineHeight(size))),
+                                        column: max(0, Int(point.x / (Self.cellRatio * size))))
+        switch state {
+        case .began:
+            pressed = screen.word(at: at)
+            selection = pressed
+            menuAt = nil
+        case .changed:
+            guard let pressed else { return }
+            selection = at < pressed.start ? TermSelection(anchor: pressed.end, head: at)
+                : TermSelection(anchor: pressed.start, head: max(at, pressed.end))
+        case .ended:
+            menuAt = window
+            menuShows += 1
+        default:
+            break
+        }
     }
 
     /// Lines one wheel notch moves. A program that reads the mouse takes
@@ -411,7 +463,7 @@ struct TerminalScreen: View {
 
     /// A row's run backgrounds as cells the full line height, then its
     /// text, each character in its own cells.
-    static func cells(_ row: [TermScreen.Run], size: CGFloat) -> some View {
+    static func cells(_ row: [TermScreen.Run], size: CGFloat, selected: ClosedRange<Int>? = nil) -> some View {
         Canvas { context, canvas in
             let width = cellRatio * size
             let font = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
@@ -436,6 +488,10 @@ struct TerminalScreen: View {
                 }
                 if !run.hidden { glyphs(run, at: x, cell: width, size: size, baseline: baseline, in: context) }
                 x += span
+            }
+            if let selected {
+                let cells = CGRect(x: CGFloat(selected.lowerBound) * width, y: 0, width: CGFloat(selected.count) * width, height: canvas.height)
+                context.fill(Path(cells), with: .color(.accentColor.opacity(0.35)))
             }
         }
     }
