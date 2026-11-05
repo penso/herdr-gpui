@@ -54,7 +54,27 @@ struct TermSelecting: ViewModifier {
                     selection = nil
                 }
             }
+            // Output that scrolls the selected text moves the selection
+            // with it; output that changes that text ends it, so neither
+            // the highlight nor Copy lands on other text.
+            .onChange(of: screen) { old, new in follow(from: old, to: new) }
             .onDisappear { selection = nil }
+    }
+
+    private func follow(from old: TermScreen, to new: TermScreen) {
+        guard let selection else { return }
+        guard let followed = new.following(selection, from: old) else {
+            self.selection = nil
+            pressed = nil
+            held = nil
+            return
+        }
+        let move = followed.anchor.row - selection.anchor.row
+        guard move != 0 else { return }
+        self.selection = followed
+        pressed = pressed?.moved(rows: move)
+        held?.fixed.row += move
+        if menuAt != nil { showMenu(at: TermHandles(followed, cell: cell).menu) }
     }
 
     /// A long press selects the word under it, its drag extends that by
