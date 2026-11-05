@@ -11,11 +11,16 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sheprd_chat_protocol::{Agent, Command, MAX_PROMPT_SIZE};
+use std::time::Duration;
+
+/// How long the form waits to learn which agents are installed. Finding
+/// them only looks at a few folders, so this bounds a stuck disk.
+const INSTALLED_WAIT: Duration = Duration::from_secs(2);
 
 /// What the new workspace and new chat forms offer.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct NewOptions {
-    /// Every agent, in Herdr's order.
+    /// The agents installed on this computer, in Herdr's order.
     pub(crate) agents: Vec<AgentChoice>,
     /// Folders workspaces already use.
     pub(crate) recent: Vec<String>,
@@ -37,9 +42,13 @@ pub(crate) struct Root {
 }
 
 impl NewOptions {
-    pub(crate) fn new(recent: Vec<String>, roots: Vec<(String, Vec<String>)>) -> Self {
+    pub(crate) fn new(
+        agents: &[Agent],
+        recent: Vec<String>,
+        roots: Vec<(String, Vec<String>)>,
+    ) -> Self {
         Self {
-            agents: Agent::ALL
+            agents: agents
                 .iter()
                 .map(|agent| AgentChoice {
                     id: agent.name().to_owned(),
@@ -99,7 +108,51 @@ pub(crate) async fn new_options(
     let folders = tokio::task::spawn_blocking(move || folders(&layout))
         .await
         .map_err(|_| ApiError::Folder)?;
-    Ok(Json(NewOptions::new(folders.recent, folders.roots)))
+    let agents = offered(installed_agents(state.hub.program()).await);
+    Ok(Json(NewOptions::new(
+        &agents,
+        folders.recent,
+        folders.roots,
+    )))
+}
+
+/// What `sheprd-acp agents` lists, the same search that starts a chat, or
+/// `None` when it could not say.
+async fn installed_agents(program: Option<&std::path::Path>) -> Option<Vec<Agent>> {
+    let program = program?.to_owned();
+    let listing = tokio::task::spawn_blocking(move || list_agents(&program));
+    tokio::time::timeout(INSTALLED_WAIT, listing)
+        .await
+        .ok()?
+        .ok()?
+}
+
+pub(super) fn list_agents(program: &std::path::Path) -> Option<Vec<Agent>> {
+    let output = sheprd_client::new_command(program)
+        .arg("agents")
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| parse_agents(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// One agent name a line; a name this daemon does not know is skipped.
+pub(super) fn parse_agents(listing: &str) -> Vec<Agent> {
+    listing
+        .lines()
+        .filter_map(|line| line.trim().parse().ok())
+        .collect()
+}
+
+/// The agents to offer: every one when none were found or the search
+/// failed, as an agent installed outside the searched folders can still
+/// start, and an empty form could start nothing.
+pub(super) fn offered(installed: Option<Vec<Agent>>) -> Vec<Agent> {
+    installed
+        .filter(|agents| !agents.is_empty())
+        .unwrap_or_else(|| Agent::ALL.to_vec())
 }
 
 /// `POST /api/v2/workspaces`.
