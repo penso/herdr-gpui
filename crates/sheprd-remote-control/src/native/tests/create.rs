@@ -160,6 +160,7 @@ fn the_forms_json_matches_the_fixtures() {
         &CreatedWorkspace {
             pane: Some("p7".into()),
             prompted: true,
+            started: true,
             workspace: "w3".into(),
         },
     );

@@ -36,6 +36,11 @@ struct ChatScreen: View {
                 ProgressView("Loading the chat…")
             }
         }
+        // The new tab screen offers the modes a chat with this agent listed.
+        .onChange(of: store?.transcript.map(StartChoice.offered(in:)), initial: true) {
+            guard let transcript = store?.transcript else { return }
+            model.updateStart(for: transcript.agent) { $0.learn(from: transcript) }
+        }
         // The principal item below draws the header; the title is what the
         // iPad's split view and the window's name fall back to.
         // Window titles show in Stage Manager and the app switcher.

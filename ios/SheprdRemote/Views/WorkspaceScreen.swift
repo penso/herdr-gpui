@@ -118,6 +118,7 @@ struct WorkspaceScreen: View {
             }
             .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
             .listRowSeparator(.hidden, edges: .bottom)
+            if let recent { StartChoiceRow(agent: recent.name) }
             if !others.isEmpty {
                 Button {
                     withAnimation { showsOthers.toggle() }
@@ -144,7 +145,12 @@ struct WorkspaceScreen: View {
                         } label: {
                             HStack(spacing: 12) {
                                 AgentIcon(agent: agent.id, size: 28)
-                                Text(agent.name)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(agent.name)
+                                    if let mode = model.startChoice(for: agent.name).picked?.name {
+                                        Text(mode).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
                                 Spacer()
                                 if starting == agent.id { ProgressView() }
                             }
@@ -187,14 +193,16 @@ struct WorkspaceScreen: View {
 
     private func start(_ agent: AgentChoice, in workspace: Home.Workspace) {
         let (device, id) = (key.device, workspace.id)
+        let start = model.startChoice(for: agent.name).start
         starting = agent.id
         Task {
             defer { starting = nil }
             do {
                 let created = try await model.fleet.call(device) { client, token in
-                    try await client.startChat(NewChatRequest(agent: agent.id), workspace: id, bearer: token)
+                    try await client.startChat(NewChatRequest(agent: agent.id, start: start), workspace: id, bearer: token)
                 }
                 model.recentAgent = agent.id
+                if start != nil, !created.started { model.notice = AppModel.startMissed }
                 if let pane = created.pane { opened = .chat(PaneKey(device: device, pane: pane), title: agent.name) }
             } catch {
                 problem = error.localizedDescription

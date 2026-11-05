@@ -43,6 +43,13 @@ final class AppModel {
     var recentAgent = UserDefaults.standard.string(forKey: "recentAgent") {
         didSet { UserDefaults.standard.set(recentAgent, forKey: "recentAgent") }
     }
+    /// What new chats start with, by agent name, kept across launches.
+    private(set) var startChoices = AppModel.savedStartChoices() {
+        didSet {
+            guard let saved = try? JSONEncoder().encode(startChoices) else { return }
+            UserDefaults.standard.set(saved, forKey: "startChoices")
+        }
+    }
     /// A new workspace or chat being set up, as a sheet over every tab.
     var creating: Creating?
     /// A tab to switch to, from a Control or an intent; the root view
@@ -54,6 +61,24 @@ final class AppModel {
     /// What each chat's composer held when the person left it, kept
     /// until they come back, for as long as the app runs.
     @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]
+
+    private static func savedStartChoices() -> [String: StartChoice] {
+        UserDefaults.standard.data(forKey: "startChoices")
+            .flatMap { try? JSONDecoder().decode([String: StartChoice].self, from: $0) } ?? [:]
+    }
+
+    func startChoice(for agent: String) -> StartChoice {
+        startChoices[agent] ?? StartChoice()
+    }
+
+    /// Changes what new chats with `agent` start with. Agents are few; a
+    /// name past the bound is not kept, so the saved list stays small.
+    func updateStart(for agent: String, _ change: (inout StartChoice) -> Void) {
+        guard !agent.isEmpty, startChoices[agent] != nil || startChoices.count < 32 else { return }
+        var choice = startChoice(for: agent)
+        change(&choice)
+        if choice != startChoices[agent] { startChoices[agent] = choice }
+    }
 
     /// Spotlight follows the app lock as soon as it changes, not at the
     /// next change to the chats.

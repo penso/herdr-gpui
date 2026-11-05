@@ -5,6 +5,7 @@ use sheprd_client::protocol::AgentStatus;
 
 mod agent_name;
 mod create;
+mod create_start;
 mod fixtures;
 mod hosts;
 #[cfg(unix)]
