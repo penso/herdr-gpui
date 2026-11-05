@@ -33,6 +33,7 @@ mod script;
 pub mod scrollback;
 mod session;
 pub mod sessions;
+pub mod settings_files;
 pub mod ssh;
 mod surface_images;
 pub mod terminal_attach;

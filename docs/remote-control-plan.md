@@ -375,8 +375,10 @@ phone never disturbs the desktop's layout.
     - It runs `sheprd-remote-control enroll` there over SSH. On the way that
       sends this daemon's APNs key (0600), so the machine notifies the phone
       itself. It starts the machine's daemon as a user service unless one is
-      installed. It turns on `[remote]` in that machine's Sheprd settings,
-      if it has any. Then it adds the phone, marked `via` this computer.
+      installed, then adds the phone, marked `via` this computer. Only then
+      does it turn on `[remote]` in that machine's Sheprd settings, creating
+      them if it has none, so a Sheprd installed there later keeps the
+      daemon. A failed pairing leaves the settings alone.
     - It reports the machine's fingerprint and addresses back
       (`HostPaired`).
   - **Trust.** The phone pins that fingerprint because the computer it
