@@ -56,6 +56,8 @@ chat-prompt-too-long = The prompt is longer than the agent accepts
 chat-select-less = Select less text to copy
 # $error is why the chat could not start.
 chat-start-failed = The chat did not start: { $error }
+# $error is why the terminal agent did not move into a chat.
+chat-convert-failed = The agent did not move into a chat: { $error }
 
 # The agent's terminal input under a chat that is shown in its terminal.
 chat-input-awaiting-fit = Activate to fit agent input

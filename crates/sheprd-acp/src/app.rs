@@ -25,6 +25,8 @@ const ADAPTER_VARIABLE: &str = "HERDR_ACP_ADAPTER";
 struct Agent {
     args: Vec<std::ffi::OsString>,
     display: String,
+    /// What the agent's own log says of a session it will not replay.
+    history: Option<crate::history::Result<sheprd_chat_protocol::Transcript>>,
     login_hint: Option<String>,
     program: std::ffi::OsString,
     reach: Box<dyn Reach>,
@@ -40,18 +42,22 @@ fn agent(options: &Options) -> Agent {
                 std::env::home_dir().as_deref(),
             );
             let adapter = adapter(options);
+            let mut history = None;
             let (program, mut args, reach): (_, _, Box<dyn Reach>) =
                 match crate::agents::launch(agent, Some(&path), adapter) {
                     Launch::Native(program) => {
                         let (args, reach) = native(agent, options.load.as_deref());
+                        history = native_history(agent, options.load.as_deref());
                         (program.into_os_string(), args, reach)
                     }
+                    // An ACP agent replays its own history on `session/load`.
                     Launch::Acp(program, args) => (program, args, Box::new(Acp)),
                 };
             args.extend(extra.iter().cloned());
             Agent {
                 args,
                 display: name.unwrap_or_else(|| agent.display_name().to_owned()),
+                history,
                 login_hint: Some(agent.login_hint().to_owned()),
                 program,
                 reach,
@@ -64,6 +70,7 @@ fn agent(options: &Options) -> Agent {
                     .map_or_else(|| "Agent".to_owned(), |n| n.to_string_lossy().into_owned())
             }),
             args: args.clone(),
+            history: None,
             login_hint: None,
             program: program.clone(),
             reach: Box::new(Acp),
@@ -95,6 +102,16 @@ fn native(
             )
         }
     }
+}
+
+/// What a natively reached agent's log says of session `load`, for an agent
+/// whose log this program can read.
+fn native_history(
+    agent: crate::agents::Agent,
+    load: Option<&str>,
+) -> Option<crate::history::Result<sheprd_chat_protocol::Transcript>> {
+    let agent = crate::mirror::transcript::TranscriptAgent::try_from(agent).ok()?;
+    Some(crate::history::load(agent, load?))
 }
 
 pub(crate) fn run(options: Options) -> anyhow::Result<()> {
@@ -129,6 +146,17 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         })?;
 
     let mut notices = Vec::new();
+    let history = agent.history.and_then(|history| match history {
+        Ok(history) => Some(history),
+        // The agent still has its session; only the view misses it.
+        Err(error) => {
+            notices.push((
+                NoticeLevel::Warning,
+                format!("Earlier messages cannot be shown: {error}"),
+            ));
+            None
+        }
+    });
     // Held to the end: dropping the server removes its socket.
     let (_server, endpoint) = if options.attach {
         listen(inputs.clone(), &mut notices)
@@ -159,6 +187,7 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         agent: agent.display,
         cwd,
         exit_with_agent: options.headless,
+        history,
         load: options.load,
         login_hint: agent.login_hint,
         pane: target.map(|target| target.pane),

@@ -45,6 +45,7 @@ pub(super) fn chat(command: ChatCommand, context: &Context) -> crate::Result<Out
             agent: agent.name().to_owned(),
             pane,
         },
+        ChatCommand::Convert { pane } => ChatOp::Convert { pane },
         ChatCommand::View { switch, pane } => ChatOp::View { switch, pane },
     };
     match context.call(Request::Chat, op)? {
@@ -73,6 +74,12 @@ pub(super) fn chat(command: ChatCommand, context: &Context) -> crate::Result<Out
         } => Output::data(
             format!("Starting a {agent} chat"),
             &serde_json::json!({ "agent": agent, "started": true }),
+        ),
+        Response::Chat {
+            reply: Reply::Converting { agent, pane_id },
+        } => Output::data(
+            format!("Moving {agent} in {pane_id} into a chat"),
+            &serde_json::json!({ "agent": agent, "pane_id": pane_id, "converting": true }),
         ),
         response => Err(unexpected(response)),
     }
