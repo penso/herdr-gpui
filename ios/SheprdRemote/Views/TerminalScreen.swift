@@ -35,25 +35,32 @@ struct TerminalScreen: View {
     var body: some View {
         GeometryReader { geometry in
             if let screen = store?.screen {
-                let fitted = fit(columns: screen.columns, width: geometry.size.width - 16)
+                // In cells: the computer counts a wide character as one.
+                let columns = screen.rows.reduce(screen.columns) { widest, row in max(widest, Self.span(row)) }
+                let fitted = fit(columns: columns, width: geometry.size.width - 16)
                 let size = min(28, max(4, fitted * zoom * pinch))
                 let paper = Self.paper(screen)
                 // Held at the phone's size and all on screen: a swipe
                 // scrolls the terminal's own history instead of this view.
-                let fits = store?.size.map { screen.columns <= $0.cols } == true
+                let fits = store?.size.map { columns <= $0.cols } == true
                     && CGFloat(screen.rows.count) * Self.lineHeight(size) + 16 <= geometry.size.height + 1
                 ScrollView(.vertical) {
                     // Sideways only once pinched wider than the screen.
                     ScrollView(.horizontal, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(screen.rows.enumerated()), id: \.offset) { _, row in
-                                Text(row.reduce(into: AttributedString()) { line, run in line += Self.styled(run, size: size) })
+                                // The text is drawn cell by cell behind
+                                // (`cells`), as terminals draw it; this
+                                // copy keeps the line's height and is what
+                                // a long press copies.
+                                Text(verbatim: row.map(Self.shown).joined())
                                     .font(.system(size: size, design: .monospaced))
+                                    .foregroundStyle(.clear)
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
+                                    .frame(minWidth: CGFloat(Self.span(row)) * Self.cellRatio * size, alignment: .leading)
                                     // Backgrounds are cells painted the full
-                                    // line height, so blocks have no seams;
-                                    // the text above stays selectable.
+                                    // line height, so blocks have no seams.
                                     .background(alignment: .leading) { Self.cells(row, size: size) }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Self.rowBackground(row) ?? paper)
@@ -383,17 +390,6 @@ struct TerminalScreen: View {
         return ("M" as NSString).size(withAttributes: [.font: font]).width / 100
     }()
 
-    /// What a wide character's glyph leaves of its two cells, per point of
-    /// font size: Chinese, Japanese, and Korean fall back to a font whose
-    /// characters are narrower than two monospaced cells, as are emoji.
-    private static let wideGap: CGFloat = gap("中")
-    private static let emojiGap: CGFloat = gap("😀")
-
-    private static func gap(_ wide: String) -> CGFloat {
-        let font = UIFont.monospacedSystemFont(ofSize: 100, weight: .regular)
-        return 2 * cellRatio - (wide as NSString).size(withAttributes: [.font: font]).width / 100
-    }
-
     /// The font size a phone-sized terminal is drawn at.
     static let readable: CGFloat = 12
 
@@ -408,10 +404,18 @@ struct TerminalScreen: View {
         return TermSize(cols: min(cols, 400), rows: min(rows, 200))
     }
 
-    /// A row's run backgrounds as cells the full line height.
+    /// The cells a row covers.
+    static func span(_ row: [TermScreen.Run]) -> Int {
+        row.reduce(0) { $0 + TermScreen.cells($1.text) }
+    }
+
+    /// A row's run backgrounds as cells the full line height, then its
+    /// text, each character in its own cells.
     static func cells(_ row: [TermScreen.Run], size: CGFloat) -> some View {
         Canvas { context, canvas in
             let width = cellRatio * size
+            let font = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+            let baseline = (canvas.height - font.lineHeight) / 2 + font.ascender
             var x: CGFloat = 0
             for run in row {
                 // A Chinese, Japanese, or Korean character covers two cells.
@@ -430,9 +434,48 @@ struct TerminalScreen: View {
                         context.fill(Path(shape.rect(in: cell)), with: .color(ink.opacity(shape.opacity)))
                     }
                 }
+                if !run.hidden { glyphs(run, at: x, cell: width, size: size, baseline: baseline, in: context) }
                 x += span
             }
         }
+    }
+
+    /// A run's characters placed on the cell grid, as SwiftTerm,
+    /// Terminal.app, and Ghostty place them: ASCII as the monospaced font
+    /// sets it, and anything else (Chinese from a fallback font about 1.7
+    /// cells wide, `❯`, emoji) centered in its one or two cells and shrunk
+    /// if wider, so its width never moves what follows.
+    private static func glyphs(_ run: TermScreen.Run, at origin: CGFloat, cell: CGFloat, size: CGFloat,
+                               baseline: CGFloat, in context: GraphicsContext) {
+        func draw(_ text: String, column: Int, cells: Int, centered: Bool) {
+            var part = run
+            part.text = text
+            let resolved = context.resolve(Text(styled(part)).font(.system(size: size, design: .monospaced)))
+            let box = resolved.measure(in: CGSize(width: CGFloat.infinity, height: .infinity))
+            let slot = CGFloat(cells) * cell
+            let scale = centered ? min(1, slot / max(box.width, 1)) : 1
+            var placed = context
+            placed.translateBy(x: origin + CGFloat(column) * cell + (centered ? (slot - box.width * scale) / 2 : 0), y: baseline)
+            placed.scaleBy(x: scale, y: scale)
+            placed.draw(resolved, at: CGPoint(x: 0, y: -resolved.firstBaseline(in: box)), anchor: .topLeading)
+        }
+        var column = 0
+        var ascii = ""
+        var asciiColumn = 0
+        for character in run.text {
+            let cells = TermScreen.cells(String(character))
+            if character.isASCII {
+                if ascii.isEmpty { asciiColumn = column }
+                ascii.append(character)
+            } else {
+                if !ascii.isEmpty { draw(ascii, column: asciiColumn, cells: ascii.count, centered: false) }
+                ascii = ""
+                // Block elements are already painted as cell shapes.
+                if block(character) == nil { draw(String(character), column: column, cells: cells, centered: true) }
+            }
+            column += cells
+        }
+        if !ascii.isEmpty { draw(ascii, column: asciiColumn, cells: ascii.count, centered: false) }
     }
 
     static func lineHeight(_ size: CGFloat) -> CGFloat {
@@ -484,24 +527,14 @@ struct TerminalScreen: View {
         run.inverse ? (color(run.fg) ?? Color(white: 0.86)) : color(run.bg)
     }
 
-    static func styled(_ run: TermScreen.Run, size: CGFloat) -> AttributedString {
-        // Backgrounds and block elements are painted as cells behind the
-        // text (`cells`), so they are blank here.
-        let shown = run.hidden ? String(repeating: " ", count: run.text.count)
-            : String(run.text.map { block($0) == nil ? $0 : " " })
-        var text = AttributedString(shown)
-        // A wide character spans its two cells, as the cells behind the
-        // text do (`cells`), so a cursor or border after it lines up.
-        var index = text.startIndex
-        while index < text.endIndex {
-            let next = text.characters.index(after: index)
-            let character = text.characters[index]
-            if TermScreen.cells(String(character)) == 2 {
-                let emoji = character.unicodeScalars.first?.properties.isEmojiPresentation == true || character.unicodeScalars.contains("\u{FE0F}")
-                text[index..<next].kern = (emoji ? emojiGap : wideGap) * size
-            }
-            index = next
-        }
+    /// A run's text as shown: hidden text (SGR 8) and block elements, which
+    /// are painted as cells, are blank.
+    static func shown(_ run: TermScreen.Run) -> String {
+        run.hidden ? String(repeating: " ", count: run.text.count) : String(run.text.map { block($0) == nil ? $0 : " " })
+    }
+
+    static func styled(_ run: TermScreen.Run) -> AttributedString {
+        var text = AttributedString(shown(run))
         text.foregroundColor = foreground(run)
         if run.underline { text.underlineStyle = .single }
         if run.strike { text.strikethroughStyle = .single }

@@ -263,7 +263,7 @@ private struct MiniTerminal: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(screen.rows.enumerated()), id: \.offset) { _, row in
-                            Text(row.reduce(into: AttributedString()) { line, run in line += TerminalScreen.styled(run, size: size) })
+                            Text(row.reduce(into: AttributedString()) { line, run in line += TerminalScreen.styled(run) })
                                 .font(.system(size: size, design: .monospaced))
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
