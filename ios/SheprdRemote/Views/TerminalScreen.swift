@@ -79,6 +79,9 @@ struct TerminalScreen: View {
                                                 selection: $selection) {
                             if let text = UIPasteboard.general.string { typing?.paste(text) }
                         })
+                        // Down to the foot of the screen, so the scroll view
+                        // passes a touch below the last row to its handle.
+                        .frame(minHeight: max(0, geometry.size.height - 16), alignment: .top)
                         .padding(8)
                     }
                     .scrollDisabled(size <= fitted)

@@ -35,8 +35,7 @@ struct TermSelecting: ViewModifier {
                     let handles = TermHandles(selection, cell: cell)
                     TermHandleShape(handles: handles)
                         .fill(Color.accentColor)
-                        .contentShape(TermHandleTargets(handles: handles))
-                        .gesture(TermLongPress(duration: 0) { state, point in drag(state, at: point) })
+                        .overlay { TermHandleGrip(handles: handles) { state, point in drag(state, at: point) } }
                         .accessibilityHidden(true)
                 }
             }
@@ -142,12 +141,39 @@ private struct TermHandleShape: Shape {
     }
 }
 
-/// Where the handles take a touch: a fingertip around each.
-private struct TermHandleTargets: Shape {
+/// Where the handles take a touch: a fingertip around each. A UIKit view
+/// decides that itself, as SwiftUI hit-tests a UIKit recognizer by what is
+/// drawn, ignoring `contentShape`, which left only the knob and bar.
+private struct TermHandleGrip: UIViewRepresentable {
     let handles: TermHandles
+    /// The phase, and the finger's place in the rows.
+    let changed: (UIGestureRecognizer.State, CGPoint) -> Void
 
-    func path(in rect: CGRect) -> Path {
-        Path { $0.addRects([handles.target(.start), handles.target(.end)]) }
+    func makeUIView(context: Context) -> TermHandleGripView {
+        let view = TermHandleGripView()
+        let recognizer = UILongPressGestureRecognizer(target: view, action: #selector(TermHandleGripView.pressed))
+        recognizer.minimumPressDuration = 0
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateUIView(_ view: TermHandleGripView, context: Context) {
+        view.handles = handles
+        view.changed = changed
+    }
+}
+
+private final class TermHandleGripView: UIView {
+    var handles: TermHandles?
+    var changed: (UIGestureRecognizer.State, CGPoint) -> Void = { _, _ in }
+
+    /// Only on a handle's target; elsewhere the touch reaches the rows.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        handles?.end(at: point) != nil
+    }
+
+    @objc func pressed(_ recognizer: UILongPressGestureRecognizer) {
+        changed(recognizer.state, recognizer.location(in: self))
     }
 }
 
