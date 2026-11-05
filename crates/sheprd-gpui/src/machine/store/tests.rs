@@ -178,3 +178,73 @@ fn writers_at_once_leave_a_whole_file_and_nothing_else() {
         .collect();
     assert_eq!(left.len(), 2, "{left:?}");
 }
+
+fn name(text: &str) -> Name {
+    Name::try_from(text.to_owned()).unwrap()
+}
+
+fn with_cpus(cpus: u16) -> Settings {
+    Settings {
+        cpus,
+        ..Settings::default()
+    }
+}
+
+#[test]
+fn the_first_push_asks_for_a_writer_and_later_ones_do_not() {
+    let queue = SettingsQueue::default();
+    assert!(queue.push(name("work"), with_cpus(4)));
+    assert!(!queue.push(name("work"), with_cpus(6)));
+    queue.drain(|_, _| Ok(())).unwrap();
+    assert!(queue.push(name("work"), with_cpus(8)));
+}
+
+#[test]
+fn only_a_machines_latest_choice_is_written() {
+    let queue = SettingsQueue::default();
+    queue.push(name("work"), with_cpus(4));
+    queue.push(name("work"), with_cpus(6));
+    let mut written = Vec::new();
+    queue
+        .drain(|_, settings| {
+            written.push(settings.cpus);
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(written, [6]);
+}
+
+#[test]
+fn a_choice_made_during_a_write_is_written_by_the_same_writer() {
+    let queue = SettingsQueue::default();
+    queue.push(name("work"), with_cpus(4));
+    let mut written = Vec::new();
+    queue
+        .drain(|_, settings| {
+            written.push(settings.cpus);
+            if settings.cpus == 4 {
+                assert!(!queue.push(name("work"), with_cpus(6)));
+            }
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(written, [4, 6]);
+}
+
+#[test]
+fn a_failed_write_is_reported_and_the_rest_still_written() {
+    let queue = SettingsQueue::default();
+    queue.push(name("one"), with_cpus(4));
+    queue.push(name("two"), with_cpus(6));
+    let mut tried = 0;
+    let outcome = queue.drain(|_, _| {
+        tried += 1;
+        if tried == 1 {
+            Err(Error::InvalidDisplay)
+        } else {
+            Ok(())
+        }
+    });
+    assert!(matches!(outcome, Err(Error::InvalidDisplay)));
+    assert_eq!(tried, 2);
+}

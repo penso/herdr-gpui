@@ -25,7 +25,7 @@ pub use error::{Error, Result};
 #[cfg(target_os = "macos")]
 pub(crate) use {
     settings::{Display, Limits, Settings},
-    store::{Listing, discard_state, list, save_settings, update_settings},
+    store::{Listing, SettingsQueue, discard_state, list, save_settings, update_settings},
     vm::{Status, delete, release, running, shut_down, start, status, suspend, view},
 };
 

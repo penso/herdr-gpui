@@ -6,11 +6,11 @@ use super::{SettingsWindow, ui};
 use crate::{
     SheprdWindow,
     i18n::{Localize as _, fl},
-    machine::{self, Display, Limits, Listing, Name, Settings, Status},
+    machine::{self, Display, Limits, Listing, Name, Settings, SettingsQueue, Status},
     settings_window::Section,
 };
 use gpui::{prelude::*, *};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 /// Opens Settings on this page, asking to delete `delete` if one is named.
 pub(crate) fn open(source: WeakEntity<SheprdWindow>, delete: Option<Name>, cx: &mut App) {
@@ -41,11 +41,9 @@ pub(in crate::settings_window) struct MachinesPage {
     deleting: Option<Name>,
     /// What went wrong last, for the user.
     failure: Option<String>,
-    /// The latest choice of each machine still to reach its folder. One write
-    /// runs at a time, so an older click cannot land after a newer one.
-    pending: HashMap<Name, Settings>,
-    /// Whether a write of `pending` runs.
-    saving: bool,
+    /// Choices on their way to disk, shared with the writer so that closing
+    /// this window does not lose them.
+    queue: Arc<SettingsQueue>,
     /// What each machine was doing when last drawn: a change moves its disk
     /// use, so the folders are read again.
     seen: HashMap<Name, Status>,
@@ -102,32 +100,18 @@ impl SettingsWindow {
         {
             listing.settings = settings;
         }
-        self.machines.pending.insert(name.clone(), settings);
-        self.save_machine_settings(cx);
         cx.notify();
-    }
-
-    /// Writes the next pending choice, and those that follow it.
-    fn save_machine_settings(&mut self, cx: &mut Context<Self>) {
-        if self.machines.saving {
+        let queue = self.machines.queue.clone();
+        if !queue.push(name.clone(), settings) {
             return;
         }
-        let Some(name) = self.machines.pending.keys().next().cloned() else {
-            return;
-        };
-        let Some(settings) = self.machines.pending.remove(&name) else {
-            return;
-        };
-        self.machines.saving = true;
         let write = cx
             .background_executor()
-            .spawn(async move { machine::save_settings(&name, &settings) });
+            .spawn(async move { queue.drain(machine::save_settings) });
         cx.spawn(async move |this, cx| {
             let written = write.await;
             let _ = this.update(cx, |this, cx| {
-                this.machines.saving = false;
                 this.machines.failure = written.err().map(|error| error.localize());
-                this.save_machine_settings(cx);
                 cx.notify();
             });
         })

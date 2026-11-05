@@ -4,11 +4,12 @@
 use super::{Error, Name, Result, Settings};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
+    collections::HashMap,
     fs,
     io::{ErrorKind, Write as _},
     os::unix::fs::MetadataExt as _,
     path::{Path, PathBuf},
-    sync::{Mutex, PoisonError},
+    sync::{Mutex, MutexGuard, PoisonError},
 };
 
 pub(super) const AUXILIARY: &str = "auxiliary.bin";
@@ -103,6 +104,58 @@ fn disk_bytes(folder: &Path) -> u64 {
 /// Keeps `settings` for machine `name`'s next boot.
 pub(crate) fn save_settings(name: &Name, settings: &Settings) -> Result<()> {
     update_settings(name, |_| Ok(*settings)).map(|_| ())
+}
+
+/// Settings on their way to disk, latest per machine. One writer drains them,
+/// so an older click cannot land after a newer one, and it owns the queue, so
+/// the window that filled it may close first.
+#[derive(Debug, Default)]
+pub(crate) struct SettingsQueue(Mutex<Queued>);
+
+#[derive(Debug, Default)]
+struct Queued {
+    pending: HashMap<Name, Settings>,
+    draining: bool,
+}
+
+impl SettingsQueue {
+    fn queued(&self) -> MutexGuard<'_, Queued> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Queues `settings`. True when no writer runs, so the caller starts one.
+    pub(crate) fn push(&self, name: Name, settings: Settings) -> bool {
+        let mut queued = self.queued();
+        queued.pending.insert(name, settings);
+        !std::mem::replace(&mut queued.draining, true)
+    }
+
+    /// Writes all that is queued, and what arrives meanwhile, off the main
+    /// thread. It returns the last failure, after trying the rest.
+    pub(crate) fn drain(
+        &self,
+        mut write: impl FnMut(&Name, &Settings) -> Result<()>,
+    ) -> Result<()> {
+        let mut outcome = Ok(());
+        loop {
+            let next = {
+                let mut queued = self.queued();
+                let name = queued.pending.keys().next().cloned();
+                let next = name.and_then(|name| {
+                    let settings = queued.pending.remove(&name)?;
+                    Some((name, settings))
+                });
+                queued.draining = next.is_some();
+                next
+            };
+            let Some((name, settings)) = next else {
+                return outcome;
+            };
+            if let Err(error) = write(&name, &settings) {
+                outcome = Err(error);
+            }
+        }
+    }
 }
 
 /// Keeps what `change` makes of machine `name`'s settings for its next boot,
