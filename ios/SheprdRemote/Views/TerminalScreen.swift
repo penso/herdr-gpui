@@ -31,13 +31,9 @@ struct TerminalScreen: View {
     @State private var coasting: Task<Void, Never>?
     /// The room the screen has, which sets the terminal's size.
     @State private var space: CGSize = .zero
-    /// What a long press selected, by cell, as terminals select, and the
-    /// word it began on, which a drag extends from.
+    /// What a long press or the handles selected, by cell, as terminals
+    /// select (`TermSelecting`).
     @State private var selection: TermSelection?
-    @State private var pressed: TermSelection?
-    /// Where the copy menu shows, and how many times it has.
-    @State private var menuAt: CGPoint?
-    @State private var menuShows = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -79,7 +75,10 @@ struct TerminalScreen: View {
                         // keyboard, as SwiftTerm does; SwiftUI's text
                         // selection would take the keyboard and select
                         // text laid out off the cell grid.
-                        .gesture(TermLongPress { state, rows, window in select(state, at: rows, shownAt: window, size: size) })
+                        .modifier(TermSelecting(screen: screen, cell: CGSize(width: Self.cellRatio * size, height: Self.lineHeight(size)),
+                                                selection: $selection) {
+                            if let text = UIPasteboard.general.string { typing?.paste(text) }
+                        })
                         .padding(8)
                     }
                     .scrollDisabled(size <= fitted)
@@ -124,18 +123,6 @@ struct TerminalScreen: View {
         }
         .background(Self.background)
         .background { if let typing { TermKeyboard(typing: typing, shown: $keyboard).frame(width: 1, height: 1).opacity(0) } }
-        .background {
-            TermMenu(at: menuAt, shows: menuShows) {
-                if let selection, let screen = store?.screen { UIPasteboard.general.string = screen.text(selection) }
-                selection = nil
-            } selectAll: {
-                selection = store?.screen?.everything
-                menuShows += 1
-            } paste: {
-                if let text = UIPasteboard.general.string { typing?.paste(text) }
-                selection = nil
-            }
-        }
         .safeAreaInset(edge: .top, spacing: 0) { paneChips }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let typing {
@@ -306,29 +293,6 @@ struct TerminalScreen: View {
                 guard selection == nil else { return }
                 coast(max(-Self.coastLimit, min(Self.coastLimit, Int(rest.rounded(.towardZero)))))
             }
-    }
-
-    /// A long press selects the word under it, its drag extends that by
-    /// cell, and letting go shows the copy menu there.
-    private func select(_ state: UIGestureRecognizer.State, at point: CGPoint, shownAt window: CGPoint, size: CGFloat) {
-        guard let screen = store?.screen else { return }
-        let at = TermSelection.Position(row: max(0, Int(point.y / Self.lineHeight(size))),
-                                        column: max(0, Int(point.x / (Self.cellRatio * size))))
-        switch state {
-        case .began:
-            pressed = screen.word(at: at)
-            selection = pressed
-            menuAt = nil
-        case .changed:
-            guard let pressed else { return }
-            selection = at < pressed.start ? TermSelection(anchor: pressed.end, head: at)
-                : TermSelection(anchor: pressed.start, head: max(at, pressed.end))
-        case .ended:
-            menuAt = window
-            menuShows += 1
-        default:
-            break
-        }
     }
 
     /// Lines one wheel notch moves. A program that reads the mouse takes
