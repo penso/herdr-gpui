@@ -95,6 +95,38 @@ fn a_session_must_come_from_the_agents_own_integration() {
 }
 
 #[test]
+fn the_hosts_fresh_answer_must_show_a_finished_turn() {
+    for status in ["idle", "done"] {
+        let found = pane(serde_json::json!({"agent_status": status}));
+        assert!(settled(&found, Agent::Claude).is_ok(), "{status}");
+    }
+    let found = [
+        pane(serde_json::json!({"agent_status": "working"})),
+        pane(serde_json::json!({"agent_status": "blocked"})),
+        pane(serde_json::json!({"agent_status": "unknown"})),
+        pane(serde_json::json!({"agent_status": "some_future_status"})),
+        pane(serde_json::json!({"agent_status": null})),
+        pane(serde_json::json!({})),
+    ];
+    for pane in &found {
+        assert!(
+            matches!(
+                settled(pane, Agent::Claude),
+                Err(Error::Busy(Agent::Claude))
+            ),
+            "{:?}",
+            pane.status
+        );
+    }
+}
+
+#[test]
+fn another_agent_in_the_pane_is_not_stopped() {
+    let found = pane(serde_json::json!({"agent": "codex", "agent_status": "idle"}));
+    assert!(matches!(settled(&found, Agent::Claude), Err(Error::Moved)));
+}
+
+#[test]
 fn a_missing_session_says_how_to_get_one() {
     let message = Error::NoSession(Agent::Claude).to_string();
     assert!(

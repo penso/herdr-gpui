@@ -106,7 +106,9 @@ a refusal leaves it running in its terminal. Everything that can refuse is
 checked before the agent is touched. It stops on Ctrl+C alone, sent until its
 shell is back, so nothing in its input is ever submitted or answered. Text in
 its input is lost, and whatever it ran in the background stops with it. If it
-has not stopped after 30 seconds, the move gives up.
+has not stopped after 30 seconds, the move gives up. Leaving its host,
+losing the connection, or turning chats off during a move ends it at once, and
+no more keys are sent.
 
 Limitations:
 

@@ -93,13 +93,27 @@ fn a_codex_session_that_is_not_a_uuid_v7_has_no_log_to_find() {
 #[test]
 fn the_config_directory_prefers_the_agents_override() {
     let home = Path::new("/home/me");
+    let cwd = Path::new("/work");
     assert_eq!(
-        config_directory(Some("/custom".into()), Some(home), ".claude"),
+        config_directory(Some("/custom".into()), Some(home), ".claude", cwd),
         Some(PathBuf::from("/custom"))
     );
     assert_eq!(
-        config_directory(Some(OsString::new()), Some(home), ".claude"),
+        config_directory(Some(OsString::new()), Some(home), ".claude", cwd),
         Some(home.join(".claude"))
     );
-    assert_eq!(config_directory(None, None, ".claude"), None);
+    assert_eq!(config_directory(None, None, ".claude", cwd), None);
+}
+
+#[test]
+fn a_relative_override_is_found_from_where_the_agent_starts() {
+    assert_eq!(
+        config_directory(
+            Some("agent-config".into()),
+            Some(Path::new("/home/me")),
+            ".claude",
+            Path::new("/work"),
+        ),
+        Some(PathBuf::from("/work/agent-config"))
+    );
 }

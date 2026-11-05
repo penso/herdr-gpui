@@ -72,6 +72,27 @@ fn a_failed_question_ends_the_stop_without_a_press() {
 }
 
 #[test]
+fn a_question_that_fails_after_a_press_is_asked_again() {
+    let asked = Cell::new(0);
+    let result = stop(
+        Agent::Codex,
+        || {
+            asked.set(asked.get() + 1);
+            match asked.get() {
+                1 => Ok(false),
+                2 => Err(Error::Moved),
+                _ => Ok(true),
+            }
+        },
+        || Ok(()),
+        || {},
+        &AtomicBool::new(false),
+    );
+    assert!(result.is_ok());
+    assert_eq!(asked.get(), 3);
+}
+
+#[test]
 fn a_cancelled_stop_presses_nothing_more() {
     let cancelled = AtomicBool::new(false);
     let events = RefCell::new(Vec::new());

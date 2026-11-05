@@ -1,8 +1,9 @@
 use sheprd_chat_protocol::Agent;
 
 /// Why an agent did not move into a chat. Each one before the agent is told
-/// to stop leaves it running; [`Self::Stale`], [`Self::Stopped`], and
-/// [`Self::Type`] can come after, and leave its session to continue by hand.
+/// to stop leaves it running; [`Self::Disabled`], [`Self::Stale`],
+/// [`Self::Stopped`], and [`Self::Type`] can also come after, and leave its
+/// session to continue by hand.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // keep-sorted start

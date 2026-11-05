@@ -32,7 +32,7 @@ struct Agent {
     reach: Box<dyn Reach>,
 }
 
-fn agent(options: &Options) -> Agent {
+fn agent(options: &Options, cwd: &std::path::Path) -> Agent {
     let name = options.name.clone();
     match &options.agent {
         AgentChoice::Builtin { agent, args: extra } => {
@@ -47,7 +47,7 @@ fn agent(options: &Options) -> Agent {
                 match crate::agents::launch(agent, Some(&path), adapter) {
                     Launch::Native(program) => {
                         let (args, reach) = native(agent, options.load.as_deref());
-                        history = native_history(agent, options.load.as_deref());
+                        history = native_history(agent, options.load.as_deref(), cwd);
                         (program.into_os_string(), args, reach)
                     }
                     // An ACP agent replays its own history on `session/load`.
@@ -109,9 +109,10 @@ fn native(
 fn native_history(
     agent: crate::agents::Agent,
     load: Option<&str>,
+    cwd: &std::path::Path,
 ) -> Option<crate::history::Result<sheprd_chat_protocol::Transcript>> {
     let agent = crate::mirror::transcript::TranscriptAgent::try_from(agent).ok()?;
-    Some(crate::history::load(agent, load?))
+    Some(crate::history::load(agent, load?, cwd))
 }
 
 pub(crate) fn run(options: Options) -> anyhow::Result<()> {
@@ -122,7 +123,7 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
     let cwd = cwd
         .canonicalize()
         .with_context(|| format!("no directory {}", cwd.display()))?;
-    let agent = agent(&options);
+    let agent = agent(&options, &cwd);
     let spawned = process::spawn(&agent.program, &agent.args, &cwd)?;
     let agent_process = spawned.process.clone();
     let (inputs, receiver) = bounded::<Input>(INPUTS);

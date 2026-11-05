@@ -20,7 +20,10 @@ use super::{Route, discovery, existing, restore::plan};
 use crate::{
     SheprdWindow,
     i18n::{Localize, fl},
-    teleport::{self, AgentKind, Envelope, Host, ProcessInfo, ProcessInfoResult, SessionKind},
+    teleport::{
+        self, AgentKind, Envelope, Host, ProcessInfo, ProcessInfoResult, SessionKind,
+        snapshot::PaneStatus,
+    },
     window::Flash,
 };
 use gpui::Context;
@@ -74,6 +77,19 @@ fn check(reported: &ClientShellAgent) -> Result<Agent, Error> {
         AgentStatus::Working | AgentStatus::Blocked | AgentStatus::Unknown => {
             Err(Error::Busy(agent))
         }
+    }
+}
+
+/// Whether the host's own answer, fresher than the window's snapshot, still
+/// shows `agent` settled in the pane. Only a turn known to be over may end:
+/// an agent waiting for an answer, or one the daemon cannot place, stays.
+fn settled(pane: &teleport::snapshot::Pane, agent: Agent) -> Result<(), Error> {
+    if pane.agent.as_deref() != Some(agent.name()) {
+        return Err(Error::Moved);
+    }
+    match pane.status {
+        PaneStatus::Done | PaneStatus::Idle => Ok(()),
+        PaneStatus::Other | PaneStatus::Working => Err(Error::Busy(agent)),
     }
 }
 
@@ -184,7 +200,10 @@ fn resume(
 
 /// Stops the agent: Ctrl+C until the shell is back, at most [`INTERRUPTS`]
 /// of them, then waits out the remaining rounds. It never presses Enter, so
-/// nothing in the agent's input can be answered or sent.
+/// nothing in the agent's input can be answered or sent. Once a key is sent
+/// the agent may be leaving, so a question that fails, such as one dropped
+/// SSH round trip, is asked again rather than abandoning the agent; a lost
+/// connection ends the move through its fence.
 fn stop(
     agent: Agent,
     mut returned: impl FnMut() -> Result<bool, Error>,
@@ -196,8 +215,11 @@ fn stop(
         if cancelled.load(Ordering::Acquire) {
             return Err(Error::Stopped);
         }
-        if returned()? {
-            return Ok(());
+        match returned() {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(error) if round == 0 => return Err(error),
+            Err(_) => {}
         }
         if round < INTERRUPTS {
             interrupt()?;
@@ -237,12 +259,7 @@ fn run(request: &Request, cancelled: &AtomicBool) -> Result<String, Error> {
     let host = teleport::host_for(&scope.target).map_err(existing::Error::from)?;
     let snapshot = existing::snapshot(&host, cancelled)?.snapshot;
     let found = snapshot.pane(pane).ok_or(Error::Moved)?;
-    if found.agent.as_deref() != Some(agent.name()) {
-        return Err(Error::Moved);
-    }
-    if found.working {
-        return Err(Error::Busy(*agent));
-    }
+    settled(found, *agent)?;
     let line =
         resume(found, &process_info(&host, pane, cancelled)?, *agent)?.line(program.as_deref())?;
     if program.is_none() {
@@ -273,6 +290,29 @@ pub(crate) struct Job {
     pane: String,
     result: mpsc::Receiver<Result<String, Error>>,
     scope: existing::Scope,
+}
+
+#[cfg(test)]
+impl Job {
+    /// A job whose worker is `result`'s sender, and the flag dropping it sets.
+    pub(in crate::chat) fn waiting(
+        pane: &str,
+        scope: existing::Scope,
+    ) -> (
+        Self,
+        mpsc::SyncSender<Result<String, Error>>,
+        Arc<AtomicBool>,
+    ) {
+        let (sender, result) = mpsc::sync_channel(1);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let job = Self {
+            cancelled: cancelled.clone(),
+            pane: pane.to_owned(),
+            result,
+            scope,
+        };
+        (job, sender, cancelled)
+    }
 }
 
 impl Drop for Job {
@@ -364,6 +404,14 @@ impl SheprdWindow {
         );
     }
 
+    /// Why a move asked of `scope` must not go on, if it must not.
+    fn convert_fence(&self, scope: &existing::Scope) -> Option<Error> {
+        if !self.config.features.acp_chats {
+            return Some(Error::Disabled);
+        }
+        (!self.convert_scope_current(scope)).then_some(Error::Stale)
+    }
+
     /// Whether the window still shows the daemon `scope` was asked of.
     fn convert_scope_current(&self, scope: &existing::Scope) -> bool {
         self.live.status.is_connected()
@@ -381,22 +429,26 @@ impl SheprdWindow {
 
     /// Runs every tick: once the agent has stopped, types the line that
     /// continues it. The chat view attaches when the program reports.
+    ///
+    /// The fence comes before the worker's answer, not after it: a window
+    /// that left the host could never type the line, so the worker must
+    /// stop pressing keys there rather than finish stopping the agent.
     pub(super) fn poll_chat_convert(&mut self, cx: &mut Context<Self>) {
         let Some(job) = &self.chats.converting else {
             return;
         };
-        let result = match job.result.try_recv() {
-            Ok(result) => result,
-            Err(mpsc::TryRecvError::Empty) => return,
-            Err(mpsc::TryRecvError::Disconnected) => Err(Error::Stopped),
+        let result = match self.convert_fence(&job.scope) {
+            Some(error) => Err(error),
+            None => match job.result.try_recv() {
+                Ok(result) => result,
+                Err(mpsc::TryRecvError::Empty) => return,
+                Err(mpsc::TryRecvError::Disconnected) => Err(Error::Stopped),
+            },
         };
         let Some(job) = self.chats.converting.take() else {
             return;
         };
         let typed = result.and_then(|line| {
-            if !self.convert_scope_current(&job.scope) {
-                return Err(Error::Stale);
-            }
             self.type_script_line(&job.scope.boot, &job.pane, &line)
                 .map_err(|error| Error::Type(Arc::new(error)))
         });

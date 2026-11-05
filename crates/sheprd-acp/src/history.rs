@@ -22,8 +22,9 @@ use crate::{
     observe::identity,
 };
 
-/// The history of `session`, read from `agent`'s config directory.
-pub(crate) fn load(agent: TranscriptAgent, session: &str) -> Result<Transcript> {
+/// The history of `session`, read from `agent`'s config directory as the
+/// agent, started in `cwd`, finds it.
+pub(crate) fn load(agent: TranscriptAgent, session: &str, cwd: &Path) -> Result<Transcript> {
     let (variable, default) = match agent {
         TranscriptAgent::Claude => ("CLAUDE_CONFIG_DIR", ".claude"),
         TranscriptAgent::Codex => ("CODEX_HOME", ".codex"),
@@ -32,21 +33,24 @@ pub(crate) fn load(agent: TranscriptAgent, session: &str) -> Result<Transcript> 
         std::env::var_os(variable),
         std::env::home_dir().as_deref(),
         default,
+        cwd,
     )
     .ok_or(Error::NoHome)?;
     read(agent, session, &base)
 }
 
-/// The directory an agent keeps its logs in: its override, else `default`
-/// in the home folder.
+/// The directory an agent keeps its logs in: its override, which a relative
+/// path takes from `cwd`, where the agent starts, else `default` in the home
+/// folder.
 fn config_directory(
     custom: Option<OsString>,
     home: Option<&Path>,
     default: &str,
+    cwd: &Path,
 ) -> Option<PathBuf> {
     custom
         .filter(|custom| !custom.is_empty())
-        .map(PathBuf::from)
+        .map(|custom| cwd.join(custom))
         .or_else(|| home.map(|home| home.join(default)))
 }
 
