@@ -117,7 +117,8 @@ import Testing
     @Test func aSelectionStaysOnTheScreen() throws {
         let screen = try screen(["one", "two"])
         let whole = screen.whole(TermSelection(anchor: at(0, 1), head: at(9, 99)))
-        #expect(whole.start == at(0, 1) && whole.end == at(1, 19))
+        // The end stops at the last row's text, where its highlight does.
+        #expect(whole.start == at(0, 1) && whole.end == at(1, 2))
     }
 
     @Test func aLongPressDragExtendsFromTheWord() throws {

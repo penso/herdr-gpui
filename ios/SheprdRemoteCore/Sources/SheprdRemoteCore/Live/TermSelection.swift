@@ -93,12 +93,15 @@ extension TermScreen {
 
     /// `selection` on the screen's cells and on whole characters: its
     /// start back to the first cell of the character it is in, its end on
-    /// to the last, keeping which end is the anchor.
+    /// to the last, keeping which end is the anchor. Ends in the blank past
+    /// a row's text, where nothing is highlighted, move to the text between
+    /// them: the end back to the last character before it, the start on to
+    /// the first after it. With no text between them, both stay.
     public func whole(_ selection: TermSelection) -> TermSelection {
-        let widest = rows.map { Self.laidOut($0).reduce(0) { $0 + $1.cells } }.max() ?? 0
+        let spans = rows.map { Self.laidOut($0).reduce(0) { $0 + $1.cells } }
         func onScreen(_ position: TermSelection.Position) -> TermSelection.Position {
             .init(row: min(max(position.row, 0), max(rows.count - 1, 0)),
-                  column: min(max(position.column, 0), max(columns, widest, 1) - 1))
+                  column: min(max(position.column, 0), max(columns, spans.max() ?? 0, 1) - 1))
         }
         func snapped(_ position: TermSelection.Position, toLast: Bool) -> TermSelection.Position {
             guard rows.indices.contains(position.row),
@@ -107,7 +110,18 @@ extension TermScreen {
             return .init(row: position.row, column: toLast ? character.column + character.cells - 1 : character.column)
         }
         let anchor = onScreen(selection.anchor), head = onScreen(selection.head)
-        return TermSelection(anchor: snapped(anchor, toLast: anchor > head), head: snapped(head, toLast: head >= anchor))
+        var start = min(anchor, head), end = max(anchor, head)
+        if !rows.isEmpty {
+            // A blank row's last cell is -1: none.
+            end.column = min(end.column, spans[end.row] - 1)
+            while end.column < 0, end.row > start.row { end = .init(row: end.row - 1, column: spans[end.row - 1] - 1) }
+            while start.column >= spans[start.row], start.row < end.row { start = .init(row: start.row + 1, column: 0) }
+        }
+        guard start <= end else {
+            return TermSelection(anchor: snapped(anchor, toLast: anchor > head), head: snapped(head, toLast: head >= anchor))
+        }
+        let first = snapped(start, toLast: false), last = snapped(end, toLast: true)
+        return head >= anchor ? TermSelection(anchor: first, head: last) : TermSelection(anchor: last, head: first)
     }
 
     /// Whether `position` is a highlighted cell of `selection`: a row
@@ -126,9 +140,12 @@ extension TermScreen {
     }
 
     /// The selected text: a line per row, each without the blanks that
-    /// end it, and a character partly selected included whole.
+    /// end it, and a character partly selected included whole. Its ends
+    /// are on the screen's text as it is now (`whole`), so a row the
+    /// highlight leaves out adds no empty line after the screen changes.
     public func text(_ selection: TermSelection) -> String {
-        rows.indices.compactMap { index -> String? in
+        let selection = whole(selection)
+        return rows.indices.compactMap { index -> String? in
             let laid = Self.laidOut(rows[index])
             guard let columns = selection.columns(in: index, last: Int.max - 1) else { return nil }
             let line = String(laid.filter { $0.column <= columns.upperBound && columns.lowerBound < $0.column + $0.cells }.map(\.character))
