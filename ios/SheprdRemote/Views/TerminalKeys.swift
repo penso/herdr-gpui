@@ -14,6 +14,8 @@ final class TermTyping {
     private(set) var problem: String?
     /// What was typed but is not on the screen yet.
     private(set) var echo = TermEcho()
+    /// What an input method is composing, typed once a candidate is picked.
+    var composing = ""
     private var pending: [TermInput.Send] = []
     private var draining = false
     private weak var fleet: Fleet?
@@ -192,7 +194,8 @@ struct TermKeyRows: View {
 
 /// An invisible text input that owns the keyboard: software keys arrive as
 /// text, and a hardware keyboard's arrows, Escape, Tab, and Control or
-/// Option combinations as key presses.
+/// Option combinations as key presses. Input methods compose in marked
+/// text (`TermInputView+TextInput.swift`) and type what they commit.
 struct TermKeyboard: UIViewRepresentable {
     let typing: TermTyping
     @Binding var shown: Bool
@@ -213,8 +216,16 @@ struct TermKeyboard: UIViewRepresentable {
     }
 }
 
-final class TermInputView: UIView, UIKeyInput {
+final class TermInputView: UIView {
     var typing: TermTyping?
+    var composition = TermComposition() {
+        didSet { typing?.composing = composition.marked }
+    }
+    /// The input method's selection inside the marked text, in UTF-16.
+    var markedSelection = NSRange()
+    var markedTextStyle: [NSAttributedString.Key: Any]?
+    weak var inputDelegate: (any UITextInputDelegate)?
+    lazy var tokenizer: any UITextInputTokenizer = UITextInputStringTokenizer(textInput: self)
 
     override var canBecomeFirstResponder: Bool { true }
     var hasText: Bool { true }
@@ -226,15 +237,17 @@ final class TermInputView: UIView, UIKeyInput {
     var smartQuotesType: UITextSmartQuotesType = .no
     var smartDashesType: UITextSmartDashesType = .no
     var smartInsertDeleteType: UITextSmartInsertDeleteType = .no
-    var keyboardType: UIKeyboardType = .asciiCapable
+    // `.asciiCapable` would leave out the Chinese, Japanese, and Korean
+    // keyboards.
+    var keyboardType: UIKeyboardType = .default
     var returnKeyType: UIReturnKeyType = .default
 
     func insertText(_ text: String) {
-        typing?.type(text)
+        if let text = composition.insert(text) { typing?.type(text) }
     }
 
     func deleteBackward() {
-        typing?.press("backspace")
+        if composition.deleteBackward() { typing?.press("backspace") }
     }
 
     // ⌘V from a hardware keyboard, and Paste from the edit menu.
@@ -249,7 +262,8 @@ final class TermInputView: UIView, UIKeyInput {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, let name = Self.name(for: key) else {
+            // While composing, arrows, Tab, and Escape pick candidates.
+            guard composition.marked.isEmpty, let key = press.key, let name = Self.name(for: key) else {
                 unhandled.insert(press)
                 continue
             }
