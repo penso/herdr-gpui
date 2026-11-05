@@ -1,8 +1,46 @@
 //! Turning a GraphQL response into a `PullRequest`, rejecting anything whose
 //! repository or branch does not match what was asked for.
+//!
+//! GitHub keeps answering to a repository's old name after a transfer or
+//! rename, and reports everything under the new one. A remote can lag behind
+//! for as long as it likes, so the name to hold a reply to is the one GitHub
+//! says the repository has, not the one the remote asked with.
 
 use super::{MergeMethod, PullRequest, Result, State, clean, fetch::OUTPUT_LIMIT};
 use crate::Error;
+
+/// The repository's name now, or the one asked with when GitHub gave none
+/// that can be trusted, which then holds the reply to that name.
+fn current_name<'a>(
+    repository: &'a serde_json::Value,
+    asked: (&'a str, &'a str),
+) -> (&'a str, &'a str) {
+    repository["nameWithOwner"]
+        .as_str()
+        .and_then(crate::repository::name_with_owner)
+        .unwrap_or(asked)
+}
+
+/// `head` under the name its repository has now. A head on the repository
+/// asked about moved with it; a fork's head is another repository, whose name
+/// only its own remote knows.
+pub(super) fn moved_head(
+    repository: &serde_json::Value,
+    asked: (&str, &str),
+    head: &super::fetch::Head,
+) -> super::fetch::Head {
+    let same = head.owner.eq_ignore_ascii_case(asked.0) && head.repo.eq_ignore_ascii_case(asked.1);
+    let (owner, repo) = if same {
+        current_name(repository, asked)
+    } else {
+        (head.owner.as_str(), head.repo.as_str())
+    };
+    super::fetch::Head {
+        owner: owner.to_owned(),
+        repo: repo.to_owned(),
+        branch: head.branch.clone(),
+    }
+}
 
 pub(super) fn parse_graphql(
     response: serde_json::Value,
@@ -11,6 +49,10 @@ pub(super) fn parse_graphql(
     branch: &str,
     head: Option<&super::fetch::Head>,
 ) -> Result {
+    let repository = &response["data"]["repository"];
+    let head = head.map(|head| moved_head(repository, (owner, repo), head));
+    let head = head.as_ref();
+    let (owner, repo) = current_name(repository, (owner, repo));
     if response["data"]["repository"]["pullRequests"]["pageInfo"]["hasNextPage"] == true {
         return Err(super::Error::Ambiguous.into());
     }
@@ -144,6 +186,18 @@ fn parse_with_owner(text: &str, owner: &str, repo: &str, branch: &str, head_owne
             .login
             .eq_ignore_ascii_case(head_owner)
     {
+        // Only which check failed: names are request fields, kept out of logs.
+        tracing::warn!(
+            category = "github_pr_identity",
+            number = pr.number,
+            url = pr.url.eq_ignore_ascii_case(&expected),
+            branch = pr.head_ref_name == branch,
+            head_owner = pr
+                .head_repository_owner
+                .login
+                .eq_ignore_ascii_case(head_owner),
+            "GitHub's pull request does not match the repository and branch asked for"
+        );
         return Err(super::Error::Identity.into());
     }
     pr.url = expected;
