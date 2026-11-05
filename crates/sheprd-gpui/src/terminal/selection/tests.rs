@@ -6,6 +6,7 @@ use sheprd_client::protocol::{
 
 mod content_range;
 mod select_all;
+mod soft_wrap;
 
 const CELL_WIDTH: f32 = 10.;
 const CELL_HEIGHT: f32 = 20.;

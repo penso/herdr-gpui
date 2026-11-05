@@ -725,9 +725,12 @@ impl Selection {
         ))
     }
 
-    /// The selected text, with rows separated by a newline. Padding is trimmed
-    /// from rows selected through to the region's right edge, where a terminal
-    /// pads short lines with blanks the user never typed.
+    /// The selected text. Padding is trimmed from rows selected through to the
+    /// region's right edge, where a terminal pads short lines with blanks the
+    /// user never typed. Rows are separated by a newline, except one whose
+    /// last cell still holds text: the surface has no soft-wrap flag, so that
+    /// row is read as continuing. A line that ends exactly on the edge is
+    /// joined with the next row for the same reason.
     pub(crate) fn text(
         &self,
         surface: &PaneSurfaceFrame,
@@ -745,6 +748,7 @@ impl Selection {
         let left = region.columns.start;
         let mut text = String::new();
         let mut line = String::new();
+        let mut continued = false;
         for (index, (row, columns)) in self.spans(region).enumerate() {
             if row >= frame.height {
                 return Err(Error::SelectionStale);
@@ -754,9 +758,13 @@ impl Selection {
                 .cells
                 .get(offset + usize::from(left)..offset + usize::from(columns.end))
                 .ok_or(Error::SelectionStale)?;
-            if index > 0 {
+            if index > 0 && !continued {
                 text.push('\n');
             }
+            continued = columns.end >= edge
+                && cells
+                    .last()
+                    .is_some_and(|cell| cell.skip || !shown(cell).chars().all(char::is_whitespace));
             line.clear();
             for (column, _, cell) in graphemes(cells) {
                 if cell.symbol.len() > MAX_SELECTION_BYTES {

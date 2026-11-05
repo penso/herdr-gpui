@@ -113,18 +113,40 @@ impl Selection {
             .collect()
     }
 
-    /// The selected text: each row's cells with trailing blanks dropped,
-    /// rows joined by newlines.
+    /// The selected text: trailing blanks dropped, and a newline where a row
+    /// ends. The frame has no soft-wrap flag, so a row that still has text in
+    /// its last column is read as continuing onto the next row. A line that
+    /// ends exactly on that column is joined the same way.
     pub(crate) fn text(&self, frame: &FrameData) -> String {
-        self.rows(frame.width)
-            .into_iter()
-            .filter(|(row, _)| *row < frame.height)
-            .map(|(row, columns)| {
-                let text: String = columns.map(|column| symbol(frame, row, column)).collect();
-                text.trim_end().to_owned()
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+        let mut text = String::new();
+        let mut continued = false;
+        let mut any = false;
+        for (row, columns) in self.rows(frame.width) {
+            if row >= frame.height {
+                continue;
+            }
+            if any && !continued {
+                text.push('\n');
+            }
+            let end = columns.end;
+            let line: String = columns.map(|column| symbol(frame, row, column)).collect();
+            continued = end == frame.width && fills_edge(frame, row);
+            text.push_str(line.trim_end());
+            any = true;
+        }
+        text
+    }
+}
+
+/// Whether `row` still has text in the frame's last column. Padding blanks
+/// mean the line ended short of the edge.
+fn fills_edge(frame: &FrameData, row: u16) -> bool {
+    let column = frame.width.saturating_sub(1);
+    let index = usize::from(row) * usize::from(frame.width) + usize::from(column);
+    match frame.cells.get(index) {
+        Some(cell) if cell.skip => true,
+        Some(cell) => !cell.symbol.is_empty() && !cell.symbol.chars().all(char::is_whitespace),
+        None => false,
     }
 }
 

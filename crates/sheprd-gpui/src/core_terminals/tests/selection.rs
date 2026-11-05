@@ -79,6 +79,14 @@ fn a_wide_character_is_copied_once() {
 }
 
 #[test]
+fn a_row_that_fills_the_width_is_copied_without_a_newline() {
+    let shown = frame(5, &["abcde", "fg", "z"]);
+    let mut selection = Selection::at(at(0, 0));
+    selection.extend(at(2, 0));
+    assert_eq!(selection.text(&shown), "abcdefg\nz");
+}
+
+#[test]
 fn a_one_letter_word_or_line_is_still_selected() {
     let shown = frame(3, &["x y"]);
     let word = Selection::word(&shown, at(0, 0));
