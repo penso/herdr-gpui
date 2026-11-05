@@ -121,6 +121,7 @@ mod socket {
         time::Instant,
     };
 
+    mod chat_recovery;
     mod new_work;
     mod recovery;
     mod screens;

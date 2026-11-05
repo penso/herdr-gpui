@@ -44,7 +44,9 @@ impl Source {
             argv: &argv,
             cwd: Some(cwd).filter(|cwd| !cwd.is_empty()),
             env: BTreeMap::from([(ENDPOINT_ENV, endpoint.as_str()), (PANE_ENV, "")]),
-            keep: true,
+            // A recovery shell cannot serve the labelled chat endpoint.
+            // Let a lost chat finish instead of advertising a dead chat.
+            keep: false,
             labels: BTreeMap::from([(TOKEN, endpoint.as_str())]),
             ..Run::default()
         })

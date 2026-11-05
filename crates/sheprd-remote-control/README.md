@@ -63,6 +63,10 @@ work appears in **Herdr 2**, because the desktop owns its spaces. The core has n
 worktrees, so a new workspace on a branch is refused. Without a core, new work
 goes to Herdr 1.
 
+Phone-created shells recover in place after program loss. Chats do not: if
+`sheprd-acp` is lost, the terminal finishes rather than recovering as a shell
+that still carries an unavailable chat endpoint label.
+
 ## Control protocol
 
 `control` is the wire between Sheprd and the daemon: one request and one
