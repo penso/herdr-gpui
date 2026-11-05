@@ -19,6 +19,12 @@ import Testing
         #expect(TermInput.pressed("ctrl+c", held: .shift) == "ctrl+c")
     }
 
+    /// A hardware Control or Option arrow arrives as a combination.
+    @Test func heldShiftReachesCombinedArrows() {
+        #expect(TermInput.pressed("ctrl+up", held: .shift) == "ctrl+shift+up")
+        #expect(TermInput.pressed("alt+left", held: .shift) == "alt+shift+left")
+    }
+
     @Test func aCombinationNamingShiftKeepsIt() {
         #expect(TermInput.pressed("shift+tab") == "shift+tab")
         #expect(TermInput.pressed("ctrl+shift+up") == "ctrl+shift+up")

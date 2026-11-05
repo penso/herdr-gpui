@@ -74,7 +74,7 @@ public enum TermInput {
         let parts = name.split(separator: "+").map(String.init)
         let key = parts.last ?? name
         var modifiers = held
-        if parts.count > 1 || !shiftable.contains(key) { modifiers.remove(.shift) }
+        if !shiftable.contains(key) { modifiers.remove(.shift) }
         for part in parts.dropLast() {
             switch part {
             case "ctrl": modifiers.insert(.ctrl)
