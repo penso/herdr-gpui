@@ -17,18 +17,29 @@ fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
 
 #[test]
 fn summary_reads_as_a_sentence_before_and_after_the_first_refresh() {
-    assert_eq!(summary(None), "Checking working tree...");
-    assert_eq!(summary(Some(Status::default())), "No uncommitted changes");
+    assert_eq!(summary(None, None), "Checking working tree...");
     assert_eq!(
-        summary(Some(status(12, 3, 0))),
+        summary(Some(Status::default()), None),
+        "No uncommitted changes"
+    );
+    assert_eq!(
+        summary(Some(Status::default()), Some(false)),
+        "No uncommitted changes"
+    );
+    assert_eq!(
+        summary(Some(Status::default()), Some(true)),
+        "Not yet committed"
+    );
+    assert_eq!(
+        summary(Some(status(12, 3, 0)), Some(true)),
         "+\u{2068}12\u{2069} -\u{2068}3\u{2069}"
     );
     assert_eq!(
-        summary(Some(status(12, 3, 1))),
+        summary(Some(status(12, 3, 1)), Some(true)),
         "+\u{2068}12\u{2069} -\u{2068}3\u{2069}, \u{2068}1\u{2069} untracked entry"
     );
     assert_eq!(
-        summary(Some(status(0, 0, 4))),
+        summary(Some(status(0, 0, 4)), Some(true)),
         "+\u{2068}0\u{2069} -\u{2068}0\u{2069}, \u{2068}4\u{2069} untracked entries"
     );
 }

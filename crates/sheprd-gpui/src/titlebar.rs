@@ -75,6 +75,7 @@ impl SheprdWindow {
         let font = &self.config.ui;
         let background = rgb(theme.surface).blend(rgba(0xffffff1a));
         let status = self.git.status();
+        let uncommitted = self.git.uncommitted() == Some(true);
         let running = self.git.running().is_some();
         let anchor = self.git_anchor.clone();
         let pr = self.git_pull_request().map(|pr| {
@@ -156,38 +157,42 @@ impl SheprdWindow {
                         )
                         // The pull request's churn is history; the badge
                         // says work is still sitting in the checkout.
-                        .when(status.is_some_and(|status| status.dirty()), |button| {
+                        .when(uncommitted, |button| {
                             button.child(
                                 crate::icons::uncommitted(theme, 18.)
                                     .debug_selector(|| "titlebar-git-dirty".into()),
                             )
                         }),
-                    None => button.when_some(
-                        status.filter(|status| status.dirty()),
-                        |button, status| {
-                            button
-                                .when(status.additions > 0, |button| {
-                                    button.child(
-                                        div()
-                                            .debug_selector(|| "titlebar-git-additions".into())
-                                            .text_color(rgb(theme.ink(theme.palette[2])))
-                                            .child(format!("+{}", status.additions)),
-                                    )
-                                })
-                                .when(status.deletions > 0, |button| {
-                                    button.child(
-                                        div()
-                                            .debug_selector(|| "titlebar-git-deletions".into())
-                                            .text_color(rgb(theme.ink(theme.palette[1])))
-                                            .child(format!("-{}", status.deletions)),
-                                    )
-                                })
-                                .child(
+                    None => {
+                        let counts =
+                            status.filter(|status| status.additions > 0 || status.deletions > 0);
+                        button
+                            .when_some(counts, |button, status| {
+                                button
+                                    .when(status.additions > 0, |button| {
+                                        button.child(
+                                            div()
+                                                .debug_selector(|| "titlebar-git-additions".into())
+                                                .text_color(rgb(theme.ink(theme.palette[2])))
+                                                .child(format!("+{}", status.additions)),
+                                        )
+                                    })
+                                    .when(status.deletions > 0, |button| {
+                                        button.child(
+                                            div()
+                                                .debug_selector(|| "titlebar-git-deletions".into())
+                                                .text_color(rgb(theme.ink(theme.palette[1])))
+                                                .child(format!("-{}", status.deletions)),
+                                        )
+                                    })
+                            })
+                            .when(uncommitted, |button| {
+                                button.child(
                                     crate::icons::uncommitted(theme, 18.)
                                         .debug_selector(|| "titlebar-git-dirty".into()),
                                 )
-                        },
-                    ),
+                            })
+                    }
                 })
                 .child(
                     div()

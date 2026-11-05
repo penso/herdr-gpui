@@ -36,19 +36,24 @@ impl Row {
 }
 
 /// Stats as the titlebar and the popup header both show them.
-pub(super) fn summary(status: Option<Status>) -> String {
+/// `uncommitted` is the focused checkout's porcelain bit: a zero-line change
+/// is still work to commit, and `None` means the refresh has not landed.
+pub(super) fn summary(status: Option<Status>, uncommitted: Option<bool>) -> String {
     let Some(status) = status else {
         return fl!("git-menu-checking");
     };
-    if !status.dirty() {
-        return fl!("git-menu-clean");
+    if status.dirty() {
+        return fl!(
+            "git-menu-changes",
+            additions = status.additions,
+            deletions = status.deletions,
+            untracked = status.untracked,
+        );
     }
-    fl!(
-        "git-menu-changes",
-        additions = status.additions,
-        deletions = status.deletions,
-        untracked = status.untracked,
-    )
+    if uncommitted == Some(true) {
+        return fl!("git-menu-not-committed", untracked = status.untracked);
+    }
+    fl!("git-menu-clean")
 }
 
 impl SheprdWindow {
@@ -322,8 +327,12 @@ impl SheprdWindow {
             .items_center()
             .gap(px(8.))
             .text_color(rgb(theme.muted));
-        let Some(status) = self.git.status().filter(|status| status.dirty()) else {
-            return row.child(summary(self.git.status()));
+        let Some(status) = self
+            .git
+            .status()
+            .filter(|_| self.git.uncommitted() == Some(true))
+        else {
+            return row.child(summary(self.git.status(), self.git.uncommitted()));
         };
         row.child(
             div()
@@ -331,24 +340,30 @@ impl SheprdWindow {
                 .min_w_0()
                 .child(fl!("git-menu-not-committed", untracked = status.untracked)),
         )
-        .child(
-            div()
-                .flex()
-                .flex_none()
-                .gap(px(6.))
-                .child(
-                    div()
-                        .debug_selector(|| "git-menu-uncommitted-additions".into())
-                        .text_color(rgb(theme.ink(theme.palette[2])))
-                        .child(format!("+{}", crate::sidebar::compact(status.additions))),
-                )
-                .child(
-                    div()
-                        .debug_selector(|| "git-menu-uncommitted-deletions".into())
-                        .text_color(rgb(theme.ink(theme.palette[1])))
-                        .child(format!("-{}", crate::sidebar::compact(status.deletions))),
-                ),
-        )
+        .when(status.additions > 0 || status.deletions > 0, |row| {
+            row.child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .gap(px(6.))
+                    .when(status.additions > 0, |counts| {
+                        counts.child(
+                            div()
+                                .debug_selector(|| "git-menu-uncommitted-additions".into())
+                                .text_color(rgb(theme.ink(theme.palette[2])))
+                                .child(format!("+{}", crate::sidebar::compact(status.additions))),
+                        )
+                    })
+                    .when(status.deletions > 0, |counts| {
+                        counts.child(
+                            div()
+                                .debug_selector(|| "git-menu-uncommitted-deletions".into())
+                                .text_color(rgb(theme.ink(theme.palette[1])))
+                                .child(format!("-{}", crate::sidebar::compact(status.deletions))),
+                        )
+                    }),
+            )
+        })
     }
 
     pub(super) fn render_git_menu(&self, cx: &mut Context<Self>) -> Div {
@@ -639,7 +654,7 @@ impl SheprdWindow {
                     .bg(rgb(theme.active))
                     .px(px(10.))
                     .py(px(6.))
-                    .child(summary(self.git.status())),
+                    .child(summary(self.git.status(), self.git.uncommitted())),
             );
         if self.menu.input.is_some() {
             body = body.child(self.render_dialog_input(cx));
