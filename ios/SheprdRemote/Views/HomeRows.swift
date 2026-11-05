@@ -27,7 +27,8 @@ enum HomeRow: Identifiable {
             // An answered question is on its way, so it no longer waits.
             let status: Home.AgentStatus = item.needsYou ? .blocked
                 : item.working || item.chat.status == .blocked ? .working : item.chat.status
-            let started = item.working ? item.chat.summary?.turnStartedMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } : nil
+            // Set only during a turn, which a question does not end.
+            let started = item.chat.summary?.turnStartedMs.map { Date(timeIntervalSince1970: Double($0) / 1000) }
             return AgentSort.Facts(
                 status: status,
                 date: [started, item.lastAnswer].compactMap { $0 }.max(),
