@@ -30,8 +30,11 @@ public enum TermInput {
     /// modifier is held.
     public static func sends(for text: String, modifiers: Modifiers = []) -> [Send] {
         // A space with no key name (Japanese input's full-width U+3000)
-        // would be dropped, and the daemon refuses whitespace as a key.
-        if modifiers.isEmpty, text.contains(where: { $0.isWhitespace && key(for: $0) == nil }) { return [.paste(text)] }
+        // would be dropped, and the daemon refuses whitespace as a key. A
+        // paste would not press Enter, so a typed line stays keys.
+        if modifiers.isEmpty, !text.contains(where: \.isNewline), text.contains(where: { $0.isWhitespace && key(for: $0) == nil }) {
+            return [.paste(text)]
+        }
         let keys = text.enumerated().compactMap { index, character in
             key(for: character, modifiers: index == 0 ? modifiers : [])
         }

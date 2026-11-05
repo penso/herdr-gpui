@@ -32,6 +32,11 @@ import Testing
         #expect(TermInput.sends(for: "a b") == [.keys(["a", "space", "b"])])
     }
 
+    @Test func aLineWithAFullWidthSpaceStillPressesEnter() {
+        // A paste would not press Enter, so a typed line stays keys.
+        #expect(TermInput.sends(for: "日本\u{3000}語\n") == [.keys(["日", "本", "語", "enter"])])
+    }
+
     @Test func longTextIsPastedWhole() {
         let long = String(repeating: "word ", count: 20)
         #expect(TermInput.sends(for: long) == [.paste(long)])
