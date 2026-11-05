@@ -35,7 +35,11 @@ extension TermInputView: UITextInput {
 
     func unmarkText() {
         markedSelection = NSRange()
-        if let text = composition.unmark() { typing?.type(text) }
+        // Some input methods commit this way. One interrupted (the keyboard
+        // hidden, the app inactive under a screenshot) has picked nothing,
+        // and its letters are not typed.
+        guard let text = composition.unmark(), isFirstResponder, UIApplication.shared.applicationState == .active else { return }
+        typing?.type(text)
     }
 
     func text(in range: UITextRange) -> String? {

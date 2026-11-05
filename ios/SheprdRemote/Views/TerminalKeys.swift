@@ -230,6 +230,12 @@ final class TermInputView: UIView {
     override var canBecomeFirstResponder: Bool { true }
     var hasText: Bool { true }
 
+    // Hiding the keyboard drops what is still being composed.
+    override func resignFirstResponder() -> Bool {
+        composition.mark("")
+        return super.resignFirstResponder()
+    }
+
     // A terminal wants what was typed, not what autocorrect guessed.
     var autocorrectionType: UITextAutocorrectionType = .no
     var autocapitalizationType: UITextAutocapitalizationType = .none
