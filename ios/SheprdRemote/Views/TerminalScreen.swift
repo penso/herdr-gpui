@@ -165,15 +165,9 @@ struct TerminalScreen: View {
                         }
                     }
                     Section {
-                        Button("New Tab", systemImage: "plus") { run(.newTab) }
                         Button("Rename Tab…", systemImage: "pencil") {
                             newName = item?.terminal.label ?? title
                             renaming = true
-                        }
-                        if let item {
-                            Button("New Chat in \(item.workspace.label)", systemImage: "bubble.left.and.text.bubble.right") {
-                                model.creating = .chat(device: key.device, workspace: item.workspace.id, label: item.workspace.label)
-                            }
                         }
                     }
                     Section {
