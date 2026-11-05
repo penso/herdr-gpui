@@ -45,6 +45,10 @@ pub mod wsl;
 #[cfg(all(test, unix))]
 #[path = "../../test-support/executable.rs"]
 mod test_executable;
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+#[allow(unsafe_code)]
+#[path = "../../test-support/process.rs"]
+mod test_process;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;
