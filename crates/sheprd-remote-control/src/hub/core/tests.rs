@@ -1,7 +1,6 @@
 use super::*;
-use crate::hub::{Hub, layout};
+use crate::hub::layout;
 use serde_json::json;
-use sheprd_core_client::Endpoint;
 
 fn record(address: &str) -> Value {
     json!({"address": address, "cols": 80, "rows": 24, "cwd": "/code/app",
@@ -88,8 +87,9 @@ fn pane_ids_do_not_collide_with_the_herdr_one_namespace_or_remote_paths() {
 #[cfg(unix)]
 mod socket {
     use super::*;
+    use crate::hub::Hub;
     use sheprd_core_client::{
-        Method,
+        Endpoint, Method,
         frame::{Decoder, Frame, Kind, encode},
     };
     use std::{
