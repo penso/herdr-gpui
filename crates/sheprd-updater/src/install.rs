@@ -37,7 +37,7 @@ mod signing;
 
 pub(super) use apply::run_helper;
 #[cfg(test)]
-use apply::{record_result, remove_failed_linux_backup, replace};
+use apply::{record_result, remove_failed_linux_backup, replace, target};
 use archive::extract;
 #[cfg(test)]
 use archive::{safe_link, safe_path};

@@ -100,15 +100,22 @@ fn future_bundle_extracts_relaunches_new_executable_in_place_and_recovers() -> a
         let executable = apply::replacement_executable(&destination, &candidate, Mode::Mac)?;
         assert_eq!(executable, destination.join("Contents/MacOS/sheprd"));
         let backup = stage.path().join("previous-installation");
-        let result = replace(&destination, &candidate, &backup, Mode::Mac, || {
-            assert_eq!(fs::read(&executable)?, b"new");
-            assert_eq!(mac_bundle(&executable)?, destination);
-            if fail {
-                Err(Error::Io(std::io::Error::other("spawn failed")))
-            } else {
-                Ok(())
-            }
-        });
+        let result = replace(
+            &destination,
+            &destination,
+            &candidate,
+            &backup,
+            Mode::Mac,
+            || {
+                assert_eq!(fs::read(&executable)?, b"new");
+                assert_eq!(mac_bundle(&executable)?, destination);
+                if fail {
+                    Err(Error::Io(std::io::Error::other("spawn failed")))
+                } else {
+                    Ok(())
+                }
+            },
+        );
         assert_eq!(result.is_err(), fail);
         if fail {
             assert_eq!(fs::read(destination.join("Contents/MacOS/Herdr"))?, b"old");
@@ -214,14 +221,21 @@ fn both_linux_names_replace_the_existing_path_and_rollback() -> anyhow::Result<(
                 candidate(stage.path(), &installation, &offer, &AtomicBool::new(false))?;
             let launch = apply::replacement_executable(&destination, &candidate, Mode::Linux)?;
             let backup = stage.path().join("previous-installation");
-            let result = replace(&destination, &candidate, &backup, Mode::Linux, || {
-                assert_eq!(fs::read(&launch)?, b"new");
-                if fail {
-                    Err(Error::Io(std::io::Error::other("spawn failed")))
-                } else {
-                    Ok(())
-                }
-            });
+            let result = replace(
+                &destination,
+                &destination,
+                &candidate,
+                &backup,
+                Mode::Linux,
+                || {
+                    assert_eq!(fs::read(&launch)?, b"new");
+                    if fail {
+                        Err(Error::Io(std::io::Error::other("spawn failed")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
             assert_eq!(result.is_err(), fail);
             assert_eq!(fs::read(destination)?, if fail { b"old" } else { b"new" });
         }
