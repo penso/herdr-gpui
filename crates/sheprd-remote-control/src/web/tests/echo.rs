@@ -29,6 +29,7 @@ fn with_api(dir: &std::path::Path) -> Shared {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![Workspace {
             id: "w1".into(),
             label: "app".into(),
@@ -67,6 +68,7 @@ async fn keys_herdr_never_took_leave_the_timer_alone() {
         Hub::offline(Layout {
             connected: true,
             boot: "b".into(),
+            working: 0,
             workspaces: vec![Workspace {
                 id: "w1".into(),
                 label: "app".into(),

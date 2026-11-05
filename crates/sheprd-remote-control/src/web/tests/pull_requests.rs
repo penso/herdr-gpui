@@ -27,6 +27,7 @@ async fn desktop_pr_changes_update_an_open_mobile_list_and_stale_identities_are_
     let hub = Hub::offline(Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![Workspace {
             id: "w1".into(),
             label: "Remote control".into(),

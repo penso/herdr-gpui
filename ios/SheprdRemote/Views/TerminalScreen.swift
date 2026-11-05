@@ -10,6 +10,7 @@ import UIKit
 struct TerminalScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.offersWorkspace) private var offersWorkspace
     let key: PaneKey
     let title: String
     @State private var store: TermStore?
@@ -116,6 +117,14 @@ struct TerminalScreen: View {
         .toolbar(.hidden, for: .tabBar)
         .hidesConnectionToast()
         .toolbar {
+            if offersWorkspace, let workspace = item?.workspace {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { model.pendingWorkspace = WorkspaceKey(device: key.device, workspace: workspace.id) } label: {
+                        Image(systemName: "square.stack.3d.up")
+                    }
+                    .accessibilityLabel("Go to \(workspace.label)")
+                }
+            }
             // `PasteButton` draws its own tinted fill and greys out with
             // nothing to paste, so it stands apart from the glass group and
             // only while the clipboard holds text.
@@ -184,6 +193,7 @@ struct TerminalScreen: View {
         }
         .onAppear {
             store = model.fleet.openTerm(key)
+            model.recentDevice = key.device
             if typing == nil { typing = TermTyping(key: key, fleet: model.fleet) }
             #if DEBUG
             // The simulator loop's `-type TEXT` types into the terminal.

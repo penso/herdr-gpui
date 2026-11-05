@@ -358,6 +358,7 @@ fn folded_thoughts_and_tools_never_leak_hidden_text_across_messages() {
                 title: "Read file".into(),
                 kind: ToolKind::Read,
                 parent: None,
+                started_ms: None,
                 status: ToolStatus::Completed,
                 locations: vec!["src/test.rs".into()],
                 content: vec![ToolContent::Text {

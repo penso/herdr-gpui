@@ -77,6 +77,7 @@ fn a_snapshot_round_trips_every_entry_kind() {
                 kind: ToolKind::Edit,
                 locations: vec!["/x".to_owned()],
                 parent: None,
+                started_ms: None,
                 status: ToolStatus::Completed,
                 title: "Edit x".to_owned(),
             }),
@@ -108,4 +109,22 @@ fn a_snapshot_round_trips_every_entry_kind() {
         read_frame::<_, ServerMessage>(&mut bytes.as_slice()).unwrap(),
         Some(message)
     );
+}
+
+#[test]
+fn a_tool_start_is_optional_either_way() {
+    let older = json!({"call_id": "c", "title": "ls"});
+    let tool: Tool = serde_json::from_value(older).unwrap();
+    assert_eq!(tool.started_ms, None);
+    let sent = serde_json::to_value(&tool).unwrap();
+    assert!(
+        sent.get("started_ms").is_none(),
+        "older peers see no new key"
+    );
+    let tool = Tool {
+        started_ms: Some(5),
+        ..tool
+    };
+    let sent = serde_json::to_value(&tool).unwrap();
+    assert_eq!(serde_json::from_value::<Tool>(sent).unwrap(), tool);
 }

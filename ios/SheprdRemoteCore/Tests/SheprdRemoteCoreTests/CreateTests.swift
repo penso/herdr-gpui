@@ -27,4 +27,19 @@ import Testing
         let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(object == ["cwd": "/a", "branch": "fix", "agent": "codex", "prompt": "go"])
     }
+
+    /// The values `generated_branches_are_namespaced_and_reproducible`
+    /// pins on the desktop, so the two clients keep proposing alike.
+    @Test func proposedBranchesMatchTheDesktop() {
+        #expect(NewWorkspaceRequest.proposedBranch(seed: 0) == "worktree/brave-river-0000")
+        #expect(NewWorkspaceRequest.proposedBranch(seed: 9) == "worktree/calm-cloud-0009")
+        #expect(NewWorkspaceRequest.proposedBranch(seed: .max) == "worktree/silver-valley-ffff")
+    }
+
+    @Test func clockProposalsAreSeededInMicroseconds() {
+        let date = Date(timeIntervalSince1970: 1)
+        #expect(NewWorkspaceRequest.proposedBranch(at: date) == NewWorkspaceRequest.proposedBranch(seed: 1_000_000))
+        // A clock before 1970 still proposes a branch rather than trapping.
+        #expect(NewWorkspaceRequest.proposedBranch(at: Date(timeIntervalSince1970: -1)) == "worktree/brave-river-0000")
+    }
 }

@@ -17,6 +17,9 @@ pub(crate) struct Layout {
     pub(crate) connected: bool,
     /// The boot the snapshot came from; requests act on it.
     pub(crate) boot: String,
+    /// Agents working now, in chats and terminals alike. A terminal tab
+    /// lists only its most pressing agent, so this counts every one.
+    pub(crate) working: usize,
     pub(crate) workspaces: Vec<Workspace>,
 }
 
@@ -69,6 +72,8 @@ pub(crate) struct TerminalAgent {
     pub(crate) pane: String,
     /// What it works on, as its terminal title says.
     pub(crate) title: Option<String>,
+    /// When this daemon saw it last change state; unknown until it does.
+    pub(crate) changed_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -237,6 +242,7 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                             status: agent.agent_status,
                             pane: agent.pane_id.clone(),
                             title: agent_title(agent).map(str::to_owned),
+                            changed_ms: None,
                         });
                     let terminal = Terminal {
                         tab: tab.tab_id.clone(),
@@ -264,6 +270,11 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
     Layout {
         connected: true,
         boot: snapshot.boot_id.clone(),
+        working: snapshot
+            .agents
+            .iter()
+            .filter(|agent| agent.agent_status == AgentStatus::Working)
+            .count(),
         workspaces,
     }
 }

@@ -23,6 +23,7 @@ pub(super) fn layout(endpoint: EndpointId) -> Layout {
     Layout {
         connected: true,
         boot: "b".into(),
+        working: 2,
         workspaces: vec![Workspace {
             id: "w1".into(),
             label: "herdr-gpui".into(),
@@ -53,6 +54,7 @@ pub(super) fn layout(endpoint: EndpointId) -> Layout {
                     status: AgentStatus::Done,
                     pane: "p2".into(),
                     title: Some("Fix the build".into()),
+                    changed_ms: Some(1_770_000_000_000),
                 }),
             }],
         }],

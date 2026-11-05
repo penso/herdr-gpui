@@ -38,13 +38,52 @@ pub(super) fn record_result(file: &mut File, result: &Result<()>) -> Result<()> 
     file.sync_all().map_err(io)
 }
 
+/// Where this update lands. A standalone `Herdr.app` given a `Sheprd.app` payload
+/// moves to that name. Homebrew's receipt names the old path, so a bundle it
+/// records stays put until its cask moves it, and an existing `Sheprd.app` is
+/// never touched. `recorded` is asked only when a move is otherwise possible.
+pub(super) fn target(
+    destination: &Path,
+    candidate: &Path,
+    mode: Mode,
+    recorded: impl FnOnce(&Path) -> bool,
+) -> Result<PathBuf> {
+    let renamed = super::bundle::renamed(destination)
+        .filter(|renamed| mode == Mode::Mac && renamed.file_name() == candidate.file_name());
+    let Some(renamed) = renamed else {
+        return Ok(destination.to_owned());
+    };
+    if recorded(destination) {
+        return Ok(destination.to_owned());
+    }
+    match fs::symlink_metadata(&renamed) {
+        Ok(_) => Ok(destination.to_owned()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(renamed),
+        Err(error) => Err(io(error)),
+    }
+}
+
+/// Undo the legacy link, and only that: whatever else now sits at the path is
+/// not ours to remove, so recovery stops there and both bundles survive.
+fn remove_legacy_link(legacy: &Path) -> std::io::Result<()> {
+    match fs::symlink_metadata(legacy) {
+        Ok(meta) if meta.file_type().is_symlink() => fs::remove_file(legacy),
+        Ok(_) => Err(std::io::ErrorKind::AlreadyExists.into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+/// `target` is `destination`, or the new name [`target`] chose for it.
 pub(super) fn replace(
     destination: &Path,
+    target: &Path,
     candidate: &Path,
     backup: &Path,
     mode: Mode,
     launch: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
+    let moved = target != destination;
     if backup.try_exists().map_err(io)? {
         return Err(Error::RecoveryExists);
     }
@@ -53,7 +92,7 @@ pub(super) fn replace(
         Mode::Linux => fs::hard_link(destination, backup).map_err(io)?,
         Mode::Mac => fs::rename(destination, backup).map_err(io)?,
     }
-    if let Err(error) = fs::rename(candidate, destination) {
+    if let Err(error) = fs::rename(candidate, target) {
         if mode == Mode::Mac {
             if let Err(rollback) = fs::rename(backup, destination) {
                 return Err(Error::ReplacementRollback {
@@ -71,11 +110,22 @@ pub(super) fn replace(
         }
         return Err(io(error));
     }
-    if let Err(error) = launch() {
+    let linked = if moved {
+        super::bundle::link_legacy(destination)
+    } else {
+        Ok(())
+    };
+    if let Err(error) = linked.and_then(|()| launch()) {
         // Move aside only the exact candidate we just installed; never delete
         // an arbitrary installation tree. Both copies survive failed recovery.
-        if let Err(recovery) =
-            fs::rename(destination, candidate).and_then(|()| fs::rename(backup, destination))
+        let unlinked = if moved {
+            remove_legacy_link(destination)
+        } else {
+            Ok(())
+        };
+        if let Err(recovery) = unlinked
+            .and_then(|()| fs::rename(target, candidate))
+            .and_then(|()| fs::rename(backup, destination))
         {
             return Err(Error::RestartRecovery {
                 source: Box::new(error),
@@ -198,10 +248,16 @@ fn helper(stage: &Path) -> Result<()> {
         let backup = stage.join("previous-installation");
         let args: Vec<OsString> = request.args.into_iter().map(OsString::from_vec).collect();
         let cwd = PathBuf::from(OsString::from_vec(request.cwd));
-        let executable =
-            replacement_executable(&installation.destination, &candidate, installation.mode)?;
+        let target = target(
+            &installation.destination,
+            &candidate,
+            installation.mode,
+            crate::brew::recorded,
+        )?;
+        let executable = replacement_executable(&target, &candidate, installation.mode)?;
         let result = replace(
             &installation.destination,
+            &target,
             &candidate,
             &backup,
             installation.mode,
@@ -232,8 +288,8 @@ fn helper(stage: &Path) -> Result<()> {
     }
 }
 
-/// Select from the validated candidate before moving it. The existing bundle
-/// directory stays put, but its internal executable can change during rebrand.
+/// Select from the validated candidate before moving it: the executable inside
+/// the bundle can change during rebrand, whichever directory it lands in.
 pub(super) fn replacement_executable(
     destination: &Path,
     candidate: &Path,

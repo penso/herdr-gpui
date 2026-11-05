@@ -260,6 +260,10 @@ pub struct Tool {
     /// The sub-agent call this call is a step of, when a sub-agent made it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// When the call was first seen unfinished (Unix time). Absent from
+    /// older programs and from calls replayed already finished.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_ms: Option<u64>,
     #[serde(default)]
     pub status: ToolStatus,
     pub title: String,

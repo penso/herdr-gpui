@@ -2,8 +2,8 @@ import SheprdRemoteCore
 import SwiftUI
 
 /// One workspace, opened from the Workspaces tab: its branch and pull
-/// request, its tabs, and a row of agents and a terminal to start another
-/// tab with one tap.
+/// request, its tabs, and buttons to start another tab: a terminal and the
+/// agent last started, with the other agents folded below them.
 struct WorkspaceScreen: View {
     @Environment(AppModel.self) private var model
     let key: WorkspaceKey
@@ -11,6 +11,8 @@ struct WorkspaceScreen: View {
     /// What a tap is starting: an agent's id, or `terminal`.
     @State private var starting: String?
     @State private var problem: String?
+    /// The agents beyond the two large buttons are unfolded.
+    @State private var showsOthers = false
     /// A tab just started, shown as soon as it exists.
     @State private var opened: Route?
 
@@ -59,12 +61,20 @@ struct WorkspaceScreen: View {
                 let count = chats.count + terminals.count
                 Text(count == 1 ? "1 tab" : "\(count) tabs")
             }
+            launcher(workspace, online: isOnline(machine))
         }
         .navigationTitle(workspace.label)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom) { launcher(workspace, online: isOnline(machine)) }
-        .navigationDestination(item: $opened) { $0.screen }
+        .onAppear {
+            model.recentDevice = key.device
+            #if DEBUG
+            // The simulator loop's `-otherAgents YES` unfolds the agents.
+            if UserDefaults.standard.bool(forKey: "otherAgents") { showsOthers = true }
+            #endif
+        }
+        // This screen is right behind what it opens, so Back is the way here.
+        .navigationDestination(item: $opened) { $0.screen.environment(\.offersWorkspace, false) }
         // Keyed on the whole status, so a link that comes back at another
         // address loads again: a phone waking from sleep still shows the
         // address it had, and the first try there fails.
@@ -84,50 +94,88 @@ struct WorkspaceScreen: View {
         }
     }
 
-    /// One tap starts a terminal, or an agent with no prompt; a long press
-    /// on an agent opens the form with a first prompt.
+    /// One tap starts a terminal or the agent last started, as the two
+    /// most likely tabs, with the other agents folded below them. A long
+    /// press on an agent opens the form with a first prompt.
     private func launcher(_ workspace: Home.Workspace, online: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("New tab").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.leading, 18)
-            // More agents than fit scroll sideways inside the card, inset
-            // from its rounded edges, never past them.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    tile("Terminal", id: Self.terminal) {
-                        Image(systemName: "apple.terminal").font(.system(size: 14, weight: .semibold))
-                            .frame(width: 30, height: 30).background(.fill.secondary, in: .rect(cornerRadius: 30 * 0.28))
-                    } action: {
-                        openTerminal(in: workspace)
+        let recent = agents.first { $0.id == model.recentAgent } ?? agents.first
+        let others = agents.filter { $0.id != recent?.id }
+        return Section("New tab") {
+            HStack(spacing: 10) {
+                bigButton("Terminal", id: Self.terminal) {
+                    Image(systemName: "apple.terminal").font(.system(size: 19, weight: .semibold))
+                        .frame(width: 40, height: 40).background(.fill.secondary, in: .rect(cornerRadius: 40 * 0.28))
+                } action: {
+                    openTerminal(in: workspace)
+                }
+                .disabled(workspace.anyPane == nil)
+                if let recent {
+                    bigButton(recent.name, id: recent.id) { AgentIcon(agent: recent.id, size: 40) } action: {
+                        start(recent, in: workspace)
                     }
-                    .disabled(workspace.anyPane == nil)
-                    ForEach(agents) { agent in
-                        tile(agent.name, id: agent.id) { AgentIcon(agent: agent.id, size: 30) } action: {
+                    .contextMenu { firstPrompt(recent, in: workspace) }
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+            .listRowSeparator(.hidden, edges: .bottom)
+            if !others.isEmpty {
+                Button {
+                    withAnimation { showsOthers.toggle() }
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("Other agents")
+                        Spacer()
+                        if !showsOthers {
+                            HStack(spacing: 4) { ForEach(others) { AgentIcon(agent: $0.id, size: 22) } }
+                                .transition(.opacity)
+                                .accessibilityHidden(true)
+                        }
+                        Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(showsOthers ? 180 : 0))
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(showsOthers ? "Shown" : "Hidden")
+                if showsOthers {
+                    ForEach(others) { agent in
+                        Button {
                             start(agent, in: workspace)
-                        }
-                        .contextMenu {
-                            Button("With a First Prompt…", systemImage: "text.bubble") {
-                                model.creating = .chat(device: key.device, workspace: workspace.id, label: workspace.label, agent: agent.id)
+                        } label: {
+                            HStack(spacing: 12) {
+                                AgentIcon(agent: agent.id, size: 28)
+                                Text(agent.name)
+                                Spacer()
+                                if starting == agent.id { ProgressView() }
                             }
+                            .contentShape(.rect)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("New \(agent.name) tab")
+                        .contextMenu { firstPrompt(agent, in: workspace) }
                     }
                 }
             }
-            .contentMargins(.horizontal, 12, for: .scrollContent)
         }
         .disabled(!online || starting != nil)
-        .padding(.vertical, 12)
-        .clipShape(.rect(cornerRadius: 26))
-        .glassEffect(.regular, in: .rect(cornerRadius: 26))
-        .padding(.horizontal, 16)
     }
 
-    private func tile(_ name: String, id: String, @ViewBuilder icon: () -> some View, action: @escaping () -> Void) -> some View {
+    private func firstPrompt(_ agent: AgentChoice, in workspace: Home.Workspace) -> some View {
+        Button("With a First Prompt…", systemImage: "text.bubble") {
+            model.creating = .chat(device: key.device, workspace: workspace.id, label: workspace.label, agent: agent.id)
+        }
+    }
+
+    private func bigButton(_ name: String, id: String, @ViewBuilder icon: () -> some View, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                if starting == id { ProgressView().frame(width: 30, height: 30) } else { icon() }
-                Text(name).font(.caption2.weight(.medium)).lineLimit(1)
+            VStack(spacing: 8) {
+                if starting == id { ProgressView().frame(width: 40, height: 40) } else { icon() }
+                Text(name).font(.subheadline.weight(.semibold)).lineLimit(1)
             }
-            .frame(width: 58)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(.fill.quinary, in: .rect(cornerRadius: 16))
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("New \(name) tab")
@@ -146,6 +194,7 @@ struct WorkspaceScreen: View {
                 let created = try await model.fleet.call(device) { client, token in
                     try await client.startChat(NewChatRequest(agent: agent.id), workspace: id, bearer: token)
                 }
+                model.recentAgent = agent.id
                 if let pane = created.pane { opened = .chat(PaneKey(device: device, pane: pane), title: agent.name) }
             } catch {
                 problem = error.localizedDescription

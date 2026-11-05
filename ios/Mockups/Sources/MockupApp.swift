@@ -72,6 +72,10 @@ struct Mockup: View {
         case ("forget", "B"): ForgetHeaderMenu(state: state)
         case ("forget", "C"): ForgetUnpairedCard(state: state)
         case ("forget", "D"): ForgetEditList(state: state)
+        case ("newtab", "A"): NewTabGrid()
+        case ("newtab", "B"): NewTabMenu(state: state)
+        case ("newtab", "C"): NewTabQuick(state: state)
+        case ("newtab", "D"): NewTabRowSheet(state: state)
         default: Text("No mockup \(screen) \(variant)")
         }
     }
@@ -92,6 +96,7 @@ struct Catalog: View {
         ("connect", "Now", 0), ("connect", "A", 0), ("connect", "B", 0), ("connect", "C", 0), ("connect", "D", 0),
         ("spaces", "A", 0), ("spaces", "A", 1), ("spaces", "B", 0), ("spaces", "B", 1),
         ("spaces", "C", 0), ("spaces", "C", 1), ("spaces", "D", 0), ("spaces", "D", 1), ("spaces", "Mix", 0), ("spaces", "Mix", 1),
+        ("newtab", "A", 0), ("newtab", "B", 0), ("newtab", "B", 1), ("newtab", "C", 0), ("newtab", "C", 1), ("newtab", "D", 0), ("newtab", "D", 1),
     ]
 
     var body: some View {
