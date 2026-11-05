@@ -590,12 +590,15 @@ fn checkout_dirty(
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<bool> {
-    let status = git(
+    // `-z` names paths as raw bytes. The text reader rejects a non-UTF-8
+    // name, which would hide a real change and refuse the commit.
+    let status = git_bytes(
         checkout,
         &["status", "--porcelain", "--untracked-files=normal", "-z"],
         "read working tree state",
         deadline,
         cancelled,
+        2 * 1024 * 1024,
     )?;
     Ok(!status.is_empty())
 }

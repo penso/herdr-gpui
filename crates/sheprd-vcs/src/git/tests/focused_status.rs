@@ -46,6 +46,28 @@ fn a_pure_rename_is_dirty_with_no_lines_and_commits() {
     assert_head_moves(&checkout, "rename");
 }
 
+/// Linux can store a path that is not UTF-8. `git status -z` returns those
+/// bytes, and the dirty check must not refuse the commit because of them.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_non_utf8_filename_stays_dirty_and_commits() {
+    use std::os::unix::ffi::OsStringExt;
+    let (directory, _hooks, checkout, input) = repository();
+    let name = std::ffi::OsString::from_vec(b"caf\xff".to_vec());
+    std::fs::write(directory.path().join(&name), b"one\n").unwrap();
+    let added = Command::new("git")
+        .args(["-C", &checkout, "add", "--"])
+        .arg(&name)
+        .status()
+        .unwrap();
+    assert!(added.success());
+    run(&checkout, &["commit", "-m", "add bytes"]);
+    std::fs::write(directory.path().join(&name), b"two\n").unwrap();
+    let focused = refresh(&input);
+    assert!(focused.dirty);
+    assert_head_moves(&checkout, "bytes");
+}
+
 #[test]
 fn a_clean_tree_has_nothing_to_commit() {
     let (_directory, _hooks, checkout, input) = repository();
