@@ -418,6 +418,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::overview::Marks::default()
     };
+    // Nor with the modes the user last picked for their chats.
+    let chat_last_modes = if mode == LaunchMode::Normal {
+        crate::chat::LastModes::load()
+    } else {
+        crate::chat::LastModes::default()
+    };
     // Nor with which workspaces and tabs the user muted.
     let notification_mutes = if mode == LaunchMode::Normal {
         crate::notification_mutes::Mutes::load()
@@ -465,6 +471,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             worktree_notes.install(cx);
             review_viewed.install(cx);
             overview_marks.install(cx);
+            chat_last_modes.install(cx);
             notification_mutes.install(cx);
             palette_frecency.install(cx);
             dispatch_history.install(cx);

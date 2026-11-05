@@ -10,6 +10,7 @@ mod disclosure;
 mod embeds;
 mod entries;
 mod layout;
+mod opening;
 mod panels;
 mod rail;
 mod rich;
@@ -22,6 +23,8 @@ pub(super) mod viewer;
 mod widgets;
 mod working;
 
+#[cfg(test)]
+pub(super) use opening::mode_rows;
 pub(super) use settings::matching;
 mod visuals;
 
@@ -426,12 +429,14 @@ impl SheprdWindow {
                                 div()
                                     .flex()
                                     .flex_col()
+                                    .relative()
                                     .flex_1()
                                     .min_h_0()
                                     .when_some(chat.text_focus.as_ref(), |view, focus| {
                                         view.track_focus(focus)
                                     })
-                                    .child(entries),
+                                    .child(entries)
+                                    .children(self.render_chat_opening(chat, cx)),
                             )
                             .when(
                                 chat.selection.is_empty() && !chat.selection.is_selecting(),

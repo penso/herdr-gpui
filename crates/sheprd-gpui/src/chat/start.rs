@@ -364,6 +364,8 @@ impl SheprdWindow {
                     command_line(starting.agent)
                 };
                 self.type_script_line(&starting.boot, &pane, &line)?;
+                self.chats
+                    .expect_fresh(super::last_mode::Fresh::Pane(pane), Instant::now());
                 Ok(tab)
             });
         match typed {

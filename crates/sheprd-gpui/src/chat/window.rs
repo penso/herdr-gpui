@@ -114,6 +114,7 @@ impl SheprdWindow {
         changed |= self.chats.rewidth(self.config.chat.max_width);
         changed |= self.chats.relocale(crate::i18n::shown_locale());
         changed |= self.chats.poll(now);
+        self.chats.settle_fresh(super::LastModes::of(cx), now);
         // Observed panes, whether a discovered agent or a `[chat.mirrors]`
         // entry, take their status from the daemon; live chats ignore it.
         for pane in self.chats.panes_mut() {
@@ -441,7 +442,15 @@ impl SheprdWindow {
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             return;
         };
-        pane.error = pane.send(command).err().map(|error| error.localize());
+        let picked =
+            super::last_mode::picked(pane.session.transcript(), &command).then(|| command.clone());
+        let sent = pane.send(command);
+        if sent.is_ok()
+            && let Some(command) = picked
+        {
+            super::LastModes::update(cx, |last| last.remember(pane.session.agent(), command));
+        }
+        pane.error = sent.err().map(|error| error.localize());
         cx.notify();
     }
 

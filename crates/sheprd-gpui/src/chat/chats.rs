@@ -478,6 +478,8 @@ pub(crate) struct Chats {
     pub(crate) agents: super::harnesses::Harnesses,
     /// Exact CLI sessions already running in this connected daemon's panes.
     pub(crate) existing: super::existing::Existing,
+    /// Chats just started, waiting to take the user's last mode.
+    pub(super) fresh: Vec<super::last_mode::Awaited>,
     /// The agent a chat was last started with, which the strips' one-button
     /// launcher offers first.
     pub(crate) last_started: Option<sheprd_chat_protocol::Agent>,

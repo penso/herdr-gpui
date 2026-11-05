@@ -204,6 +204,10 @@ chat-settings-auto-accept-on = Auto-accepting
 chat-settings-auto-accept-off = Asks first
 chat-settings-no-match = No match
 
+# What an empty chat shows above its prompt box. $agent is the agent's name.
+chat-opening-title = New { $agent } chat
+chat-opening-hint = Pick how this chat runs. New { $agent } chats start with your last choice.
+
 # Cards and forms an agent's answer shows. $title is the action's own
 # label, and $caption what pressing it does.
 chat-form-action = { $title } · { $caption }

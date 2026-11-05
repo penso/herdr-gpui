@@ -50,15 +50,17 @@ pub(in crate::chat) fn matching<'a>(
     })
 }
 
+/// Whether a mode with this id or name runs without asking for permission.
+pub(super) fn bypasses(id: &str, name: &str) -> bool {
+    [id, name]
+        .iter()
+        .any(|text| text.to_ascii_lowercase().contains("bypass"))
+}
+
 /// Whether the agent's own modes already include not asking for
 /// permission, such as Claude's "Bypass permissions"; the composer then
 /// leaves out its auto-accept button rather than offer the same twice.
 pub(super) fn agent_bypasses(transcript: &Transcript) -> bool {
-    let bypass = |id: &str, name: &str| {
-        [id, name]
-            .iter()
-            .any(|text| text.to_ascii_lowercase().contains("bypass"))
-    };
     let options = transcript
         .options
         .iter()
@@ -66,14 +68,14 @@ pub(super) fn agent_bypasses(transcript: &Transcript) -> bool {
         .any(|option| match &option.kind {
             OptionKind::Select { choices, .. } => choices
                 .iter()
-                .any(|choice| bypass(&choice.id, &choice.name)),
+                .any(|choice| bypasses(&choice.id, &choice.name)),
             OptionKind::Toggle { .. } => false,
         });
     let modes = transcript.modes.as_ref().is_some_and(|modes| {
         modes
             .available
             .iter()
-            .any(|mode| bypass(&mode.id, &mode.name))
+            .any(|mode| bypasses(&mode.id, &mode.name))
     });
     options || modes
 }
@@ -245,6 +247,7 @@ impl SheprdWindow {
     /// that turns yellow while they are.
     pub(super) fn render_chat_auto_accept(
         &self,
+        id: &'static str,
         chat: &ChatPane,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
@@ -255,8 +258,8 @@ impl SheprdWindow {
         let pane = chat.target.pane_id.clone();
         let color = if on { yellow } else { theme.subtext() };
         div()
-            .id("chat-auto-accept")
-            .debug_selector(|| "chat-auto-accept".into())
+            .id(id)
+            .debug_selector(move || id.into())
             .flex_none()
             .flex()
             .items_center()

@@ -21,6 +21,7 @@ mod discovery;
 mod existing;
 mod glide;
 mod harnesses;
+mod last_mode;
 mod link;
 mod list;
 pub(crate) mod page;
@@ -43,6 +44,7 @@ pub(crate) mod widgets;
 mod window;
 
 pub(crate) use chats::{ChatInput, Chats, LauncherDeck, Toward};
+pub(crate) use last_mode::LastModes;
 
 /// The wall clock in milliseconds since the Unix epoch, which the program
 /// on this machine stamps a running turn with.

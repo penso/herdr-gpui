@@ -120,13 +120,13 @@ impl SheprdWindow {
             .core_terminals
             .chat_split_at(tab)
             .ok_or(super::StartError::NoWorkspace)?;
-        let spawn = spawn(
-            agent,
-            &program,
-            &EndpointId::random(),
-            &self.config.chat.env,
-        );
+        let endpoint = EndpointId::random();
+        let spawn = spawn(agent, &program, &endpoint, &self.config.chat.env);
         self.chats.last_started = Some(agent);
+        self.chats.expect_fresh(
+            super::last_mode::Fresh::Endpoint(endpoint),
+            std::time::Instant::now(),
+        );
         self.start_core_program(
             Purpose::Split {
                 tab,

@@ -3394,6 +3394,12 @@ past 90%) and what the session has cost when the agent reports it, stops a
 turn, and switches back to the pane's terminal (`sheprd chat
 show|hide|toggle`). Under it, a button per setting the agent offers picks its
 model, thinking level, and mode; the gear lists the rest, such as toggles.
+A chat you start next with the same agent opens in the mode you last picked
+for it, and auto-accepting if you left it on, so "Bypass Permissions" carries
+to new tabs until you pick another mode; this survives a restart. Restored
+chats and chats started outside the app keep their own mode. Until the first
+message, an empty chat lists its modes with the current one marked, so you
+can see what it carried over and change it.
 Each finished turn leaves a line with its duration and tokens, and an agent
 message copies with the button under it. In the prompt box `/` completes the
 agent's commands (Tab or a click takes one) and Up recalls earlier prompts.

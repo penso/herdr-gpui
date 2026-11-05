@@ -238,10 +238,10 @@ impl SheprdWindow {
             .render_chat_settings_buttons(chat, cx)
             .into_iter()
             .map(IntoElement::into_any_element)
-            .chain(
-                (!super::settings::agent_bypasses(transcript))
-                    .then(|| self.render_chat_auto_accept(chat, cx).into_any_element()),
-            )
+            .chain((!super::settings::agent_bypasses(transcript)).then(|| {
+                self.render_chat_auto_accept("chat-auto-accept", chat, cx)
+                    .into_any_element()
+            }))
             .collect();
         let parts = ComposerParts {
             chips,

@@ -200,6 +200,8 @@ fn a_new_chat_opens_a_tab_and_types_the_fixed_line(cx: &mut gpui::TestAppContext
             view.poll_chat_start(cx);
             assert!(!view.chat_starting());
             assert!(view.flash.is_none(), "{:?}", view.flash);
+            let fresh = crate::chat::last_mode::Fresh::Pane("w1:p9".into());
+            assert!(view.chats.awaits(&fresh));
             // Shown at once on a ready surface, or once it is ready.
             assert!(
                 view.pending_navigation.is_none()
