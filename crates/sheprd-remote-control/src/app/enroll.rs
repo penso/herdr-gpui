@@ -8,8 +8,8 @@
 //!   the phone too;
 //! - makes sure the daemon runs: it installs the user service unless one is
 //!   installed already, as Sheprd on this host would, and turns on
-//!   `[remote]` in this host's Sheprd settings when there are any, so
-//!   that app does not stop it again;
+//!   `[remote]` in this host's Sheprd settings, creating them when there
+//!   are none, so that app, now or once installed, does not stop it again;
 //! - asks the running daemon to add the phone, so `devices.json` keeps one
 //!   writer.
 
@@ -205,9 +205,9 @@ fn ensure_running(state_dir: &Path, program: PathBuf, restart: bool) -> super::R
     wait_for_daemon(&address)
 }
 
-/// The `[remote]` settings of Sheprd on this host, turned on. When that
-/// app has a settings file, `enabled = true` is written to it, so it keeps
-/// the daemon running rather than stopping it. Blocking.
+/// The `[remote]` settings of Sheprd on this host, turned on. `enabled =
+/// true` is written to them, so that app keeps the daemon running rather
+/// than stopping it, including when it is installed here later. Blocking.
 fn enable_settings() -> super::Result<RemoteConfig> {
     match sheprd_client::local_path::config_root() {
         Ok(root) => enable_settings_at(&root.join("herdr/config-gpui.toml")),
@@ -215,34 +215,93 @@ fn enable_settings() -> super::Result<RemoteConfig> {
     }
 }
 
-/// [`enable_settings`] for the settings file at `path`.
+/// [`enable_settings`] for Sheprd's settings at `path`, as Sheprd reads
+/// them: it rewrites a managed `path` and loads its overrides beside it.
+/// Those take the change, seeded as Sheprd's first launch would seed them
+/// when missing. A personal `path` from before overrides, which Sheprd
+/// moves into them, takes it instead. Sheprd's own lock keeps its saves
+/// and moves apart from this, and every file is checked before any is
+/// written.
 fn enable_settings_at(path: &Path) -> super::Result<RemoteConfig> {
+    use sheprd_client::local_path::{SETTINGS_MANAGED_HEADER, SETTINGS_OVERRIDES_SEED};
+    let parent = path.parent().unwrap_or(Path::new("."));
+    fs::create_dir_all(parent).map_err(io_error("create", parent))?;
+    let lock_path = path.with_extension("lock");
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .map_err(io_error("open", &lock_path))?;
+    lock.lock().map_err(io_error("lock", &lock_path))?;
+    let local = path.with_extension("local.toml");
+    let personal =
+        read_settings(path)?.filter(|text| text.lines().next() != Some(SETTINGS_MANAGED_HEADER));
+    let overrides = read_settings(&local)?;
+    let personal_on = personal
+        .as_deref()
+        .map(|text| turned_on(path, text))
+        .transpose()?;
+    let overrides_on = overrides
+        .as_deref()
+        .map(|text| turned_on(&local, text))
+        .transpose()?;
+    match (personal_on, overrides_on) {
+        (Some((config, changed)), None) => {
+            if let Some(changed) = changed {
+                write_settings(path, &changed)?;
+            }
+            Ok(config)
+        }
+        // A copy of `path` Sheprd made and has yet to finish moving. It
+        // matches byte for byte, so it is dropped and Sheprd moves `path`
+        // again, with the change: stopping between the two steps leaves a
+        // move Sheprd starts over, never two files that differ.
+        (Some((config, changed)), Some(_)) if personal == overrides => {
+            if let Some(changed) = changed {
+                fs::remove_file(&local).map_err(io_error("remove", &local))?;
+                write_settings(path, &changed)?;
+            }
+            Ok(config)
+        }
+        // Overrides, and maybe a personal file that differs from them,
+        // which Sheprd leaves for a person to settle: both take the change.
+        (personal_on, Some((config, changed))) => {
+            if let Some(changed) = changed {
+                write_settings(&local, &changed)?;
+            }
+            if let Some((_, Some(changed))) = personal_on {
+                write_settings(path, &changed)?;
+            }
+            Ok(config)
+        }
+        (None, None) => {
+            let (config, changed) = turned_on(&local, SETTINGS_OVERRIDES_SEED)?;
+            write_settings(
+                &local,
+                changed.as_deref().unwrap_or(SETTINGS_OVERRIDES_SEED),
+            )?;
+            Ok(config)
+        }
+    }
+}
+
+/// `[remote]` as `text` sets it, turned on, and `text` with `enabled =
+/// true` when it does not say so already.
+fn turned_on(path: &Path, text: &str) -> super::Result<(RemoteConfig, Option<String>)> {
     #[derive(Deserialize)]
     struct File {
         #[serde(default)]
         remote: RemoteConfig,
     }
-    let path = path.to_owned();
-    let text = match fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Ok(enabled(RemoteConfig::default()));
-        }
-        Err(source) => {
-            return Err(super::Error::Io {
-                operation: "read",
-                path,
-                source,
-            });
-        }
-    };
     let config_error = |source: Box<dyn std::error::Error + Send + Sync>| Error::Config {
-        path: path.clone(),
+        path: path.to_owned(),
         source,
     };
-    let file: File = toml::from_str(&text).map_err(|error| config_error(Box::new(error)))?;
+    let file: File = toml::from_str(text).map_err(|error| config_error(Box::new(error)))?;
     if file.remote.enabled {
-        return Ok(file.remote);
+        return Ok((file.remote, None));
     }
     let mut document: toml_edit::DocumentMut = text
         .parse()
@@ -254,12 +313,41 @@ fn enable_settings_at(path: &Path) -> super::Result<RemoteConfig> {
     if let Some(table) = remote.as_table_like_mut() {
         table.insert(key, toml_edit::Item::Value(value));
     }
-    fs::write(&path, document.to_string()).map_err(|source| super::Error::Io {
-        operation: "write",
-        path: path.clone(),
+    Ok((enabled(file.remote), Some(document.to_string())))
+}
+
+/// A settings file's text, `None` when there is none.
+fn read_settings(path: &Path) -> super::Result<Option<String>> {
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(io_error("read", path)(source)),
+    }
+}
+
+/// Replaces a settings file as Sheprd does: through a link, at the file
+/// it names, with a private file renamed over it, so a write cut short
+/// never leaves half of one.
+fn write_settings(path: &Path, text: &str) -> super::Result<()> {
+    let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+    let parent = target.parent().unwrap_or(Path::new("."));
+    let result = (|| -> io::Result<()> {
+        let mut file = tempfile::NamedTempFile::new_in(parent)?;
+        io::Write::write_all(&mut file, text.as_bytes())?;
+        file.as_file().sync_all()?;
+        file.persist(&target).map_err(|error| error.error)?;
+        Ok(())
+    })();
+    result.map_err(io_error("write", path))
+}
+
+fn io_error(operation: &'static str, path: &Path) -> impl FnOnce(io::Error) -> super::Error {
+    let path = path.to_owned();
+    move |source| super::Error::Io {
+        operation,
+        path,
         source,
-    })?;
-    Ok(enabled(file.remote))
+    }
 }
 
 fn enabled(config: RemoteConfig) -> RemoteConfig {

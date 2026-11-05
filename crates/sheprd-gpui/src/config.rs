@@ -146,12 +146,9 @@ pub use zen::{Zen, ZenWidth};
 
 const DEFAULT_CONFIG: &str = include_str!("../config-gpui.example.toml");
 // Compare the first line so Windows checkouts and editors can use CRLF.
-const MANAGED_HEADER: &str = "# DO NOT EDIT -- WILL BE OVERWRITTEN";
-/// Seeds the overrides file on first launch only. Existing overrides and
-/// migrated personal configs are never rewritten, so settings placed here
-/// reach new installs without changing what current users see.
-// i18n: data
-const LOCAL_CONFIG: &str = "# Sheprd overrides. Saved changes reload automatically.\n# Unset keys inherit config-gpui.toml; tables merge key by key.\n\n# New installs start with the roomy rounded sidebar. Remove this line for\n# the managed default, or pick another layout listed in config-gpui.toml.\nlayout = \"comfortable-rounded\"\n";
+const MANAGED_HEADER: &str = sheprd_client::local_path::SETTINGS_MANAGED_HEADER;
+/// Seeds the overrides file on first launch only.
+const LOCAL_CONFIG: &str = sheprd_client::local_path::SETTINGS_OVERRIDES_SEED;
 
 /// Shared logical-pixel radii for native-style chrome, independent of the
 /// terminal grid. Small badges/keycaps retain a tighter curve than controls.
