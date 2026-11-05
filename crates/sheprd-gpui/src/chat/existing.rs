@@ -211,14 +211,14 @@ fn start(scope: Scope, candidates: Vec<String>) -> Result<Probe, Error> {
     Ok(Probe { cancelled, result })
 }
 
-fn query(host: &Host, body: &str, cancelled: &AtomicBool) -> Result<Vec<u8>, Error> {
+pub(super) fn query(host: &Host, body: &str, cancelled: &AtomicBool) -> Result<Vec<u8>, Error> {
     let mut output = Vec::new();
     host.stream(body, std::io::empty(), &mut output, LIMITS, cancelled)
         .map_err(Error::Query)?;
     Ok(output)
 }
 
-fn snapshot(host: &Host, cancelled: &AtomicBool) -> Result<SnapshotResult, Error> {
+pub(super) fn snapshot(host: &Host, cancelled: &AtomicBool) -> Result<SnapshotResult, Error> {
     // i18n: data
     let bytes = query(host, "herdr_cli api snapshot\n", cancelled)?;
     serde_json::from_slice::<Envelope<SnapshotResult>>(&bytes)
@@ -459,7 +459,7 @@ struct Selected<'a> {
 
 /// The foreground processes running `agent`, unless there are more than
 /// [`MAX_MATCHING_PROCESSES`] to verify.
-fn agent_processes(
+pub(super) fn agent_processes(
     agent: Agent,
     info: &teleport::ProcessInfo,
 ) -> Option<Vec<&teleport::snapshot::Process>> {

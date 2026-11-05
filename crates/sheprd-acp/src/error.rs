@@ -30,6 +30,8 @@ pub enum Error {
     HerdrApi(String),
     #[error("Herdr's answer named no {0}")]
     HerdrAnswer(&'static str),
+    #[error(transparent)]
+    History(#[from] crate::history::Error),
     #[error("chat I/O failed")]
     Io(#[from] io::Error),
     #[error("a line from the agent exceeded {limit} bytes")]

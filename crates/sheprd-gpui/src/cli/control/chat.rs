@@ -11,6 +11,11 @@ pub enum ChatCommand {
         /// The pane whose workspace and folder it starts in, else the caller's.
         pane: Option<String>,
     },
+    /// Move a pane's terminal agent into a chat there.
+    Convert {
+        /// The pane, else the caller's own.
+        pane: Option<String>,
+    },
     /// Show the chat view over a pane (`On`), or its terminal (`Off`).
     View {
         switch: Switch,
@@ -32,6 +37,11 @@ pub(super) fn chat(args: &mut Args) -> Result<ChatCommand, CliError> {
                 .parse()
                 .map_err(|_| CliError::InvalidValue("AGENT"))?;
             return Ok(ChatCommand::New { agent, pane });
+        }
+        Some("convert") => {
+            return Ok(ChatCommand::Convert {
+                pane: args.text_option("--pane")?,
+            });
         }
         Some("show") => Switch::On,
         Some("hide") => Switch::Off,

@@ -1,7 +1,7 @@
 use crate::teleport;
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("could not read the existing agent metadata")]
     Answer(#[source] serde_json::Error),
     #[error(transparent)]

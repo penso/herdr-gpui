@@ -63,6 +63,9 @@ pub enum Command {
     NewCoreTerminal,
     /// Opens a watch-only view of the focused herdr-core pane in a new tab.
     MirrorCorePane,
+    /// Moves the focused terminal agent into a chat, in the same pane and
+    /// conversation.
+    ConvertToChat,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -613,6 +616,11 @@ pub const COMMANDS: &[CommandInfo] = &[
         message: "commands-mirror-core-pane",
     },
     CommandInfo {
+        command: Command::ConvertToChat,
+        name: "convert_to_chat",
+        message: "commands-convert-to-chat",
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         message: "commands-increase-font-size",
@@ -918,6 +926,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::DevicesOverview
         | Command::NewCoreTerminal
         | Command::MirrorCorePane
+        | Command::ConvertToChat
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize
