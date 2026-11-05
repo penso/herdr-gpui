@@ -38,6 +38,8 @@ GROUPS = ["Security", "Added", "Changed", "Fixed"]
 HIDDEN = {"build", "chore", "ci", "docs", "style", "test"}
 SHOWN = {"feat": "Added", "fix": "Fixed", "perf": "Changed", "refactor": "Changed", "revert": "Changed"}
 SUBJECT = re.compile(r"^(?P<type>[a-z]+)(\((?P<scope>[^)]*)\))?(?P<breaking>!)?: (?P<text>.+)$")
+# As cliff.toml reads it: a breaking change is shown whatever its type.
+BREAKING_FOOTER = re.compile(r"^BREAKING[ -]CHANGE:", re.MULTILINE)
 PULL_REQUEST = re.compile(r"\s*\(#\d+\)$")
 SOURCE = re.compile(r"^Source: ([0-9a-f]{7,40})$", re.MULTILINE)
 SHA_LENGTH = 12
@@ -54,9 +56,11 @@ POLL_SECONDS = 30
 FAILED_STATES = {"FAILED", "INVALID"}
 
 
-def entry(subject: str):
-    """The (group, text) a commit subject becomes, or None for one testers
-    should not see. Anything non-conventional counts as Changed."""
+def entry(message: str):
+    """The (group, text) a commit message becomes, or None for one testers
+    should not see. Its subject is the text, and anything non-conventional
+    counts as Changed."""
+    subject = message.split("\n", 1)[0]
     match = SUBJECT.match(subject)
     if match is None:
         return "Changed", PULL_REQUEST.sub("", subject)
@@ -66,12 +70,15 @@ def entry(subject: str):
         return "Security", text
     if match["type"] in SHOWN:
         return SHOWN[match["type"]], text
-    if match["type"] in HIDDEN and not match["breaking"]:
+    if match["type"] in HIDDEN and not (match["breaking"] or BREAKING_FOOTER.search(message)):
         return None
     return "Changed", text
 
 
-def render(groups: dict, omitted: int, source: str) -> str:
+def render(entries: list, omitted: int, source: str) -> str:
+    groups = {}
+    for name, text in entries:
+        groups.setdefault(name, []).append(text)
     sections = [
         "\n".join([name, *(f"- {text}" for text in groups[name])])
         for name in GROUPS
@@ -84,23 +91,21 @@ def render(groups: dict, omitted: int, source: str) -> str:
     return "\n\n".join([*sections, f"Source: {source[:SHA_LENGTH]}"])
 
 
-def compose(subjects: list, source: str, limit: int = MAX_NOTES) -> str:
-    """The notes for `subjects`, newest first. Over `limit` the oldest
-    entries go, never the `Source:` line the next build depends on."""
-    groups = {}
-    seen = set()
-    for subject in subjects:
-        found = entry(subject)
-        if found is not None and found not in seen:
-            seen.add(found)
-            groups.setdefault(found[0], []).append(found[1])
+def compose(messages: list, source: str, limit: int = MAX_NOTES) -> str:
+    """The notes for commit `messages`, newest first. Over `limit` the oldest
+    entries go, whichever section they are in, never the `Source:` line the
+    next build depends on."""
+    entries = []
+    for message in messages:
+        found = entry(message)
+        if found is not None and found not in entries:
+            entries.append(found)
     omitted = 0
-    notes = render(groups, omitted, source)
-    while len(notes) > limit and any(groups.values()):
-        last = next(name for name in reversed(GROUPS) if groups.get(name))
-        groups[last].pop()
+    notes = render(entries, omitted, source)
+    while len(notes) > limit and entries:
+        entries.pop()
         omitted += 1
-        notes = render(groups, omitted, source)
+        notes = render(entries, omitted, source)
     return notes
 
 
@@ -114,15 +119,16 @@ def has_commit(root: Path, sha: str) -> bool:
     return git(root, "rev-parse", "--quiet", "--verify", f"{sha}^{{commit}}").returncode == 0
 
 
-def subjects_since(root: Path, baseline) -> list:
-    """Subjects of the app's commits after `baseline`, newest first; with
-    none, the latest few. `baseline..HEAD` also holds when the baseline was
-    uploaded from a branch that never merged."""
+def messages_since(root: Path, baseline) -> list:
+    """Full messages of the app's commits after `baseline`, newest first;
+    with none, the latest few. `baseline..HEAD` also holds when the baseline
+    was uploaded from a branch that never merged."""
     revision = [f"{baseline}..HEAD"] if baseline else [f"--max-count={FIRST_NOTES_COMMITS}", "HEAD"]
-    result = git(root, "log", "--no-merges", "--format=%s", *revision, "--", *PATHSPEC)
+    result = git(root, "log", "--no-merges", "--format=%B%x00", *revision, "--", *PATHSPEC)
     if result.returncode != 0:
         sys.exit(f"testflight-notes: git log failed: {result.stderr.strip()}")
-    return result.stdout.splitlines()
+    messages = (message.strip() for message in result.stdout.split("\0"))
+    return [message for message in messages if message]
 
 
 def recorded_source(localizations: list):
@@ -230,7 +236,7 @@ def main() -> None:
             head = git(ROOT, "rev-parse", "HEAD").stdout.strip()
             if not head:
                 sys.exit("testflight-notes: no commit at HEAD")
-            print(compose(subjects_since(ROOT, baseline), head))
+            print(compose(messages_since(ROOT, baseline), head))
         elif len(arguments) == 4 and arguments[0] == "publish":
             publish(arguments[1], arguments[2], Path(arguments[3]).read_text().strip())
         else:

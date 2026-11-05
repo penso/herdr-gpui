@@ -31,6 +31,17 @@ class EntryTests(unittest.TestCase):
             self.assertIsNone(notes.entry(subject))
         self.assertEqual(notes.entry("chore!: drop iOS 25"), ("Changed", "Drop iOS 25"))
 
+    def test_a_breaking_footer_shows_housekeeping(self):
+        for footer in ("BREAKING CHANGE: it goes", "BREAKING-CHANGE: it goes"):
+            message = f"chore(ios): remove legacy support\n\nWhy.\n\n{footer}"
+            self.assertEqual(notes.entry(message), ("Changed", "Remove legacy support"))
+
+    def test_breaking_change_mentioned_in_prose_is_not_a_footer(self):
+        self.assertIsNone(notes.entry("chore: bump\n\nThis is no BREAKING CHANGE: really."))
+
+    def test_only_the_subject_is_the_text(self):
+        self.assertEqual(notes.entry("feat: a\n\nThe reason."), ("Added", "A"))
+
     def test_unconventional_subject_counts_as_changed(self):
         self.assertEqual(notes.entry("Rework pairing"), ("Changed", "Rework pairing"))
 
@@ -54,6 +65,15 @@ class ComposeTests(unittest.TestCase):
         self.assertRegex(text, r"And \d+ more\.")
         self.assertEqual(notes.SOURCE.search(text)[1], SHA[:12])
 
+    def test_over_the_limit_drops_the_oldest_across_sections(self):
+        subjects = ["fix: newest fix", "feat: older feature", "feat: oldest feature"]
+        full = notes.compose(subjects, SHA)
+        text = notes.compose(subjects, SHA, limit=len(full) - 1)
+        self.assertIn("Newest fix", text)
+        self.assertIn("Older feature", text)
+        self.assertNotIn("Oldest feature", text)
+        self.assertIn("And 1 more.", text)
+
     def test_source_survives_a_limit_no_entry_fits(self):
         text = notes.compose(["feat: " + "x" * 200], SHA, limit=60)
         self.assertEqual(text, f"And 1 more.\n\nSource: {SHA[:12]}")
@@ -72,12 +92,12 @@ class HistoryTests(unittest.TestCase):
     def run_git(self, *arguments):
         subprocess.run(["git", "-C", str(self.root), *arguments], check=True, capture_output=True)
 
-    def commit(self, path, subject):
+    def commit(self, path, message):
         file = self.root / path
         file.parent.mkdir(parents=True, exist_ok=True)
-        file.write_text(subject)
+        file.write_text(message)
         self.run_git("add", "-A")
-        self.run_git("commit", "-q", "--no-verify", "-m", subject)
+        self.run_git("commit", "-q", "--no-verify", "-m", message)
         return notes.git(self.root, "rev-parse", "HEAD").stdout.strip()
 
     def test_lists_only_what_the_app_is_built_from(self):
@@ -87,12 +107,23 @@ class HistoryTests(unittest.TestCase):
         self.commit("crates/sheprd-gpui/src/lib.rs", "feat: desktop")
         self.commit("ios/README.md", "feat: readme")
         self.commit("ios/Mockups/Screen.swift", "feat: mockup")
-        self.assertEqual(notes.subjects_since(self.root, baseline), ["fix: wire", "feat: app"])
+        self.assertEqual(notes.messages_since(self.root, baseline), ["fix: wire", "feat: app"])
+
+    def test_a_breaking_footer_survives_the_history(self):
+        baseline = self.commit("ios/App.swift", "feat: old")
+        message = "chore(ios): remove legacy support\n\nBREAKING CHANGE: it goes"
+        self.commit("ios/App.swift", message)
+        self.commit("ios/App.swift", "feat: two\n\nA body.\n\nIn parts.")
+        messages = notes.messages_since(self.root, baseline)
+        self.assertEqual(messages, ["feat: two\n\nA body.\n\nIn parts.", message])
+        text = notes.compose(messages, SHA)
+        self.assertIn("Changed\n- Remove legacy support", text)
+        self.assertIn("Added\n- Two", text)
 
     def test_without_a_baseline_lists_recent_commits(self):
         self.commit("ios/App.swift", "feat: one")
         self.commit("ios/App.swift", "feat: two")
-        self.assertEqual(notes.subjects_since(self.root, None), ["feat: two", "feat: one"])
+        self.assertEqual(notes.messages_since(self.root, None), ["feat: two", "feat: one"])
 
     def test_baseline_from_an_unmerged_branch(self):
         base = self.commit("ios/App.swift", "feat: base")
@@ -100,7 +131,7 @@ class HistoryTests(unittest.TestCase):
         side = self.commit("ios/Side.swift", "feat: side")
         self.run_git("checkout", "-q", "main")
         self.commit("ios/App.swift", "feat: main")
-        self.assertEqual(notes.subjects_since(self.root, side), ["feat: main"])
+        self.assertEqual(notes.messages_since(self.root, side), ["feat: main"])
         self.assertTrue(notes.has_commit(self.root, base[:12]))
 
     def test_baseline_skips_builds_without_a_known_source(self):
