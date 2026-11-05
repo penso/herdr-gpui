@@ -241,8 +241,6 @@ final class TermInputView: UIView {
     var composition = TermComposition() {
         didSet { typing?.composing = composition.marked }
     }
-    /// The input method's selection inside the marked text, in UTF-16.
-    var markedSelection = NSRange()
     var markedTextStyle: [NSAttributedString.Key: Any]?
     weak var inputDelegate: (any UITextInputDelegate)?
     lazy var tokenizer: any UITextInputTokenizer = UITextInputStringTokenizer(textInput: self)
@@ -288,8 +286,11 @@ final class TermInputView: UIView {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            // While composing, arrows, Tab, and Escape pick candidates.
-            guard composition.marked.isEmpty, let key = press.key, let name = Self.name(for: key) else {
+            // While composing, plain arrows, Tab, and Escape pick candidates;
+            // Control and Option combinations (^C) still reach the pane.
+            guard let key = press.key, composition.marked.isEmpty || !key.modifierFlags.isDisjoint(with: [.control, .alternate]),
+                  let name = Self.name(for: key)
+            else {
                 unhandled.insert(press)
                 continue
             }

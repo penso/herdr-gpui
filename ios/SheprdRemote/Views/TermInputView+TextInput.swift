@@ -29,12 +29,10 @@ extension TermInputView: UITextInput {
     }
 
     func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
-        composition.mark(markedText ?? "")
-        markedSelection = clamped(selectedRange)
+        composition.mark(markedText ?? "", selected: selectedRange)
     }
 
     func unmarkText() {
-        markedSelection = NSRange()
         // Some input methods commit this way. One interrupted (the keyboard
         // hidden, the app inactive under a screenshot) has picked nothing,
         // and its letters are not typed.
@@ -49,13 +47,12 @@ extension TermInputView: UITextInput {
 
     func replace(_ range: UITextRange, withText text: String) {
         guard let range = range as? TermTextRange else { return }
-        markedSelection = NSRange()
-        insertText(marked.replacingCharacters(in: clamped(range.range), with: text))
+        if let text = composition.replace(range.range, with: text) { typing?.type(text) }
     }
 
     var selectedTextRange: UITextRange? {
-        get { TermTextRange(clamped(markedSelection)) }
-        set { if let range = newValue as? TermTextRange { markedSelection = clamped(range.range) } }
+        get { TermTextRange(composition.selection) }
+        set { if let range = newValue as? TermTextRange { composition.select(range.range) } }
     }
 
     // MARK: Positions
