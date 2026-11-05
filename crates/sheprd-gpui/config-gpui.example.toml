@@ -777,8 +777,12 @@ size = 12
 # back when it ends. Unset keeps the current size.
 # font_size = 24
 
-# Optional behaviors, all off unless turned on here or in Settings > General.
+# Optional behaviors, also under Settings > General.
 # [features]
+# Show sheprd-acp chats as native chat views and offer new chats with the
+# agents installed on the host. Off, chat panes keep their terminal.
+# acp_chats = true
+#
 # Open a space's menu when the pointer rests on its sidebar row, without a
 # right click. Moving the pointer anywhere but into that menu closes it again.
 # sidebar_hover_menu = false
