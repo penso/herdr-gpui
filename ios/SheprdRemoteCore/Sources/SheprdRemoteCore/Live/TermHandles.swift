@@ -58,6 +58,17 @@ public struct TermHandles: Equatable, Sendable {
         [TermSelection.End.start, .end].contains { bar($0).union(knob($0)).insetBy(dx: -Self.knob, dy: -Self.knob).contains(point) }
     }
 
+    /// How far a tapping finger may wander, as UIKit's own taps allow.
+    public static let slop: CGFloat = 10
+
+    /// Whether a finger that went down on a handle at `from` and is now at
+    /// `to` is still tapping: by where it moved, not by the selection,
+    /// which a drag past a row's text or below the last row leaves as it
+    /// was.
+    public static func isTap(from: CGPoint, to: CGPoint) -> Bool {
+        hypot(to.x - from.x, to.y - from.y) <= slop
+    }
+
     /// The selection's rows with both handles, which the copy menu keeps
     /// clear of so they can still be grabbed.
     public var bounds: CGRect {

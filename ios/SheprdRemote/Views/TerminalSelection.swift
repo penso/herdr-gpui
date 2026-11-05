@@ -18,8 +18,8 @@ struct TermSelecting: ViewModifier {
     @State private var pressed: TermSelection?
     /// The handle the finger holds.
     @State private var held: TermHandleDrag?
-    /// The selection as the finger took a handle, until it moves an end.
-    @State private var grabbed: TermSelection?
+    /// Where the finger took a handle, until it moves past a tap's slop.
+    @State private var grabbed: CGPoint?
     /// Where the copy menu shows in the rows, and how many times it has.
     @State private var menuAt: CGPoint?
     @State private var menuShows = 0
@@ -77,20 +77,20 @@ struct TermSelecting: ViewModifier {
     }
 
     /// A handle follows the finger cell by cell, the menu hidden until it
-    /// lets go. A touch that never moves it and lifts off the handle
+    /// lets go. A touch whose finger stays put and lifts off the handle
     /// itself is a tap on the cells its target reaches over.
     private func drag(_ state: UIGestureRecognizer.State, at point: CGPoint) {
         switch state {
         case .began:
             held = selection.flatMap { TermHandleDrag(TermHandles($0, cell: cell), at: point) }
-            grabbed = selection
+            grabbed = point
             menuAt = nil
         case .changed:
             guard let held else { return }
             selection = held.selection(at: point, cell: cell, in: screen)
-            if selection != grabbed { grabbed = nil }
+            if let grabbed, !TermHandles.isTap(from: grabbed, to: point) { self.grabbed = nil }
         case .ended, .cancelled:
-            let tapped = state == .ended && grabbed.map { !TermHandles($0, cell: cell).isOnHandle(at: point) } == true
+            let tapped = state == .ended && grabbed != nil && selection.map { !TermHandles($0, cell: cell).isOnHandle(at: point) } == true
             held = nil
             grabbed = nil
             if tapped {

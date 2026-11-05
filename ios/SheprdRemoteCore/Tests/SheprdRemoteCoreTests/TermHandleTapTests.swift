@@ -29,6 +29,20 @@ import Testing
         #expect(handles.isOnHandle(at: middle(3, 6)))
     }
 
+    @Test func aDragTheSelectionCannotFollowIsStillADrag() {
+        // 斜体, the last word of row 2, its end handle dragged 40 pt right
+        // into the blank past the text, or down into the next row: the end
+        // stays on 体, yet the finger moved, so lifting it is no tap.
+        let selected = TermSelection(anchor: at(2, 25), head: at(2, 28))
+        let handles = TermHandles(selected, cell: cell)
+        let knob = CGPoint(x: handles.knob(.end).midX, y: handles.knob(.end).midY)
+        for lifted in [CGPoint(x: knob.x + 40, y: knob.y), CGPoint(x: knob.x, y: knob.y + 24)] {
+            #expect(!TermHandles.isTap(from: knob, to: lifted))
+        }
+        // A finger that wobbles a few points still taps.
+        #expect(TermHandles.isTap(from: knob, to: CGPoint(x: knob.x + 4, y: knob.y - 3)))
+    }
+
     @Test func aTapByAKnobIsOnItsHandle() {
         // bold at columns 13 to 16 of row 2, tapped a little right of its
         // end's knob.
