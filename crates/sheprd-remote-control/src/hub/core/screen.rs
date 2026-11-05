@@ -79,7 +79,7 @@ impl Screen {
         self.touched.elapsed()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(super) fn age(&mut self, by: Duration) {
         self.touched -= by;
     }
