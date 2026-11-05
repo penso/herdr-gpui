@@ -196,7 +196,7 @@ struct NewWorkspaceSheet: View {
                 ?? checkout.flatMap { loaded.folders.contains($0) ? $0 : nil }
                 ?? loaded.folders.first { URL(filePath: $0).lastPathComponent == name }
                 ?? loaded.recent.first
-            if !loaded.agents.contains(where: { $0.id == agent }), let first = loaded.agents.first { agent = first.id }
+            agent = loaded.agent(preferring: agent)?.id ?? ""
         } catch where !Task.isCancelled {
             problem = error.localizedDescription
         } catch {}
@@ -265,12 +265,15 @@ struct NewChatSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    if creating { ProgressView() } else { Button("Start") { start() }.disabled(agents.isEmpty) }
+                    if creating { ProgressView() } else { Button("Start") { start() }.disabled(!agents.contains { $0.id == agent }) }
                 }
             }
             .task {
                 do {
-                    agents = try await model.fleet.call(device) { client, token in try await client.newOptions(bearer: token) }.agents
+                    let loaded = try await model.fleet.call(device) { client, token in try await client.newOptions(bearer: token) }
+                    guard !Task.isCancelled else { return }
+                    agents = loaded.agents
+                    agent = loaded.agent(preferring: agent)?.id ?? ""
                 } catch {
                     problem = error.localizedDescription
                 }
@@ -280,9 +283,10 @@ struct NewChatSheet: View {
     }
 
     private func start() {
+        guard let selected = agents.first(where: { $0.id == agent }) else { return }
         let request = NewChatRequest(agent: agent, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
         let (device, workspace) = (device, workspace)
-        let title = agents.first { $0.id == agent }?.name ?? "Chat"
+        let title = selected.name
         creating = true
         Task {
             defer { creating = false }

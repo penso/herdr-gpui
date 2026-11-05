@@ -16,6 +16,7 @@ struct SheprdRemoteApp: App {
             RootView()
                 .environment(model)
                 .modifier(AppLock())
+                .modifier(Appearance())
                 .onOpenURL { model.open($0) }
                 .task { model.tokens.start() }
                 .onChange(of: model.fleet.waiting, initial: true) { _, _ in
@@ -47,6 +48,7 @@ struct SheprdRemoteApp: App {
             }
             .environment(model)
             .modifier(AppLock())
+            .modifier(Appearance())
         }
     }
 }

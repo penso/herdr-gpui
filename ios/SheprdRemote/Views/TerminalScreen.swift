@@ -16,6 +16,8 @@ struct TerminalScreen: View {
     @State private var store: TermStore?
     @State private var typing: TermTyping?
     @State private var keyboard = false
+    @State private var dictation = Dictation()
+    @State private var dictationPaste: TermDictationPaste?
     /// Pinch zoom over the size that fits the width.
     @State private var zoom: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
@@ -96,8 +98,16 @@ struct TerminalScreen: View {
                         Text(reason).font(.footnote).foregroundStyle(.orange).padding(6)
                             .frame(maxWidth: .infinity).background(.bar)
                     }
+                    if case let .failed(reason) = dictation.phase {
+                        Text(reason).font(.footnote).foregroundStyle(.orange).padding(6)
+                            .frame(maxWidth: .infinity).background(.bar)
+                    }
                     let echo = typing.echo.text
-                    if !echo.isEmpty { TermEchoStrip(text: echo) }
+                    if dictation.active {
+                        TermEchoStrip(text: dictation.text)
+                    } else if !echo.isEmpty {
+                        TermEchoStrip(text: echo)
+                    }
                 }
             }
         }
@@ -106,7 +116,7 @@ struct TerminalScreen: View {
         .safeAreaInset(edge: .top, spacing: 0) { paneChips }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let typing {
-                TermKeyRows(typing: typing, keyboard: $keyboard)
+                TermKeyRows(typing: typing, keyboard: $keyboard, dictation: dictation) { dictate(into: typing) }
             }
         }
         .environment(\.colorScheme, .dark)
@@ -214,7 +224,38 @@ struct TerminalScreen: View {
         }
         .onDisappear {
             keyboard = false
+            dictationPaste?.cancel()
+            let dictation = dictation
+            // A pending paste already owns stopping and resetting. Do not
+            // finalize the same speech analyzer twice concurrently.
+            if dictationPaste == nil {
+                Task {
+                    await dictation.stop()
+                    dictation.reset()
+                }
+            }
             if let store { model.fleet.closeTerm(store) }
+        }
+    }
+
+    /// Starts dictating, or stops and pastes what was heard, leaving Return
+    /// to the person so a misheard command never runs.
+    private func dictate(into typing: TermTyping) {
+        guard dictationPaste == nil else { return }
+        guard dictation.active else {
+            Task { await dictation.start() }
+            return
+        }
+        let pending = TermDictationPaste()
+        dictationPaste = pending
+        Task {
+            defer { dictationPaste = nil }
+            await pending.finish(stop: {
+                await dictation.stop()
+                let text = dictation.text
+                dictation.reset()
+                return text
+            }, paste: typing.paste)
         }
     }
 
