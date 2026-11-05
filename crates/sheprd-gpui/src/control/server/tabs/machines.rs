@@ -4,7 +4,7 @@
 use super::*;
 #[cfg(target_os = "macos")]
 use crate::{
-    HerdrWindow,
+    SheprdWindow,
     control::{
         protocol::tabs::{MachineInfo, MachineState},
         server::window_for,
@@ -180,7 +180,7 @@ pub(super) fn delete(caller: &Caller, name: String, incoming: socket::Incoming, 
         cx.update(|cx| {
             let source = handle
                 .entity(cx)
-                .map(|view: gpui::Entity<HerdrWindow>| view.downgrade());
+                .map(|view: gpui::Entity<SheprdWindow>| view.downgrade());
             if let Ok(source) = source {
                 crate::settings_window::open_machines(source, Some(name), cx);
             }

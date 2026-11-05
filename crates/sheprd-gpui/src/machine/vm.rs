@@ -42,7 +42,7 @@ define_class!(
     // `MainThreadOnly` holds every use to, and `Watcher` has no `Drop`.
     #[unsafe(super(NSObject))]
     #[thread_kind = MainThreadOnly]
-    #[name = "HerdrMachineWatcher"]
+    #[name = "SheprdMachineWatcher"]
     #[ivars = Name]
     struct Watcher;
 

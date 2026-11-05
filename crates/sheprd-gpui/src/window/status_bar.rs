@@ -316,9 +316,6 @@ impl SheprdWindow {
         }
     }
 
-    /// Hidden by `keep_awake = false` only while off: the cup is the one
-    /// way to let the display sleep again. A click holds until clicked again;
-    /// a right-click holds until every agent finishes.
     #[cfg(target_os = "macos")]
     fn machines_status(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         self.render_machines_status(cx)
@@ -329,6 +326,9 @@ impl SheprdWindow {
         None
     }
 
+    /// Hidden by `keep_awake = false` only while off: the cup is the one
+    /// way to let the display sleep again. A click holds until clicked again;
+    /// a right-click holds until every agent finishes.
     fn caffeine_button(&self, shown: bool, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         use crate::caffeine::{Cup, Mode};
         let cup = crate::caffeine::cup(cx);

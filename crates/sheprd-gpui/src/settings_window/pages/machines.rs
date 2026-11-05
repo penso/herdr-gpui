@@ -4,7 +4,7 @@
 // i18n: migrated
 use super::{SettingsWindow, ui};
 use crate::{
-    HerdrWindow,
+    SheprdWindow,
     i18n::{Localize as _, fl},
     machine::{self, Display, Limits, Listing, Name, Settings, Status},
     settings_window::Section,
@@ -13,7 +13,7 @@ use gpui::{prelude::*, *};
 use std::collections::HashMap;
 
 /// Opens Settings on this page, asking to delete `delete` if one is named.
-pub(crate) fn open(source: WeakEntity<HerdrWindow>, delete: Option<Name>, cx: &mut App) {
+pub(crate) fn open(source: WeakEntity<SheprdWindow>, delete: Option<Name>, cx: &mut App) {
     crate::settings_window::open(source, cx);
     // Queued after `open`'s own deferred work, so the window exists by now.
     cx.defer(move |cx| {

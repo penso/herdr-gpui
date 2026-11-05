@@ -4,7 +4,7 @@
 #[cfg(target_os = "macos")]
 use super::TabId;
 use super::{Location, Store, Tab};
-use crate::{HerdrWindow, i18n::fl, machine::Name, window::Flash};
+use crate::{SheprdWindow, i18n::fl, machine::Name, window::Flash};
 use gpui::{AnyElement, Context, Div, IntoElement, ParentElement, Styled, Window, div, rgb};
 #[cfg(target_os = "macos")]
 use gpui::{
@@ -12,7 +12,7 @@ use gpui::{
     prelude::FluentBuilder as _, px, svg,
 };
 
-impl HerdrWindow {
+impl SheprdWindow {
     /// Shows machine `name` in a tab of the focused workspace, or brings back
     /// the one already showing it there, and starts it if it is stopped.
     pub(crate) fn open_machine(&mut self, name: Name, window: &mut Window, cx: &mut Context<Self>) {
@@ -170,13 +170,13 @@ impl HerdrWindow {
 /// Opens machine `name` in the window `source` names, from the Settings
 /// window, which has no tabs of its own.
 #[cfg(target_os = "macos")]
-pub(crate) fn open_in(source: &WeakEntity<HerdrWindow>, name: Name, cx: &mut App) {
+pub(crate) fn open_in(source: &WeakEntity<SheprdWindow>, name: Name, cx: &mut App) {
     let source = source.clone();
     cx.defer(move |cx| {
         let windows = cx.windows();
         let window = windows
             .iter()
-            .filter_map(|window| window.downcast::<HerdrWindow>())
+            .filter_map(|window| window.downcast::<SheprdWindow>())
             .find(|window| {
                 window.read_with(cx, |_, _| ()).is_ok()
                     && window

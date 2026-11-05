@@ -154,7 +154,10 @@ impl Page {
                 objc2_foundation::ns_string!("NSAppearanceNameDarkAqua")
             };
             let appearance = NSAppearance::appearanceNamed(name);
-            wry::WebViewExtMacOS::webview(&self.view).setAppearance(appearance.as_deref());
+            // A machine's guest keeps its own appearance.
+            if let Some(view) = self.web() {
+                wry::WebViewExtMacOS::webview(view).setAppearance(appearance.as_deref());
+            }
         }
         #[cfg(windows)]
         {
@@ -163,7 +166,10 @@ impl Page {
             } else {
                 wry::Theme::Dark
             };
-            if let Err(error) = wry::WebViewExtWindows::set_theme(&self.view, theme) {
+            if let Some(Err(error)) = self
+                .web()
+                .map(|view| wry::WebViewExtWindows::set_theme(view, theme))
+            {
                 tracing::debug!(%error, "Could not set a page's color scheme");
             }
         }
