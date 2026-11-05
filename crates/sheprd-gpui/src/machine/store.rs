@@ -9,7 +9,7 @@ use std::{
     io::{ErrorKind, Write as _},
     os::unix::fs::MetadataExt as _,
     path::{Path, PathBuf},
-    sync::{Mutex, MutexGuard, PoisonError},
+    sync::{LazyLock, Mutex, MutexGuard, PoisonError},
 };
 
 pub(super) const AUXILIARY: &str = "auxiliary.bin";
@@ -102,15 +102,29 @@ fn disk_bytes(folder: &Path) -> u64 {
 }
 
 /// Keeps `settings` for machine `name`'s next boot.
-pub(crate) fn save_settings(name: &Name, settings: &Settings) -> Result<()> {
+fn save_settings(name: &Name, settings: &Settings) -> Result<()> {
     update_settings(name, |_| Ok(*settings)).map(|_| ())
 }
 
 /// Settings on their way to disk, latest per machine. One writer drains them,
-/// so an older click cannot land after a newer one, and it owns the queue, so
-/// the window that filled it may close first.
+/// so an older click cannot land after a newer one. There is one queue for the
+/// app: a window may close with choices in it, and a new window then adds to
+/// the same queue rather than racing it.
 #[derive(Debug, Default)]
-pub(crate) struct SettingsQueue(Mutex<Queued>);
+struct SettingsQueue(Mutex<Queued>);
+
+static QUEUE: LazyLock<SettingsQueue> = LazyLock::new(SettingsQueue::default);
+
+/// Queues `settings` for machine `name`'s next boot. True when no writer
+/// runs, so the caller starts [`drain_settings`].
+pub(crate) fn queue_settings(name: Name, settings: Settings) -> bool {
+    QUEUE.push(name, settings)
+}
+
+/// Writes what is queued, and what arrives meanwhile, off the main thread.
+pub(crate) fn drain_settings() -> Result<()> {
+    QUEUE.drain(save_settings)
+}
 
 #[derive(Debug, Default)]
 struct Queued {
@@ -124,7 +138,7 @@ impl SettingsQueue {
     }
 
     /// Queues `settings`. True when no writer runs, so the caller starts one.
-    pub(crate) fn push(&self, name: Name, settings: Settings) -> bool {
+    fn push(&self, name: Name, settings: Settings) -> bool {
         let mut queued = self.queued();
         queued.pending.insert(name, settings);
         !std::mem::replace(&mut queued.draining, true)
@@ -132,10 +146,7 @@ impl SettingsQueue {
 
     /// Writes all that is queued, and what arrives meanwhile, off the main
     /// thread. It returns the last failure, after trying the rest.
-    pub(crate) fn drain(
-        &self,
-        mut write: impl FnMut(&Name, &Settings) -> Result<()>,
-    ) -> Result<()> {
+    fn drain(&self, mut write: impl FnMut(&Name, &Settings) -> Result<()>) -> Result<()> {
         let mut outcome = Ok(());
         loop {
             let next = {

@@ -6,11 +6,11 @@ use super::{SettingsWindow, ui};
 use crate::{
     SheprdWindow,
     i18n::{Localize as _, fl},
-    machine::{self, Display, Limits, Listing, Name, Settings, SettingsQueue, Status},
+    machine::{self, Display, Limits, Listing, Name, Settings, Status},
     settings_window::Section,
 };
 use gpui::{prelude::*, *};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 /// Opens Settings on this page, asking to delete `delete` if one is named.
 pub(crate) fn open(source: WeakEntity<SheprdWindow>, delete: Option<Name>, cx: &mut App) {
@@ -41,9 +41,6 @@ pub(in crate::settings_window) struct MachinesPage {
     deleting: Option<Name>,
     /// What went wrong last, for the user.
     failure: Option<String>,
-    /// Choices on their way to disk, shared with the writer so that closing
-    /// this window does not lose them.
-    queue: Arc<SettingsQueue>,
     /// What each machine was doing when last drawn: a change moves its disk
     /// use, so the folders are read again.
     seen: HashMap<Name, Status>,
@@ -101,13 +98,12 @@ impl SettingsWindow {
             listing.settings = settings;
         }
         cx.notify();
-        let queue = self.machines.queue.clone();
-        if !queue.push(name.clone(), settings) {
+        if !machine::queue_settings(name.clone(), settings) {
             return;
         }
         let write = cx
             .background_executor()
-            .spawn(async move { queue.drain(machine::save_settings) });
+            .spawn(async { machine::drain_settings() });
         cx.spawn(async move |this, cx| {
             let written = write.await;
             let _ = this.update(cx, |this, cx| {
