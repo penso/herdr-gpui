@@ -226,6 +226,11 @@ impl SheprdWindow {
         let Phase::Showing { offer, .. } = dialog.pairing.phase() else {
             return;
         };
+        // The dialog has no focus stops, so the app link has its own key.
+        if key == "enter" {
+            cx.open_url(IPHONE_APP);
+            return;
+        }
         let count = offer.addresses.len();
         if count == 0 {
             return;

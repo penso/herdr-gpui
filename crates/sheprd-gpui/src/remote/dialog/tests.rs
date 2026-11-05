@@ -153,6 +153,13 @@ fn a_phone_scans_claims_and_is_allowed(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("remote-pair-fingerprint").is_some());
     // Someone without the app yet can find it from here.
     assert!(cx.debug_bounds("remote-pair-get-app").is_some());
+    // Without a mouse, Enter opens the same page.
+    cx.simulate_keystrokes("enter");
+    assert_eq!(
+        cx.opened_url().as_deref(),
+        Some("https://sheprd.org/testflight/")
+    );
+    assert!(matches!(phase(&view, cx), Phase::Showing { .. }));
     CLAIMED.store(true, Ordering::SeqCst);
     wait(cx);
     let Phase::Claimed { code, .. } = phase(&view, cx) else {

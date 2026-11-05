@@ -34,7 +34,8 @@ remote-pair-nearby = Or open Sheprd on an iPhone nearby: it finds this computer 
 remote-pair-nearby-allow-mac = To pair nearby over Bluetooth, allow Sheprd in System Settings > Privacy & Security > Bluetooth.
 remote-pair-nearby-allow = To pair nearby over Bluetooth, allow Sheprd to use Bluetooth in your system's settings.
 # A link to the page that has the current iPhone and iPad beta invite.
-remote-pair-get-app = Get the iPhone app
+# Enter opens it too, so keep the key name.
+remote-pair-get-app = Get the iPhone app (Enter)
 
 # The phone's name is drawn bold.
 remote-pair-wants = { $device } wants remote control of your chats.
