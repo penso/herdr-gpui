@@ -3,7 +3,7 @@
 
 use crate::native::create::{list_agents, offered, parse_agents};
 use sheprd_chat_protocol::Agent;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Far longer than a script takes, for tests that expect an answer.
 const PATIENT: Duration = Duration::from_secs(30);
@@ -38,7 +38,7 @@ fn a_missing_program_lists_nothing() {
 #[cfg(unix)]
 mod program {
     use super::*;
-    use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
+    use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, time::Instant};
 
     fn script(dir: &tempfile::TempDir, body: &str) -> PathBuf {
         let path = dir.path().join("sheprd-acp");
