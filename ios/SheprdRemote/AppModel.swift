@@ -95,6 +95,14 @@ final class AppModel {
         }
     }
 
+    /// Changes `setting` for new chats with `agent` directly, as the new tab
+    /// row does. This is a pick too, so a slower one from a chat that is
+    /// still on its way does not replace it.
+    func chooseStart(_ setting: StartPicks.Setting, for agent: String, _ change: (inout StartChoice) -> Void) {
+        _ = startPicks.begin(agent: agent, setting: setting)
+        updateStart(for: agent, change)
+    }
+
     /// Spotlight follows the app lock as soon as it changes, not at the
     /// next change to the chats.
     func appLockChanged() {

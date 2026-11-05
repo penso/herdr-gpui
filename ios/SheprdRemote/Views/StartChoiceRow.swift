@@ -51,7 +51,7 @@ struct StartChoiceRow: View {
         Binding {
             choice.picked?.id
         } set: { id in
-            model.updateStart(for: agent) { $0.mode = id }
+            model.chooseStart(.mode, for: agent) { $0.mode = id }
         }
     }
 
@@ -59,7 +59,7 @@ struct StartChoiceRow: View {
         Binding {
             choice.autoAccept
         } set: { on in
-            model.updateStart(for: agent) { $0.autoAccept = on }
+            model.chooseStart(.autoAccept, for: agent) { $0.autoAccept = on }
         }
     }
 }
