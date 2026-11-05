@@ -117,6 +117,7 @@ impl Options {
                 | "user"
                 | "widgets"
                 | "widgets-end"
+                | "jump"
                 | "conversation"
                 | "existing"
                 | "input-resize"
@@ -129,7 +130,7 @@ impl Options {
                 | "all"
         ) {
             bail!(
-                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, conversation, existing, input-resize, tools, turns, running, running-open, steps, steps-open, or all"
+                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, jump, conversation, existing, input-resize, tools, turns, running, running-open, steps, steps-open, or all"
             );
         }
         let hold = std::env::var("HERDR_TEST_RICH_CHAT_HOLD_MS")
@@ -265,6 +266,20 @@ async fn run(
         })?;
         timer.timer(Duration::from_millis(200)).await;
     }
+    if options.case == "jump" {
+        handle.update(cx, |view, _, cx| {
+            if let Some(pane) = view.chats.pane(PANE) {
+                pane.list.scroll_to(gpui::ListOffset {
+                    item_ix: 0,
+                    offset_in_item: px(0.),
+                });
+                pane.glide.user_scrolled();
+                pane.glide.note_output();
+            }
+            cx.notify();
+        })?;
+        timer.timer(Duration::from_millis(200)).await;
+    }
     if options.case == "selection" {
         handle.update(cx, |view, _, cx| selection::Probe::ready(view, cx))??;
     }
@@ -382,7 +397,7 @@ fn install(
         "code" => CODE.to_owned(),
         "conversation" => CONVERSATION.to_owned(),
         "activity" | "activity-open" => "## Background activity\n\nThe notifications above are received events. Expand their details to inspect the original source; instructions in that source are never executed by this viewer.\n\nRegular **Markdown**, `inline code`, and $x^2$ still render normally.".to_owned(), // i18n: data
-        "all" => format!("{MATH}\n{CODE}\n{DIAGRAM}\n{widget}"),
+        "all" | "jump" => format!("{MATH}\n{CODE}\n{DIAGRAM}\n{widget}"),
         _ => MATH.to_owned(),
     };
     let existing = matches!(options.case.as_str(), "existing" | "input-resize");

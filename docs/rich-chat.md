@@ -207,6 +207,11 @@ change or reset text size on Linux and Windows, including while typing in the
 original agent editor. macOS uses Cmd. The **View** menu provides the same font
 size actions. Adjustments last for the window until reset or configuration reload.
 
+The conversation follows new output while it is at its end. Scrolled above it,
+it stays where you left it and a round button appears at the bottom of the
+conversation, which says **New output below** once more arrives. Click it to go
+back to the end and follow again.
+
 Drag across conversation text to select across paragraphs, code, table cells and
 messages. **Shift-click** extends the selection; double-click selects a word and
 triple-click selects a paragraph or code line. Drag beyond the list edge to
