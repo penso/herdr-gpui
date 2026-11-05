@@ -47,7 +47,7 @@ struct TerminalScreen: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(screen.rows.enumerated()), id: \.offset) { _, row in
-                                Text(row.reduce(into: AttributedString()) { line, run in line += Self.styled(run) })
+                                Text(row.reduce(into: AttributedString()) { line, run in line += Self.styled(run, size: size) })
                                     .font(.system(size: size, design: .monospaced))
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
@@ -383,6 +383,17 @@ struct TerminalScreen: View {
         return ("M" as NSString).size(withAttributes: [.font: font]).width / 100
     }()
 
+    /// What a wide character's glyph leaves of its two cells, per point of
+    /// font size: Chinese, Japanese, and Korean fall back to a font whose
+    /// characters are narrower than two monospaced cells, as are emoji.
+    private static let wideGap: CGFloat = gap("中")
+    private static let emojiGap: CGFloat = gap("😀")
+
+    private static func gap(_ wide: String) -> CGFloat {
+        let font = UIFont.monospacedSystemFont(ofSize: 100, weight: .regular)
+        return 2 * cellRatio - (wide as NSString).size(withAttributes: [.font: font]).width / 100
+    }
+
     /// The font size a phone-sized terminal is drawn at.
     static let readable: CGFloat = 12
 
@@ -473,12 +484,24 @@ struct TerminalScreen: View {
         run.inverse ? (color(run.fg) ?? Color(white: 0.86)) : color(run.bg)
     }
 
-    static func styled(_ run: TermScreen.Run) -> AttributedString {
+    static func styled(_ run: TermScreen.Run, size: CGFloat) -> AttributedString {
         // Backgrounds and block elements are painted as cells behind the
         // text (`cells`), so they are blank here.
         let shown = run.hidden ? String(repeating: " ", count: run.text.count)
             : String(run.text.map { block($0) == nil ? $0 : " " })
         var text = AttributedString(shown)
+        // A wide character spans its two cells, as the cells behind the
+        // text do (`cells`), so a cursor or border after it lines up.
+        var index = text.startIndex
+        while index < text.endIndex {
+            let next = text.characters.index(after: index)
+            let character = text.characters[index]
+            if TermScreen.cells(String(character)) == 2 {
+                let emoji = character.unicodeScalars.first?.properties.isEmojiPresentation == true || character.unicodeScalars.contains("\u{FE0F}")
+                text[index..<next].kern = (emoji ? emojiGap : wideGap) * size
+            }
+            index = next
+        }
         text.foregroundColor = foreground(run)
         if run.underline { text.underlineStyle = .single }
         if run.strike { text.strikethroughStyle = .single }
