@@ -151,6 +151,8 @@ fn a_phone_scans_claims_and_is_allowed(cx: &mut TestAppContext) {
     assert_eq!(qr.size.width, qr.size.height);
     assert!(cx.debug_bounds("remote-pair-countdown").is_some());
     assert!(cx.debug_bounds("remote-pair-fingerprint").is_some());
+    // Someone without the app yet can find it from here.
+    assert!(cx.debug_bounds("remote-pair-get-app").is_some());
     CLAIMED.store(true, Ordering::SeqCst);
     wait(cx);
     let Phase::Claimed { code, .. } = phase(&view, cx) else {
