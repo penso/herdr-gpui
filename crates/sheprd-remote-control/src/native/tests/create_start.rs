@@ -1,31 +1,51 @@
 //! What a new chat starts with: the mode goes first, a session still
-//! starting is asked again, and a refusal is reported so the first prompt
-//! waits.
+//! starting is asked again, and a mode counts only once the transcript
+//! shows it. Anything less is reported, so the first prompt waits, and a
+//! chat without its mode does not auto-accept.
 
 use crate::native::create::{Start, apply_start};
 use serde_json::json;
-use sheprd_chat_protocol::{Command, OptionValue, Rejection};
+use sheprd_chat_protocol::{
+    Choice, Command, ConfigOption, Mode, Modes, OptionCategory, OptionKind, OptionValue, Rejection,
+    Transcript,
+};
 use std::{
     cell::RefCell, collections::VecDeque, convert::Infallible, future::ready, time::Duration,
 };
 
 const WAIT: Duration = Duration::from_secs(5);
 
-/// Runs `apply_start` against answers given in order, then `Ok(None)`, and
-/// returns whether it took and what was sent.
+/// Runs `apply_start` against answers given in order, then `Ok(None)`, for
+/// an agent that goes on to apply what it was sent, and returns whether it
+/// took and what was sent.
 async fn run(
     start: &Start,
     wait: Duration,
     answers: Vec<Option<Rejection>>,
 ) -> (bool, Vec<Command>) {
+    run_shown(start, wait, answers, || true).await
+}
+
+/// [`run`], with `shown` saying what the transcript shows.
+async fn run_shown(
+    start: &Start,
+    wait: Duration,
+    answers: Vec<Option<Rejection>>,
+    shown: impl FnMut() -> bool,
+) -> (bool, Vec<Command>) {
     let answers = RefCell::new(VecDeque::from(answers));
     let sent = RefCell::new(Vec::new());
-    let took = apply_start(start, wait, |command| {
-        sent.borrow_mut().push(command);
-        ready(Ok::<_, Infallible>(
-            answers.borrow_mut().pop_front().flatten(),
-        ))
-    })
+    let took = apply_start(
+        start,
+        wait,
+        |command| {
+            sent.borrow_mut().push(command);
+            ready(Ok::<_, Infallible>(
+                answers.borrow_mut().pop_front().flatten(),
+            ))
+        },
+        shown,
+    )
     .await;
     (took, sent.into_inner())
 }
@@ -90,6 +110,87 @@ async fn a_mode_the_agent_refuses_is_a_failure_without_asking_again() {
     let (took, sent) = run(&plan(), WAIT, vec![Some(Rejection::UnknownMode)]).await;
     assert!(!took);
     assert_eq!(sent.len(), 1);
+}
+
+#[tokio::test]
+async fn a_refused_mode_does_not_turn_auto_accepting_on() {
+    let start = Start {
+        auto_accept: true,
+        ..plan()
+    };
+    let (took, sent) = run(&start, WAIT, vec![Some(Rejection::UnknownMode)]).await;
+    assert!(!took);
+    assert_eq!(sent, vec![Command::SetMode { id: "plan".into() }]);
+}
+
+#[tokio::test]
+async fn an_acknowledged_mode_the_agent_never_shows_is_a_failure() {
+    let start = Start {
+        auto_accept: true,
+        ..plan()
+    };
+    let (took, sent) = run_shown(&start, Duration::ZERO, Vec::new(), || false).await;
+    assert!(!took);
+    assert_eq!(sent, vec![Command::SetMode { id: "plan".into() }]);
+}
+
+#[tokio::test]
+async fn a_mode_that_shows_after_its_acknowledgement_takes() {
+    let mut checks = 0;
+    let shown = || {
+        checks += 1;
+        checks > 1
+    };
+    let (took, _) = run_shown(&plan(), WAIT, Vec::new(), shown).await;
+    assert!(took);
+}
+
+fn with_modes(current: &str) -> Transcript {
+    let mut transcript = Transcript::new("Claude");
+    transcript.modes = Some(Modes {
+        available: vec![Mode {
+            description: None,
+            id: "plan".into(),
+            name: "Plan".into(),
+        }],
+        current: current.into(),
+    });
+    transcript
+}
+
+fn with_option(current: &str) -> Transcript {
+    let mut transcript = Transcript::new("OpenCode");
+    transcript.options = vec![ConfigOption {
+        category: OptionCategory::Mode,
+        description: None,
+        id: "mode".into(),
+        kind: OptionKind::Select {
+            choices: vec![Choice {
+                description: None,
+                group: None,
+                id: "plan".into(),
+                name: "Plan".into(),
+            }],
+            current: current.into(),
+        },
+        name: "Mode".into(),
+    }];
+    transcript
+}
+
+#[test]
+fn the_transcript_shows_a_mode_only_when_it_is_the_current_one() {
+    assert!(plan().shown_in(&with_modes("plan")));
+    assert!(!plan().shown_in(&with_modes("default")));
+    assert!(!plan().shown_in(&Transcript::new("Claude")));
+    let option = Start {
+        option: Some("mode".into()),
+        ..plan()
+    };
+    assert!(option.shown_in(&with_option("plan")));
+    assert!(!option.shown_in(&with_option("build")));
+    assert!(!option.shown_in(&with_modes("plan")));
+    assert!(Start::default().shown_in(&Transcript::new("Claude")));
 }
 
 #[tokio::test]
