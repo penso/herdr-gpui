@@ -4,6 +4,7 @@
 mod error;
 mod projection;
 mod screen;
+mod spaces;
 
 use super::Error as HubError;
 use super::{ApiMethod, Layout};
@@ -44,6 +45,7 @@ pub(super) struct Source {
 #[derive(Default)]
 struct State {
     core: Option<Core>,
+    names: spaces::Names,
     screens: HashMap<String, screen::Screen>,
     terminals: Vec<Terminal>,
 }
@@ -91,14 +93,22 @@ impl Source {
         let core = state.core.as_ref().ok_or(Error::Disconnected)?;
         let terminals = core.list(false)?.terminals;
         let boot = core.hello().core.id.clone();
+        let spaces = core
+            .doc_get("herdr-app")
+            .ok()
+            .and_then(|doc| spaces::Spaces::read(doc.value));
         state.screens.retain(|address, screen| {
             !screen.expired()
                 && terminals
                     .iter()
                     .any(|terminal| &terminal.address == address)
         });
-        let saved = self.tabs.as_deref().and_then(projection::read);
-        let next = projection::project(&boot, &terminals, saved.as_ref(), self.scope.as_deref());
+        let next = if let Some(spaces) = spaces {
+            spaces.project(&boot, &terminals, &mut state.names)
+        } else {
+            let saved = self.tabs.as_deref().and_then(projection::read);
+            projection::project(&boot, &terminals, saved.as_ref(), self.scope.as_deref())
+        };
         state.terminals = terminals;
         self.connected.store(true, Ordering::Release);
         Ok(next)

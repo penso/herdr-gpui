@@ -20,6 +20,7 @@ server = [
     "dep:futures-lite",
     "dep:base64",
     "dep:getrandom",
+    "dep:gix",
     "dep:hkdf",
     "dep:http-body-util",
     "dep:hyper",
@@ -73,6 +74,7 @@ axum           = { optional = true, workspace = true }
 base64         = { optional = true, workspace = true }
 futures-lite   = { optional = true, workspace = true }
 getrandom      = { optional = true, workspace = true }
+gix            = { optional = true, workspace = true }
 hkdf           = { optional = true, workspace = true }
 http-body-util = { optional = true, workspace = true }
 hyper          = { optional = true, workspace = true }

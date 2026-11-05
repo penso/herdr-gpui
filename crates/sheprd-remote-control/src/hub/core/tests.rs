@@ -87,6 +87,7 @@ mod socket {
     };
 
     mod recovery;
+    mod spaces;
 
     struct Fake {
         _dir: tempfile::TempDir,
@@ -118,6 +119,10 @@ mod socket {
     }
 
     fn fake_with_close(close: bool) -> (Arc<Source>, Fake) {
+        fake_with_doc(close, Value::Null, vec![record("t1")])
+    }
+
+    fn fake_with_doc(close: bool, doc: Value, records: Vec<Value>) -> (Arc<Source>, Fake) {
         let dir = tempfile::Builder::new()
             .prefix("rc")
             .tempdir_in("/tmp")
@@ -156,7 +161,11 @@ mod socket {
                 }
                 let request: Value = serde_json::from_slice(&frame.payload).unwrap();
                 let result = match request["method"].as_str().unwrap() {
-                    "terminal.list" => json!({"terminals": [record("t1")]}),
+                    "terminal.list" => json!({"terminals": records}),
+                    "doc.get" => {
+                        assert_eq!(request["params"]["name"], "herdr-app");
+                        json!({"value": doc, "version": if doc.is_null() { 0 } else { 1 }})
+                    }
                     "terminal.attach" => {
                         assert_eq!(request["params"]["terminal"], "t1");
                         assert_eq!(request["params"]["cols"], 80);

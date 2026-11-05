@@ -79,7 +79,12 @@ pub(super) fn project(
             .filter_map(|address| records.iter().find(|record| record.address == address))
             .filter(|record| assigned.insert(record.address.as_str()))
             .collect();
-        if let Some(terminal) = terminal(&format!("core:tab:{}", tab.id), &tab.title, &members) {
+        if let Some(terminal) = terminal(
+            &format!("core:tab:{}", tab.id),
+            &tab.title,
+            &members,
+            urgency,
+        ) {
             add(&mut layout, &tab.workspace_id, terminal);
         }
     }
@@ -87,7 +92,7 @@ pub(super) fn project(
         .iter()
         .filter(|record| !assigned.contains(record.address.as_str()))
     {
-        if let Some(terminal) = terminal(&id(&record.address), "", &[record]) {
+        if let Some(terminal) = terminal(&id(&record.address), "", &[record], urgency) {
             add(&mut layout, "core:terminals", terminal);
         }
     }
@@ -124,7 +129,12 @@ fn status(record: &Record) -> AgentStatus {
     }
 }
 
-fn terminal(tab: &str, title: &str, records: &[&Record]) -> Option<Terminal> {
+pub(super) fn terminal(
+    tab: &str,
+    title: &str,
+    records: &[&Record],
+    urgency: impl Fn(AgentStatus) -> u8,
+) -> Option<Terminal> {
     let first = *records.first()?;
     let panes = records
         .iter()
@@ -139,13 +149,7 @@ fn terminal(tab: &str, title: &str, records: &[&Record]) -> Option<Terminal> {
     let agent = records
         .iter()
         .filter(|record| record.status.is_some())
-        .max_by_key(|record| match status(record) {
-            AgentStatus::Blocked => 4,
-            AgentStatus::Working => 3,
-            AgentStatus::Done => 2,
-            AgentStatus::Idle => 1,
-            AgentStatus::Unknown => 0,
-        })
+        .max_by_key(|record| urgency(status(record)))
         .map(|record| TerminalAgent {
             name: record
                 .status
@@ -180,7 +184,7 @@ fn terminal(tab: &str, title: &str, records: &[&Record]) -> Option<Terminal> {
     })
 }
 
-fn cwd(record: &Record) -> Option<String> {
+pub(super) fn cwd(record: &Record) -> Option<String> {
     record
         .foreground
         .as_ref()
@@ -189,4 +193,14 @@ fn cwd(record: &Record) -> Option<String> {
         .or(Some(&record.cwd))
         .filter(|cwd| !cwd.is_empty())
         .cloned()
+}
+
+fn urgency(status: AgentStatus) -> u8 {
+    match status {
+        AgentStatus::Blocked => 4,
+        AgentStatus::Working => 3,
+        AgentStatus::Done => 2,
+        AgentStatus::Idle => 1,
+        AgentStatus::Unknown => 0,
+    }
 }

@@ -9616,6 +9616,7 @@ dependencies = [
  "futures-lite",
  "futures-util",
  "getrandom 0.4.3",
+ "gix",
  "hkdf 0.13.0",
  "http-body-util",
  "hyper",

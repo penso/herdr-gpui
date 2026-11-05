@@ -20,9 +20,20 @@ A foreground daemon discovers herdr-core through
 arguments override discovery. Remote control only joins an existing core.
 It never starts the bundled core or runs `hc server start`.
 
-Herdr 1 workspaces and chats keep their existing behavior. Saved local
-Herdr 2 tabs in Sheprd's `browser-tabs.json` keep their workspace and split
-membership. The file is read beside the explicit remote `--state-dir`
+Herdr 1 workspaces and chats keep their existing behavior.
+
+When the Herdr desktop app's `herdr-app` document exists in the core,
+the phone shows its local spaces in document order, with their tabs and
+split panes. Named spaces keep their names. Unnamed spaces use the first
+terminal's current repository or folder, with `~` for home. Spaces from
+other machines are omitted. Unlisted terminals stay in **Herdr 2**.
+The worker reads the document every 500 ms. It accepts at most 1 MiB,
+256 spaces and tabs, and 16 terminal panes per tab within 16 tree levels.
+A malformed or oversized document falls back to Sheprd's saved tabs.
+
+Without a valid document, Herdr 2 tabs in Sheprd's `browser-tabs.json` keep
+their workspace and split membership. The file is read beside the explicit
+remote `--state-dir`
 (for example, `gpui/browser-tabs.json` beside `gpui/remote`), using the
 desktop state context instead of the service environment. Only tabs for the
 selected local Herdr 1 endpoint are used.
