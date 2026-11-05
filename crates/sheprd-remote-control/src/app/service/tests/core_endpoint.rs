@@ -53,24 +53,3 @@ fn desktop_core_endpoint_reaches_every_service_definition() {
             .contains("--core-socket \"/desktop/core socket.sock\" --core-session work")
     );
 }
-
-#[test]
-fn invalid_session_diagnostics_survive_service_serialization() {
-    use crate::core_target::CoreTarget;
-    for session in ["bad/name", "bad\nname", "bad\tname", "bad\u{0}name"] {
-        let mut plan = plan();
-        plan.core_endpoint = CoreTarget::InvalidSession(session.into());
-        assert!(files::launch_agent(&plan).is_ok());
-        assert!(files::systemd_unit(&plan).is_ok());
-        assert!(files::scheduled_task(&plan, "user").is_ok());
-        #[cfg(feature = "server")]
-        {
-            let args = std::iter::once("remote".into()).chain(plan.args());
-            let crate::server::Invocation::Serve(options) = crate::server::parse(args).unwrap()
-            else {
-                panic!("not serve")
-            };
-            assert_eq!(options.core_endpoint, plan.core_endpoint);
-        }
-    }
-}

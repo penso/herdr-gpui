@@ -14,7 +14,11 @@ use std::{
 };
 
 pub(super) struct Screen {
+    address: String,
     attachment: Attachment,
+    /// A viewer starts as an observer: a driving attach sets the terminal
+    /// to its size at once, and an observer's input is silently dropped.
+    driving: bool,
     emulator: Emulator,
     lost: bool,
     sync_since: Option<Instant>,
@@ -22,16 +26,21 @@ pub(super) struct Screen {
 }
 
 impl Screen {
+    /// Watches `terminal` at the size its driver set, leaving that alone.
     pub(super) fn open(core: &Core, terminal: &Terminal) -> Result<Self> {
-        let size = Size::new(terminal.cols, terminal.rows).map_err(|_| Error::Response)?;
         let attachment = core.attach(&Attach {
-            cols: size.cols(),
-            rows: size.rows(),
+            cols: terminal.cols,
+            observe: true,
+            rows: terminal.rows,
             terminal: &terminal.address,
             ..Attach::default()
         })?;
+        let attached = &attachment.terminal;
+        let size = Size::new(attached.cols, attached.rows).map_err(|_| Error::Response)?;
         Ok(Self {
+            address: terminal.address.clone(),
             attachment,
+            driving: false,
             emulator: Emulator::new(size, 0),
             lost: false,
             sync_since: None,
@@ -39,8 +48,40 @@ impl Screen {
         })
     }
 
+    /// Takes the driver's role to type, at the size the core reports now,
+    /// so it changes nothing on the desktop. Keeps the emulator: its modes
+    /// decide how input is encoded, and the new attach paints over it.
+    fn drive(&mut self, core: &Core) -> Result<()> {
+        if self.driving {
+            return Ok(());
+        }
+        let current = core
+            .list(false)?
+            .terminals
+            .into_iter()
+            .find(|terminal| terminal.address == self.address)
+            .ok_or(super::Error::Disconnected)?;
+        self.attachment = core.attach(&Attach {
+            cols: current.cols,
+            rows: current.rows,
+            terminal: &self.address,
+            ..Attach::default()
+        })?;
+        self.driving = true;
+        self.follow_size(&current)
+    }
+
     pub(super) fn expired(&self) -> bool {
         self.touched.elapsed() > Duration::from_secs(30) || self.lost
+    }
+
+    pub(super) fn idle(&self) -> Duration {
+        self.touched.elapsed()
+    }
+
+    #[cfg(test)]
+    pub(super) fn age(&mut self, by: Duration) {
+        self.touched -= by;
     }
 
     pub(super) fn follow_size(&mut self, terminal: &Terminal) -> Result<()> {
@@ -51,7 +92,7 @@ impl Screen {
         Ok(())
     }
 
-    pub(super) fn call(&mut self, method: ApiMethod, params: &Value) -> Result<Value> {
+    pub(super) fn call(&mut self, core: &Core, method: ApiMethod, params: &Value) -> Result<Value> {
         self.touched = Instant::now();
         self.drain()?;
         match method {
@@ -60,11 +101,14 @@ impl Screen {
             ),
             ApiMethod::PaneSendText => {
                 let text = params["text"].as_str().ok_or(Error::Response)?;
+                self.drive(core)?;
                 self.send(ClientPaneInputEvent::Paste(text.to_owned()))?;
                 Ok(json!({}))
             }
             ApiMethod::PaneSendKeys => {
-                for key in params["keys"].as_array().ok_or(Error::Response)? {
+                let keys = params["keys"].as_array().ok_or(Error::Response)?;
+                self.drive(core)?;
+                for key in keys {
                     self.send(key_event(key.as_str().ok_or(Error::Response)?)?)?;
                 }
                 Ok(json!({}))

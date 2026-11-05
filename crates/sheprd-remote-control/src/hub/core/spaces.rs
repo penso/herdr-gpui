@@ -133,10 +133,13 @@ impl Spaces {
         let mut layout = Layout {
             boot: format!("core:{boot}"),
             connected: true,
-            working: projection::working(records),
+            working: 0,
             workspaces: Vec::new(),
         };
         let mut assigned = HashSet::new();
+        // Another machine's terminals are omitted, not unlisted: a phone
+        // must not reach them through the Herdr 2 group.
+        let mut omitted = HashSet::new();
         for space in &self.spaces {
             if space.id.contains('/')
                 || space
@@ -144,6 +147,11 @@ impl Spaces {
                     .as_ref()
                     .is_some_and(|machine| !machine.is_empty())
             {
+                for tab in &space.tabs {
+                    let mut addresses = Vec::new();
+                    let _ = tab.root.leaves(&mut addresses, 0);
+                    omitted.extend(addresses);
+                }
                 continue;
             }
             let mut workspace = Workspace {
@@ -173,6 +181,7 @@ impl Spaces {
                     tab.name.clone()
                 };
                 if let Some(terminal) = projection::terminal(
+                    boot,
                     &format!("core:app-tab:{}", id(&tab.id)),
                     &title,
                     &members,
@@ -186,10 +195,18 @@ impl Spaces {
             }
             layout.workspaces.push(workspace);
         }
-        let unlisted = records
+        let shown = records
             .iter()
-            .filter(|record| !assigned.contains(record.address.as_str()))
+            .filter(|record| {
+                let address = record.address.as_str();
+                assigned.contains(address) || !omitted.contains(address)
+            })
             .cloned()
+            .collect::<Vec<_>>();
+        layout.working = projection::working(&shown);
+        let unlisted = shown
+            .into_iter()
+            .filter(|record| !assigned.contains(record.address.as_str()))
             .collect::<Vec<_>>();
         layout
             .workspaces

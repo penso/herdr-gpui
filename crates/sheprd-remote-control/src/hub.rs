@@ -210,6 +210,10 @@ impl Hub {
             .ok_or(Error::UnknownWorkspace)?
             .cwd
             .clone();
+        if let Some(core) = self.active_core() {
+            let (cwd, program) = (cwd.unwrap_or(&folder).to_owned(), program.to_owned());
+            return on_core(move || core.open_chat(agent, &program, &cwd)).await;
+        }
         let response = self
             .call(
                 ApiMethod::TabCreate,
@@ -234,7 +238,9 @@ impl Hub {
     }
 
     /// A new workspace in `cwd`, on a new worktree when `branch` is given,
-    /// with a chat running `agent` in it.
+    /// with a chat running `agent` in it. While a core answers the chat
+    /// starts there, in its unlisted group: the core has no workspaces or
+    /// worktrees, so a branch is refused rather than sent to Herdr 1.
     pub(crate) async fn create_workspace(
         &self,
         cwd: &str,
@@ -242,6 +248,17 @@ impl Hub {
         agent: Agent,
     ) -> Result<CreatedWorkspace> {
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
+        if let Some(core) = self.active_core() {
+            if branch.is_some() {
+                return Err(core::Error::Unsupported.into());
+            }
+            let (cwd, program) = (cwd.to_owned(), program.to_owned());
+            let pane = on_core(move || core.open_chat(agent, &program, &cwd)).await?;
+            return Ok(CreatedWorkspace {
+                workspace: core::UNLISTED.to_owned(),
+                pane,
+            });
+        }
         let opened = self
             .call(
                 ApiMethod::WorkspaceCreate,
@@ -296,6 +313,30 @@ impl Hub {
         )
         .await?;
         Ok(())
+    }
+
+    /// The core new work goes to, while one answers.
+    fn active_core(&self) -> Option<Arc<core::Source>> {
+        self.core.clone().filter(|core| core.connected())
+    }
+
+    /// A new tab on the core for `workspace`'s folder, answered as Herdr
+    /// answers one, once listed so a phone can open it. `None` when no
+    /// core answers and the tab is Herdr 1's to make.
+    pub(crate) async fn new_core_tab(&self, workspace: &str) -> Result<Option<Value>> {
+        let Some(core) = self.active_core() else {
+            return Ok(None);
+        };
+        let cwd = self
+            .layout()
+            .workspace(workspace)
+            .map_or_else(String::new, |workspace| workspace.cwd.clone());
+        let pane = on_core(move || core.open_shell(&cwd)).await?;
+        let mut layout = self.layout.clone();
+        let listed = layout.wait_for(|layout| layout.terminal(&pane).is_some());
+        // An unlisted tab is still made: the phone reloads and finds it.
+        let _ = tokio::time::timeout(CORE_LISTING, listed).await;
+        Ok(Some(json!({"pane": {"pane_id": pane}})))
     }
 
     /// Calls Herdr's public API, for the terminal views.
@@ -365,6 +406,8 @@ impl Hub {
 /// The environment variable the typed line runs the program from, as in
 /// Sheprd.
 const PROGRAM_ENV: &str = "HERDR_ACP";
+/// How long a new core tab waits to be listed: a few of the core's polls.
+const CORE_LISTING: Duration = Duration::from_secs(2);
 const PROGRAM: &str = if cfg!(windows) {
     "herdr-acp.exe"
 } else {
@@ -392,6 +435,15 @@ fn locate_named_program(program: &str) -> Option<PathBuf> {
                 .map(|dir| dir.join(program)),
         )
         .find(|candidate| candidate.is_file())
+}
+
+/// Runs blocking core work off the runtime.
+async fn on_core<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|_| Error::from(core::Error::Disconnected))?
 }
 
 fn tab_params(workspace: &str, cwd: &str, agent: Agent, program: &Path) -> Value {

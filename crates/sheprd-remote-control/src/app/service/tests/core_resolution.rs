@@ -45,7 +45,7 @@ fn a_bad_core_session_does_not_block_service_reconciliation() {
 }
 
 #[test]
-fn a_missing_core_home_is_forwarded_without_blocking_the_service() {
+fn a_missing_core_home_leaves_discovery_to_the_service() {
     let dir = tempfile::tempdir().unwrap();
     let host = host(dir.path());
     let on = RemoteConfig {
@@ -63,9 +63,5 @@ fn a_missing_core_home_is_forwarded_without_blocking_the_service() {
         .unwrap(),
         Outcome::Installed
     );
-    assert!(
-        fs::read_to_string(host.file)
-            .unwrap()
-            .contains("--core-no-home")
-    );
+    assert!(!fs::read_to_string(host.file).unwrap().contains("--core"));
 }

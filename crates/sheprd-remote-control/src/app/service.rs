@@ -96,11 +96,6 @@ impl Plan {
                 "--core-session".into(),
                 endpoint.session.clone().into(),
             ]),
-            CoreTarget::InvalidSession(session) => args.extend([
-                "--core-invalid-session".into(),
-                CoreTarget::encoded_session(session).into(),
-            ]),
-            CoreTarget::NoHome => args.push("--core-no-home".into()),
             CoreTarget::Discover => {}
         }
         args
@@ -420,7 +415,7 @@ fn write_definition(
         config: config.clone(),
         herdr_socket: sheprd_client::ConnectTarget::Local.socket_path().ok(),
         chat_dir: sheprd_chat_protocol::endpoint_dir(),
-        core_endpoint: CoreTarget::resolved(core_endpoint)?,
+        core_endpoint: CoreTarget::resolved(core_endpoint),
     };
     let text = host.manager.text(&plan)?;
     let bytes = host.manager.bytes(&text);

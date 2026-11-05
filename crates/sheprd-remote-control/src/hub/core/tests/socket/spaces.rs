@@ -35,14 +35,14 @@ fn desktop_spaces_keep_order_tabs_panes_names_and_status() {
         records,
     );
     let layout = source.poll().unwrap();
-    assert_eq!(layout.working, 4);
+    assert_eq!(layout.working, 3);
     assert_eq!(
         layout
             .workspaces
             .iter()
             .map(|workspace| workspace.label.as_str())
             .collect::<Vec<_>>(),
-        ["nexus/workflows", "gsource", "Herdr 2"]
+        ["nexus/workflows", "gsource"]
     );
     let tabs = &layout.workspaces[0].terminals;
     assert_eq!(
@@ -65,7 +65,7 @@ fn desktop_spaces_keep_order_tabs_panes_names_and_status() {
     );
     assert_eq!(tabs[0].agent.as_ref().unwrap().changed_ms, None);
     assert_eq!(layout.workspaces[1].terminals[0].label, "1");
-    assert_eq!(layout.workspaces[2].terminals[0].panes[0].pane, id("t5"));
+    assert!(layout.terminal(&id("t5")).is_none());
     assert!(layout.connected);
     drop(source);
     fake.server.join().unwrap();

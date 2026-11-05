@@ -27,7 +27,8 @@ the phone shows its local spaces in document order, with their tabs and
 split panes. Named spaces keep their names. Unnamed spaces use the first
 terminal's current repository or folder, with `~` for home. Spaces from
 other machines are omitted. Unlisted terminals stay in **Herdr 2**.
-The worker reads the document every 500 ms. It accepts at most 1 MiB,
+The worker reads the document after a terminal changes and at least every
+3 seconds, and parses it only when its version changes. It accepts at most 1 MiB,
 256 spaces and tabs, and 16 terminal panes per tab within 16 tree levels.
 A malformed or oversized document falls back to Sheprd's saved tabs.
 
@@ -46,10 +47,21 @@ A phone opens a Herdr 2 pane through the same screen and input endpoints
 as a Herdr 1 pane. The server uses `sheprd-terminal` to emulate raw core
 output and sends complete ANSI screens through the existing stream.
 Keys and pastes use the terminal's current modes, including bracketed paste.
-The pane opens at its current dimensions. Phone-specific sizing, scrolling,
-tab creation, renaming, closing, splitting, and zooming remain Herdr 1 actions.
+The pane opens as an observer at its current dimensions, so watching changes
+nothing on the desktop. The first key or paste takes the driver's role at the
+terminal's current size. Phone-specific sizing, scrolling,
+renaming, splitting, and zooming remain Herdr 1 actions. A phone closes a Herdr 2
+pane, or a tab of one pane; a tab of several panes stays open.
 The daemon keeps at most 16 shared core attachments and releases each after
-30 seconds without a screen read or input request.
+30 seconds without a screen read or input request. When all 16 are held, the
+one idle longest gives way to a new pane if it has been idle for 5 seconds.
+
+While a core answers, new work from a phone starts there, even from a Herdr 1
+pane or workspace: new tabs, chats, and workspaces. Herdr 1 terminals stay listed
+and keep working, and a failure is shown rather than retried on Herdr 1. New
+work appears in **Herdr 2**, because the desktop owns its spaces. The core has no
+worktrees, so a new workspace on a branch is refused. Without a core, new work
+goes to Herdr 1.
 
 ## Control protocol
 

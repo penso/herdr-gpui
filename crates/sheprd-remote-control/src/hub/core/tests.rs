@@ -2,6 +2,11 @@ use super::*;
 use crate::hub::layout;
 use serde_json::json;
 
+/// A pane of the fake core.
+fn id(address: &str) -> String {
+    pane_id("fake-core", address)
+}
+
 fn record(address: &str) -> Value {
     json!({"address": address, "cols": 80, "rows": 24, "cwd": "/code/app",
         "state": "live", "pid": 123, "status": {"state": "working", "app": "claude"}})
@@ -17,7 +22,12 @@ fn saved_desktop_tabs_keep_split_membership_and_ignore_other_sessions() {
     ]})).unwrap();
     let records =
         ["t1", "t2", "t3"].map(|address| serde_json::from_value(record(address)).unwrap());
-    let core = projection::project("boot", &records, Some(&saved), Some("local:/test.sock"));
+    let core = projection::project(
+        "fake-core",
+        &records,
+        Some(&saved),
+        Some("local:/test.sock"),
+    );
     let tab = &core.workspace("w1").unwrap().terminals[0];
     assert_eq!(tab.label, "build");
     assert_eq!(
@@ -84,6 +94,18 @@ fn pane_ids_do_not_collide_with_the_herdr_one_namespace_or_remote_paths() {
     assert!(!owns(&json!({"pane_id": "t1"})));
 }
 
+#[test]
+fn a_split_of_a_core_pane_belongs_to_the_core() {
+    assert!(owns(&json!({"target_pane_id": id("t1")})));
+    assert!(!owns(&json!({"target_pane_id": "p1"})));
+}
+
+#[test]
+fn a_reused_address_on_a_wiped_core_is_another_pane() {
+    assert_ne!(pane_id("core-a", "t1"), pane_id("core-b", "t1"));
+    assert_eq!(pane_id("core-a", "t1"), pane_id("core-a", "t1"));
+}
+
 #[cfg(unix)]
 mod socket {
     use super::*;
@@ -99,11 +121,14 @@ mod socket {
         time::Instant,
     };
 
+    mod new_work;
     mod recovery;
+    mod screens;
     mod spaces;
 
     struct Fake {
         _dir: tempfile::TempDir,
+        attaches: mpsc::Receiver<Value>,
         inputs: mpsc::Receiver<Vec<u8>>,
         server: thread::JoinHandle<()>,
     }
@@ -143,6 +168,7 @@ mod socket {
         let path = dir.path().join("core.sock");
         let listener = UnixListener::bind(&path).unwrap();
         let (sent, inputs) = mpsc::channel();
+        let (attached, attaches) = mpsc::channel();
         let server = thread::spawn(move || {
             let (mut socket, _) = listener.accept().unwrap();
             socket
@@ -165,36 +191,57 @@ mod socket {
                 if frame.channel != 0 {
                     sent.send(frame.payload).unwrap();
                     if close {
-                        assert_eq!(frame.channel, 8);
+                        assert!(frame.channel > 7, "typed on the closed channel");
                     }
                     socket
-                        .write_all(&encode(7, Kind::Data, b"\r\x1b[2Kreceived").unwrap())
+                        .write_all(
+                            &encode(frame.channel, Kind::Data, b"\r\x1b[2Kreceived").unwrap(),
+                        )
                         .unwrap();
                     continue;
                 }
                 let request: Value = serde_json::from_slice(&frame.payload).unwrap();
                 let result = match request["method"].as_str().unwrap() {
                     "terminal.list" => json!({"terminals": records}),
+                    "terminal.run" | "terminal.kill" => {
+                        sent.send(serde_json::to_vec(&request).unwrap()).unwrap();
+                        json!({"address": "t9", "cols": 80, "rows": 24, "state": "live"})
+                    }
                     "doc.get" => {
                         assert_eq!(request["params"]["name"], "herdr-app");
                         json!({"value": doc, "version": if doc.is_null() { 0 } else { 1 }})
                     }
                     "terminal.attach" => {
-                        assert_eq!(request["params"]["terminal"], "t1");
                         assert_eq!(request["params"]["cols"], 80);
-                        {
-                            channel += 1;
-                            json!({"channel": channel, "terminal": record("t1")})
-                        }
+                        attached.send(request["params"].clone()).unwrap();
+                        channel += 1;
+                        json!({"channel": channel, "terminal": record("t1")})
+                    }
+                    "events.subscribe" => {
+                        channel += 1;
+                        json!({"channel": channel, "seq": 0, "terminals": []})
                     }
                     method => panic!("unexpected method {method}"),
                 };
-                let response = json!({"jsonrpc": "2.0", "id": request["id"], "result": result});
+                let response = if request["params"]["cwd"] == "/refused" {
+                    json!({"jsonrpc": "2.0", "id": request["id"],
+                        "error": {"code": -32000, "message": "refused"}})
+                } else {
+                    json!({"jsonrpc": "2.0", "id": request["id"], "result": result})
+                };
                 socket
                     .write_all(
                         &encode(0, Kind::Data, &serde_json::to_vec(&response).unwrap()).unwrap(),
                     )
                     .unwrap();
+                if request["method"] == "events.subscribe" {
+                    let event = json!({"jsonrpc": "2.0", "method": "event", "params":
+                        {"seq": 1, "type": "title", "terminal": "t1", "data": {"title": "new"}}});
+                    let line = format!("{event}\n");
+                    socket
+                        .write_all(&encode(channel, Kind::Data, line.as_bytes()).unwrap())
+                        .unwrap();
+                }
                 if request["method"] == "terminal.attach" {
                     socket
                         .write_all(
@@ -226,9 +273,10 @@ mod socket {
         let source = Arc::new(Source {
             connected: AtomicBool::new(false),
             endpoint: Default::default(),
+            poller: Mutex::default(),
             scope: None,
             state: Mutex::new(State {
-                core: Some(core),
+                core: Some(Arc::new(core)),
                 ..State::default()
             }),
             tabs: None,
@@ -237,6 +285,7 @@ mod socket {
             source,
             Fake {
                 _dir: dir,
+                attaches,
                 inputs,
                 server,
             },
@@ -354,16 +403,25 @@ mod socket {
 
 mod state_context;
 
+mod poller;
+
 #[test]
-fn a_failed_desktop_resolution_stays_with_the_core_source() {
+fn an_unreachable_core_stays_with_the_core_source() {
     let source = Source {
         connected: AtomicBool::new(false),
-        endpoint: crate::core_target::CoreTarget::InvalidSession("bad/name".into()),
+        endpoint: crate::core_target::CoreTarget::Endpoint(sheprd_core_client::Endpoint {
+            socket: "/nonexistent/core.sock".into(),
+            session: "test".into(),
+        }),
+        poller: Mutex::default(),
         scope: None,
         state: Mutex::new(State::default()),
         tabs: None,
     };
-    assert!(
-        matches!(source.poll(), Err(HubError::Core(Error::Client(sheprd_core_client::Error::Session(name)))) if name == "bad/name")
-    );
+    assert!(matches!(
+        source.poll(),
+        Err(HubError::Core(Error::Client(
+            sheprd_core_client::Error::Connect { .. }
+        )))
+    ));
 }

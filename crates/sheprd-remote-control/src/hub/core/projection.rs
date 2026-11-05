@@ -1,6 +1,6 @@
 //! Core owns terminal records; the desktop owns tab and split membership.
 
-use super::id;
+use super::pane_id;
 use crate::hub::{Layout, Terminal, TerminalPane, Workspace, layout::TerminalAgent};
 use serde::Deserialize;
 use sheprd_client::protocol::AgentStatus;
@@ -81,6 +81,7 @@ pub(super) fn project(
             .filter(|record| assigned.insert(record.address.as_str()))
             .collect();
         if let Some(terminal) = terminal(
+            boot,
             &format!("core:tab:{}", tab.id),
             &tab.title,
             &members,
@@ -93,8 +94,9 @@ pub(super) fn project(
         .iter()
         .filter(|record| !assigned.contains(record.address.as_str()))
     {
-        if let Some(terminal) = terminal(&id(&record.address), "", &[record], urgency) {
-            add(&mut layout, "core:terminals", terminal);
+        let tab = pane_id(boot, &record.address);
+        if let Some(terminal) = terminal(boot, &tab, "", &[record], urgency) {
+            add(&mut layout, super::UNLISTED, terminal);
         }
     }
     layout
@@ -110,17 +112,25 @@ fn add(layout: &mut Layout, workspace: &str, terminal: Terminal) {
         chats: Vec::new(),
         cwd: terminal.cwd.clone().unwrap_or_default(),
         id: workspace.to_owned(),
-        label: if workspace == "core:terminals" {
-            "Herdr 2".to_owned()
-        } else {
-            workspace.to_owned()
-        },
+        label: label(workspace, terminal.cwd.as_deref()),
         terminals: vec![terminal],
         worktree: None,
     });
 }
 
-fn status(record: &Record) -> AgentStatus {
+/// What a phone calls a core workspace. A saved tab's workspace id is an
+/// opaque Herdr 1 id, shown only if Herdr 1 no longer lists it: its folder
+/// reads better.
+fn label(workspace: &str, cwd: Option<&str>) -> String {
+    (workspace != super::UNLISTED)
+        .then_some(cwd)
+        .flatten()
+        .and_then(|cwd| Path::new(cwd).file_name()?.to_str())
+        .unwrap_or("Herdr 2")
+        .to_owned()
+}
+
+pub(super) fn status(record: &Record) -> AgentStatus {
     match record.status.as_ref().map(|status| status.state) {
         Some(StatusState::Blocked | StatusState::Error) => AgentStatus::Blocked,
         Some(StatusState::Done) => AgentStatus::Done,
@@ -138,6 +148,7 @@ pub(super) fn working(records: &[Record]) -> usize {
 }
 
 pub(super) fn terminal(
+    boot: &str,
     tab: &str,
     title: &str,
     records: &[&Record],
@@ -151,7 +162,7 @@ pub(super) fn terminal(
             cwd: cwd(record),
             focused: index == 0,
             label: record.name.clone().or_else(|| record.title.clone()),
-            pane: id(&record.address),
+            pane: pane_id(boot, &record.address),
         })
         .collect();
     let agent = records
@@ -164,7 +175,7 @@ pub(super) fn terminal(
                 .as_ref()
                 .map(|status| status.app.clone())
                 .filter(|name| !name.is_empty()),
-            pane: id(&record.address),
+            pane: pane_id(boot, &record.address),
             status: status(record),
             title: record
                 .status
