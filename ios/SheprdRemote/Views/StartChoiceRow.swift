@@ -36,6 +36,8 @@ struct StartChoiceRow: View {
             }
             .contentShape(.rect)
         }
+        // A menu tints its label; this row reads as text, like the others here.
+        .buttonStyle(.plain)
         .accessibilityLabel("New \(agent) tabs start in \(summary(choice))")
         .accessibilityHint("Changes what new tabs start with")
     }
