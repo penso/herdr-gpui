@@ -5,3 +5,4 @@ mod leak;
 mod locale;
 mod macros;
 mod messages;
+mod static_text;
