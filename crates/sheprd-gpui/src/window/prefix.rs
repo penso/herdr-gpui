@@ -3,6 +3,7 @@
 //! to it, is swallowed. Typing the prefix twice sends it on to the focused
 //! element as ordinary input, and Escape simply cancels. A chord typed in a
 //! menu's text field closes the menu and runs, as it would from the terminal.
+//! A pause after the prefix lists what can follow it; see `next_keys`.
 //!
 //! The daemon's custom command shortcuts are matched here too, after the
 //! keymap's own, and Herdr's resize mode claims every key until it ends.
@@ -82,6 +83,7 @@ impl SheprdWindow {
             match bound {
                 Some(Bound::Prefix) => {
                     self.prefix_armed = true;
+                    self.schedule_next_keys(cx);
                     cx.stop_propagation();
                     cx.notify();
                 }
@@ -93,7 +95,7 @@ impl SheprdWindow {
             }
             return;
         }
-        self.prefix_armed = false;
+        self.end_prefix();
         cx.notify();
         let Some(bound) = bound else {
             cx.stop_propagation();
@@ -195,8 +197,14 @@ impl SheprdWindow {
     /// Leaving the window abandons a half-typed chord, as the TUI's prefix
     /// mode does not outlive its client, and ends resize mode.
     pub(super) fn disarm_prefix(&mut self) {
-        self.prefix_armed = false;
+        self.end_prefix();
         self.resize_mode = false;
+    }
+
+    /// The chord is over, typed or not, and so is the panel listing its keys.
+    pub(super) fn end_prefix(&mut self) {
+        self.prefix_armed = false;
+        self.next_keys.dismiss();
     }
 }
 

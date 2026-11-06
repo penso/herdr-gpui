@@ -35,6 +35,7 @@ mod links;
 mod monitors;
 pub(crate) use links::PressedLink;
 mod mouse;
+mod next_keys;
 mod pending_input;
 mod plugin_selection;
 pub(crate) mod prefix;
@@ -264,6 +265,8 @@ pub(crate) struct SheprdWindow {
     /// The revision of the app-wide network reading this window last drew.
     pub(crate) network_quality_seen: u64,
     /// The last orchestrator view id handed out.
+    /// The panel of keys that can follow the prefix.
+    pub(crate) next_keys: next_keys::NextKeys,
     pub(crate) next_orchestrator: u64,
     pub(crate) notes_width: crate::panel_resize::PanelWidth,
     /// Which notice cards had lines too long for their row when last laid out.

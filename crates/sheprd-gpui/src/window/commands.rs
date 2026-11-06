@@ -677,7 +677,7 @@ impl SheprdWindow {
                 return;
             }
             Command::ResizeMode => {
-                self.prefix_armed = false;
+                self.end_prefix();
                 self.resize_mode = true;
                 cx.notify();
                 return;

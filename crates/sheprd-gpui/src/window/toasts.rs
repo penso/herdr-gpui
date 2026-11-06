@@ -388,6 +388,7 @@ impl SheprdWindow {
             return false;
         }
         self.file_transfer.is_some()
+            || self.next_keys.is_open()
             || (!self.toasts_hidden
                 && (self
                     .toast_motion

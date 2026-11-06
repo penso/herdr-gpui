@@ -228,6 +228,7 @@ impl SheprdWindow {
             #[cfg(feature = "integration-test")]
             navigations: Default::default(),
             network_quality_seen: 0,
+            next_keys: Default::default(),
             next_orchestrator: 0,
             notes_width: crate::panel_resize::NOTES,
             notice_overflow: Default::default(),

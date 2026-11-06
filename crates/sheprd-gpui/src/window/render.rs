@@ -967,7 +967,9 @@ impl Render for SheprdWindow {
             .children(self.render_menu_leaving(window, cx))
             .when(self.menu.page.is_some(), |root| {
                 root.child(self.render_menu(window, cx))
-            });
+            })
+            // A chord works over a menu, so what can follow shows over it too.
+            .children(self.render_next_keys(window));
         crate::titlebar::frame(window, self.theme.active, root)
     }
 }
