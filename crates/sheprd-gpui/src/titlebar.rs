@@ -35,6 +35,11 @@ pub(super) const HEIGHT: f32 = 34.;
 /// mouse buttons still travel.
 const NAVIGATION_MIN_WIDTH: f32 = 320.;
 
+/// The narrowest window that spells out commits without a pull request. Below
+/// it the words would push the Git button and the account out of the window,
+/// so the Git icon takes their color instead, which needs no room.
+const UNOPENED_NOTE_MIN_WIDTH: f32 = 720.;
+
 impl SheprdWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
         let shown = matches!(self.menu.page, Some(Page::GitHub | Page::GitLab));
@@ -71,7 +76,7 @@ impl SheprdWindow {
     /// without one shows what a commit would include right now, and says so
     /// when commits are waiting for a pull request: a clean tree alone would
     /// leave the slot empty though there is still work to send.
-    fn render_git_button(&self, cx: &mut Context<Self>) -> Option<Div> {
+    fn render_git_button(&self, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
         self.git.tracked()?;
         let theme = &self.theme;
         let font = &self.config.ui;
@@ -80,6 +85,8 @@ impl SheprdWindow {
         let running = self.git.running().is_some();
         let anchor = self.git_anchor.clone();
         let unopened = self.git_unopened_commits();
+        let note =
+            unopened.filter(|_| f32::from(window.viewport_size().width) >= UNOPENED_NOTE_MIN_WIDTH);
         let pr = self
             .git_pull_request()
             .filter(|_| unopened.is_none())
@@ -104,7 +111,7 @@ impl SheprdWindow {
                 .text_font(font)
                 .text_size(px(font.size))
                 .text_color(rgb(theme.foreground))
-                .when_some(unopened, |button, commits| {
+                .when_some(note, |button, commits| {
                     button.child(
                         div()
                             .id("titlebar-git-unopened")
@@ -241,8 +248,11 @@ impl SheprdWindow {
                                 .path("icons/git-branch.svg")
                                 .size(px(14.))
                                 .flex_none()
+                                .debug_selector(|| "titlebar-git-icon".into())
                                 .text_color(rgb(if running {
                                     theme.ink(theme.palette[3])
+                                } else if unopened.is_some() {
+                                    crate::pull_request::unopened_color(theme)
                                 } else {
                                     theme.muted
                                 })),
@@ -267,7 +277,14 @@ impl SheprdWindow {
                             MouseButton::Left,
                             cx.listener(|this, event: &MouseDownEvent, window, cx| {
                                 cx.stop_propagation();
-                                this.open_git_menu(event.position, window, cx);
+                                match this.git_unopened_commits() {
+                                    Some(_) => this.open_git_menu_on_pull_request(
+                                        event.position,
+                                        window,
+                                        cx,
+                                    ),
+                                    None => this.open_git_menu(event.position, window, cx),
+                                }
                             }),
                         ),
                 ),
@@ -358,7 +375,7 @@ impl SheprdWindow {
             .row()
             .flex_none()
             .items_center()
-            .children(self.render_git_button(cx))
+            .children(self.render_git_button(window, cx))
             .children(self.remote_indicator(cx))
             .child(
                 div()

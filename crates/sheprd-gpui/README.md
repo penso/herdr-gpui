@@ -4053,7 +4053,7 @@ Ctrl+Shift+U is left unbound for
   A branch with commits past the default branch and no pull request carrying
   them shows a yellow `+PR` in the number's place in the sidebar, and
   `3 commits, no PR` in the titlebar, which opens the Git menu on Create pull
-  request. Pushing does not clear it, only a pull request does. It needs a
+  request; a window under 720 points wide colors the Git icon instead. Pushing does not clear it, only a pull request does. It needs a
   finished lookup, so a signed-out or non-GitHub checkout shows nothing, and a
   squash-merged branch shows its number until it moves past the merged head. The
   default branch is the remote's `HEAD` (`upstream` before `origin`); a clone

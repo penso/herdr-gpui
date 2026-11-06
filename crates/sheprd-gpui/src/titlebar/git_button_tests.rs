@@ -307,24 +307,23 @@ fn commits_without_a_pull_request_say_so_and_open_the_menu_on_its_row(cx: &mut T
             cx.notify();
         })
     });
-    for width in [900., 640., 360.] {
+    for width in [900., 720., 719., 640., 480., 360.] {
         cx.simulate_resize(size(px(width), px(600.)));
         cx.run_until_parked();
         cx.update(|window, cx| {
             window.refresh();
             let _ = window.draw(cx);
         });
-        let note = cx.debug_bounds("titlebar-git-unopened").unwrap();
         let button = cx.debug_bounds("titlebar-git").unwrap();
-        assert!(note.right() <= button.left(), "width {width}");
-        assert!(
-            button.right() <= cx.debug_bounds("titlebar-avatar").unwrap().left(),
-            "width {width}"
-        );
-        assert!(
-            note.left() >= cx.debug_bounds("toggle-sidebar").unwrap().right(),
-            "width {width}"
-        );
+        let avatar = cx.debug_bounds("titlebar-avatar").unwrap();
+        assert!(button.right() <= avatar.left(), "width {width}");
+        // The words must never cost the controls after them their place.
+        assert!(avatar.right() <= px(width), "width {width}");
+        let note = cx.debug_bounds("titlebar-git-unopened");
+        assert_eq!(note.is_some(), width >= 720., "width {width}");
+        if let Some(note) = note {
+            assert!(note.right() <= button.left(), "width {width}");
+        }
     }
     cx.simulate_resize(size(px(900.), px(600.)));
     cx.run_until_parked();
