@@ -176,5 +176,6 @@ pub(super) fn relay(
                 }
             }
         }
+        decoder.check()?;
     }
 }

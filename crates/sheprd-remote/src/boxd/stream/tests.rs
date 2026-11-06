@@ -128,3 +128,88 @@ fn the_request_head_carries_the_key_and_the_first_message() {
         [&b"b\r\n"[..], &frame(&wire::exec_stdin(b"hi")), b"\r\n"].concat()
     );
 }
+
+/// `head` and then `body`, which has no trailer frame.
+fn untrailed(head: &str, body: &[u8]) -> Vec<u8> {
+    let mut reply = head.as_bytes().to_vec();
+    reply.extend_from_slice(body);
+    reply
+}
+
+fn stdout_frame() -> Vec<u8> {
+    frame(&Message::default().bytes(1, b"partial").into_bytes())
+}
+
+/// Push `reply` whole and in single bytes. Either way the output before the
+/// body's end is kept, and the decoder then fails rather than waiting.
+fn assert_unended(reply: &[u8], output: &[Event]) {
+    let mut whole = Decoder::default();
+    assert_eq!(whole.push(reply).unwrap(), output);
+    assert!(matches!(whole.check(), Err(Error::Wire)));
+    assert!(!whole.done());
+    assert!(matches!(whole.push(b"more"), Err(Error::Wire)));
+    let mut bytes = Decoder::default();
+    let mut events = Vec::new();
+    for (index, byte) in reply.iter().enumerate() {
+        events.extend(bytes.push(std::slice::from_ref(byte)).unwrap());
+        let last = index + 1 == reply.len();
+        assert_eq!(bytes.check().is_err(), last, "byte {index}");
+    }
+    assert_eq!(events, output);
+}
+
+#[test]
+fn a_chunked_body_that_ends_without_a_status_fails() {
+    let message = stdout_frame();
+    let mut body = format!("{:x}\r\n", message.len()).into_bytes();
+    body.extend_from_slice(&message);
+    body.extend_from_slice(b"\r\n0\r\n\r\n");
+    let head = "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n";
+    // The last chunk's trailing CRLF may never come; its size line ends it.
+    let reply = untrailed(head, &body);
+    assert_unended(
+        &reply[..reply.len() - 2],
+        &[Event::Stdout(b"partial".to_vec())],
+    );
+    assert_unended(&untrailed(head, b"0\r\n"), &[]);
+}
+
+#[test]
+fn a_sized_body_that_ends_without_a_status_fails() {
+    let message = stdout_frame();
+    let head = format!(
+        "HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n",
+        message.len()
+    );
+    assert_unended(
+        &untrailed(&head, &message),
+        &[Event::Stdout(b"partial".to_vec())],
+    );
+    // A frame cut short by the body's end fails too.
+    let cut = "HTTP/1.1 200 OK\r\ncontent-length: 3\r\n\r\n";
+    assert_unended(&untrailed(cut, &message[..3]), &[]);
+    assert_unended(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n", &[]);
+}
+
+#[test]
+fn a_sized_body_with_its_status_decodes() {
+    let trailer = b"grpc-status:0\r\n";
+    let mut body = stdout_frame();
+    body.push(TRAILER);
+    body.extend_from_slice(&(trailer.len() as u32).to_be_bytes());
+    body.extend_from_slice(trailer);
+    let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n", body.len());
+    let mut decoder = Decoder::default();
+    assert_eq!(
+        decoder.push(&untrailed(&head, &body)).unwrap(),
+        [
+            Event::Stdout(b"partial".to_vec()),
+            Event::End(Trailers {
+                status: Some(0),
+                message: None,
+            }),
+        ]
+    );
+    assert!(decoder.done());
+    assert!(decoder.check().is_ok());
+}

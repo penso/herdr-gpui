@@ -80,6 +80,8 @@ enum State {
     /// A body that runs to the connection's end.
     Close,
     Done,
+    /// The body ended without the call's status.
+    Unended,
 }
 
 /// Decodes the reply incrementally; a fragment that ends mid-head, mid-chunk,
@@ -150,9 +152,15 @@ impl Decoder {
                     self.raw.clear();
                     false
                 }
+                State::Unended => return Err(Error::Wire),
             };
             self.frames(&mut events)?;
-            if !progressed || matches!(self.state, State::Done) {
+            // A body of known length that is all here has no status left to
+            // carry, and the connection may stay open, so waiting would hang.
+            if matches!(self.state, State::Length(0)) {
+                self.state = State::Unended;
+            }
+            if !progressed || matches!(self.state, State::Done | State::Unended) {
                 return Ok(events);
             }
         }
@@ -161,6 +169,16 @@ impl Decoder {
     /// Whether the call has ended, so a closed connection is expected.
     pub fn done(&self) -> bool {
         matches!(self.state, State::Done)
+    }
+
+    /// Fails once the reply's body has ended without the call's status, as
+    /// no more of it can come. Check after handling a push's events: they
+    /// came before the end, so they are still the command's output.
+    pub fn check(&self) -> Result<()> {
+        match self.state {
+            State::Unended => Err(Error::Wire),
+            _ => Ok(()),
+        }
     }
 
     fn head(&mut self, events: &mut Vec<Event>) -> Result<bool> {
@@ -230,9 +248,11 @@ impl Decoder {
             return Err(Error::Size);
         }
         self.raw.drain(..end + 2);
-        // The last chunk; the call's status came in the trailer frame before it.
+        // The last chunk. A call's status comes in a trailer frame before it,
+        // and that frame ends decoding, so a body reaching it has none. The
+        // connection may stay open, so waiting for one would hang.
         self.state = if size == 0 {
-            State::Done
+            State::Unended
         } else {
             State::Data(size)
         };

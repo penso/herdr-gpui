@@ -155,3 +155,69 @@ fn a_failed_call_is_an_error_not_an_exit_code() {
         "boxd request failed (gRPC status 5): boom"
     );
 }
+
+/// Answer with one stdout message and a body that ends without a status,
+/// chunked or of known length, then keep the connection open until the
+/// client closes it.
+fn serve_untrailed(sized: bool) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+        }
+        let message = wire::frame(&Message::default().bytes(1, b"partial").into_bytes());
+        if sized {
+            write!(
+                writer,
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n",
+                message.len()
+            )
+            .unwrap();
+            writer.write_all(&message).unwrap();
+        } else {
+            writer
+                .write_all(b"HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n")
+                .unwrap();
+            chunk(&mut writer, &message);
+            writer.write_all(b"0\r\n\r\n").unwrap();
+        }
+        writer.flush().unwrap();
+        // Held open: only the client's close ends this read.
+        let _ = std::io::copy(&mut reader, &mut std::io::sink());
+    });
+    base
+}
+
+#[test]
+fn a_reply_without_a_status_fails_rather_than_waiting() {
+    for sized in [false, true] {
+        let base = serve_untrailed(sized);
+        let (done, finished) = mpsc::channel();
+        thread::spawn(move || {
+            // Stdin stays open, as the bridge's does while it runs.
+            let (_keep, input) = mpsc::channel::<Option<Vec<u8>>>();
+            let settings = super::settings(&base);
+            let key = SecretString::from("fixture-key");
+            let mut connection = open(&settings, &key, "m-1", "cat").unwrap();
+            let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+            let code = relay(&mut connection, input, &mut stdout, &mut stderr);
+            let _ = done.send((code, stdout));
+        });
+        let (code, stdout) = finished
+            .recv_timeout(std::time::Duration::from_secs(20))
+            .unwrap_or_else(|_| panic!("the relay waited forever (sized: {sized})"));
+        assert!(
+            matches!(code, Err(super::super::Error::Wire)),
+            "sized: {sized}"
+        );
+        assert_eq!(stdout, b"partial", "sized: {sized}");
+    }
+}
