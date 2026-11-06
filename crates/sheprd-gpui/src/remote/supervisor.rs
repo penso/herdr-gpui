@@ -349,7 +349,13 @@ impl Supervisor {
                 .then(|| links::exchange(&address, send, outgoing));
             let update_asked = update.filter(|_| status.is_ok()).is_some_and(|update| {
                 matches!(
-                    send(&address, &Request::AppUpdate { update }),
+                    send(
+                        &address,
+                        &Request::AppUpdate {
+                            instance: std::process::id(),
+                            update,
+                        },
+                    ),
                     Ok(Response::AppUpdate { requested: true })
                 )
             });

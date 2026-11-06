@@ -193,7 +193,7 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
                 },
             };
         }
-        Request::AppUpdate { update } => {
+        Request::AppUpdate { instance, update } => {
             if !update.valid() {
                 return Response::Error {
                     code: ErrorCode::Unsupported,
@@ -201,7 +201,7 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
                 };
             }
             return Response::AppUpdate {
-                requested: state.updates().report(update, Instant::now()),
+                requested: state.updates().report(instance, update, Instant::now()),
             };
         }
         Request::Shutdown => {

@@ -191,8 +191,10 @@ pub enum Request {
     /// own daemon.
     Enroll(hosts::Enroll),
     /// Where the app's updater stands, sent with each poll while a window
-    /// runs it. Answered with whether a phone asked to update.
+    /// runs it. Answered with whether a phone asked to update. `instance`
+    /// names this run of the app: a request is only for the run a phone saw.
     AppUpdate {
+        instance: u32,
         update: app_update::AppUpdate,
     },
 }

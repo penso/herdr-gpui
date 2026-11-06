@@ -16,45 +16,58 @@ use std::time::{Duration, Instant};
 /// every few seconds while a window is open.
 const APP_SILENCE: Duration = Duration::from_secs(15);
 
-/// What the app last said, and whether a phone is waiting for it.
+/// One report from a run of the app.
+#[derive(Debug)]
+struct Report {
+    at: Instant,
+    instance: u32,
+    update: AppUpdate,
+}
+
+/// What the app last said, and which run of it a phone is waiting for.
 #[derive(Debug, Default)]
 pub(crate) struct Relay {
-    asked: bool,
-    report: Option<(AppUpdate, Instant)>,
+    asked: Option<u32>,
+    report: Option<Report>,
 }
 
 impl Relay {
     /// Keeps the app's report, and hands it a phone's request. A request
-    /// made before the app went away is dropped: it must not update, unseen,
-    /// whenever the app next opens.
-    pub(crate) fn report(&mut self, update: AppUpdate, now: Instant) -> bool {
+    /// goes only to the run it was made to, while that run still reports: it
+    /// must not update, unseen, an app opened later, however soon.
+    pub(crate) fn report(&mut self, instance: u32, update: AppUpdate, now: Instant) -> bool {
         let reporting = self.app(now).is_some();
-        self.report = Some((update, now));
-        std::mem::take(&mut self.asked) && reporting
+        self.report = Some(Report {
+            at: now,
+            instance,
+            update,
+        });
+        self.asked.take() == Some(instance) && reporting
+    }
+
+    fn live(&self, now: Instant) -> Option<&Report> {
+        self.report
+            .as_ref()
+            .filter(|report| now.saturating_duration_since(report.at) < APP_SILENCE)
     }
 
     /// The app's report, while it still reports.
     fn app(&self, now: Instant) -> Option<&AppUpdate> {
-        self.report
-            .as_ref()
-            .filter(|(_, at)| now.saturating_duration_since(*at) < APP_SILENCE)
-            .map(|(update, _)| update)
+        self.live(now).map(|report| &report.update)
     }
 
     /// Notes a phone's request for the app's next report.
     fn ask(&mut self, now: Instant) -> Result<(), Error> {
-        if self.app(now).is_none() {
-            return Err(Error::AppClosed);
-        }
-        self.asked = true;
+        let report = self.live(now).ok_or(Error::AppClosed)?;
+        self.asked = Some(report.instance);
         Ok(())
     }
 
     fn status(&self, now: Instant) -> Status {
-        let app = self.app(now).cloned();
+        let live = self.live(now);
         Status {
-            asked: self.asked && app.is_some(),
-            app,
+            app: live.map(|report| report.update.clone()),
+            asked: live.is_some_and(|report| self.asked == Some(report.instance)),
         }
     }
 }

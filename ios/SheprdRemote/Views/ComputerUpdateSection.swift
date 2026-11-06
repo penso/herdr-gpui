@@ -16,19 +16,21 @@ struct ComputerUpdateSection: View {
 
     private var machine: Fleet.Machine? { model.fleet.machines.first { $0.id == device } }
     private var online: Bool { if case .online = machine?.status { true } else { false } }
+    /// Too old for the live socket, so it never comes online to be asked.
+    private var unreachablyOld: Bool { machine?.status == .outdated }
 
     var body: some View {
         Section {
             LabeledContent("Version", value: machine?.home?.version ?? "Unknown")
-            if machine?.needsUpdate == true || machine?.status == .outdated {
+            if machine?.needsUpdate == true || unreachablyOld {
                 ComputerStatusLine(status: .outdated)
             }
-            if let update, update.working {
+            if online, let update, update.working {
                 HStack(spacing: 8) {
                     ProgressView()
                     Text("Updating…").foregroundStyle(.secondary)
                 }
-            } else if let update, update.canAsk {
+            } else if online, let update, update.canAsk {
                 Button(action(update)) { confirming = true }
             }
         } header: {
@@ -55,7 +57,7 @@ struct ComputerUpdateSection: View {
 
     private var footer: String? {
         if let problem { return problem }
-        if tooOld { return "Update Sheprd on \(name) by hand once. After that you can update it from here." }
+        if tooOld || unreachablyOld { return "Update Sheprd on \(name) by hand once. After that you can update it from here." }
         guard let update else { return nil }
         guard let app = update.app else { return "Sheprd is not open on \(name), so it cannot update from here." }
         switch app.stage {
@@ -67,7 +69,11 @@ struct ComputerUpdateSection: View {
 
     /// Reads the updater while this page shows, faster during an update.
     private func follow() async {
-        guard online else { return }
+        // What was last read says nothing about a computer out of reach.
+        guard online else {
+            update = nil
+            return
+        }
         while !Task.isCancelled {
             await refresh()
             try? await Task.sleep(for: .seconds(update?.working == true ? 2 : 5))
@@ -80,6 +86,8 @@ struct ComputerUpdateSection: View {
                 try await client.computerUpdate(bearer: token)
             }
             tooOld = false
+            // An answer shows where it stands, whatever a request reported.
+            problem = nil
         } catch RemoteError.status(404, _) {
             tooOld = true
             update = nil

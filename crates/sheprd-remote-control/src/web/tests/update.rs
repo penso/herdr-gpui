@@ -16,6 +16,7 @@ fn with_bearer(token: &str, mut request: HttpRequest<Body>) -> HttpRequest<Body>
 
 fn report(state: &Shared) -> bool {
     state.updates().report(
+        1,
         AppUpdate {
             stage: Stage::Available,
             latest: Some("20261106.1".into()),

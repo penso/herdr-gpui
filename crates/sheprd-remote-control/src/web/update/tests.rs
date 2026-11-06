@@ -1,6 +1,8 @@
 use super::*;
 use crate::control::app_update::Stage;
 
+const RUN: u32 = 7;
+
 fn available() -> AppUpdate {
     AppUpdate {
         stage: Stage::Available,
@@ -19,11 +21,11 @@ fn a_request_needs_an_app_reporting() {
 fn the_next_report_takes_a_request_once() {
     let now = Instant::now();
     let mut relay = Relay::default();
-    assert!(!relay.report(available(), now));
+    assert!(!relay.report(RUN, available(), now));
     relay.ask(now).unwrap();
     assert!(relay.status(now).asked);
-    assert!(relay.report(available(), now));
-    assert!(!relay.report(available(), now));
+    assert!(relay.report(RUN, available(), now));
+    assert!(!relay.report(RUN, available(), now));
     assert!(!relay.status(now).asked);
 }
 
@@ -31,7 +33,7 @@ fn the_next_report_takes_a_request_once() {
 fn an_app_gone_silent_counts_as_closed() {
     let now = Instant::now();
     let mut relay = Relay::default();
-    relay.report(available(), now);
+    relay.report(RUN, available(), now);
     relay.ask(now).unwrap();
     let later = now + APP_SILENCE;
     assert_eq!(
@@ -48,10 +50,21 @@ fn an_app_gone_silent_counts_as_closed() {
 fn a_request_does_not_outlive_the_app_it_was_made_to() {
     let now = Instant::now();
     let mut relay = Relay::default();
-    relay.report(available(), now);
+    relay.report(RUN, available(), now);
     relay.ask(now).unwrap();
-    assert!(!relay.report(available(), now + APP_SILENCE));
-    assert!(!relay.report(available(), now + APP_SILENCE));
+    assert!(!relay.report(RUN, available(), now + APP_SILENCE));
+    assert!(!relay.report(RUN, available(), now + APP_SILENCE));
+}
+
+#[test]
+fn a_request_is_not_handed_to_an_app_reopened_at_once() {
+    let now = Instant::now();
+    let mut relay = Relay::default();
+    relay.report(RUN, available(), now);
+    relay.ask(now).unwrap();
+    assert!(!relay.report(RUN + 1, available(), now));
+    assert!(!relay.status(now).asked);
+    assert!(!relay.report(RUN, available(), now));
 }
 
 #[test]

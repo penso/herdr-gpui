@@ -89,9 +89,10 @@ tests pass explicit times.
 `POST /api/v2/update` asks Sheprd to update, and this daemon only relays
 (`control::app_update`). Sheprd sends `AppUpdate` with each poll while a window
 runs its updater, and the answer hands it a phone's request, which its updater
-carries out up to the restart. Without a report for 15 seconds the app counts
-as closed: the request is refused, and one already waiting is dropped, so it
-cannot update unseen when the app next opens. A machine with no app open
+carries out up to the restart. Each report names the app's process, and a
+request goes only to the run a phone saw, so it cannot update unseen an app
+reopened later, however soon. Without a report for 15 seconds the app counts as
+closed and a request is refused. A machine with no app open
 cannot update from a phone.
 
 ### Other machines
