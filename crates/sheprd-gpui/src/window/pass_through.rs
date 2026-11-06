@@ -29,6 +29,16 @@ impl SheprdWindow {
         cx.notify();
     }
 
+    /// A config reload or another host's keymap can take the shortcut away
+    /// while the mode is on, which would leave no key to end it.
+    pub(crate) fn sync_pass_through(&mut self, cx: &mut Context<Self>) {
+        if !self.pass_through || self.pass_through_unlock().is_some() {
+            return;
+        }
+        self.pass_through = false;
+        self.show_flash(Flash::warning(fl!("status-bar-pass-through-ended")), cx);
+    }
+
     /// The shortcut that ends the mode, as shown to the user.
     pub(super) fn pass_through_unlock(&self) -> Option<String> {
         self.keymap()

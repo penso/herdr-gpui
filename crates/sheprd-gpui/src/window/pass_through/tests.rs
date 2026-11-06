@@ -6,13 +6,9 @@ use crate::{
 use gpui::{Entity, Keystroke, TestAppContext, VisualTestContext};
 use std::collections::BTreeMap;
 
-/// A window with the prefix on `cmd-j`, one chord, and pass-through on
-/// `unlock`, or unbound when that is empty.
-fn window<'a>(
-    cx: &'a mut TestAppContext,
-    unlock: &str,
-) -> (Entity<SheprdWindow>, &'a mut VisualTestContext) {
-    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+/// The prefix on `cmd-j`, one chord, and pass-through on `unlock`, or unbound
+/// when that is empty.
+fn keymap(unlock: &str) -> Keymap {
     let keys: toml::Table = "prefix = 'cmd+j'\ntoggle_sidebar = 'prefix+cmd+b'"
         .parse()
         .unwrap();
@@ -20,14 +16,21 @@ fn window<'a>(
         "toggle_pass_through".to_owned(),
         Binding::One(unlock.to_owned()),
     )]);
-    view.update(cx, |view, _| {
-        view.config.keybindings = Keymap::with_overrides(
-            &overrides,
-            &Default::default(),
-            &DaemonKeys::from_table(Some(&keys)),
-        )
-        .unwrap();
-    });
+    Keymap::with_overrides(
+        &overrides,
+        &Default::default(),
+        &DaemonKeys::from_table(Some(&keys)),
+    )
+    .unwrap()
+}
+
+/// A window on [`keymap`].
+fn window<'a>(
+    cx: &'a mut TestAppContext,
+    unlock: &str,
+) -> (Entity<SheprdWindow>, &'a mut VisualTestContext) {
+    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    view.update(cx, |view, _| view.config.keybindings = keymap(unlock));
     cx.update(|window, cx| {
         window.focus(&view.read(cx).focus.clone(), cx);
         window.draw(cx).clear(cx);
@@ -109,4 +112,42 @@ fn a_key_no_pane_can_receive_is_left_to_the_app(cx: &mut TestAppContext) {
     toggle(&view, cx);
     assert!(!press("cmd-y", cx));
     assert!(on(&view, cx));
+}
+
+#[gpui::test]
+fn it_ends_when_a_reload_removes_its_shortcut(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx, "ctrl-alt-y");
+    toggle(&view, cx);
+    view.update(cx, |view, cx| {
+        view.config.keybindings = keymap("");
+        view.poll_endpoints(cx);
+    });
+    assert!(!on(&view, cx));
+    press("cmd-j", cx);
+    view.read_with(cx, |view, _| {
+        assert!(view.prefix_armed, "the app's keys are back");
+        assert!(view.flash.is_some(), "and it says why");
+    });
+}
+
+#[gpui::test]
+fn it_stays_on_while_a_reload_keeps_a_shortcut(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx, "ctrl-alt-y");
+    toggle(&view, cx);
+    view.update(cx, |view, cx| {
+        view.config.keybindings = keymap("ctrl-alt-u");
+        view.poll_endpoints(cx);
+    });
+    assert!(on(&view, cx));
+    press("ctrl-alt-u", cx);
+    assert!(!on(&view, cx), "the new shortcut ends it");
+}
+
+#[gpui::test]
+fn the_mark_shows_for_as_long_as_the_mode_is_on(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx, "ctrl-alt-y");
+    toggle(&view, cx);
+    view.update(cx, |view, _| view.config.keybindings = keymap(""));
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(cx.debug_bounds("pass-through").is_some());
 }

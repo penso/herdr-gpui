@@ -17,6 +17,7 @@ status-bar-resize-keys = h j k l or arrows resize, Esc ends
 # Pass-through mode, which sends the app's keys to the focused pane. $key is
 # the shortcut that ends it.
 status-bar-pass-through = Pass-through
+status-bar-pass-through-ended = Pass-through ended because its shortcut was removed
 status-bar-pass-through-keys = { $key } unlocks
 # Pass-through mode cannot start without a shortcut to end it.
 status-bar-pass-through-unbound = Bind Toggle Pass-Through to a shortcut first, to have a key that ends it
