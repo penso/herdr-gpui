@@ -139,6 +139,15 @@ and builds without embedded pages return exit 8. See [px0](../crates/sheprd-gpui
 
 ### Hosts
 
+A focus asked for on a connected host the window is not showing, such as
+`herdr --machine Homelab agent focus NAME`, switches the window to that host
+when it moves the host to another tab. The daemon reports nothing when the
+target is already its focused tab, or when the focus only moves between panes
+of one tab, so a script that must end up on the host runs `sheprd host select`
+as well. A focus does not take the window while a dialog is open, or from
+another window already showing the host. A tab or workspace opening on a
+background host does not take it either.
+
 | Command | What it does |
 | --- | --- |
 | `host [list]`, `host select ID` | The window's hosts; show another one |
