@@ -25,6 +25,11 @@ muted until you point at them. **OpenCode** uses the terminal's font, draws
 prompts and open tool calls as tinted blocks behind a bar, folds finished calls
 to one line, and adds a status row under the composer.
 
+Once your prompt scrolls away, every layout pins it over the top of the
+conversation, drawn in that layout's style and cut to two lines. Reading back
+through earlier turns pins the prompt of the turn you are in. Click it to go to
+the prompt.
+
 Select a layout directly with:
 
 ```sh

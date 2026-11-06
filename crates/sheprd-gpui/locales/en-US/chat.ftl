@@ -34,6 +34,7 @@ chat-reconnecting = Reconnecting…
 chat-show-chat = Chat
 chat-jump-to-end = Scroll to the latest message
 chat-jump-waiting = New output below
+chat-pinned-prompt = Go to this prompt
 
 # The composer.
 chat-composer-placeholder = Message the agent — / for commands, Shift-Enter for a new line
