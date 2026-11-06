@@ -29,6 +29,8 @@ mod routes;
 mod stream;
 #[cfg(unix)]
 mod streaming;
+#[cfg(unix)]
+mod term_history;
 mod terminal;
 mod uploads;
 

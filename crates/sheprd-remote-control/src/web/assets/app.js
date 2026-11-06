@@ -397,6 +397,8 @@ async function route(event) {
   app.path = location.pathname;
   delete document.documentElement.dataset.sheet;
   stopStream();
+  term.history = null;
+  term.held = "";
   app.views++;
   // Only the newest navigation may fill the view or open a stream: an
   // older page answering late must not replace the one the URL names.
@@ -542,6 +544,12 @@ function handleEvent(block) {
     const busy = element.matches?.("[data-busy]") || element.querySelector?.("[data-busy]");
     if ((draft && (draft.value || document.activeElement === draft)) || busy) {
       syncComposer(element, html);
+      continue;
+    }
+    // History being read stays still; the live screen waits for its end.
+    if (id === "term-screen" && term.history) {
+      term.held = html;
+      echoScreen();
       continue;
     }
     element.outerHTML = html;
@@ -807,7 +815,21 @@ window.addEventListener("popstate", route);
 // ---- terminal tabs: the screen arrives as patches; what is typed goes to
 // the pane key by key, in Herdr's key syntax, in order ----
 
-const term = { ctrl: false, alt: false, queue: [], sending: false, zoomed: false, echo: [], screenAt: 0 };
+const term = {
+  ctrl: false,
+  alt: false,
+  queue: [],
+  sending: false,
+  zoomed: false,
+  echo: [],
+  screenAt: 0,
+  // null on the live screen, else "loading" or "shown" with the live
+  // screen waiting in `held`.
+  history: null,
+  held: "",
+  historyAt: 0,
+  touchY: 0,
+};
 
 const termPane = () => document.getElementById("term")?.dataset.pane;
 const termInput = () => document.getElementById("term-input");
@@ -903,6 +925,8 @@ function nextInput() {
 }
 
 async function flushInput() {
+  // Typing answers the live screen, so that is what the phone shows.
+  if (term.history) leaveHistory();
   if (term.sending) return;
   term.sending = true;
   while (term.queue.length) {
@@ -1003,8 +1027,86 @@ function fitTerminal() {
     const size = Math.min(13, Math.max(6, (screen.clientWidth - 16) / (columns * 0.61)));
     page.style.setProperty("--term-size", `${size.toFixed(2)}px`);
   }
-  screen.scrollTop = screen.scrollHeight;
+  if (!term.history) screen.scrollTop = screen.scrollHeight;
 }
+
+// ---- terminal history. The stream sends only the visible screen, which
+// changes many times a second; a thousand lines of history go out once, when
+// a swipe or the wheel asks for them, and live screens wait until the view
+// is back at its end.
+
+/// How far a finger moves down the screen before it means scrolling back.
+const HISTORY_SWIPE = 12;
+/// How long after one read a swipe may read again: a screen with no history
+/// to show must not read on every touch move.
+const HISTORY_RETRY = 1000;
+/// How close to the end of the history counts as being there.
+const HISTORY_END = 2;
+
+async function readHistory() {
+  const screen = document.getElementById("term-screen");
+  const pane = termPane();
+  const asked = performance.now();
+  if (!screen || !pane || term.history || asked - term.historyAt < HISTORY_RETRY) return;
+  term.historyAt = asked;
+  term.history = "loading";
+  term.held = screen.outerHTML;
+  // Left, typed into, or asked again meanwhile: this answer is not wanted.
+  const stale = () => term.history !== "loading" || term.historyAt !== asked;
+  try {
+    const response = await api(`/f/term/${encodeURIComponent(pane)}/history`, { signal: app.routing?.signal });
+    const html = await response.text();
+    if (!stale()) showHistory(html);
+  } catch (error) {
+    if (stale()) return;
+    leaveHistory();
+    flash(error.message);
+  }
+}
+
+/// Fills the same element rather than replacing it, so a swipe under way
+/// keeps scrolling. A screen with nothing above it stays live; one that had
+/// no room to scroll moves up a little, so the swipe shows it worked.
+function showHistory(html) {
+  const screen = document.getElementById("term-screen");
+  const fresh = new DOMParser().parseFromString(html, "text/html").getElementById("term-screen");
+  if (!screen || !fresh) return leaveHistory();
+  const below = screen.scrollHeight - screen.clientHeight - screen.scrollTop;
+  screen.innerHTML = fresh.innerHTML;
+  screen.dataset.columns = fresh.dataset.columns;
+  term.history = "shown";
+  fitTerminal();
+  const room = screen.scrollHeight - screen.clientHeight;
+  if (room <= HISTORY_END) return leaveHistory();
+  screen.scrollTop = room - Math.max(below, screen.clientHeight / 3);
+}
+
+/// Back to the live screen: the newest one that arrived, at its end.
+function leaveHistory() {
+  const screen = document.getElementById("term-screen");
+  const held = term.held;
+  term.history = null;
+  term.held = "";
+  if (screen && held) screen.outerHTML = held;
+  fitTerminal();
+}
+
+document.addEventListener("touchstart", (event) => {
+  term.touchY = event.touches[0]?.clientY ?? 0;
+}, { passive: true });
+document.addEventListener("touchmove", (event) => {
+  if (event.touches.length !== 1 || !event.target.closest?.("#term-screen")) return;
+  if (event.touches[0].clientY - term.touchY > HISTORY_SWIPE) readHistory();
+}, { passive: true });
+document.addEventListener("wheel", (event) => {
+  if (event.deltaY < 0 && event.target.closest?.("#term-screen")) readHistory();
+}, { passive: true });
+// Scroll events do not bubble, so this listens on the way down.
+document.addEventListener("scroll", (event) => {
+  if (term.history !== "shown" || event.target.id !== "term-screen") return;
+  const { scrollHeight, clientHeight, scrollTop } = event.target;
+  if (scrollHeight - clientHeight - scrollTop <= HISTORY_END) leaveHistory();
+}, true);
 
 /// A composer holding a draft or focus is not replaced by a live patch,
 /// but it still follows the agent's status from the patch it skipped, so
