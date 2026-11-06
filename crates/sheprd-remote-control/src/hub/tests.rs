@@ -1,6 +1,7 @@
 use super::*;
 use sheprd_client::protocol::ClientShellSnapshot;
 
+mod agent_times;
 mod api_socket;
 mod chat_link;
 mod new_chat;

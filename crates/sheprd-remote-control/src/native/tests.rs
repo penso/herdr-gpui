@@ -5,8 +5,10 @@ use sheprd_client::protocol::AgentStatus;
 
 mod agent_name;
 mod create;
+mod create_start;
 mod fixtures;
 mod hosts;
+mod installed_agents;
 #[cfg(unix)]
 mod live_chat;
 mod messages;
@@ -23,6 +25,7 @@ pub(super) fn layout(endpoint: EndpointId) -> Layout {
     Layout {
         connected: true,
         boot: "b".into(),
+        working: 2,
         workspaces: vec![Workspace {
             id: "w1".into(),
             label: "herdr-gpui".into(),
@@ -53,6 +56,7 @@ pub(super) fn layout(endpoint: EndpointId) -> Layout {
                     status: AgentStatus::Done,
                     pane: "p2".into(),
                     title: Some("Fix the build".into()),
+                    changed_ms: Some(1_770_000_000_000),
                 }),
             }],
         }],

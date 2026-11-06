@@ -234,15 +234,15 @@ and `publish` passes its `RELEASE_NOTES.md` to `gh release create --notes-file`.
 
 ## Verification
 
-Prefer the existing `just` recipes. Run focused tests while iterating, then the
-workspace gates for Rust changes before handoff or a requested commit:
+Prefer the existing `just` recipes. Before handoff, a requested commit, or a
+push, run relevant quick checks expected to finish in under 10 seconds each,
+including compilation time. Keep the overall local validation pass short;
+defer longer tests, full workspace gates (`just ci`), cross-platform lints,
+and release builds to CI jobs. Run longer checks locally only when explicitly
+requested or needed to investigate a specific failure. Report what ran and
+what was deferred to CI.
 
-```sh
-just format
-just ci
-```
-
-- For linking, startup, or packaging changes, also use `just test-build` to build the release executable and exercise its CLI without a desktop.
+- For linking, startup, or packaging changes, rely on CI build and CLI smoke checks; use `just test-build` locally when requested or needed to investigate a failure.
 - The `windows` CI job checks formatting, lints every target and feature, and
   runs workspace tests with default and all features, including headless UI and
   CLI tests, split like `checks` into parallel `default` and `all` legs. The
@@ -255,10 +255,10 @@ just ci
   and requires CI to have passed on the commit. Keep the `cfg(unix)`/`cfg(windows)`
   split honest and say plainly what a platform cannot do instead of stubbing
   behavior that appears to work.
-- A `cfg` gate is only proven on the platform it names. Before handing off a
-  change that touches one, run `just lint-linux` and `just lint-windows` as well
-  as `just ci`: a macOS run cannot see a Linux-only gate, and neither can the
-  Windows cross-check.
+- A `cfg` gate is only proven on the platform it names. For changes that touch
+  one, rely on the corresponding platform CI jobs: a macOS run cannot see a
+  Linux-only gate, and neither can the Windows cross-check. `just lint-linux`
+  and `just lint-windows` are available for local investigation when needed.
 - Documentation-only changes need command/path/link review and `git diff --check`; do not claim a code test run that did not happen.
 - Add deterministic tests for invariants: ordering, cancellation, fragmentation, revision fencing, error paths, geometry, and cleanup. Prefer explicit coordination and bounded waits over timing guesses.
 - Test pure session/CLI/geometry logic without a socket or window where possible. Exercise public behavior with mock peers and headless GPUI tests where integration matters.
@@ -300,15 +300,14 @@ just test-perf
   guidance from the agent harness; add such lines only when the user asks for
   them in the current request.
 - Before creating a PR, review every included commit and the full diff from its base. Include a summary, exact validation commands/results, and remaining manual/native QA.
-- Run `just ci` on the exact commit before creating a PR or pushing to one, so
-  failures surface locally instead of minutes later in CI. `just setup-ci`
-  installs the tools it and the other CI-equivalent recipes need. Fix every
-  failure first; do not open or update a PR on a red or skipped run.
-- After a green run, create or update a single PR comment saying `just ci`
-  ran locally and passed: the commit SHA, the platform (for example macOS
-  arm64), and any extra recipes run (`just release-check`, `just lint-linux`,
-  `just lint-windows`). Edit that comment on later pushes rather than adding
-  a new one, and never post it for a run that failed or did not happen.
+- Before creating a PR or pushing to one, run the quick local checks described
+  above and fix any failures they expose. Full local CI is not a prerequisite
+  for opening or updating a PR; let CI jobs run the longer checks and address
+  their failures before merging.
+- Record the exact local checks and results in the PR's QA checklist, and mark
+  checks deferred to CI as pending until their results are available. No
+  separate local `just ci` success comment is required. Never claim a check
+  passed when it failed or did not run.
 - Include screenshots in any PR that changes something visible: before and
   after images of the real native window, showing the changed area. Add light
   and dark variants when colors or theming change, and a narrow window when

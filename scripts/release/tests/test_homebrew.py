@@ -22,9 +22,9 @@ class HomebrewTests(unittest.TestCase):
             "legacy-semver": "0.1.0", "legacy-leading-zero": "01.2.3",
             "invalid-existing": "garbage",
         }
-        successes = ("publish", "unchanged", "upgrade-counter", "upgrade-date",
+        successes = ("publish", "legacy-tap", "unchanged", "upgrade-counter", "upgrade-date",
                      "upgrade-old-date", "upgrade-numeric", "legacy-semver")
-        for case in ("publish", "unchanged", "missing-key", "bad-version", "symlink",
+        for case in ("publish", "legacy-tap", "unknown-tap", "wrong-cask", "unchanged", "missing-key", "bad-version", "symlink",
                      "curl", "clone", "push", "bad-meta", "directory", "diff-error",
                      "version-mismatch", "missing-cask", "changed-checksum", "changed-content",
                      "missing-version", "duplicate-version", "ruby-version", *existing_versions):
@@ -34,7 +34,10 @@ class HomebrewTests(unittest.TestCase):
                 tools.mkdir()
                 temporary = work / "temporary"
                 temporary.mkdir()
-                env = {"PATH": str(tools) + os.pathsep + os.environ["PATH"],
+                tap = "penso/homebrew-tap" if case == "legacy-tap" else "sheprd-labs/homebrew-tap"
+                token = "herdr-gpui" if case == "legacy-tap" else "sheprd"
+                path = "Casks/" + token + ".rb"
+                env = {"PATH": str(tools) + os.pathsep + os.environ["PATH"], "TAP": tap,
                        "HOME": directory, "GIT_CONFIG_NOSYSTEM": "1",
                        "RUNNER_TEMP": str(temporary), "CASE": case,
                        "HOMEBREW_TAP_SSH_KEY": "dummy-private-key",
@@ -50,7 +53,7 @@ class HomebrewTests(unittest.TestCase):
                 git("init", "--initial-branch=trunk", seed)
                 (seed / "README.md").write_text("Preserve this file\n")
                 cask = work / "rendered.rb"
-                cask.write_text('cask "herdr-gpui" do\n  version "20260920.3"\n  sha256 "' + "a" * 64 + '"\nend\n')
+                cask.write_text('cask "' + token + '" do\n  version "20260920.3"\n  sha256 "' + "a" * 64 + '"\nend\n')
                 if case in existing_versions or case in (
                         "unchanged", "changed-checksum", "changed-content", "missing-version",
                         "duplicate-version", "ruby-version"):
@@ -68,15 +71,17 @@ class HomebrewTests(unittest.TestCase):
                         content += '  version "20260920.3"\n'
                     elif case == "ruby-version":
                         content = content.replace('"20260920.3"', '`touch "' + str(work / "executed") + '"`')
-                    (seed / "Casks/herdr-gpui.rb").write_text(content)
+                    (seed / path).write_text(content)
                 version = "20260920.10" if case == "upgrade-numeric" else "20260920.3"
                 if case == "upgrade-numeric":
                     cask.write_text(cask.read_text().replace('"20260920.3"', '"20260920.10"'))
                 if case == "symlink":
                     (seed / "Casks").symlink_to(".")
                 if case == "directory":
-                    (seed / "Casks/herdr-gpui.rb").mkdir(parents=True)
-                    (seed / "Casks/herdr-gpui.rb/keep").touch()
+                    (seed / path).mkdir(parents=True)
+                    (seed / path / "keep").touch()
+                if case == "wrong-cask":
+                    cask.write_text(cask.read_text().replace('"sheprd"', '"herdr-gpui"'))
                 if case == "version-mismatch":
                     cask.write_text('  version "20260920.9"\n')
                 if case == "missing-cask":
@@ -109,7 +114,7 @@ if "clone" in args:
                    "BatchMode=yes", "-F /dev/null", "GlobalKnownHostsFile=/dev/null"]:
         assert option in ssh
     assert (temp / "known_hosts").read_text() == "github.com ssh-ed25519 dummy\\n"
-    assert args[-2] == "git@github.com:penso/homebrew-tap.git"
+    assert args[-2] == "git@github.com:" + os.environ["TAP"] + ".git"
     if case == "clone": sys.exit(1)
     args[-2] = str(work / "remote.git")
 if "push" in args:
@@ -126,11 +131,16 @@ sys.exit(subprocess.call([os.environ["REAL_GIT"], *args]))
                 if case == "missing-key":
                     del env["HOMEBREW_TAP_SSH_KEY"]
                 result = subprocess.run(
-                    ["bash", str(SCRIPT), "020260920.3" if case == "bad-version" else version, str(cask)],
+                    ["bash", str(SCRIPT), "020260920.3" if case == "bad-version" else version, str(cask),
+                     "someone/homebrew-tap" if case == "unknown-tap" else tap],
                     env=env, text=True, capture_output=True, timeout=30)
                 self.assertEqual(result.returncode == 0, case in successes, result.stderr)
                 if case in ("old-job-rerun", "lower-date", "lower-counter", "large-component"):
                     self.assertIn("Refusing Homebrew downgrade", result.stderr)
+                if case == "wrong-cask":
+                    self.assertIn("does not belong to this tap", result.stderr)
+                if case == "unknown-tap":
+                    self.assertIn("Unknown Homebrew tap repository", result.stderr)
                 if case == "legacy-semver":
                     self.assertIn("Replacing pre-calendar cask version 0.1.0", result.stdout)
                 if case in ("changed-checksum", "changed-content"):
@@ -144,6 +154,6 @@ sys.exit(subprocess.call([os.environ["REAL_GIT"], *args]))
                 self.assertEqual(before == after, case not in successes or case == "unchanged")
                 if case in successes and case != "unchanged":
                     self.assertEqual(git("--git-dir", remote, "diff-tree", "--no-commit-id",
-                                         "--name-only", "-r", "HEAD").strip(), "Casks/herdr-gpui.rb")
+                                         "--name-only", "-r", "HEAD").strip(), path)
                     self.assertEqual(git("--git-dir", remote, "log", "-1", "--format=%s").strip(),
-                                     "chore: release herdr-gpui " + version)
+                                     "chore: release " + token + " " + version)

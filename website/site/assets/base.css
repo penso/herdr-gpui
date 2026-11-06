@@ -17,8 +17,6 @@ a { color: inherit; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* "Illustration" tag for hand-drawn UI that is not a real screenshot. */
-.tag-illustration { display: inline-block; font: 600 10.5px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; padding: .35em .6em; border-radius: 999px; background: rgba(214, 95, 42, .14); color: #b8501f; border: 1px dashed rgba(214, 95, 42, .55); }
-.tag-screenshot { display: inline-block; font: 600 10.5px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; padding: .35em .6em; border-radius: 999px; background: rgba(60, 140, 90, .14); color: #2f7a4b; }
 
 /* Feature status badges shared by every directory. */
 .st { display: inline-block; font: 600 10.5px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .04em; padding: .35em .55em; border-radius: 4px; white-space: nowrap; }

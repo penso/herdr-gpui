@@ -26,6 +26,9 @@ pub(crate) struct Home {
     /// older servers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) load: Option<Load>,
+    /// Agents working now, counted one by one; older servers leave it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) working: Option<usize>,
     pub(crate) workspaces: Vec<Workspace>,
 }
 
@@ -109,6 +112,9 @@ pub(crate) struct TerminalAgent {
     /// What it works on, from its terminal title.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) title: Option<String>,
+    /// When the daemon saw it last change state; unknown until it does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) changed_ms: Option<u64>,
 }
 
 /// A chat's whole transcript and the stream position it includes.
@@ -272,6 +278,7 @@ fn terminal(terminal: &hub::Terminal) -> Terminal {
             status: agent.status,
             pane: Some(agent.pane.clone()),
             title: agent.title.clone(),
+            changed_ms: agent.changed_ms,
         }),
     }
 }
@@ -328,6 +335,7 @@ impl Home {
             connected: layout.connected,
             waiting,
             load,
+            working: Some(layout.working),
             workspaces,
         }
     }

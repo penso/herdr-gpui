@@ -48,6 +48,8 @@ struct TerminalItem: Identifiable, Hashable {
     var agent: Home.TerminalRow.DetectedAgent? { terminal.agent }
     var title: String { agent?.title ?? terminal.label }
     var needsYou: Bool { agent?.status == .blocked }
+    /// When the computer saw its agent last change state.
+    var changed: Date? { agent?.changedMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } }
     var working: Bool { agent?.status == .working }
 
     /// Where a list opens it: the agent's pane, else the focused one.

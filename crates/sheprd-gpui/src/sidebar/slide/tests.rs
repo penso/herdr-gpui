@@ -5,22 +5,26 @@ use gpui::TestAppContext;
 #[gpui::test]
 fn hiding_keeps_the_expanded_layout_until_the_sidebar_has_slid_off(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(fixture_window);
-    let tick = |cx: &mut gpui::VisualTestContext| {
+    // The slide lasts 150ms, so a loaded machine outruns the real clock: each
+    // step samples it at an instant taken before the toggle, where it has
+    // only just begun.
+    let tick = |cx: &mut gpui::VisualTestContext, at| {
         view.update(cx, |view, _| {
             let visible = view.sidebar_visible;
-            view.sidebar_slide.advance(visible, motion::now());
+            view.sidebar_slide.advance(visible, at);
         });
     };
+    let hidden = motion::now();
     view.update(cx, |view, _| {
         view.sidebar_slide.live = true;
         view.toggle_sidebar();
         assert!(!view.sidebar_visible);
     });
-    tick(cx);
+    tick(cx, hidden);
     view.read_with(cx, |view, _| {
         assert!(view.sidebar_slide.closing());
         assert_eq!(view.chrome_sidebar_mode(), SidebarMode::Expanded);
-        let shown = view.sidebar_slide_shown().expect("it slides");
+        let shown = view.sidebar_slide_shown_at(hidden).expect("it slides");
         assert!(shown > 0.9, "{shown}");
     });
 
@@ -28,7 +32,7 @@ fn hiding_keeps_the_expanded_layout_until_the_sidebar_has_slid_off(cx: &mut Test
     view.update(cx, |view, _| {
         view.sidebar_slide.toggle.set(false, motion::now(), true);
     });
-    tick(cx);
+    tick(cx, motion::now());
     view.read_with(cx, |view, _| {
         assert!(!view.sidebar_slide.closing());
         assert_ne!(view.chrome_sidebar_mode(), SidebarMode::Expanded);
@@ -36,12 +40,13 @@ fn hiding_keeps_the_expanded_layout_until_the_sidebar_has_slid_off(cx: &mut Test
     });
 
     // Showing it lays it out at once and slides it in.
+    let shown_at = motion::now();
     view.update(cx, |view, _| view.toggle_sidebar());
-    tick(cx);
+    tick(cx, shown_at);
     view.read_with(cx, |view, _| {
         assert!(!view.sidebar_slide.closing());
         assert_eq!(view.chrome_sidebar_mode(), SidebarMode::Expanded);
-        let shown = view.sidebar_slide_shown().expect("it slides in");
+        let shown = view.sidebar_slide_shown_at(shown_at).expect("it slides in");
         assert!(shown < 0.1, "{shown}");
     });
 }

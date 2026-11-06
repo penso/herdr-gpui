@@ -59,6 +59,8 @@ class WebsiteTests(unittest.TestCase):
                         target = WEBSITE / parsed.path.lstrip("/")
                     else:
                         target = path.parent / parsed.path
+                    if target.is_dir():
+                        target = target / "index.html"
                     self.assertTrue(target.resolve().is_relative_to(WEBSITE), target)
                     self.assertTrue(target.is_file(), target)
                     if parsed.fragment:
@@ -81,6 +83,49 @@ class WebsiteTests(unittest.TestCase):
         for leftover in ("concept-ribbon", "Back to gallery", "../", "(future)"):
             with self.subTest(leftover=leftover):
                 self.assertNotIn(leftover, html)
+
+    def test_page_has_no_media_label_pills(self):
+        html = (WEBSITE / "index.html").read_text()
+        css = (WEBSITE / "assets/base.css").read_text() + (WEBSITE / "assets/site.css").read_text()
+        for leftover in ("tag-illustration", "tag-screenshot", "fig-tag", "lanes-tag"):
+            with self.subTest(leftover=leftover):
+                self.assertNotIn(leftover, html)
+                self.assertNotIn(leftover, css)
+        self.assertNotIn("Real screenshot", html)
+
+    def test_masthead_links_no_page_sections(self):
+        html = (WEBSITE / "index.html").read_text()
+        nav = re.search(r"<nav .*?</nav>", html, re.S).group(0)
+        self.assertEqual(re.findall(r'href="(#[^"]*)"', nav), ["#get"])
+
+    def test_masthead_shows_the_repository_and_its_stars(self):
+        html = (WEBSITE / "index.html").read_text()
+        nav = re.search(r"<nav .*?</nav>", html, re.S).group(0)
+        self.assertIn('<a class="repo" href="https://github.com/sheprd-labs/sheprd">', nav)
+        # Hidden until the count arrives, so a failed request leaves a plain link.
+        self.assertIn('id="stars" hidden', nav)
+        self.assertIn('id="stars-n"', nav)
+        self.assertIn("stargazers_count", (WEBSITE / "assets/site.js").read_text())
+
+    def test_ios_app_links_to_the_public_testflight(self):
+        html = (WEBSITE / "index.html").read_text()
+        self.assertGreaterEqual(html.count('href="/testflight/"'), 3)
+        self.assertNotIn("No public link", html)
+        self.assertNotIn("no public link", html)
+        page = (WEBSITE / "testflight/index.html").read_text()
+        self.assertEqual(page.count('href="https://testflight.apple.com/join/6nZes3NY"'), 1)
+
+    def test_the_testflight_invite_lives_only_on_its_page(self):
+        # A new invite link is changed in one file; every other link goes there.
+        invite = "testflight.apple.com/join/"
+        for path in WEBSITE.rglob("*"):
+            if path.is_file() and path.suffix in (".html", ".js", ".txt"):
+                with self.subTest(file=str(path.relative_to(WEBSITE))):
+                    count = path.read_text().count(invite)
+                    self.assertEqual(count, 1 if path == WEBSITE / "testflight/index.html" else 0)
+        app = (ROOT / "crates/sheprd-gpui/src/remote/dialog.rs").read_text()
+        self.assertIn('"https://sheprd.org/testflight/"', app)
+        self.assertIn("https://sheprd.org/testflight/", (ROOT / "README.md").read_text())
 
     def test_hidden_attribute_beats_author_display_rules(self):
         for base in (WEBSITE, ROOT / "design/sheprd-website"):
@@ -142,7 +187,7 @@ class WebsiteTests(unittest.TestCase):
         script = (WEBSITE / "assets/site.js").read_text()
         self.assertIn('id="hero-install"', html)
         self.assertIn('href="#get"', html)
-        for command in ("brew install penso/tap/herdr-gpui",
+        for command in ("brew install sheprd-labs/tap/sheprd",
                         "curl -fsSL https://sheprd.org/install.sh | sh",
                         "irm https://sheprd.org/install.ps1 | iex"):
             with self.subTest(command=command):

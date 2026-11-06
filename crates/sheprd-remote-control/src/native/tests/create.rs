@@ -145,6 +145,7 @@ fn the_forms_json_matches_the_fixtures() {
     fixtures::check(
         "new",
         &NewOptions::new(
+            sheprd_chat_protocol::Agent::ALL,
             vec!["/Users/me/code/herdr-gpui".into()],
             vec![(
                 "/Users/me/code".into(),
@@ -160,6 +161,7 @@ fn the_forms_json_matches_the_fixtures() {
         &CreatedWorkspace {
             pane: Some("p7".into()),
             prompted: true,
+            started: true,
             workspace: "w3".into(),
         },
     );

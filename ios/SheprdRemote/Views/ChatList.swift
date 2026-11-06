@@ -1,23 +1,23 @@
 import SheprdRemoteCore
 import SwiftUI
 
-/// Every chat across computers grouped by state: what needs you, answered
-/// in place; what is working; the rest. Agents run in terminal tabs join
-/// them, so Home lists every agent the computers run. Home shows it.
+/// Every chat across computers in the order the person chose, a question
+/// answered in place. Agents run in terminal tabs join them, so Home lists
+/// every agent the computers run. Home shows it.
 struct ChatList: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(HomeRow.sortKey) private var sort = AgentSort.priority
     /// The chat a long press asked to close, waiting for confirmation.
     @State private var closing: ChatItem?
     @State private var problem: String?
 
     var body: some View {
-        let items = model.fleet.chatItems
-        let agents = model.fleet.agentTerminals
+        let sections = HomeRow.sections(sort, chats: model.fleet.chatItems, agents: model.fleet.agentTerminals)
         List {
             UnpairedCards()
-            section("Needs you", items.filter(\.needsYou), agents.filter(\.needsYou))
-            section("Working", items.filter(\.working), agents.filter(\.working))
-            section("Recent", items.filter { !$0.needsYou && !$0.working }, agents.filter { !$0.needsYou && !$0.working })
+            ForEach(sections) { section in
+                Section(section.title) { ForEach(section.items) { row($0) } }
+            }
         }
         .refreshable { model.fleet.networkChanged() }
         .confirmationDialog(
@@ -37,30 +37,30 @@ struct ChatList: View {
     }
 
     @ViewBuilder
-    private func section(_ title: String, _ items: [ChatItem], _ agents: [TerminalItem]) -> some View {
-        if !items.isEmpty || !agents.isEmpty {
-            Section(title) {
-                ForEach(items) { item in
-                    Group {
-                        if let question = item.question {
-                            // The card draws its own background and border.
-                            AnswerCard(item: item, question: question)
-                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                        } else {
-                            NavigationLink(value: Route.chat(item.key, title: item.chat.title)) { ChatRowLabel(item: item) }
-                        }
-                    }
-                    .contextMenu {
-                        Button("Close Chat", systemImage: "xmark.circle", role: .destructive) { closing = item }
+    private func row(_ row: HomeRow) -> some View {
+        // A section names the workspace when they are grouped by it.
+        let grouped = sort == .workspace
+        switch row {
+        case let .chat(item):
+            Group {
+                if let question = item.question {
+                    // The card draws its own background and border.
+                    AnswerCard(item: item, question: question)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } else {
+                    NavigationLink(value: Route.chat(item.key, title: item.chat.title)) {
+                        ChatRowLabel(item: item, showsComputer: !grouped, showsWorkspace: !grouped)
                     }
                 }
-                ForEach(agents) { item in
-                    if let route = item.route {
-                        NavigationLink(value: route) { AgentTerminalRowLabel(item: item) }
-                    }
-                }
+            }
+            .contextMenu {
+                Button("Close Chat", systemImage: "xmark.circle", role: .destructive) { closing = item }
+            }
+        case let .agent(item):
+            if let route = item.route {
+                NavigationLink(value: route) { AgentTerminalRowLabel(item: item, showsComputer: !grouped, showsWorkspace: !grouped) }
             }
         }
     }

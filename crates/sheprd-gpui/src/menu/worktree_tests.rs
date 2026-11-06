@@ -20,6 +20,7 @@ mod dialog_entry;
 mod field_focus;
 mod github_listings;
 mod github_sign_in_hint;
+mod gitlab_issues;
 mod local_listings;
 mod name_field;
 mod name_label_language;
@@ -74,6 +75,26 @@ fn items() -> Vec<Item> {
 
 /// Open the new worktree dialog on the repository workspace, already on `tab`
 /// and with a listing in hand, so the tabs never reach GitHub or the disk.
+/// Waits, at most five seconds, for the dialog's listing worker to answer.
+fn settle_lookup(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) {
+    for _ in 0..500 {
+        let loading = cx.update(|_, cx| {
+            view.update(cx, |view, cx| {
+                view.poll_worktree_source(cx);
+                view.menu
+                    .worktree
+                    .as_ref()
+                    .is_some_and(|source| source.lookup.loading)
+            })
+        });
+        if !loading {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the listing worker did not answer");
+}
+
 fn open_dialog(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext, connected: bool, tab: Tab) {
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {

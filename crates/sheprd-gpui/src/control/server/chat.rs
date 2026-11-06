@@ -48,6 +48,23 @@ pub(super) fn serve(call: Call<ChatOp>, cx: &mut App) -> Response {
                 }
             })
         }
+        ChatOp::Convert { pane } => {
+            let pane = pane.or_else(|| caller.pane_id.clone());
+            in_window(&caller, cx, move |view, _, cx| {
+                match view.convert_to_chat(pane.as_deref()) {
+                    Ok((pane_id, agent)) => {
+                        cx.notify();
+                        Response::Chat {
+                            reply: Reply::Converting {
+                                agent: agent.name().into(),
+                                pane_id,
+                            },
+                        }
+                    }
+                    Err(error) => Response::error(convert_code(&error), error.to_string()),
+                }
+            })
+        }
         ChatOp::View { switch, pane } => in_window(&caller, cx, |view, window, cx| {
             // A herdr-core pane is nobody's Herdr pane: the one holding the
             // keyboard comes before Herdr's focused pane.
@@ -92,6 +109,34 @@ fn start_code(error: &crate::chat::StartError) -> ErrorCode {
         | StartError::Request(_)
         | StartError::Response
         | StartError::Timeout => ErrorCode::Failed,
+    }
+}
+
+/// How an agent that did not move is reported to the caller.
+fn convert_code(error: &crate::chat::ConvertError) -> ErrorCode {
+    use crate::chat::ConvertError;
+    match error {
+        ConvertError::Program(error) => start_code(error),
+        ConvertError::Disabled
+        | ConvertError::HostProgram(_)
+        | ConvertError::Line
+        | ConvertError::NoSession(_)
+        | ConvertError::NotReachable
+        | ConvertError::Unknown(_)
+        | ConvertError::Unsupported(_) => ErrorCode::Unsupported,
+        ConvertError::AlreadyChat | ConvertError::NoAgent | ConvertError::NotRunning(_) => {
+            ErrorCode::NotFound
+        }
+        ConvertError::AlreadyConverting | ConvertError::Busy(_) => ErrorCode::Busy,
+        ConvertError::Answer(_)
+        | ConvertError::Existing(_)
+        | ConvertError::Moved
+        | ConvertError::NotConnected
+        | ConvertError::Stale
+        | ConvertError::StillRunning(_)
+        | ConvertError::Stopped
+        | ConvertError::Type(_)
+        | ConvertError::Worker(_) => ErrorCode::Failed,
     }
 }
 

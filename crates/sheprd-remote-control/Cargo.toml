@@ -20,6 +20,7 @@ server = [
     "dep:futures-lite",
     "dep:base64",
     "dep:getrandom",
+    "dep:gix",
     "dep:hkdf",
     "dep:if-addrs",
     "dep:maud",
@@ -30,6 +31,7 @@ server = [
     "dep:rustls",
     "dep:sheprd-apns",
     "dep:sha2",
+    "dep:sheprd-terminal",
     "dep:socket2",
     "dep:sysinfo",
     "dep:time",
@@ -56,6 +58,8 @@ qrcode.workspace              = true
 rustix                        = { features = ["system"], workspace = true }
 serde.workspace               = true
 serde_json.workspace          = true
+# `enroll` replaces a host's Sheprd settings whole, as Sheprd does.
+tempfile.workspace            = true
 thiserror.workspace           = true
 # A host's own `[remote]` table, read by `enroll`.
 toml.workspace                = true
@@ -70,6 +74,7 @@ axum           = { optional = true, workspace = true }
 base64         = { optional = true, workspace = true }
 futures-lite   = { optional = true, workspace = true }
 getrandom      = { optional = true, workspace = true }
+gix            = { optional = true, workspace = true }
 hkdf           = { optional = true, workspace = true }
 if-addrs       = { optional = true, workspace = true }
 maud           = { optional = true, workspace = true }
@@ -80,6 +85,8 @@ pulldown-cmark = { optional = true, workspace = true }
 rcgen          = { optional = true, workspace = true }
 rustls         = { optional = true, workspace = true }
 sha2           = { optional = true, workspace = true }
+sheprd-core-client.workspace = true
+sheprd-terminal = { optional = true, workspace = true }
 socket2        = { optional = true, workspace = true }
 # This computer's CPU and memory, shown above its workspaces on a phone.
 sysinfo        = { optional = true, workspace = true }
@@ -98,6 +105,5 @@ x509-parser    = { optional = true, workspace = true }
 futures-util.workspace      = true
 p256.workspace              = true
 roxmltree.workspace         = true
-tempfile.workspace          = true
 tokio-tungstenite.workspace = true
 tower.workspace             = true

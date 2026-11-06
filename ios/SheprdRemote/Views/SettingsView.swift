@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var forgetting: Computer?
     @State private var editMode = EditMode.inactive
     @AppStorage(AppLock.setting, store: AppLock.store) private var requireFaceID = false
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
     @AppStorage(ActivityTokens.genericSetting) private var genericActivities = false
 
     var body: some View {
@@ -82,6 +83,17 @@ struct SettingsView: View {
                 Text("Generic shows the agent and what it is doing, without the chat's name, steps, or questions. A computer can also choose this in Sheprd's Remote control settings.")
             }
             Section {
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("Terminals stay dark either way.")
+            }
+            Section {
                 Toggle("Require Face ID", isOn: Binding(
                     get: { requireFaceID },
                     set: { on in
@@ -98,7 +110,7 @@ struct SettingsView: View {
             } header: {
                 Text("Privacy")
             } footer: {
-                Text("Asks for Face ID when the app opens and hides it in the app switcher. \"Always\" answers and auto-accept ask either way.")
+                Text("Asks for Face ID when the app opens and hides it in the app switcher. \"Always\" answers ask either way.")
             }
             Section("Storage") {
                 LabeledContent("Cached chats and lists", value: ByteCountFormatter.string(fromByteCount: Int64(cacheSize), countStyle: .file))

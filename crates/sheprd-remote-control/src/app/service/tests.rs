@@ -13,6 +13,7 @@ fn plan() -> Plan {
         },
         herdr_socket: None,
         chat_dir: None,
+        core_endpoint: Default::default(),
     }
 }
 
@@ -499,3 +500,7 @@ fn only_generic_live_activities_change_the_daemon_arguments() {
     let flag = words.iter().position(|word| *word == "--live-activities");
     assert_eq!(flag.map(|at| words[at + 1]), Some("generic"));
 }
+
+mod core_endpoint;
+
+mod core_resolution;

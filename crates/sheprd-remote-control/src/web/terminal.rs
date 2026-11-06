@@ -1,8 +1,10 @@
 //! Terminal tabs: the page for one pane, its screen as the stream sends it,
 //! and what the phone types or asks of Herdr. Everything goes through
 //! Herdr's public API, which neither focuses nor resizes anything, so a
-//! phone watching or typing leaves the desktop's layout alone. Only panes
-//! of the layout's terminal tabs and chats are reachable.
+//! phone watching or typing leaves the desktop's layout alone. A Herdr 2
+//! pane is watched as an observer, and typing into one takes its driver's
+//! role at its current size. Only panes of the layout's terminal tabs and
+//! chats are reachable.
 
 use super::{ApiError, Device, Shared, render, render::now_ms};
 use crate::hub::{ApiMethod, Layout};
@@ -18,6 +20,9 @@ use serde_json::{Value, json};
 const MAX_KEYS: usize = 64;
 /// The longest paste one request sends.
 const MAX_TEXT: usize = 64 * 1024;
+
+/// The lines of history one read asks for, the most Herdr gives.
+const HISTORY_LINES: u32 = 1000;
 
 /// Key names Herdr's `pane.send_keys` reads besides single characters.
 const NAMED_KEYS: &[&str] = &[
@@ -95,6 +100,33 @@ pub(super) async fn fragment(
     Ok(Html(
         render::terminal(workspace, terminal, row, &screen).into_string(),
     ))
+}
+
+/// The pane's history down to its last line, for the phone to scroll. Asked
+/// for when the phone scrolls back rather than streamed with the screen: it
+/// is far larger, and the stream resends what it follows on every change.
+pub(super) async fn history(
+    State(state): State<Shared>,
+    _device: Device,
+    Path(pane): Path<String>,
+) -> Result<Html<String>, ApiError> {
+    // Checked before reading, so a chat's pane is never read.
+    known(&state.hub.layout(), &pane)?;
+    let read = state
+        .hub
+        .call(
+            ApiMethod::PaneRead,
+            json!({
+                "pane_id": pane,
+                "source": "recent",
+                "lines": HISTORY_LINES,
+                "format": "ansi",
+            }),
+        )
+        .await?;
+    let text = read["read"]["text"].as_str().unwrap_or_default();
+    let screen = render::screen(crate::ansi::tail(text));
+    Ok(Html(render::terminal_screen(&screen).into_string()))
 }
 
 #[derive(Deserialize)]
@@ -274,8 +306,18 @@ pub(super) async fn action(
             })
             .ok_or(ApiError::NotFound)?
     };
-    let (method, params) = action_call(request.action, &pane, &tab, &workspace);
-    let result = state.hub.call(method, params).await?;
+    let core_tab = if request.action == Action::NewTab {
+        state.hub.new_core_tab(&workspace).await?
+    } else {
+        None
+    };
+    let result = match core_tab {
+        Some(result) => result,
+        None => {
+            let (method, params) = action_call(request.action, &pane, &tab, &workspace);
+            state.hub.call(method, params).await?
+        }
+    };
     let created = result["pane"]["pane_id"]
         .as_str()
         .or_else(|| result["root_pane"]["pane_id"].as_str())

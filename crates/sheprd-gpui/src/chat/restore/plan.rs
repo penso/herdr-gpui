@@ -326,10 +326,19 @@ pub(in crate::chat) fn line(program: &Path, record: &restore::Record) -> Option<
         words.push("--acp");
     }
     words.push(record.agent.name());
-    if !restore::session_id_is_plain(&record.session)
-        || words
-            .iter()
-            .any(|word| word.contains('\'') || word.chars().any(char::is_control))
+    if !restore::session_id_is_plain(&record.session) {
+        return None;
+    }
+    quoted_line(&words)
+}
+
+/// The line that runs `words`, the program first, through `sh`, each as its
+/// own single-quoted word; `None` when one holds a quote or a control
+/// character. See [`line`].
+pub(in crate::chat) fn quoted_line(words: &[&str]) -> Option<String> {
+    if words
+        .iter()
+        .any(|word| word.contains('\'') || word.chars().any(char::is_control))
     {
         return None;
     }
