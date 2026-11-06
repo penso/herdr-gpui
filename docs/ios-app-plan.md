@@ -135,7 +135,8 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   "fingerprint": "64 uppercase hex",
   "connected": true,
   "waiting": 1,
-  "load": {"cpu": 47, "memory": 67},
+  "load": {"cores": 10, "cpu": 47, "load5_tenths": 42, "memory": 67},
+  "working": 2,
   "workspaces": [{
     "id": "w1", "label": "sheprd", "branch": "main", "cwd": "/Users/me/code/sheprd",
     "worktree": {"key": "/Users/me/code/sheprd/.git", "label": "sheprd", "is_linked_worktree": false},
@@ -283,13 +284,25 @@ app learns the pane it should open:
 - `GET /api/v2/new` answers what the forms offer: `{"agents": [{"id":
   "claude", "name": "Claude"}], "recent": ["/Users/me/code/sheprd"],
   "roots": [{"path": "/Users/me/code", "folders": ["/Users/me/code/a"]}]}`.
-  Agents come in Herdr's order; `id` is what a request names.
-- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?}`
-  and answers `{"workspace": "w3", "pane": "p7", "prompted": true}`. The
+  Agents come in Herdr's order, only those `sheprd-acp agents` finds on
+  this computer (all of them if it finds none or cannot run); `id` is
+  what a request names.
+- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?,
+  "start"?}` and answers `{"workspace": "w3", "pane": "p7", "prompted":
+  true, "started": true}`. The
   folder must be one `new` offers, and `branch`, when not blank, opens a
   worktree.
-- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?}`
-  and answers `{"pane": "p7", "prompted": true}`.
+- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?,
+  "start"?}` and answers `{"pane": "p7", "prompted": true, "started":
+  true}`.
+- `start` is what the chat begins with, as last picked on the phone:
+  `{"mode"?, "option"?, "auto_accept"?}`. `mode` is the mode's id, or the
+  choice's when `option` names the agent's mode setting. It goes before the
+  first prompt, asked again for up to 10 s while the chat's connection and
+  session come up, and
+  counts once the transcript shows it, since the agent may still refuse a
+  request it was sent. `started` is false otherwise: the prompt is then
+  held back, and a chat without its mode does not turn on auto-accept.
 - Both wait up to 10 s for the chat's program to report in, then send the
   first prompt if it is not blank. `pane` is `null` when the chat was not
   listed in time; `prompted` is false when there was no prompt or the
@@ -707,11 +720,13 @@ Round 2 picks (2026-10-28):
   workspace to chats and terminals, with CPU and counts on each computer
   row and New chat inside each workspace.
 - **New workspace A**: one form sheet: computer, project (opens the
-  searchable folder list), new worktree with its branch, an agent grid,
-  and an optional first prompt; Create in the toolbar.
+  searchable folder list), new worktree with a proposed branch, an agent grid,
+  and an optional first prompt; Create in the toolbar. It starts on the
+  computer last looked at, and Least busy picks the one with the most
+  room, ranked like the desktop's dispatch: spare cores, memory, working
+  agents, and whether the computer has the project's repository.
 - **Session sheet C**: cards: a large context ring with model, tokens, cost,
-  and tok/s; mode tiles 2x2; an effort slider; auto-accept as a red card
-  that asks for Face ID.
+  and tok/s; mode tiles 2x2; an effort slider; auto-accept as a red card.
 - **Terminal A**: full bleed with the two key rows docked; paste and the
   action sheet in the header.
 - **Settings A**: one grouped list: computers, notifications (encrypted,
@@ -729,10 +744,15 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
   name, and + for a new worktree of it). Rows show the most pressing
   agent's mark, the checkout's branch or the worktree's name, its agent
   and terminal counts, and the pull request's number in its tone.
+- Home sorts its agents by a menu at the top left, newest first in each
+  section: Priority (the desktop's status order), Recent, or Workspace.
 - A workspace opens on its own screen: branch, pull request, and place on
-  top, its tabs (chats, agents in terminals, terminals) below, and a glass
-  row docked at the bottom that starts a terminal or an agent with one
-  tap; a long press on an agent opens the form with a first prompt.
+  top, its tabs (chats, agents in terminals, terminals) below, and under
+  them large buttons that start a terminal or the agent last started
+  with one tap, with the other agents folded below them; a long press on an agent opens the form with a first prompt. A
+  chat's + starts a terminal or another chat in its workspace. A chat or
+  terminal opened from Home has a button to its workspace, and Back from
+  there returns to Home.
 - GPU use is not sent yet: the desktop's GPU reader lives in Sheprd, and
   sharing it with the daemon means moving it to a crate both can use.
 
@@ -741,7 +761,7 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
 | Home: needs-you strip, computers > workspaces > tabs, status marks, ⊕ new chat, collapse | `List` with sections per computer. Swipe actions (mute, close tab), context menus (new chat here, open on board), status marks from `look`, pull to refresh, search with `.searchable` |
 | Attention board | The same three groups. Inline Allow once and Deny with haptics, matched-geometry transition into the chat |
 | Chat focus layout: latest turn, step timeline, folded earlier turns, markdown, tool calls, diffs, queued prompts | `swift-markdown` into native blocks. Code blocks scroll sideways with Copy. Diffs show added and removed lines. Tool rows use SF Symbols (borrowed from Moltis). Text appended to the streaming answer is rendered without a reflow jump. Text is selectable, and long-press copies a block. |
-| Header: title, status, context ring, session line, session sheet | Toolbar title menu that opens a sheet with detents. Effort is a segmented control, the mode list shows descriptions, and auto-accept asks for confirmation (Face ID optional) |
+| Header: title, status, context ring, session line, session sheet | Toolbar title menu that opens a sheet with detents. Effort is a segmented control, the mode list shows descriptions, and auto-accept is a red card |
 | Questions bottom sheet | `.sheet` at a medium detent that opens by itself. Full-width option buttons, with "always" options set apart |
 | Composer: send and stop, photos, pasted screenshots, `/` completion | Native text view with the keyboard toolbar, `PhotosPicker`, the camera, paste including images (`UIPasteControl`, no Safari prompt), `/` completion, and **dictation** with `SpeechAnalyzer` on device |
 | New workspace and new chat | The project picker with search (recent roots, then folders), a branch for a worktree, and an agent grid with the agents' icons |
@@ -784,7 +804,7 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
 - **Share extension**: send a page, text, or screenshots to a chat as a
   prompt, or to a new chat in a chosen workspace.
 - **Face ID** gate, optional: on opening the app, and always before "Allow
-  always" or turning on auto-accept.
+  always".
 - **iPad**:
   - `NavigationSplitView` with computers and workspaces, then chats, then
     the chat or terminal.
@@ -875,6 +895,8 @@ release tag; pull requests run only `ios-test` and the unsigned build.
   uploads to TestFlight itself, without fastlane or `altool`.
 - `CURRENT_PROJECT_VERSION` is the workflow's run number;
   `MARKETING_VERSION` follows the app's release version.
+- "What to Test" lists the commits since the previous build, which each
+  build's notes record in a `Source:` line (`ios/README.md`).
 - Secrets (environment `testflight`, required reviewers off for `main`):
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID`. The key is
   written to a temporary file and removed in an `always()` step.
@@ -902,7 +924,7 @@ scripted agent:
   on-device dictation with `SpeechAnalyzer`, and `/` completion.
 - **Queue:** queued prompts can be removed.
 - **Session sheet C:** the context ring, mode tiles, an effort slider,
-  the other settings, and auto-accept behind Face ID.
+  the other settings, and auto-accept.
 - **Creating:** new workspace A and new chat, through `/api/v2/new`,
   `/api/v2/workspaces`, and `/api/v2/workspaces/{id}/chats`.
 - **Still to check on a phone:** dictation, the camera, paste, and Face

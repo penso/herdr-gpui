@@ -6,6 +6,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 
 mod migration;
 mod relaunch;
+mod rename;
 mod tokens;
 
 /// A Homebrew prefix that owns `target`, returning the artifact link.
@@ -75,6 +76,7 @@ fn cask(script: &str, root: &Path) -> anyhow::Result<Cask> {
         brew,
         prefix: root.to_owned(),
         bundle: root.join(BUNDLE),
+        legacy: None,
         home: root.into(),
         token: TOKEN,
     })

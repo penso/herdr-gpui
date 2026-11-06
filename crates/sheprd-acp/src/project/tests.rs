@@ -6,6 +6,7 @@ use super::*;
 
 mod activities;
 mod images;
+mod tool_start;
 
 fn update(value: Value) -> wire::SessionUpdate {
     serde_json::from_value(value).unwrap()

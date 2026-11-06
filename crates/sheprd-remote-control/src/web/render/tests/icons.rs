@@ -8,6 +8,7 @@ fn home_draws_its_controls_as_line_icons() {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![workspace(vec![row("p1")])],
     };
     let summaries = HashMap::new();

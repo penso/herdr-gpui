@@ -39,6 +39,7 @@ fn tool(id: u64, status: ToolStatus) -> Entry {
             kind: ToolKind::Execute,
             locations: Vec::new(),
             parent: None,
+            started_ms: None,
             status,
             title: "cargo test".to_owned(),
         }),

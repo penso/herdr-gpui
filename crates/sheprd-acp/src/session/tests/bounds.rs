@@ -14,6 +14,7 @@ fn diff(index: u64, size: usize) -> Entry {
             kind: ToolKind::Edit,
             locations: vec!["/work/file".into()],
             parent: None,
+            started_ms: None,
             status: ToolStatus::Completed,
             title: "Edit".into(),
         }),

@@ -247,6 +247,29 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   loopNav();
 
+  // Cache public GitHub stars per tab; API failure leaves a plain GitHub link.
+  (function () {
+    var KEY = "sheprd-stars", TTL = 10 * 60 * 1000;
+    var badge = document.getElementById("stars");
+    function show(n) {
+      if (typeof n !== "number" || !isFinite(n)) return;
+      document.getElementById("stars-n").textContent = n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);
+      badge.hidden = false;
+      badge.parentElement.setAttribute("aria-label", "GitHub, " + n + " stars");
+    }
+    try {
+      var cached = JSON.parse(sessionStorage.getItem(KEY) || "null");
+      if (cached && Date.now() - cached.t < TTL) return show(cached.n);
+    } catch (e) {}
+    fetch("https://api.github.com/repos/sheprd-labs/sheprd", { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || typeof d.stargazers_count !== "number") return;
+        show(d.stargazers_count);
+        try { sessionStorage.setItem(KEY, JSON.stringify({ n: d.stargazers_count, t: Date.now() })); } catch (e) {}
+      }).catch(function () {});
+  })();
+
   /* Illustrative board: statuses loop. With reduced motion it stays still and says so. */
   var note = document.getElementById("motion-note");
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {

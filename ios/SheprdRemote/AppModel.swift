@@ -12,6 +12,7 @@ private let log = Logger(subsystem: "so.pen.herdr.remote", category: "app")
 enum Route: Codable, Hashable {
     case chat(PaneKey, title: String)
     case term(PaneKey, title: String)
+    case workspace(WorkspaceKey)
 }
 
 /// The app's state: paired computers, their live links, and the tokens
@@ -29,6 +30,28 @@ final class AppModel {
     var message: String?
     /// Set by a deep link; the root view shows it and clears it.
     var pendingRoute: Route?
+    /// The workspace a tab on Home asked to go to; the root view shows it
+    /// and clears it.
+    var pendingWorkspace: WorkspaceKey?
+    /// The computer of the workspace or tab last opened, which a new
+    /// workspace starts on. Kept on this phone across launches.
+    @ObservationIgnored var recentDevice = UserDefaults.standard.string(forKey: "recentDevice") {
+        didSet { UserDefaults.standard.set(recentDevice, forKey: "recentDevice") }
+    }
+    /// The agent last started from this phone, offered first for a new
+    /// tab. Kept across launches.
+    var recentAgent = UserDefaults.standard.string(forKey: "recentAgent") {
+        didSet { UserDefaults.standard.set(recentAgent, forKey: "recentAgent") }
+    }
+    /// What new chats start with, by agent name, kept across launches.
+    private(set) var startChoices = AppModel.savedStartChoices() {
+        didSet {
+            guard let saved = try? JSONEncoder().encode(startChoices) else { return }
+            UserDefaults.standard.set(saved, forKey: "startChoices")
+        }
+    }
+    /// Which picks in chats are the latest; see `pickStart`.
+    @ObservationIgnored private var startPicks = StartPicks()
     /// A new workspace or chat being set up, as a sheet over every tab.
     var creating: Creating?
     /// A tab to switch to, from a Control or an intent; the root view
@@ -40,6 +63,45 @@ final class AppModel {
     /// What each chat's composer held when the person left it, kept
     /// until they come back, for as long as the app runs.
     @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]
+
+    private static func savedStartChoices() -> [String: StartChoice] {
+        UserDefaults.standard.data(forKey: "startChoices")
+            .flatMap { try? JSONDecoder().decode([String: StartChoice].self, from: $0) } ?? [:]
+    }
+
+    func startChoice(for agent: String) -> StartChoice {
+        startChoices[agent] ?? StartChoice()
+    }
+
+    /// Changes what new chats with `agent` start with. Agents are few; a
+    /// name past the bound is not kept, so the saved list stays small.
+    func updateStart(for agent: String, _ change: (inout StartChoice) -> Void) {
+        guard !agent.isEmpty, startChoices[agent] != nil || startChoices.count < 32 else { return }
+        var choice = startChoice(for: agent)
+        change(&choice)
+        if choice != startChoices[agent] { startChoices[agent] = choice }
+    }
+
+    /// Notes `command`, sent to a chat with `agent`, as a pick new chats may
+    /// follow, and returns what saves it once the chat took it. Requests
+    /// finish in any order, so a pick the person has since replaced is not
+    /// saved. `nil` when the command is not such a pick.
+    func pickStart(_ command: ChatCommand, agent: String) -> (() -> Void)? {
+        guard let setting = startChoice(for: agent).setting(of: command) else { return nil }
+        let pick = startPicks.begin(agent: agent, setting: setting)
+        return { [weak self] in
+            guard let self, startPicks.isLatest(pick, agent: agent, setting: setting) else { return }
+            updateStart(for: agent) { $0.follow(command) }
+        }
+    }
+
+    /// Changes `setting` for new chats with `agent` directly, as the new tab
+    /// row does. This is a pick too, so a slower one from a chat that is
+    /// still on its way does not replace it.
+    func chooseStart(_ setting: StartPicks.Setting, for agent: String, _ change: (inout StartChoice) -> Void) {
+        _ = startPicks.begin(agent: agent, setting: setting)
+        updateStart(for: agent, change)
+    }
 
     /// Spotlight follows the app lock as soon as it changes, not at the
     /// next change to the chats.

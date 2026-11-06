@@ -2,8 +2,7 @@ import SheprdRemoteCore
 import SwiftUI
 
 /// Session C: the chat's name, cards for the context, the mode, effort,
-/// the session's other settings, and auto-accept, which asks for Face ID
-/// before it turns on, then closing the chat.
+/// the session's other settings, and auto-accept, then closing the chat.
 struct SessionSheet: View {
     @Environment(AppModel.self) private var model
     let key: PaneKey
@@ -189,10 +188,10 @@ struct SessionSheet: View {
     }
 
     private func autoAcceptCard(_ transcript: Transcript) -> some View {
-        Toggle(isOn: Binding(get: { transcript.autoAccept }, set: { setAutoAccept($0) })) {
+        Toggle(isOn: Binding(get: { transcript.autoAccept }, set: { send(.setAutoAccept($0)) })) {
             VStack(alignment: .leading, spacing: 2) {
                 Label("Auto-accept", systemImage: "bolt.shield").font(.headline)
-                Text("Allows every tool call without asking. Turning it on asks for Face ID.")
+                Text("Allows every tool call without asking.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -254,15 +253,14 @@ struct SessionSheet: View {
         }
     }
 
-    private func setAutoAccept(_ on: Bool) {
-        Task {
-            if on, !(await OwnerCheck.confirm("Allow every tool call without asking")) { return }
-            problem = await model.fleet.send(.setAutoAccept(on), to: key)
-        }
-    }
-
+    /// A mode or auto-accept picked here is what new chats with this agent
+    /// start with, once the chat took the command.
     private func send(_ command: ChatCommand) {
-        Task { problem = await model.fleet.send(command, to: key) }
+        let save = model.pickStart(command, agent: store.transcript?.agent ?? "")
+        Task {
+            problem = await model.fleet.send(command, to: key)
+            if problem == nil { save?() }
+        }
     }
 
     private func currentName(_ option: ConfigOption?) -> String? {

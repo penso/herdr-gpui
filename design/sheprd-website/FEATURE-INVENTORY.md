@@ -21,7 +21,7 @@ Status legend used across the site concepts:
 | Shipped | In a published release and on by default (or one click away) |
 | Opt-in | In a published release, off by default (a setting or `[features]` flag) |
 | Experimental | Docs or the UI call it experimental / proof of concept, or it ships unverified on real devices |
-| TestFlight beta | iOS builds uploaded to TestFlight (internal testers); no public link |
+| TestFlight beta | iOS builds on TestFlight, open to anyone through the public link https://testflight.apple.com/join/6nZes3NY |
 | Planned | Plan doc or "not yet" only; no shipped implementation |
 
 A platform caveat is listed separately from status (for example "macOS and Linux clients").
@@ -391,10 +391,10 @@ Sources: GR:3000-3001, 3015-3020, 2165-2167, 2357-2358, 623, 4686-4728, 3650-365
   - The repo has a `testflight` environment.
 - **Bundle and versioning:** bundle id `so.pen.herdr.remote`. The build number comes from App Store Connect (`ios/tools/next-build.py`).
 - **Who can install it:** `docs/ios-app-plan.md` "TestFlight from CI" says: "Internal testers get each build at once; an external group is a manual step in App Store Connect."
-  - The repo contains no public TestFlight link (`testflight.apple.com`) and no App Store link (`apps.apple.com`); `git grep` finds none.
-  - So distribution today is internal TestFlight, or building from source with your own team (`ios/README.md` "Sign with your own team", `just ios-build`).
+  - The public TestFlight link is https://testflight.apple.com/join/6nZes3NY. There is no App Store link (`apps.apple.com`).
+  - So distribution today is the public TestFlight beta, or building from source with your own team (`ios/README.md` "Sign with your own team", `just ios-build`).
 - **Platform:** `docs/updating.md:331` confirms iOS and watchOS use App Store/TestFlight identities.
-- **Do not claim** "Download on the App Store" or a public TestFlight. Safe wording: "Native iPhone/iPad app (TestFlight beta; build from source today)".
+- **Do not claim** "Download on the App Store". Safe wording: "Native iPhone/iPad app (TestFlight beta)".
 
 ### Feature table
 

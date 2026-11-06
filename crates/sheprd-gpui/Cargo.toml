@@ -101,6 +101,9 @@ sheprd-vcs = { features = ["test-support"], workspace = true }
 socket2.workspace = true
 test-case.workspace = true
 
+[target.'cfg(unix)'.dev-dependencies]
+libc.workspace = true
+
 [features]
 default = ["azure", "boat", "coder", "container", "daytona", "opensandbox", "railway", "sprites"]
 # Machines from cloud providers as devices: the shared device list, background

@@ -13,5 +13,6 @@ mod archives;
 mod guard;
 mod locations;
 mod migration;
+mod rename;
 mod replacement;
 mod signing;

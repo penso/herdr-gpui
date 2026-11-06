@@ -12,6 +12,7 @@ fn call(title: &str) -> Entry {
             kind: ToolKind::Execute,
             locations: Vec::new(),
             parent: None,
+            started_ms: None,
             status: ToolStatus::Completed,
             title: title.to_owned(),
         }),

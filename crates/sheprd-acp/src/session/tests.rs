@@ -16,6 +16,7 @@ mod auto_accept;
 mod bounds;
 mod commands;
 mod flow;
+mod history;
 mod linked_pictures;
 mod media;
 mod permissions;
@@ -42,6 +43,7 @@ fn config() -> Config {
         agent: "Claude".to_owned(),
         cwd: PathBuf::from("/work"),
         exit_with_agent: false,
+        history: None,
         load: None,
         login_hint: Some("run `claude` and use /login".to_owned()),
         pane: Some("p_1".to_owned()),

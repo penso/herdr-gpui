@@ -9,7 +9,8 @@ import UIKit
 @Observable
 final class TermTyping {
     let key: PaneKey
-    /// Held by the key row for the next key typed.
+    /// Held by the key row: ctrl and alt for the next key, shift until
+    /// tapped off.
     var modifiers: TermInput.Modifiers = []
     private(set) var problem: String?
     /// What was typed but is not on the screen yet.
@@ -23,27 +24,18 @@ final class TermTyping {
         self.fleet = fleet
     }
 
-    /// Typed text, with the held modifiers, which are then released.
+    /// Typed text, with the held modifiers, which are then released. The
+    /// keyboard has already applied its own shift.
     func type(_ text: String) {
-        enqueue(TermInput.sends(for: text, modifiers: modifiers))
-        modifiers = []
+        enqueue(TermInput.sends(for: text, modifiers: modifiers.subtracting(.shift)))
+        modifiers = modifiers.afterKey
     }
 
     /// A named key (`esc`, `up`) or a combination (`ctrl+c`), with the held
     /// modifiers added.
     func press(_ name: String) {
-        let parts = name.split(separator: "+").map(String.init)
-        var held = modifiers
-        for part in parts.dropLast() {
-            switch part {
-            case "ctrl": held.insert(.ctrl)
-            case "alt": held.insert(.alt)
-            case "shift": held.insert(.shift)
-            default: break
-            }
-        }
-        enqueue([.keys([TermInput.named(parts.last ?? name, modifiers: held)])])
-        modifiers = []
+        enqueue([.keys([TermInput.pressed(name, held: modifiers)])])
+        modifiers = modifiers.afterKey
     }
 
     func paste(_ text: String) {
@@ -125,13 +117,17 @@ struct TermEchoStrip: View {
 }
 
 /// Terminal B's two key rows: modifiers and the keys a phone keyboard
-/// lacks, with ^C set apart, the arrows, and the keyboard toggle.
+/// lacks, with ^C and dictation set apart, the arrows, and the keyboard
+/// toggle.
 struct TermKeyRows: View {
     @Bindable var typing: TermTyping
     @Binding var keyboard: Bool
+    let dictation: Dictation
+    let dictate: () -> Void
 
     private static let top: [(key: String, label: String)] = [
-        ("esc", "esc"), ("tab", "⇥"), ("|", "|"), ("slash", "/"), ("minus", "-"), ("~", "~"), ("backtick", "`"), ("up", "↑"),
+        // A new line without Enter: Claude Code and Codex read Ctrl-J as one.
+        ("esc", "esc"), ("tab", "⇥"), ("ctrl+j", "↵"), ("|", "|"), ("slash", "/"), ("minus", "-"), ("~", "~"), ("backtick", "`"), ("up", "↑"),
     ]
     private static let bottom: [(key: String, label: String)] = [
         ("ctrl+d", "^D"), ("ctrl+z", "^Z"), ("ctrl+r", "^R"), ("ctrl+l", "^L"), ("ctrl+a", "^A"), ("ctrl+e", "^E"),
@@ -143,19 +139,39 @@ struct TermKeyRows: View {
             row {
                 modifier("ctrl", .ctrl)
                 modifier("alt", .alt)
+                modifier("shift", .shift)
                 ForEach(Self.top, id: \.key) { key in keyButton(key.label) { typing.press(key.key) } }
             }
             row {
                 keyButton("^C", tint: .red) { typing.press("ctrl+c") }
                     .accessibilityLabel("Control C")
+                dictationButton
                 ForEach(Self.bottom, id: \.key) { key in keyButton(key.label) { typing.press(key.key) } }
                 keyButton(keyboard ? "⌨︎↓" : "⌨︎") { keyboard.toggle() }
                     .accessibilityLabel(keyboard ? "Hide keyboard" : "Show keyboard")
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(.bar)
+        // Under the keyboard too: its rounded top corners would otherwise
+        // show the window's light background beside the dark rows.
+        .background { Rectangle().fill(.bar).ignoresSafeArea() }
         .sensoryFeedback(.selection, trigger: typing.modifiers)
+    }
+
+    /// The keyboard's own mic cannot reach a terminal, which has no text
+    /// for it to edit, so the row offers the composer's dictation.
+    private var dictationButton: some View {
+        Button(action: dictate) {
+            Image(systemName: dictation.active ? "stop.circle.fill" : "mic.fill")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(dictation.active ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
+                .symbolEffect(.pulse, isActive: dictation.phase == .listening)
+                .frame(minWidth: 38, minHeight: 34).padding(.horizontal, 4)
+                .background(.fill.tertiary, in: .rect(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .disabled(dictation.phase == .preparing)
+        .accessibilityLabel(dictation.active ? "Stop dictating" : "Dictate")
     }
 
     private func row(@ViewBuilder _ content: () -> some View) -> some View {

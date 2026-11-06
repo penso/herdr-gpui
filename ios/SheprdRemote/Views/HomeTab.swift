@@ -1,10 +1,12 @@
 import SheprdRemoteCore
 import SwiftUI
 
-/// Home B: what needs you, answered in place; what is working; the rest.
+/// Home B: every agent in the order the person chose, a question answered
+/// in place.
 struct HomeTab: View {
     @Environment(AppModel.self) private var model
     @Environment(WindowState.self) private var window: WindowState?
+    @AppStorage(HomeRow.sortKey) private var sort = AgentSort.priority
     @Binding var pairing: Bool
 
     var body: some View {
@@ -30,6 +32,7 @@ struct HomeTab: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { AgentSortMenu(sort: $sort) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("New Workspace", systemImage: "plus") { model.creating = .workspace(device: nil) }
                         .disabled(model.fleet.machines.isEmpty)

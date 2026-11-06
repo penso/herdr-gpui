@@ -175,7 +175,11 @@ struct AgentTerminalRowLabel: View {
         HStack(spacing: 12) {
             AgentIcon(agent: item.agent?.name)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(item.title).lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !item.needsYou, !item.working, let date = item.changed { LastAnswer(date: date) }
+                }
                 Text(place)
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
             }

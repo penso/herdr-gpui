@@ -158,7 +158,11 @@ fn a_remote_line_finds_the_hosts_own_program() {
 }
 
 /// A window on a local daemon this user owns, with `program` found.
-fn local_window(view: &mut SheprdWindow, peer: &MockPeer, cx: &mut gpui::Context<SheprdWindow>) {
+pub(super) fn local_window(
+    view: &mut SheprdWindow,
+    peer: &MockPeer,
+    cx: &mut gpui::Context<SheprdWindow>,
+) {
     connect(view, peer, cx);
     view.config.features.acp_chats = true;
     view.endpoints[0].connection.target = sheprd_client::ConnectTarget::Local;

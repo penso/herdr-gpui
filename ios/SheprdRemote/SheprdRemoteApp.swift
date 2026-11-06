@@ -16,6 +16,7 @@ struct SheprdRemoteApp: App {
             RootView()
                 .environment(model)
                 .modifier(AppLock())
+                .modifier(Appearance())
                 .onOpenURL { model.open($0) }
                 .task { model.tokens.start() }
                 .onChange(of: model.fleet.waiting, initial: true) { _, _ in
@@ -41,11 +42,13 @@ struct SheprdRemoteApp: App {
                 switch route {
                 case let .chat(key, title)?: ChatScreen(key: key, title: title).withRoutes()
                 case let .term(key, title)?: TerminalScreen(key: key, title: title)
+                case let .workspace(key)?: WorkspaceScreen(key: key).withRoutes()
                 case nil: ContentUnavailableView("Nothing to show", systemImage: "questionmark.bubble")
                 }
             }
             .environment(model)
             .modifier(AppLock())
+            .modifier(Appearance())
         }
     }
 }

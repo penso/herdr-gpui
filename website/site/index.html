@@ -37,15 +37,10 @@
       <img src="assets/paw.svg" alt="" width="34" height="34">
       <span>Sheprd</span>
     </a>
-    <nav aria-label="Sections">
+    <nav aria-label="Site">
       <ul>
-        <li><a href="#ch1">I. Board</a></li>
-        <li><a href="#ch2">II. Loop</a></li>
-        <li><a href="#ch3">III. Machines</a></li>
-        <li><a href="#ch4">IV. Pocket</a></li>
-        <li><a href="#ch5">V. Platforms</a></li>
-        <li><a href="#features">Features</a></li>
-        <li><a href="https://github.com/sheprd-labs/sheprd/tree/main/docs">Docs</a></li>
+        <li class="nav-docs"><a href="https://github.com/sheprd-labs/sheprd/tree/main/docs">Docs</a></li>
+        <li><a class="repo" href="https://github.com/sheprd-labs/sheprd"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg><span class="repo-name">GitHub</span><span class="stars" id="stars" hidden><span id="stars-n"></span></span></a></li>
         <li><a class="nav-install" href="#get">Get Sheprd</a></li>
       </ul>
     </nav>
@@ -61,13 +56,12 @@
       <div class="hero-install" id="hero-install">
         <p class="ins-fallback"><a class="btn" href="#get">Get Sheprd</a></p>
       </div>
-      <p class="hero-more"><a href="#get">Nix, phone and other ways to install</a> · <a href="#ch2">Walk the loop</a></p>
+      <p class="hero-more"><a href="/testflight/">iPhone and iPad beta</a> · <a href="#get">Nix and other ways to install</a> · <a href="#ch2">Walk the loop</a></p>
     </div>
     <figure class="hero-shot">
       <img src="assets/shots/workspaces.jpg" width="1800" height="1125" alt="The Sheprd window: a sidebar of workspaces with nested worktrees and their agents, an editor pane and two terminal panes showing git history and passing tests, a status bar with plan usage, CPU and memory.">
       <div class="float float-a" aria-hidden="true"><span class="fdot fdot-done"></span> fix/rounding · done</div>
       <div class="float float-b" aria-hidden="true"><span class="fdot fdot-blocked"></span> claude needs you</div>
-      <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> <span class="tag-illustration">Illustration</span> The two floating labels are drawn on top.</figcaption>
     </figure>
   </section>
 
@@ -91,7 +85,6 @@
       <div class="board-head">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="board-title">agents · all devices</span>
-        <span class="tag-illustration">Illustration</span>
       </div>
       <table class="board-table">
         <caption class="sr-only">Illustrative agent board with sample workspaces</caption>
@@ -148,7 +141,7 @@
               <div class="mock-row"><span class="dot"></span><span class="mt">Paginate the docs index</span><span class="ml">harbor-docs</span><span class="mbtn">Start agent</span></div>
               <div class="mock-row"><span class="dot"></span><span class="mt">Sprite sheet export is slow</span><span class="ml">pixel-forge · perf</span><span class="mbtn">Start agent</span></div>
             </div>
-            <figcaption><span class="tag-illustration">Illustration</span> Simplified issue list with sample data.</figcaption>
+            <figcaption>Simplified issue list with sample data.</figcaption>
           </figure>
         </section>
 
@@ -166,7 +159,7 @@
           </div>
           <figure class="panel-fig">
             <img src="assets/shots/layouts.jpg" width="1800" height="1162" loading="lazy" alt="Five sidebar layouts side by side, each showing the ledger-api checkout with its feat/multi-currency and fix/rounding worktrees nested beneath it, plus build-box and gpu-runner machines.">
-            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Worktrees nest under their checkout, in any of the sidebar layouts.</figcaption>
+            <figcaption>Worktrees nest under their checkout, in any of the sidebar layouts.</figcaption>
           </figure>
         </section>
 
@@ -186,7 +179,7 @@
           </div>
           <figure class="panel-fig">
             <img src="assets/shots/workspaces.jpg" width="1800" height="1125" loading="lazy" alt="Agents sidebar listing ledger-api, pixel-forge and harbor-docs with claude, codex and pi agents and colored status dots, beside an editor and a test run.">
-            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> The Agents list groups every running agent with its status dot.</figcaption>
+            <figcaption>The Agents list groups every running agent with its status dot.</figcaption>
           </figure>
         </section>
 
@@ -203,7 +196,7 @@
           </div>
           <figure class="panel-fig">
             <img src="assets/shots/review.jpg" width="1800" height="1125" loading="lazy" alt="Review changes tab for feat/multi-currency: a diff of src/ledger.rs with two numbered notes in a side panel and a Send to agent button.">
-            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Two notes on the diff, ready to send to Claude.</figcaption>
+            <figcaption>Two notes on the diff, ready to send to Claude.</figcaption>
           </figure>
         </section>
 
@@ -228,7 +221,7 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
               </ol>
               <div class="mt-actions"><span class="mbtn">Diff</span><span class="mbtn mbtn-solid">Restore</span></div>
             </div>
-            <figcaption><span class="tag-illustration">Illustration</span> Conceptual checkpoint timeline; the app restores from the workspace menu.</figcaption>
+            <figcaption>Conceptual checkpoint timeline; the app restores from the workspace menu.</figcaption>
           </figure>
         </section>
 
@@ -256,7 +249,7 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
                 <li>Merge…</li>
               </ul>
             </div>
-            <figcaption><span class="tag-illustration">Illustration</span> Title-bar Git menu, simplified. Labels match the app.</figcaption>
+            <figcaption>Title-bar Git menu, simplified. Labels match the app.</figcaption>
           </figure>
         </section>
       </div>
@@ -272,7 +265,6 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
         <p class="note">Cloud devices and containers need a macOS or Linux client today. WSL devices are Windows only.</p>
       </div>
       <figure class="constellation">
-        <span class="tag-illustration fig-tag">Illustration</span>
         <svg viewBox="0 0 560 480" role="img" aria-labelledby="cst-title cst-desc">
           <title id="cst-title">One computer running Sheprd, connected to many machines and devices</title>
           <desc id="cst-desc">A laptop in the centre links to two SSH servers, a WSL distribution, a container, two cloud sandboxes, and a phone, a tablet and a watch.</desc>
@@ -336,7 +328,7 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
           </div>
           <figure class="shot shot-small">
             <img src="assets/shots/system-load.png" width="1388" height="280" loading="lazy" alt="Status bar showing a CPU sparkline and memory meter for the selected machine.">
-            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Load per machine feeds the ranking.</figcaption>
+            <figcaption>Load per machine feeds the ranking.</figcaption>
           </figure>
         </div>
         <div role="tabpanel" id="panel-fanout" aria-labelledby="tab-fanout" class="move-panel" hidden>
@@ -348,7 +340,6 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
             <li><img src="assets/agent-claude.svg" alt="" width="20" height="20"> claude · build-box <span class="dot dot-done">done</span></li>
             <li><img src="assets/agent-codex.svg" alt="" width="20" height="20"> codex · gpu-runner <span class="dot dot-work">working</span></li>
             <li><img src="assets/agent-gemini.svg" alt="" width="20" height="20"> gemini · local <span class="dot dot-done">done</span></li>
-            <li class="lanes-tag"><span class="tag-illustration">Illustration</span></li>
           </ol>
         </div>
         <div role="tabpanel" id="panel-teleport" aria-labelledby="tab-teleport" class="move-panel" hidden>
@@ -358,7 +349,7 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
           </div>
           <figure class="shot shot-small">
             <img src="assets/shots/teleport.png" width="1180" height="640" loading="lazy" alt="Teleport dialog moving the feat-multi-currency worktree from Local, listing build-box and gpu-runner reached over SSH.">
-            <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span> Choosing a destination.</figcaption>
+            <figcaption>Choosing a destination.</figcaption>
           </figure>
         </div>
       </div>
@@ -374,13 +365,12 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
         <ul class="pocket-list">
           <li><span class="st st-optin">Opt-in</span><div><strong>Remote control web app</strong><span>Any modern phone browser, Android included. Off until you enable it.</span></div></li>
           <li><span class="st st-optin">Opt-in</span><div><strong>Pairing approved on both screens</strong><span>QR plus a matching six-digit code, then Allow on the desktop. Its own certificate authority, over your LAN or Tailscale.</span></div></li>
-          <li><span class="st st-testflight">TestFlight beta</span><div><strong>Native iPhone and iPad app</strong><span>Merged home across computers, chat, dictation, a terminal with key rows, iPad split view. iOS 26. No public link yet.</span></div></li>
+          <li><span class="st st-testflight">TestFlight beta</span><div><strong>Native iPhone and iPad app</strong><span>Merged home across computers, chat, dictation, a terminal with key rows, iPad split view. iOS 26. <a href="/testflight/">Join the beta</a>.</span></div></li>
           <li><span class="st st-experimental">Experimental</span><div><strong>Live Activities, widgets, Apple Watch, nearby pairing</strong><span>Built into TestFlight builds; not yet verified on real devices.</span></div></li>
           <li><span class="st st-planned">Planned</span><div><strong>Native Android app</strong><span>Android uses the web app and Web Push today.</span></div></li>
         </ul>
       </div>
       <figure class="phone-fig">
-        <span class="tag-illustration fig-tag">Illustration</span>
         <div class="phone" aria-hidden="true">
           <div class="phone-notch"></div>
           <div class="phone-screen">
@@ -458,7 +448,7 @@ sheprd checkpoint restore &lt;id&gt;   # opens the dialog; you confirm</code></p
     <div class="get-panel" role="tabpanel" id="p-linux" aria-labelledby="t-linux" hidden><pre><code>curl -fsSL https://sheprd.org/install.sh | sh</code></pre><p>x86_64 and ARM64; APT, DNF or pacman. Current channel.</p></div>
     <div class="get-panel" role="tabpanel" id="p-win" aria-labelledby="t-win" hidden><pre><code>irm https://sheprd.org/install.ps1 | iex</code></pre><p>x86_64 and ARM64, per-user, no admin rights. Current channel.</p></div>
     <div class="get-panel" role="tabpanel" id="p-nix" aria-labelledby="t-nix" hidden><pre><code>nix run github:sheprd-labs/sheprd</code></pre><p>Builds from source on x86_64 and ARM64 Linux. Current channel.</p></div>
-    <div class="get-panel" role="tabpanel" id="p-phone" aria-labelledby="t-phone" hidden><p class="big-p"><strong>Any phone:</strong> turn on remote control in Settings and scan the QR code (opt-in).<br><strong>iPhone &amp; iPad:</strong> native app in TestFlight beta for testers; no public link yet.</p></div>
+    <div class="get-panel" role="tabpanel" id="p-phone" aria-labelledby="t-phone" hidden><p class="big-p"><strong>Any phone:</strong> turn on remote control in Settings and scan the QR code (opt-in).<br><strong>iPhone &amp; iPad:</strong> native app in TestFlight beta, iOS 26.</p><p><a class="btn btn-line" href="/testflight/">Join the TestFlight beta</a></p></div>
     
       <p class="sr-only" id="copy-status" aria-live="polite"></p>
       <p class="gh"><a class="btn btn-line" href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a></p>

@@ -19,6 +19,14 @@ fn segment(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
 }
 
+/// The owner and repository of GitHub's `nameWithOwner`, held to the same
+/// segments as a remote's, since a pull request URL is built from them.
+pub(crate) fn name_with_owner(value: &str) -> Option<(&str, &str)> {
+    value
+        .split_once('/')
+        .filter(|(owner, repo)| segment(owner) && segment(repo))
+}
+
 /// The lowercased owner and the repository a GitHub.com remote URL names.
 pub fn github_repo(remote: &str) -> Option<(String, String)> {
     let path = ["git@github.com:", "ssh://git@github.com/"]

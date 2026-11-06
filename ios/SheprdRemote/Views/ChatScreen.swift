@@ -14,11 +14,16 @@ struct ChatScreen: View {
     @State private var showingSession = false
     @Environment(\.horizontalSizeClass) private var width
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.offersWorkspace) private var offersWorkspace
+
+    private var item: ChatItem? {
+        model.fleet.chatItems.first { $0.key == key }
+    }
 
     /// The chat's name as the computer last sent it, so a rename shows at
     /// once; the route's title until the home arrives.
     private var name: String {
-        model.fleet.chatItems.first { $0.key == key }?.chat.title ?? title
+        item?.chat.title ?? title
     }
 
     var body: some View {
@@ -29,6 +34,11 @@ struct ChatScreen: View {
                 ProgressView("Loading the chat…")
             }
         }
+        // The new tab screen offers the modes a chat with this agent listed.
+        .onChange(of: store?.transcript.map(StartChoice.offered(in:)), initial: true) {
+            guard let transcript = store?.transcript else { return }
+            model.updateStart(for: transcript.agent) { $0.learn(from: transcript) }
+        }
         // The principal item below draws the header; the title is what the
         // iPad's split view and the window's name fall back to.
         // Window titles show in Stage Manager and the app switcher.
@@ -38,6 +48,14 @@ struct ChatScreen: View {
         .toolbar(.hidden, for: .tabBar)
         .hidesConnectionToast()
         .toolbar {
+            if offersWorkspace, let workspace = item?.workspace {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { model.pendingWorkspace = WorkspaceKey(device: key.device, workspace: workspace.id) } label: {
+                        Image(systemName: "square.stack.3d.up")
+                    }
+                    .accessibilityLabel("Go to \(workspace.label)")
+                }
+            }
             // On an iPad the bar's middle also spans the terminal
             // inspector, so the header leads there instead.
             ToolbarItem(placement: width == .regular ? .topBarLeading : .principal) {
@@ -73,6 +91,7 @@ struct ChatScreen: View {
         }
         .onAppear {
             store = model.fleet.openChat(key)
+            model.recentDevice = key.device
             #if DEBUG
             // The simulator loop's `-session YES` opens the session sheet.
             if UserDefaults.standard.bool(forKey: "session") { showingSession = true }

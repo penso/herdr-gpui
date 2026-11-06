@@ -138,7 +138,9 @@ fn home() -> Home {
         fingerprint: &"AB".repeat(32),
         layout: &layout,
         load: Some(Load {
+            cores: Some(10),
             cpu: 47,
+            load5_tenths: Some(42),
             memory: 67,
         }),
         summaries: [("p1".to_owned(), summary)].into(),

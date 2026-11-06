@@ -30,6 +30,8 @@ pub struct Options {
     /// The folder chat sockets live in, as Sheprd resolved it; `None`
     /// resolves it from this process's environment.
     pub chat_dir: Option<PathBuf>,
+    /// The desktop endpoint, when explicitly passed by its service plan.
+    pub core_endpoint: crate::core_target::CoreTarget,
     /// How long a device may stay away before it is forgotten; `None`
     /// keeps it until revoked.
     pub device_idle: Option<Duration>,
@@ -47,6 +49,8 @@ pub enum ParseError {
     // keep-sorted start
     #[error("--cert and --key go together")]
     CertificatePair,
+    #[error("--core-socket and --core-session go together")]
+    CorePair,
     #[error("{0} needs a value")]
     Missing(&'static str),
     #[error("--state-dir is required")]
@@ -91,6 +95,8 @@ Options:
   --cert FILE --key FILE   Use this certificate chain and key instead of the
                            daemon's own certificate authority
   --herdr-socket PATH      The Herdr daemon's client socket (default: discovered)
+  --core-socket PATH --core-session NAME
+                           The desktop core endpoint (default: discovered)
   --chat-dir DIR           Where chat sockets live (default: discovered)
   --privacy generic|excerpt
                            Whether notifications may quote the chat (default generic)
@@ -124,6 +130,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let mut privacy = Privacy::Generic;
     let mut idle_days = DEFAULT_IDLE_DAYS;
     let (mut herdr_socket, mut chat_dir) = (None, None);
+    let (mut core_socket, mut core_session) = (None, None);
     let mut bonjour = true;
     while let Some(arg) = args.next() {
         let name = arg.to_str().unwrap_or_default().to_owned();
@@ -153,6 +160,10 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
             "--cert" => cert = Some(PathBuf::from(value("--cert")?)),
             "--key" => key = Some(PathBuf::from(value("--key")?)),
             "--herdr-socket" => herdr_socket = Some(PathBuf::from(value("--herdr-socket")?)),
+            "--core-socket" => core_socket = Some(PathBuf::from(value("--core-socket")?)),
+            "--core-session" => {
+                core_session = Some(text(value("--core-session")?, "--core-session")?)
+            }
             "--chat-dir" => chat_dir = Some(PathBuf::from(value("--chat-dir")?)),
             "--privacy" => {
                 privacy = match text(value("--privacy")?, "--privacy")?.as_str() {
@@ -184,11 +195,22 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         (Some(cert), Some(key)) => Certificate::Files { cert, key },
         _ => return Err(ParseError::CertificatePair),
     };
+    let core_endpoint = match (core_socket, core_session) {
+        (None, None) => crate::core_target::CoreTarget::Discover,
+        (Some(socket), Some(session)) => {
+            crate::core_target::CoreTarget::Endpoint(sheprd_core_client::Endpoint {
+                socket,
+                session,
+            })
+        }
+        _ => return Err(ParseError::CorePair),
+    };
     Ok(Invocation::Serve(Options {
         bind,
         bonjour,
         certificate,
         chat_dir,
+        core_endpoint,
         device_idle: (idle_days != 0).then(|| Duration::from_secs(idle_days * 24 * 60 * 60)),
         herdr_socket,
         port,
