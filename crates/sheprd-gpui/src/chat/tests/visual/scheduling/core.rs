@@ -1,6 +1,6 @@
 use super::*;
 use crate::{browser::Location, core_terminals::panes::Panes};
-use herdr_backend::TerminalId;
+use sheprd_backend::TerminalId;
 
 #[gpui::test]
 fn core_panes_share_the_budget_without_a_herdr_surface_and_skip_hidden_tabs(
