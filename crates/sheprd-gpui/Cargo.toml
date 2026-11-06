@@ -105,7 +105,7 @@ test-case.workspace = true
 libc.workspace = true
 
 [features]
-default = ["azure", "boat", "coder", "container", "daytona", "opensandbox", "railway", "sprites"]
+default = ["azure", "boat", "boxd", "coder", "container", "daytona", "opensandbox", "railway", "sprites"]
 # Machines from cloud providers as devices: the shared device list, background
 # jobs, and connector. Turned on by each provider below; not useful alone.
 cloud = ["sheprd-client/cloud", "sheprd-remote/cloud", "sheprd-usage/cloud", "sheprd-vcs/cloud"]
@@ -114,6 +114,8 @@ cloud = ["sheprd-client/cloud", "sheprd-remote/cloud", "sheprd-usage/cloud", "sh
 azure = ["cloud", "sheprd-client/azure", "sheprd-remote/azure", "sheprd-usage/azure", "sheprd-vcs/azure"]
 # Boat sandboxes as devices, with an API key and per-machine SSH key setup.
 boat = ["cloud", "sheprd-client/boat", "sheprd-remote/boat"]
+# boxd machines as devices, with an API key and this app as their exec relay.
+boxd = ["cloud", "sheprd-client/boxd", "sheprd-remote/boxd"]
 # Coder workspaces as devices, with OAuth2 sign-in.
 coder = ["cloud", "sheprd-client/coder", "sheprd-remote/coder"]
 # Containers on this computer's Docker or Podman engine as devices.

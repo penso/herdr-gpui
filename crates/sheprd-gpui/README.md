@@ -367,11 +367,11 @@ edits only the local catalog: the host's own Herdr keeps running. When the
 device has its own GitHub sign-in, the confirmation also offers to delete it,
 since its account panel goes away with the device. Local has no such menu.
 
-A cloud device's header (Azure, Boat, Coder, Container, Daytona, OpenSandbox,
-Railway, or Sprites) has a menu too: **Rename…** changes the name the sidebar
+A cloud device's header (Azure, Boat, boxd, Coder, Container, Daytona,
+OpenSandbox, Railway, or Sprites) has a menu too: **Rename…** changes the name the sidebar
 shows, falling back to the machine's name when left empty; **Cloud device
 settings…** opens its provider under Settings > Cloud devices; and **Remove
-device…** removes it from this computer. For an Azure machine, a Boat,
+device…** removes it from this computer. For an Azure or boxd machine, a Boat,
 Daytona, or OpenSandbox sandbox, a Coder workspace, a container, or a sprite,
 it deletes the machine at the provider by default, with **Remove from Herdr
 only** beside it; a Railway VM is left as it is and expires on its own. Before
@@ -475,7 +475,7 @@ the app.
 ### Coder workspaces
 
 Settings > **Cloud devices** holds accounts with providers that create machines
-to use as devices: Azure, Boat, Coder, Container, Daytona, OpenSandbox,
+to use as devices: Azure, Boat, boxd, Coder, Container, Daytona, OpenSandbox,
 Railway, and Sprites.
 Coder's card edits the `[coder]` keys (see `config-gpui.example.toml`), saves the OAuth client secret to the
 credential store rather than the config file, signs in and out, and lists the
@@ -654,6 +654,31 @@ a WebSocket whose binary frames carry stdin, stdout, stderr, and the exit code
 unchanged. The token stays on this computer. Sprites are unavailable on
 Windows, like every cloud device. This provider is tested against a scripted
 exec stream and API replies, but not yet against a live Sprites account.
+
+### boxd (experimental)
+
+Settings > **Cloud devices** > **boxd** holds a [boxd](https://boxd.sh/?ref=sheprd)
+account: the API URL (`https://boxd.sh:9443` for boxd's service, or a region
+such as `https://nyc.boxd.sh:9443`), saved to `[boxd]`, and an API key saved
+to the credential store (`HERDR_BOXD_API_KEY` takes precedence, and
+`HERDR_BOXD_API_URL` replaces the URL). Create a key in the boxd console or
+with `boxd auth keys create <name>`; a key belongs to one organization, and
+the machines are made there. **Create machine** makes a machine with a
+generated name from boxd's default Ubuntu image, labelled `sheprd=device` and
+with any `[boxd] labels`, installs Herdr in it when the **Install Herdr**
+switch is on (the default), and saves the device; a failure deletes the
+machine again. boxd machines are full Linux microVMs with a persistent disk.
+One that went to standby or hibernated after being idle, or was stopped, is
+resumed, woken, or started when Sheprd connects. Once a boxd device exists,
+Smart Dispatch's dialogs offer a new machine like **New container**.
+
+The app reaches a machine without SSH keys: it runs itself as a relay
+(`sheprd __boxd-exec`) over the API's `Exec` stream, which boxd serves as
+grpc-web over HTTP/1.1 in both directions at once, so stdin, stdout, stderr,
+end of input, and the exit code pass unchanged, without an async runtime. The
+API key stays on this computer and goes only to the configured API URL. boxd
+is unavailable on Windows, like every cloud device. Tested against the live
+boxd service and against a scripted exec stream.
 
 ### OpenSandbox (experimental)
 

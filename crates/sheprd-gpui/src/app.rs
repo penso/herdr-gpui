@@ -233,6 +233,10 @@ pub(crate) fn run() -> std::process::ExitCode {
     if let Some(exit) = crate::azure::sandbox::relay::run_helper(&args) {
         return exit;
     }
+    #[cfg(feature = "boxd")]
+    if let Some(exit) = crate::boxd::relay::run_helper(&args) {
+        return exit;
+    }
     #[cfg(feature = "sprites")]
     if let Some(exit) = crate::sprites::relay::run_helper(&args) {
         return exit;

@@ -690,6 +690,19 @@ size = 12
 # memory = "4Gi"
 # allow_plaintext_credentials = false
 
+# boxd machines as devices (experimental). Settings > Cloud devices > boxd edits
+# api_url and saves the API key to the credential store; the key is never read
+# from this file. HERDR_BOXD_API_KEY overrides the saved key and
+# HERDR_BOXD_API_URL overrides api_url.
+# [boxd]
+# The API of boxd's service; a region is https://<region>.boxd.sh:9443.
+# api_url = "https://boxd.sh:9443"
+# Labels added to every machine made here, beside sheprd = "device".
+# labels = { team = "web" }
+# Same meaning as [github] allow_plaintext_credentials, for the key, which is
+# saved in its own 0600 boxd-api-key file. Default is false.
+# allow_plaintext_credentials = false
+
 # Fly Sprites as devices (experimental). Settings > Cloud devices > Sprites
 # edits this table and saves the API token to the credential store; the token
 # is never read from this file. HERDR_SPRITES_TOKEN overrides the saved token

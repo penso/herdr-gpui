@@ -286,6 +286,7 @@ embedded_icons! {
     "chevron-up.svg",
     "close.svg",
     "cloud/azure.svg",
+    "cloud/boxd.svg",
     "cloud/coder.svg",
     "cloud/container.svg",
     "cloud/daytona.svg",
