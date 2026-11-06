@@ -1,8 +1,10 @@
 //! Terminal tabs: the page for one pane, its screen as the stream sends it,
 //! and what the phone types or asks of Herdr. Everything goes through
 //! Herdr's public API, which neither focuses nor resizes anything, so a
-//! phone watching or typing leaves the desktop's layout alone. Only panes
-//! of the layout's terminal tabs and chats are reachable.
+//! phone watching or typing leaves the desktop's layout alone. A Herdr 2
+//! pane is watched as an observer, and typing into one takes its driver's
+//! role at its current size. Only panes of the layout's terminal tabs and
+//! chats are reachable.
 
 use super::{ApiError, Device, Shared, render, render::now_ms};
 use crate::hub::{ApiMethod, Layout};
@@ -304,8 +306,18 @@ pub(super) async fn action(
             })
             .ok_or(ApiError::NotFound)?
     };
-    let (method, params) = action_call(request.action, &pane, &tab, &workspace);
-    let result = state.hub.call(method, params).await?;
+    let core_tab = if request.action == Action::NewTab {
+        state.hub.new_core_tab(&workspace).await?
+    } else {
+        None
+    };
+    let result = match core_tab {
+        Some(result) => result,
+        None => {
+            let (method, params) = action_call(request.action, &pane, &tab, &workspace);
+            state.hub.call(method, params).await?
+        }
+    };
     let created = result["pane"]["pane_id"]
         .as_str()
         .or_else(|| result["root_pane"]["pane_id"].as_str())
