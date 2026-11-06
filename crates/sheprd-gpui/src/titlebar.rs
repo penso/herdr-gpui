@@ -68,7 +68,9 @@ impl SheprdWindow {
     /// meaning different things. A branch with a prefetched pull request shows
     /// that pull request, exactly as its sidebar row does, and a badge when the
     /// checkout also has uncommitted work; the popup says how much. A branch
-    /// without one shows what a commit would include right now.
+    /// without one shows what a commit would include right now, and says so
+    /// when commits are waiting for a pull request: a clean tree alone would
+    /// leave the slot empty though there is still work to send.
     fn render_git_button(&self, cx: &mut Context<Self>) -> Option<Div> {
         self.git.tracked()?;
         let theme = &self.theme;
@@ -77,15 +79,19 @@ impl SheprdWindow {
         let status = self.git.status();
         let running = self.git.running().is_some();
         let anchor = self.git_anchor.clone();
-        let pr = self.git_pull_request().map(|pr| {
-            (
-                format!("#{}", pr.number),
-                crate::pull_request::color(&pr, theme),
-                pr.additions,
-                pr.deletions,
-                pr.url.clone(),
-            )
-        });
+        let unopened = self.git_unopened_commits();
+        let pr = self
+            .git_pull_request()
+            .filter(|_| unopened.is_none())
+            .map(|pr| {
+                (
+                    format!("#{}", pr.number),
+                    crate::pull_request::color(&pr, theme),
+                    pr.additions,
+                    pr.deletions,
+                    pr.url.clone(),
+                )
+            });
         Some(
             div()
                 .debug_selector(|| "titlebar-git-slot".into())
@@ -98,6 +104,32 @@ impl SheprdWindow {
                 .text_font(font)
                 .text_size(px(font.size))
                 .text_color(rgb(theme.foreground))
+                .when_some(unopened, |button, commits| {
+                    button.child(
+                        div()
+                            .id("titlebar-git-unopened")
+                            .debug_selector(|| "titlebar-git-unopened".into())
+                            .row()
+                            .items_center()
+                            .flex_none()
+                            .h(px(24.))
+                            .px(px(6.))
+                            .rounded(px(crate::config::corners::CONTROL))
+                            .cursor_pointer()
+                            .hover(|link| {
+                                link.bg(background.blend(rgba((theme.foreground << 8) | 0x14)))
+                            })
+                            .text_color(rgb(crate::pull_request::unopened_color(theme)))
+                            .child(fl!("titlebar-unopened", commits = commits))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.open_git_menu_on_pull_request(event.position, window, cx);
+                                }),
+                            ),
+                    )
+                })
                 .map(|button| match pr {
                     Some((number, color, additions, deletions, url)) => button
                         .child(

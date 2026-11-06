@@ -4050,6 +4050,15 @@ Ctrl+Shift+U is left unbound for
   conflicts or blockers, and passed/failed/pending/skipped check counts. Repeated
   opens share an in-flight lookup; account authentication/rate-limit pauses still
   apply.
+  A branch with commits past the default branch and no pull request carrying
+  them shows a yellow `+PR` in the number's place in the sidebar, and
+  `3 commits, no PR` in the titlebar, which opens the Git menu on Create pull
+  request. Pushing does not clear it, only a pull request does. It needs a
+  finished lookup, so a signed-out or non-GitHub checkout shows nothing, and a
+  squash-merged branch shows its number until it moves past the merged head. The
+  default branch is the remote's `HEAD` (`upstream` before `origin`); a clone
+  without one has nothing to compare with and shows nothing, until
+  `git remote set-head origin --auto`. This machine's checkouts only.
   PR numbers in the sidebar and titlebar share readiness colors: green for a clean
   merge, red for conflicts, failing checks, or requested changes, yellow for pending
   checks/reviews or an unknown merge status, and orange for a blocked/behind branch
