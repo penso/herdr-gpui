@@ -139,6 +139,18 @@ and builds without embedded pages return exit 8. See [px0](../crates/sheprd-gpui
 
 ### Hosts
 
+A focus asked for on a connected host the window is not showing, such as
+`herdr --machine Homelab agent focus NAME`, switches the window to that host
+when it moves the host to another tab. The daemon reports nothing when the
+target is already its focused tab, or when the focus only moves between panes
+of one tab, so a script that must end up on the host runs `sheprd host select`
+as well. A focus waits until you stop typing or composing, so keys meant for
+one host do not reach another, and choosing a host yourself in the meantime
+cancels it. It leaves the host restored at the next launch as it was.
+It does not take the window while a dialog is open, or from another window
+already showing the host. A tab or workspace opening on a background host does
+not take it either.
+
 | Command | What it does |
 | --- | --- |
 | `host [list]`, `host select ID` | The window's hosts; show another one |
@@ -425,9 +437,9 @@ can hold.
 
 ## Chats on SSH hosts
 
-Native chat views are opt-in: turn on **ACP chats** in Settings > General
-(`acp_chats = true` under `[features]`). While it is off, chat panes show
-their terminal and `chat new` exits 8.
+Native chat views are on by default: turn off **ACP chats** in Settings >
+General (`acp_chats = false` under `[features]`) to go without them. While it
+is off, chat panes show their terminal and `chat new` exits 8.
 
 Set the reading width with `sheprd config set chat.max_width 1200`, or use
 `0` for the full available width. Bounded widths range from 320 to 4000 logical
@@ -454,7 +466,7 @@ temporary files under its `${TMPDIR:-/tmp}`, and the copies are attached.
 
 ### Existing agent rendering
 
-Set `chat.render_existing = true` along with `features.acp_chats = true` to
+Set `chat.render_existing = true`, with `features.acp_chats` left on, to
 render existing Linux Codex/Claude conversations automatically. The original
 terminal input remains interactive in the same pane. `chat status --json`
 reports `input_mode` (`chat`, `terminal`, or `read_only`) and `session_id`;

@@ -66,9 +66,6 @@ finished. This only stops the viewer. The GUI can show it over the selected
 existing pane using its own config (normally `config-gpui.toml`):
 
 ```toml
-[features]
-acp_chats = true
-
 [[chat.mirrors]]
 pane = "PANE_ID"
 endpoint = "0123456789abcdef0123456789abcdef"

@@ -8,8 +8,10 @@
 //! local change counts, the probe counts lines instead, on the same schedule.
 //! Commit, push, and pull request creation are explicit user actions and are
 //! never retried or replayed automatically.
+mod ahead;
 mod error;
 
+pub use ahead::Ahead;
 pub use error::Error;
 use secrecy::SecretString;
 use sheprd_github::{
@@ -103,6 +105,8 @@ enum Job {
     Dirty,
     /// A listed checkout's line counts, for a sidebar that shows them.
     Counts,
+    /// A checkout's commits beyond its default branch.
+    Ahead,
     Run(Action, Option<Tokens>),
 }
 
@@ -119,6 +123,7 @@ enum Completion {
     Status(crate::Result<Focused>),
     Dirty(crate::Result<bool>),
     Counts(crate::Result<Counted>),
+    Ahead(crate::Result<Option<Ahead>>),
     Action(crate::Result<Outcome>),
 }
 
@@ -181,6 +186,9 @@ pub struct Git {
     counted: bool,
     queue: VecDeque<Input>,
     next_scan: Option<Instant>,
+    ahead: ahead::Cache,
+    /// Commits ahead are worth reading: only a pull request lookup uses them.
+    read_ahead: bool,
 }
 
 impl Drop for Git {
@@ -206,6 +214,12 @@ impl Git {
     #[cfg(any(test, feature = "test-support"))]
     pub fn seed_probe(&mut self, input: Input, dirty: bool, now: Instant) {
         self.record_probe(input, Some(Answer::Dirty(dirty)), now);
+    }
+
+    /// Chrome fixture: a checkout's commits beyond its default branch.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed_ahead(&mut self, input: Input, ahead: Ahead, now: Instant) {
+        self.ahead.record(input, Some(ahead), now + PROBE_REFRESH);
     }
 
     /// Chrome fixture: a counted answer for a listed checkout.
@@ -313,6 +327,12 @@ impl Git {
         self.counted = counted;
     }
 
+    /// Read commits ahead of the default branch, for an app that can look up
+    /// the pull requests they would be compared with.
+    pub fn set_read_ahead(&mut self, read: bool) {
+        self.read_ahead = read;
+    }
+
     /// Follow the listed checkouts: drop probes for workspaces that are gone
     /// and queue the ones whose answer is missing or stale.
     pub fn track_listed(
@@ -329,7 +349,15 @@ impl Git {
         }
         self.probes.retain(|probe| listed.contains(&probe.input));
         self.queue.retain(|input| listed.contains(input));
-        if !refresh || self.next_scan.is_some_and(|next| now < next) {
+        let scan = refresh && self.next_scan.is_none_or(|next| now >= next);
+        // Unlike the status above, the focused checkout has no refresh of its
+        // own here, and may not be listed at all.
+        let mut tracked = listed.clone();
+        if let Some(input) = self.input.as_ref().filter(|input| !listed.contains(input)) {
+            tracked.push(input.clone());
+        }
+        self.ahead.schedule(&tracked, scan && self.read_ahead, now);
+        if !scan {
             return;
         }
         self.next_scan = Some(now + SCAN_INTERVAL);
@@ -384,6 +412,18 @@ impl Git {
         });
     }
 
+    /// Commits this listed checkout holds beyond its default branch, if a
+    /// probe found any. Pure cache read, like [`Self::dirty`].
+    pub fn ahead(&self, repo_key: &str, branch: &str) -> Option<&Ahead> {
+        self.ahead.listed(repo_key, branch)
+    }
+
+    /// [`Self::ahead`] for the focused checkout, which daemon metadata may
+    /// not name: it is then known only by its directory.
+    pub fn focused_ahead(&self) -> Option<&Ahead> {
+        self.ahead.get(self.input.as_ref()?)
+    }
+
     /// Queue an explicit user action against the tracked checkout.
     pub fn start(&mut self, action: Action, token: Option<Tokens>) -> crate::Result<()> {
         if self.running.is_some() {
@@ -436,6 +476,16 @@ impl Git {
                         Completion::Counts(result) => {
                             self.record_probe(input, result.ok().map(Answer::Counted), now);
                         }
+                        Completion::Ahead(result) => {
+                            let wait = match &result {
+                                Err(_) => PROBE_BACKOFF,
+                                // A commit made in a terminal should show as
+                                // soon as the status beside it does.
+                                Ok(_) if self.input.as_ref() == Some(&input) => REFRESH,
+                                Ok(_) => PROBE_REFRESH,
+                            };
+                            self.ahead.record(input, result.ok().flatten(), now + wait);
+                        }
                         Completion::Action(result) => {
                             self.running = None;
                             match result {
@@ -446,6 +496,7 @@ impl Git {
                             if self.input.as_ref() == Some(&input) {
                                 self.due = Some(now);
                             }
+                            self.ahead.expire(&input, now);
                         }
                     }
                 }
@@ -471,6 +522,12 @@ impl Git {
                 Job::Dirty
             };
             self.waiting = Some((input, job));
+        }
+        if !self.busy
+            && self.waiting.is_none()
+            && let Some(input) = self.ahead.next()
+        {
+            self.waiting = Some((input, Job::Ahead));
         }
         if !self.busy
             && let Some((input, job)) = self.waiting.take()
@@ -535,6 +592,7 @@ fn execute(input: &Input, job: Job, cancelled: &impl Fn() -> bool) -> Completion
         Job::Counts => {
             Completion::Counts(counted(input, Instant::now() + STATUS_TIMEOUT, cancelled))
         }
+        Job::Ahead => Completion::Ahead(ahead::read(input, STATUS_TIMEOUT, cancelled)),
         // Writes are never cancelled: killing `git commit` or `git push`
         // halfway through can leave an index lock or a half-written ref behind,
         // so only their own deadline ends them.

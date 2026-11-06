@@ -172,6 +172,9 @@ impl EntityInputHandler for SheprdWindow {
         cx: &mut Context<Self>,
     ) {
         self.shift_taps.cancel();
+        // Nothing reaches a pane until the composition commits, but this is
+        // the user typing all the same.
+        self.note_input();
         if self.menu.page.is_some() {
             if let Some(input) = self.menu.input.as_mut() {
                 input.replace(range, text, true, selected);

@@ -262,11 +262,12 @@ Installation contracts, beyond accepting a filename:
   the candidate's selected executable from where the bundle landed, retains the
   previous bundle, and restores it on rename/spawn failure.
 - **Homebrew stable:** ownership still requires an artifact receipt symlink to
-  this exact running bundle under `Caskroom/herdr-gpui/VERSION`. Either
-  `Herdr.app` or `Sheprd.app` may name that receipt; the cask token remains
-  `herdr-gpui`. Relaunch accepts either executable.
-  The renamed cask displays Sheprd but keeps its install target at
-  `Herdr.app` (`app "Sheprd.app", target: "Herdr.app"`) and stays in `penso/tap`.
+  this exact running bundle under `Caskroom/TOKEN/VERSION`, for the `herdr-gpui`
+  or `sheprd` token, and that token is what the updater upgrades. Either
+  `Herdr.app` or `Sheprd.app` may name that receipt. Relaunch accepts either executable.
+  `sheprd` in `sheprd-labs/tap` installs `Sheprd.app`. `herdr-gpui` in `penso/tap`
+  displays Sheprd but keeps its install target at `Herdr.app`
+  (`app "Sheprd.app", target: "Herdr.app"`) for existing installs.
   Clients follow the cask when it drops that target; see
   [Moving `Herdr.app` To `Sheprd.app`](#moving-herdrapp-to-sheprdapp) for the order.
 - **Linux standalone:** the single regular executable inside the updater tar

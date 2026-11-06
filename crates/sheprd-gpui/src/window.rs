@@ -583,6 +583,8 @@ impl SheprdWindow {
         };
         let old_tab = focused_tab(&self.live);
         self.poll_endpoints(cx);
+        let own = window.window_handle().window_id();
+        self.follow_focus(own, std::time::Instant::now(), cx);
         if self
             .icon_font_notice
             .observe(self.config.icon_font_missing, self.live.surface.as_deref())

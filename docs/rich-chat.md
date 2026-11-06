@@ -6,13 +6,10 @@ original terminal input, without restarting, resuming or replacing the agent.
 
 ## Enable and configure
 
-Enable **ACP chats** in Settings > General, or set the following in the
-[GUI configuration](../crates/sheprd-gpui/README.md#configuration):
+**ACP chats** are on by default; Settings > General turns them off. Configure
+them in the [GUI configuration](../crates/sheprd-gpui/README.md#configuration):
 
 ```toml
-[features]
-acp_chats = true
-
 [chat]
 layout = "bubbles"
 render_existing = true

@@ -91,6 +91,9 @@ host, in agent-launcher's GitLab row format: `native_id` is the issue's
 project `iid`. Its open merge requests (`.../merge_requests?state=opened`, read
 the same way, with the same token) join them as pull requests, keyed `pr/<iid>`
 and shown as `!<iid>`, with their source and target branches and draft state.
+`recent_issues` reads one bounded page instead, the 50 most recently updated
+open issues (`order_by=updated_at&sort=desc`), for the new worktree dialog's
+issues tab; it never touches the cache.
 A refused merge request listing fails the sync and preserves the cached
 items. Merge requests are read-only: the status, conversation, checks, merge,
 and `gh` review pages are GitHub's, so a merge request has none of them and

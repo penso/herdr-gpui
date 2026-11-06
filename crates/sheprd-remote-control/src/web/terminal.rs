@@ -21,6 +21,9 @@ const MAX_KEYS: usize = 64;
 /// The longest paste one request sends.
 const MAX_TEXT: usize = 64 * 1024;
 
+/// The lines of history one read asks for, the most Herdr gives.
+const HISTORY_LINES: u32 = 1000;
+
 /// Key names Herdr's `pane.send_keys` reads besides single characters.
 const NAMED_KEYS: &[&str] = &[
     // keep-sorted start
@@ -97,6 +100,33 @@ pub(super) async fn fragment(
     Ok(Html(
         render::terminal(workspace, terminal, row, &screen).into_string(),
     ))
+}
+
+/// The pane's history down to its last line, for the phone to scroll. Asked
+/// for when the phone scrolls back rather than streamed with the screen: it
+/// is far larger, and the stream resends what it follows on every change.
+pub(super) async fn history(
+    State(state): State<Shared>,
+    _device: Device,
+    Path(pane): Path<String>,
+) -> Result<Html<String>, ApiError> {
+    // Checked before reading, so a chat's pane is never read.
+    known(&state.hub.layout(), &pane)?;
+    let read = state
+        .hub
+        .call(
+            ApiMethod::PaneRead,
+            json!({
+                "pane_id": pane,
+                "source": "recent",
+                "lines": HISTORY_LINES,
+                "format": "ansi",
+            }),
+        )
+        .await?;
+    let text = read["read"]["text"].as_str().unwrap_or_default();
+    let screen = render::screen(crate::ansi::tail(text));
+    Ok(Html(render::terminal_screen(&screen).into_string()))
 }
 
 #[derive(Deserialize)]

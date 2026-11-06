@@ -65,6 +65,7 @@ impl SheprdWindow {
         self.git.set_counted(
             self.config.sidebar_style.change_counts == crate::config::ChangeCounts::Local,
         );
+        self.git.set_read_ahead(self.menu.github.connected());
         self.git
             .track_listed(self.listed_git_inputs(), self.active, now);
         changed |= self.git.poll(now);
@@ -150,6 +151,35 @@ impl SheprdWindow {
         self.discard_composition(cx);
         window.focus(&self.menu.focus, cx);
         cx.notify();
+    }
+
+    /// The menu with its pull request row ready, for the titlebar's note that
+    /// the branch has none. Opening one pushes the branch, so that stays a
+    /// second, deliberate step.
+    pub(crate) fn open_git_menu_on_pull_request(
+        &mut self,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_git_menu(anchor, window, cx);
+        if self.menu.page == Some(Page::Git) {
+            self.menu.git_selected = Some(Row::PullRequest);
+        }
+    }
+
+    /// How many commits the focused branch holds that no pull request
+    /// carries, once a finished lookup can say so. Reading never schedules work.
+    pub(crate) fn git_unopened_commits(&self) -> Option<u64> {
+        let input = self.git.tracked()?;
+        let ahead = self.git.focused_ahead()?;
+        let view = crate::pull_request::View {
+            origin: crate::pull_request::Origin::Local,
+            login: self.main_tokens()?.key(),
+        };
+        (self.menu.github.connected()
+            && self.menu.pr_cache.unopened_input(&view, input, &ahead.head))
+        .then_some(ahead.commits)
     }
 
     /// The pull request already prefetched for the focused branch, in whatever

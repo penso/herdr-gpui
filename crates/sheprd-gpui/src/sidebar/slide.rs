@@ -94,7 +94,11 @@ impl SheprdWindow {
 
     /// How much of the sliding sidebar shows, `None` while it is still.
     pub(crate) fn sidebar_slide_shown(&self) -> Option<f32> {
-        let now = motion::now();
+        self.sidebar_slide_shown_at(motion::now())
+    }
+
+    /// [`Self::sidebar_slide_shown`] at `now`.
+    fn sidebar_slide_shown_at(&self, now: std::time::Instant) -> Option<f32> {
         let toggle = &self.sidebar_slide.toggle;
         toggle.moving(now).then(|| toggle.shown(now))
     }
