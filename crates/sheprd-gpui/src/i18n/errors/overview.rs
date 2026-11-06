@@ -10,6 +10,11 @@ impl Localize for Error {
             Self::Json(error) => fl!("error-overview-json", error = error.to_string()),
             Self::ReopenRequest(error) => error.localize(),
             Self::ReopenResponse => fl!("error-overview-reopen-response"),
+            Self::ReplyHost(error) => error.localize(),
+            Self::ReplyRefused { message, .. } => crate::notifications::safe_text(message, 200),
+            Self::ReplyScript(error) => {
+                fl!("error-overview-reply-script", error = error.to_string())
+            }
         }
     }
 }

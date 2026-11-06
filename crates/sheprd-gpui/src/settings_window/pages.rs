@@ -18,6 +18,7 @@ use crate::i18n::{self, fl};
 pub(super) use fonts::size_control;
 use gpui::{prelude::*, *};
 pub(super) use language::language_choices;
+pub(super) use notifications::quiet_hours_choices;
 pub(super) use sidebar::Spacing;
 pub(super) use window::padding_ids;
 

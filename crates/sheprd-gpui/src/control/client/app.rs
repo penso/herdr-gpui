@@ -4,10 +4,27 @@ use crate::{
     cli::control::{AppCommand, UiCommand, WindowCommand},
     control::protocol::{
         Request, Response,
-        app::{AppOp, CommandOp, Reply, Status, UiOp, WindowInfo, WindowOp},
+        app::{AlertInfo, AppOp, CommandOp, Reply, Status, UiOp, WindowInfo, WindowOp},
     },
 };
 use std::fmt::Write as _;
+
+/// One line per alert, newest first, each saying who needs what.
+pub(super) fn alert_lines(alerts: &[AlertInfo]) -> String {
+    if alerts.is_empty() {
+        return "No alerts yet".to_owned();
+    }
+    let mut text = String::new();
+    for alert in alerts {
+        let kind = if alert.needs_attention {
+            "needs you"
+        } else {
+            "finished"
+        };
+        let _ = writeln!(text, "{kind}  {}  {}", alert.host, alert.title);
+    }
+    text
+}
 
 fn describe_window(window: &WindowInfo, text: &mut String) {
     let _ = writeln!(
@@ -89,6 +106,7 @@ pub(super) fn app(command: AppCommand, context: &Context) -> crate::Result<Outpu
 pub(super) fn window(command: WindowCommand, context: &Context) -> crate::Result<Output> {
     let op = match command {
         WindowCommand::List => WindowOp::List,
+        WindowCommand::Alerts => WindowOp::Alerts,
         WindowCommand::New { session } => WindowOp::New { session },
         WindowCommand::Focus { id } => {
             let context = Context {
@@ -116,6 +134,9 @@ pub(super) fn window(command: WindowCommand, context: &Context) -> crate::Result
             }
             Output::data(text.trim_end(), &windows)
         }
+        Response::App {
+            reply: Reply::Alerts { alerts },
+        } => Output::data(alert_lines(&alerts).trim_end(), &alerts),
         Response::App {
             reply: Reply::Size { width, height },
         } => Output::data(

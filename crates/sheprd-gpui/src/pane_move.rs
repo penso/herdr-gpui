@@ -379,24 +379,30 @@ struct ErrorBody {
 /// [`Error::Refused`] with its message; a shell that could not find `herdr`
 /// says so; anything else keeps the script error.
 fn failure(error: sheprd_client::Error) -> Error {
-    let sheprd_client::Error::ScriptExit { status, stderr } = &error else {
-        return Error::Script(error);
-    };
-    // The CLI prints its envelope as the last stderr line.
-    if let Some(ErrorEnvelope {
-        error: ErrorBody { code, message },
-    }) = stderr
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .and_then(|line| serde_json::from_str(line.trim()).ok())
-    {
+    if let Some((code, message)) = refused(&error) {
         return Error::Refused { code, message };
     }
+    let sheprd_client::Error::ScriptExit { status, .. } = &error else {
+        return Error::Script(error);
+    };
     if status.code() == Some(127) {
         return Error::MissingCli(error);
     }
     Error::Script(error)
+}
+
+/// The code and message of Herdr's error envelope, when a failed `herdr`
+/// script printed one. Its message is remote text.
+pub(crate) fn refused(error: &sheprd_client::Error) -> Option<(String, String)> {
+    let sheprd_client::Error::ScriptExit { stderr, .. } = error else {
+        return None;
+    };
+    // The CLI prints its envelope as the last stderr line.
+    let line = stderr.lines().rev().find(|line| !line.trim().is_empty())?;
+    let ErrorEnvelope {
+        error: ErrorBody { code, message },
+    } = serde_json::from_str(line.trim()).ok()?;
+    Some((code, message))
 }
 
 /// The Teleport host for `target`, which this move shares.

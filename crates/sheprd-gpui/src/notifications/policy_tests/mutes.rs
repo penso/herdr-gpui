@@ -2,7 +2,17 @@ use super::*;
 use crate::notification_mutes::{Daemon, Mutes, Scope};
 
 fn tick_muted(endpoints: &mut [Endpoint], config: NotificationConfig, mutes: &Mutes, now: Instant) {
-    super::super::tick(endpoints, 0, config, Some(mutes), false, true, None, now);
+    super::super::tick(
+        endpoints,
+        0,
+        config,
+        Some(mutes),
+        false,
+        true,
+        false,
+        None,
+        now,
+    );
 }
 
 /// The fixture's workspace or tab muted on the second endpoint.
@@ -140,6 +150,7 @@ fn a_mute_on_one_host_leaves_the_same_ids_on_another_alone() {
         Some(&mutes),
         false,
         true,
+        false,
         None,
         now,
     );

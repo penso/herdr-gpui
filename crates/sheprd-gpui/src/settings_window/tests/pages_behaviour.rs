@@ -124,6 +124,45 @@ fn override_dropdowns_offer_the_shared_value_first(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn quiet_hours_are_picked_from_common_windows(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(skill_fixture);
+    let edits = view.update(cx, |view, _| recording(view));
+    cx.simulate_resize(size(px(960.), px(2000.)));
+    show(&view, Section::Notifications, cx);
+    let button = cx
+        .debug_bounds("notif-quiet-hours-control")
+        .unwrap()
+        .center();
+    cx.simulate_click(button, Default::default());
+    cx.run_until_parked();
+    draw(cx);
+    let option = cx
+        .debug_bounds("notif-quiet-hours-control-option-4")
+        .unwrap()
+        .center();
+    cx.simulate_click(option, Default::default());
+    cx.run_until_parked();
+    assert_eq!(
+        edits.lock().unwrap().last(),
+        Some(&Preference::NotificationQuietHours(Some(
+            crate::config::QuietHours::at_hours(22, 8)
+        )))
+    );
+}
+
+#[test]
+fn quiet_hours_set_by_hand_stay_on_offer() {
+    use super::super::pages::quiet_hours_choices;
+    let common = quiet_hours_choices(None);
+    assert_eq!(common[0], None, "off comes first");
+    let custom = crate::config::QuietHours::parse("01:30-02:45");
+    let choices = quiet_hours_choices(custom);
+    assert_eq!(choices.len(), common.len() + 1);
+    assert_eq!(choices.last(), Some(&custom));
+    assert_eq!(quiet_hours_choices(common[1]).len(), common.len());
+}
+
+#[gpui::test]
 fn a_failed_preference_write_reports_and_reloads(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(skill_fixture);
     view.update(cx, |view, _| {

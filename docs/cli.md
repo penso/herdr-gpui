@@ -61,6 +61,7 @@ Every command accepts:
 | `status` | Whether the app runs, its version and control protocol, windows, and hosts |
 | `app focus\|hide\|quit` | Bring the app forward, hide it, or quit it (Herdr keeps running) |
 | `window [list]` | Windows with their IDs, size, workspace, and hosts |
+| `window alerts` | The alerts the window kept, newest first, including those held back by quiet hours |
 | `window new [--session NAME]` | Another window, of your own Herdr session or a named local session |
 | `window focus ID` | Bring a window forward |
 | `window fullscreen [on\|off\|toggle]` | |

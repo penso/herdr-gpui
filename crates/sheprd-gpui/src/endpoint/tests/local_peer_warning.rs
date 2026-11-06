@@ -37,6 +37,7 @@ fn local_peer_warning_becomes_a_toast_even_when_notifications_are_off() {
         None,
         true,
         true,
+        false,
         None,
         Instant::now(),
     );
@@ -51,6 +52,7 @@ fn local_peer_warning_becomes_a_toast_even_when_notifications_are_off() {
         None,
         false,
         true,
+        false,
         None,
         Instant::now(),
     );

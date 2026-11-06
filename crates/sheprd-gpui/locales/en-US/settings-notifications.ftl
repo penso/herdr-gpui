@@ -21,3 +21,4 @@ settings-notifications-delay-reset = Reset
 settings-notifications-sound-description = Uses Herdr's sound paths and per-agent overrides. Missing custom sounds fall back to bundled sounds.
 settings-notifications-sound-description-no-window = Uses Herdr's sound paths and per-agent overrides. Missing custom sounds fall back to bundled sounds. Open a main Sheprd window to preview audio.
 settings-notifications-sound-test = Test
+settings-notifications-quiet-off = Off

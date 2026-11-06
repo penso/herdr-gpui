@@ -283,3 +283,28 @@ esac
             .contains("\nw1:t 'x\n")
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn a_refusal_is_read_from_the_last_stderr_line_alone() {
+    use std::os::unix::process::ExitStatusExt;
+    let exit = |stderr: &str| sheprd_client::Error::ScriptExit {
+        status: std::process::ExitStatus::from_raw(1 << 8),
+        stderr: stderr.into(),
+    };
+    assert_eq!(
+        refused(&exit(
+            "warning\n{\"error\":{\"code\":\"agent_blocked\",\"message\":\"asks\"}}\n\n"
+        )),
+        Some(("agent_blocked".into(), "asks".into()))
+    );
+    assert_eq!(refused(&exit("usage: herdr agent prompt")), None);
+    // An envelope on an earlier line is not this failure's.
+    assert_eq!(
+        refused(&exit(
+            "{\"error\":{\"code\":\"agent_blocked\",\"message\":\"old\"}}\nlater"
+        )),
+        None
+    );
+    assert_eq!(refused(&sheprd_client::Error::ScriptTimeout), None);
+}

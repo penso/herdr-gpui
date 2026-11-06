@@ -3,3 +3,4 @@
 error-overview-invalid-marks = Invalid saved overview marks
 error-overview-json = Cannot read saved overview marks: { $error }
 error-overview-reopen-response = Unexpected daemon response while opening the agent's tab
+error-overview-reply-script = Cannot run the host's herdr command: { $error }

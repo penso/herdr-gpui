@@ -93,6 +93,7 @@ impl SheprdWindow {
             let endpoints = &self.endpoints;
             avatars.keep_links(|id| endpoints.iter().any(|endpoint| endpoint.id == id));
         }
+        let quiet = self.config.notifications.quiet();
         for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
             let updated = endpoint.poll(Instant::now());
             // Nothing to keep current, or to silence, while nothing is muted.
@@ -114,7 +115,7 @@ impl SheprdWindow {
             // Bells are a presentation effect: only the selected endpoint's
             // ring, as the TUI drops them from inactive endpoints.
             let bells = std::mem::take(&mut endpoint.live.bells);
-            if index == self.selected_endpoint {
+            if index == self.selected_endpoint && !quiet {
                 self.bell.queue(bells);
             }
             selected_changed |= index == self.selected_endpoint && updated != Redraw::None;
@@ -129,11 +130,12 @@ impl SheprdWindow {
                 index == self.selected_endpoint && self.active,
                 Instant::now(),
                 |event| {
-                    silenced.notice(
-                        event.workspace_id.as_deref(),
-                        event.tab_id.as_deref(),
-                        event.pane_id.as_deref(),
-                    )
+                    quiet
+                        || silenced.notice(
+                            event.workspace_id.as_deref(),
+                            event.tab_id.as_deref(),
+                            event.pane_id.as_deref(),
+                        )
                 },
             );
             changed = changed.max(updated);

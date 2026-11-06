@@ -17,6 +17,7 @@ commands-cycle-windows = Cycle Through Windows
 commands-decrease-font-size = Decrease Font Size
 commands-detach = Detach
 commands-devices-overview = Devices Overview
+commands-notification-history = Notification History
 commands-edit-scrollback = Open Scrollback in Editor
 commands-edit-worktree-note = Edit Worktree Note
 commands-equalize-splits = Equalize Splits

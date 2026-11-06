@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod history;
+
 fn tick(
     endpoints: &mut [Endpoint],
     selected: usize,
@@ -8,7 +10,9 @@ fn tick(
     hidden: bool,
     now: Instant,
 ) -> bool {
-    super::tick(endpoints, selected, config, None, hidden, true, None, now)
+    super::tick(
+        endpoints, selected, config, None, hidden, true, false, None, now,
+    )
 }
 use crate::{config::NotificationConfig, endpoint::Endpoint};
 use sheprd_client::{
@@ -536,6 +540,7 @@ fn system_delivery_is_suppressed_for_the_active_tab_only_while_focused() {
             None,
             false,
             focused,
+            false,
             None,
             now,
         );

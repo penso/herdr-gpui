@@ -74,6 +74,7 @@ pub(in crate::settings_window) enum DropdownField {
     Language,
     ToastEnabled,
     ToastPosition,
+    QuietHours,
     RemoteBind,
 }
 
@@ -86,6 +87,7 @@ impl DropdownField {
             Self::Language => "general-language-control",
             Self::ToastEnabled => "notif-show-control",
             Self::ToastPosition => "notif-position-control",
+            Self::QuietHours => "notif-quiet-hours-control",
             Self::RemoteBind => "remote-bind-control",
         }
     }
@@ -155,6 +157,15 @@ impl SettingsWindow {
                     return;
                 };
                 Preference::Language(language)
+            }
+            DropdownField::QuietHours => {
+                let choices =
+                    super::pages::quiet_hours_choices(self.config.notifications.quiet_hours);
+                let Some(hours) = choices.get(index) else {
+                    cx.notify();
+                    return;
+                };
+                Preference::NotificationQuietHours(*hours)
             }
             DropdownField::ClipboardEnabled => Preference::ClipboardEnabled(flag),
             DropdownField::ClipboardPosition => Preference::ClipboardPosition(
