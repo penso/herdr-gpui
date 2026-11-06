@@ -28,23 +28,35 @@ enum Flow {
     Wait,
 }
 
-/// The next step from `state`. `checked` says this update already asked
-/// for the latest release, so an idle updater has found nothing to do.
+/// The next step from `state`. `checked` says this update already took a
+/// step, so an idle updater is done with it: nothing newer, or someone at the
+/// computer cancelled, which a phone's request must not undo.
 fn flow(state: &State, checked: bool) -> Flow {
     match state {
         State::Available { .. } => Flow::Download,
-        State::Cancelling
-        | State::Checking
+        State::Checking
         | State::Downloading { .. }
         | State::Installing
         | State::Upgrading { .. } => Flow::Wait,
         State::Current | State::Error(_) | State::Idle if !checked => Flow::Check,
-        State::Current | State::Disabled(_) | State::Error(_) | State::Idle | State::Restarting => {
-            Flow::Stop
-        }
+        State::Cancelling
+        | State::Current
+        | State::Disabled(_)
+        | State::Error(_)
+        | State::Idle
+        | State::Restarting => Flow::Stop,
         State::Homebrew { .. } => Flow::Upgrade,
         State::Ready { .. } => Flow::Install,
         State::Restart { .. } => Flow::Restart,
+    }
+}
+
+/// What `running` becomes after `flow`: any step counts as `checked`.
+fn after(flow: Flow, checked: bool) -> Option<bool> {
+    match flow {
+        Flow::Stop => None,
+        Flow::Wait => Some(checked),
+        Flow::Check | Flow::Download | Flow::Install | Flow::Restart | Flow::Upgrade => Some(true),
     }
 }
 
@@ -123,18 +135,16 @@ impl Updates {
         let Some(checked) = *running else {
             return;
         };
-        match flow(updater.state(), checked) {
-            Flow::Check => {
-                updater.check();
-                *running = Some(true);
-            }
+        let next = flow(updater.state(), checked);
+        match next {
+            Flow::Check => updater.check(),
             Flow::Download => updater.download(),
             Flow::Install => updater.install(),
             Flow::Restart => updater.restart(),
-            Flow::Stop => *running = None,
             Flow::Upgrade => updater.upgrade(),
-            Flow::Wait => {}
+            Flow::Stop | Flow::Wait => {}
         }
+        *running = after(next, checked);
     }
 }
 

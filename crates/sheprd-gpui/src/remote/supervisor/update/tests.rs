@@ -57,6 +57,26 @@ fn an_update_waits_while_the_updater_works() {
 }
 
 #[test]
+fn cancelling_at_the_computer_ends_a_phones_update() {
+    assert_eq!(flow(&State::Cancelling, false), Flow::Stop);
+    assert_eq!(after(Flow::Stop, false), None);
+}
+
+#[test]
+fn an_update_that_took_a_step_does_not_begin_again_from_idle() {
+    // Started from an offered release, so it never had to check.
+    let running = after(flow(&available(), false), false);
+    assert_eq!(running, Some(true));
+    assert_eq!(flow(&State::Idle, true), Flow::Stop);
+}
+
+#[test]
+fn waiting_keeps_what_the_update_has_done() {
+    assert_eq!(after(Flow::Wait, false), Some(false));
+    assert_eq!(after(Flow::Wait, true), Some(true));
+}
+
+#[test]
 fn a_build_that_cannot_update_stops_at_once() {
     assert_eq!(
         flow(&State::Disabled(Disabled::LocalBuild), false),
