@@ -12,8 +12,8 @@ use sheprd_chat_protocol::{Entry, EntryKind, assist::typed};
 
 /// Lines of the prompt shown; the rest stays in the conversation.
 const LINES: usize = 2;
-/// Bytes of the prompt prepared for those lines, so a long paste costs no
-/// more than a short one in each frame.
+/// Bytes of the prompt read for those lines, so a long paste costs no more
+/// than a short one in each frame.
 const MAX_TEXT: usize = 400;
 
 /// The entry to pin with the list at `top`: the latest prompt while the list
@@ -31,19 +31,15 @@ fn pinned(entries: &[Entry], top: ListOffset, following: bool) -> Option<usize> 
     scrolled.then_some(index)
 }
 
-/// `text` on running lines, bounded.
+/// The start of `text` on running lines. It is cut before anything is copied:
+/// this runs each frame the prompt is pinned, and one word can be a whole paste.
 fn preview(text: &str) -> String {
-    let mut line = String::new();
-    for word in text.split_whitespace() {
-        if line.len() >= MAX_TEXT {
-            break;
-        }
-        if !line.is_empty() {
-            line.push(' ');
-        }
-        line.push_str(word);
-    }
-    safe_text(&line, MAX_TEXT)
+    let text = text.trim_start();
+    let start = &text[..text.floor_char_boundary(MAX_TEXT)];
+    safe_text(
+        &start.split_whitespace().collect::<Vec<_>>().join(" "),
+        MAX_TEXT,
+    )
 }
 
 impl SheprdWindow {
@@ -84,29 +80,30 @@ impl SheprdWindow {
         );
         let pane = chat.target.pane_id.clone();
         Some(
-            self.with_ground(
-                div()
-                    .id(SharedString::from(format!("chat-pinned-{pane}")))
-                    .debug_selector(|| "chat-pinned".into())
-                    .role(Role::Button)
-                    .aria_label(fl!("chat-pinned-prompt"))
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .right_0()
-                    .pb(px(6.))
-                    .border_b_1()
-                    .border_color(rgb(theme.active))
-                    .occlude()
-                    .cursor_pointer()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        cx.stop_propagation();
-                        this.go_to_chat_prompt(&pane, index, cx);
-                    }))
-                    .child(row),
-                rgb(theme.background),
-            ),
+            div()
+                .id(SharedString::from(format!("chat-pinned-{pane}")))
+                .debug_selector(|| "chat-pinned".into())
+                .role(Role::Button)
+                .aria_label(fl!("chat-pinned-prompt"))
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .pb(px(6.))
+                .border_b_1()
+                .border_color(rgb(theme.active))
+                // Solid, not `with_ground`: that leaves pages showing,
+                // and one scrolled under the pin would cover its text.
+                .bg(rgb(theme.background))
+                .occlude()
+                .cursor_pointer()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    cx.stop_propagation();
+                    this.go_to_chat_prompt(&pane, index, cx);
+                }))
+                .child(row)
+                .into_any_element(),
         )
     }
 

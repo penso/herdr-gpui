@@ -78,5 +78,23 @@ fn a_false_file_count_neither_stalls_nor_eats_the_prompt() {
 #[test]
 fn a_prompt_runs_on_and_stays_bounded() {
     assert_eq!(preview("one\n\n  two\tthree"), "one two three");
-    assert!(preview(&"word ".repeat(10_000)).len() <= MAX_TEXT + 8);
+    assert!(preview(&"word ".repeat(10_000)).len() <= MAX_TEXT);
+}
+
+#[test]
+fn one_oversized_word_is_cut_before_it_is_copied() {
+    assert!(preview(&"a".repeat(1_000_000)).len() <= MAX_TEXT);
+}
+
+#[test]
+fn a_long_blank_start_still_shows_the_prompt() {
+    let prompt = format!("{}why does it flicker?", " \n".repeat(10_000));
+    assert_eq!(preview(&prompt), "why does it flicker?");
+}
+
+#[test]
+fn the_cut_never_splits_a_character() {
+    let cut = preview(&"\u{1f4ce}".repeat(1_000));
+    assert!(cut.len() <= MAX_TEXT);
+    assert!(cut.chars().all(|ch| ch == '\u{1f4ce}' || ch == '\u{2026}'));
 }
