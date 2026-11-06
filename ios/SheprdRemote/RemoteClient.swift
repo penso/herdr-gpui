@@ -265,6 +265,12 @@ final class RemoteClient: Sendable {
         let _: EmptyAnswer = try await send("POST", "/api/term/\(Self.segment(pane))/rename", body: Body(label: label), bearer: bearer)
     }
 
+    /// Names a workspace; it always has a name.
+    func renameWorkspace(_ workspace: String, to label: String, bearer: String) async throws {
+        struct Body: Encodable { let label: String }
+        let _: EmptyAnswer = try await send("POST", "/api/v2/workspaces/\(Self.segment(workspace))/rename", body: Body(label: label), bearer: bearer)
+    }
+
     /// What was said in this computer's chats; nil from a daemon that
     /// cannot search, so the phone's index answers instead.
     func search(_ query: String, bearer: String) async throws -> SearchAnswer? {

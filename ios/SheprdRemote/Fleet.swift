@@ -406,6 +406,15 @@ final class Fleet {
         }
     }
 
+    /// Names a workspace; the next `home` from the computer carries the
+    /// name to every list.
+    func renameWorkspace(_ key: WorkspaceKey, to label: String) async throws {
+        let workspace = key.workspace
+        try await call(key.device) { client, token in
+            try await client.renameWorkspace(workspace, to: label, bearer: token)
+        }
+    }
+
     // MARK: Links
 
     private func startLink(_ computer: Computer) {
