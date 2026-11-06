@@ -116,6 +116,7 @@ pub async fn run(options: Options) -> Result<()> {
         look: web::Look::load(&options.state_dir),
         names: RwLock::new(names),
         near: Mutex::default(),
+        opened: web::attention::Opened::default(),
         port: options.port,
         privacy: options.privacy,
         pull_requests,

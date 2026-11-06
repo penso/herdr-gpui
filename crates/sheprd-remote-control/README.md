@@ -185,6 +185,12 @@ HTTPS post to the phone's push service, the triggers that turn chat changes
 into questions, finished turns, and errors, and a per-device throttle. The
 service worker receives `push::Message` as JSON.
 
+The app's badge counts agents that want the user (`web::attention`): those
+with a question, those Herdr reports blocked, and those that finished and
+nobody has opened on a phone or focused in a Herdr client. A background push
+moves it when the count changes, and iOS may delay or drop those, so the
+number is exact only once the app is open.
+
 ## Empty chats
 
 An empty chat opens at its header with the agent's icon and a prompt to start.

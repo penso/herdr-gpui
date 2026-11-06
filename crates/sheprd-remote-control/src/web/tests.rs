@@ -13,6 +13,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tower::ServiceExt;
 
 mod apps;
+mod attention;
 #[cfg(unix)]
 mod echo;
 mod handoff;
@@ -70,6 +71,7 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         look: Look::load(dir),
         names: RwLock::new(names),
         near: Mutex::default(),
+        opened: crate::web::attention::Opened::default(),
         port: 7443,
         privacy: Privacy::Generic,
         pull_requests,

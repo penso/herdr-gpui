@@ -11,6 +11,7 @@ use super::{
 use crate::{
     control::DeviceId,
     hub::{Chat, Event},
+    web::attention::Watching,
     web::{Shared, now_ms, read_screen},
 };
 use sheprd_chat_protocol::{Change, Cursor, EntryKind, Transcript};
@@ -180,7 +181,11 @@ fn handle(
             let Some(link) = layout.chat(&pane).and_then(|_| state.hub.chat(&pane)) else {
                 return Some("no such chat");
             };
-            views.start(view, follow_chat(state, link, since, out));
+            let watching = Watching::new(&state, &pane);
+            views.start(view, async move {
+                let _watching = watching;
+                follow_chat(state, link, since, out).await;
+            });
         }
         View::Term { pane } => {
             if layout.terminal(&pane).is_none() {
@@ -194,10 +199,12 @@ fn handle(
             if !views.resize(&pane, size) {
                 let (size, follow) = watch::channel(size);
                 let (scrolls, scrolled) = mpsc::channel(SCROLL_QUEUE);
-                views.start(
-                    view,
-                    follow_term(state, pane.clone(), follow, scrolled, out),
-                );
+                let watching = Watching::new(&state, &pane);
+                let term = follow_term(state, pane.clone(), follow, scrolled, out);
+                views.start(view, async move {
+                    let _watching = watching;
+                    term.await;
+                });
                 views.terms.insert(pane, TermControl { size, scrolls });
             }
             return refused;
@@ -237,6 +244,7 @@ async fn follow_home(state: Shared, out: Outbound) {
     let mut layout = state.hub.watch_layout();
     let mut pull_requests = state.pull_requests.subscribe();
     let mut load = state.load.clone();
+    let mut opened = state.opened.changed();
     let mut sent = None;
     loop {
         let current = home(&state);
@@ -258,6 +266,7 @@ async fn follow_home(state: Shared, out: Outbound) {
                 },
                 changed = layout.changed() => if changed.is_err() { return } else { break },
                 changed = pull_requests.changed() => if changed.is_err() { return } else { break },
+                changed = opened.changed() => if changed.is_err() { return } else { break },
                 // A stopped sampler leaves the last figures standing.
                 changed = load.changed(), if load.has_changed().is_ok() => if changed.is_ok() { break },
                 () = out.closed() => return,

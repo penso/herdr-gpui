@@ -11,6 +11,7 @@
 
 mod api;
 mod assets;
+pub(crate) mod attention;
 mod fragments;
 mod hosts;
 mod indicators;
@@ -85,6 +86,8 @@ pub(crate) struct State {
     /// Devices whose owner is at this computer, as Sheprd last said:
     /// their alerts wait until they leave.
     pub(crate) near: Mutex<crate::push::Near>,
+    /// What phones have looked at, for the badge.
+    pub(crate) opened: attention::Opened,
     pub(crate) port: u16,
     pub(crate) privacy: Privacy,
     pub(crate) pull_requests:

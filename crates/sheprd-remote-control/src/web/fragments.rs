@@ -32,7 +32,7 @@ pub(super) fn summaries(state: &Shared, layout: &Layout) -> HashMap<String, Summ
 }
 
 /// Home or the board, rendered from the state now; also the number of
-/// questions waiting, for the app badge.
+/// agents wanting the user, for the app badge.
 pub(super) fn lists(state: &Shared, board: bool) -> (Markup, usize) {
     let layout = state.hub.layout();
     let summaries = summaries(state, &layout);
@@ -50,7 +50,7 @@ pub(super) fn lists(state: &Shared, board: bool) -> (Markup, usize) {
     } else {
         render::home(&lists)
     };
-    (markup, lists.waiting())
+    (markup, state.attention().len())
 }
 
 pub(super) async fn home(State(state): State<Shared>, _device: Device) -> Html<String> {
@@ -75,6 +75,7 @@ pub(super) async fn chat(
     let layout = state.hub.layout();
     let (workspace, row) = layout.chat(&pane).ok_or(ApiError::NotFound)?;
     let link = state.hub.chat(&pane).ok_or(ApiError::NotFound)?;
+    state.opened.open(&layout, &pane);
     Ok(Html(
         render::chat(workspace, row, &link.view(), now_ms()).into_string(),
     ))

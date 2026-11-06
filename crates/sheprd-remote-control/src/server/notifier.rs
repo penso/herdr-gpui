@@ -15,7 +15,11 @@ use crate::{
     web::{State, now_ms},
 };
 use sheprd_chat_protocol::{Cursor, Transcript};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::{broadcast::error::RecvError, mpsc};
 
 /// How often held-back notifications are checked.
@@ -31,6 +35,7 @@ pub(super) async fn run(state: Arc<State>) {
     let mut throttles: HashMap<DeviceId, Throttle> = HashMap::new();
     let mut outbox = Outbox::default();
     let mut holds: HashMap<DeviceId, Hold> = HashMap::new();
+    let mut needing = BTreeSet::new();
     let mut ticker = tokio::time::interval(TICK);
     loop {
         tokio::select! {
@@ -86,6 +91,10 @@ pub(super) async fn run(state: Arc<State>) {
                     dispatch(&state, &mut holds, &mut outbox, device, notification);
                 }
                 release(&state, &mut holds, &mut outbox, now);
+                let was = std::mem::replace(&mut needing, state.attention());
+                for notification in badge_changes(&was, &needing) {
+                    offer(&state, &mut throttles, &mut holds, &mut outbox, notification);
+                }
                 // Forget chats that left the layout.
                 let layout = state.hub.layout();
                 transcripts.retain(|pane, _| layout.chat(pane).is_some());
@@ -215,15 +224,23 @@ fn release(
     holds.retain(|_, hold| !hold.is_empty());
 }
 
-/// Questions waiting across every chat, for the app badge.
+/// Agents wanting the user, for the app badge.
 pub(super) fn waiting(state: &State) -> u32 {
-    let layout = state.hub.layout();
-    let total: usize = layout
-        .chats()
-        .filter_map(|chat| state.hub.chat(&chat.pane))
-        .map(|link| link.summary().questions)
-        .sum();
-    u32::try_from(total).unwrap_or(u32::MAX)
+    u32::try_from(state.attention().len()).unwrap_or(u32::MAX)
+}
+
+/// What tells phones the badge moved. A pane that stopped counting closes
+/// its notification, whoever dealt with it; a count that only grew may have
+/// no alert of its own, as a terminal's agent has none.
+fn badge_changes(was: &BTreeSet<String>, now: &BTreeSet<String>) -> Vec<Notification> {
+    let left: Vec<Notification> = was
+        .difference(now)
+        .map(|pane| Notification::cleared(pane))
+        .collect();
+    if left.is_empty() && was != now {
+        return vec![Notification::badge()];
+    }
+    left
 }
 
 /// Notifications queued per device before new ones are dropped.

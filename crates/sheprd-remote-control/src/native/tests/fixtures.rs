@@ -145,6 +145,7 @@ fn home() -> Home {
         }),
         summaries: [("p1".to_owned(), summary)].into(),
         pull_requests: &pull_requests,
+        waiting: 1,
     })
 }
 

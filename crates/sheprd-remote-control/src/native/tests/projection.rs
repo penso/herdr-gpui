@@ -38,6 +38,7 @@ fn project(summaries: HashMap<String, Summary>, pull_requests: &PullRequests) ->
         load: None,
         summaries,
         pull_requests,
+        waiting: 0,
     })
 }
 
@@ -49,7 +50,6 @@ fn home_lists_chats_and_terminals_with_their_summaries() {
     );
     assert_eq!(home.computer, "Studio");
     assert!(home.connected);
-    assert_eq!(home.waiting, 2);
     let workspace = &home.workspaces[0];
     assert_eq!(workspace.branch.as_deref(), Some("main"));
     let chat = &workspace.chats[0];
@@ -70,7 +70,6 @@ fn home_lists_chats_and_terminals_with_their_summaries() {
 #[test]
 fn a_chat_not_linked_yet_has_no_summary() {
     let home = project(HashMap::new(), &PullRequests::default());
-    assert_eq!(home.waiting, 0);
     assert!(home.workspaces[0].chats[0].summary.is_none());
     let json = serde_json::to_value(&home).unwrap();
     assert!(json["workspaces"][0]["chats"][0].get("summary").is_none());

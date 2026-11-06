@@ -80,14 +80,30 @@ impl Notification {
     }
 
     fn clear(chat: &Chat<'_>) -> Self {
+        Self::cleared(chat.pane)
+    }
+
+    /// Closes `pane`'s notification, and moves the badge with it.
+    pub(crate) fn cleared(pane: &str) -> Self {
         Self {
+            body: String::new(),
             clear: true,
-            ..Self::new(chat, Kind::Question, String::new(), String::new())
+            kind: Kind::Question,
+            pane: pane.to_owned(),
+            permission: None,
+            tag: tag(pane),
+            title: String::new(),
+            urgency: Urgency::High,
         }
     }
 
-    /// The payload the service worker receives, with `badge` questions
-    /// waiting across every chat.
+    /// Moves the badge alone: no pane has this notification to close.
+    pub(crate) fn badge() -> Self {
+        Self::cleared("")
+    }
+
+    /// The payload the service worker receives, with `badge` agents
+    /// wanting the user.
     pub(crate) fn message(&self, badge: u32) -> Message {
         Message {
             badge,
