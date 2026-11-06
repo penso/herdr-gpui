@@ -1,5 +1,5 @@
 // Seals a notification to the public key in $1 (base64url SEC1) the way
-// the daemon does (apns/seal.rs) and prints an APNs payload for
+// the daemon does (sheprd-apns/src/seal.rs) and prints an APNs payload for
 // `simctl push`. Usage: swift seal-push.swift KEY > payload.json
 import CryptoKit
 import Foundation

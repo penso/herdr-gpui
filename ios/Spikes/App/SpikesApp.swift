@@ -137,12 +137,68 @@ struct ActivityTab: View {
                 } footer: {
                     Text("Then lock the phone and press Allow once on the lock screen.")
                 }
+                Section {
+                    Button("Start the sealed probe") { startSealed() }
+                    Button("Show the probe's log") { result = SealedProbe.readLog() }
+                    Button("End the probe and clear its log") { endSealed() }
+                } header: {
+                    Text("Sealed content")
+                } footer: {
+                    Text("Start it, then lock the phone at once and watch the lock screen for about 25 seconds.")
+                }
             }
             .navigationTitle("Live Activity")
             .task {
                 // `-startActivity YES` starts one at launch, for headless runs.
                 if UserDefaults.standard.bool(forKey: "startActivity") { start() }
+                // `-sealedActivity YES` starts the sealed probe.
+                if UserDefaults.standard.bool(forKey: "sealedActivity") { startSealed() }
             }
+        }
+    }
+
+    /// Starts an activity whose every update is sealed to this phone's key,
+    /// and keeps updating it for as long as iOS lets the app run after the
+    /// phone locks. The widget extension has to open each one to draw it.
+    private func startSealed() {
+        do {
+            let key = try NotifyKey.load() ?? NotifyKey.create()
+            let device = key.publicKey.x963Representation
+            let state = try SealedProbe.state(sequence: 0, device: device)
+            let activity = try Activity.request(
+                attributes: SealedProbeAttributes(label: "Sealed probe"),
+                content: .init(state: state, staleDate: nil)
+            )
+            result = "started"
+            let id = activity.id
+            let background = UIApplication.shared.beginBackgroundTask(withName: "Sealed probe")
+            Task {
+                await Self.playSealed(id, device: device)
+                UIApplication.shared.endBackgroundTask(background)
+            }
+        } catch {
+            result = "\(error)"
+        }
+    }
+
+    private nonisolated static func playSealed(_ id: String, device: Data) async {
+        for sequence in 1...SealedProbe.updates {
+            try? await Task.sleep(for: SealedProbe.interval)
+            let locked = await !UIApplication.shared.isProtectedDataAvailable
+            SealedProbe.log("app #\(sequence) sent, phone \(locked ? "locked" : "unlocked")")
+            guard let state = try? SealedProbe.state(sequence: sequence, device: device) else { continue }
+            await Activity<SealedProbeAttributes>.activities.first { $0.id == id }?
+                .update(.init(state: state, staleDate: nil))
+        }
+    }
+
+    private func endSealed() {
+        Task {
+            for activity in Activity<SealedProbeAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            SealedProbe.clearLog()
+            result = "ended"
         }
     }
 
