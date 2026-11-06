@@ -434,6 +434,12 @@ size = 12
 # tint = "#7aa2f7"
 # apply_to = ["sidebar", "terminal"]
 
+[tab_labels]
+# Show the agent's terminal title on a tab with no name of its own, in place
+# of its number, cut after 28 columns. A tab you named keeps its name, and a
+# tab without an agent or a title keeps its number.
+agent_title = false
+
 [tabs]
 # Default: "Menlo" on macOS, "Cascadia Mono" on Windows (Consolas when
 # missing), "DejaVu Sans Mono" on Linux (or an installed monospace family such

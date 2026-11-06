@@ -277,6 +277,9 @@ Focus-on-hover between split terminal panes is on by default. Disable it with
 `sheprd config set focus_follows_mouse false`.
 The change applies live; `config get focus_follows_mouse` reads it back.
 
+An unnamed tab shows its number. To show its agent's terminal title instead,
+run `sheprd config set tab_labels.agent_title true`.
+
 ### Remote control
 
 | Command | What it does |

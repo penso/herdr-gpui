@@ -664,5 +664,8 @@ mod mutes;
 /// The curved layout's sliding body and the card it flows into.
 mod curved;
 
+/// What an unnamed tab shows with `[tab_labels] agent_title` on.
+mod agent_title;
+
 /// Where the agent buttons draw, and what a click on one starts.
 mod launcher;

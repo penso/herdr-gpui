@@ -47,6 +47,7 @@ mod sprites;
 pub(crate) mod ssh_hosts;
 pub(crate) mod status_bar;
 mod status_icons;
+mod tab_labels;
 pub(crate) mod tab_layout;
 #[cfg(any(
     feature = "azure",
@@ -137,6 +138,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+pub use tab_labels::TabLabels;
 pub use tab_layout::TabLayoutMode;
 pub use theme::Theme;
 pub(crate) use theme::ThemeName;
@@ -297,6 +299,8 @@ pub struct Config {
     pub status_bar: StatusBar,
     /// The set agent status is drawn with.
     pub status_icons: StatusIcons,
+    /// What a tab with no name of its own is called.
+    pub tab_labels: TabLabels,
     /// How tab strips draw their tabs, from View > Tab Layout.
     pub tab_layout: TabLayoutMode,
     pub tabs: FontConfig,
@@ -469,6 +473,7 @@ impl Default for Config {
             ssh: SshConfig::default(),
             status_bar: StatusBar::default(),
             status_icons: StatusIcons::default(),
+            tab_labels: TabLabels::default(),
             tab_layout: TabLayoutMode::default(),
             // Tabs are terminal chrome, so they read in the monospace face the
             // sidebar and terminal use, as they do in the reference UI.
@@ -552,6 +557,7 @@ struct Settings {
     ssh: SshConfig,
     status_bar: StatusBar,
     status_icons: Option<status_icons::SavedIcons>,
+    tab_labels: TabLabels,
     tab_layout: TabLayoutMode,
     tabs: FontSettings,
     terminal: FontSettings,
@@ -928,6 +934,7 @@ impl Config {
         settings.mods.validate()?;
         config.mods = settings.mods;
         config.status_bar = settings.status_bar;
+        config.tab_labels = settings.tab_labels;
         config.tab_layout = settings.tab_layout;
         settings.ssh.check()?;
         config.ssh = settings.ssh;

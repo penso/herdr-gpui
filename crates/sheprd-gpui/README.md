@@ -128,6 +128,14 @@ Hovering a pane focuses it when the window is active and
 terminal input has keyboard focus. Held mouse buttons, modifiers, dragging,
 IME composition, menus, and terminal popups suppress hover focus.
 
+A tab with no name of its own shows its number. To tell agent sessions apart,
+turn on **Show agent titles on tabs** in **Settings > Tabs & panes > Layout**,
+or run `sheprd config set tab_labels.agent_title true`. An unnamed tab then
+shows its first agent's terminal title, cut after 28 columns. A tab you named
+keeps its name, a tab without an agent or a title keeps its number, and the
+rename and close dialogs keep the daemon's label. The phone keeps the
+daemon's label too.
+
 Normal launches restore the main windows left open at quit, including each
 window's size and screen position, using the current launch's connection options.
 Closing an individual window removes it from the saved set; closing the final

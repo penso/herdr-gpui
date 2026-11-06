@@ -82,6 +82,16 @@ pub(crate) fn cut_width(text: &str, columns: usize) -> Option<&str> {
     None
 }
 
+/// A title as a tab shows it: the start of a long one, like a web browser.
+/// The budget is in columns, so a CJK title is cut about as wide.
+pub(crate) fn tab_title(title: &str) -> String {
+    const MAX_COLUMNS: usize = 28;
+    match cut_width(title, MAX_COLUMNS) {
+        Some(kept) => format!("{}{ELLIPSIS}", kept.trim_end()),
+        None => title.to_owned(),
+    }
+}
+
 /// `text` cut to `limit` grapheme clusters, followed by an ellipsis when
 /// anything was cut.
 pub(crate) fn ellipsize(text: &str, limit: usize) -> Cow<'_, str> {
