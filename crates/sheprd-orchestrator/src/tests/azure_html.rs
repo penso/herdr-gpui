@@ -149,3 +149,26 @@ fn media_keeps_a_bare_tag_for_the_views_placeholder() {
         "[<img>](https://example.test)"
     );
 }
+
+#[test]
+fn brackets_inside_a_quoted_attribute_stay_in_the_tag() {
+    assert_eq!(
+        to_markdown(r#"<a title="x < y > z" href="https://example.test">Docs</a>"#),
+        "[Docs](https://example.test)"
+    );
+}
+
+#[test]
+fn an_unclosed_quote_leaves_the_rest_as_text() {
+    assert_eq!(
+        to_markdown(r#"One <a title="x<b>"#),
+        r#"One <a title="x<b>"#
+    );
+}
+
+/// As above, for brackets a quote hides from the first search.
+#[test]
+fn many_unclosed_quotes_are_read_once() {
+    let html = "<a '<b \"".repeat(200_000);
+    assert_eq!(to_markdown(&html).len(), html.len());
+}

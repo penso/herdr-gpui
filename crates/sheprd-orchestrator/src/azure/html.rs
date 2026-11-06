@@ -39,16 +39,13 @@ pub fn to_markdown(html: &str) -> String {
             at = past(&lower, start, "-->");
             continue;
         }
-        // A tag ends before the next `<`, so no byte is searched twice however
-        // many unclosed brackets a description holds.
-        let end = html[start + 1..]
-            .find(['<', '>'])
-            .map(|found| start + 1 + found)
-            .filter(|end| html.as_bytes()[*end] == b'>');
-        let Some(end) = end else {
-            writer.text("<");
-            at = start + 1;
-            continue;
+        let end = match tag_end(html, start) {
+            Ok(end) => end,
+            Err(stop) => {
+                writer.text(&html[start..stop]);
+                at = stop;
+                continue;
+            }
         };
         let tag = &html[start + 1..end];
         let (closing, body) = match tag.strip_prefix('/') {
@@ -59,9 +56,9 @@ pub fn to_markdown(html: &str) -> String {
             .find(|character: char| !character.is_ascii_alphanumeric())
             .unwrap_or(body.len());
         if name_end == 0 {
-            // `a < b` written bare: not a tag.
-            writer.text("<");
-            at = start + 1;
+            // `a < b > c` written bare: not a tag.
+            writer.text(&html[start..=end]);
+            at = end + 1;
             continue;
         }
         let name = body[..name_end].to_ascii_lowercase();
@@ -76,6 +73,25 @@ pub fn to_markdown(html: &str) -> String {
     }
     writer.text(&html[at..]);
     writer.finish()
+}
+
+/// The `>` ending the tag opened at `start`, past any quoted attribute, else
+/// where the search stopped: at a `<` outside quotes, or the end. What was
+/// searched is then text, so no byte is searched twice however many unclosed
+/// brackets and quotes a description holds.
+fn tag_end(html: &str, start: usize) -> Result<usize, usize> {
+    let mut quote = None;
+    for (index, byte) in html[start..].bytes().enumerate().skip(1) {
+        match (quote, byte) {
+            (Some(open), _) if open == byte => quote = None,
+            (Some(_), _) => {}
+            (None, b'>') => return Ok(start + index),
+            (None, b'<') => return Err(start + index),
+            (None, b'"' | b'\'') => quote = Some(byte),
+            (None, _) => {}
+        }
+    }
+    Err(html.len())
 }
 
 /// The offset just past the next `needle` from `from`, else the end.
