@@ -22,6 +22,10 @@ final class ActivityTokens {
         var token: String?
     }
 
+    /// The setting that keeps this phone's activities generic: every
+    /// computer leaves the chat's name and steps out of them.
+    static let genericSetting = "liveActivitiesGeneric"
+
     private(set) var pushToStart: String?
     /// The app's own APNs token, for sealed alerts.
     private(set) var alert: String?
@@ -114,11 +118,16 @@ final class ActivityTokens {
                 pushToStart: pushToStart,
                 activities: activities,
                 alert: notifyKey == nil ? nil : alert,
-                notifyKey: notifyKey
+                notifyKey: notifyKey,
+                genericActivities: UserDefaults.standard.bool(forKey: Self.genericSetting)
             )
             do {
                 let session = try await sessions.session(for: computer)
                 try await session.client.registerAPNs(registration, bearer: session.token)
+                lastError = nil
+            } catch let RemoteError.status(503, _) {
+                // A computer with no push set up. Nothing is wrong, and the
+                // session is good: it answered.
                 lastError = nil
             } catch {
                 await sessions.forget(computer)

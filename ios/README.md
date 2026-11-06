@@ -226,6 +226,19 @@ The two must match, so switch both together.
 - **A mismatch:** a token sent to the wrong service is refused as
   `BadDeviceToken`, and the daemon then forgets it.
 
+## Live Activity detail
+
+Detailed, the default, shows the chat and its current step. Generic shows the
+agent and what it is doing in general. A computer chooses in Sheprd's Settings >
+Remote control (`live_activities` in `[remote]`), and a phone chooses with Keep
+Generic in its Settings. The stricter choice wins.
+
+Questions, their answer buttons, and failure messages also need `notifications =
+"excerpt"`. Without them a question shows Open, which answers in the app.
+
+A daemon older than this refuses a phone that keeps its activities generic, so
+update Sheprd first. Phones on the default are unaffected.
+
 ## Sealed alerts
 
 With the APNs key installed, questions, finished turns, and errors reach

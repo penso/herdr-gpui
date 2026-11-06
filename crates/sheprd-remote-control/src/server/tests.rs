@@ -74,6 +74,16 @@ fn every_option_is_read() {
 }
 
 #[test]
+fn live_activities_are_detailed_unless_asked() {
+    use crate::app::config::ActivityDetail;
+
+    let options = serve(&["serve", "--state-dir", "/s"]);
+    assert_eq!(options.live_activities, ActivityDetail::Detailed);
+    let args = ["serve", "--state-dir", "/s", "--live-activities", "generic"];
+    assert_eq!(serve(&args).live_activities, ActivityDetail::Generic);
+}
+
+#[test]
 fn zero_idle_days_keeps_devices_until_revoked() {
     let options = serve(&["serve", "--state-dir", "/s", "--device-idle-days", "0"]);
     assert_eq!(options.device_idle, None);

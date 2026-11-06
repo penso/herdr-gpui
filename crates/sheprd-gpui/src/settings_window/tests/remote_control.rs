@@ -154,12 +154,16 @@ fn switches_and_choices_save_remote_edits(cx: &mut TestAppContext) {
     click(cx, "remote-enabled-toggle");
     click(cx, "remote-keep-running-toggle");
     click(cx, "remote-notifications-control-1");
+    click(cx, "remote-live-activities-control-1");
     assert_eq!(
         *edits.lock().unwrap(),
         [
             Preference::Remote(Edit::Enabled(false)),
             Preference::Remote(Edit::KeepRunning(false)),
             Preference::Remote(Edit::Notifications(crate::config::remote::Privacy::Excerpt)),
+            Preference::Remote(Edit::LiveActivities(
+                crate::config::remote::ActivityDetail::Generic
+            )),
         ]
     );
     edits.lock().unwrap().clear();

@@ -72,6 +72,7 @@ fn the_daemon_runs_with_every_setting_as_an_argument() {
         device_idle_days: 9,
         enabled: true,
         keep_running: false,
+        live_activities: Default::default(),
         notifications: Privacy::Excerpt,
         port: 9443,
         // Sheprd's own: presence runs beside the daemon, not in its args.
@@ -486,3 +487,15 @@ fn a_failed_load_is_reported_with_its_cause() {
 
 mod release;
 mod restart;
+
+#[test]
+fn only_generic_live_activities_change_the_daemon_arguments() {
+    let mut generic = plan();
+    let default = generic.args();
+    assert!(!words(&default).contains(&"--live-activities"));
+    generic.config.live_activities = crate::app::config::ActivityDetail::Generic;
+    let args = generic.args();
+    let words = words(&args);
+    let flag = words.iter().position(|word| *word == "--live-activities");
+    assert_eq!(flag.map(|at| words[at + 1]), Some("generic"));
+}

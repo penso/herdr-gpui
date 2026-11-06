@@ -17,11 +17,7 @@
 //! `{"aps": {"content-available": 1}, "sealed": "…"}`, whose
 //! sealed `clear` tells the app to remove the chat's notifications.
 
-use super::{
-    Error, Result,
-    payload::MAX_PAYLOAD,
-    send::{Priority, Push, PushType},
-};
+use super::{Error, Priority, Push, PushType, Result, payload::MAX_PAYLOAD};
 use crate::push::{Kind, Notification};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};

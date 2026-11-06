@@ -1,6 +1,6 @@
 //! Command-line options, parsed from OS strings before any runtime starts.
 
-use crate::push::Privacy;
+use crate::{app::config::ActivityDetail, push::Privacy};
 use std::{
     ffi::OsString,
     net::{IpAddr, Ipv6Addr},
@@ -37,6 +37,7 @@ pub struct Options {
     /// discovers it from this process's environment. A service manager's
     /// environment may lack the shell's `XDG_CONFIG_HOME`.
     pub herdr_socket: Option<PathBuf>,
+    pub live_activities: ActivityDetail,
     pub port: u16,
     pub privacy: Privacy,
     pub state_dir: PathBuf,
@@ -94,6 +95,9 @@ Options:
   --chat-dir DIR           Where chat sockets live (default: discovered)
   --privacy generic|excerpt
                            Whether notifications may quote the chat (default generic)
+  --live-activities detailed|generic
+                           Whether Live Activities name the chat and its step
+                           (default detailed)
   --device-idle-days N     Forget devices unseen this long, 0 for never
                            (default 30)
   --no-bonjour             Do not advertise over Bonjour; phones then pair
@@ -122,6 +126,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let mut bind = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
     let (mut cert, mut key) = (None, None);
     let mut privacy = Privacy::Generic;
+    let mut live_activities = ActivityDetail::default();
     let mut idle_days = DEFAULT_IDLE_DAYS;
     let (mut herdr_socket, mut chat_dir) = (None, None);
     let mut bonjour = true;
@@ -165,6 +170,18 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                     }
                 };
             }
+            "--live-activities" => {
+                live_activities =
+                    match text(value("--live-activities")?, "--live-activities")?.as_str() {
+                        "detailed" => ActivityDetail::Detailed,
+                        "generic" => ActivityDetail::Generic,
+                        _ => {
+                            return Err(ParseError::Value {
+                                option: "--live-activities",
+                            });
+                        }
+                    };
+            }
             "--device-idle-days" => {
                 idle_days = text(value("--device-idle-days")?, "--device-idle-days")?
                     .parse()
@@ -191,6 +208,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         chat_dir,
         device_idle: (idle_days != 0).then(|| Duration::from_secs(idle_days * 24 * 60 * 60)),
         herdr_socket,
+        live_activities,
         port,
         privacy,
         state_dir: state_dir.ok_or(ParseError::NoStateDir)?,

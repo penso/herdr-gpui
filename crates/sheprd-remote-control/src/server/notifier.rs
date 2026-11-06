@@ -302,7 +302,7 @@ async fn send_alert(state: &Arc<State>, device: &DeviceId, notification: &Notifi
         waiting(state),
     );
     let Ok(push) = apns::alert::push(sealed, &notification.tag, |plaintext| {
-        apns::seal::seal(&key, plaintext, apns::seal::INFO)
+        Ok(apns::seal::seal(&key, plaintext, apns::seal::INFO)?)
     }) else {
         return true;
     };

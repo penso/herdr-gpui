@@ -1,7 +1,7 @@
 use super::*;
 use crate::config::{
     preferences::Preference,
-    remote::{Bind, Certificate, Edit, Privacy},
+    remote::{ActivityDetail, Bind, Certificate, Edit, Privacy},
 };
 
 #[test]
@@ -134,6 +134,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
         Edit::Certificate(files.clone()),
         Edit::KeepRunning(false),
         Edit::Notifications(Privacy::Excerpt),
+        Edit::LiveActivities(ActivityDetail::Generic),
         Edit::DeviceIdleDays(90),
         Edit::Presence(true),
     ] {
@@ -148,6 +149,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
             device_idle_days: 90,
             enabled: true,
             keep_running: false,
+            live_activities: ActivityDetail::Generic,
             notifications: Privacy::Excerpt,
             port: 9443,
             presence: true,

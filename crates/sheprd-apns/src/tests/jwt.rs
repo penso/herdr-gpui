@@ -1,5 +1,5 @@
 use super::*;
-use crate::apns::jwt::{REFRESH_S, sign};
+use crate::jwt::{REFRESH_S, sign};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::ecdsa::{Signature, signature::Verifier as _};
 

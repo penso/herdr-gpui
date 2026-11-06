@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var forgetting: Computer?
     @State private var editMode = EditMode.inactive
     @AppStorage(AppLock.setting, store: AppLock.store) private var requireFaceID = false
+    @AppStorage(ActivityTokens.genericSetting) private var genericActivities = false
 
     var body: some View {
         List {
@@ -65,6 +66,10 @@ struct SettingsView: View {
                 if !ActivityAuthorizationInfo().areActivitiesEnabled {
                     Label("Live Activities are off for Sheprd. Turn them on in Settings.", systemImage: "exclamationmark.triangle")
                 }
+                Toggle("Keep Generic", isOn: $genericActivities)
+                    .onChange(of: genericActivities) {
+                        Task { await model.tokens.sync() }
+                    }
                 #if DEBUG
                 Button("Start a sample activity") { model.startSample() }
                 if let status = model.sampleStatus {
@@ -73,6 +78,8 @@ struct SettingsView: View {
                 #endif
             } header: {
                 Text("Live Activities")
+            } footer: {
+                Text("Generic shows the agent and what it is doing, without the chat's name, steps, or questions. A computer can also choose this in Sheprd's Remote control settings.")
             }
             Section {
                 Toggle("Require Face ID", isOn: Binding(

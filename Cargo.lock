@@ -9219,6 +9219,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sheprd-apns"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.23.1",
+ "getrandom 0.4.3",
+ "hkdf 0.13.0",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "p256",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "webpki-roots",
+]
+
+[[package]]
 name = "sheprd-automate"
 version = "0.1.0"
 dependencies = [
@@ -9617,9 +9640,6 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "hkdf 0.13.0",
- "http-body-util",
- "hyper",
- "hyper-util",
  "if-addrs",
  "maud",
  "mdns-sd",
@@ -9633,6 +9653,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "sheprd-apns",
  "sheprd-chat-protocol",
  "sheprd-client",
  "sheprd-github",
@@ -9652,7 +9673,6 @@ dependencies = [
  "ureq",
  "url",
  "uuid",
- "webpki-roots",
  "x509-parser",
 ]
 

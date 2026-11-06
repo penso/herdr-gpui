@@ -75,6 +75,8 @@ pub(crate) struct State {
     pub(crate) connected: Mutex<HashMap<DeviceId, usize>>,
     pub(crate) fingerprint: String,
     pub(crate) hub: Arc<Hub>,
+    /// How much this computer lets Live Activities say.
+    pub(crate) live_activities: crate::app::config::ActivityDetail,
     /// This computer's CPU and memory, as `load` last read them.
     pub(crate) load: tokio::sync::watch::Receiver<Option<crate::load::Load>>,
     /// The status marks the lists draw, as Sheprd last sent them.
