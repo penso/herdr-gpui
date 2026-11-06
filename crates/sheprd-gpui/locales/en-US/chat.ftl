@@ -217,6 +217,8 @@ chat-running-stopped = Stopped
 
 # The agent's settings menu in the chat header.
 chat-settings-search = Search…
+chat-settings-hint = { $name }: { $value }
+chat-settings-mode = Mode
 chat-settings-auto-accept-on = Auto-accepting
 chat-settings-auto-accept-off = Asks first
 chat-settings-no-match = No match

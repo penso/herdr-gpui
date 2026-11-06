@@ -12,6 +12,7 @@ use sheprd_client::ConnectTarget;
 
 mod prompt_width;
 mod terminal_footer;
+mod terminal_footer_icons;
 
 fn switch(view: &Entity<SheprdWindow>, mode: ChatLayoutMode, cx: &mut VisualTestContext) {
     view.update(cx, |view, cx| {

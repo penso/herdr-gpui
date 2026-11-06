@@ -109,7 +109,8 @@ desktop margins must not be baked into these images. The paw fits both masks.
 `plus.svg`, `close.svg`, `pencil.svg`, `trash.svg`, `chevron-up.svg`,
 `chevron-down.svg`, `git-branch.svg`, `sessions.svg`, `file.svg`, `teleport.svg`,
 `teleport-back.svg`, `zoom.svg`, the `window-*.svg` controls, `pull-request.svg`,
-`issue.svg`, `beads.svg`, and `user.svg` are original interface artwork.
+`issue.svg`, `beads.svg`, `user.svg`, `cpu.svg`, and `lightbulb.svg` are original
+interface artwork.
 GPUI renders these as masks tinted by the current theme.
 
 `gitlab.svg` is GitLab's tanuki mark from

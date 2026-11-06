@@ -78,6 +78,17 @@ pub(super) fn agent_bypasses(transcript: &Transcript) -> bool {
     options || modes
 }
 
+/// The mark that says what a setting's button sets, since a value such as
+/// "Default" says nothing alone.
+fn category_icon(category: OptionCategory) -> &'static str {
+    match category {
+        OptionCategory::Mode => "icons/lock.svg",
+        OptionCategory::Model | OptionCategory::ModelConfig => "icons/cpu.svg",
+        OptionCategory::ThoughtLevel => "icons/lightbulb.svg",
+        OptionCategory::Other => "icons/settings.svg",
+    }
+}
+
 /// Whether `option` shows as a switch.
 fn switches(option: &ConfigOption) -> bool {
     matches!(&option.kind, OptionKind::Select { choices, .. } if choices.len() == SWITCH)
@@ -111,6 +122,7 @@ impl SheprdWindow {
             .h(px(26.))
             .rounded(px(corners::CONTROL))
             .bg(rgb(theme.active))
+            .text_color(rgb(theme.foreground))
             .text_size(if compact {
                 px((self.config.terminal.size - 1.).max(10.))
             } else {
@@ -119,6 +131,39 @@ impl SheprdWindow {
             .cursor_pointer()
             .hover(|button| button.bg(rgb(crate::config::mix(theme.active, theme.foreground, 12))))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    }
+
+    /// A setting's mark, for a button that does not spell out its name.
+    fn chat_setting_icon(&self, id: &str, path: &'static str) -> Svg {
+        let selector = format!("{id}-icon");
+        svg()
+            .debug_selector(move || selector.clone())
+            .flex_none()
+            .path(path)
+            .size(px(12.))
+            .text_color(rgb(self.theme.subtext()))
+    }
+
+    /// A tooltip naming a setting and its value in full.
+    fn chat_setting_hint(
+        &self,
+        name: &str,
+        value: &str,
+    ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+        let text = SharedString::from(fl!(
+            "chat-settings-hint",
+            name = safe_text(name, 40),
+            value = safe_text(value, 80)
+        ));
+        let (foreground, surface) = (self.theme.foreground, self.theme.surface);
+        move |_, cx| {
+            cx.new(|_| crate::menu::SettingsHint {
+                text: text.clone(),
+                foreground,
+                surface,
+            })
+            .into()
+        }
     }
 
     /// Opens `menu`, or closes it when it is open. A long setting menu
@@ -180,11 +225,13 @@ impl SheprdWindow {
         cx.notify();
     }
 
-    /// An on/off switch between a setting's two choices, labeled with the
-    /// current one: off is the first choice, on the second.
+    /// An on/off switch between a setting's two choices, marked with what
+    /// it sets and labeled with the current one: off is the first choice,
+    /// on the second.
     fn chat_switch(
         &self,
         id: String,
+        (icon, setting): (&'static str, &str),
         choices: Vec<(String, bool, Command)>,
         pane_id: &str,
         cx: &mut Context<Self>,
@@ -204,6 +251,8 @@ impl SheprdWindow {
         let pane = pane_id.to_owned();
         let fill = if on { theme.primary() } else { theme.active };
         let selector = id.clone();
+        let mark = self.chat_setting_icon(&id, icon);
+        let hint = self.chat_setting_hint(setting, &name);
         div()
             .id(SharedString::from(id))
             .debug_selector(move || selector.clone())
@@ -231,7 +280,9 @@ impl SheprdWindow {
                     .when(on, |track| track.justify_end())
                     .child(div().size(px(11.)).rounded_full().bg(rgb(theme.background))),
             )
+            .child(mark)
             .child(safe_text(&name, 40))
+            .tooltip(hint)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 cx.stop_propagation();
@@ -337,6 +388,7 @@ impl SheprdWindow {
                     .collect();
                 buttons.push(self.chat_switch(
                     format!("chat-setting-{}", option.id),
+                    (category_icon(category), &option.name),
                     switch,
                     &pane_id,
                     cx,
@@ -347,10 +399,16 @@ impl SheprdWindow {
             let pane = pane_id.clone();
             let compact = layout_for(self.config.chat.layout).compact_settings()
                 && matches!(option.kind, OptionKind::Select { .. });
+            let selector = format!("chat-setting-{}", option.id);
             let button = self
-                .chat_header_button(format!("chat-setting-{}", option.id).into())
-                .when(compact && category == OptionCategory::Model, |button| {
-                    button.flex_shrink_1().min_w(px(30.))
+                .chat_header_button(selector.clone().into())
+                .tooltip(self.chat_setting_hint(&option.name, &option.current_name()))
+                // The mark and tooltip still say what a squeezed button sets.
+                .when(compact, |button| {
+                    button
+                        .flex_shrink_1()
+                        .min_w(px(46.))
+                        .child(self.chat_setting_icon(&selector, category_icon(category)))
                 })
                 .when(!compact, |button| {
                     button.child(
@@ -404,10 +462,19 @@ impl SheprdWindow {
                         (mode.name.clone(), mode.id == modes.current, command)
                     })
                     .collect();
-                buttons.push(self.chat_switch("chat-mode".into(), switch, &pane, cx));
+                let setting = fl!("chat-settings-mode");
+                let mark = (category_icon(OptionCategory::Mode), setting.as_str());
+                buttons.push(self.chat_switch("chat-mode".into(), mark, switch, &pane, cx));
             } else {
                 buttons.push(
                     self.chat_header_button("chat-mode".into())
+                        .tooltip(self.chat_setting_hint(&fl!("chat-settings-mode"), &name))
+                        .child(
+                            self.chat_setting_icon(
+                                "chat-mode",
+                                category_icon(OptionCategory::Mode),
+                            ),
+                        )
                         .child(div().max_w(px(160.)).truncate().child(safe_text(&name, 80)))
                         .child(chevron())
                         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
