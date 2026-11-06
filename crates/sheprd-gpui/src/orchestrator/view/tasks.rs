@@ -54,6 +54,16 @@ impl TaskFilters {
             && (!closed(item) || self.status.as_deref() == Some(item.state.as_str()))
     }
 
+    /// Whether the priority and assignee filters count `item`: a task of
+    /// the status asked for, or else any open one.
+    pub(crate) fn offers(&self, item: &Item) -> bool {
+        self.lists(item)
+            && self
+                .status
+                .as_deref()
+                .is_none_or(|status| status == item.state)
+    }
+
     /// Whether `item` passes every filter set.
     pub(crate) fn matches(&self, item: &Item) -> bool {
         self.status
@@ -165,7 +175,7 @@ impl OrchestratorView {
     /// assignees, as the beads have them.
     pub(super) fn render_task_facets(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let tasks = self.every_task();
-        let open = || tasks.iter().filter(|item| !closed(item));
+        let offered = || tasks.iter().filter(|item| self.task_filters.offers(item));
         let mut facets = Vec::new();
 
         facets.push(
@@ -190,7 +200,7 @@ impl OrchestratorView {
             );
         }
 
-        let mut priorities = tally(open().filter_map(|item| item.priority));
+        let mut priorities = tally(offered().filter_map(|item| item.priority));
         priorities.sort_by_key(|(priority, _)| *priority);
         if !priorities.is_empty() {
             facets.push(
@@ -214,7 +224,7 @@ impl OrchestratorView {
             );
         }
 
-        let mut people = tally(open().map(|item| Who::of(item)));
+        let mut people = tally(offered().map(|item| Who::of(item)));
         people.truncate(FACET_ASSIGNEES);
         facets.push(
             self.facet_heading(fl!("orchestrator-facets-assignee"))

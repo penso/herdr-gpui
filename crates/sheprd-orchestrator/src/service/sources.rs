@@ -1,7 +1,9 @@
 //! Which sources a repository has, which this build reads, and the GitLab
 //! CLI's say in whether a remote is a GitLab project.
 
-use super::{Item, Provider, RepoInfo, SourceKey, SourceStatus, SyncState, Worker, gitlab};
+use super::{
+    Access, Item, Provider, RepoInfo, SourceKey, SourceStatus, Store, SyncState, Worker, gitlab,
+};
 
 impl SyncState {
     /// How many items the source's last sync reported, kept while it syncs
@@ -37,10 +39,25 @@ pub(super) fn recognize(
         .is_some_and(|remote| gitlab::recognize(&mut remote.source, cli))
 }
 
-/// Drops beads of any source but `info`'s. A project keeps them in its
-/// database after its source moves, as a `.beads/redirect` added later moves
-/// it, and they would list beside the ones read now. Before the repository
-/// is known, what was last listed stays.
+/// Brings `store` to `info`'s Beads source, for everything that reads it.
+/// Failing leaves the old rows, which [`keep_current_beads`] still hides.
+pub(super) fn settle_beads(store: &mut Store, info: &RepoInfo) {
+    if !matches!(store.access(), Access::ReadWrite) {
+        return;
+    }
+    if let Err(error) = store.settle_beads(info.beads_source().as_ref()) {
+        tracing::warn!(
+            category = "orchestrator",
+            %error,
+            "Cannot bring the stored beads to the project's source"
+        );
+    }
+}
+
+/// Drops beads of any source but `info`'s. A database this build cannot
+/// write still holds them after the source moves, as a `.beads/redirect`
+/// added later moves it, and they would list beside the ones read now.
+/// Before the repository is known, what was last listed stays.
 pub(super) fn keep_current_beads(items: &mut Vec<Item>, info: Option<&RepoInfo>) {
     let Some(info) = info else {
         return;

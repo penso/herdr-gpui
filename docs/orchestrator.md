@@ -101,9 +101,12 @@ discovery as `bd` reads it (the first line neither blank nor a comment, relative
 to the project), by `repo.rs` on this machine and `discover.sh` on an SSH host;
 `RepoInfo::beads_root` keeps the result. A target not named `.beads` has no such
 folder, so it stays the project's source and `bd` follows the redirect itself;
-projects sharing one are not deduplicated. A project keeps the beads of a
-source it no longer reads in its own database, as adding a redirect leaves them,
-so `reload` lists only the current source's.
+projects sharing one are not deduplicated. When a project's source moves, as
+adding a redirect moves it, `Store::settle_beads` forgets the old source's rows
+and moves this app's runs to the new one once the repository is found, so tasks
+keep their runs and `orchestrator tasks` reads the same rows. A database this
+build cannot write keeps the old rows, so `reload` still lists only the current
+source's.
 
 A dispatch to a bead claims it before anything else happens (`beads::claim`):
 `bd show` says whether it was held, then `bd update --claim`, which is atomic.

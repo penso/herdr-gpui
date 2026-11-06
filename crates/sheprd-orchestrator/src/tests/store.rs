@@ -3,7 +3,7 @@ use crate::store::SCHEMA_V0;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 
-fn database(dir: &tempfile::TempDir) -> PathBuf {
+pub(super) fn database(dir: &tempfile::TempDir) -> PathBuf {
     dir.path()
         .join("repositories")
         .join("id")

@@ -5,7 +5,7 @@
 //! orchestrator's worker thread, never on the UI thread.
 
 use super::{
-    Checkpoint, Error, HerdrSession, Item, ItemKey, Owner, Result, Run, SourceKey,
+    Checkpoint, Error, HerdrSession, Item, ItemKey, Owner, Provider, Result, Run, SourceKey,
     model::{Activity, PullRequest, Workspace},
     review::PrStatus,
 };
@@ -259,6 +259,34 @@ impl Store {
         Ok(())
     }
 
+    /// Leaves `current` the only Beads source on disk: forgets what any other
+    /// listed, and moves this app's runs to it, so a task keeps its runs when
+    /// its source moves. A `.beads/redirect` moves one, as does this build's
+    /// keying of a redirected project by its database. Another application's
+    /// runs stay as it wrote them. With no `current`, the project has no
+    /// Beads, and runs stay too.
+    pub fn settle_beads(&mut self, current: Option<&SourceKey>) -> Result<()> {
+        self.writable()?;
+        let kept = current.map(SourceKey::canonical).unwrap_or_default();
+        let provider = Provider::Beads.as_str();
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute(
+            "DELETE FROM issues WHERE provider = ?1 AND source <> ?2",
+            params![provider, kept],
+        )?;
+        transaction.execute(
+            "DELETE FROM source_checkpoints WHERE source LIKE ?1 AND source <> ?2",
+            params![format!("{provider}:%"), kept],
+        )?;
+        if let Some(current) = current {
+            move_runs(&transaction, current)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     /// Every non-confidential run, of either owner.
     /// The last read review and checks of every open pull request, by
     /// repository and number.
@@ -439,6 +467,38 @@ impl Store {
         transaction.commit()?;
         Ok(())
     }
+}
+
+/// Points this app's runs of any other Beads source at the same bead of
+/// `current`. A key that does not parse is not a bead's.
+fn move_runs(transaction: &Transaction<'_>, current: &SourceKey) -> Result<()> {
+    let moved: Vec<(String, String)> = {
+        let mut statement =
+            transaction.prepare("SELECT id, issue_key FROM runs WHERE owner = ?1")?;
+        let rows = statement.query_map([Owner::Sheprd.as_str()], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .filter_map(|(id, key)| {
+                let key = key.parse::<ItemKey>().ok()?;
+                (key.source.provider == Provider::Beads && key.source != *current).then(|| {
+                    let moved = ItemKey {
+                        source: current.clone(),
+                        native_id: key.native_id,
+                    };
+                    (id, moved.canonical())
+                })
+            })
+            .collect()
+    };
+    for (id, key) in moved {
+        transaction.execute(
+            "UPDATE runs SET issue_key = ?1 WHERE id = ?2",
+            params![key, id],
+        )?;
+    }
+    Ok(())
 }
 
 /// Fails when a run with `id` exists and another application owns it.

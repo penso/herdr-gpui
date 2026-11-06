@@ -390,3 +390,30 @@ fn a_filter_in_use_clears_from_its_chip(cx: &mut gpui::TestAppContext) {
         })
     });
 }
+
+#[test]
+fn closed_tasks_offer_their_own_priorities_and_assignees() {
+    let items = listing();
+    let offered = |filters: &TaskFilters| -> Vec<&str> {
+        items
+            .iter()
+            .filter(|item| filters.offers(item))
+            .map(|item| item.key.native_id.as_str())
+            .collect()
+    };
+    assert_eq!(
+        offered(&TaskFilters::default()),
+        ["hg-1", "hg-1.1", "hg-3"],
+        "closed tasks stay out until asked for"
+    );
+    let closed = TaskFilters {
+        status: Some("closed".into()),
+        ..TaskFilters::default()
+    };
+    assert_eq!(offered(&closed), ["hg-2"]);
+    let deferred = TaskFilters {
+        status: Some("deferred".into()),
+        ..TaskFilters::default()
+    };
+    assert_eq!(offered(&deferred), ["hg-3"]);
+}

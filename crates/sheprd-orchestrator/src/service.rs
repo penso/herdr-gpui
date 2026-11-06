@@ -650,7 +650,8 @@ impl Worker {
                 "Cannot carry over agent-launcher's database"
             );
         }
-        let store = Store::open(&path)?;
+        let mut store = Store::open(&path)?;
+        sources::settle_beads(&mut store, &info);
         self.snapshot.access = Some(store.access());
         self.snapshot.sources = statuses(&info);
         self.site = Some(Site {

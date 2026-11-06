@@ -40,6 +40,7 @@ mod retry;
 mod service;
 mod ssh_slots;
 mod store;
+mod store_beads;
 
 fn at(value: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(value)

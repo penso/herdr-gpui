@@ -1,6 +1,6 @@
 //! Beads a project still stores under a source it no longer reads.
-use super::super::sources::keep_current_beads;
-use crate::{Item, ItemKey, Provider, Repository, SourceKey, repo::RepoInfo};
+use super::super::sources::{keep_current_beads, settle_beads};
+use crate::{Checkpoint, Item, ItemKey, Provider, Repository, SourceKey, Store, repo::RepoInfo};
 
 fn bead(root: &str) -> Item {
     Item::stand_in(ItemKey {
@@ -60,4 +60,21 @@ fn what_was_listed_stays_until_the_repository_is_known() {
     let mut items = vec![bead("/app"), issue()];
     keep_current_beads(&mut items, None);
     assert_eq!(items.len(), 2);
+}
+
+#[test]
+fn finding_the_repository_settles_what_the_store_holds() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("repositories/id/state.sqlite3");
+    let mut store = Store::open(&path).unwrap();
+    let old = bead("/app");
+    store
+        .replace_items(
+            &old.key.source,
+            std::slice::from_ref(&old),
+            &Checkpoint::default(),
+        )
+        .unwrap();
+    settle_beads(&mut store, &info(true, Some("/shared")));
+    assert!(store.items().unwrap().is_empty());
 }
