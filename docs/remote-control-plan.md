@@ -287,7 +287,9 @@ focus nor resize anything:
   through it. It is not streamed: 1,000 lines on every change would be far
   more than a phone should take. Live screens wait while history shows and
   return when the view reaches its end or the phone types. A program on the
-  alternate screen has no history here, so its screen stays as it is.
+  alternate screen has no history here, so its screen stays as it is, and
+  neither has a Herdr 2 pane yet: its read is the emulator's screen, kept
+  with no scrollback.
 - **Echo strip**: what was typed but is not on the screen yet shows,
   dotted, above the key rows (backspace takes back what it can). An input
   leaves it once Herdr took it and a screen arrived after, or 1 s after
