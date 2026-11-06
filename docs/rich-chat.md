@@ -18,10 +18,13 @@ render_existing = true
 `render_existing` opts into discovery of running Codex and Claude sessions.
 It is disabled by default. The chat header cycles
 through **Timeline**, **Bubbles**, **Terminal**, **Document**, **Cards**,
-**iMessage**, and **iA**. **iA** sets the chat like iA Writer: one column at
-about 70 characters a line, your prompts and the agent's steps as quiet notes
-hung from a gutter mark, the agent's prose in full ink, and earlier turns muted
-until you point at them.
+**iMessage**, **iA**, and **OpenCode**. **iA** sets the chat like iA Writer: one
+column at about 70 characters a line, your prompts and the agent's steps as quiet
+notes hung from a gutter mark, the agent's prose in full ink, and earlier turns
+muted until you point at them. **OpenCode** uses the terminal's font, draws
+prompts and open tool calls as tinted blocks behind a bar, folds finished calls
+to one line, and adds a status row under the composer.
+
 Select a layout directly with:
 
 ```sh

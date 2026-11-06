@@ -39,6 +39,7 @@ mod menus;
 mod notices;
 mod observed_status;
 mod observer_program;
+mod opencode;
 mod overlay;
 mod pasted;
 mod prepared;

@@ -507,8 +507,9 @@ size = 12
 # How chat views draw: "timeline" (entries on a line with avatars), "bubbles"
 # (your messages in bubbles on the right, like Claude's app), "terminal"
 # (Claude Code's own screen, in the terminal font), "document" (each prompt
-# a heading, the reply prose under it), "cards" (each turn in one card), or
-# "imessage" (blue and gray bubbles with tails, like Apple's Messages).
+# a heading, the reply prose under it), "cards" (each turn in one card),
+# "imessage" (blue and gray bubbles with tails, like Apple's Messages), or
+# "opencode" (tinted blocks, finished tools on one line, like OpenCode).
 # The button in a chat's header steps through them.
 # [chat]
 # layout = "timeline"
