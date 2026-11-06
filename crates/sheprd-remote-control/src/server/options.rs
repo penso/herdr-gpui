@@ -100,7 +100,7 @@ Options:
                            The desktop core endpoint (default: discovered)
   --chat-dir DIR           Where chat sockets live (default: discovered)
   --privacy generic|excerpt
-                           Whether notifications may quote the chat (default generic)
+                           Whether notifications may quote the chat (default excerpt)
   --live-activities detailed|generic
                            Whether Live Activities name the chat and its step
                            (default detailed)
@@ -131,7 +131,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let mut port = DEFAULT_PORT;
     let mut bind = IpAddr::V6(Ipv6Addr::UNSPECIFIED);
     let (mut cert, mut key) = (None, None);
-    let mut privacy = Privacy::Generic;
+    let mut privacy = Privacy::default();
     let mut live_activities = ActivityDetail::default();
     let mut idle_days = DEFAULT_IDLE_DAYS;
     let (mut herdr_socket, mut chat_dir) = (None, None);

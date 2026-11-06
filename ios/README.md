@@ -243,7 +243,8 @@ Remote control (`live_activities` in `[remote]`), and a phone chooses with Keep
 Generic in its Settings. The stricter choice wins.
 
 Questions, their answer buttons, and failure messages also need `notifications =
-"excerpt"`. Without them a question shows Open, which answers in the app.
+"excerpt"`, the default. With `"generic"` a question shows Open, which answers in
+the app.
 
 A daemon older than this refuses a phone that keeps its activities generic, so
 update Sheprd first. Phones on the default are unaffected.

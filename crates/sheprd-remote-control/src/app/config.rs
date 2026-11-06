@@ -161,9 +161,10 @@ impl<'de> Deserialize<'de> for Certificate {
 #[serde(rename_all = "kebab-case")]
 pub enum Privacy {
     /// "Claude needs an answer in herdr-gpui · main", without message text.
-    #[default]
     Generic,
-    /// Also a short excerpt of the message.
+    /// Also a short excerpt of the message, and on a Live Activity the
+    /// question with its answer buttons.
+    #[default]
     Excerpt,
 }
 

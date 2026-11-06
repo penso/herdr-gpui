@@ -31,7 +31,7 @@ fn serve_takes_its_defaults() {
     assert_eq!(options.port, 7443);
     assert!(options.bind.is_unspecified());
     assert_eq!(options.certificate, Certificate::Own);
-    assert_eq!(options.privacy, Privacy::Generic);
+    assert_eq!(options.privacy, Privacy::Excerpt);
     assert_eq!(
         options.device_idle,
         Some(Duration::from_secs(30 * 24 * 60 * 60))

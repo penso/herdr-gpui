@@ -13,7 +13,7 @@ fn remote_control_is_off_with_its_defaults() -> anyhow::Result<()> {
     assert_eq!(config.remote.port, 7443);
     assert_eq!(config.remote.bind, Bind::All);
     assert_eq!(config.remote.certificate, Certificate::Own);
-    assert_eq!(config.remote.notifications, Privacy::Generic);
+    assert_eq!(config.remote.notifications, Privacy::Excerpt);
     assert_eq!(config.remote.device_idle_days, 30);
     // The managed file documents the table without setting it.
     assert_eq!(

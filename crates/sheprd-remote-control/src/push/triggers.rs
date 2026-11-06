@@ -27,9 +27,9 @@ pub(crate) struct Chat<'a> {
 #[serde(rename_all = "snake_case")]
 pub enum Privacy {
     /// Who asked and where, never what was said.
-    #[default]
     Generic,
     /// Also a short excerpt: the question, the error, or the answer's end.
+    #[default]
     Excerpt,
 }
 

@@ -58,7 +58,7 @@ fn the_daemon_runs_with_every_setting_as_an_argument() {
             "--bind",
             "all",
             "--privacy",
-            "generic",
+            "excerpt",
             "--device-idle-days",
             "30",
         ]
@@ -183,7 +183,7 @@ fn the_scheduled_task_runs_at_sign_in_without_a_time_limit() {
     );
     assert!(text.contains(
         "<Arguments>serve --state-dir C:\\Users\\Me\\AppData\\Local\\herdr\\gpui\\remote \
-         --port 7443 --bind all --privacy generic --device-idle-days 30</Arguments>"
+         --port 7443 --bind all --privacy excerpt --device-idle-days 30</Arguments>"
     ));
     let bytes = files::utf16("<T/>");
     assert_eq!(&bytes[..2], &[0xFF, 0xFE]);
