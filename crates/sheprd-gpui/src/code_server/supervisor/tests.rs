@@ -141,15 +141,18 @@ mod process {
         NonZeroU16::new(port).unwrap()
     }
 
-    /// Whether `pid` has ended. One whose parent ended is reaped by the
-    /// system, so it may stay a zombie for a moment.
+    /// Whether `pid` has ended. A spawn that cannot be waited on is not an
+    /// answer: another test thread can reap `kill` and Linux reports
+    /// "No such process", so the caller retries.
     fn gone(pid: &str) -> bool {
-        let output = Command::new("/bin/ps")
-            .args(["-o", "stat=", "-p", pid.trim()])
-            .output()
-            .unwrap();
-        let state = String::from_utf8(output.stdout).unwrap();
-        state.trim().is_empty() || state.trim().starts_with('Z')
+        match Command::new("/bin/kill")
+            .args(["-0", pid.trim()])
+            .stderr(std::process::Stdio::null())
+            .status()
+        {
+            Ok(status) => !status.success(),
+            Err(_) => false,
+        }
     }
 
     fn failure(supervisor: &Supervisor) -> Option<Arc<crate::Error>> {
