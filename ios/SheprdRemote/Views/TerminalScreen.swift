@@ -33,36 +33,58 @@ struct TerminalScreen: View {
     @State private var coasting: Task<Void, Never>?
     /// The room the screen has, which sets the terminal's size.
     @State private var space: CGSize = .zero
+    /// What a long press or the handles selected, by cell, as terminals
+    /// select (`TermSelecting`).
+    @State private var selection: TermSelection?
 
     var body: some View {
         GeometryReader { geometry in
             if let screen = store?.screen {
-                let fitted = fit(columns: screen.columns, width: geometry.size.width - 16)
+                // In cells: the computer counts a wide character as one.
+                let columns = screen.rows.reduce(screen.columns) { widest, row in max(widest, Self.span(row)) }
+                let fitted = fit(columns: columns, width: geometry.size.width - 16)
                 let size = min(28, max(4, fitted * zoom * pinch))
                 let paper = Self.paper(screen)
                 // Held at the phone's size and all on screen: a swipe
                 // scrolls the terminal's own history instead of this view.
-                let fits = store?.size.map { screen.columns <= $0.cols } == true
+                let fits = store?.size.map { columns <= $0.cols } == true
                     && CGFloat(screen.rows.count) * Self.lineHeight(size) + 16 <= geometry.size.height + 1
                 ScrollView(.vertical) {
                     // Sideways only once pinched wider than the screen.
                     ScrollView(.horizontal, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(screen.rows.enumerated()), id: \.offset) { _, row in
-                                Text(row.reduce(into: AttributedString()) { line, run in line += Self.styled(run) })
+                            ForEach(Array(screen.rows.enumerated()), id: \.offset) { index, row in
+                                // The text is drawn cell by cell behind
+                                // (`cells`), as terminals draw it; this
+                                // copy keeps the line's height and is what
+                                // VoiceOver reads.
+                                Text(verbatim: row.map(Self.shown).joined())
                                     .font(.system(size: size, design: .monospaced))
+                                    .foregroundStyle(.clear)
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
+                                    .frame(minWidth: CGFloat(Self.span(row)) * Self.cellRatio * size, alignment: .leading)
                                     // Backgrounds are cells painted the full
-                                    // line height, so blocks have no seams;
-                                    // the text above stays selectable.
-                                    .background(alignment: .leading) { Self.cells(row, size: size) }
+                                    // line height, so blocks have no seams.
+                                    .background(alignment: .leading) {
+                                        Self.cells(row, size: size, selected: selection?.columns(in: index, last: Self.span(row) - 1))
+                                    }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(Self.rowBackground(row) ?? paper)
                             }
                         }
+                        // A long press selects by cell and keeps the
+                        // keyboard, as SwiftTerm does; SwiftUI's text
+                        // selection would take the keyboard and select
+                        // text laid out off the cell grid.
+                        .modifier(TermSelecting(screen: screen, cell: CGSize(width: Self.cellRatio * size, height: Self.lineHeight(size)),
+                                                selection: $selection) {
+                            if let text = UIPasteboard.general.string { typing?.paste(text) }
+                        })
+                        // Down to the foot of the screen, so the scroll view
+                        // passes a touch below the last row to its handle.
+                        .frame(minHeight: max(0, geometry.size.height - 16), alignment: .top)
                         .padding(8)
-                        .textSelection(.enabled)
                     }
                     .scrollDisabled(size <= fitted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -80,8 +102,9 @@ struct TerminalScreen: View {
                         .onEnded { value in zoom = min(3, max(0.5, zoom * value.magnification)) }
                 )
                 .onTapGesture(count: 2) { withAnimation(.snappy) { zoom = 1 } }
-                // A tap types: it brings the keyboard up, and takes it down.
-                .onTapGesture { keyboard.toggle() }
+                // A tap types: it brings the keyboard up, and takes it
+                // down; with a selection, it clears it first.
+                .onTapGesture { if selection != nil { selection = nil } else { keyboard.toggle() } }
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -295,6 +318,8 @@ struct TerminalScreen: View {
     private func swipe(line: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
+                // While a selection shows, a drag extends it instead.
+                guard selection == nil else { return }
                 coasting?.cancel()
                 let target = Int((value.translation.height / line).rounded(.towardZero))
                 notches(target - swiped)
@@ -303,6 +328,7 @@ struct TerminalScreen: View {
             .onEnded { value in
                 let rest = (value.predictedEndTranslation.height - value.translation.height) / line
                 swiped = 0
+                guard selection == nil else { return }
                 coast(max(-Self.coastLimit, min(Self.coastLimit, Int(rest.rounded(.towardZero)))))
             }
     }
@@ -320,7 +346,8 @@ struct TerminalScreen: View {
     private func coast(_ count: Int) {
         guard count != 0 else { return }
         coasting = Task {
-            for step in 0..<abs(count) where !Task.isCancelled {
+            // A selection stops it, so the text stays under the cells selected.
+            for step in 0..<abs(count) where !Task.isCancelled && selection == nil {
                 notches(count.signum())
                 try? await Task.sleep(for: .milliseconds(25 + step * 6))
             }
@@ -390,17 +417,15 @@ struct TerminalScreen: View {
     /// The color a row's last run paints, which a full-screen program
     /// fills the rest of the line with.
     static func rowBackground(_ row: [TermScreen.Run]) -> Color? {
-        guard let last = row.last else { return nil }
-        return last.inverse ? (color(last.fg) ?? Color(white: 0.86)) : color(last.bg)
+        TermScreen.fill(row).flatMap(color)
     }
 
     /// The screen's own background: the one most rows end in, so a light
     /// themed program is not framed in dark.
     static func paper(_ screen: TermScreen) -> Color {
         var counts: [String: Int] = [:]
-        for row in screen.rows {
-            guard let last = row.last else { continue }
-            counts[(last.inverse ? last.fg : last.bg) ?? "", default: 0] += 1
+        for row in screen.rows where !row.isEmpty {
+            counts[TermScreen.fill(row) ?? "", default: 0] += 1
         }
         guard let (name, _) = counts.max(by: { $0.value < $1.value }), !name.isEmpty else { return background }
         return color(name) ?? background
@@ -434,28 +459,82 @@ struct TerminalScreen: View {
         return TermSize(cols: min(cols, 400), rows: min(rows, 200))
     }
 
-    /// A row's run backgrounds as cells the full line height.
-    static func cells(_ row: [TermScreen.Run], size: CGFloat) -> some View {
+    /// The cells a row covers.
+    static func span(_ row: [TermScreen.Run]) -> Int {
+        row.reduce(0) { $0 + TermScreen.cells($1.text) }
+    }
+
+    /// A row's run backgrounds as cells the full line height, then its
+    /// text, each character in its own cells.
+    static func cells(_ row: [TermScreen.Run], size: CGFloat, selected: ClosedRange<Int>? = nil) -> some View {
         Canvas { context, canvas in
             let width = cellRatio * size
+            let font = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+            let baseline = (canvas.height - font.lineHeight) / 2 + font.ascender
             var x: CGFloat = 0
             for run in row {
-                let span = CGFloat(run.text.count) * width
+                // A Chinese, Japanese, or Korean character covers two cells.
+                let span = CGFloat(TermScreen.cells(run.text)) * width
                 if let fill = runBackground(run) {
                     context.fill(Path(CGRect(x: x, y: 0, width: span, height: canvas.height)), with: .color(fill))
                 }
                 // Hidden text (SGR 8) keeps its cells but paints nothing.
                 if !run.hidden, run.text.contains(where: { block($0) != nil }) {
                     let ink = foreground(run)
-                    for (index, character) in run.text.enumerated() {
+                    var column = 0
+                    for character in run.text {
+                        defer { column += TermScreen.cells(String(character)) }
                         guard let shape = block(character) else { continue }
-                        let cell = CGRect(x: x + CGFloat(index) * width, y: 0, width: width, height: canvas.height)
+                        let cell = CGRect(x: x + CGFloat(column) * width, y: 0, width: width, height: canvas.height)
                         context.fill(Path(shape.rect(in: cell)), with: .color(ink.opacity(shape.opacity)))
                     }
                 }
+                if !run.hidden { glyphs(run, at: x, cell: width, size: size, baseline: baseline, in: context) }
                 x += span
             }
+            if let selected {
+                let cells = CGRect(x: CGFloat(selected.lowerBound) * width, y: 0, width: CGFloat(selected.count) * width, height: canvas.height)
+                context.fill(Path(cells), with: .color(.accentColor.opacity(0.35)))
+            }
         }
+    }
+
+    /// A run's characters placed on the cell grid, as SwiftTerm,
+    /// Terminal.app, and Ghostty place them: ASCII as the monospaced font
+    /// sets it, and anything else (Chinese from a fallback font about 1.7
+    /// cells wide, `❯`, emoji) centered in its one or two cells and shrunk
+    /// if wider, so its width never moves what follows.
+    private static func glyphs(_ run: TermScreen.Run, at origin: CGFloat, cell: CGFloat, size: CGFloat,
+                               baseline: CGFloat, in context: GraphicsContext) {
+        func draw(_ text: String, column: Int, cells: Int, centered: Bool) {
+            var part = run
+            part.text = text
+            let resolved = context.resolve(Text(styled(part)).font(.system(size: size, design: .monospaced)))
+            let box = resolved.measure(in: CGSize(width: CGFloat.infinity, height: .infinity))
+            let slot = CGFloat(cells) * cell
+            let scale = centered ? min(1, slot / max(box.width, 1)) : 1
+            var placed = context
+            placed.translateBy(x: origin + CGFloat(column) * cell + (centered ? (slot - box.width * scale) / 2 : 0), y: baseline)
+            placed.scaleBy(x: scale, y: scale)
+            placed.draw(resolved, at: CGPoint(x: 0, y: -resolved.firstBaseline(in: box)), anchor: .topLeading)
+        }
+        var column = 0
+        var ascii = ""
+        var asciiColumn = 0
+        for character in run.text {
+            let cells = TermScreen.cells(String(character))
+            if character.isASCII {
+                if ascii.isEmpty { asciiColumn = column }
+                ascii.append(character)
+            } else {
+                if !ascii.isEmpty { draw(ascii, column: asciiColumn, cells: ascii.count, centered: false) }
+                ascii = ""
+                // Block elements are already painted as cell shapes.
+                if block(character) == nil { draw(String(character), column: column, cells: cells, centered: true) }
+            }
+            column += cells
+        }
+        if !ascii.isEmpty { draw(ascii, column: asciiColumn, cells: ascii.count, centered: false) }
     }
 
     static func lineHeight(_ size: CGFloat) -> CGFloat {
@@ -507,12 +586,14 @@ struct TerminalScreen: View {
         run.inverse ? (color(run.fg) ?? Color(white: 0.86)) : color(run.bg)
     }
 
+    /// A run's text as shown: hidden text (SGR 8) and block elements, which
+    /// are painted as cells, are blank.
+    static func shown(_ run: TermScreen.Run) -> String {
+        run.hidden ? String(repeating: " ", count: run.text.count) : String(run.text.map { block($0) == nil ? $0 : " " })
+    }
+
     static func styled(_ run: TermScreen.Run) -> AttributedString {
-        // Backgrounds and block elements are painted as cells behind the
-        // text (`cells`), so they are blank here.
-        let shown = run.hidden ? String(repeating: " ", count: run.text.count)
-            : String(run.text.map { block($0) == nil ? $0 : " " })
-        var text = AttributedString(shown)
+        var text = AttributedString(shown(run))
         text.foregroundColor = foreground(run)
         if run.underline { text.underlineStyle = .single }
         if run.strike { text.strikethroughStyle = .single }

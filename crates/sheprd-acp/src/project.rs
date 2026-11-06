@@ -58,6 +58,15 @@ pub(crate) struct Projector {
 }
 
 impl Projector {
+    /// A projector whose entries come after `last`, the newest entry of
+    /// the history a session opened with.
+    pub(crate) fn after(last: EntryId) -> Self {
+        Self {
+            next: last.0,
+            ..Self::default()
+        }
+    }
+
     fn next_id(&mut self) -> EntryId {
         self.next += 1;
         EntryId(self.next)

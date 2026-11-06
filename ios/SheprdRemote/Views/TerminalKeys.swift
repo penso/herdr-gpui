@@ -126,7 +126,8 @@ struct TermKeyRows: View {
     let dictate: () -> Void
 
     private static let top: [(key: String, label: String)] = [
-        ("esc", "esc"), ("tab", "⇥"), ("|", "|"), ("slash", "/"), ("minus", "-"), ("~", "~"), ("backtick", "`"), ("up", "↑"),
+        // A new line without Enter: Claude Code and Codex read Ctrl-J as one.
+        ("esc", "esc"), ("tab", "⇥"), ("ctrl+j", "↵"), ("|", "|"), ("slash", "/"), ("minus", "-"), ("~", "~"), ("backtick", "`"), ("up", "↑"),
     ]
     private static let bottom: [(key: String, label: String)] = [
         ("ctrl+d", "^D"), ("ctrl+z", "^Z"), ("ctrl+r", "^R"), ("ctrl+l", "^L"), ("ctrl+a", "^A"), ("ctrl+e", "^E"),
@@ -151,7 +152,9 @@ struct TermKeyRows: View {
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(.bar)
+        // Under the keyboard too: its rounded top corners would otherwise
+        // show the window's light background beside the dark rows.
+        .background { Rectangle().fill(.bar).ignoresSafeArea() }
         .sensoryFeedback(.selection, trigger: typing.modifiers)
     }
 

@@ -253,8 +253,14 @@ struct SessionSheet: View {
         }
     }
 
+    /// A mode or auto-accept picked here is what new chats with this agent
+    /// start with, once the chat took the command.
     private func send(_ command: ChatCommand) {
-        Task { problem = await model.fleet.send(command, to: key) }
+        let save = model.pickStart(command, agent: store.transcript?.agent ?? "")
+        Task {
+            problem = await model.fleet.send(command, to: key)
+            if problem == nil { save?() }
+        }
     }
 
     private func currentName(_ option: ConfigOption?) -> String? {

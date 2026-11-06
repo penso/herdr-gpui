@@ -54,6 +54,7 @@ ed25519-dalek        = { default-features = false, features = ["std"], version =
 flate2               = "1"
 # Use the same strict macOS family lookup as GPUI, including legacy aliases.
 font-kit             = { package = "zed-font-kit", version = "=0.14.1-zed" }
+libc                 = "0.2"
 # Fluent messages (docs/i18n.md): `sheprd-i18n` loads them through
 # i18n-embed's loader and negotiates the locale; `sheprd-gpui`'s build script
 # parses them to check `fl!` calls. i18n-embed 0.16 does not build without

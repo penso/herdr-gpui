@@ -504,6 +504,8 @@ pub(crate) enum Toward {
 pub(crate) struct Chats {
     /// The agents installed on each host new chats may start on.
     pub(crate) agents: super::harnesses::Harnesses,
+    /// The terminal agent moving into a chat, one at a time.
+    pub(crate) converting: Option<super::convert::Job>,
     /// Exact CLI sessions already running in this connected daemon's panes.
     pub(crate) existing: super::existing::Existing,
     /// The agent a chat was last started with, which the strips' one-button

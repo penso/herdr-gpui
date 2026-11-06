@@ -20,7 +20,7 @@ fn the_address_prints_its_port_alone() {
     assert!(!printed.contains("secret"), "{printed}");
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, any(target_os = "linux", target_os = "macos")))]
 mod process {
     use super::*;
     use crate::code_server::Error;
@@ -141,18 +141,10 @@ mod process {
         NonZeroU16::new(port).unwrap()
     }
 
-    /// Whether `pid` has ended. A spawn that cannot be waited on is not an
-    /// answer: another test thread can reap `kill` and Linux reports
-    /// "No such process", so the caller retries.
+    /// Whether `pid` has ended. A missing process is gone; `is_dead` treats
+    /// that as an answer instead of a failed `ps` wait.
     fn gone(pid: &str) -> bool {
-        match Command::new("/bin/kill")
-            .args(["-0", pid.trim()])
-            .stderr(std::process::Stdio::null())
-            .status()
-        {
-            Ok(status) => !status.success(),
-            Err(_) => false,
-        }
+        crate::test_process::is_dead(pid.trim().parse().unwrap()).unwrap()
     }
 
     fn failure(supervisor: &Supervisor) -> Option<Arc<crate::Error>> {

@@ -81,14 +81,37 @@ pub struct Pane {
     pub foreground_cwd: Option<String>,
     pub agent: Option<String>,
     pub agent_session: Option<AgentSession>,
-    /// The daemon reports the pane's agent as working. Statuses this client
-    /// does not know read as not working, so a new one cannot break parsing.
-    #[serde(default, rename = "agent_status", deserialize_with = "is_working")]
-    pub working: bool,
+    /// What the daemon reports the pane's agent doing.
+    #[serde(default, rename = "agent_status", deserialize_with = "pane_status")]
+    pub status: PaneStatus,
 }
 
-fn is_working<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
-    Ok(Option::<String>::deserialize(d)?.as_deref() == Some("working"))
+impl Pane {
+    /// The daemon reports the pane's agent as working.
+    pub fn working(&self) -> bool {
+        self.status == PaneStatus::Working
+    }
+}
+
+/// What a pane's agent is doing, as far as a caller here needs to tell.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PaneStatus {
+    Done,
+    Idle,
+    Working,
+    /// Waiting for an answer, unknown to the daemon, or a status this client
+    /// does not know, so a new one cannot break parsing.
+    #[default]
+    Other,
+}
+
+fn pane_status<'de, D: serde::Deserializer<'de>>(d: D) -> Result<PaneStatus, D::Error> {
+    Ok(match Option::<String>::deserialize(d)?.as_deref() {
+        Some("done") => PaneStatus::Done,
+        Some("idle") => PaneStatus::Idle,
+        Some("working") => PaneStatus::Working,
+        _ => PaneStatus::Other,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
