@@ -6,13 +6,17 @@
 
 use super::super::sessions::{Entry, Row, target_session};
 use super::super::{Page, colors};
-use super::{DeviceScope, SetupUnavailable, device_list_height, multi_select_hint};
-use crate::SheprdWindow;
+use super::{DeviceScope, SettingsHint, SetupUnavailable, device_list_height, multi_select_hint};
 use crate::i18n::fl;
+use crate::{Command, SheprdWindow};
 use gpui::{prelude::*, *};
 use sheprd_client::ConnectTarget;
 
 use super::rail::add_device_offer;
+
+/// The widest a session chip grows, which leaves a device's name its room in
+/// the picker's fixed width.
+const CHIP_WIDTH: f32 = 160.;
 
 /// A line of the picker, in paint order.
 pub(in crate::menu) enum Line {
@@ -565,6 +569,26 @@ impl SheprdWindow {
         div().flex_none().child(row)
     }
 
+    /// What hovering a device's session chip says. The Sessions shortcut opens
+    /// the device this window is on, so only that device's chip offers it.
+    pub(super) fn session_chip_hint(&self, device: usize, label: &str) -> String {
+        self.config
+            .keybindings
+            .shortcuts(Command::Sessions)
+            .next()
+            .filter(|_| device == self.selected_endpoint)
+            .map_or_else(
+                || fl!("devices-sessions-toggle", device = label),
+                |shortcut| {
+                    fl!(
+                        "devices-sessions-toggle-shortcut",
+                        device = label,
+                        shortcut = shortcut.to_string()
+                    )
+                },
+            )
+    }
+
     /// The session a device is on, which unfolds the device's other sessions
     /// beneath it and folds them away again.
     fn render_session_chip(
@@ -576,6 +600,8 @@ impl SheprdWindow {
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let unfolded = self.menu.unfolded_device.as_ref() == Some(&endpoint.id);
+        let hint = SharedString::from(self.session_chip_hint(device, &endpoint.label));
+        let (foreground, surface) = (theme.foreground, theme.surface);
         div()
             .id(("device-sessions", index))
             .debug_selector(move || format!("device-sessions-{index}"))
@@ -585,7 +611,7 @@ impl SheprdWindow {
                 device = endpoint.label.as_str()
             ))
             .flex_none()
-            .max_w(px(96.))
+            .max_w(px(CHIP_WIDTH))
             .flex()
             .items_center()
             .gap(px(4.))
@@ -597,6 +623,14 @@ impl SheprdWindow {
             .hover(|s| s.bg(colors::action_hover(theme)))
             .text_size(px(self.config.ui.size * 0.85))
             .text_color(rgb(theme.subtext()))
+            .tooltip(move |_, cx| {
+                cx.new(|_| SettingsHint {
+                    text: hint.clone(),
+                    foreground,
+                    surface,
+                })
+                .into()
+            })
             .child(match &endpoint.connection.target {
                 // An explicit socket names no session of its own.
                 ConnectTarget::Socket(_) => svg()
@@ -605,10 +639,21 @@ impl SheprdWindow {
                     .flex_none()
                     .text_color(rgb(theme.subtext()))
                     .into_any_element(),
+                // The word says what the chip is before anyone clicks it. It
+                // never shrinks, so only the session's name is cut short.
                 target => div()
                     .min_w_0()
-                    .truncate()
-                    .child(target_session(target))
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .debug_selector(move || format!("device-session-word-{index}"))
+                            .flex_none()
+                            .text_color(rgb(theme.muted))
+                            .child(fl!("devices-session-chip")),
+                    )
+                    .child(div().min_w_0().truncate().child(target_session(target)))
                     .into_any_element(),
             })
             .child(
