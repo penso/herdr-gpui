@@ -1,6 +1,7 @@
-//! Reading an Azure DevOps source with the token looked up once, and looked
-//! up again when Azure DevOps refuses it: an Azure CLI token lasts about an
-//! hour, and the next one comes from the same sign-in.
+//! Reading an Azure DevOps source with the token looked up once, and renewed
+//! when Azure DevOps refuses it: an Azure CLI token lasts about an hour, and
+//! the next one comes from the same sign-in, which also takes over from a
+//! refused personal access token.
 
 use super::{Error, Result, SourceKey, SyncState, Worker, azure};
 use crate::Checkpoint;
@@ -45,22 +46,18 @@ impl Worker {
         key: &SourceKey,
         previous: Option<&Checkpoint>,
     ) -> Result<azure::Listing> {
-        let looked_up = self.azure_token.is_some();
-        if !looked_up {
-            self.look_up_azure_token();
+        if self.azure_token.is_none() {
+            let cancelled = &self.cancelled;
+            self.azure_token = Some(azure::token::lookup(&|| cancelled.load(Ordering::Relaxed)));
         }
         match self.read_azure(key, previous) {
-            Err(Error::Azure(azure::Error::Authentication)) if looked_up => {
-                self.look_up_azure_token();
+            Err(Error::Azure(azure::Error::Authentication)) => {
+                let cancelled = &self.cancelled;
+                self.azure_token = Some(azure::token::renew(&|| cancelled.load(Ordering::Relaxed)));
                 self.read_azure(key, previous)
             }
             result => result,
         }
-    }
-
-    fn look_up_azure_token(&mut self) {
-        let cancelled = &self.cancelled;
-        self.azure_token = Some(azure::token::lookup(&|| cancelled.load(Ordering::Relaxed)));
     }
 
     fn read_azure(

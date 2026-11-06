@@ -55,6 +55,23 @@ pub fn lookup(cancelled: &impl Fn() -> bool) -> Option<Token> {
     environment(sheprd_client::login_env::var).or_else(|| cli(cancelled))
 }
 
+/// The token to try after Azure DevOps refused one. Runs a subprocess, which
+/// `cancelled` stops: call it from a worker.
+pub fn renew(cancelled: &impl Fn() -> bool) -> Option<Token> {
+    renewed(|| cli(cancelled), sheprd_client::login_env::var)
+}
+
+/// The Azure CLI's sign-in, else the environment's token. This reverses
+/// [`lookup`]'s order: the login shell's environment is read once per run, so
+/// a refused personal access token is still there until the app restarts, and
+/// a new `az login` must be able to take over from it.
+pub fn renewed(
+    cli: impl FnOnce() -> Option<Token>,
+    variable: impl Fn(&str) -> Option<OsString>,
+) -> Option<Token> {
+    cli().or_else(|| environment(variable))
+}
+
 /// `AZURE_DEVOPS_EXT_PAT`, read through `variable`.
 pub fn environment(variable: impl Fn(&str) -> Option<OsString>) -> Option<Token> {
     variable(PAT_VARIABLE)

@@ -4,7 +4,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(
-        "Azure DevOps rejected the token; sign in again with `az login`, or replace AZURE_DEVOPS_EXT_PAT"
+        "Azure DevOps rejected the token; sign in again with `az login`, or replace AZURE_DEVOPS_EXT_PAT and restart Sheprd"
     )]
     Authentication,
     #[error("Azure DevOps project address for {0:?} is not valid")]
@@ -29,7 +29,7 @@ pub enum Error {
     #[error("Azure DevOps's answer could not be read: {0}")]
     Read(#[source] std::io::Error),
     #[error(
-        "Sign in to read {repository}: run `az login`, or set AZURE_DEVOPS_EXT_PAT in your shell"
+        "Sign in to read {repository}: run `az login`, or set AZURE_DEVOPS_EXT_PAT in your shell and restart Sheprd"
     )]
     SignIn { repository: String },
     #[error("Azure DevOps's answer exceeded the size limit")]
