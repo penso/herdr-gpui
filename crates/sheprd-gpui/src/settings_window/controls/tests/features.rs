@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::{Feature, preferences::Preference};
+use crate::config::{Feature, Features, preferences::Preference};
 use crate::settings_window::controls::preferences::PreferenceIo;
 use std::sync::{Arc, Mutex};
 
@@ -29,7 +29,10 @@ fn every_feature_has_a_switch_that_saves_the_opposite(cx: &mut TestAppContext) {
         cx.run_until_parked();
         assert_eq!(
             edits.lock().unwrap().pop(),
-            Some(Preference::Feature(feature, true))
+            Some(Preference::Feature(
+                feature,
+                !Features::default().enabled(feature)
+            ))
         );
     }
     view.update(cx, |view, cx| {

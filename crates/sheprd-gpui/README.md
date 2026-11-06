@@ -1538,8 +1538,9 @@ repeating the other field. `FontConfig::line_height()` returns `size * 20 / 14` 
 weight name or 100 to 900; bold cells draw `bold_font_weight` of it, 300
 heavier and at least bold. On macOS, font resolution reports a weight the
 family has no face for; other platforms do not check.
-The `[features]` table holds opt-in behaviors as `Features`, with every flag off
-by default and unknown keys rejected like the other sections; Preferences lists
+The `[features]` table holds optional behaviors as `Features`, each flag with
+its own default (`acp_chats` on, the rest off) and unknown keys rejected like
+the other sections; Preferences lists
 each flag and its state read-only, since only the config file turns one on.
 First-frame config and theme loading is read-only: no config lock, migration,
 writes, or fsync delays window creation. It reads local overrides (or the legacy

@@ -282,7 +282,7 @@ fn defaults_and_partial_settings() -> anyhow::Result<()> {
     ] {
         assert_eq!(config.theme(false)?, Theme::default());
         assert!(config.github.oauth_client_id.is_none());
-        // Every feature ships off, including in the example config.
+        // The example config changes no feature's default.
         assert_eq!(config.features, Features::default());
         assert!(!config.features.sidebar_hover_menu);
         assert_eq!(config.terminal.line_height(), 20.0);
