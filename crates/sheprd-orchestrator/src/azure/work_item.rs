@@ -67,7 +67,7 @@ struct Fields {
     tags: Option<String>,
     #[serde(rename = "System.CommentCount")]
     comments: Option<u64>,
-    /// HTML, shown as the item's description.
+    /// HTML, stored as Markdown like every other body.
     #[serde(rename = "System.Description")]
     description: Option<String>,
     #[serde(rename = "System.Parent")]
@@ -105,7 +105,10 @@ impl WorkItemNode {
             },
             identifier: format!("#{}", self.id),
             title: fields.title,
-            description: fields.description.filter(|body| !body.is_empty()),
+            description: fields
+                .description
+                .map(|body| super::html::to_markdown(&body))
+                .filter(|body| !body.is_empty()),
             // Every listed item is unfinished; its own state is a label.
             state: "open".to_owned(),
             url: Some(format!("{web}/_workitems/edit/{}", self.id)),

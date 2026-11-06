@@ -13,6 +13,7 @@
 //! anonymous request with a sign-in page.
 
 mod error;
+pub(crate) mod html;
 pub mod pull_request;
 pub mod token;
 pub mod work_item;
