@@ -12,12 +12,41 @@ pub(crate) const MAX_PLAN: usize = 256;
 /// OpenCode's and Copilot's to-do tools.
 const TOOLS: [&str; 2] = ["todowrite", "update_todo"];
 
-/// Whether a call named `name` or titled `title` keeps the to-do list.
-pub(super) fn is_tool(name: Option<&str>, title: Option<&str>) -> bool {
-    [name, title]
-        .into_iter()
-        .flatten()
-        .any(|shown| TOOLS.iter().any(|tool| shown.eq_ignore_ascii_case(tool)))
+/// Whether a call keeps the to-do list, and so can go without a card. A call
+/// hidden by mistake is one the user never sees, and a title is free text:
+/// Copilot's comes from a `description` the model writes. So a title counts
+/// only for an agent that sends no `name`, and only beside a list.
+pub(super) fn is_tool(
+    name: Option<&str>,
+    title: &str,
+    kind: wire::ToolKind,
+    input: Option<&Value>,
+) -> bool {
+    let known = |shown: &str| TOOLS.iter().any(|tool| shown.eq_ignore_ascii_case(tool));
+    let listed = input.is_some_and(|input| input.get("todos").is_some());
+    list_kind(kind)
+        && match name {
+            Some(name) => known(name) && (listed || unwritten(input)),
+            None => known(title) && listed,
+        }
+}
+
+/// Whether an update leaves a hidden call a to-do call. One that says it does
+/// something else goes back to showing as a card.
+pub(super) fn stays_tool(kind: Option<wire::ToolKind>, input: Option<&Value>) -> bool {
+    kind.is_none_or(list_kind)
+        && (unwritten(input) || input.is_some_and(|input| input.get("todos").is_some()))
+}
+
+/// The kinds OpenCode and Copilot give their to-do tools, which neither run
+/// nor change anything.
+fn list_kind(kind: wire::ToolKind) -> bool {
+    matches!(kind, wire::ToolKind::Other | wire::ToolKind::Think)
+}
+
+/// Whether a call's input has yet to come, as OpenCode's has not at first.
+fn unwritten(input: Option<&Value>) -> bool {
+    input.is_none_or(|input| input.as_object().is_some_and(serde_json::Map::is_empty))
 }
 
 /// The list in a to-do tool's input: steps with a status, or a Markdown

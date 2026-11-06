@@ -371,9 +371,14 @@ impl Projector {
                 let tag = Tag::read(call.meta.as_ref()).or_else(|| {
                     claude_code::tag(call.meta.as_ref(), call.raw_input.as_ref(), None)
                 });
-                if tag.parent.is_none()
+                if tag == Tag::default()
                     && self.todos.len() < MAX_SKIPPED
-                    && todos::is_tool(call.name.as_deref(), Some(&call.title))
+                    && todos::is_tool(
+                        call.name.as_deref(),
+                        &call.title,
+                        call.kind,
+                        call.raw_input.as_ref(),
+                    )
                 {
                     self.todos.insert(call_id);
                     return self.todo_plan(call.raw_input.as_ref());
@@ -384,15 +389,6 @@ impl Projector {
             }
             U::ToolCallUpdate(update) => {
                 let call_id = update.tool_call_id.0.to_string();
-                if self.todos.contains(&call_id) {
-                    if matches!(
-                        update.fields.status,
-                        Some(wire::ToolCallStatus::Completed | wire::ToolCallStatus::Failed)
-                    ) {
-                        self.todos.remove(&call_id);
-                    }
-                    return self.todo_plan(update.fields.raw_input.as_ref());
-                }
                 let tag = Tag::read(update.meta.as_ref()).or_else(|| {
                     claude_code::tag(
                         update.meta.as_ref(),
@@ -400,6 +396,22 @@ impl Projector {
                         update.fields.status,
                     )
                 });
+                if self.todos.contains(&call_id) {
+                    let input = update.fields.raw_input.as_ref();
+                    let stays =
+                        tag == Tag::default() && todos::stays_tool(update.fields.kind, input);
+                    if !stays
+                        || matches!(
+                            update.fields.status,
+                            Some(wire::ToolCallStatus::Completed | wire::ToolCallStatus::Failed)
+                        )
+                    {
+                        self.todos.remove(&call_id);
+                    }
+                    if stays {
+                        return self.todo_plan(input);
+                    }
+                }
                 // A call no longer shown, or never shown, only reports how
                 // its activity ended; it does not come back as a bare card.
                 let shown = self
