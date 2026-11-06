@@ -2,6 +2,7 @@
 use super::*;
 use crate::config::BoxdConfig;
 
+mod config_home;
 mod live;
 mod mock;
 mod relay;

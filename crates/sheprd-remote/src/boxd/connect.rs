@@ -6,6 +6,7 @@
 use super::{Error, Result, Settings, http::Request, relay, store};
 use sheprd_client::Transport;
 use std::{
+    ffi::OsString,
     io,
     process::Command,
     sync::atomic::{AtomicBool, Ordering},
@@ -32,7 +33,19 @@ pub(super) fn relay_command(settings: &Settings, machine: &str) -> Result<Comman
     let executable = std::env::current_exe().map_err(Error::Executable)?;
     let mut command = sheprd_client::new_command(executable);
     command.arg(relay::HELPER).arg(&settings.base).arg(machine);
+    pin_config_home(&mut command, sheprd_client::local_var("XDG_CONFIG_HOME"));
     Ok(command)
+}
+
+/// Run the relay under the configuration root this app resolved, which may
+/// be the login shell's `XDG_CONFIG_HOME` adopted after a desktop launch. The
+/// relay returns before it could adopt one itself, so without this it would
+/// read another root's settings and fail to find the account.
+pub(super) fn pin_config_home(command: &mut Command, root: Option<OsString>) {
+    match root {
+        Some(root) => command.env("XDG_CONFIG_HOME", root),
+        None => command.env_remove("XDG_CONFIG_HOME"),
+    };
 }
 
 /// The relay command for the machine `id` in `account`, once it runs.
