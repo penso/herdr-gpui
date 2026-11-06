@@ -186,10 +186,10 @@ impl SettingsWindow {
             Update::Overview(Ok(overview)) => card.account = Account::Known(overview),
             Update::Overview(Err(error)) => {
                 card.account = Account::Known(Self::boxd_missing_overview());
-                card.message = Some(error.to_string());
+                card.message = Some(error.localize());
             }
             Update::Done(result) => {
-                card.message = result.err().map(|error| error.to_string());
+                card.message = result.err().map(|error| error.localize());
                 self.refresh_boxd(cx);
             }
         }
@@ -261,7 +261,7 @@ impl SettingsWindow {
         if let Some(card) = &mut self.boxd_card {
             card.message = Some(match started {
                 Ok(Ok(())) => fl!("settings-cloud-creating", name = name),
-                Ok(Err(error)) => error.to_string(),
+                Ok(Err(error)) => error.localize(),
                 Err(_) => fl!("settings-cloud-boxd-no-window"),
             });
         }
