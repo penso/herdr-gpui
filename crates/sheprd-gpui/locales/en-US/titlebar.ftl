@@ -14,5 +14,10 @@ titlebar-maximize = Maximize
 # Maximize's name while the window is maximized.
 titlebar-restore = Restore
 titlebar-close = Close
+# Beside the Git button: the branch has commits and no pull request yet.
+titlebar-unopened = { $commits ->
+        [one] 1 commit, no PR
+       *[other] { $commits } commits, no PR
+    }
 # A worktree build's banner: the pull request its branch belongs to.
 titlebar-pull-request = PR #{ $number }

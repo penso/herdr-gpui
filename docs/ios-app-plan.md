@@ -743,7 +743,8 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
   and CPU and memory, then its repositories as inset sections (initial,
   name, and + for a new worktree of it). Rows show the most pressing
   agent's mark, the checkout's branch or the worktree's name, its agent
-  and terminal counts, and the pull request's number in its tone.
+  and terminal counts, and the pull request's number in its tone, or `+PR`
+  when the computer's Sheprd finds commits with no pull request yet.
 - Home sorts its agents by a menu at the top left, newest first in each
   section: Priority (the desktop's status order), Recent, or Workspace.
 - A workspace opens on its own screen: branch, pull request, and place on
