@@ -3,7 +3,8 @@
 //! by topic, and it leaves with the next key. It lists what the keymap
 //! resolved, so the daemon's `[keys]` and custom commands appear less anything
 //! the app's `[keybindings]` took from them, and it draws no controls: every
-//! key goes to the chord, and the pointer to whatever lies beneath.
+//! key goes to the chord, and the pointer to whatever lies beneath. While it
+//! shows, each poll keeps its rows true to what the next key would run.
 // i18n: migrated
 
 use super::SheprdWindow;
@@ -17,13 +18,16 @@ use crate::{
 };
 use gpui::{Context, Keystroke, Modifiers, Role, Task, Window, div, prelude::*, px, rgb};
 use sheprd_client::protocol::ClientShellCommand;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Long enough that a chord typed from memory finishes first.
 const DELAY: Duration = Duration::from_millis(400);
 
 /// Most windows fit every default chord in this many columns.
 const MAX_COLUMNS: usize = 4;
+
+/// The space between columns.
+const COLUMN_GAP: f32 = 16.;
 
 /// Space kept between the panel and the window's sides and top.
 const MARGIN: f32 = 12.;
@@ -106,6 +110,16 @@ impl NextKeys {
     pub(super) fn is_open(&self) -> bool {
         self.toggle.is_open()
     }
+
+    /// Whether any of it shows at `now`, its fade out included.
+    pub(super) fn showing(&self, now: Instant) -> bool {
+        self.toggle.is_open() || self.toggle.shown(now) > 0.
+    }
+}
+
+/// How many columns `width` wide fit in `across`, gaps between them included.
+fn columns_within(across: f32, width: f32) -> usize {
+    (((across + COLUMN_GAP) / (width + COLUMN_GAP)) as usize).clamp(1, MAX_COLUMNS)
 }
 
 /// The keys `keymap` runs after the prefix, by topic. A run of numbered
@@ -213,13 +227,9 @@ impl SheprdWindow {
         }));
     }
 
-    /// Resolves the rows here, once, so drawing only lays them out. Custom
+    /// What the panel would list now, and the prefix it follows. Custom
     /// commands appear only while they would run; see `custom_command`.
-    fn show_next_keys(&mut self, cx: &mut Context<Self>) {
-        self.next_keys.pending = None;
-        if !self.prefix_armed {
-            return;
-        }
+    fn next_keys_rows(&self) -> (Vec<Group>, String) {
         let commands = self
             .live
             .snapshot
@@ -227,15 +237,44 @@ impl SheprdWindow {
             .filter(|_| self.live.status.is_connected())
             .map_or(&[][..], |snapshot| &snapshot.commands);
         let keymap = self.keymap();
-        let groups = groups(keymap, commands);
+        (
+            groups(keymap, commands),
+            keymap.prefix_label().unwrap_or_default(),
+        )
+    }
+
+    /// Resolves the rows here, not while drawing, which only lays them out.
+    fn show_next_keys(&mut self, cx: &mut Context<Self>) {
+        self.next_keys.pending = None;
+        if !self.prefix_armed {
+            return;
+        }
+        let (groups, prefix) = self.next_keys_rows();
         if groups.is_empty() {
             return;
         }
-        let prefix = keymap.prefix_label().unwrap_or_default();
         self.next_keys.groups = groups;
         self.next_keys.prefix = prefix;
         self.next_keys.toggle.set(true, motion::now(), false);
         cx.notify();
+    }
+
+    /// Keeps an open panel true to the keys, which a config reload, a new
+    /// snapshot, or a lost connection can change under it. A chord armed under
+    /// another prefix must not complete under this one, so that ends the
+    /// chord, as does nothing being left to list.
+    pub(crate) fn sync_next_keys(&mut self, cx: &mut Context<Self>) {
+        if !self.next_keys.is_open() {
+            return;
+        }
+        let (groups, prefix) = self.next_keys_rows();
+        if groups.is_empty() || prefix != self.next_keys.prefix {
+            self.end_prefix();
+            cx.notify();
+        } else if groups != self.next_keys.groups {
+            self.next_keys.groups = groups;
+            cx.notify();
+        }
     }
 
     pub(super) fn render_next_keys(&self, window: &mut Window) -> Option<impl IntoElement> {
@@ -246,7 +285,7 @@ impl SheprdWindow {
             window.request_animation_frame();
         }
         let viewport = window.viewport_size();
-        if (shown <= 0. && !panel.is_open())
+        if !panel.showing(now)
             || f32::from(viewport.width) < MIN_VIEWPORT
             || f32::from(viewport.height) < MIN_VIEWPORT
         {
@@ -262,7 +301,7 @@ impl SheprdWindow {
         let room = f32::from(viewport.height) - foot - MARGIN - padding * 2. - line;
         let capacity = (room / line).max(0.) as usize;
         let across = f32::from(viewport.width) - MARGIN * 2. - padding * 2.;
-        let columns = ((across / column_width) as usize).clamp(1, MAX_COLUMNS);
+        let columns = columns_within(across, column_width);
         let (laid, hidden) = flow(&panel.groups, columns, capacity);
         let width = column_width.min(across);
         let column = |lines: Vec<Line<'_>>| {
@@ -337,7 +376,7 @@ impl SheprdWindow {
                         .child(
                             div()
                                 .flex()
-                                .gap(px(16.))
+                                .gap(px(COLUMN_GAP))
                                 .children(laid.into_iter().map(column)),
                         )
                         .child(
