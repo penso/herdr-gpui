@@ -1,0 +1,19 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-chat-protocol"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace      = true
+serde_json.workspace = true
+thiserror.workspace  = true
+uuid.workspace       = true
+
+[dev-dependencies]
+tempfile.workspace = true

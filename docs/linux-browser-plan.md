@@ -6,7 +6,7 @@ verifiable on its own. Read `AGENTS.md` first; its rules apply throughout.
 
 ## Where Linux stands
 
-- `crates/herdr-gpui/Cargo.toml` pulls `wry` only for macOS and Windows:
+- `crates/sheprd-gpui/Cargo.toml` pulls `wry` only for macOS and Windows:
   "wry has no working GPUI child-view backend on Linux yet".
   `browser/page.rs` lays a native view out where its group draws.
 - `browser::EMBEDDED` is `false` on Linux. `control::open_browser` then opens
@@ -18,7 +18,7 @@ verifiable on its own. Read `AGENTS.md` first; its rules apply throughout.
   the kit), `browser/annotate_view*` (notes panel and delivery), page
   presentation in `browser/view/present.rs`, reload in
   `browser/view/requests.rs`, and the VS Code tab's page in `browser/code.rs`.
-  `grep -rn 'target_os = "macos", windows' crates/herdr-gpui/src` lists them.
+  `grep -rn 'target_os = "macos", windows' crates/sheprd-gpui/src` lists them.
 - macOS only: popups adopted as tabs (`browser/popup.rs`), WebKit snapshots
   for note screenshots (`browser/snapshot.rs`), page keys
   (`browser/page_keys.rs`), and pages beneath the window's drawing
@@ -33,7 +33,7 @@ verifiable on its own. Read `AGENTS.md` first; its rules apply throughout.
 
 ## Target
 
-On a Linux desktop, `herdr-gpui browser open` shows web addresses and local
+On a Linux desktop, `sheprd browser open` shows web addresses and local
 files inside the window, beside terminals, with annotations, `herdr.send`,
 the explainer kit, and reload, matching Windows' feature set. Where the
 display server cannot embed a page, the app says so plainly and falls back
@@ -126,7 +126,7 @@ one works, Wayland keeps phase 1 and says so in the UI and the skill.
 - Native QA on both an X11 session and a Wayland session, recording which
   one each check ran on: open a URL and a local file, `--beside`, reload,
   annotate with an element, a text selection, and a region, Send to an agent
-  in a pane, `herdr.send` from `herdr-gpui browser example` and from a
+  in a pane, `herdr.send` from `sheprd browser example` and from a
   variants page, a theme switch picked up by `/.herdr/theme.css`, menus and
   toasts over a page, splitting and closing groups with pages, HiDPI, and
   quitting with pages open.

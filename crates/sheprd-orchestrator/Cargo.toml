@@ -1,0 +1,41 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-orchestrator"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono.workspace            = true
+gix.workspace               = true
+sheprd-client.workspace      = true
+sheprd-credentials.workspace = true
+sheprd-github.workspace      = true
+sheprd-remote.workspace      = true
+rusqlite.workspace          = true
+secrecy.workspace           = true
+serde.workspace             = true
+serde_json.workspace        = true
+thiserror.workspace         = true
+tracing.workspace           = true
+ureq.workspace              = true
+url.workspace               = true
+uuid.workspace              = true
+zeroize.workspace           = true
+
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true
+
+[dev-dependencies]
+sheprd-client = { features = ["test-support"], workspace = true }
+sheprd-github = { features = ["test-support"], workspace = true }
+sheprd-remote = { features = ["test-support"], workspace = true }
+tempfile.workspace = true
+
+[features]
+# Fixtures for the app's own tests of the views.
+test-support = []

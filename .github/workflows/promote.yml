@@ -33,7 +33,7 @@ jobs:
     name: Promote Workflow Security
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.repository == 'penso/herdr-gpui' &&
+      github.repository == 'sheprd-labs/sheprd' &&
       github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
@@ -45,7 +45,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           advanced-security: false
           online-audits: false
@@ -54,7 +54,7 @@ jobs:
     needs: audit
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.repository == 'penso/herdr-gpui' &&
+      github.repository == 'sheprd-labs/sheprd' &&
       github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
@@ -88,15 +88,15 @@ jobs:
           [[ "$VERSION" =~ ^[1-9][0-9]{7}\.[1-9][0-9]*$ ]]
           [[ "$REQUEST_ID" =~ ^[a-zA-Z0-9-]{0,64}$ ]]
           # Only a published beta is promoted; a draft or stable release is refused.
-          gh release view "v$VERSION" --repo penso/herdr-gpui --json isDraft,isPrerelease |
+          gh release view "v$VERSION" --repo sheprd-labs/sheprd --json isDraft,isPrerelease |
             jq -e '.isDraft == false and .isPrerelease == true'
-          sha=$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)
+          sha=$(gh api "repos/sheprd-labs/sheprd/git/ref/tags/v$VERSION" --jq .object.sha)
           [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
           # The beta was cut from main; refuse a tag that no longer is on it.
-          status=$(gh api "repos/penso/herdr-gpui/compare/$sha...main" --jq .status)
+          status=$(gh api "repos/sheprd-labs/sheprd/compare/$sha...main" --jq .status)
           [[ "$status" == ahead || "$status" == identical ]]
           # Promoting under a newer stable release would move "latest" backwards.
-          latest=$(gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name)
+          latest=$(gh api repos/sheprd-labs/sheprd/releases/latest --jq .tag_name)
           python3 - "$latest" "v$VERSION" <<'PY'
           import re, sys
           def key(tag):
@@ -114,7 +114,7 @@ jobs:
   promote:
     needs: validate
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -124,7 +124,7 @@ jobs:
     env:
       VERSION: ${{ needs.validate.outputs.version }}
       RELEASE_SHA: ${{ needs.validate.outputs.sha }}
-      GH_REPO: penso/herdr-gpui
+      GH_REPO: sheprd-labs/sheprd
     steps:
       # Immutable releases keep their tag and assets locked; only the
       # prerelease flag, latest status and title change here.
@@ -133,16 +133,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
-          gh release edit "v$VERSION" --prerelease=false --latest --title "Herdr UI $VERSION"
+          [[ "$(gh api "repos/sheprd-labs/sheprd/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          gh release edit "v$VERSION" --prerelease=false --latest --title "Sheprd $VERSION"
           gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
-          [[ "$(gh api repos/penso/herdr-gpui/releases/latest --jq .tag_name)" == "v$VERSION" ]]
+          [[ "$(gh api repos/sheprd-labs/sheprd/releases/latest --jq .tag_name)" == "v$VERSION" ]]
 
   # Keep these steps identical to release.yml's homebrew job.
   homebrew:
     needs: [validate, promote]
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -151,7 +151,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.validate.outputs.version }}
-      GH_REPO: penso/herdr-gpui
+      GH_REPO: sheprd-labs/sheprd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -164,9 +164,9 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
-          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          [[ "$(gh api "repos/sheprd-labs/sheprd/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
           gh release download "v$VERSION" --dir final \
-            --pattern "Herdr-$VERSION-universal-apple-darwin.dmg" --pattern SHA256SUMS
+            --pattern "Sheprd-$VERSION-universal-apple-darwin.dmg" --pattern SHA256SUMS
           checksum=$(python3 scripts/release/artifact-manifest.py dmg "$VERSION" final)
           bash scripts/release/render-cask.sh "$VERSION" "$checksum" > rendered-cask.rb
       - name: Commit only the tap cask using its dedicated deploy key
@@ -180,7 +180,7 @@ jobs:
   winget:
     needs: [validate, promote]
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       needs.validate.outputs.windows_signed == 'true'
     runs-on: ubuntu-24.04
@@ -190,7 +190,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.validate.outputs.version }}
-      GH_REPO: penso/herdr-gpui
+      GH_REPO: sheprd-labs/sheprd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -203,7 +203,7 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
-          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          [[ "$(gh api "repos/sheprd-labs/sheprd/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
           gh release download "v$VERSION" --dir final --pattern SHA256SUMS
       - name: Install the pinned Komac
         run: python3 scripts/release/winget.py install-komac "$RUNNER_TEMP/komac" > "$RUNNER_TEMP/komac-path"

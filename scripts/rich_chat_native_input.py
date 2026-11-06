@@ -67,7 +67,7 @@ def capture_native_input(env, directory, app, case):
                 title = c.c_char_p()
                 if x.XFetchName(display, children[i], c.byref(title)) and title.value:
                     try:
-                        if title.value.decode(errors="replace") == "Herdr · Rich chat preview":
+                        if title.value.decode(errors="replace") == "Sheprd · Rich chat preview":
                             matches.append(children[i])
                     finally:
                         x.XFree(c.cast(title, pointer))

@@ -1,0 +1,442 @@
+//! Superset's single-line rows: one icon slot that reports the row's state,
+//! the name, and the pull request's change counts on the right. The focused
+//! row is filled and marked with a stripe down its leading edge. Rows Herdr's
+//! sidebar config defines replace the name with its lines; the slot keeps its
+//! dot only when those lines lead with the status.
+
+use super::{
+    super::{
+        agents::{icon_mark, status_style},
+        cell::{AgentRow, RowContext, RowLayout, RowState, WorkspaceRow},
+        line_height,
+        row::{
+            Elbow, RowIcon, RowKind, RowLift, RowTree, TokenLook, configured_status_style, guide,
+            leading_status, left_behind, removing_dot, token_column,
+        },
+        scaled,
+        tokens::ResolvedToken,
+    },
+    parts::{self, Line, glyph_at, wash},
+};
+use crate::config::{StatusIcons, Theme};
+use crate::direction::Logical;
+use gpui::{prelude::*, *};
+use sheprd_client::protocol::AgentStatus;
+
+pub(in super::super) struct Superset;
+
+/// Width of the leading edge stripe on the focused row.
+const STRIPE: f32 = 2.;
+
+/// A child's guide gutter, as `(x, width)` from the sidebar's leading edge:
+/// the trunk drops from the leading edge of the parent's glyph, and the tick
+/// spans the indent to the child's glyph, as the tree's tick meets its dot.
+/// A tile fills its whole slot, so there the guide keeps to the slots' edges
+/// rather than crossing into the tile.
+fn gutter(cx: &RowContext<'_>) -> (f32, f32) {
+    let m = Metrics::new(cx);
+    let inset = if cx.indicators.icons == StatusIcons::Tiles {
+        0.
+    } else {
+        (m.icon - m.icon * GLYPH) / 2.
+    };
+    (
+        cx.look.content_x() + cx.nest + inset,
+        cx.look.density.card_indent(),
+    )
+}
+
+/// The glyph's share of its icon slot.
+const GLYPH: f32 = 0.7;
+
+/// Geometry shared by both kinds of row, scaled from the sidebar font so a
+/// larger font grows the icon slot with the text.
+struct Metrics {
+    icon: f32,
+    glyph: f32,
+    gap: f32,
+    small: f32,
+}
+
+impl Metrics {
+    fn new(cx: &RowContext<'_>) -> Self {
+        let small = (cx.font.size * 0.8).round();
+        Self {
+            icon: (cx.font.size * 1.5).round().max(line_height(cx.font)),
+            glyph: glyph_at(cx.font, small),
+            gap: cx.look.density.gap(),
+            small,
+        }
+    }
+}
+
+/// The row: padding, the state fill, the stripe, and one measured line.
+fn shell(key: &str, state: RowState, indent: f32, line: Line<'_>, cx: &RowContext<'_>) -> Div {
+    let theme = cx.theme;
+    let gap = cx.look.density.gap();
+    let row = div()
+        .debug_selector(|| format!("row-{key}"))
+        .relative()
+        .w_full()
+        .flex_none()
+        .row()
+        .items_center()
+        .py(px(gap))
+        .ps(px(cx.look.content_x() + indent))
+        .cursor_pointer();
+    let row = cx.mark.apply(row, key, &cx.look);
+    parts::mark(
+        row,
+        state,
+        (rgb(theme.active), wash(theme.foreground, 0x0d)),
+        theme,
+    )
+    // Flat rows round off while carried, so the card reads as picked up.
+    .when(state.lift == RowLift::Lifted, |row| row.rounded(px(4.)))
+    .when(state.selected, |row| {
+        row.child(
+            div()
+                .debug_selector(|| format!("highlight-{key}"))
+                .absolute()
+                .inset_s(px(0.))
+                .top_0()
+                .bottom_0()
+                .w(px(STRIPE))
+                .rounded_e(px(STRIPE))
+                .bg(rgb(theme.foreground)),
+        )
+    })
+    .child(line.into_div())
+}
+
+/// The icon slot, with the status as a dot pinned to its top right corner in
+/// `dot`'s color. `None` draws no dot. The dot stays
+/// inside the slot: the slot sets the line's height and the line clips, so a
+/// dot that overhangs the slot loses its top.
+fn slot(
+    key: &str,
+    glyph: impl IntoElement,
+    (status, dot): (AgentStatus, Option<(u32, bool)>),
+    m: &Metrics,
+    cx: &RowContext<'_>,
+) -> Div {
+    let theme = cx.theme;
+    // Tiles tint the whole slot instead of badging a corner: the slot is
+    // already the tile, and the icon inside it stays readable.
+    let tile = dot
+        .filter(|_| cx.indicators.icons == StatusIcons::Tiles)
+        .map(|(color, _)| color);
+    // A configured weight has nothing to thicken on a badge.
+    let dot = dot.filter(|_| tile.is_none()).map(|(color, _bold)| {
+        let icons = cx.indicators.icons;
+        if icons != StatusIcons::Dots {
+            let diameter = (m.icon * 0.55).round();
+            return div()
+                .debug_selector(|| format!("dot-{key}"))
+                .absolute()
+                .top_0()
+                .inset_e(px(0.))
+                .size(px(diameter + 2.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .bg(rgb(theme.sidebar_background()))
+                .child(icon_mark(
+                    icons,
+                    status,
+                    diameter,
+                    color,
+                    cx.status_indicators().fade(),
+                ));
+        }
+        let (diameter, filled, _) = status_style(status, theme);
+        let diameter = scaled(cx.font, diameter);
+        // A working dot turns in the dot's own place, so the badge stays clear
+        // of the icon's center.
+        if status == AgentStatus::Working {
+            return div()
+                .debug_selector(|| format!("dot-{key}"))
+                .absolute()
+                .top_0()
+                .inset_e(px(0.))
+                .size(px(diameter))
+                .rounded_full()
+                .bg(rgb(theme.sidebar_background()))
+                .child(icon_mark(
+                    StatusIcons::Dots,
+                    status,
+                    diameter,
+                    color,
+                    cx.status_indicators().fade(),
+                ));
+        }
+        div()
+            .debug_selector(|| format!("dot-{key}"))
+            .absolute()
+            .top_0()
+            .inset_e(px(0.))
+            .size(px(diameter))
+            .rounded_full()
+            .border_1()
+            .border_color(rgb(color))
+            .bg(rgb(if filled {
+                color
+            } else {
+                theme.sidebar_background()
+            }))
+    });
+    div()
+        .debug_selector(|| format!("icon-{key}"))
+        .relative()
+        .size(px(m.icon))
+        .flex()
+        .items_center()
+        .justify_center()
+        .when_some(tile, |slot, color| {
+            slot.rounded(px(crate::config::corners::SMALL))
+                .bg(rgba((color << 8) | 0x30))
+                .border_1()
+                .border_color(rgba((color << 8) | 0x70))
+        })
+        .child(glyph)
+        .children(dot)
+}
+
+/// The slot's dot: none for Unknown, which has nothing to report, or for a
+/// configured row that does not lead with the status, as Herdr's rows omit
+/// it; styled as that leading `state_icon` asks.
+fn dot(
+    lines: &[Vec<ResolvedToken>],
+    status: AgentStatus,
+    cx: &RowContext<'_>,
+) -> (AgentStatus, Option<(u32, bool)>) {
+    let dot = if status == AgentStatus::Unknown {
+        None
+    } else if lines.is_empty() {
+        Some((cx.indicators.color(status), false))
+    } else {
+        leading_status(lines).map(|token| configured_status_style(token, status, cx))
+    };
+    (status, dot)
+}
+
+fn text_color(state: RowState, theme: &Theme) -> u32 {
+    if state.selected {
+        theme.foreground
+    } else {
+        theme.subtext()
+    }
+}
+
+impl RowLayout for Superset {
+    fn workspace(&self, row: WorkspaceRow<'_>, state: RowState, cx: &RowContext<'_>) -> Div {
+        let (status, upstream) = (row.status(), row.upstream());
+        let WorkspaceRow {
+            label,
+            tree,
+            icon,
+            fold,
+            badge,
+            removing,
+            lines,
+            ..
+        } = row;
+        let theme = cx.theme;
+        let m = Metrics::new(cx);
+        let slot_dot = dot(&lines, status, cx);
+        let indent = cx.nest
+            + if tree == RowTree::None {
+                0.
+            } else {
+                cx.look.density.card_indent()
+            };
+        let pr = badge.as_ref().and_then(|badge| badge.pr.as_ref());
+        let changes = badge.as_ref().and_then(|badge| badge.counts.as_ref());
+        let dirty = badge.as_ref().is_some_and(|badge| badge.dirty);
+        let teleported = badge.as_ref().is_some_and(|badge| badge.teleported);
+        let muted = badge.as_ref().is_some_and(|badge| badge.muted);
+        let dirty_size = (line_height(cx.font) * 0.75).round();
+        let size = m.icon * GLYPH;
+        let icon_color = if state.selected {
+            theme.foreground
+        } else {
+            theme.muted
+        };
+        // A pull request outranks the owner: its color is its state.
+        let glyph = match (pr, icon) {
+            (Some(pr), _) => parts::icon("icons/git-branch.svg", size, pr.color).into_any_element(),
+            (None, RowIcon::None) => {
+                parts::icon("icons/git-branch.svg", size, icon_color).into_any_element()
+            }
+            (None, icon) => div()
+                .size(px(size))
+                .child(icon.element(icon_color))
+                .into_any_element(),
+        };
+        let slot = if removing {
+            slot(
+                label,
+                removing_dot("worktree-removing", cx.font, theme),
+                (status, None),
+                &m,
+                cx,
+            )
+        } else {
+            slot(label, glyph, slot_dot, &m, cx)
+        };
+        let counts = if state.selected {
+            (theme.ink(theme.palette[2]), theme.ink(theme.palette[1]))
+        } else {
+            (theme.muted, theme.muted)
+        };
+        let line = Line::new(cx.look.content_width(cx.width) - indent, m.gap).fixed(m.icon, slot);
+        let line = if lines.is_empty() {
+            line.fill(
+                div()
+                    .debug_selector(|| format!("name-{label}"))
+                    .text_color(rgb(if teleported {
+                        left_behind(text_color(state, theme), theme)
+                    } else {
+                        text_color(state, theme)
+                    })),
+                label,
+            )
+            // Configured rows show the counts only through `git_status`.
+            .when_some(upstream, |line, upstream| {
+                let glyph = glyph_at(cx.font, cx.font.size);
+                line.fixed(upstream.width(glyph), upstream.element(label, glyph, theme))
+            })
+        } else {
+            line.fill_with(|width| {
+                token_column(
+                    label,
+                    &lines,
+                    TokenLook {
+                        kind: RowKind::Workspace,
+                        status,
+                        focused: state.selected,
+                        teleported,
+                    },
+                    width,
+                    cx,
+                )
+            })
+        };
+        let line = line
+            .when(muted, |line| {
+                line.fixed(dirty_size, parts::muted(label, dirty_size, theme))
+            })
+            .when(teleported, |line| {
+                line.fixed(dirty_size, parts::teleported(label, dirty_size, theme))
+            })
+            // Local counts take the dirty mark's place, in a chip of its hue.
+            .when(
+                dirty && !changes.is_some_and(|changes| changes.local),
+                |line| line.fixed(dirty_size, parts::dirty(label, dirty_size, theme)),
+            )
+            .when_some(changes, |line, changes| {
+                if changes.local {
+                    let (glyph, icon) = (m.glyph, (dirty_size * 0.8).round());
+                    let chip = changes.chip(label, glyph, icon, counts, theme);
+                    return line
+                        .shrink(changes.chip_width(glyph, icon), chip.text_size(px(m.small)));
+                }
+                let (width, counts) = parts::counts(label, changes, m.glyph, counts);
+                line.shrink(width, counts.text_size(px(m.small)))
+            })
+            .when_some(fold, |line, fold| {
+                let width = m.icon * 0.6;
+                let size = scaled(cx.font, 14.);
+                line.fixed(width, fold.element(theme).w(px(width)).text_size(px(size)))
+            });
+        // The slot is centred in the row, so the tick meets it halfway down.
+        shell(label, state, indent, line, cx).children(guide(
+            label,
+            tree,
+            gutter(cx),
+            Elbow::Middle,
+            cx,
+        ))
+    }
+
+    fn trunk_below(&self, key: &str, tree: RowTree, cx: &RowContext<'_>) -> Option<Div> {
+        super::super::row::trunk_below(key, tree, gutter(cx), cx)
+    }
+
+    fn agent(&self, agent: AgentRow<'_>, state: RowState, cx: &RowContext<'_>) -> Div {
+        let theme = cx.theme;
+        let m = Metrics::new(cx);
+        let key = agent.key.as_str();
+        let color = text_color(state, theme);
+        let glyph = parts::icon(agent.icon.path(), m.icon * 0.7, color);
+        let slot_dot = dot(&agent.lines, agent.status, cx);
+        let line = Line::new(cx.look.content_width(cx.width), m.gap)
+            .fixed(m.icon, slot(key, glyph, slot_dot, &m, cx));
+        if !agent.lines.is_empty() {
+            let line = line.fill_with(|width| {
+                token_column(
+                    key,
+                    &agent.lines,
+                    TokenLook {
+                        kind: RowKind::Agent(agent.icon),
+                        status: agent.status,
+                        focused: state.selected,
+                        teleported: false,
+                    },
+                    width,
+                    cx,
+                )
+            });
+            return shell(key, state, 0., line, cx);
+        }
+        // The agent's pane, then where it runs, trail its name, each never over
+        // half the row.
+        let line = line
+            .lead(
+                div()
+                    .debug_selector(|| format!("name-{key}"))
+                    .text_color(rgb(color)),
+                agent.name,
+                glyph_at(cx.font, cx.font.size),
+                0.4,
+            )
+            .when_some(agent.pane, |line, pane| {
+                line.label(
+                    div()
+                        .debug_selector(|| format!("pane-{key}"))
+                        .text_size(px(m.small))
+                        .text_color(rgb(theme.muted)),
+                    pane,
+                    m.glyph,
+                    0.5,
+                )
+            })
+            .when_some(parts::agent_place(agent.place, cx.host), |line, place| {
+                line.label(
+                    div()
+                        .debug_selector(|| format!("detail-{key}"))
+                        .text_size(px(m.small))
+                        .text_color(rgb(theme.muted)),
+                    place,
+                    m.glyph,
+                    0.5,
+                )
+            })
+            .when_some(agent.status_text.as_deref(), |line, text| {
+                line.keep(
+                    div()
+                        .debug_selector(|| format!("status-{key}"))
+                        .text_size(px(m.small))
+                        .text_color(rgb(cx.indicators.color(agent.status))),
+                    text,
+                    m.glyph,
+                    0.3,
+                )
+            });
+        shell(key, state, 0., line, cx)
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sheprd">
+<title>Sheprd</title>
+<link rel="manifest" href="{{manifest}}">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{touch-icon}}">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/app.js" defer></script>
+<script src="/assets/alpine.min.js" defer></script>
+</head>
+<body>
+<div class="status-bar-background" aria-hidden="true"></div>
+<div id="banner" class="banner" hidden></div>
+<div id="view" class="px-3.5 min-h-dvh"></div>
+<aside id="install-hint" class="install-hint" aria-label="Add to Home Screen" hidden>
+  <img src="/assets/icon-180.png" alt="" class="w-11 h-11 rounded-[10px] shrink-0">
+  <div class="flex-1 min-w-0">
+    <b class="block text-[15px]">Add to Home Screen</b>
+    <small class="block text-muted" data-install-how>Tap Share, then Add to Home Screen, to open it like an app and get notifications.</small>
+  </div>
+  <button type="button" class="chip text-accent font-semibold" data-install hidden>Install</button>
+  <button type="button" class="grid place-items-center w-7 h-7 rounded-full bg-raised text-muted text-xs shrink-0" data-install-close aria-label="Close">✕</button>
+</aside>
+
+<template id="t-loading">
+  <div class="grid place-items-center min-h-dvh text-muted">Connecting…</div>
+</template>
+
+<template id="t-offline">
+  <div class="flex flex-col items-center justify-center gap-3 min-h-dvh text-center px-6">
+    <p class="text-lg font-semibold">Can't reach your computer</p>
+    <p class="text-muted text-sm">Sheprd isn't answering at any address it gave this phone. Check that the computer is awake and on the same network, or that Tailscale is on.</p>
+    <button type="button" class="btn btn-primary max-w-60" data-retry>Try again</button>
+    <a href="/computers" data-nav class="btn btn-subtle max-w-60">Other computers</a>
+  </div>
+</template>
+
+<template id="t-unpaired">
+  <div class="flex flex-col items-center justify-center gap-3 min-h-dvh text-center px-6">
+    <p class="text-lg font-semibold">Pair this phone</p>
+    <p class="text-muted text-sm">In Sheprd on your computer, open Settings › Remote control and choose Pair a device, then scan the code with your camera.</p>
+    <button type="button" class="btn btn-primary max-w-60" data-add-computer>Scan a pairing code</button>
+    <p class="text-muted text-sm">You can pair this Home Screen app directly. Or pair in Safari first, return to the workspace list, then add Sheprd to the Home Screen.</p>
+    <p class="text-amber text-sm" data-reason></p>
+  </div>
+</template>
+
+<template id="t-approve">
+  <div class="flex flex-col items-center gap-3 px-4 pt-10 pb-10 text-center">
+    <h1 class="text-[21px] font-bold">Confirm on your computer</h1>
+    <p class="text-muted">Check that this code matches the one Sheprd shows, then choose Allow there.</p>
+    <div class="font-mono font-bold text-[38px] tracking-widest px-5 py-4 bg-surface rounded-2xl min-w-48 min-h-[78px]" data-code></div>
+    <p class="text-muted text-sm" data-state>Pairing…</p>
+    <a href="/computers" data-nav class="btn btn-subtle max-w-60" data-approve-back hidden>Back to computers</a>
+    <div class="group-list w-full mt-6 text-left" data-trust hidden>
+      <div class="row flex-col items-start gap-1">
+        <b>Trust your computer for notifications</b>
+        <small class="text-muted">Your computer uses its own certificate. Install it once so this phone trusts it, then turn on full trust in Settings › General › About › Certificate Trust Settings.</small>
+        <div class="flex gap-2 mt-1">
+          <a class="chip text-accent" href="/ca.mobileconfig" data-computer>iPhone profile</a>
+          <a class="chip text-accent" href="/ca.pem" download="herdr-remote-ca.pem" data-computer>Android certificate</a>
+        </div>
+        <small class="text-muted">Install it only if this fingerprint matches the one Sheprd shows beside the code on your computer: <span class="font-mono" data-fingerprint></span></small>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="t-computers">
+  <div class="pb-16">
+    <header class="flex items-center gap-2 pt-1.5 pb-2">
+      <a href="/" data-nav class="grid place-items-center text-accent w-8 h-9 -ml-1.5 shrink-0" aria-label="Back">
+        <svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      </a>
+      <h1 class="text-[22px] font-bold">Computers</h1>
+    </header>
+    <div class="group-list" data-hosts></div>
+    <div class="group-list mt-6">
+      <button type="button" class="row text-accent w-full text-left" data-add-computer>Add a computer</button>
+    </div>
+    <p class="text-muted text-xs px-4 pt-2">In Sheprd on that computer, open Settings › Remote control and choose Pair a device, then scan its code here.</p>
+  </div>
+</template>
+
+<template id="t-host">
+  <button type="button" class="row w-full text-left">
+    <i class="w-2.5 h-2.5 rounded-full shrink-0 bg-raised" data-dot></i>
+    <span class="flex-1 min-w-0">
+      <b class="block truncate font-semibold" data-name></b>
+      <small class="block truncate text-muted font-mono" data-address>Checking…</small>
+    </span>
+    <span class="text-accent text-sm" data-shown>Shown</span>
+  </button>
+</template>
+
+<template id="t-scan">
+  <div class="flex flex-col gap-3 pt-1.5 pb-10">
+    <header class="flex items-center gap-2">
+      <button type="button" class="pill-button" data-scan-cancel>Cancel</button>
+      <h1 class="text-[19px] font-bold">Scan a pairing code</h1>
+    </header>
+    <video class="w-full aspect-square object-cover rounded-2xl bg-surface" playsinline muted></video>
+    <p class="text-muted text-sm text-center px-4" data-scan-state>Point the camera at the code Sheprd shows in Settings › Remote control › Pair a device.</p>
+  </div>
+</template>
+
+</body>
+</html>

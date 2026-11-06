@@ -181,7 +181,7 @@ impl Sandbox {
     /// connection that the probe then closes.
     #[cfg(windows)]
     fn daemon_listening(&self) -> bool {
-        herdr_client::Stream::connect(self.socket()).is_ok()
+        sheprd_client::Stream::connect(self.socket()).is_ok()
     }
 }
 
