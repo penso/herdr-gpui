@@ -524,6 +524,19 @@ impl SheprdWindow {
         self.menu.pr_cache.seed(input, value, now);
     }
 
+    /// [`Self::seed_pr`] for a finished lookup that found no pull request.
+    #[cfg(test)]
+    pub(crate) fn seed_no_pr(&mut self, input: Input, now: std::time::Instant) {
+        if !self.menu.github.connected() {
+            self.menu.github = crate::github::Auth::connected_fixture();
+        }
+        if self.selected_endpoint == 0 {
+            self.live.local_daemon_peer = true;
+        }
+        self.sync_pr_scope();
+        self.menu.pr_cache.seed_none(input, now);
+    }
+
     #[cfg(any(test, feature = "integration-test"))]
     pub(crate) fn github_fixture(
         &mut self,

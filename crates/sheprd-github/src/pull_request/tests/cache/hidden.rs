@@ -38,6 +38,16 @@ fn a_hidden_repository_pauses_all_its_branches_but_not_other_repositories() {
 }
 
 #[test]
+fn a_failed_lookup_never_suggests_a_pull_request() {
+    let mut peer = Peer::new();
+    let now = Instant::now();
+    peer.cache.schedule([input("first")], now);
+    peer.cache.poll(now);
+    peer.complete(now, Err(hidden()), None);
+    assert!(!peer.cache.unopened_input(&local(), &input("first"), "tip"));
+}
+
+#[test]
 fn a_hidden_repository_asks_again_only_after_its_backoff() {
     let mut peer = Peer::new();
     let now = Instant::now();

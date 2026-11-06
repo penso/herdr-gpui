@@ -57,6 +57,9 @@ pub(crate) struct Workspace {
     pub(crate) worktree: Option<ClientShellWorktree>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pull_request: Option<PullRequest>,
+    /// Commits on its branch that no pull request carries yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) unopened_commits: Option<u64>,
     pub(crate) chats: Vec<Chat>,
     pub(crate) terminals: Vec<Terminal>,
 }
@@ -235,6 +238,25 @@ fn pull_request<'a>(
     })
 }
 
+/// The commits Sheprd found waiting for a pull request on `workspace` in the
+/// same boot.
+fn unopened_commits(
+    pull_requests: &PullRequests,
+    boot: &str,
+    workspace: &hub::Workspace,
+) -> Option<u64> {
+    (pull_requests.boot_id == boot).then_some(())?;
+    pull_requests
+        .unopened
+        .iter()
+        .find(|entry| {
+            entry.workspace_id == workspace.id
+                && entry.cwd == workspace.cwd
+                && Some(entry.branch.as_str()) == workspace.branch.as_deref()
+        })
+        .map(|entry| entry.commits)
+}
+
 impl From<Summary> for ChatSummary {
     fn from(summary: Summary) -> Self {
         Self {
@@ -336,6 +358,7 @@ impl Home {
                         tone: pr.tone,
                     }
                 }),
+                unopened_commits: unopened_commits(pull_requests, &layout.boot, workspace),
                 chats: workspace
                     .chats
                     .iter()

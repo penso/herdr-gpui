@@ -29,6 +29,7 @@ pub(crate) mod image_source;
 mod images;
 mod input;
 mod layout_save;
+pub(crate) use layout_save::LayoutSaves;
 mod lifecycle;
 pub(crate) use lifecycle::reasserts;
 mod links;

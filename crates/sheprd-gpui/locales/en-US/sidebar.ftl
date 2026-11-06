@@ -87,3 +87,6 @@ sidebar-workspace-move-not-sent = Workspace move not sent: { $error }
 # the Orca layout.
 sidebar-primary = primary
 sidebar-spoken-muted = notifications muted
+# A row's badge, in place of a pull request number: its branch has commits and
+# no pull request yet. Keep it about as short as "#123".
+sidebar-pull-request-unopened = +PR

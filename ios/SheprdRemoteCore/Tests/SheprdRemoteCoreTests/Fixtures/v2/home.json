@@ -115,6 +115,7 @@
           "label": "work",
           "is_linked_worktree": true
         },
+        "unopened_commits": 3,
         "chats": [],
         "terminals": []
       }

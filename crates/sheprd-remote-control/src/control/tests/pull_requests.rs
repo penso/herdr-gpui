@@ -1,5 +1,7 @@
 use super::*;
-use crate::control::pull_requests::{MAX_PULL_REQUESTS, PullRequests, Tone, WorkspacePullRequest};
+use crate::control::pull_requests::{
+    MAX_PULL_REQUESTS, PullRequests, Tone, UnopenedBranch, WorkspacePullRequest,
+};
 
 fn snapshot() -> PullRequests {
     PullRequests {
@@ -12,6 +14,7 @@ fn snapshot() -> PullRequests {
             url: "https://github.com/sheprd-labs/sheprd/pull/850".into(),
             tone: Tone::Held,
         }],
+        unopened: Vec::new(),
     }
 }
 
@@ -51,4 +54,38 @@ fn badges_are_bounded_and_links_cannot_execute_script_or_carry_credentials() {
         })
         .collect();
     assert!(!value.valid());
+}
+
+fn unopened(id: &str) -> UnopenedBranch {
+    UnopenedBranch {
+        workspace_id: id.into(),
+        cwd: "/code/app".into(),
+        branch: "topic".into(),
+        commits: 3,
+    }
+}
+
+#[test]
+fn branches_waiting_for_a_pull_request_are_bounded() {
+    let mut value = snapshot();
+    value.unopened.push(unopened("w2"));
+    assert!(value.valid());
+    value.unopened.push(unopened("w2"));
+    assert!(!value.valid(), "duplicate workspace identity");
+    value.unopened = vec![UnopenedBranch {
+        commits: 0,
+        ..unopened("w2")
+    }];
+    assert!(!value.valid(), "nothing waiting");
+    value.unopened = (0..=MAX_PULL_REQUESTS)
+        .map(|n| unopened(&format!("w{n}")))
+        .collect();
+    assert!(!value.valid());
+}
+
+#[test]
+fn an_older_app_sends_no_waiting_branches() {
+    let value: PullRequests = serde_json::from_str(r#"{"boot_id":"boot","entries":[]}"#).unwrap();
+    assert!(value.unopened.is_empty());
+    assert!(value.valid());
 }
