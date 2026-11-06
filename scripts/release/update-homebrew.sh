@@ -68,7 +68,7 @@ else
     status=$?
     [[ $status == 1 ]] || exit "$status"
 fi
-export GIT_AUTHOR_NAME='Herdr UI release'
+export GIT_AUTHOR_NAME='Sheprd release'
 export GIT_AUTHOR_EMAIL='41898282+github-actions[bot]@users.noreply.github.com'
 export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME" GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 git -C "$temp/tap" -c core.hooksPath=/dev/null -c commit.gpgSign=false \

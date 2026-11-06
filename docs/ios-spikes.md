@@ -3,8 +3,8 @@
 The risky pieces of `docs/ios-app-plan.md`, tried before building on them.
 Spike code: `ios/Spikes/` (an iPhone app with a Notification Service
 Extension and a widget extension, plus `mac/`, the Mac's Bluetooth side),
-`ios/HerdrRemoteCore` (`NotificationSeal`), and
-`crates/herdr-remote-control/src/apns/seal.rs`.
+`ios/SheprdRemoteCore` (`NotificationSeal`), and
+`crates/sheprd-remote-control/src/apns/seal.rs`.
 
 | Spike | Result | Evidence |
 | --- | --- | --- |
@@ -20,14 +20,14 @@ Extension and a widget extension, plus `mac/`, the Mac's Bluetooth side),
 
 ## Decision proposed by the spikes
 
-**The Mac's Bluetooth side becomes a small Swift helper, `herdr-nearby`,
+**The Mac's Bluetooth side becomes a small Swift helper, `sheprd-nearby`,
 inside the app bundle.**
-- Herdr UI starts it and exchanges newline-delimited JSON with it on stdio:
+- Sheprd starts it and exchanges newline-delimited JSON with it on stdio:
   advertise, stop, frames in and out, and presence. The SAS crypto stays in
   the daemon, and the helper only carries bytes, as the plan already says
-  of Herdr UI.
+  of Sheprd.
 - Swift keeps Core Bluetooth safe and idiomatic.
-- A helper inside the bundle is attributed to Herdr.app for the Bluetooth
+- A helper inside the bundle is attributed to Sheprd for the Bluetooth
   permission.
 - The cost is a `swiftc` step in macOS packaging.
 
@@ -57,7 +57,7 @@ an iPhone on iOS 26, and this Mac.
    - The banner must show the decrypted title and body, which proves the
      extension can use the Secure Enclave key from the shared group.
 4. **Live Activity button**
-   - In the Activity tab, paste a pairing link from Herdr's Remote control
+   - In the Activity tab, paste a pairing link from Sheprd's Remote control
      dialog (only its address and fingerprint are used), Save, and Start.
    - Lock the phone and press Allow once.
    - The activity should show `HTTP 200 in N ms`.

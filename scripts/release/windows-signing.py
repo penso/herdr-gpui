@@ -2,16 +2,16 @@
 """Authenticode-sign the Windows release zip's executables in the release workflow.
 
   unpack ZIP DIRECTORY
-      Extract the tested, unsigned release zip that package-windows.py wrote
+      Extract the tested release zip that package-windows.py wrote
       into DIRECTORY, which must not exist, and print the tree root holding
-      herdr-gpui.exe, herdr-gpui-launcher.exe, herdr-acp.exe,
-      herdr-remote-control.exe, herdr-automate.exe, herdr-nearby.exe, and
+      sheprd.exe, sheprd-launcher.exe, sheprd-acp.exe,
+      sheprd-remote-control.exe, sheprd-automate.exe, sheprd-nearby.exe, and
       herdr-core.exe for the signing action.
   repack ZIP TREE_DIRECTORY OUTPUT_DIR
       Write OUTPUT_DIR/ZIP's name from the signed tree. Refuses unless every
       file is the zip's own and each executable differs from the tested one
-      only by its appended Authenticode signature, so signing cannot change
-      what was built and tested.
+      only by its appended or replaced Authenticode signature, so signing
+      cannot change what was built and tested.
   verify [--subject SUBJECT] ZIP INSTALLER
       On Windows: require a valid, RFC 3161 timestamped signature from one
       signer, optionally exactly SUBJECT, on the zip's executables and on the
@@ -32,9 +32,6 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-EXECUTABLES = ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe",
-               "herdr-remote-control.exe", "herdr-automate.exe", "herdr-nearby.exe",
-               "herdr-core.exe")
 # IMAGE_OPTIONAL_HEADER offsets: CheckSum, NumberOfRvaAndSizes, and the
 # certificate table, data directory 4, whose address is a file offset.
 CHECKSUM_OFFSET = 64
@@ -49,6 +46,9 @@ def load_package():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+EXECUTABLES = load_package().EXECUTABLES
 
 
 def certificate_table(data):
@@ -70,23 +70,34 @@ def certificate_table(data):
     return optional + CHECKSUM_OFFSET, entry, offset, size
 
 
-def without_signature(signed, unsigned):
-    """Refuse unless `signed` is `unsigned` plus one appended Authenticode
-    signature: the only other changes signing makes are the checksum and the
-    certificate table entry, and alignment padding before the table."""
-    checksum, entry, offset, size = certificate_table(unsigned)
-    if (offset, size) != (0, 0):
-        raise ValueError("Tested executable is already signed")
+def without_signature(signed, original):
+    """Allow only an appended or replaced trailing Authenticode signature.
+
+    A pinned upstream companion can already be signed. Preserve its entire
+    prefix, including alignment padding, when replacing its certificate table.
+    Windows verifies the new signature and release identity separately.
+    """
+    checksum, entry, old_offset, old_size = certificate_table(original)
+    previously_signed = (old_offset, old_size) != (0, 0)
+    if previously_signed:
+        if (not old_size or old_offset < entry + 8
+                or old_offset % CERTIFICATE_ALIGNMENT
+                or old_offset + old_size != len(original)):
+            raise ValueError("Tested executable has no valid trailing certificate table")
+        original = original[:old_offset]
     if certificate_table(signed)[:2] != (checksum, entry):
         raise ValueError("Signing changed the PE headers")
     offset, size = certificate_table(signed)[2:]
-    if not size or offset + size != len(signed) or offset % CERTIFICATE_ALIGNMENT:
+    if (not size or offset < entry + 8 or offset + size != len(signed)
+            or offset % CERTIFICATE_ALIGNMENT):
         raise ValueError("Executable has no appended Authenticode signature")
-    padding = signed[len(unsigned):offset]
-    if not 0 <= offset - len(unsigned) < CERTIFICATE_ALIGNMENT or padding.strip(b"\0"):
+    if previously_signed and offset != old_offset:
+        raise ValueError("Signing moved the existing certificate table")
+    padding = signed[len(original):offset]
+    if not 0 <= offset - len(original) < CERTIFICATE_ALIGNMENT or padding.strip(b"\0"):
         raise ValueError("Signing changed the executable's contents")
-    stripped = bytearray(signed[:len(unsigned)])
-    original = bytearray(unsigned)
+    stripped = bytearray(signed[:len(original)])
+    original = bytearray(original)
     for image in (stripped, original):
         struct.pack_into("<I", image, checksum, 0)
         struct.pack_into("<II", image, entry, 0, 0)
@@ -126,7 +137,10 @@ def repack(archive, tree, output_dir):
         for name in names:
             data = (tree / name).read_bytes()
             if name.removeprefix(root + "/") in EXECUTABLES:
-                without_signature(data, release.read(name))
+                try:
+                    without_signature(data, release.read(name))
+                except ValueError as error:
+                    raise ValueError(f"{name}: {error}") from error
             elif data != release.read(name):
                 raise ValueError(f"Signing changed {name}")
             contents[name] = data

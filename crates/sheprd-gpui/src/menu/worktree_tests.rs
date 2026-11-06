@@ -1,0 +1,152 @@
+#![allow(clippy::unwrap_used)]
+
+use super::{
+    Page, WorkspaceAction,
+    worktree_source::{Pending, Tab, item_request, pick_request},
+};
+use crate::{
+    SheprdWindow,
+    pull_request::Remote,
+    repo_items::{Branch, Item, Kind, Origin},
+    sidebar,
+};
+use gpui::{Entity, VisualTestContext};
+
+mod branch_first;
+mod branch_follows_name;
+mod branch_only;
+mod branch_typing;
+mod dialog_entry;
+mod field_focus;
+mod github_listings;
+mod github_sign_in_hint;
+mod gitlab_issues;
+mod local_listings;
+mod name_field;
+mod name_label_language;
+mod open_remove_shortcuts;
+mod remote_listings;
+
+fn origin() -> Origin {
+    Origin {
+        owner: "penso".into(),
+        repo: "herdr-gpui".into(),
+        ..Origin::default()
+    }
+}
+
+fn items() -> Vec<Item> {
+    vec![
+        Item {
+            kind: Kind::PullRequest,
+            number: 48,
+            title: "Centre the worktree dialog".into(),
+            url: "https://github.com/sheprd-labs/sheprd/pull/48".into(),
+            author: "penso".into(),
+            head: Some("worktree/rapid-forest".into()),
+            fork_owner: None,
+            remote: Remote::Origin,
+            draft: false,
+        },
+        Item {
+            kind: Kind::PullRequest,
+            number: 51,
+            title: "Fork contribution".into(),
+            url: "https://github.com/sheprd-labs/sheprd/pull/51".into(),
+            author: "outsider".into(),
+            head: Some("patch-1".into()),
+            fork_owner: Some("outsider".into()),
+            remote: Remote::Origin,
+            draft: true,
+        },
+        Item {
+            kind: Kind::Issue,
+            number: 1255,
+            title: "bug: agent end message is empty".into(),
+            url: "https://github.com/sheprd-labs/sheprd/issues/1255".into(),
+            author: "penso".into(),
+            head: None,
+            fork_owner: None,
+            remote: Remote::Origin,
+            draft: false,
+        },
+    ]
+}
+
+/// Open the new worktree dialog on the repository workspace, already on `tab`
+/// and with a listing in hand, so the tabs never reach GitHub or the disk.
+/// Waits, at most five seconds, for the dialog's listing worker to answer.
+fn settle_lookup(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) {
+    for _ in 0..500 {
+        let loading = cx.update(|_, cx| {
+            view.update(cx, |view, cx| {
+                view.poll_worktree_source(cx);
+                view.menu
+                    .worktree
+                    .as_ref()
+                    .is_some_and(|source| source.lookup.loading)
+            })
+        });
+        if !loading {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the listing worker did not answer");
+}
+
+fn open_dialog(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext, connected: bool, tab: Tab) {
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            let ssh = matches!(
+                view.endpoints[view.selected_endpoint].connection.target,
+                sheprd_client::ConnectTarget::Ssh { .. }
+            );
+            let snapshot = std::sync::Arc::make_mut(view.live.snapshot.as_mut().unwrap());
+            snapshot.workspaces = if ssh {
+                sidebar::layout_tests::ssh_snapshot(7)
+            } else {
+                sidebar::layout_tests::snapshot(7)
+            }
+            .workspaces;
+            view.live.status = crate::state::ConnectionStatus::Connected;
+            // Only the local fixture models a verified daemon on this machine.
+            view.live.local_daemon_peer = !ssh;
+            view.menu.reset();
+            view.menu.github = if connected {
+                crate::github::Auth::connected_fixture()
+            } else {
+                Default::default()
+            };
+            view.open_workspace_menu("w3", Default::default(), window, cx);
+            view.open_workspace_dialog(WorkspaceAction::NewWorktree, window, cx);
+            if connected {
+                let source = view.menu.worktree.as_mut().unwrap();
+                source.install(origin(), items());
+                view.select_worktree_tab(tab, window, cx);
+            }
+        });
+    });
+    draw(cx);
+}
+
+/// GPUI double-buffers frames and their debug bounds, so a selector that was
+/// painted two frames ago is still readable. Draw both buffers before asking
+/// whether something is on screen.
+fn draw(cx: &mut VisualTestContext) {
+    for _ in 0..2 {
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+        });
+    }
+}
+
+/// Move typing to the optional name field, as a click on it does.
+fn click_name(cx: &mut VisualTestContext) {
+    let field = cx.debug_bounds("worktree-name").unwrap();
+    cx.simulate_click(field.center(), gpui::Modifiers::none());
+}
+
+fn tab(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> Tab {
+    cx.update(|_, cx| view.read(cx).menu.worktree.as_ref().unwrap().tab)
+}

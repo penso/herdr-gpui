@@ -1,4 +1,4 @@
-# Plan: Herdr Remote for iOS
+# Plan: Sheprd for iOS
 
 Turn `ios/` from a Live Activity companion into the main way to use remote
 control on an iPhone or iPad: everything the web app does, natively, plus
@@ -9,7 +9,7 @@ QR code as today. Bluetooth also keeps working after pairing.
 This supersedes "It does not duplicate the chat UI" in
 `docs/remote-control-plan.md` (iOS Live Activities). The web app stays for
 Android and for phones without the app. Both talk to the same daemon,
-`herdr-remote-control`.
+`sheprd-remote-control`.
 
 ## Where things stand
 
@@ -17,7 +17,7 @@ Android and for phones without the app. Both talk to the same daemon,
 | --- | --- |
 | `ios/` | About 1,600 lines of Swift. QR pairing, a Secure Enclave device key, pinned TLS, push token upload, and Live Activity layouts. Tapping anything opens the web app in Safari. iOS 17.2, Swift 5, iPhone only. |
 | Daemon web app | Server-rendered HTML fragments (`/f/...`) plus an SSE stream of fragment patches. JSON is used only for commands, pairing, and push. A native client has nothing typed to read. |
-| Typed data | `herdr-chat-protocol` already has serde JSON for `Transcript`, `Entry`, `Change`, and a shared reducer. The hub keeps a `Layout` (workspaces, chats, terminals) and per-chat `View`s. The fragments render from these. |
+| Typed data | `sheprd-chat-protocol` already has serde JSON for `Transcript`, `Entry`, `Change`, and a shared reducer. The hub keeps a `Layout` (workspaces, chats, terminals) and per-chat `View`s. The fragments render from these. |
 | APNs | `src/apns` signs tokens, decides start/update/end, and posts. It is not yet wired to `POST /api/apns` or to the notifier. |
 | Moltis iOS (`~/code/moltis/apps/ios`) | XcodeGen plus `just` recipes. An actor-based WebSocket RPC with continuation maps and typed events. Capped backoff with readable connection diagnostics. Bonjour discovery with a TLS trust probe. A Live Activity "step stack" (current plus previous two steps, debounced). A tok/s footer, and tool names mapped to SF Symbols. No tests, no APNs, no markdown, no Observation, and not Swift 6. Borrow the first five ideas, not the gaps. |
 
@@ -43,7 +43,7 @@ the user's team, built and uploaded by CI.
   types. The JSON fixtures are checked by both the Rust and the Swift tests,
   as `ChatActivityState` already is. There is no code generator.
 - **Port the change reducer to Swift**, so the app applies the same
-  `Change`s the desktop and `herdr-acp` apply, against shared fixtures.
+  `Change`s the desktop and `sheprd-acp` apply, against shared fixtures.
 - **The trust model stays as it is.** The daemon's CA is pinned by
   fingerprint, the device key stays in the Secure Enclave, and a person
   approves on both screens. The native app needs no certificate profile and
@@ -58,12 +58,15 @@ the user's team, built and uploaded by CI.
 
 | Target | What |
 | --- | --- |
-| `HerdrRemote` | The app |
-| `HerdrRemoteWidgets` | Live Activities, Home and Lock Screen widgets, and Controls |
-| `HerdrRemoteNotifications` | Notification Service Extension: decrypts pushes and attaches the agent icon and thumbnails |
-| `HerdrRemoteShare` | Share extension: send text, a URL, or images to a chat or a new chat |
-| `HerdrRemoteCore` (SPM) | Pure Swift, no UIKit: API types, the reducer, pairing and SAS crypto, address racing, ANSI runs, and the markdown model. `swift test` runs it on the Mac. |
-| `HerdrRemoteKit` (SPM) | Shared by the app and its extensions: Keychain and Secure Enclave, the connection actor, session signing, and the App Intents |
+| `SheprdRemote` | The app (visible name: Sheprd) |
+| `SheprdRemoteWidgets` | Live Activities, Home and Lock Screen widgets, and Controls |
+| `SheprdRemoteNotifications` | Notification Service Extension: decrypts pushes and attaches the agent icon and thumbnails |
+| `SheprdRemoteShare` | Share extension: send text, a URL, or images to a chat or a new chat |
+| `SheprdRemoteCore` (SPM) | Pure Swift, no UIKit: API types, the reducer, pairing and SAS crypto, address racing, ANSI runs, and the markdown model. `swift test` runs it on the Mac. |
+| `SheprdRemoteKit` (SPM) | Shared by the app and its extensions: Keychain and Secure Enclave, the connection actor, session signing, and the App Intents |
+
+Module names change without changing deployed bundle/App Group/Keychain/APNs,
+Bonjour or pairing identities; see [the compatibility inventory](rebranding.md).
 
 One App Group and one Keychain access group are shared by all targets, so
 the extensions can sign requests (an Allow from the lock screen) without
@@ -79,11 +82,11 @@ opening the app.
 - The views read `@Observable @MainActor` stores (`HomeStore`, `ChatStore`,
   `TerminalStore`). They are fed from the actor through `AsyncStream`s with
   latest-value coalescing, never an unbounded queue. This is the same rule
-  as Herdr UI's mailbox.
+  as Sheprd's mailbox.
 - Requests are correlated by ID through `CheckedContinuation` maps, with a
   bounded number in flight. Cancelling a request never replays it.
 
-### Daemon: the native API (`crates/herdr-remote-control/src/native/`)
+### Daemon: the native API (`crates/sheprd-remote-control/src/native/`)
 
 This is a new module beside `web/`. It reads the same hub and uses the same
 `Device` bearer auth and limits.
@@ -91,7 +94,7 @@ This is a new module beside `web/`. It reads the same hub and uses the same
 - `GET /api/v2/home`: computers, workspaces, chats, terminals, and status
   marks, as serde types next to `hub::layout`. Rendering only becomes an
   HTML concern inside `web/`.
-- `GET /api/v2/chat/{pane}`: the transcript snapshot (`herdr_chat_protocol::Transcript`)
+- `GET /api/v2/chat/{pane}`: the transcript snapshot (`sheprd_chat_protocol::Transcript`)
   with its revision.
 - `GET /api/v2/live` (WebSocket):
   - The client sends `subscribe {home}`, `{chat, pane, after_revision}`, or
@@ -114,13 +117,13 @@ This is a new module beside `web/`. It reads the same hub and uses the same
   Swift draws runs and never parses escapes.
 - `POST /api/v2/notify-key`: the device's notification key-agreement public
   key (see Notifications).
-- Fixtures: `ios/HerdrRemoteCore/Tests/.../Fixtures/v2/*.json`, generated
+- Fixtures: `ios/SheprdRemoteCore/Tests/.../Fixtures/v2/*.json`, generated
   from the Rust types in a test and compared byte for byte, then decoded in
   Swift. A field added on one side without the other fails CI.
 
 ### The v2 wire, exactly
 
-All JSON, `snake_case`. Chat types are `herdr_chat_protocol`'s own serde
+All JSON, `snake_case`. Chat types are `sheprd_chat_protocol`'s own serde
 (`Transcript`, `Change`, `Cursor`, `Status`, `Permission`); nothing is
 mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
 
@@ -132,10 +135,11 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   "fingerprint": "64 uppercase hex",
   "connected": true,
   "waiting": 1,
-  "load": {"cpu": 47, "memory": 67},
+  "load": {"cores": 10, "cpu": 47, "load5_tenths": 42, "memory": 67},
+  "working": 2,
   "workspaces": [{
-    "id": "w1", "label": "herdr-gpui", "branch": "main", "cwd": "/Users/me/code/herdr-gpui",
-    "worktree": {"key": "/Users/me/code/herdr-gpui/.git", "label": "herdr-gpui", "is_linked_worktree": false},
+    "id": "w1", "label": "sheprd", "branch": "main", "cwd": "/Users/me/code/sheprd",
+    "worktree": {"key": "/Users/me/code/sheprd/.git", "label": "sheprd", "is_linked_worktree": false},
     "pull_request": {"number": 870, "url": "https://github.com/...", "tone": "success"},
     "chats": [{
       "pane": "p1", "tab": "t1", "title": "Equalize splits", "agent": "claude",
@@ -148,8 +152,8 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
       }
     }],
     "terminals": [{
-      "tab": "t2", "label": "zsh", "cwd": "/Users/me/code/herdr-gpui", "zoomed": false,
-      "panes": [{"pane": "p2", "label": null, "cwd": "/Users/me/code/herdr-gpui", "focused": true}],
+      "tab": "t2", "label": "zsh", "cwd": "/Users/me/code/sheprd", "zoomed": false,
+      "panes": [{"pane": "p2", "label": null, "cwd": "/Users/me/code/sheprd", "focused": true}],
       "agent": {"name": "claude", "status": "done", "pane": "p2", "title": "Fix the build"}
     }]
   }]
@@ -173,7 +177,7 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   worktrees, under that name. It is absent for a folder outside a
   repository and from older daemons.
 - `pull_request` is absent when the workspace has none; `tone` is
-  `herdr_github::pull_request::Tone` as serde writes it.
+  `sheprd_github::pull_request::Tone` as serde writes it.
 - As built: `waiting` counts every waiting permission request, as the web
   app's badge does; a chat's `cursor` is `null` until the daemon has heard
   from its program once; runs also carry `strike` and `hidden`; a device
@@ -214,7 +218,7 @@ The phone sends:
 phone draws. While the view runs, the daemon holds a direct terminal
 attach to Herdr at that size (without taking the terminal from another
 attached client), so Herdr resizes the pane's terminal to the phone and
-`term_screen` comes back at that width; Herdr UI shows the pane at the
+`term_screen` comes back at that width; Sheprd shows the pane at the
 smaller size meanwhile. Unsubscribing, closing the socket, or the view
 ending detaches, and Herdr sizes the terminal back to its layout.
 Subscribing to the same terminal again with another `size` (a rotation)
@@ -278,15 +282,27 @@ New workspaces and chats (Phase 3) have their own JSON routes, so the
 app learns the pane it should open:
 
 - `GET /api/v2/new` answers what the forms offer: `{"agents": [{"id":
-  "claude", "name": "Claude"}], "recent": ["/Users/me/code/herdr-gpui"],
+  "claude", "name": "Claude"}], "recent": ["/Users/me/code/sheprd"],
   "roots": [{"path": "/Users/me/code", "folders": ["/Users/me/code/a"]}]}`.
-  Agents come in Herdr's order; `id` is what a request names.
-- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?}`
-  and answers `{"workspace": "w3", "pane": "p7", "prompted": true}`. The
+  Agents come in Herdr's order, only those `sheprd-acp agents` finds on
+  this computer (all of them if it finds none or cannot run); `id` is
+  what a request names.
+- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?,
+  "start"?}` and answers `{"workspace": "w3", "pane": "p7", "prompted":
+  true, "started": true}`. The
   folder must be one `new` offers, and `branch`, when not blank, opens a
   worktree.
-- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?}`
-  and answers `{"pane": "p7", "prompted": true}`.
+- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?,
+  "start"?}` and answers `{"pane": "p7", "prompted": true, "started":
+  true}`.
+- `start` is what the chat begins with, as last picked on the phone:
+  `{"mode"?, "option"?, "auto_accept"?}`. `mode` is the mode's id, or the
+  choice's when `option` names the agent's mode setting. It goes before the
+  first prompt, asked again for up to 10 s while the chat's connection and
+  session come up, and
+  counts once the transcript shows it, since the agent may still refuse a
+  request it was sent. `started` is false otherwise: the prompt is then
+  held back, and a chat without its mode does not turn on auto-accept.
 - Both wait up to 10 s for the chat's program to report in, then send the
   first prompt if it is not blank. `pane` is `null` when the chat was not
   listed in time; `prompted` is false when there was no prompt or the
@@ -351,10 +367,10 @@ Secure Connections does:
    shows the same code. No second code appears.
 
 The daemon runs both sides of the protocol (`src/auth/sas.rs`; `p256`,
-`hkdf`, and `aes-gcm` are already there, plus `chacha20poly1305`). Herdr UI
+`hkdf`, and `aes-gcm` are already there, plus `chacha20poly1305`). Sheprd
 only carries bytes between Bluetooth and the daemon's control socket, so
-"Herdr UI never holds secrets" still holds. On iOS everything is CryptoKit.
-The protocol is pure functions in `HerdrRemoteCore` and `auth::sas`, tested
+"Sheprd never holds secrets" still holds. On iOS everything is CryptoKit.
+The protocol is pure functions in `SheprdRemoteCore` and `auth::sas`, tested
 against shared vectors, including a relayed man-in-the-middle that must
 fail.
 
@@ -394,13 +410,13 @@ bytes.
 Transports: over the network, `POST /api/nearby/start` and
 `POST /api/nearby/reveal` on the daemon's HTTPS port, which A calls
 without pinning (the code is what authenticates); over Bluetooth, the same
-JSON as `pair` characteristic frames, which Herdr UI relays to the
+JSON as `pair` characteristic frames, which Sheprd relays to the
 daemon's control socket as `nearby_start` and `nearby_reveal`.
 
 Bonjour: `_herdr-remote._tcp` with the computer's name as the instance
 and TXT `v=1`, `fp=` the fingerprint's first 16 hex, and `pairing=1`
 while a pairing dialog is open (`0` otherwise).
-- On macOS, `herdr-nearby` registers it through the system's DNS-SD while
+- On macOS, `sheprd-nearby` registers it through the system's DNS-SD while
   the dialog is open. A second mDNS responder beside mDNSResponder (the
   daemon's `mdns-sd`) is invisible to browsers on the same Mac and
   contends for its host name, so the daemon does not advertise there.
@@ -433,7 +449,7 @@ through APNs and none through Web Push. APNs refusing the token
 question, 5 otherwise:
 
 ```json
-{ "aps": { "alert": { "title": "Herdr", "body": "New activity" },
+{ "aps": { "alert": { "title": "Sheprd", "body": "New activity" },
            "mutable-content": 1, "thread-id": "w1:p2",
            "interruption-level": "time-sensitive", "sound": "default" },
   "sealed": "BASE64URL" }
@@ -488,23 +504,23 @@ The Mac is the peripheral and the phone the central, because iOS supports
 central mode best in the background (state restoration, long-lived
 connections).
 
-- **macOS: `herdr-nearby`**, a small Swift helper in `macos/herdr-nearby`,
-  shipped inside Herdr.app beside `herdr-acp` (`scripts/release/build-nearby.sh`).
+- **macOS: `sheprd-nearby`**, a small Swift helper in `macos/sheprd-nearby`,
+  shipped inside Sheprd.app beside `sheprd-acp` (`scripts/release/build-nearby.sh`).
   Phase 0 found that `objc2-core-bluetooth` makes every Core Bluetooth
   call an `unsafe fn`, so the peripheral is Swift, not Rust.
-  - Herdr UI starts it while the pairing dialog is open and talks to it in
+  - Sheprd starts it while the pairing dialog is open and talks to it in
     newline-delimited JSON on stdio: `advertise`, `stop`, and `frame`
     messages each way.
-  - It holds no secrets and decides nothing. Herdr UI relays each `pair`
+  - It holds no secrets and decides nothing. Sheprd relays each `pair`
     frame to the daemon's control socket (`nearby_start`,
     `nearby_reveal`) and writes the answer back.
-  - Running inside the bundle, it is attributed to Herdr.app for the
+  - Running inside the bundle, it is attributed to Sheprd for the
     Bluetooth permission (`NSBluetoothAlwaysUsageDescription`).
-- **Linux and Windows: `herdr-nearby`**, a Rust helper in
-  `crates/herdr-nearby`, shipped beside `herdr-gpui` in every Linux format
+- **Linux and Windows: `sheprd-nearby`**, a Rust helper in
+  `crates/sheprd-nearby`, shipped beside `sheprd` in every Linux format
   and the Windows zip and installer. It speaks the macOS helper's stdio
-  protocol and serves the same GATT service, so neither Herdr UI nor the
-  phone tells them apart; Herdr UI runs it the same way (`nearby::Station`).
+  protocol and serves the same GATT service, so neither Sheprd nor the
+  phone tells them apart; Sheprd runs it the same way (`nearby::Station`).
   - The stdio protocol, the framing, each phone's partial messages and
     UUID-shaped id, and the idle reports are shared and unit-tested; only
     the radio differs.
@@ -560,7 +576,7 @@ sides.
   - The phone keeps a background Bluetooth connection to each paired
     computer it is near, and proves itself by signing the `presence`
     challenge with its device key.
-  - Herdr UI reports to the daemon whether the phone is "near" (connected,
+  - Sheprd reports to the daemon whether the phone is "near" (connected,
     RSSI above a threshold, with hysteresis) and whether the desktop is in
     use (input in the last N minutes).
   - The notifier then holds back phone alerts while you are at the desk,
@@ -576,7 +592,7 @@ sides.
     when the computer comes back in range. The app then refreshes its home
     badges and Live Activity tokens.
 - **Fallback transport (after a spike).**
-  - An L2CAP channel, piped by Herdr UI to the daemon's loopback port. The
+  - An L2CAP channel, piped by Sheprd to the daemon's loopback port. The
     phone runs its ordinary pinned TLS through a loopback `NWListener`, so
     there is no second protocol and the encryption is end-to-end.
   - This is for when there is no IP path: a plane, hotel Wi-Fi with client
@@ -590,8 +606,8 @@ sides.
 Opt-in on the desktop with `[remote] presence = true` (Settings > Remote
 control, "Hold phone alerts while I'm here"); macOS only for now.
 
-- **Advertising.** While remote control runs with presence on, Herdr UI
-  keeps `herdr-nearby` running and sends it
+- **Advertising.** While remote control runs with presence on, Sheprd
+  keeps `sheprd-nearby` running and sends it
   `{"type":"advertise_presence","on":true}`. The advertisement carries
   only the service UUID. `info` reads `{"v":1}`, without the name or
   fingerprint, outside the pairing dialog.
@@ -636,24 +652,24 @@ control, "Hold phone alerts while I'm here"); macOS only for now.
   - A nonce is single use and good for 30 s.
   - Up to 4 wait per device, the oldest dropped beyond that, so a forged
     hello cannot cancel the real phone's challenge.
-  - Herdr UI takes at most 8 hellos a minute from one phone, and a phone
+  - Sheprd takes at most 8 hellos a minute from one phone, and a phone
     may prove only a nonce given to it.
 - **Addresses.** On a valid proof, the daemon seals `{"origins":[...]}` to
   the device's registered `notify_key`, in the alert seal's format with
   `herdr-remote-addresses-v1` as HKDF info and AAD. With no key, it sends
   `null`.
-- **Control socket (Herdr UI only).**
+- **Control socket (Sheprd only).**
   - `presence_challenge {hint}` answers `presence_challenge {nonce,
     certificate, signature}`.
   - `presence_prove {nonce, signature}` answers `presence_proven {device,
     addresses}`.
   - `presence_set {device, near}` answers `done`.
 - **Near.**
-  - Herdr UI marks a device near while a phone that proved it says
-    `near` and the desktop saw input in the last 300 s. `herdr-nearby`
+  - Sheprd marks a device near while a phone that proved it says
+    `near` and the desktop saw input in the last 300 s. `sheprd-nearby`
     reports idle seconds every 30 s.
-  - Herdr UI sends each change, and renews a near mark every 30 s. A mark
-    lapses after 120 s without renewal, so a crashed Herdr UI never holds
+  - Sheprd sends each change, and renews a near mark every 30 s. A mark
+    lapses after 120 s without renewal, so a crashed Sheprd never holds
     alerts for long.
   - A disconnect lifts the mark.
 - **Hold.**
@@ -704,11 +720,13 @@ Round 2 picks (2026-10-28):
   workspace to chats and terminals, with CPU and counts on each computer
   row and New chat inside each workspace.
 - **New workspace A**: one form sheet: computer, project (opens the
-  searchable folder list), new worktree with its branch, an agent grid,
-  and an optional first prompt; Create in the toolbar.
+  searchable folder list), new worktree with a proposed branch, an agent grid,
+  and an optional first prompt; Create in the toolbar. It starts on the
+  computer last looked at, and Least busy picks the one with the most
+  room, ranked like the desktop's dispatch: spare cores, memory, working
+  agents, and whether the computer has the project's repository.
 - **Session sheet C**: cards: a large context ring with model, tokens, cost,
-  and tok/s; mode tiles 2x2; an effort slider; auto-accept as a red card
-  that asks for Face ID.
+  and tok/s; mode tiles 2x2; an effort slider; auto-accept as a red card.
 - **Terminal A**: full bleed with the two key rows docked; paste and the
   action sheet in the header.
 - **Settings A**: one grouped list: computers, notifications (encrypted,
@@ -718,7 +736,7 @@ Round 2 picks (2026-10-28):
   inspector beside the chat.
 
 Workspaces round (2026-10-29) replaces the Computers tab with a
-**Workspaces** tab laid out like Herdr UI's sidebar (`spaces-Mix` in
+**Workspaces** tab laid out like Sheprd's sidebar (`spaces-Mix` in
 `ios/Mockups`):
 
 - Search on top, then every computer: a header with its name, connection,
@@ -726,11 +744,16 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
   name, and + for a new worktree of it). Rows show the most pressing
   agent's mark, the checkout's branch or the worktree's name, its agent
   and terminal counts, and the pull request's number in its tone.
+- Home sorts its agents by a menu at the top left, newest first in each
+  section: Priority (the desktop's status order), Recent, or Workspace.
 - A workspace opens on its own screen: branch, pull request, and place on
-  top, its tabs (chats, agents in terminals, terminals) below, and a glass
-  row docked at the bottom that starts a terminal or an agent with one
-  tap; a long press on an agent opens the form with a first prompt.
-- GPU use is not sent yet: the desktop's GPU reader lives in Herdr UI, and
+  top, its tabs (chats, agents in terminals, terminals) below, and under
+  them large buttons that start a terminal or the agent last started
+  with one tap, with the other agents folded below them; a long press on an agent opens the form with a first prompt. A
+  chat's + starts a terminal or another chat in its workspace. A chat or
+  terminal opened from Home has a button to its workspace, and Back from
+  there returns to Home.
+- GPU use is not sent yet: the desktop's GPU reader lives in Sheprd, and
   sharing it with the daemon means moving it to a crate both can use.
 
 | Web app | Native |
@@ -738,12 +761,12 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
 | Home: needs-you strip, computers > workspaces > tabs, status marks, ⊕ new chat, collapse | `List` with sections per computer. Swipe actions (mute, close tab), context menus (new chat here, open on board), status marks from `look`, pull to refresh, search with `.searchable` |
 | Attention board | The same three groups. Inline Allow once and Deny with haptics, matched-geometry transition into the chat |
 | Chat focus layout: latest turn, step timeline, folded earlier turns, markdown, tool calls, diffs, queued prompts | `swift-markdown` into native blocks. Code blocks scroll sideways with Copy. Diffs show added and removed lines. Tool rows use SF Symbols (borrowed from Moltis). Text appended to the streaming answer is rendered without a reflow jump. Text is selectable, and long-press copies a block. |
-| Header: title, status, context ring, session line, session sheet | Toolbar title menu that opens a sheet with detents. Effort is a segmented control, the mode list shows descriptions, and auto-accept asks for confirmation (Face ID optional) |
+| Header: title, status, context ring, session line, session sheet | Toolbar title menu that opens a sheet with detents. Effort is a segmented control, the mode list shows descriptions, and auto-accept is a red card |
 | Questions bottom sheet | `.sheet` at a medium detent that opens by itself. Full-width option buttons, with "always" options set apart |
 | Composer: send and stop, photos, pasted screenshots, `/` completion | Native text view with the keyboard toolbar, `PhotosPicker`, the camera, paste including images (`UIPasteControl`, no Safari prompt), `/` completion, and **dictation** with `SpeechAnalyzer` on device |
 | New workspace and new chat | The project picker with search (recent roots, then folders), a branch for a worktree, and an agent grid with the agents' icons |
 | Terminal tabs | A Core Text view of the runs, fit to width, pinch to zoom, and selection. Two fixed key rows (B) above the keyboard. Hardware keys (Esc, Ctrl, arrows, ⌘V) through `UIKeyCommand` on iPad. The action sheet (A). Paste and image upload as today |
-| Several computers, SSH hosts | All computers merged on home, not one at a time. The SSH and cloud machines a computer's Herdr UI connects to are paired directly once that computer allows the phone (`docs/remote-control-plan.md`, "Other machines"), and show "via" that computer |
+| Several computers, SSH hosts | All computers merged on home, not one at a time. The SSH and cloud machines a computer's Sheprd connects to are paired directly once that computer allows the phone (`docs/remote-control-plan.md`, "Other machines"), and show "via" that computer |
 | Settings | Notifications (per chat and per computer, privacy), presence, Bonjour, Face ID, the paired computers with their fingerprints, unpair |
 | Reconnecting banner | A thin glass banner that says why, such as "No route to MacBook (LAN, Tailscale tried)" |
 
@@ -763,7 +786,7 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
     Reply that becomes the next prompt).
   - Encryption: the payload is encrypted to a second Secure Enclave key, for
     key agreement, in the shared access group. The Notification Service
-    Extension decrypts it, so Apple sees only "Herdr" and ciphertext.
+    Extension decrypts it, so Apple sees only "Sheprd" and ciphertext.
   - The existing privacy setting decides how much the decrypted text shows.
   - Thread identifiers are set per chat and interruption levels are set per
     kind (a question is time-sensitive).
@@ -775,13 +798,13 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
     new chat on the last computer, and dictate a prompt.
 - **App Intents, Siri, Shortcuts, Spotlight.**
   - `AppEntity` types for computers, workspaces, and chats.
-  - Intents: "Ask Claude in herdr-gpui to …", "What needs me?", "Stop the
+  - Intents: "Ask Claude in sheprd to …", "What needs me?", "Stop the
     running chat", and "Answer the question".
   - `IndexedEntity` makes chats searchable in Spotlight.
 - **Share extension**: send a page, text, or screenshots to a chat as a
   prompt, or to a new chat in a chosen workspace.
 - **Face ID** gate, optional: on opening the app, and always before "Allow
-  always" or turning on auto-accept.
+  always".
 - **iPad**:
   - `NavigationSplitView` with computers and workspaces, then chats, then
     the chat or terminal.
@@ -814,7 +837,7 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
   posts the last bounded log to `/api/log` (which exists) on the user's
   request only.
 
-## Herdr UI changes
+## Sheprd changes
 
 - The pairing dialog gets a "Nearby" state: advertising while it is open,
   then the SAS code with Allow and Deny. The QR stays in the same dialog.
@@ -825,8 +848,8 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
 - Control protocol: Bluetooth relay frames, and presence and desktop-in-use
   reports to the daemon.
 - CLI:
-  - `herdr-gpui remote devices --json` gains `kind` and `near`.
-  - `herdr-gpui remote pair` gains `--nearby`, which opens the same dialog.
+  - `sheprd remote devices --json` gains `kind` and `near`.
+  - `sheprd remote pair` gains `--nearby`, which opens the same dialog.
     The user still approves in the dialog.
   - Both go in `docs/cli.md`.
 
@@ -872,6 +895,8 @@ release tag; pull requests run only `ios-test` and the unsigned build.
   uploads to TestFlight itself, without fastlane or `altool`.
 - `CURRENT_PROJECT_VERSION` is the workflow's run number;
   `MARKETING_VERSION` follows the app's release version.
+- "What to Test" lists the commits since the previous build, which each
+  build's notes record in a `Source:` line (`ios/README.md`).
 - Secrets (environment `testflight`, required reviewers off for `main`):
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID`. The key is
   written to a temporary file and removed in an `always()` step.
@@ -894,12 +919,12 @@ simulator, and Bluetooth waits for a device. Phase 3 (chat parity) is
 built and checked in the simulator against a sandbox daemon and a
 scripted agent:
 - **Answers:** native Markdown blocks (`MarkdownBlock` in
-  `HerdrRemoteCore`).
+  `SheprdRemoteCore`).
 - **Composer:** photos, the camera, and pasted images (uploaded at once),
   on-device dictation with `SpeechAnalyzer`, and `/` completion.
 - **Queue:** queued prompts can be removed.
 - **Session sheet C:** the context ring, mode tiles, an effort slider,
-  the other settings, and auto-accept behind Face ID.
+  the other settings, and auto-accept.
 - **Creating:** new workspace A and new chat, through `/api/v2/new`,
   `/api/v2/workspaces`, and `/api/v2/workspaces/{id}/chats`.
 - **Still to check on a phone:** dictation, the camera, paste, and Face
@@ -908,7 +933,7 @@ scripted agent:
 Phase 4 (terminal parity) is built and checked in the simulator against
 a sandbox daemon:
 - **Typing:** keys typed on the phone reach the shell in order
-  (`TermInput` in `HerdrRemoteCore`, one request at a time with keys
+  (`TermInput` in `SheprdRemoteCore`, one request at a time with keys
   batched between).
 - **Key rows B:** sticky ctrl and alt, with ^C set apart.
 - **Screen:** fit to width, pinch to zoom, and double-tap to reset; it

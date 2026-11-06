@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 
-REPO = "penso/herdr-gpui"
+REPO = "sheprd-labs/sheprd"
 # Job names are the API contract with ci.yml. Missing/renamed jobs fail closed.
 # Windows packaging is path-selected and also runs in the release workflow;
 # the macOS release builds run on pull requests only, since the release

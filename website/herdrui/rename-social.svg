@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <title>Herdr UI is now Sheprd</title>
+  <rect width="1200" height="630" fill="#fff8f0" />
+  <rect x="64" y="68" width="56" height="6" rx="3" fill="#d65f2a" />
+  <text x="64" y="186" fill="#795b49" font-family="Arial, sans-serif" font-size="46" font-weight="500">Herdr UI is now</text>
+  <text x="64" y="300" fill="#34241c" font-family="Arial, sans-serif" font-size="112" font-weight="700">Sheprd</text>
+  <text x="64" y="376" fill="#34241c" font-family="Arial, sans-serif" font-size="38" font-weight="500">Same app, new name.</text>
+  <text x="64" y="430" fill="#795b49" font-family="Arial, sans-serif" font-size="23" font-weight="400">A new home for your coding agents.</text>
+  <text x="64" y="562" fill="#b04518" font-family="Arial, sans-serif" font-size="24" font-weight="700">sheprd.org</text>
+  <defs>
+    <clipPath id="avatar-crop">
+      <circle cx="940" cy="315" r="170" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#avatar-crop)">
+    <svg width="340" height="340" viewBox="0 0 100 100" role="img" aria-labelledby="title desc" x="770" y="145">
+      <title id="title">Sheprd</title>
+      <desc id="desc">A cream paw print on an orange gradient.</desc>
+      <defs>
+        <linearGradient id="background" x1="0" y1="0" x2="0.35" y2="1">
+          <stop offset="0" stop-color="#f39a5a" />
+          <stop offset="1" stop-color="#d65f2a" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" fill="url(#background)" />
+      <g fill="#fff8f0">
+        <path d="M50 50 C60 50 70 60 72 68 C74 76 68 80 61 79 C56 78 54 76 50 76 C46 76 44 78 39 79 C32 80 26 76 28 68 C30 60 40 50 50 50Z" />
+        <ellipse cx="27" cy="45" rx="7" ry="9" transform="rotate(-25 27 45)" />
+        <ellipse cx="41" cy="31" rx="7" ry="10" transform="rotate(-8 41 31)" />
+        <ellipse cx="59" cy="31" rx="7" ry="10" transform="rotate(8 59 31)" />
+        <ellipse cx="73" cy="45" rx="7" ry="9" transform="rotate(25 73 45)" />
+      </g>
+    </svg>
+  </g>
+</svg>

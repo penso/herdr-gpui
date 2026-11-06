@@ -42,11 +42,11 @@ jobs:
   build:
     # Called from the release workflow, event_name is its workflow_dispatch.
     if: >-
-      github.repository == 'penso/herdr-gpui' &&
+      (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       ((github.event_name == 'pull_request' &&
         github.event.pull_request.user.login == 'penso' &&
-        github.event.pull_request.head.repo.full_name == 'penso/herdr-gpui') ||
+        github.event.pull_request.head.repo.full_name == github.repository) ||
        ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
         github.ref == 'refs/heads/main'))
     name: Nix flake (${{ matrix.runner }})
@@ -63,13 +63,19 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
       - name: Check the flake and build the package in the Nix sandbox
         run: |
           nix flake check --no-build
           nix build -L --print-out-paths
       - name: Run the built executable's CLI without a desktop
         run: |
+          ./result/bin/sheprd --help >/dev/null
           ./result/bin/herdr-gpui --help >/dev/null
+          test "$(readlink result/bin/herdr-gpui)" = sheprd
+          for helper in acp automate nearby remote-control; do
+            test "$(readlink "result/bin/herdr-$helper")" = "sheprd-$helper"
+            test -x "result/bin/herdr-$helper"
+          done
           test -f result/share/applications/so.pen.herdr-gpui.desktop
-          if ldd result/bin/herdr-gpui | grep 'not found'; then exit 1; fi
+          if ldd result/bin/sheprd | grep 'not found'; then exit 1; fi
