@@ -20,7 +20,7 @@ use std::{
 };
 
 /// The newest schema this build reads and writes.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 /// How long a write waits for the other application's transaction.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -133,7 +133,7 @@ const PULL_REQUEST_STATUS_V2: &str = "CREATE TABLE IF NOT EXISTS pull_request_st
 
 const ITEM_COLUMNS: &str = "provider, host, repository, native_id, identifier, title, \
      description, state, url, author, labels_json, parent_id, blocked_by_json, priority, \
-     created_at, updated_at, pull_request_json, activity_json";
+     created_at, updated_at, pull_request_json, activity_json, assignee, acceptance";
 
 const RUN_COLUMNS: &str = "id, issue_key, workspace_json, agent, model, state_json, message, \
      session_id, started_at, updated_at, owner";
@@ -499,6 +499,16 @@ fn migrate(connection: &mut Connection) -> Result<Access> {
     }
     if version < 2 {
         transaction.execute(PULL_REQUEST_STATUS_V2, [])?;
+    }
+    if version < 3 {
+        // Empty until each bead's next sync fills them in.
+        for column in ["assignee", "acceptance"] {
+            if !has_column(&transaction, "issues", column)? {
+                transaction.execute(&format!("ALTER TABLE issues ADD COLUMN {column} TEXT"), [])?;
+            }
+        }
+    }
+    if version < SCHEMA_VERSION {
         transaction.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
     }
     transaction.commit()?;
@@ -525,7 +535,8 @@ fn insert_item(transaction: &Transaction<'_>, source: &str, item: &Item) -> Resu
     transaction.execute(
         &format!(
             "INSERT INTO issues (canonical_key, source, {ITEM_COLUMNS}) VALUES (?1, ?2, ?3, ?4, \
-             ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20) \
+             ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, \
+             ?22) \
              ON CONFLICT(canonical_key) DO UPDATE SET source = excluded.source, \
              provider = excluded.provider, host = excluded.host, \
              repository = excluded.repository, native_id = excluded.native_id, \
@@ -535,7 +546,8 @@ fn insert_item(transaction: &Transaction<'_>, source: &str, item: &Item) -> Resu
              parent_id = excluded.parent_id, blocked_by_json = excluded.blocked_by_json, \
              priority = excluded.priority, created_at = excluded.created_at, \
              updated_at = excluded.updated_at, pull_request_json = excluded.pull_request_json, \
-             activity_json = excluded.activity_json"
+             activity_json = excluded.activity_json, assignee = excluded.assignee, \
+             acceptance = excluded.acceptance"
         ),
         params![
             key.canonical(),
@@ -564,6 +576,8 @@ fn insert_item(transaction: &Transaction<'_>, source: &str, item: &Item) -> Resu
                 .as_ref()
                 .map(|activity| encode("activity_json", activity))
                 .transpose()?,
+            item.assignee,
+            item.acceptance,
         ],
     )?;
     Ok(())
@@ -583,9 +597,11 @@ fn item_from_row(row: &Row<'_>) -> Result<Item> {
         identifier: row.get("identifier")?,
         title: row.get("title")?,
         description: row.get("description")?,
+        acceptance: row.get("acceptance")?,
         state: row.get("state")?,
         url: row.get("url")?,
         author: row.get("author")?,
+        assignee: row.get("assignee")?,
         labels: decode("labels_json", &row.get::<_, String>("labels_json")?)?,
         parent_id: row.get("parent_id")?,
         blocked_by: decode("blocked_by_json", &row.get::<_, String>("blocked_by_json")?)?,

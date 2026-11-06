@@ -6,6 +6,7 @@ use super::{
     OrchestratorView,
     look::{BLUE, CYAN, GREEN, Look, MAGENTA, RED, YELLOW, age, agent_icon},
     rows::{Heading, ItemRow, Line, Next, Tab},
+    tasks::status_label,
 };
 use crate::{
     fonts::StyledFont,
@@ -24,6 +25,8 @@ const PROJECT_WIDTH: f32 = 130.;
 const SOURCE_WIDTH: f32 = 22.;
 /// The column holding a row's action, such as Start agent.
 const ACTION_WIDTH: f32 = 96.;
+/// The status column of the Tasks list.
+const TASK_STATUS_WIDTH: f32 = 78.;
 /// Checks a row names before counting the rest.
 const CHECK_PILLS: usize = 3;
 
@@ -46,7 +49,7 @@ impl OrchestratorView {
 
     /// Whether rows of several projects are listed, so each names its own.
     fn listing_projects(&self) -> bool {
-        self.projects_named().count() > 1 && self.projects.len() != 1
+        self.projects_listing().count() > 1 && self.projects.len() != 1
     }
 
     /// A row's project, in its own column while several are listed.
@@ -64,10 +67,13 @@ impl OrchestratorView {
     }
 
     /// The project a row names: its checkout's, or how many hosts list it
-    /// when several checkouts of the same repository do.
+    /// when several checkouts of the same repository do. Projects sharing a
+    /// Beads database are different projects, not one on several hosts.
     fn row_project(&self, row: &ItemRow) -> String {
         let repo = &self.repos[row.repo];
-        match self.twins(&self.row_item(row).key.canonical()) {
+        let item = self.row_item(row);
+        match self.twins(&item.key.canonical()) {
+            _ if item.key.source.provider == Provider::Beads => self.project_label(repo),
             0 => self.project_label(repo),
             twins => fl!(
                 "orchestrator-project-hosts",
@@ -89,7 +95,7 @@ impl OrchestratorView {
 
     fn row_height(&self) -> f32 {
         self.look.row(match self.tab {
-            Tab::Issues => ISSUE_ROW,
+            Tab::Issues | Tab::Tasks => ISSUE_ROW,
             Tab::PullRequests => PULL_REQUEST_ROW,
         })
     }
@@ -101,7 +107,7 @@ impl OrchestratorView {
         let projects = self.listing_projects();
         let mut head: Vec<(String, Option<f32>)> = Vec::new();
         match self.tab {
-            Tab::Issues => {
+            Tab::Issues | Tab::Tasks => {
                 head.push((fl!("orchestrator-column-age"), Some(32.)));
                 if sources {
                     head.push((fl!("orchestrator-column-source"), Some(SOURCE_WIDTH)));
@@ -111,7 +117,12 @@ impl OrchestratorView {
                     head.push((fl!("orchestrator-column-project"), Some(PROJECT_WIDTH)));
                 }
                 head.push((fl!("orchestrator-column-title"), None));
-                if !compact {
+                if !compact && self.tab == Tab::Tasks {
+                    head.extend([
+                        (fl!("orchestrator-column-assignee"), Some(110.)),
+                        (fl!("orchestrator-column-status"), Some(TASK_STATUS_WIDTH)),
+                    ]);
+                } else if !compact {
                     head.extend([
                         (fl!("orchestrator-column-author"), Some(110.)),
                         ("\u{1f4ac}".into(), Some(34.)),
@@ -184,9 +195,9 @@ impl OrchestratorView {
         let searching = !self.query.trim().is_empty();
         // The pills narrow both tabs; each tab also has its own filters.
         let filtered = !self.projects.is_empty()
-            || !self.backends.is_empty()
+            || (self.tab != Tab::Tasks && !self.backends.is_empty())
             || match self.tab {
-                Tab::Issues => self.active_filters() > 0,
+                Tab::Issues | Tab::Tasks => self.active_filters() > 0,
                 Tab::PullRequests => self.yours.any() || self.filters.has_run,
             };
         if self.repos.is_empty() {
@@ -205,6 +216,7 @@ impl OrchestratorView {
     fn render_empty(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let look = &self.look;
         let issues = self.tab == Tab::Issues;
+        let tasks = self.tab == Tab::Tasks;
         let query = self.query.trim();
         // With nothing listed at all, the section says what it is for.
         let (icon, text, about) = match self.empty() {
@@ -214,6 +226,11 @@ impl OrchestratorView {
                 Some(fl!("orchestrator-no-repositories-about")),
             ),
             Empty::Loading => ("icons/refresh.svg", fl!("orchestrator-loading"), None),
+            Empty::Search if tasks => (
+                "icons/search.svg",
+                fl!("orchestrator-no-tasks-match", query = query),
+                None,
+            ),
             Empty::Search if issues => (
                 "icons/search.svg",
                 fl!("orchestrator-no-issues-match", query = query),
@@ -222,6 +239,11 @@ impl OrchestratorView {
             Empty::Search => (
                 "icons/search.svg",
                 fl!("orchestrator-no-pull-requests-match", query = query),
+                None,
+            ),
+            Empty::Filtered if tasks => (
+                "icons/search.svg",
+                fl!("orchestrator-no-tasks-filtered"),
                 None,
             ),
             Empty::Filtered if issues => (
@@ -233,6 +255,11 @@ impl OrchestratorView {
                 "icons/search.svg",
                 fl!("orchestrator-no-pull-requests-filtered"),
                 None,
+            ),
+            Empty::Nothing if tasks => (
+                "icons/check.svg",
+                fl!("orchestrator-no-tasks"),
+                Some(fl!("orchestrator-no-tasks-about")),
             ),
             Empty::Nothing if issues => (
                 "icons/check.svg",
@@ -281,7 +308,7 @@ impl OrchestratorView {
         match self.lines.get(index) {
             Some(Line::Heading { heading, count }) => self.render_heading(*heading, *count),
             Some(Line::Row(row)) => match self.tab {
-                Tab::Issues => self.render_issue_row(index, *row, cx),
+                Tab::Issues | Tab::Tasks => self.render_issue_row(index, *row, cx),
                 Tab::PullRequests => self.render_pull_request_row(index, *row, cx),
             },
             None => div().h(px(self.row_height())).into_any_element(),
@@ -403,7 +430,9 @@ impl OrchestratorView {
         });
         let writable = self.repos[row.repo].snapshot.access == Some(Access::ReadWrite);
         let blocked = !item.blocked_by.is_empty() || item.state == "blocked";
-        let start = (writable && row.run.is_none() && !blocked).then(|| {
+        let tasks = self.tab == Tab::Tasks;
+        let closed = super::rows::closed(item);
+        let start = (writable && row.run.is_none() && !blocked && !closed).then(|| {
             let key = key.clone();
             look.compact_button(
                 ("orchestrator-start", index),
@@ -455,7 +484,27 @@ impl OrchestratorView {
                         el.child(look.icon("icons/lock.svg", 11., look.hue(YELLOW)))
                     }),
             )
-            .when(!compact, |el| {
+            .when(!compact && tasks, |el| {
+                el.child(
+                    div()
+                        .flex_none()
+                        .w(px(110.))
+                        .truncate()
+                        .text_size(look.small())
+                        .text_color(rgb(theme.subtext()))
+                        .child(item.assignee.clone().unwrap_or_default()),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(TASK_STATUS_WIDTH))
+                        .truncate()
+                        .text_size(look.small())
+                        .text_color(rgb(look.hue(look.state_hue(&item.state))))
+                        .child(status_label(&item.state)),
+                )
+            })
+            .when(!compact && !tasks, |el| {
                 el.child(
                     div()
                         .flex_none()
@@ -708,7 +757,7 @@ pub(super) fn diff_squares(look: &Look, additions: Option<u64>, deletions: Optio
 }
 
 /// A priority's heading: `P1 · high`.
-fn priority_name(priority: i64) -> String {
+pub(super) fn priority_name(priority: i64) -> String {
     fl!("orchestrator-priority", priority = priority)
 }
 

@@ -288,14 +288,17 @@ pub(super) fn ui(call: Call<UiOp>, cx: &mut App) -> Response {
                 );
             }
             if !view.activity_panel_listed(panel) {
-                return Response::error(
-                    ErrorCode::Unsupported,
-                    format!(
+                let why = match panel {
+                    crate::sidebar::ActivityPanel::Tasks => {
+                        "No project in this window has a .beads folder".to_owned()
+                    }
+                    panel => format!(
                         "{} is turned off: [sidebar] {} = false",
                         panel.name(),
                         panel.name()
                     ),
-                );
+                };
+                return Response::error(ErrorCode::Unsupported, why);
             }
             view.show_activity_panel(panel, window, cx);
             Response::done(format!("Showing {}", panel.name()))

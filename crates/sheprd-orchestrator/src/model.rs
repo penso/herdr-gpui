@@ -142,6 +142,8 @@ impl Item {
             labels: Vec::new(),
             parent_id: None,
             blocked_by: Vec::new(),
+            assignee: None,
+            acceptance: None,
             priority: None,
             created_at: None,
             updated_at: None,
@@ -178,10 +180,15 @@ pub struct Item {
     pub identifier: String,
     pub title: String,
     pub description: Option<String>,
+    /// A bead's acceptance criteria; other providers have none.
+    pub acceptance: Option<String>,
     /// The provider's own state word, such as `open`, `merged`, or `in_progress`.
     pub state: String,
     pub url: Option<String>,
     pub author: Option<String>,
+    /// Who a bead is assigned to, which is who claimed it once it is in
+    /// progress; other providers leave it empty.
+    pub assignee: Option<String>,
     pub labels: Vec<String>,
     pub parent_id: Option<String>,
     pub blocked_by: Vec<String>,

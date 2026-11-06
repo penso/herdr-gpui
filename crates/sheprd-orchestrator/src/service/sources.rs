@@ -1,7 +1,7 @@
 //! Which sources a repository has, which this build reads, and the GitLab
 //! CLI's say in whether a remote is a GitLab project.
 
-use super::{Provider, RepoInfo, SourceKey, SourceStatus, SyncState, Worker, gitlab};
+use super::{Item, Provider, RepoInfo, SourceKey, SourceStatus, SyncState, Worker, gitlab};
 
 impl SyncState {
     /// How many items the source's last sync reported, kept while it syncs
@@ -35,6 +35,20 @@ pub(super) fn recognize(
     info.remote
         .as_mut()
         .is_some_and(|remote| gitlab::recognize(&mut remote.source, cli))
+}
+
+/// Drops beads of any source but `info`'s. A project keeps them in its
+/// database after its source moves, as a `.beads/redirect` added later moves
+/// it, and they would list beside the ones read now. Before the repository
+/// is known, what was last listed stays.
+pub(super) fn keep_current_beads(items: &mut Vec<Item>, info: Option<&RepoInfo>) {
+    let Some(info) = info else {
+        return;
+    };
+    let current = info.beads_source();
+    items.retain(|item| {
+        item.key.source.provider != Provider::Beads || Some(&item.key.source) == current.as_ref()
+    });
 }
 
 /// Each source of `info`, syncing when this build can read it.

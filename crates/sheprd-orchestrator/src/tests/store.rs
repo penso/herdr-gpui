@@ -276,3 +276,45 @@ fn a_database_others_can_read_is_refused() {
     mode(&folder, 0o700);
     assert!(Store::open(&path).is_ok());
 }
+
+#[test]
+fn a_version_two_database_gains_the_task_columns_and_keeps_its_items() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = database(&dir);
+    let mut store = Store::open(&path).unwrap();
+    let source = beads();
+    store
+        .replace_items(
+            &source,
+            &[item(&source, "hg-1", "Kept")],
+            &Checkpoint::default(),
+        )
+        .unwrap();
+    drop(store);
+    // As a build before the columns left it.
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "ALTER TABLE issues DROP COLUMN assignee;\n\
+             ALTER TABLE issues DROP COLUMN acceptance;\n\
+             PRAGMA user_version = 2;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let mut store = Store::open(&path).unwrap();
+    assert_eq!(pragma(&path, "user_version"), SCHEMA_VERSION.to_string());
+    let kept = store.items().unwrap().remove(0);
+    assert_eq!(kept.title, "Kept");
+    assert_eq!((kept.assignee, kept.acceptance), (None, None));
+
+    let mut task = item(&source, "hg-1", "Kept");
+    task.assignee = Some("ada".into());
+    task.acceptance = Some("Tests pass".into());
+    store
+        .replace_items(&source, &[task], &Checkpoint::default())
+        .unwrap();
+    let read = store.items().unwrap().remove(0);
+    assert_eq!(read.assignee.as_deref(), Some("ada"));
+    assert_eq!(read.acceptance.as_deref(), Some("Tests pass"));
+}

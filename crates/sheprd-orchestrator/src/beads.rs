@@ -10,8 +10,12 @@ use sheprd_client::{ScriptLimits, shell_quote};
 use sheprd_remote::teleport::Host;
 use std::{collections::HashMap, sync::atomic::AtomicBool};
 
+pub mod claim;
+
 /// Exit status the scripts use when `bd` is not on the host's `PATH`.
 const MISSING: i32 = 127;
+
+const READING: &str = "Reading Beads";
 
 /// Reads every bead. Beads always syncs fully.
 pub fn sync(
@@ -21,8 +25,9 @@ pub fn sync(
 ) -> Result<(Vec<Item>, Checkpoint)> {
     let (list, blocked) = if host.is_local() {
         let flags = safety_flags(host, &source.repository, cancelled)?;
-        let list = run(host, &source.repository, &flags, &LIST, cancelled)?;
-        let blocked = run(host, &source.repository, &flags, &BLOCKED, cancelled)?;
+        let run = |args: &[&str]| run(host, &source.repository, &flags, args, READING, cancelled);
+        let list = run(&LIST)?;
+        let blocked = run(&BLOCKED)?;
         (list, blocked)
     } else {
         // One connection rather than three: sshd may drop a burst of them.
@@ -118,6 +123,7 @@ pub fn delete(host: &Host, source: &SourceKey, id: &str, cancelled: &AtomicBool)
         &source.repository,
         &flags,
         &["delete", "--force", "--", id],
+        "Deleting the bead",
         cancelled,
     )
     .map(drop)
@@ -168,11 +174,12 @@ fn run(
     root: &str,
     flags: &[&str],
     args: &[&str],
+    operation: &'static str,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>> {
     if host.is_local() {
         let args: Vec<&str> = flags.iter().chain(args).copied().collect();
-        return local(host, root, &args, "Reading Beads", cancelled);
+        return local(host, root, &args, operation, cancelled);
     }
     let command = flags
         .iter()
@@ -181,7 +188,7 @@ fn run(
         .collect::<Vec<_>>()
         .join(" ");
     let body = format!("{}bd {command}\n", prefix(root));
-    capture(host, &body, "Reading Beads", cancelled)
+    capture(host, &body, operation, cancelled)
 }
 
 /// `bd` with `args` run directly in `root` on this machine, with Beads'
@@ -304,9 +311,11 @@ struct Bead {
     id: String,
     title: String,
     description: Option<String>,
+    acceptance_criteria: Option<String>,
     status: String,
     priority: Option<i64>,
     created_by: Option<String>,
+    assignee: Option<String>,
     #[serde(default)]
     labels: Vec<String>,
     #[serde(alias = "parent")]
@@ -335,9 +344,11 @@ impl Bead {
             identifier: self.id,
             title: self.title,
             description: self.description,
+            acceptance: self.acceptance_criteria.filter(|text| !text.is_empty()),
             state: self.status,
             url: None,
             author: self.created_by,
+            assignee: self.assignee.filter(|name| !name.is_empty()),
             labels: self.labels,
             parent_id,
             blocked_by,

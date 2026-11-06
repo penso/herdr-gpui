@@ -22,6 +22,7 @@ mod pull;
 mod repo;
 mod rows;
 mod status;
+mod tasks;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -66,6 +67,10 @@ pub(crate) enum Event {
         host: Option<String>,
         session: Option<String>,
         workspace_id: String,
+    },
+    /// Show the workspace holding the project with repository key `repo`.
+    OpenProject {
+        repo: String,
     },
     /// Open a web address, such as an issue's page, in a browser tab.
     OpenUrl(String),
@@ -173,6 +178,8 @@ pub(crate) struct OrchestratorView {
     filters_open: bool,
     /// Only issues with this label.
     label: Option<String>,
+    /// What only the Tasks list narrows by.
+    task_filters: tasks::TaskFilters,
     collapsed: HashSet<String>,
     search: Entity<SearchInput>,
     query: String,
@@ -255,6 +262,7 @@ impl OrchestratorView {
             yours: rows::Yours::default(),
             filters_open: false,
             label: None,
+            task_filters: tasks::TaskFilters::default(),
             collapsed: HashSet::new(),
             search,
             query: String::new(),
