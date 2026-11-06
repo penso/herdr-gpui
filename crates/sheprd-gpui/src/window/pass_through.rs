@@ -1,7 +1,8 @@
 //! Pass-through mode: the keys the app would claim go to the focused Herdr
 //! pane instead, for full-screen programs that want them, until the command's
 //! own shortcut ends it. The prefix does not arm, custom commands do not run,
-//! and `key_down` skips its clipboard and selection keys.
+//! and `key_down` skips its clipboard and selection keys for keys a pane can
+//! receive.
 //!
 //! A key GPUI's bindings hold is handed to the pane here, as the bindings
 //! would otherwise run first. Every other key stays on its usual way to the

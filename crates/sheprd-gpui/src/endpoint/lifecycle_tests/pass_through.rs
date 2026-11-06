@@ -109,3 +109,30 @@ fn the_apps_paste_key_goes_to_the_pane(cx: &mut gpui::TestAppContext) {
     let message = server.receive();
     assert!(is_key(&message, 'v', 3), "{message:?}");
 }
+
+/// No pane can receive Cmd-V, so it would be lost if it left the app's path.
+#[gpui::test]
+fn a_key_no_pane_can_receive_keeps_its_app_meaning(cx: &mut gpui::TestAppContext) {
+    let (view, mut server, cx) = passing_window(cx);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string("pasted".into()));
+            view.key_down(&file_paste::cmd_v(), window, cx);
+            assert!(view.pass_through, "and the mode stays on");
+        });
+    });
+    cx.run_until_parked();
+    sentinel(&view, cx);
+    let message = server.receive();
+    assert!(
+        matches!(
+            &message,
+            ClientMessage::ClientShellPaneInput { events, .. }
+                if events.as_slice() == [ClientPaneInputEvent::Paste("pasted".into())]
+        ),
+        "{message:?}"
+    );
+    let message = server.receive();
+    assert!(is_sentinel(&message), "{message:?}");
+    wait_image_finished(&view, cx);
+}

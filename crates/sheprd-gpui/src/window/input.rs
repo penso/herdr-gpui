@@ -8,8 +8,8 @@ use crate::i18n::{Localize, fl};
 use crate::{
     connection::ConnectionBridge,
     terminal::{
-        InputTarget, WheelAccumulator, cursor_offset, key_input, pane_key_input, wheel_rows,
-        wheel_target,
+        InputTarget, WheelAccumulator, cursor_offset, key_input, pane_key_input, reaches_pane,
+        wheel_rows, wheel_target,
     },
 };
 use gpui::{
@@ -351,8 +351,10 @@ impl SheprdWindow {
             .config
             .option_as_alt
             .sends_alt(cx.keyboard_layout().id(), option_keys);
-        // The app's clipboard and selection keys below stand aside too.
-        if self.pass_through {
+        // The app's clipboard and selection keys below stand aside too, for
+        // keys the pane can take. Cmd-V and the like cannot reach it, so they
+        // stay the app's.
+        if self.pass_through && reaches_pane(&event.keystroke) {
             self.send_key(event, alt_keys, window, cx);
             return;
         }
