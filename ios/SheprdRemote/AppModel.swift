@@ -130,6 +130,7 @@ final class AppModel {
     let nearby = NearbyBrowser()
     let collapsed = CollapsedStore()
     let shortcuts = ShortcutStore()
+    let termKeys = TermKeyStore()
     let bluetooth = NearbyBluetooth()
     /// Bluetooth presence with the computers that have it on.
     let presence = PresenceCentral()
