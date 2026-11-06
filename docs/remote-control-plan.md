@@ -282,6 +282,12 @@ focus nor resize anything:
   Herdr takes also reads it at once, then 50 ms and 150 ms later, so an
   echo does not wait out the timer. The ANSI (SGR only) becomes escaped
   spans on the server. No cursor position comes with it.
+- **History**: a swipe down or the wheel on the screen reads `pane.read
+  {source: recent, lines: 1000, format: ansi}` once, and the view scrolls
+  through it. It is not streamed: 1,000 lines on every change would be far
+  more than a phone should take. Live screens wait while history shows and
+  return when the view reaches its end or the phone types. A program on the
+  alternate screen has no history here, so its screen stays as it is.
 - **Echo strip**: what was typed but is not on the screen yet shows,
   dotted, above the key rows (backspace takes back what it can). An input
   leaves it once Herdr took it and a screen arrived after, or 1 s after
