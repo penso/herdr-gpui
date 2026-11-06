@@ -56,6 +56,9 @@ impl SheprdWindow {
             .items_center()
             .whitespace_nowrap()
             .when(view.marked == Some(line), |row| row.bg(rgb(theme.active)))
+            .when_some(self.code_blame_width(view), |line, width| {
+                line.child(self.code_blame_cell(view, row, width))
+            })
             .child(
                 div()
                     .flex_none()
@@ -204,6 +207,17 @@ impl SheprdWindow {
                 })),
             )
             .child(
+                button(
+                    if view.blame.wanted() {
+                        fl!("code-view-hide-blame")
+                    } else {
+                        fl!("code-view-blame")
+                    },
+                    "code-blame-toggle",
+                )
+                .on_click(cx.listener(move |this, _, _, cx| this.toggle_code_blame(id, cx))),
+            )
+            .child(
                 button(fl!("code-view-open-in-editor"), "code-open-editor").on_click(
                     cx.listener(move |this, _, _, cx| this.open_code_view_in_editor(id, cx)),
                 ),
@@ -276,6 +290,7 @@ impl SheprdWindow {
             .child(measure(view.width.clone()))
             .child(self.code_header(id, tab, view, cx))
             .child(body)
+            .children(self.code_blame_bar(view))
             .into_any_element()
     }
 

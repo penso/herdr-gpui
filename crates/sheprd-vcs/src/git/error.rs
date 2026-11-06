@@ -17,6 +17,8 @@ pub enum Error {
     },
     #[error("No local checkout is focused.")]
     NoCheckout,
+    #[error("Nothing to commit: no change is staged.")]
+    NothingStaged,
     #[error("Nothing to commit: the checkout has no changes.")]
     NothingToCommit,
     #[error("Could not {operation}.")]

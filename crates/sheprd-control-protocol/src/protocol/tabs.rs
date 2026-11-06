@@ -68,6 +68,8 @@ pub enum TabOp {
     },
     /// The review of the caller's workspace's uncommitted changes.
     Review,
+    /// The file tree of the caller's workspace's checkout.
+    Files,
     Px0,
 }
 
@@ -80,6 +82,7 @@ impl TabOp {
             | Self::Devices
             | Self::Orchestrator { .. }
             | Self::Review
+            | Self::Files
             | Self::Px0 => ARRIVE_WAIT_SECONDS,
             Self::List { .. }
             | Self::Focus { .. }
@@ -111,6 +114,7 @@ impl TabKind {
             Self::File => "file",
             Self::Code => "code",
             Self::Review => "review",
+            Self::Files => "files",
             Self::Orchestrator => "orchestrator",
             Self::Devices => "devices",
             Self::CoreTerminal => "core_terminal",
@@ -132,6 +136,8 @@ pub enum TabKind {
     File,
     Code,
     Review,
+    /// A checkout's file tree.
+    Files,
     Orchestrator,
     Devices,
     /// A herdr-core (Herdr 2) terminal the app draws.

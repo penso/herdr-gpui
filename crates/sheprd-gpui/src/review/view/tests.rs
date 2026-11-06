@@ -260,6 +260,7 @@ mod scrollbar;
 mod search;
 mod selection;
 mod split_resize;
+mod stage;
 mod tab;
 mod withdraw;
 mod wrap;

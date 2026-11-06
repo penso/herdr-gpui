@@ -1,7 +1,8 @@
-//! The changed files as a tree of folders, for the file list. A folder
-//! holding nothing but one other folder shares its line (`src/review/`), so
-//! deep paths do not cost a line per level. Files are in the diff's order,
-//! sorted by path, so the tree read top to bottom is the diff's order too.
+//! Files as a tree of folders, for a review's file list and the file tree
+//! tab. A folder holding nothing but one other folder shares its line
+//! (`src/review/`), so deep paths do not cost a line per level. Files keep
+//! the order they came in, which keeps each folder's files together, so a
+//! review's tree read top to bottom is its diff's order too.
 use crate::review::diff::Diff;
 use std::collections::HashSet;
 
@@ -49,7 +50,7 @@ impl Dir {
             self.children.push(Child::File(file));
             return;
         }
-        // Paths are sorted, so a folder's files arrive together.
+        // A folder's files arrive together.
         match self.children.last_mut() {
             Some(Child::Dir(dir)) if dir.name == *name => dir.insert(rest, file),
             _ => {
@@ -96,16 +97,20 @@ pub(crate) struct Tree {
 
 impl Tree {
     pub(crate) fn build(diff: &Diff) -> Self {
+        Self::of(diff.files.iter().map(|file| file.path.as_str()))
+    }
+
+    /// The tree of `paths`, a node's `file` being its place among them.
+    /// Each folder's paths must come together.
+    pub(crate) fn of<'a>(paths: impl IntoIterator<Item = &'a str>) -> Self {
         let mut root = Dir::default();
-        for (index, file) in diff.files.iter().enumerate() {
-            let parts: Vec<&str> = file
-                .path
-                .split('/')
-                .filter(|part| !part.is_empty())
-                .collect();
+        let mut count = 0;
+        for (index, path) in paths.into_iter().enumerate() {
+            let parts: Vec<&str> = path.split('/').filter(|part| !part.is_empty()).collect();
             root.insert(&parts, index);
+            count += 1;
         }
-        let mut nodes = Vec::with_capacity(diff.files.len());
+        let mut nodes = Vec::with_capacity(count);
         root.flatten("", 0, &mut nodes);
         Self { nodes }
     }

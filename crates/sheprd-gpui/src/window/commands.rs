@@ -403,6 +403,10 @@ impl SheprdWindow {
                 self.open_review(window, cx);
                 return;
             }
+            Command::OpenFileTree => {
+                self.open_file_tree(window, cx);
+                return;
+            }
             Command::GitMenu => {
                 // Where the titlebar's Git button last painted, so the
                 // shortcut opens the menu where clicking the button does.

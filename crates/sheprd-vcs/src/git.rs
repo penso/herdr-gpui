@@ -62,6 +62,9 @@ pub struct Status {
     pub additions: u64,
     pub deletions: u64,
     pub untracked: u64,
+    /// Files staged for the next commit, which a commit of only what is
+    /// staged takes. They are already counted in the lines above.
+    pub staged: u64,
 }
 
 impl Status {
@@ -72,7 +75,10 @@ impl Status {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
+    /// Stages every change, then commits.
     Commit(String),
+    /// Commits what is staged, leaving the rest of the checkout as it is.
+    CommitStaged(String),
     Push,
     CreatePullRequest,
 }
@@ -80,7 +86,7 @@ pub enum Action {
 impl Action {
     pub fn running_label(&self) -> &'static str {
         match self {
-            Self::Commit(_) => "Committing...",
+            Self::Commit(_) | Self::CommitStaged(_) => "Committing...",
             Self::Push => "Pushing...",
             Self::CreatePullRequest => "Creating pull request...",
         }
@@ -365,13 +371,21 @@ impl Git {
         });
     }
 
+    /// Reads the status on the next tick, after a write made outside this
+    /// worker, such as staging a hunk.
+    pub fn refresh(&mut self, now: Instant) {
+        if self.input.is_some() {
+            self.due = Some(now);
+        }
+    }
+
     /// Queue an explicit user action against the tracked checkout.
     pub fn start(&mut self, action: Action, token: Option<Tokens>) -> crate::Result<()> {
         if self.running.is_some() {
             return Err(Error::Busy.into());
         }
         let input = self.input.clone().ok_or(Error::NoCheckout)?;
-        if let Action::Commit(message) = &action
+        if let Action::Commit(message) | Action::CommitStaged(message) = &action
             && (message.trim().is_empty() || message.len() > MESSAGE_LIMIT)
         {
             return Err(Error::CommitMessage.into());
@@ -605,12 +619,29 @@ fn checkout_status(
         deadline,
         cancelled,
     )?;
+    let staged = staged_files(checkout, deadline, cancelled)?;
     let mut status = parse_numstat(&numstat);
+    status.staged = staged.split('\0').filter(|name| !name.is_empty()).count() as u64;
     status.untracked = untracked
         .split('\0')
         .filter(|entry| !entry.is_empty())
         .count() as u64;
     Ok(status)
+}
+
+/// The NUL-separated names of what the next commit would take.
+fn staged_files(
+    checkout: &str,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+) -> crate::Result<String> {
+    git(
+        checkout,
+        &["diff", "--cached", "--name-only", "-z"],
+        "read staged changes",
+        deadline,
+        cancelled,
+    )
 }
 
 /// `--numstat` is machine readable in any locale; binary files report `-` and
@@ -637,6 +668,7 @@ fn perform(
     let checkout = local_checkout(input, deadline, cancelled)?;
     match action {
         Action::Commit(message) => commit(&checkout, &message, deadline, cancelled),
+        Action::CommitStaged(message) => commit_staged(&checkout, &message, deadline, cancelled),
         Action::Push => push(&checkout, &input.branch, deadline, cancelled),
         Action::CreatePullRequest => {
             let token = token.ok_or(sheprd_github::Error::Authentication)?;
@@ -661,6 +693,29 @@ fn commit(
         deadline,
         cancelled,
     )?;
+    commit_index(checkout, message, deadline, cancelled)
+}
+
+/// Commits the index as it stands, so a hunk staged from a review goes in
+/// without the changes around it.
+fn commit_staged(
+    checkout: &str,
+    message: &str,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+) -> crate::Result<Outcome> {
+    if staged_files(checkout, deadline, cancelled)?.is_empty() {
+        return Err(Error::NothingStaged.into());
+    }
+    commit_index(checkout, message, deadline, cancelled)
+}
+
+fn commit_index(
+    checkout: &str,
+    message: &str,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+) -> crate::Result<Outcome> {
     git(
         checkout,
         &["commit", "-m", message],
@@ -830,6 +885,12 @@ pub fn git_bytes(
         }
         .into())
     }
+}
+
+/// A pathspec naming exactly `path`, from the top of the checkout, whatever
+/// characters it holds.
+pub fn literal(path: &str) -> String {
+    format!(":(top,literal){path}")
 }
 
 /// Git in `checkout`, read-only and without the file monitor.

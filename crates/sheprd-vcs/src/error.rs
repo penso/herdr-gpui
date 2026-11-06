@@ -6,6 +6,8 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 pub enum Error {
     // keep-sorted start
     #[error(transparent)]
+    Blame(#[from] crate::blame::Error),
+    #[error(transparent)]
     Checkpoint(#[from] crate::checkpoint::Error),
     /// Only CPU and memory are sampled on an Azure machine so far.
     #[cfg(feature = "azure")]
@@ -17,5 +19,7 @@ pub enum Error {
     Git(#[from] crate::git::Error),
     #[error(transparent)]
     GitHub(#[from] sheprd_github::Error),
+    #[error(transparent)]
+    Stage(#[from] crate::stage::Error),
     // keep-sorted end
 }

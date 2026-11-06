@@ -341,6 +341,7 @@ impl Pages {
             Location::Web { .. }
             | Location::Review { .. }
             | Location::Code { .. }
+            | Location::Files { .. }
             | Location::Orchestrator { .. }
             | Location::Devices
             | Location::CoreTerminal { .. } => None,

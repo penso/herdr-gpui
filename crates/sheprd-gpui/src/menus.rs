@@ -168,6 +168,12 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
                         command: Command::GoToFile,
                     },
                 ),
+                MenuItem::action(
+                    fl!("menus-file-tree"),
+                    RunCommand {
+                        command: Command::OpenFileTree,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     fl!("menus-close-pane"),

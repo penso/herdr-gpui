@@ -1,4 +1,4 @@
-//! `tab`, `code`, `devices`, `orchestrator`, `review`, and the page commands
+//! `tab`, `code`, `devices`, `orchestrator`, `review`, `files`, and the page commands
 //! of `browser`: the app's own tabs, which the `browser::Store` keeps for
 //! every window.
 mod arrive;
@@ -44,6 +44,7 @@ pub(super) fn serve(
         TabOp::Devices => arrive::devices(&caller, incoming, watches, cx),
         TabOp::Orchestrator { repo } => arrive::orchestrator(&caller, repo, incoming, watches, cx),
         TabOp::Review => arrive::review(&caller, incoming, watches, cx),
+        TabOp::Files => arrive::files(&caller, incoming, watches, cx),
         TabOp::Px0 => arrive::px0(&caller, incoming, watches, cx),
     }
 }
@@ -61,6 +62,7 @@ fn kind(tab: &Tab) -> TabKind {
         Some(Location::Review { .. }) => TabKind::Review,
         Some(Location::Orchestrator { .. }) => TabKind::Orchestrator,
         Some(Location::Code { .. }) => TabKind::Code,
+        Some(Location::Files { .. }) => TabKind::Files,
         Some(Location::Devices) => TabKind::Devices,
         Some(Location::CoreTerminal { .. }) => TabKind::CoreTerminal,
     }
@@ -75,10 +77,12 @@ fn location(tab: &Tab) -> Option<String> {
     Some(match tab.location.as_ref()? {
         Location::Web { url } => url.as_str().to_owned(),
         Location::Local { file } => file.path().display().to_string(),
-        Location::Review { checkout } => checkout
-            .checkout
-            .clone()
-            .or_else(|| checkout.repo_key.clone())?,
+        Location::Review { checkout } | Location::Files { checkout } => {
+            checkout
+                .checkout
+                .clone()
+                .or_else(|| checkout.repo_key.clone())?
+        }
         Location::Orchestrator { repo } => repo.checkout.clone(),
         Location::Code { file } => file.path.clone(),
         // Every pane's terminal, for `herdr-core attach` and the like.

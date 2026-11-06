@@ -5,7 +5,11 @@
 //! ranges into it, so a change of hundreds of thousands of lines stays
 //! compact. File contents are untrusted: every line is stripped of control
 //! and direction-override characters and bounded before it is stored.
-use crate::{i18n::fl, notifications::unsafe_char};
+use crate::{
+    i18n::fl,
+    notifications::unsafe_char,
+    stage::{Span, Walk, new_side},
+};
 use std::{collections::HashMap, ops::Range, sync::Arc};
 
 mod bases;
@@ -18,7 +22,7 @@ mod words;
 pub(crate) use bases::{BaseChoice, bases};
 pub(crate) use budget::{EAGER_LINES, batch};
 pub(crate) use context::read_lines;
-pub(crate) use load::{Loaded, Request, bodies, load, short_ref};
+pub(crate) use load::{Loaded, Request, bodies, load, short_ref, unstaged};
 pub(crate) use words::emphasis;
 
 /// Characters kept of one line; a longer one ends in an ellipsis.
@@ -68,8 +72,9 @@ pub(crate) enum SplitRow {
 pub(crate) struct Lines {
     text: String,
     lines: Vec<Line>,
-    /// Where each hunk header is.
+    /// Where each hunk header is, and where each hunk's changes are.
     hunks: Vec<usize>,
+    spans: Vec<Option<Span>>,
     split: Vec<SplitRow>,
     /// Each line's partner in an edit: the added line that replaced a
     /// removed one, and back; `u32::MAX` for none.
@@ -109,6 +114,7 @@ impl Lines {
     /// Pairs the lines side by side; done once the lines are all in.
     pub(crate) fn finish(mut self) -> Self {
         self.split = split_rows(&self.lines);
+        self.spans = (0..self.hunks.len()).map(|hunk| self.span(hunk)).collect();
         let mut partners = vec![u32::MAX; self.lines.len()];
         for row in &self.split {
             if let SplitRow::Sides {
@@ -123,6 +129,34 @@ impl Lines {
         }
         self.partners = partners;
         self
+    }
+
+    /// Where hunk number `hunk`'s changes are in the working tree's lines.
+    fn span(&self, hunk: usize) -> Option<Span> {
+        let header = *self.hunks.get(hunk)?;
+        let end = self.hunks.get(hunk + 1).copied().unwrap_or(self.len());
+        let (start, count) = new_side(self.text(header).as_bytes())?;
+        let mut walk = Walk::new(start, count);
+        for line in &self.lines[header + 1..end] {
+            match line.kind {
+                Kind::Added => walk.added(),
+                Kind::Removed => walk.removed(),
+                Kind::Context => walk.context(),
+                Kind::Hunk | Kind::Meta => {}
+            }
+        }
+        walk.span()
+    }
+
+    /// Where the changes are of the hunk whose header is line `header`.
+    pub(crate) fn hunk_span(&self, header: usize) -> Option<Span> {
+        let hunk = self.hunks.binary_search(&header).ok()?;
+        self.spans.get(hunk).copied().flatten()
+    }
+
+    /// Where each hunk's changes are.
+    pub(crate) fn spans(&self) -> impl Iterator<Item = Span> {
+        self.spans.iter().copied().flatten()
     }
 
     /// The line paired with `line` in an edit, if any.

@@ -339,6 +339,7 @@ impl SheprdWindow {
                 | Command::NewBrowserTab
                 | Command::OpenOrchestrator
                 | Command::ReviewChanges
+                | Command::OpenFileTree
                 | Command::GitMenu
                 | Command::ToggleAnnotate
                 | Command::SplitEditor

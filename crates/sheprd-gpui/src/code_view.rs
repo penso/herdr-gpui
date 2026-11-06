@@ -7,9 +7,11 @@
 //! keeps each tab's view, made when the tab opens or is first seen after a
 //! restart. The file is read, outlined, and coloured on the background
 //! executor, colours last, so its text shows before a large file is
-//! coloured. Drawing only reads what those produced.
+//! coloured. Drawing only reads what those produced. `b` shows who last
+//! changed each line, read the same way (see `blame`).
 
 // i18n: migrated
+mod blame;
 mod render;
 
 use crate::{
@@ -23,7 +25,13 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use serde::{Deserialize, Serialize};
-use std::{cell::Cell, ops::Range, path::Path, rc::Rc, sync::Arc};
+use std::{
+    cell::Cell,
+    ops::Range,
+    path::Path,
+    rc::Rc,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 /// Lines coloured at most; the rest of a longer file draws plain.
 const MAX_COLOURED_LINES: usize = 20_000;
@@ -157,6 +165,15 @@ pub(crate) struct CodeView {
     width: Rc<Cell<f32>>,
     /// The newest read; an older one's result is dropped.
     load: u64,
+    blame: blame::Lines,
+    /// Stops the blame read nobody waits for any more.
+    blame_cancelled: Arc<AtomicBool>,
+}
+
+impl Drop for CodeView {
+    fn drop(&mut self) {
+        self.stop_blame();
+    }
 }
 
 impl CodeView {
@@ -298,6 +315,8 @@ impl SheprdWindow {
                 outline: true,
                 width: Rc::default(),
                 load: 0,
+                blame: blame::Lines::Off,
+                blame_cancelled: Arc::default(),
             },
         );
         true
@@ -317,7 +336,11 @@ impl SheprdWindow {
         };
         view.load += 1;
         let load = view.load;
+        let blamed = view.blame.wanted();
         let path = std::path::PathBuf::from(&file.path);
+        if blamed {
+            self.read_code_blame(id, load, path.clone(), cx);
+        }
         let read = cx
             .background_executor()
             .spawn(async move { Text::read(&path).map(Arc::new) });
@@ -435,6 +458,10 @@ impl SheprdWindow {
         }
         if keystroke.key == "e" && !modifiers.shift {
             self.open_code_view_in_editor(id, cx);
+            return true;
+        }
+        if keystroke.key == "b" && !modifiers.shift {
+            self.toggle_code_blame(id, cx);
             return true;
         }
         let Some(view) = self.code_views.get_mut(&id) else {

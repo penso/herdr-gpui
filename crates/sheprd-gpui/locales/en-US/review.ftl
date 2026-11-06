@@ -100,3 +100,7 @@ review-notes-copied = Notes copied
 review-copied = Copied to clipboard
 review-path-copied = Path copied
 review-hunk-copied = Hunk copied
+# A hunk's button that stages it for the next commit, and what it says once
+# it is.
+review-stage-hunk = Stage
+review-hunk-staged = Staged

@@ -190,6 +190,7 @@ impl SheprdWindow {
             )],
             fan_out: None,
             file_transfer: None,
+            file_trees: Default::default(),
             find: None,
             find_memory: Default::default(),
             flash: None,

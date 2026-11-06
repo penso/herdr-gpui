@@ -198,6 +198,9 @@ pub(crate) struct SheprdWindow {
     /// dialog so the lanes can be compared later.
     pub(crate) fan_out: Option<crate::fan_out::FanOut>,
     pub(crate) file_transfer: Option<transfers::FileTransfer>,
+    /// File tree tabs' views, by tab.
+    pub(crate) file_trees:
+        std::collections::HashMap<crate::browser::TabId, crate::file_tree::FileTree>,
     /// The find bar, over the pane it searches.
     pub(crate) find: Option<find::FindBar>,
     /// How the find bar was left over each pane, to bring it back there.

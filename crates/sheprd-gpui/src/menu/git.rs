@@ -228,6 +228,8 @@ impl SheprdWindow {
             Row::Commit => {
                 self.menu.page = Some(Page::GitCommit);
                 self.menu.input = Some(DialogInput::default());
+                // Hunks staged on purpose stay what the commit is about.
+                self.menu.git_commit_staged = self.git_staged() > 0;
             }
             Row::Push => self.start_git(Action::Push),
             Row::PullRequest => {
@@ -243,6 +245,11 @@ impl SheprdWindow {
             Row::Merge => self.open_pr_merge(),
         }
         cx.notify();
+    }
+
+    /// Files staged in the focused checkout.
+    fn git_staged(&self) -> u64 {
+        self.git.status().map_or(0, |status| status.staged)
     }
 
     fn start_git(&mut self, action: Action) {
@@ -268,7 +275,11 @@ impl SheprdWindow {
             .as_ref()
             .map(|input| input.text.trim().to_owned())
             .unwrap_or_default();
-        self.start_git(Action::Commit(message));
+        self.start_git(if self.menu.git_commit_staged {
+            Action::CommitStaged(message)
+        } else {
+            Action::Commit(message)
+        });
         if self.menu.error.is_none() {
             self.menu.input = None;
             self.menu.page = Some(Page::Git);
@@ -610,6 +621,29 @@ impl SheprdWindow {
         panel
     }
 
+    /// The commit dialog's choice to take only what is staged, offered when
+    /// something is.
+    fn render_git_commit_staged(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        div()
+            .id("git-commit-staged")
+            .debug_selector(|| "git-commit-staged".into())
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .cursor_pointer()
+            .child(crate::toggles::checkbox(
+                &self.theme,
+                14.,
+                self.menu.git_commit_staged,
+            ))
+            .child(fl!("git-commit-only-staged", count = self.git_staged()))
+            .on_click(cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.menu.git_commit_staged = !this.menu.git_commit_staged;
+                cx.notify();
+            }))
+    }
+
     /// The commit dialog wears the workspace dialogs' chrome: a titled header
     /// naming the branch, the body, then right-aligned actions. Its primary
     /// action stays unarmed until there is a message to commit.
@@ -629,9 +663,17 @@ impl SheprdWindow {
             .py(px(12.))
             .child(
                 div()
+                    .debug_selector(|| "git-commit-note".into())
                     .text_color(rgb(theme.subtext()))
-                    .child(fl!("git-commit-note")),
+                    .child(if self.menu.git_commit_staged {
+                        fl!("git-commit-note-staged")
+                    } else {
+                        fl!("git-commit-note")
+                    }),
             )
+            .when(self.git_staged() > 0, |body| {
+                body.child(self.render_git_commit_staged(cx))
+            })
             .child(
                 div()
                     .debug_selector(|| "git-commit-summary".into())

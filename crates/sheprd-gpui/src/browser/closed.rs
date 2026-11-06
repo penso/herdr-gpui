@@ -279,6 +279,12 @@ impl Store {
                     matches!(&open.location, Some(Location::Review { checkout: existing }) if existing == checkout)
                 })
                 .map(|open| open.id),
+            Some(Location::Files { checkout }) => self
+                .in_workspace(&tab.scope, &tab.workspace_id)
+                .find(|open| {
+                    matches!(&open.location, Some(Location::Files { checkout: existing }) if existing == checkout)
+                })
+                .map(|open| open.id),
             Some(Location::Code { file }) => self
                 .in_workspace(&tab.scope, &tab.workspace_id)
                 .find(|open| {
@@ -394,6 +400,7 @@ impl SheprdWindow {
                 };
                 self.poll_reviews(cx);
                 self.poll_code_views(cx);
+                self.poll_file_trees(cx);
                 self.poll_orchestrators(window, cx);
                 self.poll_devices_overview(cx);
                 match self.ensure_layout().map(|layout| layout.active()) {
@@ -403,6 +410,8 @@ impl SheprdWindow {
                 if let Some(review) = self.reviews.get(&id) {
                     window.focus(review.focus(), cx);
                 } else if let Some(view) = self.code_views.get(&id) {
+                    window.focus(&view.focus, cx);
+                } else if let Some(view) = self.file_trees.get(&id) {
                     window.focus(&view.focus, cx);
                 } else if let Some(page) = self.devices_overview.pages.get(&id) {
                     window.focus(&page.focus, cx);

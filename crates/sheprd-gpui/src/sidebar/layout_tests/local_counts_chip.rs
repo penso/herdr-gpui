@@ -34,6 +34,7 @@ fn local_counts_sit_in_the_dirty_chip_under_the_number(cx: &mut gpui::TestAppCon
                     additions,
                     deletions,
                     untracked: 0,
+                    ..Default::default()
                 },
                 dirty: true,
             };

@@ -6,6 +6,11 @@ code-view-outline-count = Outline · { $count }
 code-view-outline = Outline
 code-view-hide-outline = Hide Outline
 code-view-open-in-editor = Open in Editor
+# Who last changed each line. "Blame" is Git's word for it.
+code-view-blame = Blame
+code-view-hide-blame = Hide Blame
+# In place of a commit, for a line changed since the last one.
+code-view-blame-uncommitted = Not committed yet
 code-view-reading = Reading file…
 code-view-no-workspace = Open a workspace first
 code-view-too-many-tabs = Too many tabs are open

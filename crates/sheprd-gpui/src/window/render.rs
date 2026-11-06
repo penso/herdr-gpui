@@ -751,6 +751,9 @@ impl Render for SheprdWindow {
                         Some(crate::browser::Location::Code { .. }) => {
                             self.render_code_tab(slot, &tab, cx)
                         }
+                        Some(crate::browser::Location::Files { .. }) => {
+                            self.render_file_tree_tab(slot, &tab, cx)
+                        }
                         Some(crate::browser::Location::Devices) => {
                             self.render_devices_tab(slot, &tab, cx)
                         }

@@ -272,8 +272,9 @@ impl SheprdWindow {
             .and_then(|id| {
                 let code = self.code_views.get(&id).map(|view| &view.focus);
                 let review = || self.reviews.get(&id).map(|review| review.focus());
+                let files = || self.file_trees.get(&id).map(|view| &view.focus);
                 let devices = || self.devices_overview.pages.get(&id).map(|page| &page.focus);
-                code.or_else(review).or_else(devices)
+                code.or_else(review).or_else(files).or_else(devices)
             });
         match own {
             Some(focus) if focus.contains_focused(window, cx) => {}

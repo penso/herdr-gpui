@@ -1,4 +1,6 @@
 use super::*;
+use serde_json::json;
+use sheprd_client::{Method, protocol::ClientShellSnapshot};
 
 fn snapshot() -> ClientShellSnapshot {
     serde_json::from_str(include_str!(
@@ -123,6 +125,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (NewBrowserTab, &["cmd-shift-b"]),
         (OpenOrchestrator, &[]),
         (ReviewChanges, &[]),
+        (OpenFileTree, &[]),
         (GitMenu, &[]),
         (ToggleAnnotate, &[]),
         (InstallBrowserSkill, &[]),
@@ -235,6 +238,7 @@ fn gui_commands_never_send_daemon_requests() {
         Command::AgentNumber(1),
         Command::ReloadConfig,
         Command::ReviewChanges,
+        Command::OpenFileTree,
         Command::GitMenu,
         Command::ToggleAnnotate,
     ] {

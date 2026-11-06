@@ -11,5 +11,5 @@ pub(crate) mod viewed;
 
 pub(crate) use diff::push_clean;
 pub(crate) use error::Error;
-pub(crate) use view::{Review, styled_code};
+pub(crate) use view::{Review, styled_code, tree};
 pub(crate) use viewed::Viewed;

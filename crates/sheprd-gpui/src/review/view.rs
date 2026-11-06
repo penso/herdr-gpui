@@ -39,8 +39,9 @@ mod rows;
 mod scrollbar;
 mod search;
 mod selection;
+mod stage;
 mod tab;
-mod tree;
+pub(crate) mod tree;
 
 /// The share of the review's width the file list and the notes may each
 /// take, so a review in a narrow group keeps most of its room for the diff.
@@ -118,6 +119,12 @@ enum State {
 pub(crate) struct Review {
     /// The checkout under review; notes belong to it.
     checkout: Input,
+    /// By file as Git names it, where its changes not staged yet are; `None`
+    /// until read. The newest read lands.
+    unstaged: Option<HashMap<String, Vec<crate::stage::Span>>>,
+    unstaged_read: u64,
+    /// A hunk is being staged; one at a time.
+    staging: bool,
     /// Which of its changes show, how, and whether changes in whitespace
     /// alone count; kept between looks.
     scope: Scope,
@@ -351,6 +358,7 @@ impl SheprdWindow {
             let result = loading.await;
             this.update(cx, |this, cx| {
                 this.review_loaded(id, request, result, cx);
+                this.read_review_unstaged(id, cx);
                 this.schedule_review_reads(id, cx);
                 cx.notify();
             })
@@ -399,12 +407,25 @@ impl SheprdWindow {
             return;
         };
         let mut moved = Vec::new();
+        let mut staged = Vec::new();
         for (id, review) in &mut self.reviews {
             if review.checkout != tracked {
                 continue;
             }
             match review.seen {
                 None => review.seen = Some(status),
+                // The diff compares with HEAD, so staging moves no line.
+                Some(seen)
+                    if seen != status
+                        && crate::git::Status { staged: 0, ..seen }
+                            == crate::git::Status {
+                                staged: 0,
+                                ..status
+                            } =>
+                {
+                    review.seen = Some(status);
+                    staged.push(*id);
+                }
                 Some(seen)
                     if seen != status
                         && review.draft.is_none()
@@ -417,6 +438,9 @@ impl SheprdWindow {
         }
         for id in moved {
             self.reload_review(id, cx);
+        }
+        for id in staged {
+            self.read_review_unstaged(id, cx);
         }
     }
 

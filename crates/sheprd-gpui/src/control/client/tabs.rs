@@ -1,4 +1,4 @@
-//! `tab`, `code`, `devices`, `orchestrator`, and `review`.
+//! `tab`, `code`, `devices`, `orchestrator`, `review`, and `files`.
 mod items;
 
 use super::{Context, Output, unexpected};
@@ -168,6 +168,11 @@ pub(super) fn orchestrator(
 pub(super) fn review(context: &Context) -> crate::Result<Output> {
     let response = context.call(Request::Tab, TabOp::Review)?;
     opened("the review", response)
+}
+
+pub(super) fn files(context: &Context) -> crate::Result<Output> {
+    let response = context.call(Request::Tab, TabOp::Files)?;
+    opened("the file tree", response)
 }
 
 #[cfg(test)]

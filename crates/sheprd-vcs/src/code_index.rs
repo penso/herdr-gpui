@@ -24,7 +24,7 @@ use std::{
 };
 
 /// The most files listed, which bounds the index of the largest monorepos.
-const MAX_FILES: usize = 100_000;
+pub(crate) const MAX_FILES: usize = 100_000;
 /// The longest file listing read from Git.
 const MAX_LISTING_BYTES: usize = 32 << 20;
 /// Larger files are generated or data, and are listed but not scanned.
@@ -62,21 +62,8 @@ impl Index {
     pub fn build(root: &Path, cancelled: &AtomicBool) -> crate::Result<Self> {
         let checkout = root.to_str().ok_or(Error::Root)?;
         let stop = || cancelled.load(Ordering::Acquire);
-        let git = |args: &[&str], operation| {
-            crate::git::git_bytes(
-                checkout,
-                args,
-                operation,
-                Instant::now() + GIT_DEADLINE,
-                &stop,
-                MAX_LISTING_BYTES,
-            )
-        };
-        let tracked = git(&["ls-files", "-z", "--cached"], "list files")?;
-        let untracked = git(
-            &["ls-files", "-z", "--others", "--exclude-standard"],
-            "list untracked files",
-        )?;
+        let git = |args: &[&str], operation| read_git(checkout, args, operation, &stop);
+        let (tracked, untracked) = listings(checkout, &stop)?;
         let mut index = Self::from_listing(root, &[tracked.as_slice(), &untracked].concat());
         // A checkout with no commit yet has nothing to compare with. Git's
         // warnings share the output's stream, and a `core.autocrlf` checkout
@@ -137,12 +124,7 @@ impl Index {
     /// The files of a NUL-separated `git ls-files -z` listing, sorted, with
     /// any name that is not UTF-8 or could leave the checkout left out.
     fn from_listing(root: &Path, listing: &[u8]) -> Self {
-        let mut files: Vec<String> = listing
-            .split(|byte| *byte == 0)
-            .filter_map(|name| std::str::from_utf8(name).ok())
-            .filter(|name| relative(name))
-            .map(str::to_owned)
-            .collect();
+        let mut files = names(listing);
         files.sort_unstable();
         files.dedup();
         let truncated = files.len() > MAX_FILES;
@@ -218,9 +200,58 @@ impl Index {
     }
 }
 
+/// Git's output for a checkout listing, bounded and within the deadline.
+pub(crate) fn read_git(
+    checkout: &str,
+    args: &[&str],
+    operation: &'static str,
+    stop: &impl Fn() -> bool,
+) -> crate::Result<Vec<u8>> {
+    crate::git::git_bytes(
+        checkout,
+        args,
+        operation,
+        Instant::now() + GIT_DEADLINE,
+        stop,
+        MAX_LISTING_BYTES,
+    )
+}
+
+/// The NUL-separated listings of the tracked files and of the untracked ones
+/// Git does not ignore.
+pub(crate) fn listings(
+    checkout: &str,
+    stop: &impl Fn() -> bool,
+) -> crate::Result<(Vec<u8>, Vec<u8>)> {
+    let tracked = read_git(
+        checkout,
+        &["ls-files", "-z", "--cached"],
+        "list files",
+        stop,
+    )?;
+    let untracked = read_git(
+        checkout,
+        &["ls-files", "-z", "--others", "--exclude-standard"],
+        "list untracked files",
+        stop,
+    )?;
+    Ok((tracked, untracked))
+}
+
+/// The names of a NUL-separated listing, leaving out any that is not UTF-8
+/// or could leave the checkout.
+pub(crate) fn names(listing: &[u8]) -> Vec<String> {
+    listing
+        .split(|byte| *byte == 0)
+        .filter_map(|name| std::str::from_utf8(name).ok())
+        .filter(|name| relative(name))
+        .map(str::to_owned)
+        .collect()
+}
+
 /// Whether a listed name stays inside the checkout and shows as it reads,
 /// without control or direction-override characters.
-fn relative(name: &str) -> bool {
+pub(crate) fn relative(name: &str) -> bool {
     !name.is_empty()
         && !name.chars().any(sheprd_client::text::unsafe_char)
         && Path::new(name)

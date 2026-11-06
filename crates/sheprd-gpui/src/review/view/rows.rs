@@ -382,6 +382,7 @@ impl SheprdWindow {
                             .min_w_0()
                             .child(lines.text_of(found).to_owned()),
                     )
+                    .children(self.review_hunk_stage(id, review, file, index, cx))
                     .child(self.review_hunk_copy(id, file, index, line_height, cx)),
             );
         }

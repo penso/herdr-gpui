@@ -237,6 +237,7 @@ for what only Sheprd shows or keeps.
 | --- | --- |
 | Show a file at a line, read-only | `sheprd code open src/main.rs:42` |
 | Open the review of your uncommitted changes | `sheprd review` |
+| Show the user your checkout's files with their Git status | `sheprd files` |
 | Open px0 to browse, edit, or review your local checkout (macOS/Windows) | `sheprd px0 open` |
 | Get notes the user sent this pane (pages, reviews, terminals) | `sheprd feedback --wait 600` |
 | Keep a note on this worktree (repository and branch) | `sheprd notes set waiting on CI` |
