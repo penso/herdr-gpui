@@ -91,9 +91,13 @@ final class Fleet {
     @ObservationIgnored private var termViewers: [PaneKey: Int] = [:]
     /// One client per computer, kept while its address and CA stay.
     @ObservationIgnored private var clients: [String: RemoteClient] = [:]
+    /// Calls that got no answer, for the computer's log once it is back.
+    @ObservationIgnored private var unreported: [String: [String]] = [:]
     /// Commands sent to chats that have not come back yet.
     let pending = PendingCommands()
     private var active = false
+    /// The most failures held for one computer; the daemon takes ten at once.
+    private static let maxUnreported = 8
     let sessions: Sessions
     let cache: Cache
 
@@ -340,15 +344,49 @@ final class Fleet {
         guard let machine = machines.first(where: { $0.id == device }),
               case let .online(origin) = machine.status
         else { throw FleetError.offline(machines.first { $0.id == device }?.computer.name ?? "The computer") }
-        let token = try await sessions.token(for: machine.computer, at: origin)
-        let client: RemoteClient
-        if let known = clients[device], known.origin == origin, known.fingerprint == machine.computer.fingerprint {
-            client = known
-        } else {
-            client = RemoteClient(origin: origin, fingerprint: machine.computer.fingerprint)
-            clients[device] = client
+        let started = ContinuousClock.now
+        do {
+            let token = try await sessions.token(for: machine.computer, at: origin)
+            let client: RemoteClient
+            if let known = clients[device], known.origin == origin, known.fingerprint == machine.computer.fingerprint {
+                client = known
+            } else {
+                client = RemoteClient(origin: origin, fingerprint: machine.computer.fingerprint)
+                clients[device] = client
+            }
+            return try await body(client, token)
+        } catch where PathFailure.isDead(error) {
+            pathFailed(error, device: device, origin: origin, after: ContinuousClock.now - started)
+            throw error
         }
-        return try await body(client, token)
+    }
+
+    /// A call got no answer: the link looks for an address that gives one,
+    /// and the client goes, as its open connections use the dead path. The
+    /// call is not sent again, as it may have reached the computer.
+    private func pathFailed(_ error: Error, device: String, origin: String, after elapsed: Duration) {
+        let route = PathFailure.route((error as? URLError)?.failingURL)
+        let line = "\(route) at \(origin): \(PathFailure.summary(error, after: elapsed))"
+        log.error("no answer from \(device, privacy: .public): \(line, privacy: .public)")
+        clients[device] = nil
+        unreported[device] = (unreported[device, default: []] + [line]).suffix(Self.maxUnreported)
+        Task { await links[device]?.pathFailed(origin) }
+    }
+
+    /// Tells the computer, now that it answers again, what this phone saw
+    /// while it did not: the daemon's log otherwise shows only silence.
+    private func reportFailures(of computer: Computer, at origin: String) {
+        guard let lines = unreported.removeValue(forKey: computer.device) else { return }
+        let client = RemoteClient(origin: origin, fingerprint: computer.fingerprint)
+        Task {
+            do {
+                for line in lines {
+                    try await client.report(context: "ios network", message: "\(line); back at \(origin)")
+                }
+            } catch {
+                log.error("could not report to \(computer.name, privacy: .public): \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 
     /// Closes the pane a chat runs in, which stops its agent in Sheprd.
@@ -402,10 +440,14 @@ final class Fleet {
         guard let index = machines.firstIndex(where: { $0.id == device }) else { return }
         switch update {
         case let .status(status):
+            log.notice("\(self.machines[index].computer.name, privacy: .public) is \(String(describing: status), privacy: .public)")
             machines[index].status = status
             if case .online = status {} else { machines[index].watching = false }
             if case .revoked = status { stopLink(device) }
-            if case .online = status { onOnline?(machines[index].computer) }
+            if case let .online(origin) = status {
+                onOnline?(machines[index].computer)
+                reportFailures(of: machines[index].computer, at: origin)
+            }
         case let .event(.home(home)):
             // The computer's load moves every few seconds; only the header
             // shows it, so the cache, widgets, and Spotlight wait for a
