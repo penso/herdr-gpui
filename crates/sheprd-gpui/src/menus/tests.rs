@@ -313,6 +313,7 @@ fn view_menu_carries_the_font_size_full_screen_and_zen_commands() {
         ("Devices Overview", Command::DevicesOverview),
         ("Toggle Full Screen", Command::ToggleFullScreen),
         ("Toggle Zen Mode", Command::ToggleZenMode),
+        ("Toggle Pass-Through", Command::TogglePassThrough),
     ];
     assert_eq!(actions.len(), expected.len());
     for ((name, action), (label, command)) in actions.iter().zip(expected) {

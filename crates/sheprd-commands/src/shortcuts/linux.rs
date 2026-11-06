@@ -50,6 +50,7 @@ pub(super) fn defaults(command: Command) -> &'static [&'static str] {
         FocusNextRegion => &["f6"],
         FocusPreviousRegion => &["shift-f6"],
         ToggleZenMode => &["ctrl-alt-z"],
+        TogglePassThrough => &["ctrl-alt-shift-k"],
         // GPUI drops Shift from punctuation: the physical Ctrl-Shift keys
         // arrive as their symbols on Linux (for example Ctrl-Shift-- as Ctrl-_).
         IncreaseFontSize => &["ctrl-shift-=", "ctrl-shift-+", "ctrl-+"],

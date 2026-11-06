@@ -93,6 +93,28 @@ impl SheprdWindow {
                         .child(fl!("status-bar-resize-keys")),
                 )
             })
+            .when_some(
+                self.pass_through
+                    .then(|| self.pass_through_unlock())
+                    .flatten(),
+                |bar, key| {
+                    bar.child(
+                        div()
+                            .debug_selector(|| "pass-through".into())
+                            .flex_none()
+                            .px(px(6.))
+                            .rounded(px(crate::config::corners::SMALL))
+                            .bg(rgb(self.theme.active))
+                            .child(fl!("status-bar-pass-through")),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_color(rgb(self.theme.muted))
+                            .child(fl!("status-bar-pass-through-keys", key = key)),
+                    )
+                },
+            )
             .when(!self.live.status.is_connected(), |bar| {
                 bar.child(self.connection_dot())
             })

@@ -36,6 +36,7 @@ mod monitors;
 pub(crate) use links::PressedLink;
 mod mouse;
 mod next_keys;
+mod pass_through;
 mod pending_input;
 mod plugin_selection;
 pub(crate) mod prefix;
@@ -285,6 +286,8 @@ pub(crate) struct SheprdWindow {
     pub(crate) painter: std::rc::Rc<std::cell::RefCell<terminal_painter::TerminalPainter>>,
     /// A pane moving to another device; a move outlives its menu.
     pub(crate) pane_carry: Option<crate::pane_menu::carry::Carry>,
+    /// The app's keys go to the focused pane; see `pass_through`.
+    pub(crate) pass_through: bool,
     pub(crate) pending_images: Vec<images::PendingImage>,
     pub(crate) pending_input: pending_input::PendingInput,
     pub(crate) pending_navigation: Option<OwnedNavigationTarget>,

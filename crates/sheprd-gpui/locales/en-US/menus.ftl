@@ -38,6 +38,7 @@ menus-reset-font-size = Reset Font Size
 menus-devices-overview = Devices Overview
 menus-toggle-full-screen = Toggle Full Screen
 menus-toggle-zen-mode = Toggle Zen Mode
+menus-toggle-pass-through = Toggle Pass-Through
 
 menus-terminal = Terminal
 menus-split-vertically-right = Split Vertically (Right)

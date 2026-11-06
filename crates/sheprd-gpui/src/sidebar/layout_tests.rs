@@ -616,6 +616,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,
         pane_carry: None,
+        pass_through: false,
         dispatch_job: None,
         dispatch_setups: Default::default(),
         fan_out: None,

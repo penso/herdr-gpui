@@ -79,6 +79,7 @@ impl SheprdWindow {
             && self.menu.page.is_none()
             && self.marked.is_empty()
             && !self.prefix_armed
+            && !self.pass_through
             && !cx.has_active_drag()
             && self.terminal_mouse.is_none()
             && self.selection.is_none()
