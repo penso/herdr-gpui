@@ -13,6 +13,8 @@ use std::sync::{
 pub(super) struct LatestSave<T> {
     wanted: Arc<Mutex<Option<T>>>,
     writing: Arc<Mutex<()>>,
+    /// The last choice made in any window, which writing does not clear.
+    newest: Arc<Mutex<Option<T>>>,
     /// Choices made so far, and the newest of them a save has finished with.
     /// A failed write counts as finished: nothing more is coming for it.
     made: Arc<AtomicU64>,
@@ -34,6 +36,7 @@ impl<T> Default for LatestSave<T> {
         Self {
             wanted: Arc::default(),
             writing: Arc::default(),
+            newest: Arc::default(),
             made: Arc::default(),
             finished: Arc::default(),
         }
@@ -45,18 +48,20 @@ impl<T> Clone for LatestSave<T> {
         Self {
             wanted: self.wanted.clone(),
             writing: self.writing.clone(),
+            newest: self.newest.clone(),
             made: self.made.clone(),
             finished: self.finished.clone(),
         }
     }
 }
 
-impl<T> LatestSave<T> {
+impl<T: Copy> LatestSave<T> {
     /// Makes `value` the choice the next save writes. The UI thread calls
     /// this; it never waits on a write in progress.
     pub(super) fn want(&self, value: T) {
         let mut wanted = self.wanted.lock().unwrap_or_else(PoisonError::into_inner);
         *wanted = Some(value);
+        *self.newest.lock().unwrap_or_else(PoisonError::into_inner) = Some(value);
         self.made.fetch_add(1, Ordering::SeqCst);
     }
 
@@ -68,10 +73,12 @@ impl<T> LatestSave<T> {
         }
     }
 
-    /// Whether a load stamped `stamp` holds the newest choice, rather than
-    /// one the user has since moved on from.
-    fn loaded_newest(&self, stamp: Stamp) -> bool {
-        stamp.current && self.made.load(Ordering::SeqCst) == stamp.made
+    /// The newest choice, when a load stamped `stamp` may hold an older one.
+    fn newer_than(&self, stamp: Stamp) -> Option<T> {
+        if stamp.current && self.made.load(Ordering::SeqCst) == stamp.made {
+            return None;
+        }
+        *self.newest.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Writes the newest choice, if one is still waiting, after any save
@@ -122,18 +129,20 @@ impl LayoutSaves {
         }
     }
 
-    /// Keeps `live`'s layouts in `loaded` where the load may hold an older
-    /// choice. Saving a choice makes every window reload, so without this a
-    /// quick second choice is undone by the reload of the first.
-    pub(crate) fn keep_newer(&self, stamps: LayoutStamps, live: &Config, loaded: &mut Config) {
-        if !self.chat.loaded_newest(stamps.chat) {
-            loaded.chat.layout = live.chat.layout;
+    /// Puts the newest choice in `loaded` where the load may hold an older
+    /// one. Saving a choice makes every window reload, so without this a quick
+    /// second choice is undone by the reload of the first. It is the shared
+    /// choice, not a window's own: a window that did not make it may have just
+    /// read it, and no later reload would bring it back.
+    pub(crate) fn keep_newer(&self, stamps: LayoutStamps, loaded: &mut Config) {
+        if let Some(mode) = self.chat.newer_than(stamps.chat) {
+            loaded.chat.layout = mode;
         }
-        if !self.sidebar.loaded_newest(stamps.sidebar) {
-            loaded.layout.mode = live.layout.mode;
+        if let Some(mode) = self.sidebar.newer_than(stamps.sidebar) {
+            loaded.layout.mode = mode;
         }
-        if !self.tabs.loaded_newest(stamps.tabs) {
-            loaded.tab_layout = live.tab_layout;
+        if let Some(mode) = self.tabs.newer_than(stamps.tabs) {
+            loaded.tab_layout = mode;
         }
     }
 }

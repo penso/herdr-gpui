@@ -75,7 +75,7 @@ fn a_load_with_nothing_pending_shows_the_file() {
     let saves = LayoutSaves::default();
     let stamps = saves.stamp();
     let mut loaded = chats(ChatLayoutMode::Cards);
-    saves.keep_newer(stamps, &chats(ChatLayoutMode::Timeline), &mut loaded);
+    saves.keep_newer(stamps, &mut loaded);
     assert_eq!(loaded.chat.layout, ChatLayoutMode::Cards);
 }
 
@@ -85,7 +85,7 @@ fn a_choice_made_during_a_load_outlives_it() {
     let stamps = saves.stamp();
     saves.chat.want(ChatLayoutMode::Bubbles);
     let mut loaded = chats(ChatLayoutMode::Cards);
-    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    saves.keep_newer(stamps, &mut loaded);
     assert_eq!(loaded.chat.layout, ChatLayoutMode::Bubbles);
 }
 
@@ -96,7 +96,7 @@ fn a_load_started_before_a_save_finished_may_be_stale_even_after_it() {
     let stamps = saves.stamp();
     write(&saves);
     let mut loaded = chats(ChatLayoutMode::Cards);
-    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    saves.keep_newer(stamps, &mut loaded);
     assert_eq!(loaded.chat.layout, ChatLayoutMode::Bubbles);
 }
 
@@ -107,7 +107,7 @@ fn the_reload_of_a_finished_save_shows_the_file_again() {
     write(&saves);
     let stamps = saves.stamp();
     let mut loaded = chats(ChatLayoutMode::Cards);
-    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    saves.keep_newer(stamps, &mut loaded);
     assert_eq!(loaded.chat.layout, ChatLayoutMode::Cards);
 }
 
@@ -121,7 +121,7 @@ fn a_failed_save_leaves_nothing_pending() {
     assert!(failed.is_err());
     let stamps = saves.stamp();
     let mut loaded = chats(ChatLayoutMode::Cards);
-    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    saves.keep_newer(stamps, &mut loaded);
     assert_eq!(loaded.chat.layout, ChatLayoutMode::Cards);
 }
 
@@ -130,10 +130,21 @@ fn each_layout_keeps_only_its_own_choice() {
     let saves = LayoutSaves::default();
     let stamps = saves.stamp();
     saves.tabs.want(TabLayoutMode::Cards);
-    let mut live = chats(ChatLayoutMode::Bubbles);
-    live.tab_layout = TabLayoutMode::Cards;
     let mut loaded = chats(ChatLayoutMode::Timeline);
-    saves.keep_newer(stamps, &live, &mut loaded);
+    saves.keep_newer(stamps, &mut loaded);
     assert_eq!(loaded.tab_layout, TabLayoutMode::Cards);
     assert_eq!(loaded.chat.layout, ChatLayoutMode::Timeline);
+}
+
+#[test]
+fn a_window_that_did_not_choose_still_gets_the_choice() {
+    let saves = LayoutSaves::default();
+    saves.chat.want(ChatLayoutMode::Bubbles);
+    // Another window's reload starts with the save unfinished, so its load
+    // may be stale, and no later change to the file would correct it.
+    let stamps = saves.stamp();
+    write(&saves);
+    let mut loaded = chats(ChatLayoutMode::Timeline);
+    saves.keep_newer(stamps, &mut loaded);
+    assert_eq!(loaded.chat.layout, ChatLayoutMode::Bubbles);
 }

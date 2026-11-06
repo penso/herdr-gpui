@@ -182,7 +182,7 @@ impl SheprdWindow {
                         crate::settings_window::apply_loaded_sidebar(&mut config, sidebar_revision, cx);
                         crate::settings_window::apply_loaded_theme(&mut config, &mut theme, theme_revision, cx);
                         cx.default_global::<crate::window::LayoutSaves>()
-                            .keep_newer(layouts, &this.config, &mut config);
+                            .keep_newer(layouts, &mut config);
                         if let Some(shared) = &this.settings.shared {
                             config.apply_shared_notifications(shared);
                         }
