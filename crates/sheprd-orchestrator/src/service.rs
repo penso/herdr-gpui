@@ -583,6 +583,7 @@ impl Worker {
                 tracing::debug!(%error, "Cannot cache the repository");
             }
         }
+        self.settle_beads(&info)?;
         if let Some(branches) = extras.branches {
             self.snapshot.branches = Arc::new(branches);
             self.branches_fresh = true;
@@ -650,8 +651,7 @@ impl Worker {
                 "Cannot carry over agent-launcher's database"
             );
         }
-        let mut store = Store::open(&path)?;
-        sources::settle_beads(&mut store, &info);
+        let store = Store::open(&path)?;
         self.snapshot.access = Some(store.access());
         self.snapshot.sources = statuses(&info);
         self.site = Some(Site {

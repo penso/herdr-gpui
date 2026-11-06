@@ -109,3 +109,17 @@ fn a_project_without_beads_forgets_its_tasks_and_keeps_its_runs() {
     assert_eq!(sources(&store), ["sheprd-labs/sheprd"]);
     assert_eq!(store.runs().unwrap()[0].item_key, saved.item_key);
 }
+
+#[test]
+fn an_action_in_flight_cannot_undo_a_moved_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = stored(&dir);
+    let mut read_before = bead_run("r1", "/app");
+    store.save_run(&read_before, None).unwrap();
+    store.settle_beads(Some(&source("/shared"))).unwrap();
+    read_before.state = RunState::Cancelled;
+    store.update_run(&read_before, None).unwrap();
+    let saved = store.runs().unwrap().remove(0);
+    assert_eq!(saved.state, RunState::Cancelled);
+    assert_eq!(saved.item_key, bead_run("r1", "/shared").item_key);
+}

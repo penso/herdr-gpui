@@ -2,7 +2,7 @@
 //! CLI's say in whether a remote is a GitLab project.
 
 use super::{
-    Access, Item, Provider, RepoInfo, SourceKey, SourceStatus, Store, SyncState, Worker, gitlab,
+    Access, Item, Provider, RepoInfo, Result, SourceKey, SourceStatus, SyncState, Worker, gitlab,
 };
 
 impl SyncState {
@@ -26,6 +26,29 @@ impl Worker {
             };
         }
     }
+
+    /// Brings the store to `info`'s Beads source, then reads it again. `info`
+    /// must be what was just discovered: a cached one can be older than what
+    /// another checkout of the repository synced, and settling on it would
+    /// forget those tasks. Failing leaves the old rows, which
+    /// [`keep_current_beads`] still hides.
+    pub(super) fn settle_beads(&mut self, info: &RepoInfo) -> Result<()> {
+        let Some(store) = self
+            .store
+            .as_mut()
+            .filter(|store| matches!(store.access(), Access::ReadWrite))
+        else {
+            return Ok(());
+        };
+        if let Err(error) = store.settle_beads(info.beads_source().as_ref()) {
+            tracing::warn!(
+                category = "orchestrator",
+                %error,
+                "Cannot bring the stored beads to the project's source"
+            );
+        }
+        self.reload()
+    }
 }
 
 /// Makes `info`'s remote a GitLab source when glab knows its host; returns
@@ -37,21 +60,6 @@ pub(super) fn recognize(
     info.remote
         .as_mut()
         .is_some_and(|remote| gitlab::recognize(&mut remote.source, cli))
-}
-
-/// Brings `store` to `info`'s Beads source, for everything that reads it.
-/// Failing leaves the old rows, which [`keep_current_beads`] still hides.
-pub(super) fn settle_beads(store: &mut Store, info: &RepoInfo) {
-    if !matches!(store.access(), Access::ReadWrite) {
-        return;
-    }
-    if let Err(error) = store.settle_beads(info.beads_source().as_ref()) {
-        tracing::warn!(
-            category = "orchestrator",
-            %error,
-            "Cannot bring the stored beads to the project's source"
-        );
-    }
 }
 
 /// Drops beads of any source but `info`'s. A database this build cannot

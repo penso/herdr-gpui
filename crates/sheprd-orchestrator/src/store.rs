@@ -400,10 +400,13 @@ impl Store {
             .as_ref()
             .map(|workspace| encode("workspace_json", workspace))
             .transpose()?;
+        // A run's task is set once: `issue_key` stays out of the update, so
+        // an action that read the run before `settle_beads` moved it cannot
+        // write the old key back.
         transaction.execute(
             &format!(
                 "INSERT INTO runs ({RUN_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
-                 ON CONFLICT(id) DO UPDATE SET issue_key = excluded.issue_key, \
+                 ON CONFLICT(id) DO UPDATE SET \
                  workspace_json = excluded.workspace_json, agent = excluded.agent, \
                  model = excluded.model, state_json = excluded.state_json, \
                  message = excluded.message, session_id = excluded.session_id, \
