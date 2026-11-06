@@ -7,6 +7,7 @@ use crate::harness::tests::{file_name, file_uri};
 
 mod background;
 mod settings;
+mod tasks;
 mod turns;
 
 const SESSION: &str = "c3a1e0d4-0000-4000-8000-000000000001";
