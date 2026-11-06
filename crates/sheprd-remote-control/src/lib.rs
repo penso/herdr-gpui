@@ -11,6 +11,7 @@ pub mod app;
 #[cfg(feature = "server")]
 mod auth;
 pub mod control;
+pub mod core_target;
 mod error;
 #[cfg(feature = "server")]
 mod hub;

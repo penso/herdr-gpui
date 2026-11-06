@@ -147,3 +147,5 @@ fn serve_takes_the_daemon_and_chat_locations_herdr_ui_resolved() {
         Err(ParseError::Missing("--chat-dir"))
     );
 }
+
+mod core_endpoint;
