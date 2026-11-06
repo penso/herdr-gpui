@@ -116,3 +116,23 @@ fn a_work_item_stores_its_description_as_markdown() {
     let empty = node("<div> </div>").into_item(&source, web);
     assert_eq!(empty.description, None);
 }
+
+#[test]
+fn a_bracket_before_another_opens_no_tag() {
+    assert_eq!(to_markdown("<a <b>x"), "<a x");
+}
+
+/// Quadratic scanning would not finish this in any reasonable test run.
+#[test]
+fn many_unclosed_brackets_are_read_once() {
+    let brackets = "<".repeat(1_000_000);
+    let html = format!("{brackets}>");
+    assert_eq!(to_markdown(&html), html);
+    let tags = "<a ".repeat(300_000);
+    // Only the last `<a >` closes, so it alone is a tag.
+    let last_tag_and_space = "<a  ".len();
+    assert_eq!(
+        to_markdown(&format!("{tags}>")).len(),
+        tags.len() - last_tag_and_space
+    );
+}

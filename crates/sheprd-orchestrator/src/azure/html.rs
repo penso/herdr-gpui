@@ -37,11 +37,17 @@ pub fn to_markdown(html: &str) -> String {
             at = past(&lower, start, "-->");
             continue;
         }
-        let Some(length) = html[start..].find('>') else {
-            at = start;
-            break;
+        // A tag ends before the next `<`, so no byte is searched twice however
+        // many unclosed brackets a description holds.
+        let end = html[start + 1..]
+            .find(['<', '>'])
+            .map(|found| start + 1 + found)
+            .filter(|end| html.as_bytes()[*end] == b'>');
+        let Some(end) = end else {
+            writer.text("<");
+            at = start + 1;
+            continue;
         };
-        let end = start + length;
         let tag = &html[start + 1..end];
         let (closing, body) = match tag.strip_prefix('/') {
             Some(body) => (true, body),
