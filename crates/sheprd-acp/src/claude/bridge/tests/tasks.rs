@@ -256,3 +256,77 @@ fn task_stop_is_still_a_call() {
     );
     assert_eq!(update(&outs[0])["sessionUpdate"], "tool_call");
 }
+
+/// The results of `calls` in one message, which leaves out the structured
+/// form, each as `(call id, text)`.
+fn together(bridge: &mut Bridge, calls: &[(&str, &str)]) -> Vec<Out> {
+    let content: Vec<Value> = calls
+        .iter()
+        .map(|(id, text)| json!({"type": "tool_result", "tool_use_id": id, "content": text}))
+        .collect();
+    bridge.on_harness(&json!({
+        "type": "user",
+        "parent_tool_use_id": null,
+        "message": {"role": "user", "content": content},
+        "tool_use_result": {"tasks": []},
+    }))
+}
+
+#[test]
+fn a_list_is_read_from_its_text_when_results_share_a_message() {
+    let mut bridge = started();
+    create(&mut bridge, "1", "Fix it (urgent)");
+    call(&mut bridge, "toolu_r", "Read", json!({"file_path": "/a"}));
+    call(&mut bridge, "toolu_l", "TaskList", json!({}));
+    let outs = together(
+        &mut bridge,
+        &[
+            ("toolu_r", "text"),
+            (
+                "toolu_l",
+                "#1 [in_progress] Fix it (urgent) (agent-1)\n\
+                 #2 [pending] Ship it [blocked by #1, #3]\n\
+                 #3 [completed] Earlier (agent-2)",
+            ),
+        ],
+    );
+    assert_eq!(outs.len(), 2, "the read's card and the plan");
+    assert_eq!(
+        steps(&outs[1..]),
+        pairs(&[
+            ("Fix it (urgent)", "in_progress"),
+            ("Ship it", "pending"),
+            ("Earlier (agent-2)", "completed"),
+        ]),
+        "a known subject stands; an owner stays on one not known"
+    );
+}
+
+#[test]
+fn an_empty_list_in_text_clears_the_plan() {
+    let mut bridge = started();
+    create(&mut bridge, "1", "alpha");
+    call(&mut bridge, "toolu_r", "Read", json!({"file_path": "/a"}));
+    call(&mut bridge, "toolu_l", "TaskList", json!({}));
+    let outs = together(
+        &mut bridge,
+        &[("toolu_r", "text"), ("toolu_l", "No tasks found")],
+    );
+    assert_eq!(steps(&outs[1..]), pairs(&[]));
+}
+
+#[test]
+fn text_that_is_not_all_a_list_leaves_the_plan() {
+    let mut bridge = started();
+    create(&mut bridge, "1", "alpha");
+    for (id, text) in [
+        ("toolu_a", "#1 [completed] alpha\nsomething else"),
+        ("toolu_b", "#1 [odd] alpha"),
+        ("toolu_c", "Could not read the tasks"),
+    ] {
+        call(&mut bridge, "toolu_r", "Read", json!({"file_path": "/a"}));
+        call(&mut bridge, id, "TaskList", json!({}));
+        let outs = together(&mut bridge, &[("toolu_r", "text"), (id, text)]);
+        assert_eq!(outs.len(), 1, "only the read's card for {id}");
+    }
+}
