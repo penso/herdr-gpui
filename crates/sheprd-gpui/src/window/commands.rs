@@ -144,6 +144,7 @@ impl SheprdWindow {
             cx.global_mut::<InitialAppearance>().config.chat.layout = mode;
         }
         self.chats.relayout(mode);
+        crate::menus::install(cx);
         cx.notify();
         let saves = cx.default_global::<LayoutSaves>().chat.clone();
         saves.want(mode);

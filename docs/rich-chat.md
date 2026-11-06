@@ -30,7 +30,7 @@ conversation, drawn in that layout's style and cut to two lines. Reading back
 through earlier turns pins the prompt of the turn you are in. Click it to go to
 the prompt.
 
-Select a layout directly with:
+Pick one from **View > Agent Layout**, or select a layout directly with:
 
 ```sh
 sheprd config set chat.layout bubbles
