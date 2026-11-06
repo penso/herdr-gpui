@@ -59,3 +59,81 @@ fn a_choice_made_during_a_write_lands_after_it() {
         [TabLayoutMode::Pills, TabLayoutMode::Cards]
     );
 }
+
+fn chats(mode: ChatLayoutMode) -> Config {
+    let mut config = Config::default();
+    config.chat.layout = mode;
+    config
+}
+
+fn write(saves: &LayoutSaves) {
+    saves.chat.write_latest(|_| Ok(())).unwrap();
+}
+
+#[test]
+fn a_load_with_nothing_pending_shows_the_file() {
+    let saves = LayoutSaves::default();
+    let stamps = saves.stamp();
+    let mut loaded = chats(ChatLayoutMode::Cards);
+    saves.keep_newer(stamps, &chats(ChatLayoutMode::Timeline), &mut loaded);
+    assert_eq!(loaded.chat.layout, ChatLayoutMode::Cards);
+}
+
+#[test]
+fn a_choice_made_during_a_load_outlives_it() {
+    let saves = LayoutSaves::default();
+    let stamps = saves.stamp();
+    saves.chat.want(ChatLayoutMode::Bubbles);
+    let mut loaded = chats(ChatLayoutMode::Cards);
+    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    assert_eq!(loaded.chat.layout, ChatLayoutMode::Bubbles);
+}
+
+#[test]
+fn a_load_started_before_a_save_finished_may_be_stale_even_after_it() {
+    let saves = LayoutSaves::default();
+    saves.chat.want(ChatLayoutMode::Bubbles);
+    let stamps = saves.stamp();
+    write(&saves);
+    let mut loaded = chats(ChatLayoutMode::Cards);
+    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    assert_eq!(loaded.chat.layout, ChatLayoutMode::Bubbles);
+}
+
+#[test]
+fn the_reload_of_a_finished_save_shows_the_file_again() {
+    let saves = LayoutSaves::default();
+    saves.chat.want(ChatLayoutMode::Bubbles);
+    write(&saves);
+    let stamps = saves.stamp();
+    let mut loaded = chats(ChatLayoutMode::Cards);
+    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    assert_eq!(loaded.chat.layout, ChatLayoutMode::Cards);
+}
+
+#[test]
+fn a_failed_save_leaves_nothing_pending() {
+    let saves = LayoutSaves::default();
+    saves.chat.want(ChatLayoutMode::Bubbles);
+    let failed = saves
+        .chat
+        .write_latest(|_| Err(crate::Error::from(std::io::Error::other("full"))));
+    assert!(failed.is_err());
+    let stamps = saves.stamp();
+    let mut loaded = chats(ChatLayoutMode::Cards);
+    saves.keep_newer(stamps, &chats(ChatLayoutMode::Bubbles), &mut loaded);
+    assert_eq!(loaded.chat.layout, ChatLayoutMode::Cards);
+}
+
+#[test]
+fn each_layout_keeps_only_its_own_choice() {
+    let saves = LayoutSaves::default();
+    let stamps = saves.stamp();
+    saves.tabs.want(TabLayoutMode::Cards);
+    let mut live = chats(ChatLayoutMode::Bubbles);
+    live.tab_layout = TabLayoutMode::Cards;
+    let mut loaded = chats(ChatLayoutMode::Timeline);
+    saves.keep_newer(stamps, &live, &mut loaded);
+    assert_eq!(loaded.tab_layout, TabLayoutMode::Cards);
+    assert_eq!(loaded.chat.layout, ChatLayoutMode::Timeline);
+}

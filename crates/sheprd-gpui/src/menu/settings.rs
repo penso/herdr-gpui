@@ -166,6 +166,7 @@ impl SheprdWindow {
         let theme_revision = crate::settings_window::theme_load_revision(cx);
         let layout_revision = crate::settings_window::layout_load_revision(cx);
         let sidebar_revision = crate::settings_window::sidebar_load_revision(cx);
+        let layouts = cx.default_global::<crate::window::LayoutSaves>().stamp();
         // Loaders resolve the theme for the appearance when they start.
         let light = crate::app::light_appearance(cx);
         let load = cx.background_executor().spawn(async move { load() });
@@ -180,6 +181,8 @@ impl SheprdWindow {
                         crate::settings_window::apply_loaded_layout(&mut config, layout_revision, cx);
                         crate::settings_window::apply_loaded_sidebar(&mut config, sidebar_revision, cx);
                         crate::settings_window::apply_loaded_theme(&mut config, &mut theme, theme_revision, cx);
+                        cx.default_global::<crate::window::LayoutSaves>()
+                            .keep_newer(layouts, &this.config, &mut config);
                         if let Some(shared) = &this.settings.shared {
                             config.apply_shared_notifications(shared);
                         }
