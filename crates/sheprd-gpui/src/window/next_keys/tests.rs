@@ -287,3 +287,102 @@ fn custom_commands_appear_only_while_connected(cx: &mut TestAppContext) {
     wait(cx);
     assert!(listed(&view, cx));
 }
+
+#[test]
+fn columns_leave_room_for_the_gaps_between_them() {
+    let width = 380.;
+    assert_eq!(columns_within(width * 2., width), 1, "no room for the gap");
+    assert_eq!(columns_within(width * 2. + COLUMN_GAP, width), 2);
+    assert_eq!(columns_within(10., width), 1, "always one");
+    assert_eq!(columns_within(100_000., width), MAX_COLUMNS);
+}
+
+#[test]
+fn its_fade_out_still_counts_as_showing() {
+    let closed_at = Instant::now();
+    let mut panel = NextKeys::default();
+    assert!(!panel.showing(closed_at), "never opened");
+    panel.toggle.set(true, closed_at, true);
+    panel.toggle.set(false, closed_at, false);
+    assert!(!panel.is_open());
+    assert!(panel.showing(closed_at), "it is still fading");
+    assert!(!panel.showing(closed_at + motion::LEAVE * 2));
+}
+
+#[gpui::test]
+fn a_new_custom_command_joins_the_open_panel(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    view.update(cx, |view, _| view.live.status = ConnectionStatus::Connected);
+    press("cmd-j", cx);
+    wait(cx);
+    view.update(cx, |view, cx| {
+        Arc::make_mut(view.live.snapshot.as_mut().unwrap()).commands =
+            vec![command("deploy", "prefix+y")];
+        view.sync_next_keys(cx);
+    });
+    view.read_with(cx, |view, _| {
+        assert!(view.next_keys.is_open());
+        assert!(find(&view.next_keys.groups, "y").is_some());
+    });
+}
+
+#[gpui::test]
+fn a_lost_connection_takes_custom_commands_off_the_open_panel(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    view.update(cx, |view, _| {
+        Arc::make_mut(view.live.snapshot.as_mut().unwrap()).commands =
+            vec![command("deploy", "prefix+y")];
+        view.live.status = ConnectionStatus::Connected;
+    });
+    press("cmd-j", cx);
+    wait(cx);
+    view.update(cx, |view, cx| {
+        view.live.status = ConnectionStatus::Disconnected;
+        view.sync_next_keys(cx);
+    });
+    view.read_with(cx, |view, _| {
+        assert!(view.next_keys.is_open(), "the keymap's chords remain");
+        assert!(find(&view.next_keys.groups, "y").is_none());
+    });
+}
+
+#[gpui::test]
+fn a_reload_that_moves_the_prefix_ends_the_chord(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    press("cmd-j", cx);
+    wait(cx);
+    view.update(cx, |view, cx| {
+        view.config.keybindings = keymap("prefix = 'cmd+k'\ntoggle_sidebar = 'prefix+b'", &[]);
+        view.sync_next_keys(cx);
+    });
+    assert!(!open(&view, cx));
+    view.read_with(cx, |view, _| assert!(!view.prefix_armed));
+}
+
+#[gpui::test]
+fn a_reload_that_drops_a_chord_takes_it_off_the_open_panel(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    press("cmd-j", cx);
+    wait(cx);
+    view.update(cx, |view, cx| {
+        view.config.keybindings = keymap("prefix = 'cmd+j'\ntoggle_sidebar = 'prefix+x'", &[]);
+        view.sync_next_keys(cx);
+    });
+    view.read_with(cx, |view, _| {
+        assert!(view.next_keys.is_open());
+        assert!(find(&view.next_keys.groups, "x").is_some());
+        assert!(find(&view.next_keys.groups, "cmd-b").is_none());
+    });
+}
+
+#[gpui::test]
+fn the_poll_keeps_the_panel_current(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    press("cmd-j", cx);
+    wait(cx);
+    view.update(cx, |view, cx| {
+        view.config.keybindings = keymap("prefix = 'cmd+k'\ntoggle_sidebar = 'prefix+b'", &[]);
+        view.poll_endpoints(cx);
+    });
+    assert!(!open(&view, cx));
+}
