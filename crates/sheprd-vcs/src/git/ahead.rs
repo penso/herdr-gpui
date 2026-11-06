@@ -7,7 +7,7 @@
 //! nothing here contacts a remote.
 
 use super::{CACHE_LIMIT, git};
-use sheprd_github::pull_request::{Input, local_checkout};
+use sheprd_github::pull_request::{Input, Remote, base_repository, local_checkout};
 use std::{
     collections::VecDeque,
     time::{Duration, Instant},
@@ -16,8 +16,6 @@ use std::{
 /// The most commits counted, which also bounds what Git prints. A branch this
 /// far ahead reads the same to a person at any larger number.
 const COUNT_LIMIT: &str = "--max-count=1000";
-/// The remotes a pull request could target, as `base_repository` prefers them.
-const REMOTES: [&str; 2] = ["upstream", "origin"];
 
 /// A branch's commits that its default branch does not have.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,9 +99,11 @@ impl Cache {
     }
 }
 
-/// What `input`'s branch holds beyond the default branch. `None` when it is
-/// the default branch, holds nothing more, or no remote names a default
-/// branch, which a fresh `git init` with a remote added by hand does not.
+/// What `input`'s branch holds beyond the default branch of the repository
+/// its pull requests target, the one the lookup asks. `None` when it is that
+/// branch, holds nothing more, or that remote names no default branch, as a
+/// remote added by hand may not. Another remote's default branch would answer
+/// for the wrong repository: a fork's can already hold the commits.
 pub(super) fn read(
     input: &Input,
     timeout: Duration,
@@ -111,7 +111,8 @@ pub(super) fn read(
 ) -> crate::Result<Option<Ahead>> {
     let deadline = Instant::now() + timeout;
     let checkout = local_checkout(input, deadline, cancelled)?;
-    let Some((base, default)) = default_branch(&checkout, deadline, cancelled)? else {
+    let remote = base_repository(&checkout, deadline, cancelled)?.remote;
+    let Some((base, default)) = default_branch(&checkout, remote, deadline, cancelled)? else {
         return Ok(None);
     };
     if input.branch == default {
@@ -127,32 +128,32 @@ pub(super) fn read(
     Ok(parse(&list))
 }
 
-/// The first remote's default branch, as its full ref and its short name.
+/// `remote`'s default branch, as its full ref and its short name.
 fn default_branch(
     checkout: &str,
+    remote: Remote,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Option<(String, String)>> {
-    for remote in REMOTES {
-        let head = format!("refs/remotes/{remote}/HEAD");
-        let base = match git(
-            checkout,
-            &["symbolic-ref", "--quiet", &head],
-            "read the default branch",
-            deadline,
-            cancelled,
-        ) {
-            Ok(base) => base,
-            // Exits nonzero for a remote that names no default branch.
-            Err(crate::Error::Git(super::Error::Failed { .. })) => continue,
-            Err(error) => return Err(error),
-        };
-        let prefix = format!("refs/remotes/{remote}/");
-        if let Some(default) = base.strip_prefix(&prefix).map(str::to_owned) {
-            return Ok(Some((base, default)));
-        }
-    }
-    Ok(None)
+    let remote = remote.name();
+    let head = format!("refs/remotes/{remote}/HEAD");
+    let base = match git(
+        checkout,
+        &["symbolic-ref", "--quiet", &head],
+        "read the default branch",
+        deadline,
+        cancelled,
+    ) {
+        Ok(base) => base,
+        // Exits nonzero for a remote that names no default branch.
+        Err(crate::Error::Git(super::Error::Failed { .. })) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let prefix = format!("refs/remotes/{remote}/");
+    let Some(default) = base.strip_prefix(&prefix).map(str::to_owned) else {
+        return Ok(None);
+    };
+    Ok(Some((base, default)))
 }
 
 /// `rev-list` of one start point prints that tip first, one commit per line.

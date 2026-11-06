@@ -37,11 +37,33 @@ fn read(input: &Input) -> Option<Ahead> {
     crate::git::ahead::read(input, Duration::from_secs(15), &|| false).unwrap()
 }
 
+const ORIGIN: &str = "https://github.com/contributor/project.git";
+const UPSTREAM: &str = "https://github.com/base-owner/project.git";
+
+/// Name `upstream` and point its `main` at `start`, leaving its default
+/// branch unnamed, as a remote added by hand may.
+fn add_upstream(path: &Path, url: &str, start: &str) {
+    run_git(path, &["config", "remote.upstream.url", url]);
+    run_git(path, &["update-ref", "refs/remotes/upstream/main", start]);
+}
+
+fn name_upstream_default(path: &Path) {
+    run_git(
+        path,
+        &[
+            "symbolic-ref",
+            "refs/remotes/upstream/HEAD",
+            "refs/remotes/upstream/main",
+        ],
+    );
+}
+
 /// A repository on `main` whose `origin` names `main` as its default branch.
 fn repository() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path();
     run_git(path, &["init", "-b", "main"]);
+    run_git(path, &["config", "remote.origin.url", ORIGIN]);
     run_git(path, &["commit", "--allow-empty", "-m", "initial"]);
     run_git(path, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
     run_git(
@@ -98,8 +120,22 @@ fn a_repository_without_a_named_default_branch_says_nothing() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path();
     run_git(path, &["init", "-b", "feature"]);
+    run_git(path, &["config", "remote.origin.url", ORIGIN]);
     run_git(path, &["commit", "--allow-empty", "-m", "initial"]);
     assert_eq!(read(&input_at(path, "feature")), None);
+}
+
+#[test]
+fn a_checkout_outside_github_is_not_read() {
+    let directory = repository();
+    let path = directory.path();
+    let url = "https://example.invalid/project.git";
+    run_git(path, &["config", "remote.origin.url", url]);
+    run_git(path, &["switch", "-c", "feature"]);
+    run_git(path, &["commit", "--allow-empty", "-m", "one"]);
+    let input = input_at(path, "feature");
+    let read = crate::git::ahead::read(&input, Duration::from_secs(15), &|| false);
+    assert!(matches!(read, Err(crate::Error::GitHub(_))));
 }
 
 #[test]
@@ -110,19 +146,39 @@ fn a_fork_counts_against_upstream() {
     run_git(path, &["commit", "--allow-empty", "-m", "one"]);
     // The fork's own default branch already has that commit; upstream's lacks it.
     run_git(path, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
-    run_git(
-        path,
-        &["update-ref", "refs/remotes/upstream/main", "HEAD~1"],
-    );
-    run_git(
-        path,
-        &[
-            "symbolic-ref",
-            "refs/remotes/upstream/HEAD",
-            "refs/remotes/upstream/main",
-        ],
-    );
+    add_upstream(path, UPSTREAM, "HEAD~1");
+    name_upstream_default(path);
     assert_eq!(read(&input_at(path, "feature")).unwrap().commits, 1);
+}
+
+#[test]
+fn a_fork_never_counts_against_its_own_default_branch() {
+    let directory = repository();
+    let path = directory.path();
+    run_git(path, &["switch", "-c", "feature"]);
+    run_git(path, &["commit", "--allow-empty", "-m", "one"]);
+    run_git(path, &["commit", "--allow-empty", "-m", "two"]);
+    // Pull requests target upstream, which names no default branch here.
+    // Origin's is one commit behind, and would give a wrong count of one.
+    run_git(path, &["update-ref", "refs/remotes/origin/main", "HEAD~1"]);
+    add_upstream(path, UPSTREAM, "HEAD~2");
+    assert_eq!(read(&input_at(path, "feature")), None);
+}
+
+#[test]
+fn an_upstream_the_lookup_ignores_is_not_counted_against() {
+    let directory = repository();
+    let path = directory.path();
+    run_git(path, &["switch", "-c", "feature"]);
+    run_git(path, &["commit", "--allow-empty", "-m", "one"]);
+    let input = input_at(path, "feature");
+    // Neither of these is where the pull request goes, and each holds the
+    // commit, so counting against it would hide the mark.
+    for url in ["https://example.invalid/project.git", ORIGIN] {
+        add_upstream(path, url, "HEAD");
+        name_upstream_default(path);
+        assert_eq!(read(&input).unwrap().commits, 1, "{url}");
+    }
 }
 
 #[test]
