@@ -13,6 +13,11 @@ use std::time::{Duration, Instant};
 /// for the window's own: a click just before leaving is answered after it.
 const LEAVING: Duration = Duration::from_secs(2);
 
+/// How long the window's input must have been quiet before a focus moves it.
+/// A host is not trusted with what is typed for another: anything on it can
+/// ask for a focus, and keys following the switch would go there.
+const TYPING: Duration = Duration::from_secs(1);
+
 /// Whether going from `old` to `new` shows someone asking for a focus.
 ///
 /// Only a move between two tabs that both still exist counts. Herdr keeps a
@@ -46,10 +51,21 @@ impl Endpoint {
 impl SheprdWindow {
     /// Shows the host a focus was asked for on, as the window already does
     /// for the host it shows. The daemon has put this connection on the
-    /// target, so selecting the host is all it takes. A focus the window
-    /// passes up is dropped, not kept for later: a dialog stays open, and a
-    /// host another window shows stays there.
+    /// target, so switching to the host is all it takes, and the saved
+    /// selection stays the user's own: a host cannot set what the next launch
+    /// shows.
+    ///
+    /// A focus waits while the user types, since a command typed in a pane
+    /// here ends with its own Enter. One the window passes up is dropped, not
+    /// kept for later: a dialog stays open, and a host another window shows
+    /// stays there.
     pub(crate) fn follow_focus(&mut self, own: WindowId, now: Instant, cx: &mut Context<Self>) {
+        if self
+            .last_input
+            .is_some_and(|last| now.saturating_duration_since(last) < TYPING)
+        {
+            return;
+        }
         let selected = self.selected_endpoint;
         let mut followed = None;
         for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
@@ -70,7 +86,7 @@ impl SheprdWindow {
             return;
         }
         let id = endpoint.id.clone();
-        self.select_endpoint(&id, cx);
+        self.switch_endpoint(&id, cx);
     }
 }
 

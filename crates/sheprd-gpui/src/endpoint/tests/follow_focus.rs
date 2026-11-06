@@ -148,12 +148,13 @@ fn shown(view: &gpui::Entity<SheprdWindow>, cx: &mut VisualTestContext) -> Strin
 }
 
 #[gpui::test]
-fn the_window_follows_a_focus_to_the_host_and_remembers_it(cx: &mut TestAppContext) {
+fn the_window_follows_a_focus_without_touching_the_saved_selection(cx: &mut TestAppContext) {
     let (view, cx) = window_with_focus_asked_for(cx);
     follow(&view, Instant::now(), cx);
     assert_eq!(shown(&view, cx), HOST);
     view.read_with(cx, |view, _| {
-        assert_eq!(view.catalog.desired.as_deref(), Some(HOST));
+        assert_eq!(view.catalog.desired, None);
+        assert!(view.catalog.queued_write.is_none());
         assert!(!view.endpoints[1].focus_requested);
     });
 }
@@ -168,6 +169,17 @@ fn a_host_just_left_answers_the_windows_own_click_without_taking_it_back(cx: &mu
     // A later focus is someone asking again.
     ask_for_focus(&view, on_tab("t0", 3), cx);
     follow(&view, left + Duration::from_secs(5), cx);
+    assert_eq!(shown(&view, cx), HOST);
+}
+
+#[gpui::test]
+fn a_focus_waits_for_the_user_to_stop_typing(cx: &mut TestAppContext) {
+    let (view, cx) = window_with_focus_asked_for(cx);
+    let typed = Instant::now();
+    view.update(cx, |view, _| view.last_input = Some(typed));
+    follow(&view, typed + Duration::from_millis(500), cx);
+    assert_eq!(shown(&view, cx), LOCAL);
+    follow(&view, typed + Duration::from_secs(2), cx);
     assert_eq!(shown(&view, cx), HOST);
 }
 
