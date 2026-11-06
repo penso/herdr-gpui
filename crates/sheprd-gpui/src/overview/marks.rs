@@ -271,9 +271,16 @@ impl Marks {
         rows: impl IntoIterator<Item = (&'a Key, State)>,
         now: SystemTime,
     ) -> bool {
-        let mut changed = false;
+        // Keyed once for the tick rather than scanned per row: the window hands
+        // in every shown row, so looking each one up across all the marks was
+        // rows × marks every 16 ms.
+        let mut states: std::collections::HashMap<&Key, State> = std::collections::HashMap::new();
         for (key, state) in rows {
-            let Some(mark) = self.marks.iter_mut().find(|mark| mark.key == *key) else {
+            states.entry(key).or_insert(state);
+        }
+        let mut changed = false;
+        for mark in &mut self.marks {
+            let Some(&state) = states.get(&mark.key) else {
                 continue;
             };
             let Some((hold, _)) = mark.held else {
