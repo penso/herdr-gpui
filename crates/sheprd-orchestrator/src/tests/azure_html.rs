@@ -48,10 +48,7 @@ fn only_web_addresses_become_links() {
 
 #[test]
 fn a_link_around_no_text_is_dropped_and_an_open_one_is_closed() {
-    assert_eq!(
-        to_markdown(r#"<a href="https://example.test"><img src="x.png"></a>"#),
-        ""
-    );
+    assert_eq!(to_markdown(r#"<a href="https://example.test"> </a>"#), "");
     assert_eq!(
         to_markdown(r#"<a href="https://example.test">Open"#),
         "[Open](https://example.test)"
@@ -134,5 +131,21 @@ fn many_unclosed_brackets_are_read_once() {
     assert_eq!(
         to_markdown(&format!("{tags}>")).len(),
         tags.len() - last_tag_and_space
+    );
+}
+
+#[test]
+fn media_keeps_a_bare_tag_for_the_views_placeholder() {
+    assert_eq!(
+        to_markdown(r#"<p><IMG src="diagram.png" alt="Diagram"></p>"#),
+        "<img>"
+    );
+    assert_eq!(
+        to_markdown(r#"<video src="demo.mp4"></video>after"#),
+        "<video>after"
+    );
+    assert_eq!(
+        to_markdown(r#"<a href="https://example.test"><img src="x.png"></a>"#),
+        "[<img>](https://example.test)"
     );
 }

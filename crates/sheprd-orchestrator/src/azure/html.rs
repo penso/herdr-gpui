@@ -21,6 +21,8 @@ const BLOCKS: &[&str] = &[
     "ul",
 ];
 const LINES: &[&str] = &["br", "tr"];
+/// Tags the views stand a placeholder in for.
+const MEDIA: &[&str] = &["img", "video"];
 /// Tags whose content is not text to show.
 const HIDDEN: &[&str] = &["script", "style"];
 
@@ -150,6 +152,13 @@ impl Writer {
                 }
             }
             _ if LINES.contains(&name) => self.breaks(1),
+            // Bare, so the views show their placeholder however long the
+            // address, which only a signed-in browser could open anyway.
+            _ if MEDIA.contains(&name) && !closing => {
+                self.out.push('<');
+                self.out.push_str(name);
+                self.out.push('>');
+            }
             _ => {}
         }
     }
@@ -167,7 +176,7 @@ impl Writer {
         }
     }
 
-    /// Ends the open link; one around no text, such as an image, is dropped.
+    /// Ends the open link; one around nothing is dropped.
     fn close_link(&mut self) {
         let Some((address, start)) = self.link.take() else {
             return;
