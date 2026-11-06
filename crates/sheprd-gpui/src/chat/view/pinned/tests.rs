@@ -66,11 +66,13 @@ fn a_chat_without_prompts_pins_nothing() {
 
 #[test]
 fn attachment_lines_are_left_out() {
-    assert_eq!(
-        typed("look\nat this\n\u{1f4ce} a.png\n\u{1f4ce} b.png", 2),
-        "look\nat this"
-    );
-    assert_eq!(typed("only files", 3), "");
+    let prompt = "look\nat this\n\u{1f4ce} a.png\n\u{1f4ce} b.png";
+    assert_eq!(preview(typed(prompt, 2)), "look at this");
+}
+
+#[test]
+fn a_false_file_count_neither_stalls_nor_eats_the_prompt() {
+    assert_eq!(preview(typed("look\nat this", usize::MAX)), "look at this");
 }
 
 #[test]

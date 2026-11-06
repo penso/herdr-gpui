@@ -8,7 +8,7 @@ use super::{
     *,
 };
 use crate::notifications::safe_text;
-use sheprd_chat_protocol::{Entry, EntryKind};
+use sheprd_chat_protocol::{Entry, EntryKind, assist::typed};
 
 /// Lines of the prompt shown; the rest stays in the conversation.
 const LINES: usize = 2;
@@ -29,12 +29,6 @@ fn pinned(entries: &[Entry], top: ListOffset, following: bool) -> Option<usize> 
     };
     let scrolled = index < top.item_ix || (index == top.item_ix && top.offset_in_item > px(0.));
     scrolled.then_some(index)
-}
-
-/// What the user typed: `text` without the `files` lines naming attachments.
-fn typed(text: &str, files: usize) -> &str {
-    let end = (0..files).fold(text.len(), |end, _| text[..end].rfind('\n').unwrap_or(0));
-    &text[..end]
 }
 
 /// `text` on running lines, bounded.
