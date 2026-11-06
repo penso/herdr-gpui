@@ -20,6 +20,7 @@ server = [
     "dep:futures-lite",
     "dep:base64",
     "dep:getrandom",
+    "dep:gix",
     "dep:hkdf",
     "dep:http-body-util",
     "dep:hyper",
@@ -32,6 +33,7 @@ server = [
     "dep:rcgen",
     "dep:rustls",
     "dep:sha2",
+    "dep:sheprd-terminal",
     "dep:socket2",
     "dep:sysinfo",
     "dep:time",
@@ -74,6 +76,7 @@ axum           = { optional = true, workspace = true }
 base64         = { optional = true, workspace = true }
 futures-lite   = { optional = true, workspace = true }
 getrandom      = { optional = true, workspace = true }
+gix            = { optional = true, workspace = true }
 hkdf           = { optional = true, workspace = true }
 http-body-util = { optional = true, workspace = true }
 hyper          = { optional = true, workspace = true }
@@ -87,6 +90,8 @@ pulldown-cmark = { optional = true, workspace = true }
 rcgen          = { optional = true, workspace = true }
 rustls         = { optional = true, workspace = true }
 sha2           = { optional = true, workspace = true }
+sheprd-core-client.workspace = true
+sheprd-terminal = { optional = true, workspace = true }
 socket2        = { optional = true, workspace = true }
 # This computer's CPU and memory, shown above its workspaces on a phone.
 sysinfo        = { optional = true, workspace = true }

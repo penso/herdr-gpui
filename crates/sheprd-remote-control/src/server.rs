@@ -94,7 +94,12 @@ pub async fn run(options: Options) -> Result<()> {
         Some(authority) => web::Origins::load(&options.state_dir, authority.fingerprint()),
         None => web::Origins::none(),
     };
-    let hub = Hub::start(options.herdr_socket.clone(), options.chat_dir.clone())?;
+    let hub = Hub::start(
+        options.herdr_socket.clone(),
+        options.chat_dir.clone(),
+        options.core_endpoint.clone(),
+        &options.state_dir,
+    )?;
     let (pull_requests, _) = watch::channel(Arc::new(Default::default()));
     let load = crate::load::start();
     let state = Arc::new(State {

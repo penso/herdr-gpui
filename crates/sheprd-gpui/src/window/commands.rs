@@ -498,8 +498,9 @@ impl SheprdWindow {
             }
             // Every interactive creation path ends here, so Herdr's name prompt
             // covers buttons, menus, shortcuts, and the palette alike.
-            // With Herdr 2 chosen for new terminals, a new tab is herdr-core's.
-            Command::Tab if self.config.herdr_2_terminals => {
+            // With Herdr 2 chosen for new terminals, a new tab on this computer
+            // is herdr-core's.
+            Command::Tab if self.new_tabs_use_core() => {
                 self.new_core_terminal(window, cx);
                 return;
             }
