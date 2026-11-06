@@ -365,7 +365,7 @@ impl Endpoint {
                 (state.snapshot.as_deref(), state.surface.as_ref()),
                 crate::palette::unix_now(),
             );
-            self.observe_focus(&state);
+            self.observe_focus(&state, now);
             self.live = state;
             self.sync_live();
         }
@@ -762,7 +762,7 @@ impl SheprdWindow {
             cx.notify();
             return false;
         }
-        self.endpoints[self.selected_endpoint].left_at = Some(Instant::now());
+        self.leave_selected(Instant::now());
         self.release_selected();
         if index == 0 {
             // Local is the escape hatch and never waits on a remote release. An

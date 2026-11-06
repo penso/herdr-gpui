@@ -46,3 +46,17 @@ fn the_tick_takes_the_window_to_the_host_a_focus_moved(cx: &mut gpui::TestAppCon
         });
     });
 }
+
+#[gpui::test]
+fn composing_counts_as_typing(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            assert!(view.last_input.is_none());
+            gpui::EntityInputHandler::replace_and_mark_text_in_range(
+                view, None, "\u{304b}", None, window, cx,
+            );
+            assert!(view.last_input.is_some());
+        });
+    });
+}

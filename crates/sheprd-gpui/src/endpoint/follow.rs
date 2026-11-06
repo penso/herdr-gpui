@@ -38,8 +38,16 @@ fn focus_requested(old: &ClientShellSnapshot, new: &ClientShellSnapshot) -> bool
 }
 
 impl Endpoint {
-    /// Notes a focus asked for in the update `new` about to replace `live`.
-    pub(super) fn observe_focus(&mut self, new: &crate::LiveState) {
+    /// Notes a focus asked for in the update `new` about to replace `live`,
+    /// received at `now`. The window's own click is ruled out here, as it
+    /// arrives: a focus can wait out the typing for longer than `LEAVING`.
+    pub(super) fn observe_focus(&mut self, new: &crate::LiveState, now: Instant) {
+        if self
+            .left_at
+            .is_some_and(|left| now.saturating_duration_since(left) < LEAVING)
+        {
+            return;
+        }
         self.focus_requested |= self
             .live
             .latest_snapshot()
@@ -56,25 +64,22 @@ impl SheprdWindow {
     /// shows.
     ///
     /// A focus waits while the user types, since a command typed in a pane
-    /// here ends with its own Enter. One the window passes up is dropped, not
-    /// kept for later: a dialog stays open, and a host another window shows
-    /// stays there.
+    /// here ends with its own Enter, and while they compose, since switching
+    /// hosts discards the composition. One the window passes up is dropped,
+    /// not kept for later: a dialog stays open, and a host another window
+    /// shows stays there.
     pub(crate) fn follow_focus(&mut self, own: WindowId, now: Instant, cx: &mut Context<Self>) {
-        if self
-            .last_input
-            .is_some_and(|last| now.saturating_duration_since(last) < TYPING)
+        if !self.marked.is_empty()
+            || self
+                .last_input
+                .is_some_and(|last| now.saturating_duration_since(last) < TYPING)
         {
             return;
         }
         let selected = self.selected_endpoint;
         let mut followed = None;
         for (index, endpoint) in self.endpoints.iter_mut().enumerate() {
-            if std::mem::take(&mut endpoint.focus_requested)
-                && index != selected
-                && endpoint
-                    .left_at
-                    .is_none_or(|left| now.duration_since(left) >= LEAVING)
-            {
+            if std::mem::take(&mut endpoint.focus_requested) && index != selected {
                 followed = Some(index);
             }
         }
@@ -87,6 +92,17 @@ impl SheprdWindow {
         }
         let id = endpoint.id.clone();
         self.switch_endpoint(&id, cx);
+    }
+
+    /// Notes the window leaving the host it shows at `now`. A change of host
+    /// settles every focus still waiting for the typing to stop: the shown
+    /// host's was the window's own click, and another's is older than the
+    /// user's choice.
+    pub(super) fn leave_selected(&mut self, now: Instant) {
+        self.endpoints[self.selected_endpoint].left_at = Some(now);
+        for endpoint in &mut self.endpoints {
+            endpoint.focus_requested = false;
+        }
     }
 }
 

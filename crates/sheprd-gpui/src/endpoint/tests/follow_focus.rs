@@ -31,13 +31,17 @@ fn remote() -> Endpoint {
 
 /// Delivers `snapshot` as the worker does and lets the endpoint take it.
 fn receive(endpoint: &mut Endpoint, snapshot: ClientShellSnapshot) {
+    receive_at(endpoint, snapshot, Instant::now());
+}
+
+fn receive_at(endpoint: &mut Endpoint, snapshot: ClientShellSnapshot, now: Instant) {
     endpoint
         .connection
         .inbox
         .lock()
         .unwrap()
         .apply(ClientEvent::Snapshot(Arc::new(snapshot)));
-    endpoint.poll(Instant::now());
+    endpoint.poll(now);
 }
 
 /// Whether going from `old` to `new` on a background host is noted.
@@ -107,18 +111,24 @@ fn a_replaced_connection_forgets_a_focus_it_saw() {
     assert!(!endpoint.focus_requested);
 }
 
-/// A window on Local holding a background connection to the host, which the
-/// daemon has just moved to another tab.
-fn window_with_focus_asked_for(
+/// A window on Local holding a background connection to the host.
+fn window_beside_host(
     cx: &mut TestAppContext,
 ) -> (gpui::Entity<SheprdWindow>, &mut VisualTestContext) {
-    let (view, cx) = cx.add_window_view(|window, cx| {
+    cx.add_window_view(|window, cx| {
         let mut view = fixture_window(window, cx);
         let mut endpoint = remote();
         receive(&mut endpoint, on_tab("t0", 1));
         view.endpoints.push(endpoint);
         view
-    });
+    })
+}
+
+/// The same window, once the daemon has moved the host to another tab.
+fn window_with_focus_asked_for(
+    cx: &mut TestAppContext,
+) -> (gpui::Entity<SheprdWindow>, &mut VisualTestContext) {
+    let (view, cx) = window_beside_host(cx);
     ask_for_focus(&view, on_tab("t1", 2), cx);
     (view, cx)
 }
@@ -161,15 +171,56 @@ fn the_window_follows_a_focus_without_touching_the_saved_selection(cx: &mut Test
 
 #[gpui::test]
 fn a_host_just_left_answers_the_windows_own_click_without_taking_it_back(cx: &mut TestAppContext) {
-    let (view, cx) = window_with_focus_asked_for(cx);
+    let (view, cx) = window_beside_host(cx);
     let left = Instant::now();
-    view.update(cx, |view, _| view.endpoints[1].left_at = Some(left));
-    follow(&view, left + Duration::from_millis(500), cx);
+    let later = left + Duration::from_secs(5);
+    view.update(cx, |view, _| {
+        view.endpoints[1].left_at = Some(left);
+        let answer = left + Duration::from_millis(500);
+        receive_at(&mut view.endpoints[1], on_tab("t1", 2), answer);
+        assert!(!view.endpoints[1].focus_requested);
+    });
+    follow(&view, later, cx);
     assert_eq!(shown(&view, cx), LOCAL);
     // A later focus is someone asking again.
-    ask_for_focus(&view, on_tab("t0", 3), cx);
-    follow(&view, left + Duration::from_secs(5), cx);
+    view.update(cx, |view, _| {
+        receive_at(&mut view.endpoints[1], on_tab("t0", 3), later);
+    });
+    follow(&view, later, cx);
     assert_eq!(shown(&view, cx), HOST);
+}
+
+#[gpui::test]
+fn typing_past_the_leaving_guard_does_not_bring_a_click_back(cx: &mut TestAppContext) {
+    let (view, cx) = window_beside_host(cx);
+    let left = Instant::now();
+    let typed = left + Duration::from_secs(3);
+    view.update(cx, |view, _| {
+        view.endpoints[1].left_at = Some(left);
+        let answer = left + Duration::from_millis(500);
+        receive_at(&mut view.endpoints[1], on_tab("t1", 2), answer);
+        view.last_input = Some(typed);
+    });
+    follow(&view, typed + Duration::from_millis(500), cx);
+    follow(&view, typed + Duration::from_secs(2), cx);
+    assert_eq!(shown(&view, cx), LOCAL);
+}
+
+#[gpui::test]
+fn a_change_of_host_settles_a_focus_held_by_typing(cx: &mut TestAppContext) {
+    let (view, cx) = window_beside_host(cx);
+    let typed = Instant::now();
+    view.update(cx, |view, cx| {
+        assert!(view.switch_endpoint(HOST, cx));
+        view.last_input = Some(typed);
+        // A click in the shown host, whose answer the typing holds.
+        receive(&mut view.endpoints[1], on_tab("t1", 2));
+        assert!(view.endpoints[1].focus_requested);
+        assert!(view.switch_endpoint(LOCAL, cx));
+        assert!(!view.endpoints[1].focus_requested);
+    });
+    follow(&view, typed + Duration::from_secs(2), cx);
+    assert_eq!(shown(&view, cx), LOCAL);
 }
 
 #[gpui::test]
@@ -180,6 +231,18 @@ fn a_focus_waits_for_the_user_to_stop_typing(cx: &mut TestAppContext) {
     follow(&view, typed + Duration::from_millis(500), cx);
     assert_eq!(shown(&view, cx), LOCAL);
     follow(&view, typed + Duration::from_secs(2), cx);
+    assert_eq!(shown(&view, cx), HOST);
+}
+
+#[gpui::test]
+fn a_focus_waits_for_a_composition_to_end(cx: &mut TestAppContext) {
+    let (view, cx) = window_with_focus_asked_for(cx);
+    view.update(cx, |view, _| view.marked = "\u{304b}".into());
+    follow(&view, Instant::now(), cx);
+    assert_eq!(shown(&view, cx), LOCAL);
+    view.read_with(cx, |view, _| assert_eq!(view.marked, "\u{304b}"));
+    view.update(cx, |view, _| view.marked.clear());
+    follow(&view, Instant::now(), cx);
     assert_eq!(shown(&view, cx), HOST);
 }
 
