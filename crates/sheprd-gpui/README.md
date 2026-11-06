@@ -1777,7 +1777,10 @@ Herdr 1 tabs, and nothing moves from one to the other.
 
 - **Opening one:** **New Herdr 2 Terminal** in the command palette, or
   `sheprd run new_core_terminal`. With `herdr_2_terminals = true`
-  (**Settings > Tabs > New terminals use Herdr 2**), every new tab is one.
+  (**Settings > Tabs > New terminals use Herdr 2**), every new tab on this
+  computer is one. herdr-core runs only on this computer, so a new tab in a
+  workspace on an SSH, WSL, or cloud host stays a Herdr tab on that host, and
+  **New Herdr 2 Terminal** is refused there.
 - **Starting herdr-core:** the app joins a core that already runs. Otherwise
   it starts the user's own `herdr-core`, or the pinned one every release
   bundles beside the app, and only when a Herdr 2 terminal is asked for.
