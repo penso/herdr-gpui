@@ -58,7 +58,7 @@ impl Identity {
                 let Ok(path) = fs::read_link(entry.path()) else {
                     continue;
                 };
-                if candidate_name(&path, options) {
+                if candidate_name(&path, options.agent, &options.session) {
                     candidates.insert(path);
                 }
             }
@@ -67,17 +67,8 @@ impl Identity {
         // within its private projects directory; never recurse over histories.
         if options.agent == TranscriptAgent::Claude
             && let Some(base) = config_directory(&process, home, TranscriptAgent::Claude)?
-            && let Ok(projects) = fs::read_dir(base.join("projects"))
         {
-            for project in projects.take(MAX_PROJECTS).flatten() {
-                if !project.file_type()?.is_dir() {
-                    continue;
-                }
-                let path = project.path().join(format!("{}.jsonl", options.session));
-                if path.is_file() {
-                    candidates.insert(path);
-                }
-            }
+            candidates.extend(claude_logs(&base, &options.session)?);
         }
         // A daemon-backed Codex TUI has no rollout descriptor of its own.
         // Its UUIDv7 bounds the lookup to three date directories; the exact
@@ -87,7 +78,7 @@ impl Identity {
         }
         let matches: Vec<_> = candidates
             .into_iter()
-            .filter(|path| matches_session(path, options).unwrap_or(false))
+            .filter(|path| matches_session(path, options.agent, &options.session).unwrap_or(false))
             .collect();
         let [path] = <[PathBuf; 1]>::try_from(matches).map_err(|_| Error::Ambiguous)?;
         let identity = Self {
@@ -190,19 +181,53 @@ fn codex_rollouts(
     home: Option<&Path>,
     options: &ObserveOptions,
 ) -> Result<Vec<PathBuf>> {
-    let uuid = uuid::Uuid::parse_str(&options.session)?;
+    let date = rollout_date(&options.session)?;
+    let Some(base) = config_directory(process, home, TranscriptAgent::Codex)? else {
+        return Ok(Vec::new());
+    };
+    rollouts_around(&base, date, &options.session)
+}
+
+/// The logs named after Claude session `session` under `base`, its config
+/// directory. Only exact names are tried; histories are never searched.
+pub(crate) fn claude_logs(base: &Path, session: &str) -> Result<Vec<PathBuf>> {
+    let Ok(projects) = fs::read_dir(base.join("projects")) else {
+        return Ok(Vec::new());
+    };
+    let mut logs = Vec::new();
+    for project in projects.take(MAX_PROJECTS).flatten() {
+        if !project.file_type()?.is_dir() {
+            continue;
+        }
+        let path = project.path().join(format!("{session}.jsonl"));
+        if path.is_file() {
+            logs.push(path);
+        }
+    }
+    Ok(logs)
+}
+
+/// The day Codex session `session`, a UUIDv7, was created.
+fn rollout_date(session: &str) -> Result<chrono::NaiveDate> {
+    let uuid = uuid::Uuid::parse_str(session)?;
     if uuid.get_version() != Some(uuid::Version::SortRand) {
         return Err(Error::NotUuidV7);
     }
     let (seconds, nanos) = uuid.get_timestamp().ok_or(Error::NoTimestamp)?.to_unix();
-    let date = i64::try_from(seconds)
+    Ok(i64::try_from(seconds)
         .ok()
         .and_then(|seconds| chrono::DateTime::from_timestamp(seconds, nanos))
         .ok_or(Error::TimestampRange)?
-        .date_naive();
-    let Some(base) = config_directory(process, home, TranscriptAgent::Codex)? else {
-        return Ok(Vec::new());
-    };
+        .date_naive())
+}
+
+/// The rollouts named after Codex session `session` under `base`, its
+/// config directory. The session's own id bounds the search to three days.
+pub(crate) fn codex_logs(base: &Path, session: &str) -> Result<Vec<PathBuf>> {
+    rollouts_around(base, rollout_date(session)?, session)
+}
+
+fn rollouts_around(base: &Path, date: chrono::NaiveDate, session: &str) -> Result<Vec<PathBuf>> {
     let mut candidates = Vec::new();
     // Rollout filenames may use the host's local date around UTC midnight.
     for day in [date.pred_opt(), Some(date), date.succ_opt()]
@@ -223,7 +248,9 @@ fn codex_rollouts(
             }
             let entry = entry?;
             let path = entry.path();
-            if candidate_name(&path, options) && entry.file_type()?.is_file() {
+            if candidate_name(&path, TranscriptAgent::Codex, session)
+                && entry.file_type()?.is_file()
+            {
                 candidates.push(path);
             }
         }
@@ -245,25 +272,29 @@ fn start_ticks(process: &Path) -> Result<u64> {
         .map_err(Error::InvalidStartTime)
 }
 
-fn candidate_name(path: &Path, options: &ObserveOptions) -> bool {
+fn candidate_name(path: &Path, agent: TranscriptAgent, session: &str) -> bool {
     let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
         return false;
     };
-    match options.agent {
+    match agent {
         TranscriptAgent::Codex => {
-            name.starts_with("rollout-") && name.ends_with(&format!("-{}.jsonl", options.session))
+            name.starts_with("rollout-") && name.ends_with(&format!("-{session}.jsonl"))
         }
-        TranscriptAgent::Claude => name == format!("{}.jsonl", options.session),
+        TranscriptAgent::Claude => name == format!("{session}.jsonl"),
     }
 }
 
-fn matches_session(path: &Path, options: &ObserveOptions) -> io::Result<bool> {
+pub(crate) fn matches_session(
+    path: &Path,
+    agent: TranscriptAgent,
+    session: &str,
+) -> io::Result<bool> {
     // Checked before opening, since opening a FIFO can block; `matches_file`
     // checks the opened descriptor again in case the path was replaced.
     if !fs::metadata(path)?.is_file() {
         return Ok(false);
     }
-    matches_file(File::open(path)?, options.agent, &options.session)
+    matches_file(File::open(path)?, agent, session)
 }
 
 fn matches_file(mut file: File, agent: TranscriptAgent, session: &str) -> io::Result<bool> {

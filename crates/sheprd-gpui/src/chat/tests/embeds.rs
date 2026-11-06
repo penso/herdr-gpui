@@ -177,6 +177,7 @@ fn an_html_file_a_tool_wrote_offers_a_preview(cx: &mut TestAppContext) {
             kind: ToolKind::Edit,
             locations: vec![page.into()],
             parent: None,
+            started_ms: None,
             status: ToolStatus::Completed,
             title: "Write index.html".into(),
         }),

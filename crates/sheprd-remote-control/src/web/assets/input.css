@@ -87,6 +87,9 @@
        without making the body a scroll container, so sticky still works. */
     overflow-x: clip;
   }
+  /* Chrome on Android reads this from the root, not the body: without it a
+     swipe down on a terminal pulls to refresh and reloads the page. */
+  html:has(.term-page) { overscroll-behavior-y: none; }
   [x-cloak] { display: none !important; }
   button, select, input, textarea { font: inherit; color: inherit; }
 }
@@ -221,6 +224,7 @@
   }
   .term-screen {
     @apply flex-1 min-h-0 overflow-auto m-0 px-2 py-1.5 whitespace-pre;
+    overscroll-behavior: contain;
     font: var(--term-size, 11px)/1.32 ui-monospace, SFMono-Regular, Menlo, monospace;
     background: var(--term-bg); color: var(--term-fg);
   }

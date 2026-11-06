@@ -65,6 +65,7 @@ fn a_tool_entry_shows_status_title_and_diff_summary() {
             kind: ToolKind::Edit,
             locations: vec!["src/x.rs:1".to_owned()],
             parent: None,
+            started_ms: None,
             status: ToolStatus::Completed,
             title: "Edit x".to_owned(),
         }),

@@ -14,6 +14,13 @@ pub enum ChatOp {
         #[serde(default)]
         pane: Option<String>,
     },
+    /// Moves a pane's terminal agent into a chat in the same pane and
+    /// conversation: stops its CLI, then continues its session in the chat.
+    Convert {
+        /// The pane, else the caller's own, else the focused one.
+        #[serde(default)]
+        pane: Option<String>,
+    },
     /// Shows the chat view over a pane (`on`), or its terminal (`off`).
     View {
         switch: Switch,
@@ -74,6 +81,12 @@ pub enum Reply {
     /// The chat's tab was asked for; it attaches once its program reports.
     Started {
         agent: String,
+    },
+    /// The agent is moving into a chat, which attaches once it has stopped
+    /// and the program reports.
+    Converting {
+        agent: String,
+        pane_id: String,
     },
 }
 

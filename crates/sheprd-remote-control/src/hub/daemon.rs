@@ -4,7 +4,10 @@
 //! from an inactive client; those go through [`super::api`]. A worker
 //! thread owns the blocking I/O; the server only reads the layout.
 
-use super::layout::{self, Layout};
+use super::{
+    layout::{self, Layout},
+    recency::AgentTimes,
+};
 use sheprd_client::{ClientEvent, ClientHandle, ConnectOptions, ConnectTarget};
 use std::{
     sync::{
@@ -77,13 +80,15 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 fn run(shared: &Shared, target: &ConnectTarget) {
+    // Outlives a connection: a reconnect to the same boot keeps the times.
+    let mut times = AgentTimes::default();
     while !shared.stop.load(Ordering::Acquire) {
         if let Ok(client) = sheprd_client::connect_with_surface_active(
             target.clone(),
             ConnectOptions::default(),
             false,
         ) {
-            serve(shared, client);
+            serve(shared, client, &mut times);
         }
         *lock(&shared.handle) = None;
         shared.layout.send_replace(Arc::new(Layout::default()));
@@ -91,7 +96,7 @@ fn run(shared: &Shared, target: &ConnectTarget) {
     }
 }
 
-fn serve(shared: &Shared, client: sheprd_client::Client) {
+fn serve(shared: &Shared, client: sheprd_client::Client, times: &mut AgentTimes) {
     let handle = client.handle.clone();
     *lock(&shared.handle) = Some(handle.clone());
     while let Ok(event) = client.events.recv() {
@@ -101,7 +106,8 @@ fn serve(shared: &Shared, client: sheprd_client::Client) {
         }
         match event {
             ClientEvent::Snapshot(snapshot) => {
-                let next = layout::project(&snapshot);
+                let mut next = layout::project(&snapshot);
+                times.stamp(&snapshot, &mut next, crate::web::now_ms());
                 shared.layout.send_if_modified(|current| {
                     let changed = **current != next;
                     if changed {

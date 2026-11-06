@@ -30,6 +30,8 @@ chat-needs-input = Needs input
 chat-watching = { $count } watching
 chat-reconnecting = Reconnecting…
 chat-show-chat = Chat
+chat-jump-to-end = Scroll to the latest message
+chat-jump-waiting = New output below
 
 # The composer.
 chat-composer-placeholder = Message the agent — / for commands, Shift-Enter for a new line
@@ -56,6 +58,8 @@ chat-prompt-too-long = The prompt is longer than the agent accepts
 chat-select-less = Select less text to copy
 # $error is why the chat could not start.
 chat-start-failed = The chat did not start: { $error }
+# $error is why the terminal agent did not move into a chat.
+chat-convert-failed = The agent did not move into a chat: { $error }
 
 # The agent's terminal input under a chat that is shown in its terminal.
 chat-input-awaiting-fit = Activate to fit agent input
@@ -75,6 +79,19 @@ chat-working-writing = Writing
 chat-working-thinking = Thinking
 # What the agent is doing now: one of the words above, or the step it runs.
 chat-working-doing = { $doing }…
+# What a running step works on, when it names a file.
+chat-working-deleting = Deleting { $target }
+chat-working-editing = Editing { $target }
+chat-working-moving = Moving { $target }
+chat-working-reading = Reading { $target }
+chat-working-searching = Searching { $target }
+# Steps running beside the one the working row names.
+chat-working-more = +{ $count } more
+# Steps running that the open list of them has no room for.
+chat-working-hidden = { $count ->
+    [one] { $count } more step not shown
+   *[other] { $count } more steps not shown
+}
 chat-answer-cut = The rest of this answer is too long to show here; Copy takes all of it.
 
 # Copy buttons and what their flash says.

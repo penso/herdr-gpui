@@ -58,6 +58,15 @@ pub(crate) struct Projector {
 }
 
 impl Projector {
+    /// A projector whose entries come after `last`, the newest entry of
+    /// the history a session opened with.
+    pub(crate) fn after(last: EntryId) -> Self {
+        Self {
+            next: last.0,
+            ..Self::default()
+        }
+    }
+
     fn next_id(&mut self) -> EntryId {
         self.next += 1;
         EntryId(self.next)
@@ -213,6 +222,7 @@ impl Projector {
             kind: ToolKind::Other,
             locations: Vec::new(),
             parent: None,
+            started_ms: None,
             status: ToolStatus::Pending,
             title: call_id.to_owned(),
         };
@@ -251,6 +261,11 @@ impl Projector {
             let change = self.tool(transcript, call_id, |tool| {
                 update(tool);
                 tag.mark(tool);
+                // History replays calls already finished, whose start is
+                // not now.
+                if matches!(tool.status, ToolStatus::Pending | ToolStatus::InProgress) {
+                    tool.started_ms.get_or_insert(now);
+                }
             });
             if let Change::Push { entry } | Change::Replace { entry } = &change
                 && let EntryKind::Tool(found) = &entry.kind
@@ -266,6 +281,7 @@ impl Projector {
                 kind: ToolKind::Other,
                 locations: Vec::new(),
                 parent: None,
+                started_ms: None,
                 status: ToolStatus::Pending,
                 title: call_id.to_owned(),
             };

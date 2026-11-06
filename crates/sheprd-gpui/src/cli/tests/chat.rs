@@ -59,6 +59,21 @@ fn chat_refuses_what_it_does_not_know() {
 }
 
 #[test]
+fn chat_convert_takes_an_optional_pane() {
+    assert_eq!(
+        command(&["chat", "convert"]),
+        ControlCommand::Chat(ChatCommand::Convert { pane: None })
+    );
+    assert_eq!(
+        command(&["chat", "convert", "--pane", "w1:p2"]),
+        ControlCommand::Chat(ChatCommand::Convert {
+            pane: Some("w1:p2".into())
+        })
+    );
+    assert!(parse(&["chat", "convert", "claude"]).is_err());
+}
+
+#[test]
 fn chat_new_names_a_built_in_agent() {
     assert_eq!(
         command(&["chat", "new", "claude"]),

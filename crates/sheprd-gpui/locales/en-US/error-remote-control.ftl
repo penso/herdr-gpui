@@ -39,4 +39,5 @@ error-remote-control-enroll-config = { $path } is not valid TOML
 error-remote-control-enroll-no-home = this host has no home directory
 error-remote-control-enroll-not-started = the remote control daemon on this host did not start
 error-remote-control-enroll-outdated = the remote control daemon on this host is older than Sheprd; update it
+error-remote-control-enroll-settings-locked = Sheprd on this host kept { $path } locked
 error-remote-control-enroll-unexpected = the remote control daemon gave an answer of the wrong kind

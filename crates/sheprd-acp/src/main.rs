@@ -11,6 +11,7 @@ mod error;
 mod files;
 mod harness;
 mod herdr;
+mod history;
 mod mirror;
 mod observe;
 mod pi;

@@ -2,9 +2,15 @@ import SheprdRemoteCore
 import SwiftUI
 
 /// One workspace of one computer, which the Workspaces tab opens.
-struct WorkspaceKey: Hashable {
+struct WorkspaceKey: Codable, Hashable {
     let device: String
     let workspace: String
+}
+
+extension EnvironmentValues {
+    /// Whether a tab offers a button to its workspace: on Home, whose
+    /// lists open tabs straight away, so nothing behind them leads there.
+    @Entry var offersWorkspace = false
 }
 
 /// The Workspaces tab, laid out like Sheprd's sidebar: every computer

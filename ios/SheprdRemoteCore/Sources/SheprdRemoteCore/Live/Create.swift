@@ -15,6 +15,12 @@ public struct NewOptions: Codable, Hashable, Sendable {
         public var id: String { path }
     }
 
+    /// Keeps the chosen agent when offered, otherwise selects the first
+    /// available one. An empty list has no valid selection.
+    public func agent(preferring id: String) -> AgentChoice? {
+        agents.first { $0.id == id } ?? agents.first
+    }
+
     /// Every folder offered, recent ones first, once each.
     public var folders: [String] {
         var seen = Set<String>()
@@ -36,12 +42,32 @@ public struct NewWorkspaceRequest: Codable, Hashable, Sendable {
     public var agent: String
     /// Sent once the chat is ready; empty sends nothing.
     public var prompt: String
+    /// What the chat starts with, before the prompt goes.
+    public var start: ChatStart?
 
-    public init(cwd: String, branch: String = "", agent: String, prompt: String = "") {
+    public init(cwd: String, branch: String = "", agent: String, prompt: String = "", start: ChatStart? = nil) {
         self.cwd = cwd
         self.branch = branch
         self.agent = agent
         self.prompt = prompt
+        self.start = start
+    }
+
+    /// The branch proposed for `seed`, the same one the desktop's new
+    /// worktree dialog proposes (`generated_branch_slug` in
+    /// `sheprd-gpui`'s `worktree.rs`), so the form can be sent as it opens.
+    public static func proposedBranch(seed: UInt64) -> String {
+        let adjectives = ["brave", "calm", "clear", "green", "lucky", "quiet", "rapid", "silver"]
+        let nouns = ["river", "cloud", "field", "forest", "harbor", "meadow", "stone", "valley"]
+        let adjective = adjectives[Int(seed % UInt64(adjectives.count))]
+        let noun = nouns[Int(seed / UInt64(adjectives.count) % UInt64(nouns.count))]
+        let suffix = String(seed & 0xffff, radix: 16)
+        return "worktree/\(adjective)-\(noun)-\(String(repeating: "0", count: 4 - suffix.count))\(suffix)"
+    }
+
+    /// A proposal seeded from the clock in microseconds, as the desktop's is.
+    public static func proposedBranch(at date: Date = Date()) -> String {
+        proposedBranch(seed: UInt64(max(date.timeIntervalSince1970, 0) * 1_000_000))
     }
 }
 
@@ -49,10 +75,13 @@ public struct NewWorkspaceRequest: Codable, Hashable, Sendable {
 public struct NewChatRequest: Codable, Hashable, Sendable {
     public var agent: String
     public var prompt: String
+    /// What the chat starts with, before the prompt goes.
+    public var start: ChatStart?
 
-    public init(agent: String, prompt: String = "") {
+    public init(agent: String, prompt: String = "", start: ChatStart? = nil) {
         self.agent = agent
         self.prompt = prompt
+        self.start = start
     }
 }
 
@@ -63,13 +92,17 @@ public struct Created: Codable, Hashable, Sendable {
     public var pane: String?
     /// Whether the first prompt went to the chat.
     public var prompted: Bool
+    /// Whether the chat took what it was asked to start with. A daemon too
+    /// old to know the request's `start` does not say.
+    public var started: Bool
 
-    enum CodingKeys: String, CodingKey { case workspace, pane, prompted }
+    enum CodingKeys: String, CodingKey { case workspace, pane, prompted, started }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         workspace = try c.decodeIfPresent(String.self, forKey: .workspace)
         pane = try c.decodeIfPresent(String.self, forKey: .pane)
         prompted = try c.decodeIfPresent(Bool.self, forKey: .prompted) ?? false
+        started = try c.decodeIfPresent(Bool.self, forKey: .started) ?? false
     }
 }

@@ -105,6 +105,9 @@ pub(crate) struct Config {
     pub cwd: PathBuf,
     /// Exit when the agent does, rather than leave its last words on screen.
     pub exit_with_agent: bool,
+    /// The conversation so far, for a continued session whose agent does
+    /// not replay it.
+    pub history: Option<Transcript>,
     pub load: Option<String>,
     pub login_hint: Option<String>,
     pub pane: Option<String>,
@@ -161,8 +164,17 @@ pub(crate) struct Session<R: FnMut(Update)> {
 }
 
 impl<R: FnMut(Update)> Session<R> {
-    pub(crate) fn new(config: Config, outbox: rpc::Outbox, report: R) -> Self {
-        let transcript = Transcript::new(config.agent.clone());
+    pub(crate) fn new(mut config: Config, outbox: rpc::Outbox, report: R) -> Self {
+        let mut transcript = Transcript::new(config.agent.clone());
+        if let Some(history) = config.history.take() {
+            transcript.entries = history.entries;
+            transcript.truncated = history.truncated;
+            transcript.usage = history.usage;
+        }
+        let projector = transcript
+            .entries
+            .last()
+            .map_or_else(Projector::default, |entry| Projector::after(entry.id));
         Self {
             accepts: crate::files::Accepts::default(),
             acp_session: None,
@@ -178,7 +190,7 @@ impl<R: FnMut(Update)> Session<R> {
             outbox,
             pending: HashMap::new(),
             pictures: pictures::Pictures::default(),
-            projector: Projector::default(),
+            projector,
             ready: false,
             report,
             seq: 0,

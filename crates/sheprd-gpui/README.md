@@ -146,7 +146,7 @@ Updates...**. Background offers change the status version label without taking
 focus. **Download** and **Install Update** are separate approvals; closing the
 panel does not cancel work. Explicit **Cancel** requests cancellation.
 The panel shows archive download progress and an animated bar for work without a
-known percentage. Homebrew-managed installs use `brew upgrade --cask herdr-gpui`;
+known percentage. Homebrew-managed installs use `brew upgrade --cask` on their cask;
 if the installed version is behind the offer, `brew update` refreshes metadata
 before one retry. Linux distribution installs download the signed package matching
 the owning package manager and invoke APT, DNF, or pacman through PolicyKit.
@@ -1538,8 +1538,9 @@ repeating the other field. `FontConfig::line_height()` returns `size * 20 / 14` 
 weight name or 100 to 900; bold cells draw `bold_font_weight` of it, 300
 heavier and at least bold. On macOS, font resolution reports a weight the
 family has no face for; other platforms do not check.
-The `[features]` table holds opt-in behaviors as `Features`, with every flag off
-by default and unknown keys rejected like the other sections; Preferences lists
+The `[features]` table holds optional behaviors as `Features`, each flag with
+its own default (`acp_chats` on, the rest off) and unknown keys rejected like
+the other sections; Preferences lists
 each flag and its state read-only, since only the config file turns one on.
 First-frame config and theme loading is read-only: no config lock, migration,
 writes, or fsync delays window creation. It reads local overrides (or the legacy
@@ -1776,7 +1777,10 @@ Herdr 1 tabs, and nothing moves from one to the other.
 
 - **Opening one:** **New Herdr 2 Terminal** in the command palette, or
   `sheprd run new_core_terminal`. With `herdr_2_terminals = true`
-  (**Settings > Tabs > New terminals use Herdr 2**), every new tab is one.
+  (**Settings > Tabs > New terminals use Herdr 2**), every new tab on this
+  computer is one. herdr-core runs only on this computer, so a new tab in a
+  workspace on an SSH, WSL, or cloud host stays a Herdr tab on that host, and
+  **New Herdr 2 Terminal** is refused there.
 - **Starting herdr-core:** the app joins a core that already runs. Otherwise
   it starts the user's own `herdr-core`, or the pinned one every release
   bundles beside the app, and only when a Herdr 2 terminal is asked for.
@@ -3928,6 +3932,16 @@ Ctrl+Shift+U is left unbound for
   upstream repository: its own branches are fetched from `upstream`, pull
   requests from the fork behind `origin` check out their real branch from
   `origin`, and other forks use the PR head ref fetched from `upstream`.
+  A GitLab project (its `origin` remote, else `upstream`, on a host named
+  "gitlab" or one glab knows as an instance) fills the issues tab with its 50
+  most recently updated open issues, and needs no GitHub account: without one,
+  the dialog looks for a GitLab remote as it opens and enables the issues tab
+  when it finds one. They are read with the token the Orchestrator reads that
+  instance with (an `.envrc`'s or the shell's `GITLAB_TOKEN`, an account
+  connected in the account menu, or glab's); a public project lists without
+  one. Picking an issue creates a new branch named after it, and the agent
+  context note says it is a GitLab issue. Merge requests are not listed, so the
+  PR tab stays faded for a GitLab project.
 - Open worktree... asynchronously lists the clicked parent's existing checkouts
   through `worktree.list`, including already-open and detached checkouts but
   excluding bare/prunable entries. Use Up/Down and Enter, the Open button, or

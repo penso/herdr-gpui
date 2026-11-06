@@ -9,6 +9,64 @@ The daemon is a user service that Sheprd installs when Remote control is
 turned on, and it keeps running when the app quits. It never starts, stops,
 or upgrades a Herdr daemon.
 
+## Herdr 2 terminals
+
+The daemon lists terminals from both Herdr 1 and a running herdr-core.
+The managed service receives the socket and session resolved by the desktop,
+so it joins the same core even when its service environment differs.
+A foreground daemon discovers herdr-core through
+`HC_SOCKET`, the core's configured socket, or its default session socket.
+`HC_SESSION` selects the session. Explicit `--core-socket PATH --core-session NAME`
+arguments override discovery. Remote control only joins an existing core.
+It never starts the bundled core or runs `hc server start`.
+
+Herdr 1 workspaces and chats keep their existing behavior.
+
+When the Herdr desktop app's `herdr-app` document exists in the core,
+the phone shows its local spaces in document order, with their tabs and
+split panes. Named spaces keep their names. Unnamed spaces use the first
+terminal's current repository or folder, with `~` for home. Spaces from
+other machines are omitted. Unlisted terminals stay in **Herdr 2**.
+The worker reads the document after a terminal changes and at least every
+3 seconds, and parses it only when its version changes. It accepts at most 1 MiB,
+256 spaces and tabs, and 16 terminal panes per tab within 16 tree levels.
+A malformed or oversized document falls back to Sheprd's saved tabs.
+
+Without a valid document, Herdr 2 tabs in Sheprd's `browser-tabs.json` keep
+their workspace and split membership. The file is read beside the explicit
+remote `--state-dir`
+(for example, `gpui/browser-tabs.json` beside `gpui/remote`), using the
+desktop state context instead of the service environment. Only tabs for the
+selected local Herdr 1 endpoint are used.
+Other core terminals appear in a **Herdr 2** workspace, including terminals
+created by `hc` and the desktop's shell when Herdr 1 is absent. Status comes
+from the core's terminal records. The phone reports **Herdr not running**
+only when neither source answers.
+
+A phone opens a Herdr 2 pane through the same screen and input endpoints
+as a Herdr 1 pane. The server uses `sheprd-terminal` to emulate raw core
+output and sends complete ANSI screens through the existing stream.
+Keys and pastes use the terminal's current modes, including bracketed paste.
+The pane opens as an observer at its current dimensions, so watching changes
+nothing on the desktop. The first key or paste takes the driver's role at the
+terminal's current size. Phone-specific sizing, scrolling,
+renaming, splitting, and zooming remain Herdr 1 actions. A phone closes a Herdr 2
+pane, or a tab of one pane; a tab of several panes stays open.
+The daemon keeps at most 16 shared core attachments and releases each after
+30 seconds without a screen read or input request. When all 16 are held, the
+one idle longest gives way to a new pane if it has been idle for 5 seconds.
+
+While a core answers, new work from a phone starts there, even from a Herdr 1
+pane or workspace: new tabs, chats, and workspaces. Herdr 1 terminals stay listed
+and keep working, and a failure is shown rather than retried on Herdr 1. New
+work appears in **Herdr 2**, because the desktop owns its spaces. The core has no
+worktrees, so a new workspace on a branch is refused. Without a core, new work
+goes to Herdr 1.
+
+Phone-created shells recover in place after program loss. Chats do not: if
+`sheprd-acp` is lost, the terminal finishes rather than recovering as a shell
+that still carries an unavailable chat endpoint label.
+
 ## Control protocol
 
 `control` is the wire between Sheprd and the daemon: one request and one

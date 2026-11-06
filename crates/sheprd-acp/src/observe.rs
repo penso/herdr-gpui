@@ -3,7 +3,7 @@
 //! never the agent. No persistent sidecar, replacement session, or socket.
 
 mod error;
-mod identity;
+pub(crate) mod identity;
 #[cfg(test)]
 mod tests;
 

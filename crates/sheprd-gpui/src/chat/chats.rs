@@ -11,7 +11,7 @@ use super::{
 use crate::multiline_input::MultilineInput;
 use crate::search_input::SearchInput;
 use gpui::{App, Entity, FocusHandle, ListAlignment, ListState, Window, px};
-use sheprd_chat_protocol::{ClientMessage, Command, Cursor, EndpointId, EntryId};
+use sheprd_chat_protocol::{ClientMessage, Command, Cursor, EntryId};
 use std::{
     collections::HashSet,
     time::{Duration, Instant},
@@ -160,6 +160,8 @@ pub(crate) struct ChatPane {
     /// the composer changes, since typing does not redraw the window.
     pub(crate) send: SendButton,
     pub(crate) session: Session,
+    /// Whether the steps running now show in full under the working row.
+    pub(crate) steps: crate::motion::Toggle,
     pub(crate) target: Target,
     /// Expose more of an existing agent's original editor and dialogs inline.
     pub(crate) terminal_size: super::terminal::InputSize,
@@ -264,6 +266,7 @@ impl ChatPane {
             selection: Default::default(),
             send: SendButton::Off,
             session: Session::default(),
+            steps: Default::default(),
             target,
             terminal_size: Default::default(),
             text_drag: Default::default(),
@@ -392,24 +395,49 @@ impl ChatPane {
             self.text_geometry.clear();
             self.text_drag = Default::default();
             self.widgets.clear();
-            self.list.reset(keys.len());
-            self.glide.reset(&self.list);
+            self.restart_list(&keys);
         } else {
             match list::splices(&self.list_keys, &keys) {
                 Some(splices) => {
+                    if self.list_keys.last() != keys.last() {
+                        self.glide.note_output();
+                    }
                     for Splice { range, count } in splices {
                         super::glide::splice_in_place(&self.list, range, count);
                     }
                 }
-                None => {
-                    self.list.reset(keys.len());
-                    self.glide.reset(&self.list);
-                }
+                None => self.restart_list(&keys),
             }
         }
         self.list_keys = keys;
         self.refresh_text();
         self.widgets.retain(&self.prepared);
+    }
+
+    /// Starts the list over for `keys`: at its end, unless the user left it
+    /// above the end and the entry they were reading is still there, as it
+    /// is when a reconnect sends the same transcript again.
+    fn restart_list(&mut self, keys: &[(EntryId, u64)]) {
+        let tail_changed = self.session.take_tail_changed();
+        let top = self.list.logical_scroll_top();
+        let place = self
+            .glide
+            .stopped()
+            .then(|| self.list_keys.get(top.item_ix))
+            .flatten()
+            .and_then(|(reading, _)| keys.iter().position(|(id, _)| id == reading));
+        self.list.reset(keys.len());
+        match place {
+            Some(item_ix) => {
+                self.list.scroll_to(gpui::ListOffset { item_ix, ..top });
+                if tail_changed
+                    || self.list_keys.last().map(|key| key.0) != keys.last().map(|key| key.0)
+                {
+                    self.glide.note_output();
+                }
+            }
+            None => self.glide.reset(&self.list),
+        }
     }
 
     /// Redraws one entry, such as a thought folding open.
@@ -476,6 +504,8 @@ pub(crate) enum Toward {
 pub(crate) struct Chats {
     /// The agents installed on each host new chats may start on.
     pub(crate) agents: super::harnesses::Harnesses,
+    /// The terminal agent moving into a chat, one at a time.
+    pub(crate) converting: Option<super::convert::Job>,
     /// Exact CLI sessions already running in this connected daemon's panes.
     pub(crate) existing: super::existing::Existing,
     /// The agent a chat was last started with, which the strips' one-button
@@ -503,8 +533,9 @@ pub(crate) struct Chats {
     panes: Vec<ChatPane>,
     /// The `herdr-acp` new chats run.
     pub(crate) program: super::Program,
-    /// Programs whose panes the user turned back to their terminal.
-    raw: HashSet<EndpointId>,
+    /// Exact pane/process/host targets the user turned back to their terminal.
+    /// Two panes may legitimately observe the same session endpoint.
+    raw: HashSet<Target>,
     /// Textures of panes no longer attached, for the window to drop.
     released: Vec<std::sync::Arc<gpui::RenderImage>>,
     /// Chats being continued in the panes Herdr restored.
@@ -646,12 +677,8 @@ impl Chats {
             });
         }
         self.panes = panes;
-        let endpoints: HashSet<&EndpointId> = self
-            .panes
-            .iter()
-            .map(|pane| &pane.target.endpoint)
-            .collect();
-        self.raw.retain(|endpoint| endpoints.contains(endpoint));
+        let targets: HashSet<&Target> = self.panes.iter().map(|pane| &pane.target).collect();
+        self.raw.retain(|target| targets.contains(target));
         for pane in &mut self.panes {
             let due =
                 pane.link.is_none() && !pane.permanent && pane.retry_at.is_none_or(|at| at <= now);
@@ -702,25 +729,25 @@ impl Chats {
     /// Whether `pane_id` shows the chat view rather than its terminal.
     pub(crate) fn shown(&self, pane_id: &str) -> bool {
         self.pane(pane_id)
-            .is_some_and(|pane| pane.available() && !self.raw.contains(&pane.target.endpoint))
+            .is_some_and(|pane| pane.available() && !self.raw.contains(&pane.target))
     }
 
     /// Whether the user turned `pane_id` back to its terminal.
     pub(crate) fn raw(&self, pane_id: &str) -> bool {
         self.pane(pane_id)
-            .is_some_and(|pane| self.raw.contains(&pane.target.endpoint))
+            .is_some_and(|pane| self.raw.contains(&pane.target))
     }
 
     /// Shows the chat view over `pane_id`, or its terminal; `false` when the
     /// pane has no chat to show.
     pub(crate) fn set_raw(&mut self, pane_id: &str, raw: bool) -> bool {
-        let Some(endpoint) = self.pane(pane_id).map(|pane| pane.target.endpoint.clone()) else {
+        let Some(target) = self.pane(pane_id).map(|pane| pane.target.clone()) else {
             return false;
         };
         if raw {
-            self.raw.insert(endpoint);
+            self.raw.insert(target);
         } else {
-            self.raw.remove(&endpoint);
+            self.raw.remove(&target);
         }
         true
     }

@@ -92,7 +92,7 @@ fn session_source(origin: &Origin, cancelled: &AtomicBool) -> Result<SessionSour
         .ok_or(Error::PaneGone)?;
     // Read from the host, not the window's snapshot, which can lag: a working
     // agent is still writing the session it would leave behind.
-    if pane.working {
+    if pane.working() {
         return Err(Error::SessionAgentWorking);
     }
     if !snapshot

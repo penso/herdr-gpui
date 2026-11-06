@@ -55,4 +55,5 @@ windows-sys = { features = [
 
 # `login_env`'s tests bind a socket that never listens.
 [target.'cfg(unix)'.dev-dependencies]
+libc.workspace = true
 nix.workspace = true

@@ -156,7 +156,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var root = document.getElementById("hero-install");
     if (!root) return;
     var OS = {
-      macOS: { cmd: "brew install penso/tap/herdr-gpui", req: "macOS 14.2 or newer, Apple silicon or Intel." },
+      macOS: { cmd: "brew install sheprd-labs/tap/sheprd", req: "macOS 14.2 or newer, Apple silicon or Intel." },
       Linux: { cmd: "curl -fsSL https://sheprd.org/install.sh | sh", req: "x86_64 and ARM64, with APT, DNF or pacman." },
       Windows: { cmd: "irm https://sheprd.org/install.ps1 | iex", req: "x86_64 and ARM64, in PowerShell. No admin rights needed." }
     };
@@ -246,6 +246,29 @@ document.addEventListener("DOMContentLoaded", function () {
     sync();
   }
   loopNav();
+
+  // Cache public GitHub stars per tab; API failure leaves a plain GitHub link.
+  (function () {
+    var KEY = "sheprd-stars", TTL = 10 * 60 * 1000;
+    var badge = document.getElementById("stars");
+    function show(n) {
+      if (typeof n !== "number" || !isFinite(n)) return;
+      document.getElementById("stars-n").textContent = n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);
+      badge.hidden = false;
+      badge.parentElement.setAttribute("aria-label", "GitHub, " + n + " stars");
+    }
+    try {
+      var cached = JSON.parse(sessionStorage.getItem(KEY) || "null");
+      if (cached && Date.now() - cached.t < TTL) return show(cached.n);
+    } catch (e) {}
+    fetch("https://api.github.com/repos/sheprd-labs/sheprd", { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || typeof d.stargazers_count !== "number") return;
+        show(d.stargazers_count);
+        try { sessionStorage.setItem(KEY, JSON.stringify({ n: d.stargazers_count, t: Date.now() })); } catch (e) {}
+      }).catch(function () {});
+  })();
 
   /* Illustrative board: statuses loop. With reduced motion it stays still and says so. */
   var note = document.getElementById("motion-note");

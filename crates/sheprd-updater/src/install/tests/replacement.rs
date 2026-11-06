@@ -11,13 +11,20 @@ fn replacement_retains_backup_and_rolls_back_on_spawn_failure() -> anyhow::Resul
             let backup = root.path().join("backup");
             fs::write(&destination, b"old")?;
             fs::write(&candidate, b"new")?;
-            let result = replace(&destination, &candidate, &backup, mode, || {
-                if fail {
-                    Err(io(std::io::Error::other("spawn failed")))
-                } else {
-                    Ok(())
-                }
-            });
+            let result = replace(
+                &destination,
+                &destination,
+                &candidate,
+                &backup,
+                mode,
+                || {
+                    if fail {
+                        Err(io(std::io::Error::other("spawn failed")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
             assert_eq!(result.is_err(), fail);
             assert_eq!(fs::read(&destination)?, if fail { b"old" } else { b"new" });
             if !fail {
@@ -36,6 +43,7 @@ fn replacement_rename_failure_restores_old() -> anyhow::Result<()> {
     let mut launched = false;
     assert!(
         replace(
+            &destination,
             &destination,
             &root.path().join("missing"),
             &root.path().join("backup"),
@@ -66,6 +74,7 @@ fn linux_failed_rename_removes_our_link_and_remains_eligible_for_retry() -> anyh
         assert!(
             replace(
                 &destination,
+                &destination,
                 &home.join("missing"),
                 &backup,
                 Mode::Linux,
@@ -85,7 +94,14 @@ fn linux_failed_rename_removes_our_link_and_remains_eligible_for_retry() -> anyh
     }
     let candidate = home.join("candidate");
     fs::write(&candidate, b"new")?;
-    replace(&destination, &candidate, &backup, Mode::Linux, || Ok(()))?;
+    replace(
+        &destination,
+        &destination,
+        &candidate,
+        &backup,
+        Mode::Linux,
+        || Ok(()),
+    )?;
     assert_eq!(fs::read(destination)?, b"new");
     assert_eq!(fs::read(backup)?, b"old");
     Ok(())
@@ -137,11 +153,18 @@ fn mac_replaces_entire_bundle_and_preserves_recovery() -> anyhow::Result<()> {
         fs::write(destination.join("old-only"), b"old")?;
         fs::write(candidate.join("new-only"), b"new")?;
         assert_eq!(
-            replace(&destination, &candidate, &backup, Mode::Mac, || if fail {
-                Err(io(std::io::Error::other("launch failed")))
-            } else {
-                Ok(())
-            })
+            replace(
+                &destination,
+                &destination,
+                &candidate,
+                &backup,
+                Mode::Mac,
+                || if fail {
+                    Err(io(std::io::Error::other("launch failed")))
+                } else {
+                    Ok(())
+                }
+            )
             .is_err(),
             fail
         );
@@ -253,16 +276,23 @@ fn real_executable_archive_installs_relaunches_and_rolls_back() -> anyhow::Resul
         // manifest authentication to exercise real hash/extract/swap/exec.
         let (_tree, candidate) = candidate(stage.path(), &installation, &offer, &cancel)?;
         let backup = stage.path().join("previous-installation");
-        let result = replace(&destination, &candidate, &backup, Mode::Linux, || {
-            let mut command = Command::new(&destination);
-            command.arg("restarted successfully");
-            if fail {
-                command.current_dir(parent.join("missing-directory"));
-            }
-            let text = output(&mut command, &cancel)?;
-            assert_eq!(text, "restarted successfully\n");
-            Ok(())
-        });
+        let result = replace(
+            &destination,
+            &destination,
+            &candidate,
+            &backup,
+            Mode::Linux,
+            || {
+                let mut command = Command::new(&destination);
+                command.arg("restarted successfully");
+                if fail {
+                    command.current_dir(parent.join("missing-directory"));
+                }
+                let text = output(&mut command, &cancel)?;
+                assert_eq!(text, "restarted successfully\n");
+                Ok(())
+            },
+        );
         let mut report = OpenOptions::new()
             .write(true)
             .create_new(true)

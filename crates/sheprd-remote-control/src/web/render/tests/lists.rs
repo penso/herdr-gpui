@@ -4,6 +4,7 @@ fn lists_html(summaries: HashMap<String, Summary>, board_view: bool) -> String {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![workspace(vec![row("p1"), row("p2")])],
     };
     let lists = Lists {
@@ -63,6 +64,7 @@ fn a_title_from_daemon_data_is_escaped() {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![workspace(vec![chat])],
     };
     let summaries = HashMap::new();
@@ -87,6 +89,7 @@ fn rows_show_the_daemons_status_dot_and_no_path() {
         status: AgentStatus::Blocked,
         pane: "t2".into(),
         title: None,
+        changed_ms: None,
     });
     let mut shell = crate::hub::layout_terminal("t3", "bash");
     shell.cwd = Some("/srv/code/app".into());
@@ -95,6 +98,7 @@ fn rows_show_the_daemons_status_dot_and_no_path() {
     let layout = Layout {
         connected: true,
         boot: "b".into(),
+        working: 0,
         workspaces: vec![workspace],
     };
     let summaries = HashMap::new();
