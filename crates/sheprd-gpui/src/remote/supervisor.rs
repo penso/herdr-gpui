@@ -13,6 +13,7 @@ use sheprd_remote_control::control::{self, Device, DeviceId, Request, Response, 
 
 mod links;
 mod pull_requests;
+mod update;
 pub(crate) use links::Links;
 use std::{
     cell::Cell,
@@ -21,6 +22,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use update::Updates;
 
 /// How often the supervisor looks at what needs doing.
 const TICK: Duration = Duration::from_millis(500);
@@ -115,6 +117,8 @@ pub(crate) struct Supervisor {
     send: Send,
     /// The settings the service was last brought in line with.
     synced: Option<RemoteConfig>,
+    /// Where the app's updater stands, and a phone's update running.
+    updates: Updates,
     watchers: Rc<Cell<usize>>,
     // keep-sorted end
 }
@@ -145,6 +149,7 @@ impl Default for Supervisor {
             restart: restart_host,
             send: control::request,
             synced: None,
+            updates: Updates::default(),
             watchers: Rc::default(),
             // keep-sorted end
         }
@@ -310,6 +315,7 @@ impl Supervisor {
                     .is_none_or(|sent| sent.elapsed() >= Duration::from_secs(30))
         });
         let outgoing = supervisor.links.outgoing();
+        let update = supervisor.updates.outgoing();
         let task = executor.spawn(async move {
             let status = send(&address, &Request::Status);
             // Every poll: the title bar shows whether any phone is paired.
@@ -341,12 +347,21 @@ impl Supervisor {
             let hosts = status
                 .is_ok()
                 .then(|| links::exchange(&address, send, outgoing));
-            (status, devices, sent, sent_prs, hosts)
+            let update_asked = update.filter(|_| status.is_ok()).is_some_and(|update| {
+                matches!(
+                    send(&address, &Request::AppUpdate { update }),
+                    Ok(Response::AppUpdate { requested: true })
+                )
+            });
+            (status, devices, sent, sent_prs, hosts, update_asked)
         });
         cx.spawn(async move |cx| {
-            let (status, devices, sent, sent_prs, hosts) = task.await;
+            let (status, devices, sent, sent_prs, hosts, update_asked) = task.await;
             cx.update(|cx| {
                 let supervisor = cx.global_mut::<Self>();
+                if update_asked {
+                    supervisor.updates.requested();
+                }
                 if status.is_err() {
                     supervisor.indicators_sent = None;
                     supervisor.pull_requests_sent = None;

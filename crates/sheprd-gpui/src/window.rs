@@ -560,6 +560,7 @@ impl SheprdWindow {
             }
             cx.notify();
         }
+        crate::remote::Supervisor::follow_updater(&mut self.updater, cx);
         if self
             .avatars
             .as_mut()

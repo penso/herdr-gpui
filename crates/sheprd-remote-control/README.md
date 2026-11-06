@@ -84,6 +84,16 @@ sessions, and per-address rate limits. It is synchronous and takes every time
 as milliseconds since the Unix epoch, so the server calls it under a mutex and
 tests pass explicit times.
 
+### Updating from a phone
+
+`POST /api/v2/update` asks Sheprd to update, and this daemon only relays
+(`control::app_update`). Sheprd sends `AppUpdate` with each poll while a window
+runs its updater, and the answer hands it a phone's request, which its updater
+carries out up to the restart. Without a report for 15 seconds the app counts
+as closed: the request is refused, and one already waiting is dropped, so it
+cannot update unseen when the app next opens. A machine with no app open
+cannot update from a phone.
+
 ### Other machines
 
 Allowing a phone also pairs it directly with the SSH and cloud machines Herdr
