@@ -310,7 +310,11 @@ impl SheprdWindow {
                             // The upstream row owns step timers and their expandable list.
                             // Keep the shared metrics here without a second working strip.
                             div()
-                                .debug_selector(|| "chat-live-moving".into())
+                                .when(
+                                    self.config.chat.layout
+                                        != crate::config::ChatLayoutMode::IMessage,
+                                    |row| row.debug_selector(|| "chat-live-moving".into()),
+                                )
                                 .children(self.render_chat_working(chat, cx))
                         } else {
                             self.render_chat_running_row(chat, Some(row), true, cx)

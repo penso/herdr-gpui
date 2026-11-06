@@ -38,7 +38,10 @@ fn jump(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) {
         view.chats.pane("w1:p1").unwrap().list.viewport_bounds()
     });
     assert!(button.left() >= viewport.left() && button.right() <= viewport.right());
-    assert!(button.top() >= viewport.top() && button.bottom() <= viewport.bottom());
+    assert!(
+        button.top() >= viewport.top() && button.bottom() <= viewport.bottom(),
+        "the jump stays inside the entries even while rising: {button:?}, viewport {viewport:?}"
+    );
     assert!((button.center().x - viewport.center().x).abs() <= px(1.));
     let arrow = cx.debug_bounds("chat-jump-arrow").unwrap();
     let label = cx.debug_bounds("chat-jump-label").unwrap();

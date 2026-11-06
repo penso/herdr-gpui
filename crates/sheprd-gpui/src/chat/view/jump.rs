@@ -4,8 +4,9 @@
 use super::*;
 use crate::motion;
 
-/// How far above the bottom of the entries the button rests.
-const REST: f32 = 12.;
+/// Twelve pixels above the entries, plus their eight-pixel bottom margin.
+/// The entering button must remain above that margin throughout its rise.
+const REST: f32 = 20.;
 /// How far it rises into place as it appears, and sinks as it goes.
 const RISE: f32 = 6.;
 

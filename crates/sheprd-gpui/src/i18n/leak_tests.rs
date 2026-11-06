@@ -165,13 +165,22 @@ pub(crate) fn uncut(shown: Vec<String>) -> Vec<String> {
         .filter(|line| line.chars().nth(1).is_some())
         .filter(|line| {
             line.strip_suffix('…').is_none_or(|stem| {
-                !shown
-                    .iter()
-                    .any(|whole| whole.len() > line.len() && whole.starts_with(stem))
+                !shown.iter().any(|whole| {
+                    whole != *line && whole.len() > stem.len() && whole.starts_with(stem)
+                })
             })
         })
         .cloned()
         .collect()
+}
+
+#[test]
+fn a_utf8_ellipsis_can_make_a_cut_as_many_bytes_as_its_whole_line() {
+    let shown = ["cargo test", "cargo t…", "Other…", "Exact", "Exact…"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(uncut(shown), ["cargo test", "Other…", "Exact", "Exact…"]);
 }
 
 /// `text` without the isolation marks Fluent puts around each placeable,
