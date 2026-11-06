@@ -22,10 +22,10 @@ fn select(id: &str, category: OptionCategory, names: &[&str]) -> ConfigOption {
     }
 }
 
-/// The terminal layout drops each setting's name, so two settings both at
-/// "Default" differ only by their marks.
+/// No layout spells out a setting's name, so two settings both at "Default"
+/// differ only by their marks.
 #[gpui::test]
-fn terminal_footer_marks_each_setting(cx: &mut TestAppContext) {
+fn every_layout_marks_each_setting(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
     let mut transcript = Transcript::new("Claude");
@@ -51,16 +51,18 @@ fn terminal_footer_marks_each_setting(cx: &mut TestAppContext) {
         },
         cx,
     );
-    switch(&view, ChatLayoutMode::Terminal, cx);
-    poll(&view, &program, cx);
-    for (setting, icon) in [
-        ("chat-setting-model", "chat-setting-model-icon"),
-        ("chat-setting-effort", "chat-setting-effort-icon"),
-        ("chat-setting-mode", "chat-setting-mode-icon"),
-    ] {
-        let button = cx.debug_bounds(setting).unwrap();
-        let mark = cx.debug_bounds(icon).unwrap();
-        assert!(mark.left() >= button.left(), "{setting}");
-        assert!(mark.right() <= button.right(), "{setting}");
+    for &layout in ChatLayoutMode::ALL {
+        switch(&view, layout, cx);
+        poll(&view, &program, cx);
+        for (setting, icon) in [
+            ("chat-setting-model", "chat-setting-model-icon"),
+            ("chat-setting-effort", "chat-setting-effort-icon"),
+            ("chat-setting-mode", "chat-setting-mode-icon"),
+        ] {
+            let button = cx.debug_bounds(setting).unwrap();
+            let mark = cx.debug_bounds(icon).unwrap();
+            assert!(mark.left() >= button.left(), "{layout:?}: {setting}");
+            assert!(mark.right() <= button.right(), "{layout:?}: {setting}");
+        }
     }
 }

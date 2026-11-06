@@ -84,7 +84,7 @@ fn category_icon(category: OptionCategory) -> &'static str {
     match category {
         OptionCategory::Mode => "icons/lock.svg",
         OptionCategory::Model | OptionCategory::ModelConfig => "icons/cpu.svg",
-        OptionCategory::ThoughtLevel => "icons/lightbulb.svg",
+        OptionCategory::ThoughtLevel => "icons/brain.svg",
         OptionCategory::Other => "icons/settings.svg",
     }
 }
@@ -133,7 +133,7 @@ impl SheprdWindow {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
     }
 
-    /// A setting's mark, for a button that does not spell out its name.
+    /// A setting's mark, which stands for its name on every button.
     fn chat_setting_icon(&self, id: &str, path: &'static str) -> Svg {
         let selector = format!("{id}-icon");
         svg()
@@ -403,20 +403,9 @@ impl SheprdWindow {
             let button = self
                 .chat_header_button(selector.clone().into())
                 .tooltip(self.chat_setting_hint(&option.name, &option.current_name()))
+                .child(self.chat_setting_icon(&selector, category_icon(category)))
                 // The mark and tooltip still say what a squeezed button sets.
-                .when(compact, |button| {
-                    button
-                        .flex_shrink_1()
-                        .min_w(px(46.))
-                        .child(self.chat_setting_icon(&selector, category_icon(category)))
-                })
-                .when(!compact, |button| {
-                    button.child(
-                        div()
-                            .text_color(rgb(theme.subtext()))
-                            .child(safe_text(&option.name, 40)),
-                    )
-                })
+                .when(compact, |button| button.flex_shrink_1().min_w(px(46.)))
                 .child(
                     div()
                         .when(compact, |label| label.min_w_0().flex_shrink_1())
