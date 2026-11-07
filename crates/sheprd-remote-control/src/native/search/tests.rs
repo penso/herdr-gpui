@@ -112,6 +112,7 @@ fn chats() -> Layout {
             branch: None,
             cwd: "/work".into(),
             worktree: None,
+            session: None,
             chats: vec![ChatRow {
                 pane: "p1".into(),
                 tab: "t1".into(),

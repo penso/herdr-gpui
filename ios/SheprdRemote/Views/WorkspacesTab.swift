@@ -15,9 +15,11 @@ extension EnvironmentValues {
 
 /// The Workspaces tab, laid out like Sheprd's sidebar: every computer
 /// with its load, then its repositories, each with its own checkout and
-/// its linked worktrees. A workspace opens on a screen of its own with its
-/// tabs (`WorkspaceScreen`). Search covers workspaces, chats, their
-/// messages, and terminals on every computer, collapsed or not.
+/// its linked worktrees. A computer running more than one Herdr session
+/// lists its repositories under each session's name. A workspace opens on
+/// a screen of its own with its tabs (`WorkspaceScreen`). Search covers
+/// workspaces, chats, their messages, and terminals on every computer,
+/// collapsed or not.
 ///
 /// With many computers the list gets long, so each collapses to its header,
 /// all of them at once from the toolbar, and a long list gets a section
@@ -84,19 +86,25 @@ struct WorkspacesTab: View {
                     }
                 }
                 .sectionIndexLabel(model.displayName(machine.computer).first.map { String($0).uppercased() })
-                ForEach(collapsed ? [] : machine.home?.repositories ?? []) { repository in
-                    Section {
-                        ForEach(repository.workspaces) { workspace in
-                            NavigationLink(value: WorkspaceKey(device: machine.id, workspace: workspace.id)) {
-                                WorkspaceRow(workspace: workspace, repository: repository)
-                            }
-                        }
-                    } header: {
-                        RepositoryHeader(repository: repository, device: machine.id)
+                ForEach(collapsed ? [] : machine.home?.sessionGroups ?? []) { group in
+                    if let name = group.name {
+                        Section {} header: { SessionHeader(name: name) }
+                            .sectionIndexLabel("•")
                     }
-                    // A dot, as repositories repeat across computers: the
-                    // letters say where each computer starts.
-                    .sectionIndexLabel("•")
+                    ForEach(group.repositories) { repository in
+                        Section {
+                            ForEach(repository.workspaces) { workspace in
+                                NavigationLink(value: WorkspaceKey(device: machine.id, workspace: workspace.id)) {
+                                    WorkspaceRow(workspace: workspace, repository: repository)
+                                }
+                            }
+                        } header: {
+                            RepositoryHeader(repository: repository, device: machine.id, session: group.name)
+                        }
+                        // A dot, as repositories repeat across computers: the
+                        // letters say where each computer starts.
+                        .sectionIndexLabel("•")
+                    }
                 }
             }
         }
@@ -198,6 +206,21 @@ private struct MachineHeader<Actions: View>: View {
     }
 }
 
+/// A Herdr session above its repositories, when the computer runs more
+/// than one.
+private struct SessionHeader: View {
+    var name: String
+
+    var body: some View {
+        Label(name, systemImage: "rectangle.stack")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+            .lineLimit(1)
+            .accessibilityLabel("Herdr session \(name)")
+    }
+}
+
 /// Where the phone stands with a computer, after its name.
 struct MachineStatus: View {
     var machine: Fleet.Machine
@@ -249,11 +272,12 @@ private struct LoadGauge: View {
 }
 
 /// A repository's name over its workspaces, with a button for another
-/// worktree of it.
+/// worktree of it, in the same Herdr session.
 private struct RepositoryHeader: View {
     @Environment(AppModel.self) private var model
     var repository: Repository
     var device: String
+    var session: String?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -263,7 +287,7 @@ private struct RepositoryHeader: View {
             // Its own checkout is where a new worktree branches from.
             if let own = repository.workspaces.first(where: { $0.worktree?.linked != true }) {
                 Button {
-                    model.creating = .workspace(device: device, folder: own.cwd)
+                    model.creating = .workspace(device: device, folder: own.cwd, session: session)
                 } label: {
                     Image(systemName: "plus")
                 }

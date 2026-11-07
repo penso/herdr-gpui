@@ -40,6 +40,39 @@ struct RepositoriesTests {
         let home = try JSONDecoder().decode(Home.self, from: json)
         #expect(home.load == nil)
         #expect(home.repositories.map(\.label) == ["l"])
+        #expect(home.workspaces[0].session == nil)
+        #expect(home.sessionGroups == [SessionGroup(name: nil, repositories: home.repositories)])
+    }
+
+    @Test func groupsTheFixturesWorkspacesBySession() throws {
+        guard case let .home(home) = try WireTests.event("home") else { Issue.record("not home"); return }
+        #expect(home.workspaces.map(\.session) == ["default", "pilots", "default"])
+        let groups = home.sessionGroups
+        #expect(groups.map(\.name) == ["default", "pilots"])
+        #expect(groups[0].repositories.map(\.label) == ["work"])
+        #expect(groups[0].repositories[0].workspaces.map(\.id) == ["w1", "w3"])
+        #expect(groups[1].repositories.map(\.label) == ["moltis"])
+    }
+
+    @Test func keepsARepositoryInTwoSessionsApartAndHerdr2First() {
+        let worktree = Home.Worktree(key: "k", label: "repo", linked: false)
+        let home = Self.home([
+            Self.workspace("a", worktree: worktree, session: "coding"),
+            Self.workspace("b"),
+            Self.workspace("c", worktree: worktree, session: "pilots"),
+        ])
+        let groups = home.sessionGroups
+        #expect(groups.map(\.name) == [nil, "coding", "pilots"])
+        #expect(groups.map { $0.repositories.flatMap(\.workspaces).map(\.id) } == [["b"], ["a"], ["c"]])
+    }
+
+    @Test func listsOneNamedSessionAsBeforeSessionsWereNamed() {
+        let home = Self.home([
+            Self.workspace("a", session: "default"),
+            Self.workspace("b"),
+            Self.workspace("c", session: "default"),
+        ])
+        #expect(home.sessionGroups == [SessionGroup(name: nil, repositories: home.repositories)])
     }
 
     @Test func takesTheMostPressingStatus() throws {
@@ -65,7 +98,7 @@ struct RepositoriesTests {
         Home(computer: "c", fingerprint: "f", connected: true, waiting: 0, workspaces: workspaces)
     }
 
-    static func workspace(_ id: String, worktree: Home.Worktree? = nil) -> Home.Workspace {
-        Home.Workspace(id: id, label: id, branch: nil, cwd: "/\(id)", worktree: worktree, pullRequest: nil, chats: [], terminals: [])
+    static func workspace(_ id: String, worktree: Home.Worktree? = nil, session: String? = nil) -> Home.Workspace {
+        Home.Workspace(id: id, label: id, branch: nil, cwd: "/\(id)", worktree: worktree, session: session, pullRequest: nil, chats: [], terminals: [])
     }
 }

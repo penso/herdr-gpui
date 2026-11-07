@@ -142,6 +142,7 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   "workspaces": [{
     "id": "w1", "label": "sheprd", "branch": "main", "cwd": "/Users/me/code/sheprd",
     "worktree": {"key": "/Users/me/code/sheprd/.git", "label": "sheprd", "is_linked_worktree": false},
+    "session": "default",
     "pull_request": {"number": 870, "url": "https://github.com/...", "tone": "success"},
     "chats": [{
       "pane": "p1", "tab": "t1", "title": "Equalize splits", "agent": "claude",
@@ -178,6 +179,10 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   Workspaces tab lists a repository's own checkouts, then its linked
   worktrees, under that name. It is absent for a folder outside a
   repository and from older daemons.
+- `session` is the Herdr 1 session the workspace is in: `default` for the
+  root session, `NAME` for `herdr --session NAME`. It is absent for a
+  Herdr 2 workspace and from older daemons. With more than one session
+  named, the Workspaces tab lists a computer's repositories under each.
 - `pull_request` is absent when the workspace has none; `tone` is
   `sheprd_github::pull_request::Tone` as serde writes it.
 - As built: `waiting` counts every waiting permission request, as the web
@@ -290,10 +295,12 @@ app learns the pane it should open:
   this computer (all of them if it finds none or cannot run); `id` is
   what a request names.
 - `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?,
-  "start"?}` and answers `{"workspace": "w3", "pane": "p7", "prompted":
+  "start"?, "session"?}` and answers `{"workspace": "w3", "pane": "p7", "prompted":
   true, "started": true}`. The
   folder must be one `new` offers, and `branch`, when not blank, opens a
-  worktree.
+  worktree. `session`, as home names it, opens it in that Herdr 1
+  session; absent, or naming none the daemon follows, it opens where new
+  workspaces go.
 - `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?,
   "start"?}` and answers `{"pane": "p7", "prompted": true, "started":
   true}`.

@@ -58,7 +58,7 @@ struct RootView: View {
         }
         .sheet(item: Bindable(model).creating) { creating in
             switch creating {
-            case let .workspace(device, folder): NewWorkspaceSheet(device: device, folder: folder)
+            case let .workspace(device, folder, session): NewWorkspaceSheet(device: device, folder: folder, session: session)
             case let .chat(device, workspace, label, agent): NewChatSheet(device: device, workspace: workspace, label: label, agent: agent)
             }
         }

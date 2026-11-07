@@ -43,6 +43,7 @@ pub(super) fn workspace(chats: Vec<ChatRow>) -> Workspace {
         branch: Some("main".into()),
         cwd: "/code/herdr-gpui".into(),
         worktree: None,
+        session: None,
         chats,
         terminals: vec![crate::hub::layout_terminal("t2", "zsh")],
     }

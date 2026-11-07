@@ -32,6 +32,7 @@ pub(super) fn layout(endpoint: EndpointId) -> Layout {
             branch: Some("main".into()),
             cwd: "/work".into(),
             worktree: None,
+            session: None,
             chats: vec![ChatRow {
                 pane: "p1".into(),
                 tab: "t1".into(),
