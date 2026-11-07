@@ -3,7 +3,9 @@
 use acp::v1 as wire;
 use serde_json::Value;
 
-use crate::harness::out;
+use crate::{harness::out, project::MAX_ENTRY_TEXT};
+
+mod content;
 
 /// A call as it starts running.
 pub(super) fn call(id: &str, name: &str, args: &Value) -> wire::ToolCall {
@@ -40,32 +42,7 @@ pub(super) fn call(id: &str, name: &str, args: &Value) -> wire::ToolCall {
         ),
         _ => (name.to_owned(), wire::ToolKind::Other),
     };
-    let diff = |old: Option<&str>, new: &str| {
-        wire::ToolCallContent::Diff(
-            wire::Diff::new(path.unwrap_or_default().to_owned(), new.to_owned())
-                .old_text(old.map(str::to_owned)),
-        )
-    };
-    let content: Vec<wire::ToolCallContent> = match name {
-        "write" => vec![diff(None, field("content").unwrap_or_default())],
-        "edit" => args
-            .get("edits")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .map(|edit| {
-                let text = |key: &str| edit.get(key).and_then(Value::as_str);
-                diff(text("oldText"), text("newText").unwrap_or_default())
-            })
-            .collect(),
-        // The whole command, so a long one is never hidden by its title.
-        "bash" => field("command")
-            .filter(|command| command.lines().nth(1).is_some())
-            .map(out::text)
-            .into_iter()
-            .collect(),
-        _ => Vec::new(),
-    };
+    let content = content::initial(name, args, MAX_ENTRY_TEXT);
     let mut call = wire::ToolCall::new(id.to_owned(), title)
         .kind(kind)
         .status(wire::ToolCallStatus::InProgress)
@@ -89,21 +66,79 @@ pub(super) fn finished(name: &str, result: &Value, failed: bool) -> wire::ToolCa
     if !failed && matches!(name, "edit" | "write" | "read") {
         return fields;
     }
-    let content: Vec<wire::ToolCallContent> = result
-        .get("content")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|block| match block.get("type").and_then(Value::as_str) {
-            Some("text") => block.get("text").and_then(Value::as_str).map(out::text),
-            Some("image") => Some(wire::ToolCallContent::Content(wire::Content::new(
-                wire::ContentBlock::Image(wire::ImageContent::new(
-                    block.get("data")?.as_str()?,
-                    block.get("mimeType")?.as_str()?,
-                )),
-            ))),
-            _ => None,
-        })
-        .collect();
-    fields.content(Some(content))
+    fields.content(content::result(
+        result,
+        MAX_ENTRY_TEXT,
+        sheprd_chat_protocol::MAX_IMAGE_DATA,
+    ))
+}
+
+/// A running call's live preview. pi's bash sends cumulative snapshots and
+/// other tools have contracts of their own, so a partial result replaces the
+/// last one rather than being appended to it.
+#[derive(Debug)]
+pub(super) struct Progress {
+    base: Vec<wire::ToolCallContent>,
+    latest: Option<Vec<wire::ToolCallContent>>,
+}
+
+const BASE_TEXT: usize = MAX_ENTRY_TEXT / 4;
+const PARTIAL_TEXT: usize = MAX_ENTRY_TEXT - BASE_TEXT;
+/// A preview's images, kept tighter than a final result's.
+const PARTIAL_MEDIA: usize = 1024 * 1024;
+
+impl Progress {
+    pub(super) fn new(name: &str, args: &Value) -> Self {
+        Self {
+            base: content::initial(name, args, BASE_TEXT),
+            latest: None,
+        }
+    }
+
+    /// Takes in a partial result; `false` when it changes nothing.
+    pub(super) fn replace(&mut self, result: &Value) -> bool {
+        let Some(content) = content::result(result, PARTIAL_TEXT, PARTIAL_MEDIA) else {
+            return false;
+        };
+        if self.latest.as_ref() == Some(&content) {
+            return false;
+        }
+        self.latest = Some(content);
+        true
+    }
+
+    pub(super) fn fields(&self) -> wire::ToolCallUpdateFields {
+        let content = self
+            .base
+            .iter()
+            .chain(self.latest.iter().flatten())
+            .cloned()
+            .collect();
+        wire::ToolCallUpdateFields::new()
+            .status(Some(wire::ToolCallStatus::InProgress))
+            .content(Some(content))
+    }
+
+    /// What the finished call shows: the final result in place of the last
+    /// partial one, which stays when the final result carries none.
+    pub(super) fn finish(
+        self,
+        name: &str,
+        result: &Value,
+        failed: bool,
+    ) -> wire::ToolCallUpdateFields {
+        if self.latest.is_none() {
+            return finished(name, result, failed);
+        }
+        let status = if failed {
+            wire::ToolCallStatus::Failed
+        } else {
+            wire::ToolCallStatus::Completed
+        };
+        let output = content::result(result, PARTIAL_TEXT, sheprd_chat_protocol::MAX_IMAGE_DATA)
+            .or(self.latest);
+        wire::ToolCallUpdateFields::new()
+            .status(Some(status))
+            .content(output.map(|output| self.base.into_iter().chain(output).collect()))
+    }
 }

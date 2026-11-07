@@ -324,9 +324,10 @@ fn text_that_is_not_all_a_list_leaves_the_plan() {
         ("toolu_b", "#1 [odd] alpha"),
         ("toolu_c", "Could not read the tasks"),
     ] {
-        call(&mut bridge, "toolu_r", "Read", json!({"file_path": "/a"}));
+        let read = format!("{id}_read");
+        call(&mut bridge, &read, "Read", json!({"file_path": "/a"}));
         call(&mut bridge, id, "TaskList", json!({}));
-        let outs = together(&mut bridge, &[("toolu_r", "text"), (id, text)]);
+        let outs = together(&mut bridge, &[(&read, "text"), (id, text)]);
         assert_eq!(outs.len(), 1, "only the read's card for {id}");
     }
 }

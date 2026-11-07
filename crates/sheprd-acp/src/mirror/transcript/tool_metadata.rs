@@ -20,8 +20,25 @@ pub(super) struct Described {
     pub(super) title: String,
 }
 
+/// A tool's name without the namespace Codex logs it under.
+pub(super) fn short(name: &str) -> &str {
+    name.strip_prefix("functions.")
+        .or_else(|| name.strip_prefix("collaboration."))
+        .unwrap_or(name)
+}
+
+/// What a log gave as an id, when it can be matched exactly later.
+pub(super) fn identifier(value: Option<&Value>) -> Option<String> {
+    let value = value?;
+    if let Some(id) = value.as_u64() {
+        return Some(id.to_string());
+    }
+    let id = value.as_str()?;
+    (!id.is_empty() && id.len() <= 128 && !id.chars().any(char::is_control)).then(|| id.to_owned())
+}
+
 /// Codex logs its arguments encoded as a string.
-fn arguments(input: &Value) -> Cow<'_, Value> {
+pub(super) fn arguments(input: &Value) -> Cow<'_, Value> {
     input
         .as_str()
         .filter(|raw| raw.len() <= TEXT)
@@ -39,11 +56,7 @@ pub(super) fn describe(name: &str, input: &Value) -> Described {
     };
     let path = field(&["file_path", "notebook_path", "path"]);
     let titled = |verb: &str, subject: Option<&str>| subject.map(|text| format!("{verb} {text}"));
-    let short = name
-        .strip_prefix("functions.")
-        .or_else(|| name.strip_prefix("collaboration."))
-        .unwrap_or(name);
-    let (kind, title) = match short {
+    let (kind, title) = match short(name) {
         "Bash" | "exec_command" | "shell" | "shell_command" => (
             ToolKind::Execute,
             field(&["cmd", "command"]).map(out::command_title),

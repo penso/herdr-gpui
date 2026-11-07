@@ -23,6 +23,7 @@ mod permissions;
 mod prompt_titles;
 mod resume;
 mod settings;
+mod streaming;
 
 type Reports = Rc<RefCell<Vec<Activity>>>;
 type Prompts = Rc<RefCell<Vec<String>>>;
