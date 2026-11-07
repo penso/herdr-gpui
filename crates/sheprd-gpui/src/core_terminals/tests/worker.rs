@@ -24,6 +24,16 @@ pub(super) struct Scripted {
     fail_attach: bool,
 }
 
+impl Scripted {
+    /// A backend whose terminals never attach.
+    pub(super) fn failing_attach() -> Self {
+        Self {
+            fail_attach: true,
+            ..Self::default()
+        }
+    }
+}
+
 pub(super) struct ScriptedTerminal(Scripted);
 
 pub(super) struct NoChanges;
@@ -169,12 +179,8 @@ fn commands_reach_the_terminal_in_order_and_screens_come_back() {
 
 #[test]
 fn a_terminal_that_cannot_attach_says_why() {
-    let backend = Scripted {
-        fail_attach: true,
-        ..Scripted::default()
-    };
     let link = worker::spawn(
-        backend,
+        Scripted::failing_attach(),
         TerminalId::new("t1").unwrap(),
         size(80, 24),
         Role::Active,

@@ -31,7 +31,14 @@ fn open(
     cx: &mut TestAppContext,
     observe: bool,
 ) -> (Entity<CoreTerminalView>, &mut VisualTestContext, Scripted) {
-    let backend = Scripted::default();
+    open_on(cx, Scripted::default(), observe)
+}
+
+fn open_on(
+    cx: &mut TestAppContext,
+    backend: Scripted,
+    observe: bool,
+) -> (Entity<CoreTerminalView>, &mut VisualTestContext, Scripted) {
     let link = worker::spawn(
         backend.clone(),
         TerminalId::new("t1").unwrap(),
@@ -119,6 +126,29 @@ fn a_mirror_never_offers_insertion(cx: &mut TestAppContext) {
             assert!(!terminal.supports_action(Action::SetValue));
         })
     });
+}
+
+#[gpui::test]
+fn a_failed_terminal_stops_offering_insertion(cx: &mut TestAppContext) {
+    let (view, cx, backend) = open_on(cx, Scripted::failing_attach(), false);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            window.focus(view.focus_handle(), cx);
+            assert!(node(view, window, cx).supports_action(Action::SetValue));
+        })
+    });
+    until(|| {
+        cx.update(|_, cx| view.update(cx, |view, cx| view.poll(cx)))
+            .then_some(())
+    });
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            assert!(!view.ended());
+            assert!(!node(view, window, cx).supports_action(Action::SetValue));
+            view.insert_accessible_text(Some(&value("after the failure")), window);
+        })
+    });
+    assert!(backend.received.lock().unwrap().is_empty());
 }
 
 #[gpui::test]

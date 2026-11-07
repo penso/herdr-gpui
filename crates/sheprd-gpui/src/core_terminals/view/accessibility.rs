@@ -27,10 +27,14 @@ impl CoreTerminalView {
     }
 
     /// Whether inserted text would reach the program now: the view has the
-    /// keyboard, types rather than watches, holds no IME composition, and its
-    /// program still runs.
+    /// keyboard, types rather than watches, holds no IME composition, its
+    /// program still runs, and its worker has not stopped on an error.
     fn takes_accessible_text(&self, window: &Window) -> bool {
-        self.focus.is_focused(window) && !self.observe && self.marked.is_empty() && !self.ended()
+        self.focus.is_focused(window)
+            && !self.observe
+            && self.marked.is_empty()
+            && !self.ended()
+            && self.screen.failure.is_none()
     }
 
     /// Pastes a set value. A delayed request is checked again, so it never
