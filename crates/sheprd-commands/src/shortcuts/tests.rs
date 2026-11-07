@@ -8,7 +8,12 @@ mod toggle_status_bar;
 type Profile = fn(Command) -> &'static [&'static str];
 
 fn parse(shortcut: &str) -> Keystroke {
-    Keystroke::parse(shortcut).unwrap_or_else(|error| panic!("{shortcut}: {error}"))
+    let os = if cfg!(target_os = "macos") {
+        gpui::OperatingSystem::Mac
+    } else {
+        gpui::OperatingSystem::Linux
+    };
+    Keystroke::parse_with_os(shortcut, os).unwrap_or_else(|error| panic!("{shortcut}: {error}"))
 }
 
 /// Checks a Ctrl profile on every host, not only the platform it ships on:

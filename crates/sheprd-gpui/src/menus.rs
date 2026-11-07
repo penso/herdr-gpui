@@ -10,11 +10,11 @@ use crate::{
     CheckForUpdates, PlaySound, Quit, RunCommand, ShowHerdrNotDetected, ShowLogs,
     ShowUpdatePreview,
     actions::{
-        Copy, Cut, Paste, RingBellPreview, SelectAll, SetLayout, SetTabLayout, ShowToastPreview,
-        ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, TogglePseudoLocale,
+        Copy, Cut, Paste, RingBellPreview, SelectAll, SetChatLayout, SetLayout, SetTabLayout,
+        ShowToastPreview, ShowUpdateDownloadPreview, ShowUpdateHomebrewPreview, TogglePseudoLocale,
         ToggleSlowAnimations,
     },
-    config::{Config, LayoutMode, TabLayoutMode},
+    config::{ChatLayoutMode, Config, LayoutMode, TabLayoutMode},
     controls::Command,
 };
 #[cfg(target_os = "macos")]
@@ -71,17 +71,26 @@ fn tab_layout_menu(current: TabLayoutMode) -> MenuItem {
     MenuItem::submenu(Menu::new(fl!("menus-tab-layout")).items(items))
 }
 
+/// View > Agent Layout: how chat views draw, the one in use checked.
+fn chat_layout_menu(current: ChatLayoutMode) -> MenuItem {
+    let items = ChatLayoutMode::ALL.iter().map(|&mode| {
+        MenuItem::action(mode.label(), SetChatLayout { mode }).checked(mode == current)
+    });
+    MenuItem::submenu(Menu::new(fl!("menus-chat-layout")).items(items))
+}
+
 /// Whether the menu bar built from `new` differs from the one built from
 /// `old`, so a config reload knows to install it again.
 pub(crate) fn changed(old: &Config, new: &Config) -> bool {
     old.layout.mode != new.layout.mode
         || old.tab_layout != new.tab_layout
+        || old.chat.layout != new.chat.layout
         || old.features.qa_menu != new.features.qa_menu
 }
 
-/// The menu bar, with the config's layout checked under View > Layout and
-/// its tab layout under View > Tab Layout, and QA last when
-/// `features.qa_menu` is on.
+/// The menu bar, with the config's layout checked under View > Layout, its
+/// tab layout under View > Tab Layout, and its chat layout under View >
+/// Agent Layout, and QA last when `features.qa_menu` is on.
 pub(crate) fn menus(config: &Config) -> Vec<Menu> {
     let mut menus = vec![
         Menu {
@@ -228,6 +237,7 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
                 MenuItem::separator(),
                 layout_menu(config.layout.mode),
                 tab_layout_menu(config.tab_layout),
+                chat_layout_menu(config.chat.layout),
                 MenuItem::action(
                     fl!("menus-devices-overview"),
                     RunCommand {

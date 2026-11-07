@@ -45,7 +45,7 @@ fn views(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> usize {
     cx.update(|_, cx| view.read(cx).orchestrators.len())
 }
 
-fn shown_list(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> List {
+pub(super) fn shown_list(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> List {
     cx.update(|_, cx| {
         let view = view.read(cx);
         let id = view.activity.section_view.unwrap();

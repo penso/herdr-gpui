@@ -31,6 +31,8 @@ const QR_SIDE: f32 = 176.;
 const RING: f32 = 14.;
 /// The longest device name shown; the daemon bounds it too.
 const NAME_LIMIT: usize = 64;
+/// The page that always carries the current iPhone and iPad beta invite.
+const IPHONE_APP: &str = "https://sheprd.org/testflight/";
 
 /// The open pairing dialog. Dropping it, as closing the dialog does, cancels
 /// a pairing still open at the daemon, so its token stops working at once.
@@ -224,6 +226,11 @@ impl SheprdWindow {
         let Phase::Showing { offer, .. } = dialog.pairing.phase() else {
             return;
         };
+        // The dialog has no focus stops, so the app link has its own key.
+        if key == "enter" {
+            cx.open_url(IPHONE_APP);
+            return;
+        }
         let count = offer.addresses.len();
         if count == 0 {
             return;
@@ -424,7 +431,8 @@ impl SheprdWindow {
                             seconds = left.as_secs_f32().ceil() as u64
                         ))
                 }))
-                .children(self.nearby_hint(cx)),
+                .children(self.nearby_hint(cx))
+                .child(self.get_app_link()),
             None => div()
                 .text_color(rgb(theme.subtext()))
                 .child(fl!("remote-pair-asking")),
@@ -477,6 +485,23 @@ impl SheprdWindow {
                 .text_color(rgb(self.theme.subtext()))
                 .child(text),
         )
+    }
+
+    /// A link to the page with the current iPhone and iPad beta invite, so a
+    /// user who has no app yet can find it from the dialog that asks for it.
+    fn get_app_link(&self) -> Stateful<Div> {
+        let theme = &self.theme;
+        div()
+            .id("remote-pair-get-app")
+            .debug_selector(|| "remote-pair-get-app".into())
+            .cursor_pointer()
+            .text_color(crate::menu::accent(theme))
+            .hover(|s| s.underline())
+            .child(fl!("remote-pair-get-app"))
+            .on_click(|_, _, cx| {
+                cx.stop_propagation();
+                cx.open_url(IPHONE_APP);
+            })
     }
 
     fn pairing_claim(

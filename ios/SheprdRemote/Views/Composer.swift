@@ -15,6 +15,8 @@ struct Composer: View {
     let transcript: Transcript
     @Binding var problem: String?
     @State private var draft = ""
+    /// Tells this composer from another window's on the same chat.
+    @State private var id = UUID()
     @State private var pictures: [Picture] = []
     @State private var picks: [PhotosPickerItem] = []
     @State private var choosingPhotos = false
@@ -69,6 +71,7 @@ struct Composer: View {
         }
         .sensoryFeedback(.start, trigger: dictation.phase == .listening) { _, now in now }
         .onAppear {
+            model.fleet.composerOpened(id, in: key)
             // Memory first, which keeps uploads already under way; the
             // saved draft after a relaunch uploads its pictures again.
             if let saved = model.drafts.removeValue(forKey: key) {
@@ -84,12 +87,19 @@ struct Composer: View {
             // The simulator loop's `-draft TEXT` types into the composer.
             if let text = UserDefaults.standard.string(forKey: "draft") { draft = text }
             #endif
+            // Said here too: the camera hides this composer without ending
+            // it, and coming back with the same words changes nothing.
+            model.fleet.composer(id, in: key, drafted: !draft.isEmpty || !pictures.isEmpty)
         }
         .onDisappear {
             if !draft.isEmpty || !pictures.isEmpty {
                 model.drafts[key] = ComposerDraft(text: draft, pictures: pictures)
             }
             saveDraft()
+            model.fleet.composerClosed(id, in: key)
+        }
+        .onChange(of: draft.isEmpty && pictures.isEmpty) { _, empty in
+            model.fleet.composer(id, in: key, drafted: !empty)
         }
         // The app may be ended while in the background, with no
         // disappearing first.
@@ -289,7 +299,7 @@ struct Composer: View {
     /// Keeps the draft on disk for after a relaunch, or removes it once empty.
     private func saveDraft() {
         let saved = draft.isEmpty && pictures.isEmpty ? nil : Cache.Draft(text: draft, pictures: pictures.map(\.jpeg))
-        model.fleet.cache.save(draft: saved, device: key.device, pane: key.pane)
+        model.fleet.save(draft: saved, for: key, by: id)
     }
 
     /// The clipboard's pictures, read from the attach menu. Unlike the

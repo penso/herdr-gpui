@@ -17,11 +17,7 @@
 //! `{"aps": {"content-available": 1}, "sealed": "…"}`, whose
 //! sealed `clear` tells the app to remove the chat's notifications.
 
-use super::{
-    Error, Result,
-    payload::MAX_PAYLOAD,
-    send::{Priority, Push, PushType},
-};
+use super::{Error, Priority, Push, PushType, Result, payload::MAX_PAYLOAD};
 use crate::push::{Kind, Notification};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
@@ -50,7 +46,7 @@ pub(crate) struct Sealed {
     pub(crate) pane: String,
     pub(crate) title: String,
     pub(crate) body: String,
-    /// Questions waiting across every chat.
+    /// Agents that need an answer or finished unseen.
     pub(crate) badge: u32,
     /// The permission request a question is, for its answer buttons.
     #[serde(default, skip_serializing_if = "Option::is_none")]

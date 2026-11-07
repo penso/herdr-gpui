@@ -55,7 +55,9 @@ pub(crate) fn parse_distro_list(output: &[u8]) -> Vec<String> {
     let utf16 = output.starts_with(&[0xff, 0xfe]) || output.get(1) == Some(&0);
     let text = if utf16 {
         let units: Vec<u16> = output
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
             .collect();
         String::from_utf16_lossy(&units)

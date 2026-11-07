@@ -14,6 +14,7 @@ mod mod_apps;
 mod pulse;
 mod sections;
 mod startup_counts;
+mod tasks_section;
 mod toggle;
 
 fn item(native_id: &str, title: &str) -> Item {
@@ -35,6 +36,8 @@ fn item(native_id: &str, title: &str) -> Item {
         labels: vec!["enhancement".into()],
         parent_id: None,
         blocked_by: Vec::new(),
+        assignee: None,
+        acceptance: None,
         priority: None,
         created_at: None,
         updated_at: None,

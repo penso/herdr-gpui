@@ -16,6 +16,7 @@ mod azure;
 pub(crate) mod backdrop;
 mod bitmap_fonts;
 mod boat;
+mod boxd;
 pub(crate) mod chat;
 mod cjk_fonts;
 mod cloud;
@@ -47,10 +48,12 @@ mod sprites;
 pub(crate) mod ssh_hosts;
 pub(crate) mod status_bar;
 mod status_icons;
+mod tab_labels;
 pub(crate) mod tab_layout;
 #[cfg(any(
     feature = "azure",
     feature = "boat",
+    feature = "boxd",
     feature = "coder",
     feature = "container",
     feature = "daytona",
@@ -107,6 +110,9 @@ pub(crate) use sheprd_remote::config::AzureFields;
 pub use sheprd_remote::config::BoatConfig;
 #[cfg(feature = "boat")]
 pub(crate) use sheprd_remote::config::BoatFields;
+pub use sheprd_remote::config::BoxdConfig;
+#[cfg(feature = "boxd")]
+pub(crate) use sheprd_remote::config::BoxdFields;
 pub use sheprd_remote::config::CoderConfig;
 #[cfg(feature = "coder")]
 pub(crate) use sheprd_remote::config::CoderFields;
@@ -137,6 +143,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+pub use tab_labels::TabLabels;
 pub use tab_layout::TabLayoutMode;
 pub use theme::Theme;
 pub(crate) use theme::ThemeName;
@@ -174,6 +181,8 @@ pub struct Config {
     pub backdrop: Backdrop,
     pub bell: BellConfig,
     pub boat: BoatConfig,
+    /// The boxd account whose machines are devices.
+    pub boxd: BoxdConfig,
     /// What chats started from the app run with.
     pub chat: chat::ChatConfig,
     /// Only the keys this GUI's own file sets, so Settings can tell an
@@ -297,6 +306,8 @@ pub struct Config {
     pub status_bar: StatusBar,
     /// The set agent status is drawn with.
     pub status_icons: StatusIcons,
+    /// What a tab with no name of its own is called.
+    pub tab_labels: TabLabels,
     /// How tab strips draw their tabs, from View > Tab Layout.
     pub tab_layout: TabLayoutMode,
     pub tabs: FontConfig,
@@ -408,6 +419,7 @@ impl Default for Config {
             backdrop: Backdrop::default(),
             bell: BellConfig::default(),
             boat: BoatConfig::default(),
+            boxd: BoxdConfig::default(),
             chat: chat::ChatConfig::default(),
             clipboard_overrides: ClipboardToastSettings::default(),
             clipboard_toast: ClipboardToast::default(),
@@ -469,6 +481,7 @@ impl Default for Config {
             ssh: SshConfig::default(),
             status_bar: StatusBar::default(),
             status_icons: StatusIcons::default(),
+            tab_labels: TabLabels::default(),
             tab_layout: TabLayoutMode::default(),
             // Tabs are terminal chrome, so they read in the monospace face the
             // sidebar and terminal use, as they do in the reference UI.
@@ -499,6 +512,7 @@ struct Settings {
     backdrop: Backdrop,
     bell: BellConfig,
     boat: BoatConfig,
+    boxd: BoxdConfig,
     chat: chat::ChatConfig,
     clipboard_toast: ClipboardToastSettings,
     cloud: CloudConfig,
@@ -552,6 +566,7 @@ struct Settings {
     ssh: SshConfig,
     status_bar: StatusBar,
     status_icons: Option<status_icons::SavedIcons>,
+    tab_labels: TabLabels,
     tab_layout: TabLayoutMode,
     tabs: FontSettings,
     terminal: FontSettings,
@@ -596,6 +611,7 @@ impl Config {
         Ok(sheprd_remote::config::Sections {
             azure: config.azure,
             boat: config.boat,
+            boxd: config.boxd,
             coder: config.coder,
             container: config.container,
             daytona: config.daytona,
@@ -836,6 +852,9 @@ impl Config {
         #[cfg(feature = "boat")]
         settings.boat.settings_with(|_| None)?;
         config.boat = settings.boat;
+        #[cfg(feature = "boxd")]
+        settings.boxd.settings_with(|_| None)?;
+        config.boxd = settings.boxd;
         settings.chat.check()?;
         config.chat = settings.chat;
         settings.cloud.check()?;
@@ -928,6 +947,7 @@ impl Config {
         settings.mods.validate()?;
         config.mods = settings.mods;
         config.status_bar = settings.status_bar;
+        config.tab_labels = settings.tab_labels;
         config.tab_layout = settings.tab_layout;
         settings.ssh.check()?;
         config.ssh = settings.ssh;

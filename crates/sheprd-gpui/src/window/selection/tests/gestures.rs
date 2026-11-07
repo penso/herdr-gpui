@@ -36,7 +36,7 @@ fn dragging_across_a_link_copies_it_instead_of_opening_it(cx: &mut TestAppContex
     cx.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string("kept".into())));
     cx.simulate_click(at(1.), Modifiers::default());
     assert!(cx.opened_url().is_none());
-    cx.simulate_click(at(1.), Modifiers::secondary_key());
+    cx.simulate_click(at(1.), crate::keymap::secondary_key());
     assert_eq!(cx.opened_url().as_deref(), Some(url));
     assert_eq!(
         cx.update(|_, cx| cx.read_from_clipboard().and_then(|item| item.text())),
@@ -101,7 +101,7 @@ fn application_mouse_takes_precedence_shift_keeps_copy_and_the_link_modifier_lin
     // link from the application and opens it.
     cx.simulate_click(at(1.), shift);
     assert!(cx.opened_url().is_none());
-    cx.simulate_click(at(1.), Modifiers::secondary_key());
+    cx.simulate_click(at(1.), crate::keymap::secondary_key());
     assert_eq!(cx.opened_url().as_deref(), Some(url));
 }
 

@@ -212,16 +212,20 @@ impl Keymap {
         let reserved = crate::actions::reserved_keystrokes().map(|label| -> &str { label });
         keymap
             .chain(reserved)
-            .filter_map(|label| Keystroke::parse(label).ok())
+            .filter_map(|label| crate::keymap::parse_keystroke(label).ok())
             .map(|keystroke| identity(&keystroke))
             .collect()
     }
 
     fn custom_label(&self, trigger: &Trigger) -> String {
         match trigger {
-            Trigger::Direct(keystroke) => keystroke.unparse(),
+            Trigger::Direct(keystroke) => keystroke.unparse(crate::keymap::HOST_OS),
             Trigger::Prefixed(keystroke) => {
-                format!("{} {}", self.prefix_word(), keystroke.unparse())
+                format!(
+                    "{} {}",
+                    self.prefix_word(),
+                    keystroke.unparse(crate::keymap::HOST_OS)
+                )
             }
         }
     }

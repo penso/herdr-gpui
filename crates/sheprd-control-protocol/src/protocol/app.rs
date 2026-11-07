@@ -11,6 +11,7 @@ pub enum ActivityPanel {
     Overview,
     PullRequests,
     Issues,
+    Tasks,
     Security,
     Automations,
     Usage,
@@ -22,6 +23,7 @@ impl ActivityPanel {
         Self::Overview,
         Self::PullRequests,
         Self::Issues,
+        Self::Tasks,
         Self::Security,
         Self::Automations,
         Self::Usage,
@@ -34,6 +36,7 @@ impl ActivityPanel {
             Self::Workspaces => "workspaces",
             Self::PullRequests => "pull-requests",
             Self::Issues => "issues",
+            Self::Tasks => "tasks",
             Self::Security => "security",
             Self::Automations => "automations",
             Self::Usage => "usage",
@@ -182,6 +185,12 @@ pub struct HostInfo {
     /// "online", "connecting", "reconnecting", "detached", "disabled", ...
     pub status: String,
     pub selected: bool,
+    /// Its notifications are muted as a whole.
+    #[serde(default)]
+    pub muted: bool,
+    /// What groups it in the sidebar.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

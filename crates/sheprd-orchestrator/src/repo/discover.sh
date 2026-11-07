@@ -4,6 +4,20 @@
 set -eu
 cd -- "$checkout"
 
+# The folder holding the .beads that $1/.beads/redirect names, read as bd reads
+# it: the first line neither blank nor a comment, relative to $1. A target that
+# cannot be read or is not named .beads prints nothing: bd then follows it.
+beads_root() {
+    [ -f "$1/.beads/redirect" ] || return 0
+    target=$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' -e 's/^[[:space:]]*//' \
+        -e 's/[[:space:]]*$//' -e q "$1/.beads/redirect") || return 0
+    [ -n "$target" ] || return 0
+    database=$(cd -- "$1" && cd -P -- "$target" && pwd -P) 2>/dev/null || return 0
+    case $database in
+    */.beads) printf 'beads-root\t%s\n' "${database%/.beads}" ;;
+    esac
+}
+
 # Missing Git and unreadable or malformed configuration are discovery failures,
 # including in folders with .beads. Never turn them into a skipped project.
 git config --list >/dev/null
@@ -31,6 +45,7 @@ else
     if [ -d .beads ]; then
         root=$(pwd -P)
         printf 'common\t%s/.beads\nmain\t%s\nbeads\t1\n' "$root" "$root"
+        beads_root "$root"
         after ''
     else
         printf 'not-repository\n'
@@ -47,7 +62,10 @@ main=${worktrees%%'
 main=${main#worktree }
 printf 'common\t%s\n' "$common"
 printf 'main\t%s\n' "${main:-$root}"
-if [ -d "${main:-$root}/.beads" ]; then printf 'beads\t1\n'; fi
+if [ -d "${main:-$root}/.beads" ]; then
+    printf 'beads\t1\n'
+    beads_root "${main:-$root}"
+fi
 remotes=$(git remote)
 for name in $remotes; do
     url=$(git remote get-url "$name")

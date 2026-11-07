@@ -54,3 +54,17 @@ fn destination_inventory_reconciles_selection_and_ignores_other_hosts(cx: &mut T
         })
     });
 }
+
+#[test]
+fn only_a_review_marks_a_profile_that_replaces_the_built_in_prompt() {
+    use crate::orchestrator::prompt::Profile;
+    let marked = Profile::parse("mine".into(), "review: replace\nBody");
+    let plain = Profile::parse("other".into(), "Body");
+    assert_eq!(
+        super::profile_label(&marked, true),
+        crate::i18n::fl!("orchestrator-profile-replaces", name = "mine")
+    );
+    assert_ne!(super::profile_label(&marked, true), "mine");
+    assert_eq!(super::profile_label(&marked, false), "mine");
+    assert_eq!(super::profile_label(&plain, true), "other");
+}

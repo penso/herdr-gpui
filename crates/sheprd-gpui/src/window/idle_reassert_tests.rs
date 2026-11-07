@@ -151,7 +151,7 @@ fn a_wheel_on_a_frame_another_client_sized_is_use(cx: &mut gpui::TestAppContext)
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             assert!(!view.input_ready(), "the fixture holds input");
-            let wheel = gpui::ScrollWheelEvent {
+            let wheel = gpui::ScrollEvent {
                 position: gpui::point(gpui::px(15.), gpui::px(10.)),
                 ..Default::default()
             };

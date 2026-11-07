@@ -165,6 +165,17 @@ class WingetTests(unittest.TestCase):
         self.assertIn("PackageName: Sheprd\n", locale)
         self.assertIn("PackageUrl: https://sheprd.org\n", locale)
 
+    def test_submit_without_a_token_warns_and_runs_nothing(self):
+        env = {key: value for key, value in WINGET.os.environ.items() if key != "GITHUB_TOKEN"}
+        with mock.patch.dict(WINGET.os.environ, env, clear=True), \
+                mock.patch.object(WINGET, "published") as published, \
+                mock.patch.object(WINGET.subprocess, "run") as run, \
+                mock.patch("builtins.print") as printed:
+            WINGET.submit(VERSION, self.sums, Path("komac"), self.work / "unused")
+        published.assert_not_called()
+        run.assert_not_called()
+        self.assertIn("::warning::WINGET_TOKEN is not set", printed.call_args.args[0])
+
     def test_the_komac_pin_is_one_exact_release(self):
         self.assertRegex(WINGET.KOMAC_SHA256, r"^[0-9a-f]{64}$")
         self.assertTrue(WINGET.KOMAC_URL.startswith(

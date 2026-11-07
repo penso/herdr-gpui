@@ -197,6 +197,49 @@ final class CollapsedStore {
     }
 }
 
+/// The terminal key rows' buttons, kept on this phone.
+@MainActor
+@Observable
+final class TermKeyStore {
+    private static let key = "terminalKeys"
+
+    private static let symbolsKey = "terminalKeySymbols"
+
+    var layout: TermKeyLayout {
+        didSet {
+            guard let data = try? TermKeyLayout.save(layout) else { return }
+            UserDefaults.standard.set(data, forKey: Self.key)
+        }
+    }
+
+    /// Keys written as words show symbols: esc ⎋, ctrl ⌃, alt ⌥, shift ⇧.
+    var symbols: Bool {
+        didSet { UserDefaults.standard.set(symbols, forKey: Self.symbolsKey) }
+    }
+
+    init() {
+        layout = TermKeyLayout.load(UserDefaults.standard.data(forKey: Self.key))
+        symbols = UserDefaults.standard.bool(forKey: Self.symbolsKey)
+    }
+}
+
+/// The tag the Workspaces tab shows computers of, kept on this phone and
+/// shared by its windows. Read it through `ComputerTags.active`: the tag may
+/// have left every computer since.
+@MainActor
+@Observable
+final class TagFilterStore {
+    private static let key = "computerTagFilter"
+
+    var tag: String? {
+        didSet { UserDefaults.standard.set(tag, forKey: Self.key) }
+    }
+
+    init() {
+        tag = UserDefaults.standard.string(forKey: Self.key)
+    }
+}
+
 /// The composer's text shortcuts, kept on this phone.
 @MainActor
 @Observable

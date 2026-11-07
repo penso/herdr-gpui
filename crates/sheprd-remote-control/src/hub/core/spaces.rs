@@ -160,6 +160,7 @@ impl Spaces {
                 cwd: space.folder.clone(),
                 id: format!("core:space:{}", id(&space.id)),
                 label: space.name.clone(),
+                session: None,
                 terminals: Vec::new(),
                 worktree: None,
             };

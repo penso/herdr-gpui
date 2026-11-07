@@ -46,7 +46,7 @@ impl Favicon {
         }
         let mut pixels = image::RgbaImage::from_raw(SIZE, SIZE, pixels)?;
         // GPUI keeps pictures as BGRA.
-        for pixel in pixels.chunks_exact_mut(4) {
+        for pixel in pixels.as_chunks_mut::<4>().0.iter_mut() {
             pixel.swap(0, 2);
         }
         Some(Self::Icon(RenderImage::new(vec![image::Frame::new(

@@ -17,6 +17,7 @@ use axum::{
     extract::{ConnectInfo, Path, State},
     http::{HeaderMap, header},
 };
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sheprd_chat_protocol::{Agent, Command};
@@ -45,7 +46,7 @@ pub(super) async fn ping(State(state): State<Shared>) -> Json<Value> {
 
 #[derive(Deserialize)]
 pub(super) struct ClaimRequest {
-    token: String,
+    token: SecretString,
     name: String,
     public_key: String,
 }
@@ -71,7 +72,7 @@ pub(super) async fn claim(
     let claim = with_auth(&state, move |auth| {
         let claim = auth.claim(
             peer.ip(),
-            &request.token,
+            request.token.expose_secret(),
             &request.name,
             &request.public_key,
             now_ms(),
@@ -130,14 +131,14 @@ pub(super) async fn handoff(
 ) -> Result<Json<Value>, ApiError> {
     let handoff = with_auth(&state, move |auth| Ok(auth.handoff(&device, now_ms())?)).await?;
     Ok(Json(json!({
-        "token": handoff.token,
+        "token": handoff.token.expose_secret(),
         "expires_ms": handoff.expires_ms,
     })))
 }
 
 #[derive(Deserialize)]
 pub(super) struct RedeemRequest {
-    token: String,
+    token: SecretString,
     public_key: String,
 }
 
@@ -149,7 +150,12 @@ pub(super) async fn redeem(
     Json(request): Json<RedeemRequest>,
 ) -> Result<Json<Value>, ApiError> {
     let device = with_auth(&state, move |auth| {
-        Ok(auth.redeem(peer.ip(), &request.token, &request.public_key, now_ms())?)
+        Ok(auth.redeem(
+            peer.ip(),
+            request.token.expose_secret(),
+            &request.public_key,
+            now_ms(),
+        )?)
     })
     .await?;
     Ok(Json(json!({
@@ -202,7 +208,7 @@ pub(super) async fn session(
     // The addresses served now, so an installed app that paired on another
     // network can still find this computer later.
     Ok(Json(json!({
-        "token": session.token,
+        "token": session.token.expose_secret(),
         "expires_ms": session.expires_ms,
         "origins": state.origins(),
     })))
@@ -266,7 +272,7 @@ pub(super) async fn create_workspace(
         check_new_workspace(&state, &request.cwd, &request.branch, &request.agent).await?;
     state
         .hub
-        .create_workspace(&request.cwd, branch.as_deref(), agent)
+        .create_workspace(&request.cwd, branch.as_deref(), agent, None)
         .await?;
     Ok(Json(json!({ "location": "/" })))
 }

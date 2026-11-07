@@ -3,7 +3,7 @@ use gpui::Keystroke;
 use sheprd_backend::{ClientKeyCode, ClientKeyKind, ClientPaneInputEvent};
 
 fn key(text: &str, key_char: Option<&str>) -> Keystroke {
-    let mut keystroke = Keystroke::parse(text).unwrap();
+    let mut keystroke = crate::keymap::parse_keystroke(text).unwrap();
     keystroke.key_char = key_char.map(str::to_owned);
     keystroke
 }

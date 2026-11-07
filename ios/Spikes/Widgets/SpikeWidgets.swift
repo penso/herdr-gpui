@@ -7,6 +7,7 @@ import WidgetKit
 struct SpikeWidgets: WidgetBundle {
     var body: some Widget {
         SpikeLiveActivity()
+        SealedProbeLiveActivity()
     }
 }
 

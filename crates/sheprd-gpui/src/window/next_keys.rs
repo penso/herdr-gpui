@@ -171,7 +171,7 @@ fn extend_run(
         return Some((kind, first, number));
     }
     rows.push(Row {
-        key: key.unparse(),
+        key: key.unparse(crate::keymap::HOST_OS),
         description: crate::i18n::command(info),
     });
     numbered.map(|(kind, number)| (kind, number, number))

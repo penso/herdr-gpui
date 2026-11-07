@@ -6,6 +6,7 @@ use gpui::{TestAppContext, VisualTestContext, point, px, size};
 use std::sync::Arc;
 
 mod en_xa;
+mod unopened;
 
 fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
     Status {
@@ -17,18 +18,29 @@ fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
 
 #[test]
 fn summary_reads_as_a_sentence_before_and_after_the_first_refresh() {
-    assert_eq!(summary(None), "Checking working tree...");
-    assert_eq!(summary(Some(Status::default())), "No uncommitted changes");
+    assert_eq!(summary(None, None), "Checking working tree...");
     assert_eq!(
-        summary(Some(status(12, 3, 0))),
+        summary(Some(Status::default()), None),
+        "No uncommitted changes"
+    );
+    assert_eq!(
+        summary(Some(Status::default()), Some(false)),
+        "No uncommitted changes"
+    );
+    assert_eq!(
+        summary(Some(Status::default()), Some(true)),
+        "Not yet committed"
+    );
+    assert_eq!(
+        summary(Some(status(12, 3, 0)), Some(true)),
         "+\u{2068}12\u{2069} -\u{2068}3\u{2069}"
     );
     assert_eq!(
-        summary(Some(status(12, 3, 1))),
+        summary(Some(status(12, 3, 1)), Some(true)),
         "+\u{2068}12\u{2069} -\u{2068}3\u{2069}, \u{2068}1\u{2069} untracked entry"
     );
     assert_eq!(
-        summary(Some(status(0, 0, 4))),
+        summary(Some(status(0, 0, 4)), Some(true)),
         "+\u{2068}0\u{2069} -\u{2068}0\u{2069}, \u{2068}4\u{2069} untracked entries"
     );
 }
@@ -211,6 +223,35 @@ fn the_popup_says_when_it_is_waiting_on_github(cx: &mut TestAppContext) {
     draw(cx);
     assert!(cx.debug_bounds("git-menu-pr-loading").is_none());
     assert!(cx.debug_bounds("git-menu-pr").is_some());
+}
+
+#[gpui::test]
+fn a_change_with_no_counted_lines_is_not_yet_committed_without_counts(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    let input = crate::pull_request::Input {
+        checkout: None,
+        repo_key: Some(REPO_KEY.into()),
+        branch: "develop".into(),
+    };
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            // Porcelain sees a binary or mode-only change numstat counts no
+            // line of; the pull request puts the summary row in the popup.
+            view.git = crate::git::Git::fixture(input.clone(), status(0, 0, 0));
+            view.git.seed_uncommitted(true);
+            view.menu.github = crate::github::Auth::connected_fixture();
+            let pr = crate::pull_request::fixture().unwrap();
+            view.seed_pr(input, pr, std::time::Instant::now());
+            view.open_git_menu(point(px(900.), px(20.)), window, cx);
+        })
+    });
+    cx.update(|window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+    assert!(cx.debug_bounds("git-menu-not-committed").is_some());
+    assert!(cx.debug_bounds("git-menu-uncommitted-additions").is_none());
+    assert!(cx.debug_bounds("git-menu-uncommitted-deletions").is_none());
 }
 
 #[gpui::test]

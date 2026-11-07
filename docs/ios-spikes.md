@@ -4,7 +4,7 @@ The risky pieces of `docs/ios-app-plan.md`, tried before building on them.
 Spike code: `ios/Spikes/` (an iPhone app with a Notification Service
 Extension and a widget extension, plus `mac/`, the Mac's Bluetooth side),
 `ios/SheprdRemoteCore` (`NotificationSeal`), and
-`crates/sheprd-remote-control/src/apns/seal.rs`.
+`crates/sheprd-apns/src/seal.rs`.
 
 | Spike | Result | Evidence |
 | --- | --- | --- |
@@ -13,6 +13,8 @@ Extension and a widget extension, plus `mac/`, the Mac's Bluetooth side),
 | Notification Service Extension opens a push | **Not shown on the simulator; needs a device** | `simctl push` delivered the notification, but with provisional authorization (the only kind granted without a tap) alerts are disabled and the system did not run the extension; the notification kept its placeholder text. |
 | Live Activity with `Button(intent:)` | **Starts; tap needs a device** | `Activity.request` succeeded with the widget extension's `LiveActivityIntent` buttons. A headless simulator cannot tap the lock screen, and its screenshots did not show the island. |
 | Intent calls the computer over pinned TLS | **Builds; needs a device** | `SpikeAnswerIntent.call()` uses the app's pinning; "Run the intent here" runs it in the app. |
+| Live Activity the widget extension must open | **Builds; needs a device** | `Shared/SealedProbe.swift` seals each update to the phone's Secure Enclave key, and `Widgets/SealedProbeWidget.swift` opens it to draw it. Compiled for iOS; not yet run. |
+| Sealed Live Activity payload size | **Fits, except all-emoji text** | `seal-activity-push.swift`: the largest update is 3,574 of 4,096 bytes and the largest start 2,525, with 3-byte text. Figures in `docs/apns-relay-plan.md`. |
 | Bluetooth peripheral on the Mac from Rust | **Possible, but not recommended** | In `objc2-core-bluetooth` 0.3.2 every Core Bluetooth method is an `unsafe fn`, and delegate conformances are `unsafe impl`. A Rust peripheral would be dozens of unsafe calls, against the repository's safe-Rust rule. |
 | Bluetooth peripheral on the Mac in Swift | **Builds; needs the user's permission and an iPhone** | `ios/Spikes/mac/Peripheral.swift`: GATT service, echo characteristic, L2CAP channel. `run.sh` wraps it in an app bundle with `NSBluetoothAlwaysUsageDescription`, which macOS requires before Bluetooth access. |
 | iPhone central: restoration, latency, throughput | **Builds; needs a device** | The simulator has no Bluetooth. `App/Central.swift` logs relaunches by state restoration, 20 echo round trips, and 1 MiB each way over L2CAP. |
@@ -61,3 +63,13 @@ an iPhone on iOS 26, and this Mac.
      dialog (only its address and fingerprint are used), Save, and Start.
    - Lock the phone and press Allow once.
    - The activity should show `HTTP 200 in N ms`.
+5. **Sealed Live Activity** (no APNs key needed)
+   - Set a passcode on the phone, and in Settings make it required immediately.
+   - In the Activity tab, tap Start the sealed probe, then lock the phone at once.
+   - Watch the lock screen for about 25 seconds. It should count up through
+     `Opened #1` to `Opened #6`, each with a time in ms, `Secure Enclave`, and
+     the memory left. `FAILED` and a reason means the extension could not open it.
+   - Unlock, and tap Show the probe's log. Lines with `app #N sent, phone locked`
+     followed by a `widget Opened #N` line prove it opened while locked.
+   - If iOS does not redraw, the log has no `widget` lines after the lock: note
+     that, because it is a different result from `FAILED`.

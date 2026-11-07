@@ -33,6 +33,7 @@ mod remote_paths;
 mod responses;
 mod reused_branch;
 mod routing;
+mod unopened;
 mod upstream;
 mod workspace_directory;
 

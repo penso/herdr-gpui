@@ -2,8 +2,8 @@
 
 The orchestrator (`crates/sheprd-gpui/src/orchestrator/`) lists a repository's
 issues, pull requests, and the agent runs dispatched for them in the activity
-bar's Pull requests and Issues sections, and dispatches new ones through the
-Herdr CLI. User-facing behavior is in the crate README's "Orchestrator"
+bar's Pull requests, Issues, and Tasks sections, and dispatches new ones through
+the Herdr CLI. User-facing behavior is in the crate README's "Orchestrator"
 section; this page is for working on it.
 
 ## State and restart
@@ -12,8 +12,9 @@ The orchestrator keeps its own per-repository SQLite database, in the app's
 state directory: `<state dir>/repositories/<uuid v5 of the canonical git
 common dir>/state.sqlite3`, private to the user. Repositories on SSH hosts
 are keyed by `ssh://<destination><git common dir>` and live on this machine.
-Its schema began as agent-launcher's (`PRAGMA user_version`, currently 2,
-which added each open pull request's last read review and checks):
+Its schema began as agent-launcher's (`PRAGMA user_version`, currently 3:
+version 2 added each open pull request's last read review and checks, and
+version 3 each bead's assignee and acceptance criteria):
 
 - The first time a repository opens, agent-launcher's database at
   `<data_local_dir>/agent-launcher/repositories/<same uuid>/state.sqlite3`
@@ -43,14 +44,15 @@ agent-launcher wrote it and check that migration keeps its rows.
 | `model.rs`, `location.rs`, `store.rs` | Records in the database's shapes, its path, and SQLite access. |
 | `repo.rs` | Finding a checkout's repository, main checkout, Beads, and remote on its host. |
 | `github.rs`, `gitlab.rs`, `beads.rs` | The sources: a full listing each. GitHub reads only what changed since the last sync, both listings' first pages in one request, with a full listing again every 30 minutes; a listing larger than 2,000 open items is shown, not stored, and continues from memory the same way, staying capped until a full listing reads it all. GitLab lists its open issues and merge requests in full on every sync. |
-| `review.rs` | Each open pull request's review decision, review requests, and checks, kept in the database, so a restart shows the last ones until the first sync. A GitHub sync reads them again only when an open pull request's head or update time moved, a check is still running, five minutes passed, or the user pressed Refresh. |
+| `review.rs` | Each open pull request's review decision, review requests, checks, and merge state, kept in the database, so a restart shows the last ones until the first sync. A GitHub sync reads them again only when an open pull request's head or update time moved, a check is still running, GitHub answered that it has not worked out the merge state yet, five minutes passed, or the user pressed Refresh. |
 | `service.rs` | The worker thread per open view: sync, reload, and the action queue. Sources sync every minute while the Pull requests or Issues section is shown and every ten minutes otherwise (`service/schedule.rs`); a source failing again waits twice as long each time, up to 30 minutes unless the provider asks for longer. |
 | `actions.rs` | Dispatch, stop, send, remove, delete: each on its own thread. |
 | `prompt.rs` | Prompt profiles, agent-launcher's built-in and review prompts. |
 | `naming.rs` | agent-launcher's branch names, and runs found from branches. |
-| `view/` | The view entity: the list of every repository (`view/repo.rs` keeps each one's worker, snapshot, and rows; an item's page and actions go to its own), the backend and project pills, filters, the item pane, dialogs. Pure row, merge, and grouping logic is in `view/rows.rs`. |
+| `beads/claim.rs` | Claiming a bead for a dispatch, and giving it back. |
+| `view/` | The view entity: the list of every repository (`view/repo.rs` keeps each one's worker, snapshot, and rows; an item's page and actions go to its own), the backend and project pills, filters, the item pane, dialogs. Pure row, merge, and grouping logic is in `view/rows.rs`; what the Tasks section adds is in `view/tasks.rs`. |
 | `host.rs` | The window's one view and the repositories it lists, one per Git common directory per host across every connected host's workspaces: the tick that feeds it, and its events. |
-| `section.rs` | The Pull requests and Issues sections, and the commands that open them narrowed to a project. |
+| `section.rs` | The Pull requests, Issues, and Tasks sections, and the commands that open them narrowed to a project. |
 
 The view is a GPUI entity that talks to its host only through `Event`s and
 setters (`set_look`, `set_live`, `set_github`, `set_hosts`). Tabs hosted it
@@ -83,6 +85,58 @@ Each becomes a run owned by `branch`, shown like any other but never written,
 and only when no recorded run already has that branch. It opens its workspace;
 it has no Stop, Send, or Remove, since no application owns it.
 
+## Review profiles
+
+`compose_review` keeps the built-in read-only prompt and appends the chosen
+profile. `Profile::parse` takes a first line of `review: replace` out of the
+template and sets `Review::Replace`, and such a profile is the whole prompt
+(plus extra instructions), rendered with the `pr_` variables as well as the
+`issue_` ones. The marker is removed at load so that no render path can send
+it, including an issue dispatch, where the same profile replaces the built-in
+prompt anyway. Other profiles never see the `pr_` variables: they are left as
+written, as they were before the marker existed. `{{ pr_title }}` and
+`{{ pr_body }}` stay marked as untrusted, and ref and repository names outside
+`valid_branch`'s characters are withheld, since Git allows `$(…)` in a branch
+name and a profile may put one in a command. The rest of what the built-in
+prompt guards is the profile author's to keep.
+
+## Tasks
+
+Tasks is a third list on the same view, not a store of its own: Beads remains
+the source of truth, and the database only caches what `bd` last listed, as it
+does for Issues. `Tab::Tasks` lists the Beads items of `Item`, and only while it
+shows are its rows computed. The bar lists the section while a project has a
+`.beads` folder.
+
+A task is `ItemKey`: its source and its Beads id. The source's `repository` is
+the folder holding the database `bd` opens, so identical ids in two projects stay
+apart, while everything that reaches one database is one source and the
+existing dedupe of rows, pills, and counts applies. `.beads/redirect` is read in
+discovery as `bd` reads it (the first line neither blank nor a comment, relative
+to the project), by `repo.rs` on this machine and `discover.sh` on an SSH host;
+`RepoInfo::beads_root` keeps the result. A target not named `.beads` has no such
+folder, so it stays the project's source and `bd` follows the redirect itself;
+projects sharing one are not deduplicated. When a project's source moves, as
+adding a redirect moves it, `Store::settle_beads` forgets the old source's rows
+and moves this app's runs to the new one once discovery confirms it, never from
+cached details, so tasks keep their runs and `orchestrator tasks` reads the same rows. A database this
+build cannot write keeps the old rows, so `reload` still lists only the current
+source's.
+
+A dispatch to a bead claims it before anything else happens (`beads::claim`):
+`bd show` says whether it was held, then `bd update --claim`, which is atomic.
+Claiming runs as `bd` by hand does, without `--sandbox`, since a claim has to
+reach a shared Dolt remote to coordinate anything.
+`bd` marks a refused claim only in its words (`already claimed by NAME`, or
+`already claimed: already assigned to "NAME"`), read at that boundary into
+`claim::Error`; any other refusal stays `bd`'s own failure. Nothing was started
+then, so no run is recorded. A failed launch runs `bd unclaim --if-assignee`, but
+only for a claim that dispatch took: a second agent on a task its actor already
+holds leaves it. The actor is `bd`'s own default. Agents start on the database's
+host: embedded databases are not reachable from another, so the dialog offers
+none. `bd` leases a claim for five minutes, which is why the prompt asks for
+`bd heartbeat`; a stale lease is only ever recovered by `bd reclaim`, never here.
+
 ## GitLab
 
 `gitlab.rs` lists a GitLab project's open issues through the REST API
@@ -91,6 +145,9 @@ host, in agent-launcher's GitLab row format: `native_id` is the issue's
 project `iid`. Its open merge requests (`.../merge_requests?state=opened`, read
 the same way, with the same token) join them as pull requests, keyed `pr/<iid>`
 and shown as `!<iid>`, with their source and target branches and draft state.
+`recent_issues` reads one bounded page instead, the 50 most recently updated
+open issues (`order_by=updated_at&sort=desc`), for the new worktree dialog's
+issues tab; it never touches the cache.
 A refused merge request listing fails the sync and preserves the cached
 items. Merge requests are read-only: the status, conversation, checks, merge,
 and `gh` review pages are GitHub's, so a merge request has none of them and

@@ -22,6 +22,10 @@ final class ActivityTokens {
         var token: String?
     }
 
+    /// The setting that keeps this phone's activities generic: every
+    /// computer leaves the chat's name and steps out of them.
+    static let genericSetting = "liveActivitiesGeneric"
+
     private(set) var pushToStart: String?
     /// The app's own APNs token, for sealed alerts.
     private(set) var alert: String?
@@ -67,6 +71,11 @@ final class ActivityTokens {
 
     private func watch(_ activity: Activity<ChatActivityAttributes>) {
         guard running[activity.id] == nil else { return }
+        if activity.attributes.facts.namesChat, UserDefaults.standard.bool(forKey: Self.genericSetting) {
+            let id = activity.id
+            Task { await Self.end(id) }
+            return
+        }
         running[activity.id] = Running(
             id: activity.id,
             attributes: activity.attributes.facts,
@@ -97,6 +106,28 @@ final class ActivityTokens {
         }
     }
 
+    /// Tells the computers about Keep Generic. Turned on, it first ends
+    /// every activity: a title and workspace are fixed when one starts, so
+    /// no later push could take them off the lock screen, and what one last
+    /// said may name the chat too. That needs no network, so it does not
+    /// wait on a computer that is away; `watch` ends what such a computer
+    /// starts before it hears.
+    func genericChanged(to generic: Bool) async {
+        if generic {
+            for id in Activity<ChatActivityAttributes>.activities.map(\.id) {
+                await Self.end(id)
+            }
+        }
+        await sync()
+    }
+
+    /// Ends the activity with `id` at once. By id and off this actor, since
+    /// an activity it holds cannot be sent to ActivityKit.
+    private nonisolated static func end(_ id: String) async {
+        await Activity<ChatActivityAttributes>.activities.first { $0.id == id }?
+            .end(nil, dismissalPolicy: .immediate)
+    }
+
     /// Sends each paired computer (or only the one with CA `only`) its
     /// tokens.
     func sync(only: Fingerprint? = nil) async {
@@ -114,11 +145,16 @@ final class ActivityTokens {
                 pushToStart: pushToStart,
                 activities: activities,
                 alert: notifyKey == nil ? nil : alert,
-                notifyKey: notifyKey
+                notifyKey: notifyKey,
+                genericActivities: UserDefaults.standard.bool(forKey: Self.genericSetting)
             )
             do {
                 let session = try await sessions.session(for: computer)
                 try await session.client.registerAPNs(registration, bearer: session.token)
+                lastError = nil
+            } catch let RemoteError.status(503, _) {
+                // A computer with no push set up. Nothing is wrong, and the
+                // session is good: it answered.
                 lastError = nil
             } catch {
                 await sessions.forget(computer)

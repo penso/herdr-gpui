@@ -178,7 +178,7 @@ fn the_keyboard_reaches_the_chevron_and_enter_opens_the_card(cx: &mut TestAppCon
     draw(cx);
     for key in ["enter", "space"] {
         let before = expanded(&view, cx);
-        let keystroke = gpui::Keystroke::parse(key).unwrap();
+        let keystroke = crate::keymap::parse_keystroke(key).unwrap();
         cx.simulate_event(gpui::KeyDownEvent {
             keystroke: keystroke.clone(),
             is_held: false,

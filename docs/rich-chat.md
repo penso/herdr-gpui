@@ -6,13 +6,10 @@ original terminal input, without restarting, resuming or replacing the agent.
 
 ## Enable and configure
 
-Enable **ACP chats** in Settings > General, or set the following in the
-[GUI configuration](../crates/sheprd-gpui/README.md#configuration):
+**ACP chats** are on by default; Settings > General turns them off. Configure
+them in the [GUI configuration](../crates/sheprd-gpui/README.md#configuration):
 
 ```toml
-[features]
-acp_chats = true
-
 [chat]
 layout = "bubbles"
 render_existing = true
@@ -21,11 +18,19 @@ render_existing = true
 `render_existing` opts into discovery of running Codex and Claude sessions.
 It is disabled by default. The chat header cycles
 through **Timeline**, **Bubbles**, **Terminal**, **Document**, **Cards**,
-**iMessage**, and **iA**. **iA** sets the chat like iA Writer: one column at
-about 70 characters a line, your prompts and the agent's steps as quiet notes
-hung from a gutter mark, the agent's prose in full ink, and earlier turns muted
-until you point at them.
-Select a layout directly with:
+**iMessage**, **iA**, and **OpenCode**. **iA** sets the chat like iA Writer: one
+column at about 70 characters a line, your prompts and the agent's steps as quiet
+notes hung from a gutter mark, the agent's prose in full ink, and earlier turns
+muted until you point at them. **OpenCode** uses the terminal's font, draws
+prompts and open tool calls as tinted blocks behind a bar, folds finished calls
+to one line, and adds a status row under the composer.
+
+Once your prompt scrolls away, every layout pins it over the top of the
+conversation, drawn in that layout's style and cut to two lines. Reading back
+through earlier turns pins the prompt of the turn you are in. Click it to go to
+the prompt.
+
+Pick one from **View > Agent Layout**, or select a layout directly with:
 
 ```sh
 sheprd config set chat.layout bubbles
@@ -77,8 +82,8 @@ keeps its terminal view.
 ## Moving a terminal agent into a chat
 
 An agent running in its own CLI can move into a chat without leaving its pane
-or its conversation. With the agent's pane focused, run **Move Agent into
-Chat** from the command palette, or:
+or its conversation. Right-click its tab and choose **Move Agent into Chat**,
+run the same command from the palette with the agent's pane focused, or:
 
 ```sh
 sheprd chat convert [--pane ID]
@@ -100,6 +105,10 @@ and the chat opens with the conversation so far and its context window use.
 Herdr must know the agent's session, which takes its integration: run
 `herdr integration install claude` (or `codex`, `copilot`, `opencode`), then
 restart the agent. Without it the move is refused and the agent keeps running.
+
+The tab's menu offers the row for an agent that can move, on a host chats reach,
+and shows a refusal in the menu. In a tab with several such agents it moves the
+one in the focused pane, else the first; use `--pane` to choose another.
 
 Only an idle agent moves, since stopping one mid-turn would lose the turn, and
 a refusal leaves it running in its terminal. Everything that can refuse is

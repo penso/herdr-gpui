@@ -3,6 +3,7 @@
 //! requests grouped by what each waits on. Pure, so it is tested without a
 //! window.
 
+use super::tasks::TaskFilters;
 use crate::i18n::fl;
 use crate::orchestrator::{
     Backend, CheckState, HerdrSession, Item, PrStatus, Provider, Review, Run, RunState,
@@ -18,6 +19,7 @@ pub(crate) enum Tab {
     #[default]
     Issues,
     PullRequests,
+    Tasks,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -278,7 +280,9 @@ pub(crate) fn matches(item: &Item, query: &str) -> bool {
         Some(item.title.as_str()),
         Some(item.state.as_str()),
         item.author.as_deref(),
+        item.assignee.as_deref(),
         item.description.as_deref(),
+        item.acceptance.as_deref(),
         Some(item.key.native_id.as_str()),
         item.pull_request.as_ref().map(|pr| pr.head_ref.as_str()),
     ];
@@ -311,6 +315,54 @@ pub(crate) fn issue_rows(
     sort: Sort,
     collapsed: &HashSet<String>,
 ) -> Vec<ItemRow> {
+    nested_rows(
+        items,
+        (runs, query),
+        filters,
+        sort,
+        collapsed,
+        |item| item.pull_request.is_none() && !closed(item),
+        |_| true,
+    )
+}
+
+/// The Tasks tab: beads alone, narrowed by `tasks` as well.
+pub(crate) fn task_rows(
+    items: &[Item],
+    runs: &Runs<'_>,
+    query: &str,
+    filters: Filters,
+    sort: Sort,
+    collapsed: &HashSet<String>,
+    tasks: &TaskFilters,
+) -> Vec<ItemRow> {
+    // Tasks are all one provider; the Issues list's pick does not apply.
+    let filters = Filters {
+        provider: None,
+        ..filters
+    };
+    nested_rows(
+        items,
+        (runs, query),
+        filters,
+        sort,
+        collapsed,
+        |item| tasks.lists(item),
+        |item| tasks.matches(item),
+    )
+}
+
+/// The `listed` items that match, children under their parents. Those
+/// `narrowed` turns down still show when a child of theirs matches.
+fn nested_rows(
+    items: &[Item],
+    (runs, query): (&Runs<'_>, &str),
+    filters: Filters,
+    sort: Sort,
+    collapsed: &HashSet<String>,
+    listed: impl Fn(&Item) -> bool,
+    narrowed: impl Fn(&Item) -> bool,
+) -> Vec<ItemRow> {
     let latest = runs.latest();
     let keys: Vec<String> = items.iter().map(|item| item.key.canonical()).collect();
     let sources: Vec<String> = items
@@ -318,7 +370,7 @@ pub(crate) fn issue_rows(
         .map(|item| item.key.source.canonical())
         .collect();
     let listed: Vec<usize> = (0..items.len())
-        .filter(|&index| items[index].pull_request.is_none() && !closed(&items[index]))
+        .filter(|&index| listed(&items[index]))
         .collect();
     // A bead's parent is another bead of the same source with that id.
     let by_id: HashMap<(&str, &str), usize> = listed
@@ -341,6 +393,7 @@ pub(crate) fn issue_rows(
         let item = &items[index];
         let run = latest.get(keys[index].as_str());
         matches(item, query)
+            && narrowed(item)
             && filters
                 .provider
                 .is_none_or(|provider| item.key.source.provider == provider)
@@ -466,7 +519,7 @@ pub(crate) fn pull_request_rows(
 
 /// What a run's item is called when the item is not listed, such as a
 /// closed issue: `#375` for an issue or GitHub pull request, `!375` for a
-/// GitLab merge request, else its id.
+/// GitLab merge request or Azure DevOps pull request, else its id.
 pub(crate) fn key_label(key: &str) -> String {
     let native = key
         .rsplit(':')
@@ -476,7 +529,8 @@ pub(crate) fn key_label(key: &str) -> String {
         .replace("%25", "%");
     let number = native.strip_prefix("pr/").unwrap_or(&native);
     if !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()) {
-        let merge_request = native.starts_with("pr/") && key.starts_with("gitlab:");
+        let merge_request =
+            native.starts_with("pr/") && (key.starts_with("gitlab:") || key.starts_with("azure:"));
         format!("{}{number}", if merge_request { '!' } else { '#' })
     } else {
         native

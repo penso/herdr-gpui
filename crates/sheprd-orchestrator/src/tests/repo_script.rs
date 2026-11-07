@@ -228,3 +228,47 @@ fn an_inaccessible_checkout_is_a_discovery_failure() {
         .unwrap_err();
     assert!(matches!(error, Error::Script { .. }));
 }
+
+/// `.beads/redirect` in `fixture`'s checkout, naming `target`.
+fn redirect(fixture: &Fixture, text: &str) {
+    std::fs::write(fixture.checkout.join(".beads/redirect"), text).unwrap();
+}
+
+#[test]
+fn a_redirected_beads_folder_is_keyed_by_the_database_it_names() {
+    for git in [false, true] {
+        let fixture = Fixture::new(git, true);
+        let shared = fixture.dir.path().join("shared");
+        std::fs::create_dir_all(shared.join(".beads")).unwrap();
+        let shared = shared.canonicalize().unwrap();
+        // Relative to the project, as `bd` reads it, after a comment.
+        redirect(&fixture, "# moved\n\n  ../shared/.beads  \n");
+        let info = fixture.probe(|_| {}).unwrap();
+        assert_eq!(
+            info.beads_root.as_deref(),
+            Some(shared.to_str().unwrap()),
+            "git: {git}"
+        );
+        assert_eq!(
+            info.beads_source().unwrap().repository,
+            shared.to_str().unwrap()
+        );
+    }
+}
+
+#[test]
+fn a_redirect_that_leads_nowhere_keeps_the_project_as_the_source() {
+    let fixture = Fixture::new(true, true);
+    let other = fixture.dir.path().join("other/tasks");
+    std::fs::create_dir_all(&other).unwrap();
+    for target in [
+        "../missing/.beads\n",
+        "../other/tasks\n",
+        "# only a comment\n",
+    ] {
+        redirect(&fixture, target);
+        let info = fixture.probe(|_| {}).unwrap();
+        assert_eq!(info.beads_root, None, "{target}");
+        assert_eq!(info.beads_source().unwrap().repository, info.main_root);
+    }
+}

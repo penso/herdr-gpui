@@ -2,6 +2,14 @@
 use super::{Args, CliError, Script, unknown};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorktreeCommand {
+    /// Whether the caller's worktree is muted.
+    Status,
+    Mute,
+    Unmute,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotesCommand {
     List,
     Get,
@@ -50,6 +58,18 @@ fn bounded(text: String) -> Result<String, CliError> {
         return Err(CliError::InvalidValue("text over 16 KiB"));
     }
     Ok(text)
+}
+
+pub(super) fn worktree(args: &mut Args) -> Result<WorktreeCommand, CliError> {
+    let Some(verb) = args.verb() else {
+        return Ok(WorktreeCommand::Status);
+    };
+    Ok(match verb.to_str() {
+        Some("status") => WorktreeCommand::Status,
+        Some("mute") => WorktreeCommand::Mute,
+        Some("unmute") => WorktreeCommand::Unmute,
+        _ => return Err(unknown("worktree", verb)),
+    })
 }
 
 pub(super) fn notes(args: &mut Args) -> Result<NotesCommand, CliError> {

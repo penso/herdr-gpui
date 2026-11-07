@@ -76,7 +76,7 @@ Rust and 8,000+ tests" — always next to what those crates *do*.
 | The one remote install: Herdr's own installer (`curl -fsSL https://herdr.dev/install.sh \| sh`) runs on new cloud machines, and only with the user's "Install Herdr" switch on. | GR:488-494 |
 | Upstream projects: Herdr at https://github.com/herdrdev/herdr (herdr.dev), and herdr-core ("Herdr 2") at https://github.com/herdrdev/herdr-core. | NOTICE, `crates/herdr-core-client/README.md:3` |
 | Attribution: Apache-2.0 (Copyright 2026 Fabien Penso). Parts of `herdr-protocol`, the shared settings schema, theme palettes, status indicators, and the Done/Request sounds are adapted from Herdr (Apache-2.0). Usage providers are ported from CodexBar (MIT). GitHub integration references Arbor (`GITHUB-NOTICE.md`). | R:497-501, `NOTICE`, `crates/herdr-protocol/NOTICE.md`, `docs/usage-providers.md:10-13` |
-| Built on Rust 1.96.1 and GPUI 0.3.6 (the `gpui-pre` crate). | R:273-276 |
+| Built on Rust 1.99.0 and GPUI 0.3.10 (the `gpui-pre` crate). | R:273-276 |
 | Versions are calendar-based: `YYYYMMDD.COUNTER`, tagged `vYYYYMMDD.COUNTER`. | GR:146-150, `scripts/release/package-windows.py:40` |
 | The current site at herdrui.dev uses the title "Herdr UI: a native window for the Herdr daemon" and the H1 "Herdr's TUI is great." Its description: "the window adds dispatch from issues, side-by-side review, checkpoints, Teleport and a Devices overview." | `site/index.html` |
 
@@ -169,9 +169,9 @@ Rust and 8,000+ tests" — always next to what those crates *do*.
 
 | Feature | Description | Source | Status |
 | --- | --- | --- | --- |
-| ACP chats (`herdr-acp`) | Runs Claude, Codex, Copilot, Gemini, OpenCode, or Pi through the Agent Client Protocol inside a Herdr pane. The app draws the chat natively over the pane: messages, reasoning, tool diffs, plan, permission requests, context meter, and cost. The TUI sees the same chat. | GR:3338-3419, `crates/herdr-acp/README.md` | **Opt-in** (`[features] acp_chats`, CLI:425-427, `features.ftl`). The binary ships in every package. Native view only for local and SSH hosts (GR:3416-3419, CLI:434-447) |
-| Chat layouts | Timeline, Bubbles, Terminal, Document, Cards, plus iMessage and iA in `docs/rich-chat.md`. One-click launch buttons for each agent. | GR:3359-3368, 3405-3413, `docs/rich-chat.md:22-25` | Opt-in (with ACP chats) |
-| Rich chat content | Markdown, equations, Mermaid, inline images, live HTML pages in messages, and `herdr-ui` interactive cards (choice, slider, table, chart, and more). | `docs/rich-chat.md`, SKILL.md:26-45, GR:3389-3403 | Opt-in. Live HTML only on macOS/Windows (Linux opens the browser) |
+| ACP chats (`herdr-acp`) | Runs Claude, Codex, Copilot, Gemini, OpenCode, or Pi through the Agent Client Protocol inside a Herdr pane. The app draws the chat natively over the pane: messages, reasoning, tool diffs, plan, permission requests, context meter, and cost. The TUI sees the same chat. | GR:3338-3419, `crates/herdr-acp/README.md` | **Shipped**, on by default (`[features] acp_chats = false` turns it off, CLI:425-427, `features.ftl`). The binary ships in every package. Native view only for local and SSH hosts (GR:3416-3419, CLI:434-447) |
+| Chat layouts | Timeline, Bubbles, Terminal, Document, Cards, plus iMessage and iA in `docs/rich-chat.md`. One-click launch buttons for each agent. | GR:3359-3368, 3405-3413, `docs/rich-chat.md:22-25` | Shipped (with ACP chats) |
+| Rich chat content | Markdown, equations, Mermaid, inline images, live HTML pages in messages, and `herdr-ui` interactive cards (choice, slider, table, chart, and more). | `docs/rich-chat.md`, SKILL.md:26-45, GR:3389-3403 | Shipped (with ACP chats). Live HTML only on macOS/Windows (Linux opens the browser) |
 | Render existing CLI sessions | Shows a running Codex or Claude CLI conversation as a chat without restarting it. | CLI:452-459, `docs/rich-chat.md` | Opt-in (`chat.render_existing`). Docs say "Linux Codex/Claude" |
 | Company endpoints | `[chat.env]` passes variables to every chat, such as GHE `GH_HOST` or `ANTHROPIC_BASE_URL`. | GR:3370-3375 | Opt-in |
 | Smart Dispatch | Ranks connected hosts by spare cores and load, then creates the worktree on the best one (shipping a Git bundle when needed). | GR:2282-2358 | macOS/Linux clients |
@@ -360,7 +360,7 @@ Sources: GR:3000-3001, 3015-3020, 2165-2167, 2357-2358, 623, 4686-4728, 3650-365
 5. **Teleport's cloud host list.** GR:2165-2167 names Coder, Daytona, and Railway only. Confirm whether Azure, Containers, Sprites, and OpenSandbox work as Teleport destinations (GR:587 says containers are reached by Teleport, Fan-out, and dispatch).
 6. **Windows ARM64 herdr-core.** `scripts/release/herdr-core.json` has no `windows-aarch64` target, but the Windows ARM64 zip requires `herdr-core.exe`. Confirm what ships there (likely the x86_64 build under emulation).
 7. **Windows signing and winget.** README says that until signing is set up, Windows builds "ship unsigned, are not submitted to winget, and do not update themselves" (R:381-386). Confirm whether current releases are signed before claiming auto-update or winget on Windows.
-8. **ACP chats default.** The CLI docs say chats are opt-in (`acp_chats = true`). GR's Chats section reads as if always available. Confirm the default before marketing "native chat" as on by default.
+8. **ACP chats default.** Resolved: chats are on by default, and `acp_chats = false` turns them off.
 9. **"Render existing sessions" platform.** CLI:454-455 says "Linux Codex/Claude conversations". Confirm whether macOS works.
 10. **Remote control scope.** The plan says chats only and that terminal tabs are not available. `ios/README.md` says the iOS app opens "a chat or a terminal". Confirm what the shipped PWA does with terminals.
 11. **iOS app availability.** `ios/` has TestFlight tooling, and the desktop pairing dialog references "Herdr Remote on an iPhone nearby". Is it on TestFlight or the App Store? If not, the nearby-pairing feature cannot be marketed yet.

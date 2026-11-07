@@ -8,58 +8,22 @@
 //!
 //! ```json
 //! { "push_to_start": "80a1…", "activities": [{ "pane": "w1-p3", "token": "5c3e…" }],
-//!   "alert": "9f02…", "notify_key": "BHk3…" }
+//!   "alert": "9f02…", "notify_key": "BHk3…", "activity_detail": "generic" }
 //! ```
+//!
+//! The app sends `activity_detail` only when the phone keeps its activities
+//! generic, so a phone on the default still registers with older daemons,
+//! which refuse a key they do not know.
 
-use super::{Error, Result};
+use super::{DeviceToken, Error, Result};
+use crate::app::config::ActivityDetail;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::PublicKey;
 use serde::{Deserialize, Serialize};
 
 /// The most activities one device registers; iOS shows only a few at once.
 pub(crate) const MAX_ACTIVITIES: usize = 32;
-/// Bounds on a token's length in bytes. APNs device tokens are 32 bytes;
-/// Live Activity tokens are longer, and Apple documents no fixed length.
-const MIN_TOKEN: usize = 16;
-const MAX_TOKEN: usize = 256;
 const MAX_PANE: usize = 128;
-
-/// An APNs token as lowercase hex, the form the request path takes.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
-pub(crate) struct DeviceToken(String);
-
-impl DeviceToken {
-    pub(crate) fn parse(hex: &str) -> Result<Self> {
-        let hex = hex.trim();
-        let bytes = hex.len() / 2;
-        let valid = hex.len().is_multiple_of(2)
-            && (MIN_TOKEN..=MAX_TOKEN).contains(&bytes)
-            && hex.bytes().all(|byte| byte.is_ascii_hexdigit());
-        if !valid {
-            return Err(Error::DeviceToken);
-        }
-        Ok(Self(hex.to_ascii_lowercase()))
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl TryFrom<String> for DeviceToken {
-    type Error = Error;
-
-    fn try_from(hex: String) -> Result<Self> {
-        Self::parse(&hex)
-    }
-}
-
-impl From<DeviceToken> for String {
-    fn from(token: DeviceToken) -> Self {
-        token.0
-    }
-}
 
 /// The P-256 key-agreement key alerts are sealed to (`seal`), as the app
 /// sends it: base64url without padding of the 65-byte uncompressed point.
@@ -118,6 +82,9 @@ pub(crate) struct ActivityToken {
 pub(crate) struct Registration {
     #[serde(default)]
     pub(crate) activities: Vec<ActivityToken>,
+    /// How much this phone's activities may say.
+    #[serde(default, skip_serializing_if = "ActivityDetail::is_detailed")]
+    pub(crate) activity_detail: ActivityDetail,
     /// The app's own device token, for alerts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) alert: Option<DeviceToken>,
@@ -186,9 +153,11 @@ impl Registration {
 
     /// Applies what the app sent: a push-to-start token, an alert token,
     /// or a notify key replaces the old one when present, and the activity
-    /// list replaces the old list, since the app sends every activity it
-    /// still shows. A later token for one pane wins over an earlier one.
+    /// list and detail replace the old ones, since the app sends every
+    /// activity it still shows and its current choice. A later token for one
+    /// pane wins over an earlier one.
     pub(crate) fn merge(&mut self, update: Self) {
+        self.activity_detail = update.activity_detail;
         if update.push_to_start.is_some() {
             self.push_to_start = update.push_to_start;
         }

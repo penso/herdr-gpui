@@ -20,6 +20,11 @@ pub struct RepoInfo {
     /// The main checkout, where `bd` runs and Beads' source is keyed.
     pub main_root: String,
     pub beads: bool,
+    /// The folder holding the `.beads` that `main_root`'s `.beads/redirect`
+    /// names, when it names one. That is the database `bd` really opens, so
+    /// projects sharing one key the same source.
+    #[serde(default)]
+    pub beads_root: Option<String>,
     /// The remote issues and pull requests come from: `origin`, else
     /// `upstream`, else the first one, as agent-launcher picks.
     pub remote: Option<Remote>,
@@ -33,12 +38,16 @@ pub struct Remote {
 }
 
 impl RepoInfo {
-    /// The Beads source of this repository, keyed as agent-launcher keys it.
+    /// The Beads source of this repository, keyed as agent-launcher keys it:
+    /// by the folder of the database itself, which is where `bd` then runs.
     pub fn beads_source(&self) -> Option<SourceKey> {
         self.beads.then(|| SourceKey {
             provider: Provider::Beads,
             host: "local".into(),
-            repository: self.main_root.clone(),
+            repository: self
+                .beads_root
+                .clone()
+                .unwrap_or_else(|| self.main_root.clone()),
         })
     }
 }
@@ -207,6 +216,7 @@ pub fn parse(target: &ConnectTarget, output: &str) -> Result<RepoInfo> {
     let mut common = None;
     let mut main = None;
     let mut beads = false;
+    let mut beads_root = None;
     let mut remotes = Vec::new();
     for line in output.lines() {
         let mut fields = line.splitn(3, '\t');
@@ -218,6 +228,9 @@ pub fn parse(target: &ConnectTarget, output: &str) -> Result<RepoInfo> {
                 main = Some(path.to_owned());
             }
             (Some("beads"), Some("1"), None) => beads = true,
+            (Some("beads-root"), Some(path), None) if !path.is_empty() => {
+                beads_root = Some(path.to_owned());
+            }
             (Some("remote"), Some(name), Some(url)) => remotes.push((name, url)),
             _ => {}
         }
@@ -227,7 +240,9 @@ pub fn parse(target: &ConnectTarget, output: &str) -> Result<RepoInfo> {
             operation: "Reading the repository",
         });
     };
-    Ok(assemble(target, common, main_root, beads, &remotes))
+    Ok(assemble(
+        target, common, main_root, beads, beads_root, &remotes,
+    ))
 }
 
 /// What [`detect`]'s script reads, read with gix: this machine starts no
@@ -249,6 +264,7 @@ fn detect_local(target: &ConnectTarget, checkout: &str) -> Result<RepoInfo> {
             root.join(".beads").to_string_lossy().into_owned(),
             root.to_string_lossy().into_owned(),
             true,
+            redirected_root(&root),
             &[],
         ));
     };
@@ -264,8 +280,26 @@ fn detect_local(target: &ConnectTarget, checkout: &str) -> Result<RepoInfo> {
         found.common.to_string_lossy().into_owned(),
         main,
         beads,
+        beads.then(|| redirected_root(&found.main)).flatten(),
         &remotes,
     ))
+}
+
+/// The folder holding the `.beads` that `root/.beads/redirect` names, as
+/// `bd` reads the file: its first line that is neither blank nor a comment,
+/// relative to `root`. A target not named `.beads` has no such folder, so it
+/// stays `root`'s and `bd` follows the redirect itself.
+fn redirected_root(root: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(root.join(".beads").join("redirect")).ok()?;
+    let target = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with('#'))?;
+    let database = plain(root.join(target).canonicalize().ok()?);
+    if database.file_name()? != ".beads" {
+        return None;
+    }
+    Some(database.parent()?.to_string_lossy().into_owned())
 }
 
 /// `path` without Windows' `\\?\` prefix, which `canonicalize` adds and Git
@@ -287,6 +321,7 @@ fn assemble(
     common: String,
     main_root: String,
     beads: bool,
+    beads_root: Option<String>,
     remotes: &[(&str, &str)],
 ) -> RepoInfo {
     let repository = match target {
@@ -312,6 +347,7 @@ fn assemble(
         repository,
         main_root,
         beads,
+        beads_root,
         remote,
     }
 }
@@ -348,6 +384,9 @@ pub fn parse_remote_url(value: &str) -> Result<SourceKey> {
             (host.to_owned(), path.to_owned())
         }
     };
+    if let Some(source) = super::azure::source(&host, &path) {
+        return Ok(source);
+    }
     let trimmed = path.trim_matches('/');
     let repository = trimmed.strip_suffix(".git").unwrap_or(trimmed).to_owned();
     if repository.split('/').count() < 2 || repository.ends_with('/') {

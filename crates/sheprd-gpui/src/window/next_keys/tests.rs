@@ -133,7 +133,12 @@ fn a_digit_bound_out_of_step_keeps_its_own_row() {
     let mut rows = Vec::new();
     let mut run = None;
     for (number, key) in [(1, "1"), (2, "2"), (3, "x"), (4, "4")] {
-        run = extend_run(&mut rows, run, tab(number), &Keystroke::parse(key).unwrap());
+        run = extend_run(
+            &mut rows,
+            run,
+            tab(number),
+            &crate::keymap::parse_keystroke(key).unwrap(),
+        );
     }
     let keys: Vec<_> = rows.iter().map(|row| row.key.as_str()).collect();
     assert_eq!(keys, ["1…2", "x", "4"]);
@@ -187,7 +192,7 @@ fn flow_with_no_room_shows_nothing_and_counts_it_all() {
 
 fn press(keystroke: &str, cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
-        window.dispatch_keystroke(Keystroke::parse(keystroke).unwrap(), cx);
+        window.dispatch_keystroke(crate::keymap::parse_keystroke(keystroke).unwrap(), cx);
     });
     cx.run_until_parked();
 }

@@ -3,7 +3,7 @@
 //! the agent's prose in full ink, and everything before the current turn
 //! muted. Pointing at an earlier entry brings it back to full ink.
 
-use super::{ChatLayout, ComposerParts, Look, Row, Side};
+use super::{super::entries::ToolState, ChatLayout, ComposerParts, Look, Row, Side, ToolFold};
 use crate::config::mix;
 use gpui::{prelude::*, *};
 use sheprd_chat_protocol::{Author, EntryKind};
@@ -116,8 +116,8 @@ impl ChatLayout for IA {
     }
 
     /// A step in the margin is one line until it is opened.
-    fn tool_preview(&self) -> bool {
-        false
+    fn tool_fold(&self, _state: ToolState) -> ToolFold {
+        ToolFold::Title
     }
 
     /// Each row sets its own ink, so a note in the margin reads quieter

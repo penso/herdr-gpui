@@ -22,8 +22,9 @@ public struct CollapsedComputers: Hashable, Sendable {
 
     /// Opens every computer when all of `shown` are collapsed, else
     /// collapses them all, so one still open never takes two taps to fold.
+    /// Computers a tag filter hides stay as they were.
     public mutating func toggleAll(_ shown: some Collection<String>) {
-        devices = allCollapsed(shown) ? [] : Set(shown)
+        if allCollapsed(shown) { devices.subtract(shown) } else { devices.formUnion(shown) }
     }
 
     /// A forgotten computer leaves nothing behind.

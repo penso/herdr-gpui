@@ -3,7 +3,7 @@ use crate::{
     keymap::{Binding, DaemonKeys, Keymap},
     window::SheprdWindow,
 };
-use gpui::{Entity, Keystroke, TestAppContext, VisualTestContext};
+use gpui::{Entity, TestAppContext, VisualTestContext};
 use std::collections::BTreeMap;
 
 /// The prefix on `cmd-j`, one chord, and pass-through on `unlock`, or unbound
@@ -39,8 +39,9 @@ fn window<'a>(
 }
 
 fn press(keystroke: &str, cx: &mut VisualTestContext) -> bool {
-    let handled =
-        cx.update(|window, cx| window.dispatch_keystroke(Keystroke::parse(keystroke).unwrap(), cx));
+    let handled = cx.update(|window, cx| {
+        window.dispatch_keystroke(crate::keymap::parse_keystroke(keystroke).unwrap(), cx)
+    });
     cx.run_until_parked();
     handled
 }
