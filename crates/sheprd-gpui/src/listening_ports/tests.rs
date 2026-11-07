@@ -2,7 +2,7 @@
 
 use super::{
     Daemon, ListeningPorts, Reading,
-    scan::{Bind, Link, MAX_PORTS, Origin, Port, Ports, parse},
+    scan::{Bind, Link, MAX_PORTS, Origin, Port, Scan, parse},
     tunnel::{self, Key},
 };
 use crate::{Error, usage::Host};
@@ -10,6 +10,7 @@ use sheprd_client::ConnectTarget;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 mod en_xa;
+mod process_owner;
 #[cfg(unix)]
 mod repeated_scans;
 mod ssh_links;
@@ -17,8 +18,8 @@ mod status_bar;
 mod wsl_hosts;
 
 /// The ports one workspace was found with, whichever daemon it named.
-fn of<'a>(ports: &'a Ports, workspace: &str) -> &'a [Port] {
-    ports
+fn of<'a>(scan: &'a Scan, workspace: &str) -> &'a [Port] {
+    scan.ports
         .iter()
         .find(|(owner, _)| owner.workspace == workspace)
         .map(|(_, ports)| ports.as_slice())
@@ -72,7 +73,7 @@ fn listeners_belong_to_the_workspace_their_process_names() {
         )]
     );
     // A process started outside Herdr belongs to no workspace.
-    assert_eq!(ports.len(), 2);
+    assert_eq!(ports.ports.len(), 2);
 }
 
 #[test]
@@ -123,7 +124,7 @@ fn malformed_and_untrusted_lines_are_dropped() {
          E y w1\n"
     );
     let ports = parse(&text).unwrap();
-    assert_eq!(ports.len(), 1);
+    assert_eq!(ports.ports.len(), 1);
     // Control characters are stripped from the name; the rest is display text.
     assert_eq!(of(&ports, "w1"), [port(81, Bind::Any, "[31mred")]);
 }
@@ -135,7 +136,7 @@ fn a_host_without_tools_says_so() {
         Err(Error::ListeningPorts(super::Error::Tool))
     ));
     // An idle host answers with nothing at all, which is no ports, not an error.
-    assert_eq!(parse("\n").unwrap(), Ports::new());
+    assert_eq!(parse("\n").unwrap(), Scan::default());
 }
 
 #[test]
@@ -191,14 +192,14 @@ fn only_a_different_scan_changes_what_is_shown() {
     assert!(!reading.apply(Err(
         super::Error::Scan(Box::new(sheprd_usage::Error::Unreachable.into())).into()
     )));
-    assert_eq!(reading.ports, found);
+    assert_eq!(reading.scan, found);
     let error = reading.error.clone().unwrap();
     assert!(
         error.starts_with("Could not read listening ports"),
         "{error}"
     );
     assert!(error.contains("SSH"), "the cause is kept: {error}");
-    assert!(reading.apply(Ok(Ports::new())));
+    assert!(reading.apply(Ok(Scan::default())));
     assert_eq!(reading.error, None);
 }
 
@@ -280,6 +281,7 @@ fn listeners_name_the_daemon_whose_pane_started_them() {
     .unwrap();
     let socket = |workspace: &str| {
         ports
+            .ports
             .keys()
             .find(|owner| owner.workspace == workspace)
             .map(|owner| owner.socket.as_str())

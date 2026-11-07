@@ -585,6 +585,7 @@ impl SheprdWindow {
                         | Page::VersionMismatch
                         | Page::OpenCheckout
                         | Page::OpenLink
+                        | Page::PortSignal
                 ) || self.cloud_batch_open()
                     || self.remote_dialog_open(),
                 |panel| {
@@ -769,6 +770,8 @@ impl SheprdWindow {
             panel = panel.child(self.render_worktree_script(cx));
         } else if page == Page::OpenLink {
             panel = panel.child(self.render_open_link(cx));
+        } else if page == Page::PortSignal {
+            panel = panel.child(self.render_port_signal(cx));
         } else if let Some(body) = self.cloud_batch_page(cx) {
             panel = panel.child(body);
         } else if let Some(body) = self.automation_dialog_page(cx) {

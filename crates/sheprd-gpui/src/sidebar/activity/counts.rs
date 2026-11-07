@@ -1,8 +1,9 @@
 //! The bar's count bubbles: what needs the user, as the Overview counted it
 //! on the last tick, and from the orchestrator views the window holds, open
 //! pull requests, open issues, and open beads, the open critical and high Dependabot
-//! alerts, and the automation scripts waiting for approval or after a
-//! failed run. An item two views list, such as one repository open in two
+//! alerts, the automation scripts waiting for approval or after a failed
+//! run, and the servers this computer's user runs (`[sidebar]
+//! ports_count`). An item two views list, such as one repository open in two
 //! workspaces, counts once. Each count keeps when its newest item last
 //! changed, which the bar compares with when the section was last open.
 
@@ -23,6 +24,7 @@ pub(super) struct Counts {
     tasks: Count,
     security: Count,
     automations: Count,
+    ports: Count,
 }
 
 /// How many items a bubble counts, and when the newest of them changed.
@@ -61,6 +63,7 @@ impl Counts {
         match panel {
             ActivityPanel::Overview => Some(self.needs),
             ActivityPanel::Workspaces | ActivityPanel::Usage => None,
+            ActivityPanel::Ports => Some(self.ports),
             ActivityPanel::PullRequests => Some(self.pull_requests),
             ActivityPanel::Issues => Some(self.issues),
             ActivityPanel::Tasks => Some(self.tasks),
@@ -100,6 +103,16 @@ impl SheprdWindow {
             automations: Count {
                 items: self.automations.needing(),
                 latest: self.automations.needing_since(),
+            },
+            // The user's own servers, as the Ports section last listed them;
+            // a server starting is not news, so it carries no time.
+            ports: Count {
+                items: if self.config.sidebar_style.ports_count {
+                    self.local_ports.serving().unwrap_or(0)
+                } else {
+                    0
+                },
+                latest: None,
             },
             ..Counts::default()
         };

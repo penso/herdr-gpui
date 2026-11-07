@@ -211,6 +211,27 @@ impl SettingsWindow {
                 ),
             )
             .child(
+                ui::row(
+                    theme,
+                    "sidebar-ports-count",
+                    fl!("settings-sidebar-ports-count-title"),
+                )
+                .description(fl!("settings-sidebar-ports-count-hint"))
+                .switch(
+                    ui::toggle(
+                        theme,
+                        "sidebar-ports-count-toggle",
+                        self.config.sidebar_style.ports_count,
+                        ready,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        let mut intent = SidebarIntent::of(&this.config);
+                        intent.style.ports_count = !intent.style.ports_count;
+                        this.commit_sidebar(intent, cx);
+                    })),
+                ),
+            )
+            .child(
                 ui::row(theme, "sidebar-select", fl!("settings-sidebar-select"))
                     .description(fl!("settings-sidebar-select-description"))
                     .control(ui::segmented(

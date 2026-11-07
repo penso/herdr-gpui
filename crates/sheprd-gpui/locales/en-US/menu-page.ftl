@@ -43,6 +43,7 @@ menu-page-open-link = Open link
 menu-page-command-palette = Command palette
 menu-page-pane = Pane
 menu-page-processes = Processes
+menu-page-ports = Ports
 menu-page-comment-on-pull-request = Comment on pull request
 menu-page-merge-pull-request = Merge pull request
 menu-page-pull-request = Pull request

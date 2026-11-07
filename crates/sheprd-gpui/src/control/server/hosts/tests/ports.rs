@@ -2,7 +2,7 @@ use super::super::ports::{forward_info, list, port_info, unforward};
 use super::*;
 use crate::{
     control::protocol::hosts::Ports,
-    listening_ports::{Bind, Origin, Owner, Port, Tunnels},
+    listening_ports::{Bind, Origin, Owner, Port, Scan, Tunnels},
     port_forward::{PortForwards, State},
 };
 use std::net::{IpAddr, Ipv4Addr};
@@ -117,14 +117,17 @@ fn ports_list_the_workspaces_listeners_or_say_why_not(cx: &mut TestAppContext) {
         view.update(cx, |view, _| {
             view.listening_ports.seed(
                 crate::usage::Host::Local,
-                [(
-                    Owner {
-                        workspace: "w3".into(),
-                        socket: String::new(),
-                    },
-                    vec![port(3000, Bind::Any)],
-                )]
-                .into(),
+                Scan {
+                    ports: [(
+                        Owner {
+                            workspace: "w3".into(),
+                            socket: String::new(),
+                        },
+                        vec![port(3000, Bind::Any)],
+                    )]
+                    .into(),
+                    ..Scan::default()
+                },
             );
             let Response::Host {
                 reply: Reply::Ports(ports),

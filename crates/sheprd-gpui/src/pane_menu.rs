@@ -12,6 +12,8 @@ use sheprd_client::{Method, protocol::ClientShellSnapshot};
 pub(crate) mod carry;
 mod moves;
 mod processes;
+// The Ports section shows its processes' usage the same way.
+pub(crate) use processes::{cpu_text, memory_text};
 
 #[cfg(test)]
 pub(crate) mod tests;

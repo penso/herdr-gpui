@@ -7,7 +7,9 @@
 //! Security the Dependabot alerts of every repository (`crate::security`),
 //! listed only once GitHub reports them on for one, Automations the
 //! `herdr-automate` scripts and runs of every host (`crate::automations`),
-//! and Usage the plan limits of every host (`crate::usage::section`).
+//! Ports every TCP port this computer's user listens on
+//! (`crate::local_ports`), and Usage the plan limits of every host
+//! (`crate::usage::section`).
 //! `[sidebar] activity_bar = false` turns the bar off, and `[sidebar]
 //! automations = false` leaves Automations off it. With the bar on, the
 //! sidebar toggle sits at the end of the Workspaces title, and collapsing the
@@ -54,6 +56,7 @@ fn label(panel: ActivityPanel) -> SharedString {
         ActivityPanel::Tasks => fl!("sidebar-activity-tasks"),
         ActivityPanel::Security => fl!("sidebar-activity-security"),
         ActivityPanel::Automations => fl!("sidebar-activity-automations"),
+        ActivityPanel::Ports => fl!("sidebar-activity-ports"),
         ActivityPanel::Usage => fl!("sidebar-activity-usage"),
     }
     .into()
@@ -68,6 +71,7 @@ fn icon(panel: ActivityPanel) -> &'static str {
         ActivityPanel::Tasks => "icons/beads.svg",
         ActivityPanel::Security => "icons/shield.svg",
         ActivityPanel::Automations => "icons/automations.svg",
+        ActivityPanel::Ports => "icons/plug.svg",
         ActivityPanel::Usage => "icons/chart.svg",
     }
 }
@@ -311,6 +315,7 @@ impl SheprdWindow {
                 ActivityPanel::Overview
                 | ActivityPanel::Security
                 | ActivityPanel::Automations
+                | ActivityPanel::Ports
                 | ActivityPanel::Usage,
             ) => {
                 let focus = self
@@ -340,6 +345,7 @@ impl SheprdWindow {
             ActivityPanel::Overview => self.render_overview(cx),
             ActivityPanel::Security => self.render_security_section(window, cx),
             ActivityPanel::Automations => self.render_automations_section(cx),
+            ActivityPanel::Ports => self.render_local_ports_section(cx),
             ActivityPanel::Usage => self.render_usage_section(cx),
             ActivityPanel::PullRequests | ActivityPanel::Issues | ActivityPanel::Tasks => {
                 return self.render_orchestrator_section();
@@ -725,6 +731,7 @@ fn panel_selector(panel: ActivityPanel) -> &'static str {
         ActivityPanel::Tasks => "activity-tasks",
         ActivityPanel::Security => "activity-security",
         ActivityPanel::Automations => "activity-automations",
+        ActivityPanel::Ports => "activity-ports",
         ActivityPanel::Usage => "activity-usage",
     }
 }

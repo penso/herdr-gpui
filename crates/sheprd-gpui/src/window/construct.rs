@@ -226,6 +226,7 @@ impl SheprdWindow {
             listening_ports: Default::default(),
             live: LiveState::default(),
             local_error: error,
+            local_ports: Default::default(),
             mark_layer,
             marked: String::new(),
             marked_selection: None,

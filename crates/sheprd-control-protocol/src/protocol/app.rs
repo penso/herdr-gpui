@@ -14,6 +14,7 @@ pub enum ActivityPanel {
     Tasks,
     Security,
     Automations,
+    Ports,
     Usage,
 }
 
@@ -26,6 +27,7 @@ impl ActivityPanel {
         Self::Tasks,
         Self::Security,
         Self::Automations,
+        Self::Ports,
         Self::Usage,
     ];
 
@@ -39,6 +41,7 @@ impl ActivityPanel {
             Self::Tasks => "tasks",
             Self::Security => "security",
             Self::Automations => "automations",
+            Self::Ports => "ports",
             Self::Usage => "usage",
         }
     }

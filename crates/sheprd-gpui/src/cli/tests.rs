@@ -11,6 +11,7 @@ mod cloud_setup;
 mod control_commands;
 mod language;
 mod links;
+mod local_ports;
 mod mods;
 mod open_command;
 mod px0;

@@ -2458,6 +2458,15 @@ window at once, and `sheprd ui panel NAME` shows a section.
 - **Pull requests** and **Issues** list every repository the connected hosts'
   workspaces hold (see [Orchestrator](#orchestrator)). Refresh spins while a
   sync runs.
+- **Ports** lists every TCP port your user listens on in this computer,
+  whoever started it: the app or script behind it (`vite`, `next dev`,
+  `manage.py runserver`), its project, CPU and memory, uptime, and the
+  workspace that started it, with Open, Pause, Resume, and Stop (Pause and
+  Stop ask first). The operating system's own listeners sit apart under
+  System. The icon counts your servers; `[sidebar] ports_count = false`
+  (**Settings > Sidebar**) turns the count off and with it the scan every 30
+  seconds that keeps it current while the section is closed. macOS and Linux
+  only.
 - **Usage** shows every host's plan limits, one card per signed-in agent. Only
   the selected host is read; another host shows what was read while it was
   selected.
