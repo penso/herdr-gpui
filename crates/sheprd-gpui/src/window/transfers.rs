@@ -443,7 +443,7 @@ impl SheprdWindow {
                             this.poll_file_transfer(cx);
                         })),
                 )
-                .children(self.overlay_probe())
+                .children(self.overlay_probe(crate::browser::Overlay::FileTransfer))
                 .into_any_element(),
         )
     }
