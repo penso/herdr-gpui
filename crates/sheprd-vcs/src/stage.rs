@@ -3,7 +3,9 @@
 //! A review shows a file against HEAD; what can be staged is the difference
 //! between the index and the working tree. Both end at the working tree, so
 //! a hunk is found by where its changes are in the file as it is now, and
-//! everything unstaged there goes to the index. The patch is cut from Git's
+//! what is unstaged at those places goes to the index. The diff is read
+//! without context, so each change stands alone and one that only the index
+//! knows, beside the hunk, stays as it is. The patch is cut from Git's
 //! own bytes rather than the text the review shows, which is cleaned for
 //! display. A review can be out of date when the file has moved on, so every
 //! line about to be staged is first compared with what the user saw, and the
@@ -101,12 +103,19 @@ impl Walk {
 pub struct Hunk {
     /// The file's name as Git wrote it.
     pub path: String,
-    pub span: Span,
+    /// Where each of its changes is, a run of added and removed lines.
+    pub changes: Vec<Span>,
     /// The working tree's lines shown in the hunk, by line number, cleaned
     /// for display.
     pub lines: HashMap<u32, String>,
     /// The lines shown as removed against HEAD, cleaned the same way.
     pub removed: Vec<String>,
+}
+
+impl Hunk {
+    fn covers(&self, span: Span) -> bool {
+        self.changes.iter().any(|change| change.touches(span))
+    }
 }
 
 /// Stages the part of `checkout`'s unstaged changes that `hunk` covers.
@@ -131,7 +140,14 @@ pub fn stage_hunk(
     let name = file.path().to_string_lossy();
     git(
         checkout,
-        &["apply", "--cached", "--whitespace=nowarn", "--", &name],
+        &[
+            "apply",
+            "--cached",
+            "--unidiff-zero",
+            "--whitespace=nowarn",
+            "--",
+            &name,
+        ],
         "stage the hunk",
         deadline,
         &|| false,
@@ -177,8 +193,7 @@ fn read_diff(
         "--no-renames",
         "--src-prefix=a/",
         "--dst-prefix=b/",
-        "--unified=3",
-        "--inter-hunk-context=0",
+        "--unified=0",
         "--",
         &spec,
     ]);
@@ -211,7 +226,7 @@ fn check_removed(
     }
     let (_, parts) = split(&diff);
     let walked = parts.into_iter().filter_map(read_hunk);
-    for part in walked.filter(|part| part.span.touches(hunk.span)) {
+    for part in walked.filter(|part| hunk.covers(part.span)) {
         for (_, kind, text) in &part.lines {
             if *kind != LineKind::Removed {
                 continue;
@@ -276,9 +291,9 @@ fn contents(path: &Path) -> io::Result<Vec<u8>> {
 }
 
 /// The patch taking `hunk`'s part of `diff`, one file's diff with its
-/// header: that header and each hunk touching `hunk`'s span, as Git wrote
-/// them. Hunks left out need no renumbering: Git finds each one by its old
-/// side, which does not depend on the hunks before it.
+/// header, read without context: that header and each change at one of
+/// `hunk`'s, as Git wrote them. Changes left out need no renumbering: Git
+/// finds each one by its old side, which does not depend on those before it.
 fn patch(diff: &[u8], hunk: &Hunk, clean: impl Fn(&str) -> String) -> Result<Vec<u8>, Error> {
     let (header, parts) = split(diff);
     let mut patch = header.to_vec();
@@ -287,19 +302,14 @@ fn patch(diff: &[u8], hunk: &Hunk, clean: impl Fn(&str) -> String) -> Result<Vec
         let Some(walked) = read_hunk(part) else {
             continue;
         };
-        if !walked.span.touches(hunk.span) {
+        if !hunk.covers(walked.span) {
             continue;
         }
         for (number, kind, text) in &walked.lines {
             let text = clean(&String::from_utf8_lossy(text));
-            let shown = hunk.lines.get(number);
-            let same = match kind {
-                LineKind::Added => shown == Some(&text),
-                // A context line can lie beyond the lines shown.
-                LineKind::Context => shown.is_none_or(|shown| *shown == text),
-                LineKind::Removed => true,
-            };
-            if !same {
+            // What the index loses may be an edit staged earlier, which
+            // the review never showed: `check_removed` looks at HEAD's.
+            if *kind == LineKind::Added && hunk.lines.get(number) != Some(&text) {
                 return Err(Error::Changed);
             }
         }
@@ -335,7 +345,6 @@ fn split(diff: &[u8]) -> (&[u8], Vec<&[u8]>) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LineKind {
     Added,
-    Context,
     Removed,
 }
 
@@ -354,10 +363,6 @@ fn read_hunk(hunk: &[u8]) -> Option<Walked<'_>> {
         let (sign, text) = row.split_first()?;
         let text = text.strip_suffix(b"\n").unwrap_or(text);
         match sign {
-            b' ' => {
-                lines.push((walk.next(), LineKind::Context, text));
-                walk.context();
-            }
             b'+' => {
                 lines.push((walk.next(), LineKind::Added, text));
                 walk.added();

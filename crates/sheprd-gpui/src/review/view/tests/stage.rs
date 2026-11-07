@@ -124,6 +124,23 @@ fn a_hunks_span_covers_its_changes_not_its_context() {
 }
 
 #[test]
+fn a_request_names_each_change_of_its_hunk() {
+    let parsed = crate::review::diff::Diff::parse(
+        "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1,7 +1,7 @@\n one\n-two\n+TWO\n three\n four\n-five\n six\n+seven\n",
+    );
+    let lines = parsed.files[0].lines().unwrap();
+    let rows = lines.iter().skip(1).map(|line| (line.kind, line.new));
+    assert_eq!(
+        crate::review::view::stage::changes(rows, 2),
+        [
+            Span { start: 2, end: 3 },
+            Span { start: 5, end: 5 },
+            Span { start: 6, end: 7 },
+        ]
+    );
+}
+
+#[test]
 fn a_hunk_with_more_context_keeps_its_span() {
     let parsed = crate::review::diff::Diff::parse(
         "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -5,3 +5,3 @@\n a\n-b\n+B\n c\n",
@@ -237,6 +254,26 @@ fn a_stage_finishing_after_the_chrome_moved_says_nothing_of_the_new_checkout(
     assert_ne!(git(dir.path(), &["diff", "--cached", "--name-only"]), "");
     view.read_with(cx, |view, _| {
         assert_eq!(view.git.status().unwrap().staged, 0);
+    });
+}
+
+#[gpui::test]
+fn a_stage_outliving_its_tab_still_says_something_is_staged(cx: &mut gpui::TestAppContext) {
+    let dir = checkout();
+    let (view, cx) = window(cx, None);
+    open(&view, cx, dir.path());
+    let hunks = headers(&view, cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let id = the(view);
+            view.stage_review_hunk(id, 0, hunks[0], cx);
+            view.reviews.remove(&id);
+        })
+    });
+    cx.run_until_parked();
+
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.git.status().unwrap().staged, 1);
     });
 }
 

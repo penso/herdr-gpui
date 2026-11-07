@@ -28,10 +28,10 @@ fn whole(path: &str, lines: &[&str]) -> Hunk {
     let last = u32::try_from(lines.len()).unwrap() + 1;
     Hunk {
         path: path.into(),
-        span: Span {
+        changes: vec![Span {
             start: 1,
             end: last,
-        },
+        }],
         lines: (1..)
             .zip(lines.iter().map(|line| (*line).to_owned()))
             .collect(),
@@ -68,10 +68,10 @@ fn numbered(edits: &[(u32, &str)]) -> String {
 fn hunk(line: u32, text: &str) -> Hunk {
     Hunk {
         path: "a.txt".into(),
-        span: Span {
+        changes: vec![Span {
             start: line,
             end: line + 1,
-        },
+        }],
         lines: HashMap::from([(line, text.to_owned())]),
         removed: vec![format!("line {line}")],
     }
@@ -176,7 +176,7 @@ fn a_hunk_of_removed_lines_stages_by_its_place() {
     std::fs::write(root.join("a.txt"), &text).unwrap();
     let hunk = Hunk {
         path: "a.txt".into(),
-        span: Span { start: 10, end: 10 },
+        changes: vec![Span { start: 10, end: 10 }],
         lines: HashMap::new(),
         removed: vec!["line 10".into()],
     };

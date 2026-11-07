@@ -9,8 +9,9 @@ use crate::{
     SheprdWindow,
     browser::TabId,
     i18n::{Localize, fl},
+    pull_request::Input,
     review::diff::{self, Kind, Scope, Status},
-    stage::{self, Hunk},
+    stage::{self, Hunk, Span},
     window::Flash,
 };
 use gpui::{prelude::*, *};
@@ -21,6 +22,33 @@ fn clean(text: &str) -> String {
     let mut line = String::new();
     diff::push_clean(&mut line, text);
     line
+}
+
+/// Where each run of added and removed lines is, among a hunk's rows of
+/// kind and working tree line, the first change being at `first`.
+pub(super) fn changes(rows: impl Iterator<Item = (Kind, Option<u32>)>, first: u32) -> Vec<Span> {
+    let mut changes: Vec<Span> = Vec::new();
+    let mut next = first;
+    let mut open = false;
+    for (kind, line) in rows {
+        let (start, end) = match (kind, line) {
+            (Kind::Added, Some(line)) => (line, line.saturating_add(1)),
+            (Kind::Removed, _) => (next, next),
+            (Kind::Context, Some(line)) => {
+                next = line.saturating_add(1);
+                open = false;
+                continue;
+            }
+            _ => continue,
+        };
+        next = end;
+        match changes.last_mut().filter(|_| open) {
+            Some(change) => change.end = end,
+            None => changes.push(Span { start, end }),
+        }
+        open = true;
+    }
+    changes
 }
 
 impl Review {
@@ -52,22 +80,22 @@ impl Review {
         let entry = self.loaded()?.diff.files.get(file)?;
         let lines = entry.lines()?;
         let span = lines.hunk_span(header)?;
-        let shown = lines
-            .iter()
-            .skip(header + 1)
-            .take_while(|line| line.kind != Kind::Hunk)
+        let rows = || {
+            lines
+                .iter()
+                .skip(header + 1)
+                .take_while(|line| line.kind != Kind::Hunk)
+        };
+        let shown = rows()
             .filter_map(|line| Some((line.new?, lines.text_of(line).to_owned())))
             .collect::<HashMap<_, _>>();
-        let removed = lines
-            .iter()
-            .skip(header + 1)
-            .take_while(|line| line.kind != Kind::Hunk)
+        let removed = rows()
             .filter(|line| line.kind == Kind::Removed)
             .map(|line| lines.text_of(line).to_owned())
             .collect();
         Some(Hunk {
             path: entry.git_path().to_owned(),
-            span,
+            changes: changes(rows().map(|line| (line.kind, line.new)), span.start),
             lines: shown,
             removed,
         })
@@ -137,6 +165,7 @@ impl SheprdWindow {
             return;
         };
         let checkout = loaded.source.checkout.clone();
+        let source = review.checkout.clone();
         let untracked = loaded
             .diff
             .files
@@ -153,7 +182,7 @@ impl SheprdWindow {
         cx.spawn(async move |this, cx| {
             let staged = staging.await;
             let _ = this.update(cx, |this, cx| {
-                this.review_hunk_staged(id, untracked, staged, cx);
+                this.review_hunk_staged(id, &source, untracked, staged, cx);
             });
         })
         .detach();
@@ -163,6 +192,7 @@ impl SheprdWindow {
     fn review_hunk_staged(
         &mut self,
         id: TabId,
+        source: &Input,
         untracked: bool,
         staged: sheprd_vcs::Result<()>,
         cx: &mut Context<Self>,
@@ -171,11 +201,8 @@ impl SheprdWindow {
             review.staging = false;
         }
         // The chrome may have moved to another checkout, which this says
-        // nothing about.
-        let tracked = self
-            .reviews
-            .get(&id)
-            .is_some_and(|review| self.git.tracked() == Some(&review.checkout));
+        // nothing about; the tab may have closed, which changes nothing.
+        let tracked = self.git.tracked() == Some(source);
         let now = Instant::now();
         match staged {
             Ok(()) if tracked => self.git.refresh_staged(now),
