@@ -102,7 +102,7 @@ fn chords_without_a_usable_prefix_keep_separate_keys() {
 #[test]
 fn a_system_key_never_reaches_a_custom_command_whoever_holds_it() {
     let commands = [custom("hide", &["cmd+alt+h"])];
-    let label = keystroke("cmd-alt-h").unparse();
+    let label = keystroke("cmd-alt-h").unparse(HOST_OS);
     let reach = |keymap: &Keymap| reference(keymap, &commands);
     // Elsewhere the keystroke is no system key, and nothing holds it.
     let unbound = if cfg!(target_os = "macos") {
@@ -135,8 +135,8 @@ fn reserved_and_keymap_keystrokes_never_reach_a_custom_command() {
         ],
     )];
     // Labels read in GPUI's platform spelling (`super-v` on Linux).
-    let paste = keystroke(paste_key).unparse();
-    let select_all = keystroke(select_all_key).unparse();
+    let paste = keystroke(paste_key).unparse(HOST_OS);
+    let select_all = keystroke(select_all_key).unparse(HOST_OS);
     assert_eq!(
         reference(&keymap, &commands),
         [vec![

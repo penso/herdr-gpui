@@ -408,8 +408,8 @@ mod tests {
             assert_eq!(rendered.width, rendered.height, "{path}");
             assert!(rendered.width >= DevicePixels(16), "{path}");
             let pixels = image.as_bytes(0).unwrap();
-            assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] > 0));
-            assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] == 0));
+            assert!(pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0));
+            assert!(pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] == 0));
         }
         assert!(Icons.load("unknown.svg").unwrap().is_none());
         // Every asset is listed once, whichever table declares it.

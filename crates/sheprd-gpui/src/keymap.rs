@@ -10,10 +10,14 @@
 mod custom;
 pub(crate) mod daemon;
 mod error;
+mod host;
 
 pub(crate) use custom::Reach;
 pub(crate) use daemon::DaemonKeys;
 pub(crate) use error::Error;
+#[cfg(test)]
+pub(crate) use host::secondary_key;
+pub(crate) use host::{HOST_OS, parse_keystroke, secondary};
 
 use crate::{
     Result,
@@ -203,7 +207,7 @@ impl Keymap {
         for (typed, _) in &pane_keys {
             if let Some(command) = claimed.insert(identity(typed), "pane_keys") {
                 return Err(Error::PaneKeyBound {
-                    keystroke: typed.unparse(),
+                    keystroke: typed.unparse(HOST_OS),
                     command,
                 }
                 .into());
@@ -244,7 +248,7 @@ impl Keymap {
                     if !has_modifier(keystroke) || !taken.insert(identity(keystroke)) {
                         continue;
                     }
-                    Shortcut::direct(keystroke.unparse())
+                    Shortcut::direct(keystroke.unparse(HOST_OS))
                 }
                 Trigger::Prefixed(keystroke) => {
                     // A prefix typed after a prefix sends it to the terminal
@@ -260,7 +264,11 @@ impl Keymap {
                         continue;
                     }
                     Shortcut {
-                        label: format!("{} {}", prefix.unparse(), keystroke.unparse()),
+                        label: format!(
+                            "{} {}",
+                            prefix.unparse(HOST_OS),
+                            keystroke.unparse(HOST_OS)
+                        ),
                         chord: Some(keystroke.clone()),
                         catalog_default: false,
                     }
@@ -278,7 +286,7 @@ impl Keymap {
                     .default_shortcuts()
                     .iter()
                     .filter(|shortcut| {
-                        Keystroke::parse(shortcut)
+                        parse_keystroke(shortcut)
                             .is_ok_and(|parsed| !taken.contains(&identity(&parsed)))
                     })
                     .map(|&shortcut| Shortcut {
@@ -339,7 +347,9 @@ impl Keymap {
 
     /// The first prefix as shown to the user, while chords can use one.
     pub(crate) fn prefix_label(&self) -> Option<String> {
-        self.prefixes.first().map(Keystroke::unparse)
+        self.prefixes
+            .first()
+            .map(|keystroke| keystroke.unparse(HOST_OS))
     }
 
     /// Whether `typed` is one of the keystrokes that start a chord.
@@ -375,8 +385,9 @@ impl Keymap {
             .flatten()
             .any(|shortcut| match (&shortcut.chord, prefixed) {
                 (Some(chord), true) => typed_matches(typed, chord),
-                (None, false) => Keystroke::parse(&shortcut.label)
-                    .is_ok_and(|bound| typed_matches(typed, &bound)),
+                (None, false) => {
+                    parse_keystroke(&shortcut.label).is_ok_and(|bound| typed_matches(typed, &bound))
+                }
                 _ => false,
             })
     }
@@ -429,8 +440,8 @@ fn default_pane_keys() -> impl Iterator<Item = (Keystroke, PaneKey)> {
         .chain(PORTABLE_PANE_KEYS)
         .filter_map(|(typed, sent)| {
             Some((
-                Keystroke::parse(typed).ok()?,
-                PaneKey::Key(Keystroke::parse(sent).ok()?),
+                parse_keystroke(typed).ok()?,
+                PaneKey::Key(parse_keystroke(sent).ok()?),
             ))
         })
 }
@@ -445,7 +456,7 @@ fn resolve_pane_keys(
         return Err(Error::TooManyPaneKeys(MAX_PANE_KEYS).into());
     }
     let parse = |keystroke: &str| {
-        Keystroke::parse(keystroke).map_err(|source| Error::InvalidPaneKey {
+        parse_keystroke(keystroke).map_err(|source| Error::InvalidPaneKey {
             keystroke: keystroke.to_owned(),
             source,
         })
@@ -496,7 +507,7 @@ fn resolve_pane_keys(
 }
 
 fn parse(command: &'static str, keystroke: &str) -> Result<Keystroke> {
-    let parsed = Keystroke::parse(keystroke).map_err(|source| Error::InvalidKeystroke {
+    let parsed = parse_keystroke(keystroke).map_err(|source| Error::InvalidKeystroke {
         command,
         keystroke: keystroke.to_owned(),
         source,

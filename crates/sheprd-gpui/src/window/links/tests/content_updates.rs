@@ -102,7 +102,7 @@ fn release_on_revision(
     position: Point<Pixels>,
 ) {
     view.update(cx, |view, _| place(view, WEB, 2));
-    release_after(view, cx, position, Modifiers::secondary_key(), |view| {
+    release_after(view, cx, position, crate::keymap::secondary_key(), |view| {
         place(view, WEB, 4);
     });
 }
@@ -174,7 +174,7 @@ fn an_unchanged_revision_still_opens_through_the_daemon(cx: &mut gpui::TestAppCo
     view.update(cx, |view, _| place(view, WEB, 2));
     let link = at(&view, cx, 2, 0);
 
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     let request = activation(&mut peer);
     assert_eq!(request["params"]["content_revision"], 2);
     assert!(cx.opened_url().is_none());
@@ -187,13 +187,13 @@ fn an_unchanged_revision_still_opens_through_the_daemon(cx: &mut gpui::TestAppCo
     );
     assert!(cx.opened_url().is_none());
 
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     let request = activation(&mut peer);
     handler_failed(&mut peer, &view, cx, &request);
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| assert!(view.links.activating.is_none()));
 
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     let request = activation(&mut peer);
     assert_eq!(request["params"]["content_revision"], 2);
     answer(&mut peer, &view, cx, &request, declined(WEB));
@@ -217,7 +217,7 @@ fn a_changed_or_removed_url_does_not_activate(cx: &mut gpui::TestAppContext) {
     let link = at(&view, cx, 2, 0);
 
     view.update(cx, |view, _| place(view, WEB, 2));
-    release_after(&view, cx, link, Modifiers::secondary_key(), |view| {
+    release_after(&view, cx, link, crate::keymap::secondary_key(), |view| {
         place(view, OTHER, 2);
     });
     assert_not_activated(&view, cx, "changed url");
@@ -226,7 +226,7 @@ fn a_changed_or_removed_url_does_not_activate(cx: &mut gpui::TestAppContext) {
     });
 
     view.update(cx, |view, _| place(view, WEB, 2));
-    release_after(&view, cx, link, Modifiers::secondary_key(), |view| {
+    release_after(&view, cx, link, crate::keymap::secondary_key(), |view| {
         place(view, "see notes", 2);
     });
     assert_not_activated(&view, cx, "removed url");
@@ -249,7 +249,7 @@ fn reject_revised(
     change: impl FnOnce(&mut SheprdWindow),
 ) {
     view.update(cx, |view, _| prepare(view));
-    release_after(view, cx, link, Modifiers::secondary_key(), |view| {
+    release_after(view, cx, link, crate::keymap::secondary_key(), |view| {
         place(view, WEB, 4);
         change(view);
     });
@@ -291,7 +291,7 @@ fn a_different_viewport_or_a_missing_cell_does_not_activate(cx: &mut gpui::TestA
 
     // The press had a daemon cell; the release, at the new revision, does not.
     view.update(cx, |view, _| prepare(view));
-    release_after(&view, cx, link, Modifiers::secondary_key(), |view| {
+    release_after(&view, cx, link, crate::keymap::secondary_key(), |view| {
         place(view, WEB, 4);
         view.live.supports_link_activate = false;
     });
@@ -299,7 +299,7 @@ fn a_different_viewport_or_a_missing_cell_does_not_activate(cx: &mut gpui::TestA
     view.read_with(cx, |view, _| {
         assert_eq!(view.terminal_link_at(link).as_deref(), Some(WEB));
         assert!(
-            view.terminal_link_press(link, Modifiers::secondary_key())
+            view.terminal_link_press(link, crate::keymap::secondary_key())
                 .is_some_and(|pressed| pressed.cell.is_none())
         );
     });
@@ -309,14 +309,14 @@ fn a_different_viewport_or_a_missing_cell_does_not_activate(cx: &mut gpui::TestA
         prepare(view);
         view.live.supports_link_activate = false;
     });
-    release_after(&view, cx, link, Modifiers::secondary_key(), |view| {
+    release_after(&view, cx, link, crate::keymap::secondary_key(), |view| {
         view.live.supports_link_activate = true;
         place(view, WEB, 4);
     });
     assert_not_activated(&view, cx, "press cell missing");
     view.read_with(cx, |view, _| {
         assert!(
-            view.terminal_link_press(link, Modifiers::secondary_key())
+            view.terminal_link_press(link, crate::keymap::secondary_key())
                 .is_some_and(
                     |pressed| pressed.cell.is_some() && pressed.url.as_deref() == Some(WEB)
                 )
@@ -347,7 +347,7 @@ fn endpoint_retargeting_drops_a_pending_press(cx: &mut gpui::TestAppContext) {
         view.endpoints.push(remote);
     });
     let link = at(&view, cx, 2, 0);
-    cx.simulate_mouse_down(link, MouseButton::Left, Modifiers::secondary_key());
+    cx.simulate_mouse_down(link, MouseButton::Left, crate::keymap::secondary_key());
     let (surface, snapshot) = view.read_with(cx, |view, _| {
         assert!(view.pressed_terminal_link.is_some());
         (view.live.surface.clone(), view.live.snapshot.clone())
@@ -360,7 +360,7 @@ fn endpoint_retargeting_drops_a_pending_press(cx: &mut gpui::TestAppContext) {
         view.live.status = ConnectionStatus::Connected;
         view.live.supports_link_activate = true;
     });
-    cx.simulate_mouse_up(link, MouseButton::Left, Modifiers::secondary_key());
+    cx.simulate_mouse_up(link, MouseButton::Left, crate::keymap::secondary_key());
     assert_not_activated(&view, cx, "retarget");
     view.read_with(cx, |view, _| {
         assert_eq!(view.terminal_link_at(link).as_deref(), Some(WEB));
@@ -375,7 +375,7 @@ fn file_and_daemon_only_links_reject_revision_changes(cx: &mut gpui::TestAppCont
     let mut peer = MockPeer::advertising(&["pane.link.resolve", "pane.link.activate"]);
     let (view, cx) = window(&peer, true, cx);
     let continuation = at(&view, cx, 2, 1);
-    cx.simulate_mouse_move(continuation, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(continuation, None, crate::keymap::secondary_key());
     resolve_after_delay(cx);
     let request = peer.request();
     assert_eq!(request["method"], "pane.link.resolve");
@@ -390,7 +390,11 @@ fn file_and_daemon_only_links_reject_revision_changes(cx: &mut gpui::TestAppCont
         ]}),
     );
     view.read_with(cx, |view, _| assert!(view.hovered_daemon_link().is_some()));
-    cx.simulate_mouse_down(continuation, MouseButton::Left, Modifiers::secondary_key());
+    cx.simulate_mouse_down(
+        continuation,
+        MouseButton::Left,
+        crate::keymap::secondary_key(),
+    );
     view.read_with(cx, |view, _| {
         let pressed = view.pressed_terminal_link.as_ref().unwrap();
         assert!(pressed.url.is_none());
@@ -399,10 +403,14 @@ fn file_and_daemon_only_links_reject_revision_changes(cx: &mut gpui::TestAppCont
     });
     view.update(cx, |view, _| view.live.surface = Some(wrapped(4)));
     view.read_with(cx, |view, _| assert!(view.hovered_daemon_link().is_none()));
-    cx.simulate_mouse_up(continuation, MouseButton::Left, Modifiers::secondary_key());
+    cx.simulate_mouse_up(
+        continuation,
+        MouseButton::Left,
+        crate::keymap::secondary_key(),
+    );
     assert_not_activated(&view, cx, "wrapped");
 
-    let modifiers = Modifiers::secondary_key();
+    let modifiers = crate::keymap::secondary_key();
     let path = "/tmp/notes.md";
     view.update(cx, |view, _| place(view, path, 2));
     let link = at(&view, cx, 2, 0);
@@ -444,13 +452,13 @@ fn file_and_daemon_only_links_reject_revision_changes(cx: &mut gpui::TestAppCont
     });
 
     view.update(cx, |view, _| place(view, WEB, 2));
-    release_after(&view, cx, link, Modifiers::secondary_key(), |view| {
+    release_after(&view, cx, link, crate::keymap::secondary_key(), |view| {
         place(view, WEB, 3)
     });
     assert_not_activated(&view, cx, "odd revision");
     view.read_with(cx, |view, _| {
         let release = view
-            .terminal_link_press(link, Modifiers::secondary_key())
+            .terminal_link_press(link, crate::keymap::secondary_key())
             .unwrap();
         assert_eq!(release.url.as_deref(), Some(WEB));
         assert!(release.cell.is_none());

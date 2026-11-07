@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{ScrollDelta, ScrollWheelEvent};
+use gpui::{ScrollDelta, ScrollEvent};
 
 /// Release notes far past every parser bound: unbreakable words, an endless
 /// link, a code line wider than any window, and more lines than are kept.
@@ -111,7 +111,7 @@ fn huge_release_notes_stay_inside_the_dialog_and_scroll(cx: &mut gpui::TestAppCo
         }
 
         // Scrolling the notes reaches the last kept line.
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: body.center(),
             delta: ScrollDelta::Pixels(point(px(0.), px(-1_000_000.))),
             ..Default::default()

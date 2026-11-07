@@ -11,7 +11,7 @@ pub(crate) use selection::{MAX_SELECTION_BYTES, Selection};
 
 use crate::{config::Theme, keymap::PaneKey};
 use gpui::{
-    Bounds, KeyDownEvent, Keystroke, Modifiers, Pixels, Point, ScrollDelta, ScrollWheelEvent,
+    Bounds, KeyDownEvent, Keystroke, Modifiers, Pixels, Point, ScrollDelta, ScrollEvent,
     TouchPhase, point, px, size,
 };
 use sheprd_client::protocol::{
@@ -201,7 +201,7 @@ impl WheelAccumulator {
     pub fn steps(
         &mut self,
         target: &WheelTarget,
-        event: &ScrollWheelEvent,
+        event: &ScrollEvent,
         cell_width: f32,
         cell_height: f32,
         notch_lines: NonZeroU16,
@@ -248,11 +248,7 @@ impl WheelAccumulator {
 /// notch scrolls `notch_lines`, Herdr's `ui.mouse_scroll_lines`, on both the
 /// smooth and whole-line paths; precise (trackpad) pixel motion keeps
 /// following the pointer one cell height per row.
-pub(crate) fn wheel_rows(
-    event: &ScrollWheelEvent,
-    cell_height: f32,
-    notch_lines: NonZeroU16,
-) -> f32 {
+pub(crate) fn wheel_rows(event: &ScrollEvent, cell_height: f32, notch_lines: NonZeroU16) -> f32 {
     match event.delta {
         ScrollDelta::Pixels(delta) => delta.y.to_f64() as f32 / cell_height,
         // Multiply before dividing so the common equal counts stay exact.

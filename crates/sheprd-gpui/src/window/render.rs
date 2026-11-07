@@ -343,7 +343,7 @@ impl Render for SheprdWindow {
                     this.copy_retained_selection(cx);
                 }))
             })
-            .on_scroll_wheel(cx.listener(Self::scroll_wheel))
+            .on_scroll(cx.listener(Self::scroll_wheel))
             .on_drop(cx.listener(Self::drop_terminal_files))
             .on_mouse_down(
                 MouseButton::Middle,
@@ -809,7 +809,7 @@ impl Render for SheprdWindow {
                     move |bounds, _, _| menu_bounds.set(bounds),
                     move |_, _, window, _| {
                         let scroll_entity = entity.clone();
-                        window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, cx| {
+                        window.on_mouse_event(move |_: &ScrollEvent, phase, _, cx| {
                             if phase == DispatchPhase::Capture {
                                 let _ =
                                     scroll_entity.update(cx, |this, _| this.shift_taps.cancel());

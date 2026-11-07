@@ -175,7 +175,7 @@ fn dropdown_opens_picks_and_dismisses(cx: &mut TestAppContext) {
     view.update(cx, |view, _| {
         let open = view.open.as_mut().unwrap();
         let key = |s: &str| KeyDownEvent {
-            keystroke: Keystroke::parse(s).unwrap(),
+            keystroke: crate::keymap::parse_keystroke(s).unwrap(),
             is_held: false,
             prefer_character_input: false,
         };

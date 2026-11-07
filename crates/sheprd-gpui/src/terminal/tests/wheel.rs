@@ -11,7 +11,7 @@ fn hit(target: InputTarget, mouse_reporting: bool) -> WheelTarget {
     }
 }
 
-fn lines(wheel: &mut WheelAccumulator, target: &WheelTarget, event: &ScrollWheelEvent) -> i16 {
+fn lines(wheel: &mut WheelAccumulator, target: &WheelTarget, event: &ScrollEvent) -> i16 {
     wheel.steps(target, event, 10., CELL_HEIGHT, NEUTRAL).lines
 }
 
@@ -21,7 +21,7 @@ fn wheel_preserves_fractions_and_resets_on_target_direction_or_gesture_change() 
     let pane = hit(InputTarget::Pane("pane".into()), false);
     let other = hit(InputTarget::Pane("other".into()), false);
     let popup = hit(InputTarget::Popup("other".into()), false);
-    let mut event = ScrollWheelEvent {
+    let mut event = ScrollEvent {
         delta: ScrollDelta::Pixels(point(px(0.), px(12.))),
         touch_phase: TouchPhase::Moved,
         ..Default::default()
@@ -55,7 +55,7 @@ fn nonfinite_wheel_deltas_do_not_poison_fractional_motion() {
                     })
                 };
                 let step = |wheel: &mut WheelAccumulator, value: f32| {
-                    let event = ScrollWheelEvent {
+                    let event = ScrollEvent {
                         delta: delta(value),
                         touch_phase: TouchPhase::Moved,
                         ..Default::default()
@@ -82,12 +82,12 @@ fn horizontal_wheel_accumulates_columns_by_cell_width_for_mouse_reporting_target
     let pane = hit(InputTarget::Pane("pane".into()), true);
     let popup = hit(InputTarget::Popup("popup".into()), true);
     let plain = hit(InputTarget::Pane("plain".into()), false);
-    let mut event = ScrollWheelEvent {
+    let mut event = ScrollEvent {
         delta: ScrollDelta::Pixels(point(px(6.), px(0.))),
         touch_phase: TouchPhase::Moved,
         ..Default::default()
     };
-    let mut steps = |target: &WheelTarget, event: &ScrollWheelEvent| {
+    let mut steps = |target: &WheelTarget, event: &ScrollEvent| {
         wheel.steps(target, event, 10., CELL_HEIGHT, NEUTRAL)
     };
     // Pixel motion becomes columns by cell width, keeping the fraction.
@@ -192,7 +192,7 @@ fn wheel_steps_become_one_report_per_step_for_an_application_vertical_first() {
 fn wheel_uses_configured_height_only_for_pixel_deltas() {
     let mut wheel = WheelAccumulator::default();
     let pane = hit(InputTarget::Pane("pane".into()), true);
-    let mut event = ScrollWheelEvent {
+    let mut event = ScrollEvent {
         delta: ScrollDelta::Pixels(point(px(0.), px(15.))),
         touch_phase: TouchPhase::Moved,
         ..Default::default()

@@ -357,7 +357,7 @@ pub fn start(handle: WindowHandle<SheprdWindow>, cx: &mut App) {
                         Key::Terminal(name) => name,
                     };
                     let before = view.read(cx).input_probe;
-                    let key = Keystroke::parse(name).with_context(|| format!("parsing keystroke {name}"))?;
+                    let key = crate::keymap::parse_keystroke(name).with_context(|| format!("parsing keystroke {name}"))?;
                     if !window.dispatch_keystroke(key, cx) { bail!("unhandled keystroke {name}"); }
                     let after = view.read(cx).input_probe;
                     let delivered = if matches!(input, Key::Command(_)) {
@@ -669,7 +669,7 @@ async fn second_window(first: WindowHandle<SheprdWindow>, cx: &mut AsyncApp) -> 
 
 #[cfg(target_os = "macos")]
 fn key(name: &str, window: &mut Window, cx: &mut App) -> Result<()> {
-    if !window.dispatch_keystroke(Keystroke::parse(name)?, cx) {
+    if !window.dispatch_keystroke(crate::keymap::parse_keystroke(name)?, cx) {
         bail!("unhandled CJK fixture key {name}");
     }
     Ok(())

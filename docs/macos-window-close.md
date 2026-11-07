@@ -37,14 +37,14 @@ local reproduction proving that it explains every Sheprd close failure.
 
 | Component | Resolved version | Relevant source |
 | --- | --- | --- |
-| `gpui-pre` / `gpui-pre-macos` | `0.3.6` | `src/window.rs`: `Window::new`, `MacWindow::a11y_init`, `Drop for MacWindow` |
+| `gpui-pre` / `gpui-pre-macos` | `0.3.10` | `src/window.rs`: `Window::new`, `MacWindow::a11y_init`, `Drop for MacWindow` |
 | `accesskit_macos` | `0.26.3` | `src/subclass.rs`: `SubclassingAdapter::for_window`, `Drop for SubclassingAdapter` |
 | `accesskit` | `0.24.1` | GPUI's accessibility tree and handler types |
 
 The current lockfile has **0.26.3**, not the 0.26.0 cited in the old issue
 comment. Inspection of the published 0.26.3 source still finds the unconditional
 `object_setClass(view, prev_class)` in `SubclassingAdapter::drop`. The downloaded
-0.26.3 and GPUI 0.3.6 archives' SHA-256 hashes match `Cargo.lock`.
+0.26.3 and GPUI 0.3.10 archives' SHA-256 hashes match `Cargo.lock`.
 
 Sheprd uses `gpui_platform::application()` in `crates/sheprd-gpui/src/app.rs`.
 GPUI installs `SubclassingAdapter::for_window` on the native content view.
@@ -69,7 +69,7 @@ open and merged project PRs found no fix for this signature.
 
 ## Adoption blocker
 
-GPUI 0.3.6 requires `accesskit_macos = "0.26.0"` (the compatible 0.26 series)
+GPUI 0.3.10 requires `accesskit_macos = "0.26.0"` (the compatible 0.26 series)
 and `accesskit = "0.24.0"`. The fixed macOS adapter 0.27.2 requires
 `accesskit = "0.25.2"` and `accesskit_consumer = "0.39.2"`. It is not a
 compatible lockfile-only update: GPUI passes AccessKit tree and handler types
@@ -84,7 +84,7 @@ GPUI's subclassing adapter with the regular adapter on `GPUIView`. That PR
 is still open and is not part of the pinned GPUI release.
 
 A backport also needs a native startup check: the fixed adapter rejects views
-that were already KVO-observed before installation. GPUI 0.3.6's `Window::new`
+that were already KVO-observed before installation. GPUI 0.3.10's `Window::new`
 calls `platform.open_window` before `a11y_init`, and the macOS constructor can
 show/focus the window before returning. Source alone does not establish whether
 AppKit has installed an observer at that point on an affected Mac.
