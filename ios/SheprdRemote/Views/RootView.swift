@@ -90,6 +90,10 @@ struct RootView: View {
         #if DEBUG
         .task { await followLaunchArguments() }
         #endif
+        // The microphone never stays open behind the app, or its lock.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { model.voice = nil }
+        }
         .onChange(of: LockState.shared.locked) { _, locked in
             guard !locked, let talk = model.pendingTalk else { return }
             model.pendingTalk = nil

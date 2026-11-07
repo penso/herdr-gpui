@@ -345,6 +345,9 @@ private struct VoiceFanOutCard: View {
                         Text(one.computer?.name ?? "").font(.body.weight(.medium))
                         Text([one.project?.name, one.agent?.name].compactMap(\.self).joined(separator: " · "))
                             .font(.caption).foregroundStyle(.secondary)
+                        if !one.branch.isEmpty {
+                            Text(one.branch).font(.caption.monospaced()).foregroundStyle(VoiceSlot.topic.tint)
+                        }
                     }
                 }
             }

@@ -53,7 +53,7 @@ public enum VoicePlan: Hashable, Sendable {
         case computer
         /// A computer was named that is not connected.
         case offline(String)
-        /// A computer was named that is not one of them.
+        /// A computer was named that is none of them, or more than one.
         case unknownComputer(String)
         /// `name` was asked for by name and is not on the computer.
         case project(on: String, named: String?, choices: [VoiceCatalog.Project])
@@ -87,6 +87,14 @@ public enum VoicePlan: Hashable, Sendable {
     /// existing checkout, and an unwanted one is simply deleted.
     public var confirmableByVoice: Bool {
         if case let .workspace(plan) = self { plan.question == nil && !plan.branch.isEmpty } else { false }
+    }
+
+    /// Whether `other` would run exactly the same thing, however its
+    /// computers' load has changed since.
+    public func runsTheSame(as other: VoicePlan) -> Bool {
+        guard case let .workspace(a) = self, case let .workspace(b) = other else { return false }
+        return a.computer?.id == b.computer?.id && a.project == b.project && a.branch == b.branch
+            && a.agent == b.agent && a.prompt == b.prompt
     }
 
     /// The card read aloud, for someone not looking at it.
@@ -243,7 +251,7 @@ extension VoicePlan.Question {
         case let .agent(on, nil): "Which agent on \(on)?"
         case .computer: "None of your computers is connected."
         case let .offline(name): "\(name) is not connected."
-        case let .unknownComputer(name): "\(name) is not one of your computers. Which one?"
+        case let .unknownComputer(name): "Which computer did you mean by \(name)?"
         case let .project(on, named?, _): "\(named) is not on \(on). Which project?"
         case let .project(on, nil, _): "Which project on \(on)?"
         }

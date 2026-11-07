@@ -166,7 +166,14 @@ final class AppModel {
             guard let pane = item.terminal.agentPane?.pane, !panes.contains("\(item.computer.device)/\(pane)") else { return nil }
             // A numbered tab cannot be told apart out loud; its workspace can.
             let title = Int(item.title) == nil ? item.title : item.workspace.label
-            return VoiceCatalog.Chat(device: item.computer.device, pane: pane, title: title, computer: displayName(item.computer), terminal: true)
+            return VoiceCatalog.Chat(
+                device: item.computer.device,
+                pane: pane,
+                title: title,
+                computer: displayName(item.computer),
+                terminal: true,
+                terminalAgent: item.agent?.name
+            )
         }
         return chats + terminals
     }

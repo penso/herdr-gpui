@@ -148,6 +148,8 @@ public enum VoiceParser {
         }
         let near = adjacent ? found.filter { $0.1.words.lowerBound == 0 } : found
         guard let best = near.max(by: { $0.1.score < $1.1.score }) else { return nil }
+        // Two chats it fits as well: acting on either would be a guess.
+        guard near.filter({ $0.1.score == best.1.score }).count == 1 else { return nil }
         var end = head + best.1.words.upperBound
         if end < words.count, chatNouns.contains(words[end].text) { end += 1 }
         return (best.0, end, best.1.range)
@@ -340,18 +342,17 @@ public enum VoiceParser {
         if ["least busy", "most room", "most free", "has room", "idle machine"].contains(where: lower.contains) {
             draft.leastBusy = true
         }
-        let computers = catalog.computers.compactMap { computer -> (VoiceCatalog.Computer, VoiceSpot)? in
-            VoiceNames.find(computer.name, in: words, partly: true).map { (computer, $0) }
-        }
-        // "About studio lighting" says what it is about, not where.
-        let named = computers.filter { !follows(topicWords, $0.1, in: words) }
-        let computer = named.max { $0.1.score < $1.1.score }
-        if computer == nil, !draft.leastBusy, everyComputer(in: words) == nil, let unknown = unknownComputer(in: words) {
+        let computers = computerMentions(in: words, catalog: catalog)
+        let computer = computers.chosen.first
+        if computers.chosen.count > 1 { draft.fanOut = .computers(computers.chosen.map(\.0.id)) }
+        if everyComputer(in: words) != nil { draft.fanOut = .every }
+        if let unclear = computers.unclear {
+            draft.unknownComputer = String(draft.text[unclear])
+            draft.marks.append(VoiceMark(range: unclear, slot: .computer))
+        } else if computer == nil, !draft.leastBusy, everyComputer(in: words) == nil, let unknown = unknownComputer(in: words) {
             draft.unknownComputer = unknown.text
             draft.marks.append(VoiceMark(range: unknown.range, slot: .computer))
         }
-        if named.count > 1 { draft.fanOut = .computers(named.sorted { $0.1.range.lowerBound < $1.1.range.lowerBound }.map(\.0.id)) }
-        if everyComputer(in: words) != nil { draft.fanOut = .every }
         if let computer {
             draft.computer = computer.0.id
             draft.marks.append(VoiceMark(range: computer.1.range, slot: .computer))
@@ -406,6 +407,29 @@ public enum VoiceParser {
     private static func unknownAgent(in words: [VoiceWord]) -> VoiceWord? {
         let ordinary: Set<String> = ["working", "work", "up", "over", "fresh", "tests", "it", "chat", "session"]
         return nameShaped(after: ["start", "launch", "with", "using", "use"], in: words, ignoring: ordinary)
+    }
+
+    /// The computers said, one per place in the sentence, in order. With
+    /// two named alike, "macbook" fits both equally: that is `unclear`, not
+    /// a reason to pick one, and "MacBook Pro" fits only one best.
+    private static func computerMentions(in words: [VoiceWord], catalog: VoiceCatalog) -> (chosen: [(VoiceCatalog.Computer, VoiceSpot)], unclear: Range<String.Index>?) {
+        let found = catalog.computers.compactMap { computer -> (VoiceCatalog.Computer, VoiceSpot)? in
+            VoiceNames.find(computer.name, in: words, partly: true).map { (computer, $0) }
+        }
+        // "About studio lighting" says what it is about, not where.
+        .filter { !follows(topicWords, $0.1, in: words) }
+        .sorted { $0.1.score > $1.1.score }
+        var chosen: [(VoiceCatalog.Computer, VoiceSpot)] = []
+        var unclear: Range<String.Index>?
+        for mention in found {
+            guard let rival = chosen.first(where: { $0.1.range.overlaps(mention.1.range) }) else {
+                chosen.append(mention)
+                continue
+            }
+            if rival.1.score == mention.1.score { unclear = rival.1.range }
+        }
+        if let unclear { chosen.removeAll { $0.1.range.overlaps(unclear) } }
+        return (chosen.sorted { $0.1.range.lowerBound < $1.1.range.lowerBound }, unclear)
     }
 
     private static let topicWords: Set<String> = ["about", "for", "called", "named", "regarding"]
@@ -463,17 +487,20 @@ public enum VoiceParser {
         } else if let unknown = unknownAgent(in: words) {
             edited.agent = unknown.text
         }
-        if let spot = catalog.computers.compactMap({ computer in
-            VoiceNames.find(computer.name, in: words, partly: true).map { (computer.id, $0.score) }
-        }).max(by: { $0.1 < $1.1 }) {
-            edited.computer = spot.0
+        let computers = computerMentions(in: words, catalog: catalog)
+        if let first = computers.chosen.first, computers.unclear == nil {
+            edited.computer = first.0.id
             edited.unknownComputer = nil
             edited.leastBusy = false
-        } else if let unknown = unknownComputer(in: words) {
+            // One named replaces the several the last command ran on.
+            edited.fanOut = computers.chosen.count > 1 ? .computers(computers.chosen.map(\.0.id)) : nil
+        } else if let unknown = computers.unclear.map({ String(text[$0]) }) ?? unknownComputer(in: words)?.text {
             // The old computer is not what was asked for any more.
             edited.computer = nil
-            edited.unknownComputer = unknown.text
+            edited.unknownComputer = unknown
+            edited.fanOut = nil
         }
+        if everyComputer(in: words) != nil { edited.fanOut = .every }
         if let project = catalog.projectNames.compactMap({ name in
             VoiceNames.find(name, in: words).map { (name, $0.score) }
         }).max(by: { $0.1 < $1.1 }) {

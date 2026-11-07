@@ -112,6 +112,61 @@ import Testing
         #expect(computer.agent(named: "site") == nil)
     }
 
+    private func twoMacBooks() -> VoiceCatalog {
+        var catalog = VoiceSample.catalog()
+        catalog.computers[0].name = "MacBook Pro"
+        catalog.computers[1].name = "MacBook Air"
+        return catalog
+    }
+
+    @Test func oneNameIsOneComputerHoweverAlikeTheyAre() {
+        let draft = VoiceParser.parse("Start Claude on the MacBook Pro", catalog: twoMacBooks())
+        #expect(draft.fanOut == nil)
+        #expect(draft.computer == "mac")
+    }
+
+    @Test func aNameFittingTwoComputersIsAsked() {
+        let catalog = twoMacBooks()
+        let draft = VoiceParser.parse("Start Claude on the macbook", catalog: catalog)
+        #expect(draft.computer == nil && draft.fanOut == nil)
+        #expect(draft.unknownComputer == "macbook")
+        guard case let .workspace(plan) = VoicePlan.resolve(draft, catalog: catalog) else {
+            Issue.record("expected a workspace")
+            return
+        }
+        #expect(plan.question == .unknownComputer("macbook"))
+    }
+
+    @Test func aNameFittingTwoChatsActsOnNeither() {
+        var catalog = VoiceSample.catalog()
+        catalog.chats.append(.init(device: "mac", pane: "p9", title: "Hero copy", computer: "MacBook Pro"))
+        let draft = VoiceParser.parse("Stop hero", catalog: catalog)
+        #expect(draft.chat == nil)
+        #expect(draft.intent == .none)
+    }
+
+    @Test func aFollowUpOnOneComputerLeavesTheOthers() {
+        let every = parse("Start Claude in sheprd on every host asking it to build")
+        let draft = VoiceParser.parse("Same thing on the macbook", catalog: catalog, context: VoiceContext(draft: every))
+        #expect(draft.fanOut == nil)
+        #expect(draft.computer == "mac")
+        let again = VoiceParser.parse("Same thing on every host", catalog: catalog, context: VoiceContext(draft: draft))
+        #expect(again.fanOut == .every)
+    }
+
+    @Test func aChangedPlanIsNotTheOneReadAloud() {
+        let draft = parse("Worktree on studio in moltis about login with Claude asking it to fix it")
+        let plan = VoicePlan.resolve(draft, catalog: catalog)
+        #expect(plan.runsTheSame(as: plan))
+        // Load changing does not matter; where it would run does.
+        var busier = catalog
+        busier.computers[1].home = Home(computer: "studio", fingerprint: "", connected: true, waiting: 0, workspaces: [])
+        #expect(plan.runsTheSame(as: VoicePlan.resolve(draft, catalog: busier)))
+        var moved = draft
+        moved.computer = "mac"
+        #expect(!plan.runsTheSame(as: VoicePlan.resolve(moved, catalog: catalog)))
+    }
+
     @Test func anUnattendedChatNeverBypassesPermissions() {
         let bypass = OfferedMode(id: "bypassPermissions", name: "Bypass Permissions")
         let plan = OfferedMode(id: "plan", name: "Plan")

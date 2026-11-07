@@ -54,6 +54,8 @@ final class VoiceSession: Identifiable {
     private(set) var reply = ""
     /// A spoken yes would start the plan on the card.
     private(set) var awaitingYes = false
+    /// What was read aloud, which a spoken yes approves.
+    private var readAloud: VoicePlan?
     /// What needs the person, after "what needs me".
     private(set) var waiting: [Waiting] = []
     /// When Start was pressed, while it runs.
@@ -74,12 +76,19 @@ final class VoiceSession: Identifiable {
     }
 
     /// The fleet, and the last chat though its home has not listed it yet.
+    /// Never a terminal: one no longer listed may be a shell by now.
     private static func catalog(of model: AppModel) -> VoiceCatalog {
         var catalog = model.voiceCatalog()
-        if let chat = model.voiceContext.chat, !catalog.chats.contains(where: { $0.id == chat.id }) {
+        if let chat = model.voiceContext.chat, !chat.terminal, !catalog.chats.contains(where: { $0.id == chat.id }) {
             catalog.chats.append(chat)
         }
         return catalog
+    }
+
+    /// Closes the sheet, if it is still this command's. A start left
+    /// running after Close must not take the next command's sheet with it.
+    private func dismiss() {
+        if model.voice === self { model.voice = nil }
     }
 
     /// Whether the microphone is open or about to be.
@@ -221,19 +230,26 @@ final class VoiceSession: Identifiable {
         let replied = replyingTo != nil
         replyingTo = nil
         reply = ""
+        // Settled here: a branch proposed anew at each plan would differ
+        // from the one on the card.
+        if draft.worktree, draft.branch == nil, draft.topic == nil {
+            draft.branch = NewWorkspaceRequest.proposedBranch()
+        }
         replan()
         tidyBranch()
         if awaitingYes {
             awaitingYes = false
             switch VoiceReply(answer) {
-            case .yes where plan.confirmableByVoice:
+            case .yes where plan.confirmableByVoice && readAloud.map(plan.runsTheSame) == true:
                 phase = .ready
                 await confirm()
                 return
             case .no:
-                model.voice = nil
+                dismiss()
                 return
             case .yes, .other:
+                // A yes to what changed since, such as the least busy
+                // computer, falls through and reads the new plan aloud.
                 // Silence leaves the card for a tap; words corrected it.
                 guard !answer.isEmpty else {
                     phase = .ready
@@ -276,13 +292,14 @@ final class VoiceSession: Identifiable {
         case let .chat(chat) where chat.action == .open:
             model.voiceContext.chat = chat.chat
             model.pendingRoute = route(to: chat.chat)
-            model.voice = nil
+            dismiss()
         case let .workspace(workspace):
             phase = .ready
             if let question = workspace.question {
                 await speaker.say(question.words, always: VoiceSettings.confirms)
                 if question.answerable, phase == .ready { listenAgain() }
             } else if VoiceSettings.confirms, plan.confirmableByVoice, let words = plan.readBack {
+                readAloud = plan
                 await speaker.say(words, always: true)
                 if phase == .ready { listenAgain(forYes: true) }
             }
@@ -423,7 +440,7 @@ final class VoiceSession: Identifiable {
             model.recentDevice = launch.computer.id
             guard launch.clean, let pane = launch.created.pane else {
                 // The form's path keeps the prompt and says what happened.
-                model.voice = nil
+                dismiss()
                 model.opened(launch.created, prompt: launch.request.prompt, start: launch.start, device: launch.computer.id, title: launch.agent.name)
                 return
             }
@@ -452,7 +469,12 @@ final class VoiceSession: Identifiable {
         var problems: [String] = []
         for run in runs {
             do {
-                if let launch = try await run.task.value, launch.clean { started += 1 } else { problems.append("\(run.name): prompt not sent") }
+                guard let launch = try await run.task.value else { continue }
+                if launch.clean {
+                    started += 1
+                } else {
+                    problems.append("\(run.name): \(keepPrompt(of: launch))")
+                }
             } catch {
                 problems.append("\(run.name): \(error.localizedDescription)")
             }
@@ -464,6 +486,15 @@ final class VoiceSession: Identifiable {
         let title = "Started on \(started) computer\(started == 1 ? "" : "s")"
         phase = .done(Done(title: title, detail: (problems + plan.skipped.map { "\($0): skipped" }).joined(separator: "\n"), route: nil))
         await speaker.say(title)
+    }
+
+    /// Saves a prompt that did not go in its chat's composer, as the form
+    /// does, and says where it is.
+    private func keepPrompt(of launch: Launch) -> String {
+        guard !launch.request.prompt.isEmpty, !launch.created.prompted else { return "started in another mode" }
+        guard let pane = launch.created.pane else { return "prompt not sent, chat still starting" }
+        model.fleet.cache.save(draft: Cache.Draft(text: launch.request.prompt, pictures: []), device: launch.computer.id, pane: pane)
+        return "prompt saved in its message box"
     }
 
     private func run(_ plan: VoicePlan.Chat) async {
@@ -496,9 +527,23 @@ final class VoiceSession: Identifiable {
         await model.fleet.send(command, to: PaneKey(device: chat.device, pane: chat.pane))
     }
 
+    private static let agentGone = "That agent is no longer running, so nothing was typed."
+
+    /// A terminal takes what it is sent whatever runs there: after the
+    /// agent exits, that is a shell. So the same agent must still be listed
+    /// in the same pane, in a home fresher than the cache's.
+    private func agentStillRuns(in chat: VoiceCatalog.Chat) -> Bool {
+        guard model.fleet.machines.first(where: { $0.id == chat.device })?.stale == false else { return false }
+        return model.fleet.agentTerminals.contains { item in
+            item.computer.device == chat.device && item.terminal.agentPane?.pane == chat.pane
+                && item.agent != nil && item.agent?.name == chat.terminalAgent
+        }
+    }
+
     /// A terminal has no prompt to send to: the words are pasted, as a
     /// person would, then entered. The gap lets the agent take the paste.
     private func type(_ text: String, into chat: VoiceCatalog.Chat) async -> String? {
+        guard agentStillRuns(in: chat) else { return Self.agentGone }
         do {
             try await model.fleet.call(chat.device) { client, token in
                 try await client.termPaste(text, pane: chat.pane, bearer: token)
@@ -513,6 +558,7 @@ final class VoiceSession: Identifiable {
 
     /// The key agents take to stop a turn without quitting.
     private func press(_ key: String, in chat: VoiceCatalog.Chat) async -> String? {
+        guard agentStillRuns(in: chat) else { return Self.agentGone }
         do {
             try await model.fleet.call(chat.device) { client, token in
                 try await client.termKeys([key], pane: chat.pane, bearer: token)
