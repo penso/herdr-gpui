@@ -9302,6 +9302,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "getrandom 0.4.3",
+ "httparse",
  "nix",
  "percent-encoding",
  "rustix",

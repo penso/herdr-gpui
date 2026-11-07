@@ -140,6 +140,10 @@ impl SheprdWindow {
                 crate::cloud::CloudProvider::Boat => {
                     self.config.boat.api_url.is_some() || var("HERDR_BOAT_API_URL").is_some()
                 }
+                #[cfg(feature = "boxd")]
+                crate::cloud::CloudProvider::Boxd => {
+                    self.config.boxd.api_url.is_some() || var("HERDR_BOXD_API_URL").is_some()
+                }
                 #[cfg(feature = "coder")]
                 crate::cloud::CloudProvider::Coder => {
                     self.config.coder.url.is_some() || var("HERDR_CODER_URL").is_some()
