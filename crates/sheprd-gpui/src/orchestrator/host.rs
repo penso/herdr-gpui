@@ -355,6 +355,7 @@ impl SheprdWindow {
             .activity_section()
             .and_then(super::section::list_of)
             .and(self.activity.section_view);
+        self.activity.tasks_listed = views.iter().any(|(_, view)| view.read(cx).has_tasks());
         for (id, view) in views {
             let accounts: Vec<_> = view
                 .read(cx)
@@ -501,6 +502,22 @@ impl SheprdWindow {
                 workspace_id,
             } => {
                 self.open_run_workspace(id, host.as_deref(), session.as_deref(), &workspace_id, cx)
+            }
+            Event::OpenProject { repo } => {
+                // The workspace that holds it now: the one the view was
+                // told of may have closed since.
+                let Some(spec) = self.repo_specs().into_iter().find(|spec| spec.key == repo) else {
+                    self.tell_orchestrator(id, super::Error::WorkspaceClosed, cx);
+                    return;
+                };
+                let (host, session) = super::actions::place(&spec.request.target);
+                self.open_run_workspace(
+                    id,
+                    host.as_deref(),
+                    session.as_deref(),
+                    &spec.request.workspace_id,
+                    cx,
+                );
             }
             Event::OpenUrl(url) => match WebUrl::try_from(url.as_str()) {
                 Ok(url) => {

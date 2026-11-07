@@ -59,3 +59,16 @@ fn only_plain_bead_ids_can_be_deleted() {
         assert!(!valid_id(id), "{id}");
     }
 }
+
+#[test]
+fn a_beads_assignee_and_acceptance_criteria_are_read_and_empty_ones_dropped() {
+    let list = br#"[
+      {"id":"hg-1","title":"Held","status":"in_progress","assignee":"ada",
+       "acceptance_criteria":"Tests pass"},
+      {"id":"hg-2","title":"Free","status":"open","assignee":"","acceptance_criteria":""}
+    ]"#;
+    let items = parse(&beads(), list, b"[]").unwrap();
+    assert_eq!(items[0].assignee.as_deref(), Some("ada"));
+    assert_eq!(items[0].acceptance.as_deref(), Some("Tests pass"));
+    assert_eq!((&items[1].assignee, &items[1].acceptance), (&None, &None));
+}

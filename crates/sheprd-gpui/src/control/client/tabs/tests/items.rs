@@ -99,3 +99,20 @@ fn listing_never_creates_a_database() {
     assert_eq!(output.status, crate::control::client::exit::NOTHING);
     assert!(!path.exists());
 }
+
+#[test]
+fn tasks_are_the_beads_with_who_holds_each_and_what_it_waits_on() {
+    let mut bead = item("hg-1", false, 10);
+    bead.key.source.provider = Provider::Beads;
+    bead.identifier = "hg-1".into();
+    bead.state = "in_progress".into();
+    bead.title = "A task".into();
+    bead.assignee = Some("ada".into());
+    bead.priority = Some(1);
+    bead.blocked_by = vec!["hg-0".into()];
+    let tasks = select(vec![bead, item("1", false, 20)], Items::Tasks);
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].priority, Some(1));
+    assert_eq!(tasks[0].blocked_by, ["hg-0"]);
+    assert_eq!(describe(&tasks), "hg-1\tin_progress\tA task\t->ada");
+}

@@ -32,6 +32,7 @@ mod sessions;
 mod sign_in;
 mod source_chip;
 mod status;
+mod tasks;
 mod twin_text;
 mod twins;
 
@@ -69,6 +70,8 @@ fn item(provider: Provider, id: &str, title: &str, updated: &str) -> Item {
         labels: Vec::new(),
         parent_id: None,
         blocked_by: Vec::new(),
+        assignee: None,
+        acceptance: None,
         priority: None,
         created_at: Some(at(updated)),
         updated_at: Some(at(updated)),
