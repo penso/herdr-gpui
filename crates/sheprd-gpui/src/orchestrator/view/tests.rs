@@ -22,6 +22,7 @@ mod non_projects;
 mod outside_git;
 mod pills;
 mod pr_empty;
+mod pr_standing;
 mod refresh;
 mod repo_name;
 mod review_requested;

@@ -5,6 +5,7 @@
 
 use super::{CheckState, Item, PrStatus};
 use chrono::{DateTime, Utc};
+use sheprd_github::pull_request::MergeState;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -66,8 +67,8 @@ pub(super) struct ChecksRead {
 }
 
 /// Whether `repository`'s checks are read this sync: never read, an open
-/// pull request moved, a check of it is still running, or
-/// [`CHECKS_EVERY`] passed.
+/// pull request moved, a check of it is still running, GitHub had not
+/// decided whether one can merge, or [`CHECKS_EVERY`] passed.
 pub(super) fn checks_due(
     last: Option<&ChecksRead>,
     open: &[OpenPull],
@@ -79,15 +80,18 @@ pub(super) fn checks_due(
         return true;
     };
     // Each check, not the summary: a failed check outranks a running one
-    // there, and the running one still finishes.
-    let running = statuses.iter().any(|((shown, _), status)| {
+    // there, and the running one still finishes. GitHub works out whether a
+    // pull request can merge only once asked, answering unknown until then,
+    // so the read after a push or a change to the base has the answer.
+    let unsettled = statuses.iter().any(|((shown, _), status)| {
         shown == repository
-            && status
-                .checks
-                .iter()
-                .any(|check| check.state == CheckState::Pending)
+            && (status.merge == MergeState::Unknown
+                || status
+                    .checks
+                    .iter()
+                    .any(|check| check.state == CheckState::Pending))
     });
-    running || last.open != open || now.duration_since(last.at) >= CHECKS_EVERY
+    unsettled || last.open != open || now.duration_since(last.at) >= CHECKS_EVERY
 }
 
 /// Whether a listing is complete. One continued from a capped listing in

@@ -24,7 +24,7 @@ pub(crate) fn unopened_color(theme: &crate::config::Theme) -> u32 {
     tone_color(Tone::Waiting, theme)
 }
 
-fn tone_color(tone: Tone, theme: &crate::config::Theme) -> u32 {
+pub(crate) fn tone_color(tone: Tone, theme: &crate::config::Theme) -> u32 {
     theme.ink(match tone {
         Tone::Attention => theme.palette[1],
         Tone::Merged => theme.palette[5],
