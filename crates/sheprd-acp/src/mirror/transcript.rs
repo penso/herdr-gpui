@@ -25,6 +25,7 @@ mod activities;
 mod codex_messages;
 mod notices;
 mod question_replies;
+mod tool_activity;
 mod tool_metadata;
 
 use question_replies::QuestionKey;
@@ -223,6 +224,7 @@ fn text_block(block: &Value) -> bool {
 
 #[derive(Default)]
 struct Projection {
+    activity: tool_activity::Activity,
     answered: HashMap<QuestionKey, sheprd_chat_protocol::QuestionAnswer>,
     /// Claude Code's sub-agents and background shells in the log.
     background: crate::claude::background::Background,
@@ -284,6 +286,8 @@ impl Projection {
         if call.is_empty() || name.is_empty() || call.len() > MAX_ID {
             return;
         }
+        let index = self.transcript.entries.len();
+        self.activity.record(index, name, input);
         let described = tool_metadata::describe(name, input);
         let input = input
             .as_str()
@@ -309,14 +313,24 @@ impl Projection {
         let Some(&index) = self.tools.get(call) else {
             return;
         };
-        let output = self.text(output);
+        let content = if output.is_object() {
+            self.clip(&output.to_string(), TEXT)
+        } else {
+            self.text(output)
+        };
+        self.activity.output(
+            index,
+            output,
+            &content,
+            status == ToolStatus::Failed,
+            &mut self.transcript.entries,
+        );
         let EntryKind::Tool(tool) = &mut self.transcript.entries[index].kind else {
             return;
         };
-        tool.status = status;
-        if !output.is_empty() {
+        if !content.is_empty() {
             tool.content.truncate(1);
-            tool.content.push(ToolContent::Text { text: output });
+            tool.content.push(ToolContent::Text { text: content });
         }
     }
 

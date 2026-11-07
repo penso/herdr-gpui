@@ -116,6 +116,11 @@ The mirror's native-log format support is best effort because those storage
 formats can change. A missing or unreadable source ends the watcher with an
 error. It never repairs or writes to the transcript.
 
+Explicit exit and error fields and background command or script ids refine a
+logged tool's status: a command still running stays so until a poll of the same
+id ends it. Returning from a delegation or wait call does not establish that a
+child agent finished, and unknown results are not read as evidence of an end.
+
 ## What it tells Herdr
 
 Inside a Herdr pane (`HERDR_PANE_ID` and `HERDR_SOCKET_PATH` set), it reports
@@ -227,6 +232,20 @@ The same holds for two more agents, each through a translator of its own
   extension's `select` and `confirm` dialogs become permission requests, and
   its models and thinking levels are the session's settings. `--load` passes
   pi's `--session`; earlier messages are not shown again.
+
+Tools report as they run through the same bounded batching: the first change
+of a call shows at once, later ones share a 50 ms deadline, and an idle bridge
+has no timer. Up to 16 calls stream at a time; the rest show their start and
+their end.
+
+- **Codex** command output deltas extend the running card, and the final output
+  replaces them.
+- **pi** partial tool results replace each other, since each tool defines what
+  its partial result means, and the final result replaces the last one.
+- **Claude Code** reports how long a tool has run, shown in its title, and the
+  progress of background tasks, each on a card of its own that can outlive its
+  turn. These report progress, not stdout: a command's output still arrives with
+  its result, and a task's `output_file` is never read.
 
 ### Enterprise endpoints
 

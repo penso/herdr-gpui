@@ -10,6 +10,7 @@ mod codex_messages;
 mod metadata;
 mod notices;
 mod question_replies;
+mod tool_activity;
 
 fn lines(values: &[Value]) -> Vec<u8> {
     values

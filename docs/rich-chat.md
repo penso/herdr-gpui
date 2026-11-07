@@ -248,6 +248,13 @@ whole-file write, the card shows the written text and counts its lines without
 claiming any were removed. Changes too large to compare show their text before
 and after. A tool the app doesn't know keeps its own name.
 
+A running call updates in place. Native Codex shows a command's output as it
+prints, pi shows each partial result its tools report, and Claude Code shows how
+long a tool has run and what its background tasks report, though a Claude
+command's own output still arrives with its result. The final output replaces
+what streamed, and other ACP agents show whatever updates they send. A chat
+following an existing CLI session can only show what that CLI saves to its log.
+
 ## Sub-agents and background shells
 
 When the agent hands a task to a sub-agent or leaves a command running in the

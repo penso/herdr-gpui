@@ -1,13 +1,16 @@
 //! The translation between the session's ACP and pi's RPC mode, free of
 //! threads and pipes.
 
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use acp::v1 as wire;
 use serde_json::{Value, json};
 
 use super::tools;
-use crate::harness::{Out, Translator, out};
+use crate::harness::{Out, Translator, out, streaming::Streams};
 use crate::rpc::Inbound;
 
 const MODEL: &str = "model";
@@ -16,6 +19,8 @@ const THINKING: &str = "thinking";
 const LEVELS: [&str; 6] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 /// Models kept from pi's list, so a long list cannot grow the session.
 const MAX_MODELS: usize = 64;
+/// Finished calls remembered per prompt, to refuse a replayed event.
+const MAX_FINISHED: usize = 2000;
 
 /// What a command sent to pi is waiting for.
 #[derive(Debug)]
@@ -50,6 +55,8 @@ pub(super) struct Bridge {
     dialogs: HashMap<i64, Dialog>,
     /// Calls running now, by id, with their tool's name.
     calls: HashMap<String, String>,
+    /// Calls of this prompt that ended, so a replay cannot reopen one.
+    finished: HashSet<String>,
     /// The message pi is streaming, numbered as pi gives messages no id.
     message: u64,
     model: Option<String>,
@@ -65,9 +72,20 @@ pub(super) struct Bridge {
     /// The `get_state` answer, kept until the models are in too.
     state: Option<Value>,
     thinking: Option<String>,
+    tool_output: Streams<tools::Progress>,
 }
 
 impl Translator for Bridge {
+    fn next_tick(&self) -> Option<Instant> {
+        self.tool_output.next_tick()
+    }
+
+    fn tick(&mut self) -> Vec<Out> {
+        let session = &self.session;
+        self.tool_output
+            .flush(|id, progress| partial(session, id, progress))
+    }
+
     fn start(&mut self) -> Vec<Out> {
         vec![
             self.command(json!({"type": "get_state"}), Pending::State),
@@ -274,6 +292,9 @@ impl Bridge {
                 _ => {}
             }
         }
+        self.calls.clear();
+        self.finished.clear();
+        self.tool_output.clear();
         self.prompt = Some(id);
         let mut command = json!({"type": "prompt", "message": text.join("\n\n")});
         if !images.is_empty() {
@@ -338,7 +359,11 @@ impl Bridge {
                 }
             }
             Pending::Prompt => match (failed, self.prompt.take()) {
-                (Some(error), Some(id)) => vec![out::reply(id, Err(out::failure(error)))],
+                (Some(error), Some(id)) => {
+                    self.calls.clear();
+                    self.tool_output.clear();
+                    vec![out::reply(id, Err(out::failure(error)))]
+                }
                 (None, prompt) => {
                     // Accepted: the turn ends with `agent_end`.
                     self.prompt = prompt;
@@ -422,21 +447,62 @@ impl Bridge {
                 let (Some(id), Some(name)) = (text("toolCallId"), text("toolName")) else {
                     return Vec::new();
                 };
+                if self.calls.contains_key(id) || self.finished.contains(id) {
+                    return Vec::new();
+                }
                 self.calls.insert(id.to_owned(), name.to_owned());
                 let args = message.get("args").unwrap_or(&Value::Null);
+                // Past the cap a call still shows its start and its end.
+                self.tool_output
+                    .insert(id, tools::Progress::new(name, args));
                 vec![out::update(
                     &session,
                     wire::SessionUpdate::ToolCall(tools::call(id, name, args)),
                 )]
             }
+            "tool_execution_update" => {
+                let (Some(id), Some(name), Some(result)) = (
+                    text("toolCallId"),
+                    text("toolName"),
+                    message.get("partialResult"),
+                ) else {
+                    return Vec::new();
+                };
+                if self.calls.get(id).map(String::as_str) != Some(name) {
+                    return Vec::new();
+                }
+                self.tool_output
+                    .update(
+                        id,
+                        Instant::now(),
+                        |progress| progress.replace(result),
+                        |id, progress| partial(&session, id, progress),
+                    )
+                    .into_iter()
+                    .collect()
+            }
             "tool_execution_end" => {
                 let Some(id) = text("toolCallId") else {
                     return Vec::new();
                 };
-                let name = self.calls.remove(id).unwrap_or_default();
+                let Some(name) = self
+                    .calls
+                    .get(id)
+                    .filter(|name| text("toolName").is_none_or(|reported| reported == *name))
+                    .cloned()
+                else {
+                    return Vec::new();
+                };
+                self.calls.remove(id);
+                if self.finished.len() < MAX_FINISHED {
+                    self.finished.insert(id.to_owned());
+                }
                 let failed = message.get("isError") == Some(&Value::Bool(true));
                 let result = message.get("result").unwrap_or(&Value::Null);
-                let fields = tools::finished(&name, result, failed);
+                let fields = self.tool_output.remove(id).map_or_else(
+                    || tools::finished(&name, result, failed),
+                    |progress| progress.finish(&name, result, failed),
+                );
                 vec![out::update(
                     &session,
                     wire::SessionUpdate::ToolCallUpdate(wire::ToolCallUpdate::new(
@@ -479,7 +545,9 @@ impl Bridge {
         let Some(id) = self.prompt.take() else {
             return Vec::new();
         };
+        let mut outs = self.tick();
         self.calls.clear();
+        self.tool_output.clear();
         let assistant: Vec<&Value> = messages
             .and_then(Value::as_array)
             .into_iter()
@@ -523,10 +591,9 @@ impl Bridge {
             }),
             Err(message) => Err(out::failure(message)),
         };
-        vec![
-            out::reply(id, reply),
-            self.command(json!({"type": "get_session_stats"}), Pending::Stats),
-        ]
+        outs.push(out::reply(id, reply));
+        outs.push(self.command(json!({"type": "get_session_stats"}), Pending::Stats));
+        outs
     }
 
     fn stats(&self, data: &Value) -> Vec<Out> {
@@ -630,6 +697,17 @@ impl Bridge {
 }
 
 /// A pi model's `provider/id`.
+/// A running call's live preview, as an update of its card.
+fn partial(session: &str, id: &str, progress: &tools::Progress) -> Out {
+    out::update(
+        session,
+        wire::SessionUpdate::ToolCallUpdate(wire::ToolCallUpdate::new(
+            id.to_owned(),
+            progress.fields(),
+        )),
+    )
+}
+
 fn model_id(model: Option<&Value>) -> Option<String> {
     let model = model?;
     let provider = model.get("provider")?.as_str()?;
