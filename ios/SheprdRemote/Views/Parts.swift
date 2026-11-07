@@ -139,8 +139,8 @@ struct ChatRowLabel: View {
                     Text(item.chat.title).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if item.drafted {
-                        Image(systemName: "pencil.line")
-                            .font(.footnote.weight(.semibold)).foregroundStyle(.tint)
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.body).foregroundStyle(.tint)
                             .accessibilityLabel("Draft not sent")
                     }
                     if item.working, let started = item.chat.summary?.turnStartedMs {
