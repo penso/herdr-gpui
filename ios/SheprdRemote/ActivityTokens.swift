@@ -72,7 +72,8 @@ final class ActivityTokens {
     private func watch(_ activity: Activity<ChatActivityAttributes>) {
         guard running[activity.id] == nil else { return }
         if activity.attributes.facts.namesChat, UserDefaults.standard.bool(forKey: Self.genericSetting) {
-            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            let id = activity.id
+            Task { await Self.end(id) }
             return
         }
         running[activity.id] = Running(
@@ -118,6 +119,13 @@ final class ActivityTokens {
             }
         }
         await sync()
+    }
+
+    /// Ends the activity with `id` at once. By id, since an activity this
+    /// actor holds cannot be sent to ActivityKit.
+    private static func end(_ id: String) async {
+        await Activity<ChatActivityAttributes>.activities.first { $0.id == id }?
+            .end(nil, dismissalPolicy: .immediate)
     }
 
     /// Sends each paired computer (or only the one with CA `only`) its
