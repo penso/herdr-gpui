@@ -79,12 +79,15 @@ fn transcript() -> Transcript {
 
 fn home() -> Home {
     let mut layout = layout(EndpointId::random());
+    layout.name_session("default");
+    // A named session the daemon follows beside the default one.
     layout.workspaces.push(Workspace {
         id: "w2".into(),
         label: "moltis".into(),
         branch: None,
         cwd: "/moltis".into(),
         worktree: None,
+        session: Some("pilots".into()),
         chats: Vec::new(),
         terminals: Vec::new(),
     });
@@ -100,6 +103,7 @@ fn home() -> Home {
         branch: Some("worktree/spaces-tab".into()),
         cwd: "/work-spaces-tab".into(),
         worktree: Some(worktree(true)),
+        session: Some("default".into()),
         chats: Vec::new(),
         terminals: Vec::new(),
     });

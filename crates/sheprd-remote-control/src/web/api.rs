@@ -266,7 +266,7 @@ pub(super) async fn create_workspace(
         check_new_workspace(&state, &request.cwd, &request.branch, &request.agent).await?;
     state
         .hub
-        .create_workspace(&request.cwd, branch.as_deref(), agent)
+        .create_workspace(&request.cwd, branch.as_deref(), agent, None)
         .await?;
     Ok(Json(json!({ "location": "/" })))
 }

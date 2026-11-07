@@ -37,6 +37,7 @@ fn with_history(dir: &std::path::Path, text: String) -> (Shared, mpsc::Receiver<
             branch: None,
             cwd: "/code/app".into(),
             worktree: None,
+            session: None,
             chats: Vec::new(),
             terminals: vec![crate::hub::layout_terminal("t2", "zsh")],
         }],

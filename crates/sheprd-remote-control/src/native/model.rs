@@ -61,6 +61,10 @@ pub(crate) struct Workspace {
     /// repository's linked worktrees under it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) worktree: Option<ClientShellWorktree>,
+    /// The Herdr 1 session it is in, which a phone groups a computer's
+    /// workspaces by; older servers leave it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) session: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pull_request: Option<PullRequest>,
     /// Commits on its branch that no pull request carries yet.
@@ -359,6 +363,7 @@ impl Home {
                 branch: workspace.branch.clone(),
                 cwd: workspace.cwd.clone(),
                 worktree: workspace.worktree.clone(),
+                session: workspace.session.clone(),
                 pull_request: pull_request(pull_requests, &layout.boot, workspace).map(|pr| {
                     PullRequest {
                         number: pr.number,

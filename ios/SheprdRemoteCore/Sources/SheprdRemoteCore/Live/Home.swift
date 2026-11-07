@@ -83,6 +83,9 @@ public struct Home: Codable, Hashable, Sendable {
         public var cwd: String
         /// The repository checkout it is; older computers leave it out.
         public var worktree: Worktree?
+        /// The Herdr session it is in, when its computer names one; older
+        /// computers, and Herdr 2 workspaces, leave it out.
+        public var session: String?
         public var pullRequest: PullRequest?
         /// Commits on its branch that no pull request carries yet; older
         /// computers leave it out.
@@ -91,7 +94,7 @@ public struct Home: Codable, Hashable, Sendable {
         public var terminals: [TerminalRow]
 
         enum CodingKeys: String, CodingKey {
-            case id, label, branch, cwd, worktree, chats, terminals
+            case id, label, branch, cwd, worktree, session, chats, terminals
             case pullRequest = "pull_request"
             case unopenedCommits = "unopened_commits"
         }

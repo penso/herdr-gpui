@@ -27,6 +27,7 @@ fn workspace(id: &str, cwd: &str) -> Workspace {
         label: id.to_owned(),
         terminals: Vec::new(),
         worktree: None,
+        session: None,
     }
 }
 
@@ -109,7 +110,7 @@ async fn a_core_failure_is_reported_and_not_retried_on_herdr_one() {
     source.poll().unwrap();
     let hub = hub_on(&source, Layout::default());
     let error = hub
-        .create_workspace("/refused", None, Agent::Claude)
+        .create_workspace("/refused", None, Agent::Claude, None)
         .await
         .err()
         .unwrap();
@@ -124,7 +125,7 @@ async fn a_worktree_is_refused_while_a_core_answers() {
     source.poll().unwrap();
     let hub = hub_on(&source, Layout::default());
     let error = hub
-        .create_workspace("/code", Some("topic"), Agent::Claude)
+        .create_workspace("/code", Some("topic"), Agent::Claude, None)
         .await
         .err()
         .unwrap();
