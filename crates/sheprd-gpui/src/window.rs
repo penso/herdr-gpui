@@ -42,6 +42,7 @@ pub(crate) mod prefix;
 mod reconnecting;
 mod regions;
 mod render;
+pub(crate) use render::NoticeCard;
 mod report_issue;
 mod select_hint;
 mod selection;

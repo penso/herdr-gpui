@@ -18,6 +18,7 @@ the branch with it.
 | `[backdrop] opacity = 0.6, blur = true`: composition blur under a solid title bar before; DWM acrylic over the window and title bar after | ![](backdrop-blur-before.png) | ![](backdrop-acrylic-after.png) |
 | `material = "mica"` (after only: Mica tints the window with the wallpaper, not the windows behind) | | ![](backdrop-mica-after.png) |
 | `accent = "system"`: the current tab takes the Windows accent (this machine's is gray, #767676) instead of the theme's purple | ![](accent-before.png) | ![](accent-after.png) |
+| A browser tab: its title and address arrive but GPUI's drawing covers the page before; the page shows after | ![](browser-page-before.png) | ![](browser-page-after.png) |
 
 The "after" executable reports version 0.0.0.0 / dev because it is a local
 build; release builds carry the release version.

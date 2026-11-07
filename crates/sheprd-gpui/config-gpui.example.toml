@@ -750,7 +750,9 @@ size = 12
 # default opacity the window paints as it always has.
 # [backdrop]
 # How solid the theme's background is, from 0 (clear) to 1 (opaque). Terminal
-# colors a program chooses, popups, and dialogs stay opaque.
+# colors a program chooses, popups, and dialogs stay opaque. On Windows, a window
+# that starts below 1 shows no browser pages, and a change between the two takes
+# a restart.
 # opacity = 1.0
 # Blur the desktop behind a translucent window: macOS, Windows, and Wayland
 # compositors with KDE's blur protocol.
