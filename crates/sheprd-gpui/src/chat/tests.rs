@@ -35,6 +35,7 @@ mod jump;
 mod layouts;
 mod link;
 mod list;
+mod loading;
 mod menus;
 mod notices;
 mod observed_status;

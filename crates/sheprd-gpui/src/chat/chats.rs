@@ -284,6 +284,20 @@ impl ChatPane {
         self.session.synced() && !self.permanent && self.failures < MAX_FAILURES
     }
 
+    /// Whether an observed agent's first transcript is still on its way.
+    /// Visual only: input stays with the original pane until `available`.
+    pub(crate) fn loading(&self) -> bool {
+        // The helper lookup leaves no link yet, but no failed attempt either.
+        let connected = self.link.is_some() || (self.generation > 0 && self.retry_at.is_none());
+        #[cfg(feature = "integration-test")]
+        let connected = connected || self.preview;
+        self.target.existing.is_some()
+            && !self.session.synced()
+            && connected
+            && !self.permanent
+            && self.failures == 0
+    }
+
     pub(crate) fn attached(&self) -> bool {
         #[cfg(feature = "integration-test")]
         if self.preview {
@@ -322,6 +336,9 @@ impl ChatPane {
         let resend = self.session.resend();
         match connect(&self.target, self.session.since(), resend) {
             Ok(link) => self.link = Some((self.generation, link)),
+            // The lookup has not returned yet: try again next poll. This is
+            // not a failure of the observer or its transport.
+            Err(Error::Start(super::StartError::ProgramUnknown)) => {}
             Err(error) => self.fail(&error, now),
         }
     }
@@ -680,10 +697,16 @@ impl Chats {
         let targets: HashSet<&Target> = self.panes.iter().map(|pane| &pane.target).collect();
         self.raw.retain(|target| targets.contains(target));
         for pane in &mut self.panes {
+            if pane.target.existing.is_some() && self.existing.take_dismissed(&pane.target.pane_id)
+            {
+                self.raw.insert(pane.target.clone());
+            }
             let due =
                 pane.link.is_none() && !pane.permanent && pane.retry_at.is_none_or(|at| at <= now);
             if due {
+                let loading = pane.loading();
                 pane.start(now, connect);
+                changed |= loading != pane.loading();
             }
         }
         changed
