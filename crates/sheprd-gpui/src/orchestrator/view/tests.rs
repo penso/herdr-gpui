@@ -6,6 +6,7 @@ use crate::orchestrator::{
 use chrono::{DateTime, Utc};
 use sheprd_client::protocol::AgentStatus;
 
+mod author_column;
 mod clicks;
 mod conversation;
 mod conversation_list;

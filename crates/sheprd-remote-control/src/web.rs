@@ -221,6 +221,10 @@ pub(crate) fn router(state: Shared) -> Router {
             "/api/v2/workspaces/{workspace}/chats",
             post(crate::native::start_chat),
         )
+        .route(
+            "/api/v2/workspaces/{workspace}/rename",
+            post(terminal::rename_workspace),
+        )
         .route("/f/home", get(fragments::home))
         .route("/f/board", get(fragments::board))
         .route("/f/chat/{pane}", get(fragments::chat))

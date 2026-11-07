@@ -14,6 +14,7 @@
 
 mod closed;
 mod hosts;
+mod inputs;
 mod marks;
 mod model;
 mod presets;
@@ -74,6 +75,8 @@ pub(crate) struct Page {
     /// When the latest row needing the user entered its state, on the last
     /// tick, so the bar's count can tell new from already seen.
     needing_since: Option<SystemTime>,
+    /// What the rows were last rebuilt from.
+    inputs: inputs::Inputs,
 }
 
 impl Default for Page {
@@ -91,6 +94,7 @@ impl Default for Page {
             scroll: ScrollHandle::new(),
             drawn: (0, 0, 0, 0, 0),
             needing_since: None,
+            inputs: Default::default(),
         }
     }
 }
@@ -183,11 +187,38 @@ impl SheprdWindow {
         Sections::of(self.overview_rows(cx), Marks::of(cx), SystemTime::now())
     }
 
-    /// Runs every window tick: notes when agents changed state or closed,
-    /// wakes snoozes whose time came, advances a reopen, and redraws the
-    /// page or the bar's count when what they show moved.
+    /// What the rows read now, to compare with the last rebuild's.
+    fn overview_inputs(&self, now: SystemTime, cx: &App) -> inputs::Inputs {
+        let hosts = self.endpoints.iter().enumerate().map(|(index, endpoint)| {
+            let live = if index == self.selected_endpoint {
+                &self.live
+            } else {
+                &endpoint.live
+            };
+            (endpoint.enabled, live)
+        });
+        let revisions = (
+            Marks::of(cx).map_or(0, Marks::revision),
+            crate::notification_mutes::Mutes::of(cx)
+                .map_or(0, crate::notification_mutes::Mutes::revision),
+            self.overview.closed.revision(),
+        );
+        inputs::Inputs::new(hosts, revisions, now)
+    }
+
+    /// Runs every window tick: advances a reopen and, when the rows could
+    /// have moved, notes agents that changed state or closed, wakes snoozes
+    /// whose time came, and redraws the page or the bar's count when what
+    /// they show moved.
     pub(crate) fn poll_overview(&mut self, cx: &mut Context<Self>) {
-        let now = SystemTime::now();
+        self.poll_overview_at(SystemTime::now(), cx);
+    }
+
+    fn poll_overview_at(&mut self, now: SystemTime, cx: &mut Context<Self>) {
+        if self.overview_inputs(now, cx) == self.overview.inputs {
+            self.poll_overview_reopen(cx);
+            return;
+        }
         let mut live: HashMap<&str, Vec<&str>> = HashMap::new();
         for (index, endpoint) in self.endpoints.iter().enumerate() {
             let state = if index == self.selected_endpoint {
@@ -255,6 +286,9 @@ impl SheprdWindow {
             self.overview.closed.revision(),
         );
         let needing_since = sections.needing_since();
+        // After the work above, whose own changes to the marks and the
+        // closed agents need no second pass.
+        self.overview.inputs = self.overview_inputs(now, cx);
         if drawn != self.overview.drawn || needing_since != self.overview.needing_since {
             self.overview.drawn = drawn;
             self.overview.needing_since = needing_since;
