@@ -16,6 +16,8 @@ struct ChatItem: Identifiable, Hashable {
     /// When the agent last answered: the computer's time, else when this
     /// phone saw it.
     var lastAnswer: Date?
+    /// The composer holds something not sent yet.
+    var drafted = false
 
     var id: String { "\(computer.device)/\(chat.pane)" }
     var key: PaneKey { PaneKey(device: computer.device, pane: chat.pane) }
@@ -84,6 +86,7 @@ final class Fleet {
     }
 
     private(set) var machines: [Machine] = []
+    private var drafts = DraftMarks<PaneKey>()
     private var links: [String: ComputerLink] = [:]
     private var readers: [String: Task<Void, Never>] = [:]
     private var chats: [PaneKey: ChatStore] = [:]
@@ -96,6 +99,8 @@ final class Fleet {
     @ObservationIgnored private var clients: [String: RemoteClient] = [:]
     /// Calls that got no answer, for the computer's log once it is back.
     @ObservationIgnored private var unreported: [String: UnreportedFailures] = [:]
+    /// Addresses named in a report, which the daemon cuts at 600 characters.
+    private static let failuresReported = 6
     /// Computers a report is on its way to, so only one task sends them.
     @ObservationIgnored private var reporting: Set<String> = []
     /// Commands sent to chats that have not come back yet.
@@ -116,6 +121,7 @@ final class Fleet {
             stopLink(machine.id)
             cache.clear(machine.id)
             unreported[machine.id] = nil
+            drafts.forget { $0.device == machine.id }
         }
         machines = computers.map { computer in
             if var known = machines.first(where: { $0.id == computer.device }) {
@@ -138,6 +144,7 @@ final class Fleet {
                 answers: cache.answers(computer.device)
             )
         }
+        machines.forEach(discoverDrafts)
         if active { machines.forEach { startLink($0.computer) } }
         // From the cached homes at launch, and without forgotten ones.
         publishSummary()
@@ -164,6 +171,44 @@ final class Fleet {
         for link in links.values { Task { await link.networkChanged() } }
     }
 
+    // MARK: Drafts
+
+    /// Keeps what a chat's composer holds across launches; `nil` removes it,
+    /// unless another window's composer still holds a draft of that chat.
+    func save(draft: Cache.Draft?, for key: PaneKey, by composer: UUID? = nil) {
+        let emptied = drafts.set(key, drafted: draft != nil, by: composer)
+        guard draft != nil || emptied else { return }
+        cache.save(draft: draft, device: key.device, pane: key.pane)
+    }
+
+    /// The composer changed, for a list beside it on iPad.
+    func composer(_ composer: UUID, in key: PaneKey, drafted: Bool) {
+        drafts.set(key, drafted: drafted, by: composer)
+    }
+
+    func composerOpened(_ composer: UUID, in key: PaneKey) {
+        drafts.open(key, composer: composer)
+    }
+
+    func composerClosed(_ composer: UUID, in key: PaneKey) {
+        drafts.close(key, composer: composer)
+    }
+
+    /// Empties the cache, the drafts kept in it with the rest. A chat still
+    /// open keeps its mark, as its composer holds its draft and saves it
+    /// again on leaving.
+    func clearCache() {
+        cache.clear()
+        let open = chats
+        drafts.forget { open[$0] == nil }
+    }
+
+    private func discoverDrafts(on machine: Machine) {
+        let device = machine.id
+        let panes = (machine.home?.workspaces ?? []).flatMap(\.chats).map { PaneKey(device: device, pane: $0.pane) }
+        drafts.discover(panes) { cache.hasDraft($0.device, pane: $0.pane) }
+    }
+
     // MARK: Lists
 
     var chatItems: [ChatItem] {
@@ -178,7 +223,8 @@ final class Fleet {
                         workspace: workspace,
                         chat: chat,
                         answered: answered,
-                        lastAnswer: ended ?? machine.answers[chat.pane]
+                        lastAnswer: ended ?? machine.answers[chat.pane],
+                        drafted: drafts.marked.contains(key)
                     )
                 }
             }
@@ -498,6 +544,12 @@ final class Fleet {
                 onOnline?(machines[index].computer)
                 reportFailures(of: device)
             }
+        case let .unreachable(failures):
+            // Kept for the computer's log, which shows only silence for
+            // this: nothing here reached it.
+            let line = "offline from \(Date.now.ISO8601Format()): " + failures.prefix(Self.failuresReported).joined(separator: "; ")
+            log.error("\(self.machines[index].computer.name, privacy: .public) \(line, privacy: .public)")
+            unreported[device, default: UnreportedFailures()].add(line)
         case let .event(.home(home)):
             if let tags = home.tags { onTags?(tags, machines[index].computer) }
             // The computer's load moves every few seconds; only the header
@@ -518,6 +570,7 @@ final class Fleet {
             machines[index].stale = false
             machines[index].watching = true
             machines[index].updated = .now
+            discoverDrafts(on: machines[index])
             cache.save(home: home, device: device)
             for key in Set(pending.items.filter { $0.key.device == device }.map(\.key)) {
                 pending.settle(key) { shown($0) }

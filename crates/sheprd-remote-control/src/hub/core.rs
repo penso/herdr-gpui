@@ -8,6 +8,7 @@ mod poller;
 mod projection;
 mod screen;
 mod spaces;
+pub(super) mod worktree;
 
 use super::Error as HubError;
 use super::{ApiMethod, Layout};
