@@ -17,10 +17,12 @@ use sheprd_chat_protocol::{Image, ImageType};
 mod remote;
 
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
     panic::{AssertUnwindSafe, catch_unwind},
+    rc::Rc,
     sync::Arc,
 };
 
@@ -34,8 +36,9 @@ const MAX_IMAGE_SIDE: u32 = 8_192;
 const MAX_TEXTURE_SIDE: f32 = 4_096.;
 /// Device pixels per diagram point, so labels stay sharp on dense screens.
 const DIAGRAM_SCALE: f32 = 2.;
-/// Visuals one chat prepares at once; the rest wait their turn.
-const MAX_RUNNING: usize = 2;
+/// Visuals a window prepares at once, across all its chats; the rest wait
+/// their turn.
+pub(crate) const MAX_RUNNING: usize = 2;
 /// Rich entries admitted per pane, including queued work and failures.
 pub(crate) const MAX_RICH_VISUALS: usize = 128;
 /// Retained formula textures per pane; images/diagrams keep their own limits.
@@ -356,11 +359,27 @@ struct Item {
     /// Kept for a diagram, which redraws with the theme; an image's bytes
     /// leave with its job.
     source: Option<Source>,
+    /// Bytes of a valid formula the texture budget refused. It is drawn again
+    /// once it is on screen and that much room exists, never every frame.
+    refused_bytes: usize,
+}
+
+impl Item {
+    /// Bytes of the texture drawn now.
+    fn shown_bytes(&self) -> usize {
+        self.shown
+            .as_ref()
+            .and_then(|shown| shown.as_ref().ok())
+            .map_or(0, Output::texture_bytes)
+    }
 }
 
 /// The visuals of one chat, by identity.
 #[derive(Default)]
 pub(crate) struct Visuals {
+    /// Tells this pane's results from those of a pane recreated with the same
+    /// target, whose tickets start over. Survives reconnects, unlike a pane.
+    pub(crate) generation: Rc<()>,
     items: HashMap<VisualId, Item>,
     /// A preparation pass requests new visuals before it knows which old
     /// ones remain. Stage bounded overflow until retain frees those slots.
@@ -374,9 +393,101 @@ pub(crate) struct Visuals {
     rich_count: usize,
     style: Option<Arc<DiagramStyle>>,
     tickets: u64,
+    /// What the lazy list drew last frame, which goes first and may push out
+    /// history. Its sources share the prepared bodies' text.
+    visible: RefCell<HashMap<VisualId, Source>>,
 }
 
 impl Visuals {
+    /// Starts a frame's demand; the rows it draws then ask for their visuals.
+    pub(crate) fn begin_frame(&self) {
+        self.visible.borrow_mut().clear();
+    }
+
+    /// Notes that a row on screen draws `id`, a formula or code block. It is
+    /// admitted with the next jobs, rebuilt if it was evicted.
+    pub(crate) fn request_visible(&self, id: VisualId, source: Source) {
+        let mut visible = self.visible.borrow_mut();
+        if visible.len() < MAX_RICH_VISUALS {
+            visible.entry(id).or_insert(source);
+        }
+    }
+
+    /// Drops a visual to make room. One still running keeps its worker slot
+    /// until it finishes, and its ticket cannot match a later admission.
+    fn evict(&mut self, id: VisualId) {
+        let Some(mut item) = self.items.remove(&id) else {
+            return;
+        };
+        if item.kind != Kind::Other {
+            self.rich_count -= 1;
+        }
+        if let Some(Ok(drawn)) = item.shown.take() {
+            if item.kind == Kind::Math {
+                self.math_bytes = self.math_bytes.saturating_sub(drawn.texture_bytes());
+            }
+            self.released.extend(drawn.texture());
+        }
+    }
+
+    /// Admits what is on screen, evicting history when the budget is full,
+    /// and queues refused formulas again where room now exists.
+    fn admit_visible(&mut self, visible: &HashMap<VisualId, Source>) {
+        for (id, source) in visible {
+            if let Some(refused) = self.items.get(id).map(|item| item.refused_bytes) {
+                if refused > 0 {
+                    self.make_math_room(refused, visible);
+                    if refused <= MAX_MATH_TEXTURE_BYTES.saturating_sub(self.math_bytes)
+                        && let Some(item) = self.items.get_mut(id)
+                    {
+                        item.phase = Phase::Queued;
+                        item.source = Some(source.clone());
+                        item.refused_bytes = 0;
+                    }
+                }
+                continue;
+            }
+            if self.rich_count >= MAX_RICH_VISUALS {
+                // Finished work is cheaper to lose than a worker's result.
+                let victim = self
+                    .items
+                    .iter()
+                    .filter(|(id, item)| item.kind != Kind::Other && !visible.contains_key(*id))
+                    .min_by_key(|(_, item)| matches!(item.phase, Phase::Running(_)))
+                    .map(|(id, _)| *id);
+                let Some(victim) = victim else {
+                    break;
+                };
+                self.evict(victim);
+            }
+            self.want(*id, source.clone());
+        }
+    }
+
+    /// Evicts drawn formulas off screen until `needed` bytes fit. A formula
+    /// past the whole budget never fits, so it costs the others nothing.
+    fn make_math_room(&mut self, needed: usize, visible: &HashMap<VisualId, Source>) {
+        if needed > MAX_MATH_TEXTURE_BYTES {
+            return;
+        }
+        while needed > MAX_MATH_TEXTURE_BYTES.saturating_sub(self.math_bytes) {
+            let victim = self
+                .items
+                .iter()
+                .find(|(id, item)| {
+                    item.kind == Kind::Math
+                        && !visible.contains_key(*id)
+                        && matches!(item.phase, Phase::Done)
+                        && item.shown.as_ref().is_some_and(Result::is_ok)
+                })
+                .map(|(id, _)| *id);
+            let Some(victim) = victim else {
+                break;
+            };
+            self.evict(victim);
+        }
+    }
+
     /// Asks for a visual; one already known is left as it is.
     pub(crate) fn want(&mut self, id: VisualId, source: Source) {
         if self.items.contains_key(&id) {
@@ -397,11 +508,13 @@ impl Visuals {
             phase: Phase::Queued,
             shown: None,
             source: Some(source),
+            refused_bytes: 0,
         });
     }
 
     /// Forgets the visuals no entry draws any more.
     pub(crate) fn retain(&mut self, live: &HashSet<VisualId>) {
+        self.visible.get_mut().retain(|id, _| live.contains(id));
         let released = &mut self.released;
         let math_bytes = &mut self.math_bytes;
         let rich_count = &mut self.rich_count;
@@ -454,9 +567,35 @@ impl Visuals {
         }
     }
 
-    /// The jobs to start now: queued visuals, up to [`MAX_RUNNING`] at once,
-    /// with every diagram queued again when the style changed.
+    /// [`Self::jobs_within`] with the whole budget to itself.
+    #[cfg(test)]
     pub(crate) fn jobs(&mut self, style: &DiagramStyle, renderer: &SvgRenderer) -> Vec<Job> {
+        self.jobs_within(MAX_RUNNING, style, renderer)
+    }
+
+    /// The jobs to start now: queued visuals, what is on screen first, at
+    /// most `capacity` of them and [`MAX_RUNNING`] running here at once, with
+    /// every diagram queued again when the style changed.
+    pub(crate) fn jobs_within(
+        &mut self,
+        capacity: usize,
+        style: &DiagramStyle,
+        renderer: &SvgRenderer,
+    ) -> Vec<Job> {
+        let visible = self.visible.take();
+        self.admit_visible(&visible);
+        let jobs = self.start_jobs(capacity, &visible, style, renderer);
+        self.visible.replace(visible);
+        jobs
+    }
+
+    fn start_jobs(
+        &mut self,
+        capacity: usize,
+        visible: &HashMap<VisualId, Source>,
+        style: &DiagramStyle,
+        renderer: &SvgRenderer,
+    ) -> Vec<Job> {
         if self.style.as_deref() != Some(style) {
             self.style = Some(Arc::new(style.clone()));
             for item in self.items.values_mut() {
@@ -468,39 +607,41 @@ impl Visuals {
         let Some(style) = self.style.clone() else {
             return Vec::new();
         };
-        let running = self.running.len();
+        let capacity = capacity.min(MAX_RUNNING.saturating_sub(self.running.len()));
         let mut jobs = Vec::new();
-        for (id, item) in &mut self.items {
-            if running + jobs.len() >= MAX_RUNNING {
-                break;
-            }
-            if !matches!(item.phase, Phase::Queued) {
-                continue;
-            }
-            let work = match item.source.take() {
-                Some(Source::Diagram(source)) => {
-                    let work = Work::Diagram(source.clone(), style.clone(), renderer.clone());
-                    item.source = Some(Source::Diagram(source));
-                    work
+        for on_screen in [true, false] {
+            for (id, item) in &mut self.items {
+                if jobs.len() >= capacity {
+                    return jobs;
                 }
-                Some(Source::Math { source, mode }) => {
-                    let work = Work::Math(source.clone(), mode, style.clone());
-                    item.source = Some(Source::Math { source, mode });
-                    work
+                if visible.contains_key(id) != on_screen || !matches!(item.phase, Phase::Queued) {
+                    continue;
                 }
-                Some(Source::Code { language, source }) => Work::Code(language, source),
-                Some(Source::Image(image)) => Work::Image(image),
-                Some(Source::Remote(url)) => Work::Remote(url),
-                None => continue,
-            };
-            self.tickets += 1;
-            item.phase = Phase::Running(self.tickets);
-            self.running.insert(self.tickets);
-            jobs.push(Job {
-                id: *id,
-                ticket: self.tickets,
-                work,
-            });
+                let work = match item.source.take() {
+                    Some(Source::Diagram(source)) => {
+                        let work = Work::Diagram(source.clone(), style.clone(), renderer.clone());
+                        item.source = Some(Source::Diagram(source));
+                        work
+                    }
+                    Some(Source::Math { source, mode }) => {
+                        let work = Work::Math(source.clone(), mode, style.clone());
+                        item.source = Some(Source::Math { source, mode });
+                        work
+                    }
+                    Some(Source::Code { language, source }) => Work::Code(language, source),
+                    Some(Source::Image(image)) => Work::Image(image),
+                    Some(Source::Remote(url)) => Work::Remote(url),
+                    None => continue,
+                };
+                self.tickets += 1;
+                item.phase = Phase::Running(self.tickets);
+                self.running.insert(self.tickets);
+                jobs.push(Job {
+                    id: *id,
+                    ticket: self.tickets,
+                    work,
+                });
+            }
         }
         jobs
     }
@@ -509,7 +650,7 @@ impl Visuals {
     /// visual is dropped. Whether the view changed.
     pub(crate) fn finish(&mut self, id: VisualId, ticket: u64, mut drawn: Result<Output>) -> bool {
         self.running.remove(&ticket);
-        let Some(item) = self.items.get_mut(&id) else {
+        let Some(item) = self.items.get(&id) else {
             if let Ok(drawn) = drawn {
                 self.released.extend(drawn.texture());
             }
@@ -521,13 +662,18 @@ impl Visuals {
             }
             return false;
         }
+        if item.kind == Kind::Math && self.visible.borrow().contains_key(&id) {
+            let new_bytes = drawn.as_ref().map_or(0, Output::texture_bytes);
+            let growth = new_bytes.saturating_sub(item.shown_bytes());
+            let visible = self.visible.take();
+            self.make_math_room(growth, &visible);
+            self.visible.replace(visible);
+        }
+        let Some(item) = self.items.get_mut(&id) else {
+            return false;
+        };
         if item.kind == Kind::Math {
-            let old_bytes = item
-                .shown
-                .as_ref()
-                .and_then(|shown| shown.as_ref().ok())
-                .map_or(0, Output::texture_bytes);
-            self.math_bytes = self.math_bytes.saturating_sub(old_bytes);
+            self.math_bytes = self.math_bytes.saturating_sub(item.shown_bytes());
             let new_bytes = drawn.as_ref().map_or(0, Output::texture_bytes);
             if new_bytes > MAX_MATH_TEXTURE_BYTES.saturating_sub(self.math_bytes) {
                 if let Ok(output) = drawn {
@@ -537,8 +683,10 @@ impl Visuals {
                 // A cached failure stays source; a theme change must not
                 // restart work that cannot fit and starve other queued jobs.
                 item.source = None;
+                item.refused_bytes = new_bytes;
             } else {
                 self.math_bytes += new_bytes;
+                item.refused_bytes = 0;
             }
         }
         item.phase = Phase::Done;

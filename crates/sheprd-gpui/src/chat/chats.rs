@@ -502,6 +502,8 @@ pub(crate) enum Toward {
 /// Every chat pane of the window's daemon, in its snapshot's order.
 #[derive(Default)]
 pub(crate) struct Chats {
+    /// Visual workers running, including those of panes since hidden or gone.
+    pub(crate) active_visual_jobs: usize,
     /// The agents installed on each host new chats may start on.
     pub(crate) agents: super::harnesses::Harnesses,
     /// The terminal agent moving into a chat, one at a time.
@@ -544,6 +546,8 @@ pub(crate) struct Chats {
     pub(crate) ticked: u64,
     /// A new chat whose tab is being made.
     pub(crate) starting: Option<super::start::Starting>,
+    /// The visible pane offered a worker next, so busy splits take turns.
+    pub(crate) visual_cursor: usize,
 }
 
 impl Chats {

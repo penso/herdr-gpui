@@ -125,6 +125,8 @@ impl SheprdWindow {
         {
             return div().into_any_element();
         }
+        chat.prepared
+            .request_visible(entry.id, chat.expanded.contains(&entry.id));
         let body = chat.prepared.body(entry.id);
         let content = match &entry.kind {
             EntryKind::User { text, .. } | EntryKind::Agent { text } => {

@@ -44,7 +44,11 @@ pub(crate) enum MathMode {
 #[derive(Clone, Debug)]
 pub(crate) enum Inline {
     Text(String, Style),
-    Math { id: VisualId, source: Arc<str> },
+    Math {
+        id: VisualId,
+        source: Arc<str>,
+        mode: MathMode,
+    },
     Break,
 }
 
@@ -77,6 +81,8 @@ pub(crate) enum Block {
         id: VisualId,
         language: String,
         source: Arc<str>,
+        /// A complete fence within the message's grammar budget.
+        highlight: bool,
     },
     Table {
         align: Vec<Alignment>,
@@ -85,6 +91,48 @@ pub(crate) enum Block {
 }
 
 impl Block {
+    /// Notes what this block draws as on screen, so an evicted visual comes
+    /// back without the message being parsed again.
+    pub(super) fn request_visible(&self, visuals: &Visuals) {
+        let inline = |content: &[Inline]| {
+            for part in content {
+                if let Inline::Math { id, source, mode } = part {
+                    visuals.request_visible(
+                        *id,
+                        Source::Math {
+                            source: source.clone(),
+                            mode: *mode,
+                        },
+                    );
+                }
+            }
+        };
+        match self {
+            Self::Math { id, source } => visuals.request_visible(
+                *id,
+                Source::Math {
+                    source: source.clone(),
+                    mode: MathMode::Display,
+                },
+            ),
+            Self::Code {
+                id,
+                language,
+                source,
+                highlight: true,
+            } => visuals.request_visible(
+                *id,
+                Source::Code {
+                    language: language.clone(),
+                    source: source.clone(),
+                },
+            ),
+            Self::Code { .. } => {}
+            Self::Paragraph { content, .. } => inline(content),
+            Self::Table { rows, .. } => rows.iter().flatten().for_each(|cell| inline(cell)),
+        }
+    }
+
     /// The visuals this block draws: its own code or display formula, or the
     /// inline formulas in its text.
     pub(super) fn visuals(&self) -> impl Iterator<Item = VisualId> + '_ {

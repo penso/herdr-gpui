@@ -287,6 +287,7 @@ impl SheprdWindow {
         let theme = &self.theme;
         let pane_id = chat.target.pane_id.clone();
         chat.text_geometry.begin_frame();
+        chat.prepared.visuals.begin_frame();
         let entries = {
             let pane_id = pane_id.clone();
             list(

@@ -321,6 +321,7 @@ fn code_projection_obeys_preview_bounds_without_copying_full_source() {
                     id: VisualId::of(&source),
                     language: String::new(),
                     source,
+                    highlight: false,
                 }]
                 .into(),
             )])),

@@ -34,16 +34,14 @@ impl Code {
         }
     }
 
-    fn request(&self, visuals: &mut Visuals) {
-        if !self.language.is_empty() && self.source.len() <= crate::chat::rich::MAX_CODE_BYTES {
-            visuals.want(
-                self.id,
-                Source::Code {
-                    language: self.language.clone(),
-                    source: self.source.clone(),
-                },
-            );
-        }
+    /// What a grammar draws this from; plain or oversized source has none.
+    fn visual(&self) -> Option<Source> {
+        (!self.language.is_empty() && self.source.len() <= crate::chat::rich::MAX_CODE_BYTES).then(
+            || Source::Code {
+                language: self.language.clone(),
+                source: self.source.clone(),
+            },
+        )
     }
 }
 
@@ -63,7 +61,19 @@ impl Preview {
     }
 
     pub(super) fn request(&self, visuals: &mut Visuals) {
-        self.codes().for_each(|code| code.request(visuals));
+        for code in self.codes() {
+            if let Some(source) = code.visual() {
+                visuals.want(code.id, source);
+            }
+        }
+    }
+
+    pub(super) fn request_visible(&self, visuals: &Visuals) {
+        for code in self.codes() {
+            if let Some(source) = code.visual() {
+                visuals.request_visible(code.id, source);
+            }
+        }
     }
 
     fn plain(label: String, source: Arc<str>) -> Self {
