@@ -93,9 +93,44 @@ public struct TermKey: Codable, Hashable, Identifiable, Sendable {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty else { return trimmed }
         return keys.map { key in
-            guard let choice = Self.choice(key) else { return Special(rawValue: key)?.symbol ?? key }
+            guard let choice = Self.choice(key) else { return Special(rawValue: key)?.symbol ?? Self.face(key).symbol }
             return symbols ? choice.symbol : choice.word ?? choice.symbol
         }.joined()
+    }
+
+    /// A key of `modifiers` and one more: a character, or a key's name such
+    /// as `tab` or `f5`. Nil when the daemon would not take it.
+    public static func combination(_ modifiers: TermInput.Modifiers, _ text: String) -> String? {
+        let text = text.trimmingCharacters(in: .whitespaces)
+        if text.count == 1, let character = text.first {
+            // The daemon takes one Unicode scalar that is not a control, not
+            // a cluster (👍🏻, or İ that ctrl lowercases to i and a dot).
+            guard let key = TermInput.key(for: character, modifiers: modifiers), let last = key.split(separator: "+").last,
+                  last.count > 1 || last.unicodeScalars.count == 1 && last.unicodeScalars.first?.properties.generalCategory != .control
+            else { return nil }
+            return key
+        }
+        let name = text.lowercased()
+        let function = (1...12).contains { "f\($0)" == name }
+        guard function || ["backspace", "down", "enter", "esc", "left", "right", "space", "tab", "up"].contains(name) else { return nil }
+        return TermInput.named(name, modifiers: modifiers)
+    }
+
+    /// A key no choice offers, such as `alt+x` or `ctrl+f5`: ⌥x and
+    /// "Alt x", ⌃F5 and "Control F5".
+    private static func face(_ key: String) -> (symbol: String, name: String) {
+        var modifiers = key.split(separator: "+").map(String.init)
+        let last = modifiers.popLast() ?? key
+        // A character keeps its case, which alt+b and alt+B send; with ctrl
+        // or shift case makes no difference, so it shows as a keyboard
+        // prints it, B (but not ß as SS). F5 is always upper case.
+        let upper = last.uppercased()
+        let printed = last.count > 1 || (modifiers.contains("ctrl") || modifiers.contains("shift")) && upper.count == 1 ? upper : last
+        let base = choice(last).map { ($0.symbol, $0.name) } ?? ["space": ("␣", "Space"), "plus": ("+", "Plus")][last] ?? (printed, printed)
+        let names = modifiers.map { ["ctrl": "Control", "alt": "Alt", "shift": "Shift"][$0] ?? $0 } + [base.1]
+        // ^B, as the offered ^C is.
+        let symbol = modifiers == ["ctrl"] && last.count == 1 ? "^" + printed : modifiers.map { modifier($0, symbols: true) }.joined() + base.0
+        return (symbol, names.joined(separator: " "))
     }
 
     /// A fixed modifier key's label: its name, or with `symbols` ⌃ ⌥ ⇧.
@@ -107,12 +142,13 @@ public struct TermKey: Codable, Hashable, Identifiable, Sendable {
     /// The title, or the keys' names.
     public var spoken: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? keys.map { Self.choice($0)?.name ?? Special(rawValue: $0)?.name ?? $0 }.joined(separator: ", ") : trimmed
+        return trimmed.isEmpty ? keys.map { Self.choice($0)?.name ?? Special(rawValue: $0)?.name ?? Self.face($0).name }.joined(separator: ", ") : trimmed
     }
 
-    /// Held down, one key repeats as a keyboard's does. Enter and a run of
-    /// keys do not, so a long press cannot answer an agent twice.
-    public var repeats: Bool { keys.count == 1 && keys != ["enter"] && special == nil }
+    /// Held down, one key repeats as a keyboard's does. Enter, with any
+    /// modifiers, and a run of keys do not, so a long press cannot answer an
+    /// agent twice.
+    public var repeats: Bool { keys.count == 1 && keys[0].split(separator: "+").last != "enter" && special == nil }
 
     /// One of the keys the editor always offers, as it offers it, rather
     /// than one the person made with a label or several presses.

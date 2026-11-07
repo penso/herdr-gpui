@@ -121,6 +121,9 @@ private struct KeyEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State var key: TermKey
     @State var row: TermKeyLayout.Row
+    /// A combination being made: modifiers, and a character or key name.
+    @State var held: TermInput.Modifiers = []
+    @State var other = ""
     let isNew: Bool
     let save: (TermKey, TermKeyLayout.Row) -> Void
 
@@ -151,6 +154,7 @@ private struct KeyEditor: View {
                 } footer: {
                     Text("In this order, so Tab then Enter accepts an agent's suggestion with one tap.")
                 }
+                combination
             }
             // The presses always show their handles; the other rows ignore it.
             .environment(\.editMode, .constant(.active))
@@ -170,6 +174,39 @@ private struct KeyEditor: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// Any key the menu lacks, such as ^B, ⌥X, or ⌃F5.
+    private var combination: some View {
+        let made = TermKey.combination(held, other)
+        return Section {
+            HStack {
+                ForEach([("ctrl", TermInput.Modifiers.ctrl), ("alt", .alt), ("shift", .shift)], id: \.0) { name, modifier in
+                    Toggle(TermKey.modifier(name, symbols: model.termKeys.symbols), isOn: Binding {
+                        held.contains(modifier)
+                    } set: { on in
+                        if on { held.insert(modifier) } else { held.remove(modifier) }
+                    })
+                    .accessibilityLabel(name)
+                }
+            }
+            // Bordered, so each toggles alone rather than the whole row.
+            .toggleStyle(.button)
+            .buttonStyle(.bordered)
+            TextField("Key", text: $other, prompt: Text("A character, or tab, f5…"))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button(made.map { "Add \(TermKey(keys: [$0]).label())" } ?? "Add Combination") {
+                if let made { key.keys.append(made) }
+                held = []
+                other = ""
+            }
+            .disabled(made == nil)
+        } header: {
+            Text("Combination")
+        } footer: {
+            Text("ctrl, alt, or shift with one character, or with tab, enter, esc, space, backspace, up, down, left, right, or f1 to f12.")
+        }
     }
 }
 

@@ -48,6 +48,10 @@ import Testing
         // A long press must not answer an agent twice.
         #expect(!TermKey(keys: ["enter"]).repeats)
         #expect(!TermKey(keys: ["tab", "enter"]).repeats)
+        // Legacy input sends these as the same carriage return.
+        #expect(!TermKey(keys: ["ctrl+enter"]).repeats)
+        #expect(!TermKey(keys: ["shift+enter"]).repeats)
+        #expect(TermKey(keys: ["ctrl+left"]).repeats)
     }
 
     @Test func savedRowsRoundTripWithTheirSpareKeys() throws {
@@ -267,14 +271,75 @@ import Testing
     }
 
     /// Rows as saved before spare keys existed.
-    @Test func everyChoiceIsOneKeyTheDaemonAccepts() {
-        // `valid_key` in crates/sheprd-remote-control/src/web/terminal.rs.
+    @Test func aCombinationIsModifiersAndOneKey() {
+        #expect(TermKey.combination([.ctrl], "b") == "ctrl+b")
+        #expect(TermKey.combination([.ctrl], "B") == "ctrl+b")
+        #expect(TermKey.combination([.alt], "x") == "alt+x")
+        #expect(TermKey.combination([.alt, .ctrl], "F5") == "ctrl+alt+f5")
+        #expect(TermKey.combination([.alt], "+") == "alt+plus")
+        #expect(TermKey.combination([.ctrl], "space") == "ctrl+space")
+        #expect(TermKey.combination([.shift], "tab") == "shift+tab")
+        #expect(TermKey.combination([], "q") == "q")
+        // Spaces around what was typed are not part of it.
+        #expect(TermKey.combination([.alt], " b ") == "alt+b")
+        #expect(TermKey.combination([.ctrl], " f5") == "ctrl+f5")
+        // Not one character to the daemon: several scalars (👍🏻, a flag,
+        // İ lowercased by ctrl into i and a dot), or a control (U+0080).
+        // A function key is f1 to f12 as written, not f+5 or f05, which a
+        // number parse would read as 5.
+        for text in ["", " ", "ab", "home", "f0", "f13", "f+5", "f05", "👍🏻", "🇺🇸", "İ", "\u{80}"] {
+            #expect(TermKey.combination([.ctrl], text) == nil, "\(text)")
+        }
+        #expect(TermKey.combination([.alt], "İ") == "alt+İ")
+    }
+
+    @Test func aCombinationShowsItsModifiersAsSymbols() {
+        func key(_ name: String) -> TermKey { TermKey(keys: [name]) }
+        #expect(key("ctrl+b").label() == "^B" && key("ctrl+b").spoken == "Control B")
+        #expect(key("ctrl+alt+b").label() == "⌃⌥B" && key("shift+b").label() == "⇧B")
+        // alt keeps the letter's case, which the terminal receives.
+        #expect(key("alt+x").label() == "⌥x" && key("alt+x").spoken == "Alt x")
+        #expect(key("alt+X").label() == "⌥X" && key("alt+X").spoken == "Alt X")
+        #expect(key("alt+ß").label() == "⌥ß" && key("ctrl+ß").label() == "^ß")
+        #expect(key("ctrl+alt+f5").label(symbols: true) == "⌃⌥F5" && key("ctrl+alt+f5").spoken == "Control Alt F5")
+        #expect(key("alt+tab").label() == "⌥⇥" && key("alt+tab").spoken == "Alt Tab")
+        #expect(key("ctrl+space").label() == "⌃␣" && key("ctrl+space").spoken == "Control Space")
+        #expect(key("q").label() == "q" && key("q").spoken == "q")
+        // Made by the person, unlike ^C, which More Keys offers.
+        #expect(!key("ctrl+b").isStock && key("ctrl+c").isStock && key("ctrl+b").repeats)
+    }
+
+    @Test func everyCombinationIsOneKeyTheDaemonAccepts() {
+        let modifiers: [TermInput.Modifiers] = [[], [.ctrl], [.alt], [.shift], [.ctrl, .alt, .shift]]
+        let texts = ["b", "B", "1", "+", "-", "/", "`", "~", "|", "é", "ß", "İ", "tab", "enter", "esc", "space", "backspace", "up", "down", "left", "right", "f1", "f12"]
+        for held in modifiers {
+            for text in texts {
+                guard let key = TermKey.combination(held, text) else {
+                    // Only ctrl+İ, whose lowercase is two scalars.
+                    #expect(text == "İ" && held.contains(.ctrl), "\(text)")
+                    continue
+                }
+                #expect(daemonAccepts(key), "\(key)")
+                #expect(TermInput.pressed(key) == key, "\(key)")
+            }
+        }
+    }
+
+    /// As `valid_key` in crates/sheprd-remote-control/src/web/terminal.rs.
+    private func daemonAccepts(_ key: String) -> Bool {
         let named: Set = ["backspace", "backtick", "down", "enter", "esc", "left", "minus", "plus", "right", "slash", "space", "tab", "up"]
+        let parts = key.split(separator: "+", omittingEmptySubsequences: false).map(String.init)
+        let last = parts.last ?? ""
+        let function = last.hasPrefix("f") && Int(last.dropFirst()).map { (1...12).contains($0) } == true
+        // One Rust `char`: a Unicode scalar, not a grapheme.
+        let scalar = last.unicodeScalars.count == 1 ? last.unicodeScalars.first : nil
+        let single = scalar.map { $0.properties.generalCategory != .control && !$0.properties.isWhitespace } ?? false
+        return (1...32).contains(key.utf8.count) && parts.dropLast().allSatisfy { ["ctrl", "alt", "shift"].contains($0) } && (named.contains(last) || single || function)
+    }
+
+    @Test func everyChoiceIsOneKeyTheDaemonAccepts() {
         for choice in TermKey.choices {
-            let parts = choice.key.split(separator: "+").map(String.init)
-            let last = parts.last ?? ""
-            #expect(parts.dropLast().allSatisfy { ["ctrl", "alt", "shift"].contains($0) }, "\(choice.key)")
-            #expect(named.contains(last) || last.count == 1, "\(choice.key)")
+            #expect(daemonAccepts(choice.key), "\(choice.key)")
             // Already in the order the key row writes modifiers.
             #expect(TermInput.pressed(choice.key) == choice.key)
         }

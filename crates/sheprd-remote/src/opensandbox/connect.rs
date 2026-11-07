@@ -29,9 +29,8 @@ pub fn settings(account: &str) -> Result<Settings> {
 
 /// The relay command for `sandbox`: this executable run as [`relay::HELPER`].
 pub(super) fn relay_command(settings: &Settings, sandbox: &str) -> Result<Command> {
-    let executable = std::env::current_exe().map_err(Error::Executable)?;
-    let mut command = sheprd_client::new_command(executable);
-    command.arg(relay::HELPER).arg(&settings.base).arg(sandbox);
+    let mut command = crate::cloud::relay::command(relay::HELPER).map_err(Error::Executable)?;
+    command.arg(&settings.base).arg(sandbox);
     Ok(command)
 }
 
