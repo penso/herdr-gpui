@@ -257,6 +257,7 @@ async fn follow_lists(state: &Shared, board: bool, sender: &mpsc::Sender<Sse>) {
     let mut all = state.hub.subscribe_all();
     let mut layout = state.hub.watch_layout();
     let mut pull_requests = state.pull_requests.subscribe();
+    let mut opened = state.opened.changed();
     loop {
         let (markup, waiting) = lists(state, board);
         let patch = Patch {
@@ -276,6 +277,7 @@ async fn follow_lists(state: &Shared, board: bool, sender: &mpsc::Sender<Sse>) {
                 },
                 changed = layout.changed() => if changed.is_err() { return } else { break },
                 changed = pull_requests.changed() => if changed.is_err() { return } else { break },
+                changed = opened.changed() => if changed.is_err() { return } else { break },
                 () = sender.closed() => return,
             }
         }
