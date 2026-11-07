@@ -121,11 +121,12 @@ impl<'a> Parser<'a> {
     }
 
     /// A side's `a/` or `b/` is only Git's when the header says so or the
-    /// other side has its own: `a/` alone may be a real directory.
+    /// other side of a unified patch has its own: `a/` alone may be a real
+    /// directory, and `apply_patch` always names real paths.
     fn file(&self) -> Option<&'a str> {
         let old = self.old.and_then(|name| name.strip_prefix("a/"));
         let new = self.new.and_then(|name| name.strip_prefix("b/"));
-        if self.git || (old.is_some() && new.is_some()) {
+        if self.git || (!self.apply && old.is_some() && new.is_some()) {
             new.or(self.new).or(old).or(self.old)
         } else {
             self.new.or(self.old)

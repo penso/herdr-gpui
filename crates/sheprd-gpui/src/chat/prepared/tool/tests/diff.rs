@@ -295,3 +295,13 @@ fn a_real_directory_named_like_a_git_prefix_keeps_its_path() {
         [("b/file.rs".to_owned(), 1, 0)]
     );
 }
+
+#[test]
+fn an_apply_patch_move_keeps_directories_named_like_git_prefixes() {
+    assert_eq!(
+        files(
+            "*** Begin Patch\n*** Update File: a/old.rs\n*** Move to: b/new.rs\n@@\n-old\n+new\n*** End Patch\n"
+        ),
+        [("b/new.rs".to_owned(), 1, 1)]
+    );
+}
