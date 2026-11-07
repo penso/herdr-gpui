@@ -138,6 +138,11 @@ struct ChatRowLabel: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(item.chat.title).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    if item.drafted {
+                        Image(systemName: "pencil.line")
+                            .font(.footnote.weight(.semibold)).foregroundStyle(.tint)
+                            .accessibilityLabel("Draft not sent")
+                    }
                     if item.working, let started = item.chat.summary?.turnStartedMs {
                         Text(timerInterval: Date(timeIntervalSince1970: Double(started) / 1000)...Date.distantFuture, countsDown: false)
                             .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)

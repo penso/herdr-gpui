@@ -400,7 +400,7 @@ extension AppModel {
     func opened(_ created: Created, prompt: String, start: ChatStart?, device: String, title: String) {
         let unsent = !prompt.isEmpty && !created.prompted
         if let pane = created.pane {
-            if unsent { fleet.cache.save(draft: Cache.Draft(text: prompt, pictures: []), device: device, pane: pane) }
+            if unsent { fleet.save(draft: Cache.Draft(text: prompt, pictures: []), for: PaneKey(device: device, pane: pane)) }
             pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title)
         }
         let unset = startProblem(created, start: start, device: device)

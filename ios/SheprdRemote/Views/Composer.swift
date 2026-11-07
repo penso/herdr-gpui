@@ -91,6 +91,9 @@ struct Composer: View {
             }
             saveDraft()
         }
+        .onChange(of: draft.isEmpty && pictures.isEmpty) { _, empty in
+            model.fleet.composer(key, drafted: !empty)
+        }
         // The app may be ended while in the background, with no
         // disappearing first.
         .onChange(of: scenePhase) { _, phase in if phase == .background { saveDraft() } }
@@ -289,7 +292,7 @@ struct Composer: View {
     /// Keeps the draft on disk for after a relaunch, or removes it once empty.
     private func saveDraft() {
         let saved = draft.isEmpty && pictures.isEmpty ? nil : Cache.Draft(text: draft, pictures: pictures.map(\.jpeg))
-        model.fleet.cache.save(draft: saved, device: key.device, pane: key.pane)
+        model.fleet.save(draft: saved, for: key)
     }
 
     /// The clipboard's pictures, read from the attach menu. Unlike the

@@ -116,7 +116,8 @@ struct SettingsView: View {
             Section("Storage") {
                 LabeledContent("Cached chats and lists", value: ByteCountFormatter.string(fromByteCount: Int64(cacheSize), countStyle: .file))
                 Button("Clear cache", role: .destructive) {
-                    model.fleet.cache.clear()
+                    model.fleet.clearCache()
+                    model.drafts = [:]
                     cacheSize = 0
                 }
             }
