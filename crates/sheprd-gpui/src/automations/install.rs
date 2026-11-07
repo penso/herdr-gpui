@@ -14,6 +14,7 @@
 
 use super::{Error, fetch};
 use crate::{host_build, teleport::Host};
+use sheprd_automation::report::Status;
 use sheprd_client::ScriptLimits;
 use std::{
     path::{Path, PathBuf},
@@ -27,7 +28,7 @@ const BUILDS: &str = "automate";
 const COPY_IDLE: Duration = Duration::from_secs(300);
 /// What the install script itself may print.
 const COPY_OUTPUT: u64 = 64 * 1024;
-/// `shutdown` waits up to about 40 s for runs to finish before it answers.
+/// `shutdown` waits up to about 40 s for the daemon to exit before it answers.
 const SHUTDOWN_IDLE: Duration = Duration::from_secs(90);
 pub(crate) use crate::host_build::Platform;
 
@@ -121,13 +122,20 @@ pub(crate) fn install(
         _ => Error::Run(error),
     })?;
     if update {
+        // `shutdown` stops every run, so it is only asked for with none
+        // going. Read as late as possible: a schedule may start one.
+        let status: Status = fetch::query_installed(host, &["status"], fetch::IDLE, cancelled)?;
+        if status.scripts.iter().any(|script| script.running.is_some()) {
+            return Err(Error::RunsActive);
+        }
         // `start` does nothing while a daemon holds the lock: stop the old
-        // one first. It lets its runs finish, which can take a while.
-        fetch::act_within(host, &["shutdown"], SHUTDOWN_IDLE, cancelled)?;
+        // one first.
+        fetch::act_installed(host, &["shutdown"], SHUTDOWN_IDLE, cancelled)?;
     }
     // On an update too: the service names the executable it runs, and the
-    // one written before names the old version.
-    fetch::act(host, &["install-service"], cancelled)?;
-    let started = fetch::act(host, &["start"], cancelled)?;
+    // one written before names the old version. On this machine that must
+    // be the copy just made, never the app's own.
+    fetch::act_installed(host, &["install-service"], fetch::IDLE, cancelled)?;
+    let started = fetch::act_installed(host, &["start"], fetch::IDLE, cancelled)?;
     Ok(started.message)
 }

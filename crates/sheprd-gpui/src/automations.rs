@@ -596,6 +596,10 @@ impl SheprdWindow {
 
     /// Whether `host` runs another `herdr-automate` than this app ships.
     pub(crate) fn automation_update(&self, host: &HostState) -> Option<String> {
+        // Updating runs a shell script, and this machine has none on Windows.
+        if cfg!(windows) && host.machine.is_local() {
+            return None;
+        }
         let shipped = self.shipped_automate_version()?;
         let status = host.status()?;
         // The daemon that runs is what matters; with none running, the
@@ -604,7 +608,7 @@ impl SheprdWindow {
             Some(version) if status.daemon.running => version,
             _ => &status.version,
         };
-        (!host.machine.is_local() && running != shipped).then(|| shipped.to_owned())
+        (running != shipped).then(|| shipped.to_owned())
     }
 
     /// Shows `opened`, reading the run's page unless it was read.
