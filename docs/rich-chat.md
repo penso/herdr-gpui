@@ -82,8 +82,8 @@ keeps its terminal view.
 ## Moving a terminal agent into a chat
 
 An agent running in its own CLI can move into a chat without leaving its pane
-or its conversation. With the agent's pane focused, run **Move Agent into
-Chat** from the command palette, or:
+or its conversation. Right-click its tab and choose **Move Agent into Chat**,
+run the same command from the palette with the agent's pane focused, or:
 
 ```sh
 sheprd chat convert [--pane ID]
@@ -105,6 +105,10 @@ and the chat opens with the conversation so far and its context window use.
 Herdr must know the agent's session, which takes its integration: run
 `herdr integration install claude` (or `codex`, `copilot`, `opencode`), then
 restart the agent. Without it the move is refused and the agent keeps running.
+
+The tab's menu offers the row for an agent that can move, on a host chats reach,
+and shows a refusal in the menu. In a tab with several such agents it moves the
+one in the focused pane, else the first; use `--pane` to choose another.
 
 Only an idle agent moves, since stopping one mid-turn would lose the turn, and
 a refusal leaves it running in its terminal. Everything that can refuse is
