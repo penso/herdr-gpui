@@ -449,8 +449,24 @@ impl SheprdWindow {
         });
         self.menu.removing_devices.insert(id.clone());
         self.dismiss_menu(window, cx);
-        cx.spawn(async move |this, cx| {
+        Self::follow_removal(cx.entity().downgrade(), background, id, label, forget, cx);
+    }
+
+    /// Applies a removal's result. Its mute goes first, from the app: the
+    /// window that started the removal may have closed by the time it ends.
+    fn follow_removal(
+        this: WeakEntity<Self>,
+        background: Task<crate::Result<crate::Result<()>>>,
+        id: String,
+        label: String,
+        forget: bool,
+        cx: &mut App,
+    ) {
+        cx.spawn(async move |cx| {
             let result = background.await;
+            if result.is_ok() {
+                cx.update(|cx| crate::notification_mutes::Mutes::forget_host(cx, &id));
+            }
             let _ = this.update(cx, |this, cx| {
                 this.device_removed(&id, &label, forget, result, cx)
             });
@@ -509,15 +525,13 @@ impl SheprdWindow {
         cx.notify();
     }
 
-    /// Forget removal marks for devices the catalog no longer lists, and
-    /// their mutes, so a device added back later starts unmuted.
-    pub(crate) fn prune_device_removals(&mut self, cx: &mut App) {
+    /// Forget removal marks for devices the catalog no longer lists.
+    pub(crate) fn prune_device_removals(&mut self) {
         let endpoints = &self.endpoints;
         self.menu.removing_devices.retain(|id| {
             let listed = endpoints.iter().any(|endpoint| &endpoint.id == id);
             if !listed {
                 tracing::info!(category = "device_remove", id, "Catalog dropped the device");
-                crate::notification_mutes::Mutes::update(cx, |mutes| mutes.set_host(id, false));
             }
             listed
         });

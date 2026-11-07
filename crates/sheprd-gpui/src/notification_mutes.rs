@@ -425,6 +425,22 @@ impl Mutes {
         self.hosts.iter().any(|host| host == endpoint)
     }
 
+    /// Forgets the mute of the device `endpoint`, which was removed, so it
+    /// starts unmuted if it is added back.
+    pub(crate) fn forget_host(cx: &mut App, endpoint: &str) {
+        if Self::of(cx).is_some_and(|mutes| mutes.host(endpoint)) {
+            Self::update(cx, |mutes| mutes.set_host(endpoint, false));
+        }
+    }
+
+    /// What `endpoint`'s mute silences while it has no snapshot to look in.
+    pub(crate) fn silenced_offline(&self, endpoint: &str) -> Silenced<'static> {
+        Silenced {
+            host: self.host(endpoint),
+            ..Silenced::default()
+        }
+    }
+
     /// Mutes or unmutes the device `endpoint`, which need not be connected.
     /// Returns whether anything changed; an ID too long to keep is refused.
     pub(crate) fn set_host(&mut self, endpoint: &str, muted: bool) -> bool {

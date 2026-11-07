@@ -119,10 +119,11 @@ impl SheprdWindow {
                 self.bell.queue(bells);
             }
             selected_changed |= index == self.selected_endpoint && updated != Redraw::None;
-            let silenced = muted
-                .as_ref()
-                .zip(Mutes::any(cx))
-                .map(|((daemon, snapshot), mutes)| mutes.silenced(daemon, snapshot))
+            let silenced = Mutes::any(cx)
+                .map(|mutes| match &muted {
+                    Some((daemon, snapshot)) => mutes.silenced(daemon, snapshot),
+                    None => mutes.silenced_offline(&endpoint.id),
+                })
                 .unwrap_or_default();
             self.sound.poll(
                 &mut endpoint.sounds,

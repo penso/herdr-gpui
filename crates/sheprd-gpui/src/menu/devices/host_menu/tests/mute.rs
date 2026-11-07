@@ -43,19 +43,34 @@ fn the_host_menu_mutes_an_offline_device_and_marks_its_header(cx: &mut TestAppCo
 }
 
 #[gpui::test]
-fn removing_a_device_forgets_its_mute(cx: &mut TestAppContext) {
+fn a_finished_removal_forgets_the_mute_after_its_window_closed(cx: &mut TestAppContext) {
     let (view, cx) = window(cx);
-    cx.update(|_, cx| {
-        view.update(cx, |view, cx| {
-            view.set_host_muted(HOST, true, cx);
-            view.menu.removing_devices.insert(HOST.into());
-            view.prune_device_removals(cx);
-            assert!(muted(cx), "kept until the catalog drops the device");
-            view.endpoints.truncate(1);
-            view.prune_device_removals(cx);
-            assert!(!muted(cx));
-        });
+    let this = view.downgrade();
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| view.set_host_muted(HOST, true, cx));
+        window.remove_window();
     });
+    drop(view);
+    // The window's own context is gone with it.
+    let app: &mut TestAppContext = cx;
+    app.run_until_parked();
+    let finish = |result: crate::Result<crate::Result<()>>, app: &mut TestAppContext| {
+        app.update(|cx| {
+            crate::SheprdWindow::follow_removal(
+                this.clone(),
+                gpui::Task::ready(result),
+                HOST.into(),
+                "m5max-ms".into(),
+                false,
+                cx,
+            );
+        });
+        app.run_until_parked();
+        app.update(|cx| muted(cx))
+    };
+    let failed = Err(crate::menu::devices::Error::Adding.into());
+    assert!(finish(failed, app), "a failed removal keeps it");
+    assert!(!finish(Ok(Ok(())), app));
 }
 
 #[gpui::test]

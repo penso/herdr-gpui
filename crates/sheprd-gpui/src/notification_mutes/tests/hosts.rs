@@ -124,3 +124,11 @@ fn the_largest_set_of_devices_fits_in_the_file() {
     assert!(bytes.len() as u64 <= MAX_FILE_BYTES);
     assert_eq!(parse(&bytes).unwrap().hosts.len(), MAX_HOSTS);
 }
+
+#[test]
+fn a_muted_device_stays_silent_without_a_snapshot() {
+    let mut mutes = Mutes::default();
+    mutes.set_host(HOST, true);
+    assert!(mutes.silenced_offline(HOST).notice(None, None, None));
+    assert!(mutes.silenced_offline("local").is_empty());
+}

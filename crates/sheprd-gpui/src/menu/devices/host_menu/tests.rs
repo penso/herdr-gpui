@@ -257,10 +257,10 @@ fn a_removal_pulses_the_host_header_until_the_device_leaves(cx: &mut TestAppCont
                     .replace(['\u{2068}', '\u{2069}'], "")
                     .starts_with("Removed m5max-ms, but could not delete its GitHub sign-in")
             );
-            view.prune_device_removals(cx);
+            view.prune_device_removals();
             assert!(view.menu.removing_devices.contains(HOST));
             view.endpoints.truncate(1);
-            view.prune_device_removals(cx);
+            view.prune_device_removals();
             assert!(view.menu.removing_devices.is_empty());
         });
     });
