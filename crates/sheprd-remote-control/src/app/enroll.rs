@@ -490,7 +490,7 @@ fn private_dir(path: &Path) -> super::Result<()> {
 }
 
 /// Writes `path` readable by this user alone.
-fn write_private(path: &Path, bytes: &[u8]) -> super::Result<()> {
+pub(super) fn write_private(path: &Path, bytes: &[u8]) -> super::Result<()> {
     let failed = |source| super::Error::Io {
         operation: "write",
         path: path.to_owned(),

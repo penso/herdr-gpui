@@ -312,3 +312,22 @@ fn mute_commands() {
     }
     assert!(parse(&["worktree", "silence"]).is_err());
 }
+
+#[test]
+fn host_tag_takes_a_host_and_any_number_of_tags() {
+    assert_eq!(
+        command(&["host", "tag", "devbox", "work", "client acme"]),
+        ControlCommand::Host(control::HostCommand::Tag {
+            id: "devbox".into(),
+            tags: vec!["work".into(), "client acme".into()],
+        })
+    );
+    assert_eq!(
+        command(&["host", "tag", "devbox"]),
+        ControlCommand::Host(control::HostCommand::Tag {
+            id: "devbox".into(),
+            tags: Vec::new(),
+        })
+    );
+    assert!(parse(&["host", "tag"]).is_err());
+}

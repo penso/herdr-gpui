@@ -3,6 +3,12 @@ import Foundation
 /// What one computer lists: `GET /api/v2/home` and the live socket's
 /// `home` message (`crates/sheprd-remote-control/src/native/model.rs`).
 public struct Home: Codable, Hashable, Sendable {
+    /// The `api` this app relies on: `API_LEVEL` in the daemon's `model.rs`
+    /// raised to something new means raising this with it.
+    public static let requiredAPI = 1
+
+    /// What the computer's daemon offers phones; older computers leave it out.
+    public var api: Int?
     public var computer: String
     public var fingerprint: String
     /// Whether the computer's Herdr daemon is reachable.
@@ -15,17 +21,44 @@ public struct Home: Codable, Hashable, Sendable {
     /// Agents working now, counted one by one, as a terminal tab lists only
     /// its most pressing agent; older computers leave it out.
     public var working: Int?
+    /// The release serving, to show; older computers leave it out.
+    public var version: String?
     public var workspaces: [Workspace]
+    /// The tags this computer keeps; older computers leave them out.
+    public var tags: Tags?
 
-    public init(computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, workspaces: [Workspace]) {
+    public init(api: Int? = nil, computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, version: String? = nil, workspaces: [Workspace], tags: Tags? = nil) {
+        self.api = api
         self.computer = computer
         self.fingerprint = fingerprint
         self.connected = connected
         self.waiting = waiting
         self.load = load
         self.working = working
+        self.version = version
         self.workspaces = workspaces
+        self.tags = tags
     }
+
+    /// A computer's tags and when they were last edited, also the body and
+    /// answer of `PUT /api/v2/tags`.
+    public struct Tags: Codable, Hashable, Sendable {
+        public var tags: [String]
+        public var updatedMs: UInt64
+
+        public init(tags: [String], updatedMs: UInt64) {
+            self.tags = tags
+            self.updatedMs = updatedMs
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case tags
+            case updatedMs = "updated_ms"
+        }
+    }
+
+    /// Whether the computer runs a Sheprd too old for this app.
+    public var needsUpdate: Bool { (api ?? 0) < Self.requiredAPI }
 
     /// CPU and memory in whole percentages, 0 to 100. Older computers
     /// send neither `cores` nor `load5Tenths`, and a computer whose OS

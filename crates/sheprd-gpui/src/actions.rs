@@ -70,6 +70,13 @@ pub(crate) struct SetLayout {
     pub(crate) mode: crate::config::LayoutMode,
 }
 
+/// Picks how chat views draw, from View > Agent Layout.
+#[derive(Clone, PartialEq, serde::Deserialize, Action)]
+#[action(no_json)]
+pub(crate) struct SetChatLayout {
+    pub(crate) mode: crate::config::ChatLayoutMode,
+}
+
 /// Picks how tab strips draw their tabs, from View > Tab Layout.
 #[derive(Clone, PartialEq, serde::Deserialize, Action)]
 #[action(no_json)]

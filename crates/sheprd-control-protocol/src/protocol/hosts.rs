@@ -23,6 +23,11 @@ pub enum HostOp {
         host: Option<String>,
         muted: bool,
     },
+    /// Replaces the tags that group `id` in the sidebar.
+    Tag {
+        id: String,
+        tags: Vec<String>,
+    },
     /// The pull request of the caller's workspace's branch.
     Pr,
     /// Its review comments, loaded on request.

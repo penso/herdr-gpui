@@ -16,6 +16,7 @@ fn stopping_ends_a_tool_that_ignores_term_after_the_agent_exits() {
     let spawned = spawn(
         &OsString::from("/bin/sh"),
         &[OsString::from("-c"), OsString::from(script)],
+        &[],
         dir.path(),
     )
     .unwrap();
@@ -41,4 +42,25 @@ fn stopping_ends_a_tool_that_ignores_term_after_the_agent_exits() {
         );
         thread::sleep(POLL);
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn the_agent_gets_the_environment_it_was_started_with() {
+    use std::io::Read as _;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut spawned = spawn(
+        &OsString::from("/bin/sh"),
+        &[
+            OsString::from("-c"),
+            OsString::from("printf %s \"$HERDR_ACP_TEST\""),
+        ],
+        &[("HERDR_ACP_TEST", "1")],
+        dir.path(),
+    )
+    .unwrap();
+    let mut seen = String::new();
+    spawned.output.read_to_string(&mut seen).unwrap();
+    assert_eq!(seen, "1");
 }

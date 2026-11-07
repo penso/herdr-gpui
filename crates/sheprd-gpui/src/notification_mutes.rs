@@ -456,8 +456,7 @@ impl Mutes {
             .unwrap_or_default()
     }
 
-    /// Read by the Dock badge, which only macOS and Windows draw.
-    #[cfg(any(target_os = "macos", windows, test))]
+    /// Read by the Dock badge and the Overview's tick.
     pub(crate) fn revision(&self) -> u64 {
         self.revision
     }

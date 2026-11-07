@@ -729,6 +729,7 @@ impl SheprdWindow {
             Page::Host
                 | Page::RenameDevice
                 | Page::ForwardPort
+                | Page::DeviceTags
                 | Page::DeviceTheme
                 | Page::RemoveDevice
         ) {

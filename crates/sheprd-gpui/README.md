@@ -365,7 +365,7 @@ choose **Remove device…** to forget it. Renaming runs `herdr machine rename`;
 an empty name falls back to the SSH target, as when adding. Removal runs the installed `herdr machine remove`, which
 edits only the local catalog: the host's own Herdr keeps running. When the
 device has its own GitHub sign-in, the confirmation also offers to delete it,
-since its account panel goes away with the device. Local has no such menu.
+since its account panel goes away with the device. Local's menu offers neither.
 
 A cloud device's header (Azure, Boat, Coder, Container, Daytona, OpenSandbox,
 Railway, or Sprites) has a menu too: **Rename…** changes the name the sidebar

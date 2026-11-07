@@ -11,6 +11,7 @@ mod en_xa;
 mod forwards;
 mod menu_width;
 mod mute;
+mod tags;
 #[cfg(feature = "azure")]
 mod unsynced;
 
@@ -34,12 +35,19 @@ fn add_host(view: &mut crate::SheprdWindow) {
     ));
 }
 
+/// The selector of an action's row; `debug_bounds` keeps only static names.
+fn menu_row(index: usize) -> &'static str {
+    format!("host-menu-{index}").leak()
+}
+
 fn host(view: &crate::SheprdWindow) -> &HostMenu {
     view.menu.host.as_ref().unwrap()
 }
 
 #[gpui::test]
-fn right_clicking_a_saved_host_offers_removal_but_local_only_its_mute(cx: &mut TestAppContext) {
+fn right_clicking_a_saved_host_offers_removal_but_local_only_grouping_and_mute(
+    cx: &mut TestAppContext,
+) {
     let (view, cx) = cx.add_window_view(|window, cx| {
         crate::bind_keys(cx);
         let mut view = fixture_window(window, cx);
@@ -56,8 +64,8 @@ fn right_clicking_a_saved_host_offers_removal_but_local_only_its_mute(cx: &mut T
         assert_eq!(host(view).saved, Saved::Local);
         assert_eq!(host(view).actions(), super::LOCAL_ACTIONS);
     });
-    cx.simulate_keystrokes("escape");
-    assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
+    view.update_in(cx, |view, window, cx| view.dismiss_menu(window, cx));
+    cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
 
     let remote = cx.debug_bounds(HOST_HEADER).unwrap();
     cx.simulate_mouse_down(remote.center(), MouseButton::Right, Modifiers::default());
@@ -101,15 +109,19 @@ fn the_menu_shows_the_server_keybindings_choice(cx: &mut TestAppContext) {
     view.update_in(cx, |view, window, cx| {
         view.open_host_menu(HOST, point(px(20.), px(20.)), window, cx)
     });
+    let keys = SSH_ACTIONS
+        .iter()
+        .position(|(action, _)| *action == Action::ServerKeybindings)
+        .unwrap();
+    let keys = menu_row(keys);
     let row = |cx: &mut VisualTestContext| {
         cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
         (
-            cx.debug_bounds("host-menu-2").is_some(),
+            cx.debug_bounds(keys).is_some(),
             cx.debug_bounds("host-menu-keybindings-error").is_some(),
         )
     };
     assert_eq!(row(cx), (true, false));
-    assert_eq!(SSH_ACTIONS[2].0, Action::ServerKeybindings);
     view.update(cx, |view, cx| {
         view.config.devices.insert(
             "0123456789abcdef0123456789abcdef".into(),

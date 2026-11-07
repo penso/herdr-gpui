@@ -30,8 +30,11 @@ fn forwarding_a_port_asks_for_one_and_refuses_bad_or_repeated_ports(cx: &mut Tes
     view.update_in(cx, |view, window, cx| {
         view.open_host_menu(HOST, point(px(10.), px(10.)), window, cx)
     });
-    assert_eq!(SSH_ACTIONS[3].0, Action::ForwardPort);
-    cx.simulate_keystrokes("down down down down enter");
+    let forward = SSH_ACTIONS
+        .iter()
+        .position(|(action, _)| *action == Action::ForwardPort)
+        .unwrap();
+    cx.simulate_keystrokes(&format!("{}enter", "down ".repeat(forward + 1)));
     let input = view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::ForwardPort));
         host(view).input.clone().unwrap()
@@ -102,7 +105,9 @@ fn the_menu_lists_the_host_forwards_and_stops_one(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("host-forward-stop-80").is_some());
     // The forwards sit below the actions, and widen the menu to fit.
     assert!(
-        cx.debug_bounds("host-menu-5").unwrap().bottom()
+        cx.debug_bounds(menu_row(SSH_ACTIONS.len() - 1))
+            .unwrap()
+            .bottom()
             <= cx.debug_bounds("host-forward-3000").unwrap().top()
     );
     assert_eq!(cx.debug_bounds("menu-panel").unwrap().size.width, px(260.));

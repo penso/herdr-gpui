@@ -29,9 +29,11 @@ mod routes;
 mod stream;
 #[cfg(unix)]
 mod streaming;
+mod tags;
 #[cfg(unix)]
 mod term_history;
 mod terminal;
+mod update;
 mod uploads;
 
 pub(crate) const ORIGIN: &str = "https://192.168.1.20:7443";
@@ -75,7 +77,9 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         push: None,
         reports: Mutex::new(report_limit()),
         seen: Mutex::new(seen),
+        tags: Tags::load(dir),
         typed: Typed::default(),
+        updates: Mutex::default(),
         uploads: Uploads::new(dir),
     })
 }

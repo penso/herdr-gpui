@@ -19,6 +19,11 @@ pub enum HostCommand {
         host: Option<String>,
         muted: bool,
     },
+    /// Replace a host's tags; none clears them.
+    Tag {
+        id: String,
+        tags: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,6 +99,11 @@ pub(super) fn host(args: &mut Args) -> Result<HostCommand, CliError> {
         Some(verb @ ("mute" | "unmute")) => HostCommand::Mute {
             host: args.optional_text()?,
             muted: verb == "mute",
+        },
+        Some("tag") => HostCommand::Tag {
+            id: args.required_text("HOST")?,
+            tags: std::iter::from_fn(|| args.optional_text().transpose())
+                .collect::<Result<_, _>>()?,
         },
         _ => return Err(unknown("host", verb)),
     })

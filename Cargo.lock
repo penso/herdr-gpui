@@ -9546,8 +9546,10 @@ dependencies = [
 name = "sheprd-orchestrator"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "chrono",
  "gix",
+ "percent-encoding",
  "rusqlite",
  "rustix",
  "secrecy",

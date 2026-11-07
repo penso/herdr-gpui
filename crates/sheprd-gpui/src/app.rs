@@ -490,6 +490,7 @@ pub(crate) fn run() -> std::process::ExitCode {
                 crate::px0::Launcher::install(cx);
                 // Nor do they install or ask the remote control service.
                 crate::remote::Supervisor::install(cx);
+                crate::device_tags::DeviceTags::install(cx);
                 #[cfg(feature = "cloud")]
                 crate::cloud::install_idle_checks(cx);
             }

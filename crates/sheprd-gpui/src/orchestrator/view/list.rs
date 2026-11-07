@@ -10,9 +10,11 @@ use super::{
 use crate::{
     fonts::StyledFont,
     i18n::fl,
-    orchestrator::{Access, CheckState, PrStatus, Provider, Review, SyncState},
+    orchestrator::{Access, CheckState, Item, PrStatus, Provider, Review, SyncState},
+    pull_request::{MergeState, Tone, tone_color},
 };
 use gpui::{prelude::*, *};
+use std::{cell::Cell, rc::Rc};
 
 /// Row heights at the usual text size; [`Look::row`] grows them with it.
 /// A list's headings take its rows' height, as the list is uniform.
@@ -24,8 +26,18 @@ const PROJECT_WIDTH: f32 = 130.;
 const SOURCE_WIDTH: f32 = 22.;
 /// The column holding a row's action, such as Start agent.
 const ACTION_WIDTH: f32 = 96.;
-/// Checks a row names before counting the rest.
-const CHECK_PILLS: usize = 3;
+/// The author column of each list.
+const ISSUE_AUTHOR_WIDTH: f32 = 110.;
+const PULL_REQUEST_AUTHOR_WIDTH: f32 = 100.;
+/// What a title keeps before an author joins it beside an open item.
+pub(super) const AUTHOR_TITLE_MIN: f32 = 280.;
+/// The gap between a row's cells, and its padding on either side.
+const CELL_GAP: f32 = 8.;
+const ROW_PADDING: f32 = 16.;
+/// The columns saying where a pull request stands, at the usual text size:
+/// see [`Look::column`].
+const STATUS_WIDTH: f32 = 72.;
+const CHECKS_WIDTH: f32 = 70.;
 
 /// Why the list is empty.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,8 +56,49 @@ impl OrchestratorView {
         self.detail.is_some()
     }
 
+    /// Whether rows name their author: always, unless an open item leaves
+    /// the title too little room for it.
+    fn shows_author(&self) -> bool {
+        !self.compact() || self.list_width.get() >= self.author_fit()
+    }
+
+    /// The list width at which a row beside an open item fits its author.
+    pub(super) fn author_fit(&self) -> f32 {
+        let (cells, fixed) = match self.tab {
+            // Age, run, title, author, and action.
+            Tab::Issues => (5., 32. + 30. + ISSUE_AUTHOR_WIDTH + ACTION_WIDTH),
+            // Number, title, author, two dots, and age.
+            Tab::PullRequests => (6., 48. + PULL_REQUEST_AUTHOR_WIDTH + 12. + 12. + 32.),
+        };
+        let (source_cells, source) = if self.mixed_sources {
+            (1., SOURCE_WIDTH)
+        } else {
+            (0., 0.)
+        };
+        let (project_cells, project) = if self.listing_projects() {
+            (1., PROJECT_WIDTH)
+        } else {
+            (0., 0.)
+        };
+        let gaps = cells + source_cells + project_cells - 1.;
+        fixed + source + project + AUTHOR_TITLE_MIN + gaps * CELL_GAP + 2. * ROW_PADDING
+    }
+
+    /// A row's author, in a column `width` wide.
+    fn author_cell(&self, item: &Item, width: f32) -> Div {
+        let look = &self.look;
+        div()
+            .debug_selector(|| "orchestrator-row-author".into())
+            .flex_none()
+            .w(px(width))
+            .truncate()
+            .text_size(look.small())
+            .text_color(rgb(look.theme.subtext()))
+            .child(item.author.clone().unwrap_or_default())
+    }
+
     /// Whether rows of several projects are listed, so each names its own.
-    fn listing_projects(&self) -> bool {
+    pub(super) fn listing_projects(&self) -> bool {
         self.projects_named().count() > 1 && self.projects.len() != 1
     }
 
@@ -97,6 +150,7 @@ impl OrchestratorView {
     pub(super) fn render_list(&self, cx: &mut Context<Self>) -> AnyElement {
         let look = &self.look;
         let compact = self.compact();
+        let author = self.shows_author();
         let sources = self.mixed_sources;
         let projects = self.listing_projects();
         let mut head: Vec<(String, Option<f32>)> = Vec::new();
@@ -111,11 +165,11 @@ impl OrchestratorView {
                     head.push((fl!("orchestrator-column-project"), Some(PROJECT_WIDTH)));
                 }
                 head.push((fl!("orchestrator-column-title"), None));
+                if author {
+                    head.push((fl!("orchestrator-column-author"), Some(ISSUE_AUTHOR_WIDTH)));
+                }
                 if !compact {
-                    head.extend([
-                        (fl!("orchestrator-column-author"), Some(110.)),
-                        ("\u{1f4ac}".into(), Some(34.)),
-                    ]);
+                    head.push(("\u{1f4ac}".into(), Some(34.)));
                 }
                 head.push((String::new(), Some(ACTION_WIDTH)));
             }
@@ -128,13 +182,25 @@ impl OrchestratorView {
                     head.push((fl!("orchestrator-column-project"), Some(PROJECT_WIDTH)));
                 }
                 head.push((fl!("orchestrator-column-title-branch"), None));
+                if author {
+                    head.push((
+                        fl!("orchestrator-column-author"),
+                        Some(PULL_REQUEST_AUTHOR_WIDTH),
+                    ));
+                }
                 if compact {
                     head.extend([(String::new(), Some(12.)), (String::new(), Some(12.))]);
                 } else {
                     head.extend([
-                        (fl!("orchestrator-column-author"), Some(100.)),
+                        (
+                            fl!("orchestrator-column-status"),
+                            Some(look.column(STATUS_WIDTH)),
+                        ),
                         (fl!("orchestrator-column-review"), Some(124.)),
-                        (fl!("orchestrator-column-checks"), Some(150.)),
+                        (
+                            fl!("orchestrator-column-checks"),
+                            Some(look.column(CHECKS_WIDTH)),
+                        ),
                         (fl!("orchestrator-column-size"), Some(70.)),
                         (fl!("orchestrator-column-run"), Some(30.)),
                     ]);
@@ -160,10 +226,12 @@ impl OrchestratorView {
         };
         div()
             .debug_selector(|| "orchestrator-list".into())
+            .relative()
             .flex_1()
             .min_w_0()
             .flex()
             .flex_col()
+            .child(measure(self.list_width.clone(), self.author_fit()))
             // Column heads over nothing to line up are clutter.
             .when(count > 0, |el| el.child(column_head(look, &head)))
             .child(list)
@@ -332,7 +400,7 @@ impl OrchestratorView {
     fn row_shell(
         &self,
         id: (&'static str, usize),
-        item: &crate::orchestrator::model::Item,
+        item: &Item,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let key = item.key.canonical();
@@ -430,6 +498,7 @@ impl OrchestratorView {
             .children(self.project_cell(&row))
             .child(
                 div()
+                    .debug_selector(|| "orchestrator-row-title".into())
                     .flex_1()
                     .min_w_0()
                     .flex()
@@ -455,17 +524,11 @@ impl OrchestratorView {
                         el.child(look.icon("icons/lock.svg", 11., look.hue(YELLOW)))
                     }),
             )
+            .when(self.shows_author(), |el| {
+                el.child(self.author_cell(item, ISSUE_AUTHOR_WIDTH))
+            })
             .when(!compact, |el| {
                 el.child(
-                    div()
-                        .flex_none()
-                        .w(px(110.))
-                        .truncate()
-                        .text_size(look.small())
-                        .text_color(rgb(theme.subtext()))
-                        .child(item.author.clone().unwrap_or_default()),
-                )
-                .child(
                     div()
                         .flex_none()
                         .w(px(34.))
@@ -513,6 +576,7 @@ impl OrchestratorView {
             .as_deref()
             .is_some_and(|head| head != item.key.source.repository);
         let draft = item.state == "draft";
+        let tone = row_tone(item, status);
         let key = item.key.canonical();
         self.row_shell(("orchestrator-pr", index), item, cx)
             .debug_selector(move || format!("orchestrator-row-{key}"))
@@ -523,11 +587,7 @@ impl OrchestratorView {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(look.icon(
-                        "icons/pull-request.svg",
-                        12.,
-                        if draft { theme.muted } else { look.hue(GREEN) },
-                    ))
+                    .child(look.icon("icons/pull-request.svg", 12., tone_color(tone, theme)))
                     .child(
                         look.mono(item.identifier.clone())
                             .text_color(rgb(theme.muted)),
@@ -537,6 +597,7 @@ impl OrchestratorView {
             .children(self.project_cell(&row))
             .child(
                 div()
+                    .debug_selector(|| "orchestrator-row-title".into())
                     .flex_1()
                     .min_w_0()
                     .flex()
@@ -571,6 +632,9 @@ impl OrchestratorView {
                             }),
                     ),
             )
+            .when(self.shows_author(), |el| {
+                el.child(self.author_cell(item, PULL_REQUEST_AUTHOR_WIDTH))
+            })
             .map(|el| {
                 if compact {
                     el.child(
@@ -589,11 +653,13 @@ impl OrchestratorView {
                     el.child(
                         div()
                             .flex_none()
-                            .w(px(100.))
-                            .truncate()
-                            .text_size(look.small())
-                            .text_color(rgb(theme.subtext()))
-                            .child(item.author.clone().unwrap_or_default()),
+                            .w(px(look.column(STATUS_WIDTH)))
+                            .overflow_hidden()
+                            .flex()
+                            .children(
+                                standing_word(tone, item, status)
+                                    .map(|word| look.badge_in(word, tone_color(tone, theme))),
+                            ),
                     )
                     .child(div().flex_none().w(px(124.)).flex().children(review_badge(
                         look,
@@ -603,12 +669,10 @@ impl OrchestratorView {
                     .child(
                         div()
                             .flex_none()
-                            .w(px(150.))
+                            .w(px(look.column(CHECKS_WIDTH)))
                             .overflow_hidden()
                             .flex()
-                            .items_center()
-                            .gap(px(3.))
-                            .children(check_pills(look, status)),
+                            .children(checks_count(look, status)),
                     )
                     .child(diff_squares(look, pr.additions, pr.deletions).w(px(70.)))
                     .child(self.run_mark(&row))
@@ -641,6 +705,23 @@ impl OrchestratorView {
     }
 }
 
+/// Records the list's width as it lays out, and draws again when that moves
+/// it across `fit`, so rows gain or lose their author on the next frame.
+fn measure(width: Rc<Cell<f32>>, fit: f32) -> impl IntoElement {
+    canvas(
+        move |bounds, window, _| {
+            let now = f32::from(bounds.size.width);
+            let before = width.replace(now);
+            if (before >= fit) != (now >= fit) {
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0()
+}
+
 /// A backend's muted mark in a row.
 pub(super) fn source_mark(look: &Look, provider: Provider) -> AnyElement {
     look.icon(source_icon(provider), 12., look.theme.muted)
@@ -649,6 +730,7 @@ pub(super) fn source_mark(look: &Look, provider: Provider) -> AnyElement {
 
 pub(super) fn source_icon(provider: Provider) -> &'static str {
     match provider {
+        Provider::Azure => "icons/azure-devops.svg",
         Provider::Github => "icons/github.svg",
         Provider::Beads => "icons/beads.svg",
         Provider::Gitlab => "icons/gitlab.svg",
@@ -748,32 +830,56 @@ fn checks_dot(look: &Look, status: Option<&PrStatus>) -> Option<Div> {
     Some(look.dot(check_hue(look, state), 7.))
 }
 
-/// The first checks as short colored pills, failures first, then a count of
-/// the rest.
-fn check_pills(look: &Look, status: Option<&PrStatus>) -> Vec<Div> {
-    let Some(status) = status else {
-        return Vec::new();
-    };
-    let mut checks: Vec<_> = status.checks.iter().collect();
-    checks.sort_by_key(|check| check.state);
-    let mut pills: Vec<Div> = checks
-        .iter()
-        .take(CHECK_PILLS)
-        .map(|check| {
-            let hue = check_hue(look, check.state);
-            let short = crate::truncate::cut_width(&check.name, 4).unwrap_or(&check.name);
-            div()
-                .flex_none()
-                .px(px(4.))
-                .rounded(px(crate::config::corners::SMALL))
-                .bg(rgb(crate::config::mix(look.theme.background, hue, 18)))
-                .text_color(rgb(hue))
-                .text_size(look.tiny())
-                .child(short.to_owned())
-        })
-        .collect();
-    if checks.len() > CHECK_PILLS {
-        pills.push(look.muted(format!("+{}", checks.len() - CHECK_PILLS)));
+/// The tone of a row's pull request, the one its sidebar badge takes. One
+/// with no status yet, or a merge request, says nothing rather than ready.
+pub(super) fn row_tone(item: &Item, status: Option<&PrStatus>) -> Tone {
+    match item.state.as_str() {
+        "merged" => Tone::Merged,
+        "closed" => Tone::Attention,
+        "draft" => Tone::Muted,
+        _ => status.map_or(Tone::Muted, PrStatus::tone),
     }
-    pills
+}
+
+/// The word beside the tone's color, naming what no other column shows:
+/// conflicts and a branch behind its base. A draft's badge is by its title.
+pub(super) fn standing_word(tone: Tone, item: &Item, status: Option<&PrStatus>) -> Option<String> {
+    let merge = status.map_or(MergeState::Unknown, |status| status.merge);
+    Some(match tone {
+        Tone::Attention if item.state == "closed" => fl!("orchestrator-standing-closed"),
+        Tone::Attention if merge == MergeState::Dirty => fl!("orchestrator-standing-conflicts"),
+        Tone::Attention => fl!("orchestrator-standing-attention"),
+        Tone::Held if merge == MergeState::Behind => fl!("orchestrator-standing-behind"),
+        Tone::Held => fl!("orchestrator-badge-blocked"),
+        Tone::Merged => fl!("orchestrator-standing-merged"),
+        Tone::Muted => return None,
+        Tone::Ready => fl!("orchestrator-standing-ready"),
+        Tone::Waiting => fl!("orchestrator-standing-waiting"),
+    })
+}
+
+/// How many checks are fine out of how many reported, in the color and mark
+/// of what they add up to.
+fn checks_count(look: &Look, status: Option<&PrStatus>) -> Option<Div> {
+    let status = status.filter(|status| !status.checks.is_empty())?;
+    let state = status.checks_state().unwrap_or(CheckState::Skipped);
+    let icon = match state {
+        CheckState::Failed => "icons/error.svg",
+        CheckState::Pending => "icons/refresh.svg",
+        CheckState::Passed => "icons/check.svg",
+        CheckState::Skipped => "icons/pass.svg",
+    };
+    let hue = check_hue(look, state);
+    Some(
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(look.icon(icon, 11., hue))
+            .child(
+                look.mono(format!("{}/{}", status.checks_ok(), status.checks.len()))
+                    .text_size(look.small())
+                    .text_color(rgb(hue)),
+            ),
+    )
 }

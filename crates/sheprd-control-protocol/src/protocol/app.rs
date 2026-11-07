@@ -185,6 +185,9 @@ pub struct HostInfo {
     /// Its notifications are muted as a whole.
     #[serde(default)]
     pub muted: bool,
+    /// What groups it in the sidebar.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

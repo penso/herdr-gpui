@@ -21,6 +21,23 @@ fn messages_come_from_every_feature_file_of_the_language() {
 }
 
 #[test]
+fn a_message_reads_the_same_once_kept_and_only_real_messages_are_kept() {
+    let catalog = Catalog::new(FILES, Locale::FALLBACK).unwrap();
+    assert_eq!(catalog.text("menu-quit"), catalog.text("menu-quit"));
+    assert_eq!(catalog.formatted(), 1);
+    assert_eq!(catalog.text("missing"), catalog.text("missing"));
+    assert_eq!(catalog.formatted(), 1);
+}
+
+#[test]
+fn a_pseudo_locale_marks_a_kept_message_once() {
+    let catalog = Catalog::new(FILES, Pseudo::Accented.locale()).unwrap();
+    let first = catalog.text("menu-quit");
+    assert_ne!(first, "Quit");
+    assert_eq!(catalog.text("menu-quit"), first);
+}
+
+#[test]
 fn placeables_are_isolated_and_plurals_follow_the_language() {
     let catalog = Catalog::new(FILES, Locale::FALLBACK).unwrap();
     assert_eq!(
