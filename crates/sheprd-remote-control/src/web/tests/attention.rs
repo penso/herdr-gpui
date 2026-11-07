@@ -44,6 +44,7 @@ fn layout(chats: Vec<ChatRow>, terminals: Vec<Terminal>) -> Layout {
             label: "work".to_owned(),
             branch: None,
             cwd: "/work".to_owned(),
+            session: None,
             worktree: None,
             chats,
             terminals,
