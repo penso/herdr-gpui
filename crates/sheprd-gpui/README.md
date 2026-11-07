@@ -2545,7 +2545,9 @@ safeguards and the steps that verify the pull request are then gone, so the
 profile has to state its own. The line itself is never sent. Such a profile can
 also use `{{ pr_title }}`, `{{ pr_link }}`, `{{ pr_body }}`, `{{ pr_number }}`,
 `{{ pr_head_ref }}`, `{{ pr_head_sha }}`, `{{ pr_head_repository }}`,
-`{{ pr_base_ref }}`, and `{{ pr_base_sha }}`. GitHub is read as the account used
+`{{ pr_base_ref }}`, and `{{ pr_base_sha }}`. A pull request's author picks
+its head branch, so a ref or repository name with anything beyond letters,
+digits, `-`, `_`, `/`, and `.` is withheld; prefer the SHAs in commands. GitHub is read as the account used
 for pull requests on that host. A GitLab remote, on gitlab.com or a
 self-managed host, lists its open issues (not yet its merge requests), read
 with the `GITLAB_TOKEN` or `GITLAB_ACCESS_TOKEN` the checkout's `.envrc` sets

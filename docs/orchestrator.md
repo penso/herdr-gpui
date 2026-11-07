@@ -93,7 +93,9 @@ template and sets `Review::Replace`, and such a profile is the whole prompt
 it, including an issue dispatch, where the same profile replaces the built-in
 prompt anyway. Other profiles never see the `pr_` variables: they are left as
 written, as they were before the marker existed. `{{ pr_title }}` and
-`{{ pr_body }}` stay marked as untrusted, but the rest of what the built-in
+`{{ pr_body }}` stay marked as untrusted, and ref and repository names outside
+`valid_branch`'s characters are withheld, since Git allows `$(…)` in a branch
+name and a profile may put one in a command. The rest of what the built-in
 prompt guards is the profile author's to keep.
 
 ## GitLab

