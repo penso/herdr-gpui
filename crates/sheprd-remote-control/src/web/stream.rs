@@ -12,6 +12,7 @@ use axum::{
     response::sse::{Event as Sse, KeepAlive, Sse as Stream},
 };
 use futures_lite::stream;
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::Deserialize;
 use serde_json::json;
 use std::{convert::Infallible, time::Duration};
@@ -67,7 +68,7 @@ pub(super) async fn stream(
 ) -> Stream<impl futures_lite::Stream<Item = Result<Sse, Infallible>>> {
     let (sender, receiver) = mpsc::channel(QUEUE);
     // `Device` accepted this token, so it is present.
-    let token = bearer(&headers).unwrap_or_default().to_owned();
+    let token = SecretString::from(bearer(&headers).unwrap_or_default());
     let guard = Connected::new(state.clone(), device);
     tokio::spawn(async move {
         let _guard = guard;
@@ -81,7 +82,7 @@ pub(super) async fn stream(
         };
         tokio::select! {
             () = follow => {}
-            () = lose_access(&state, &token) => {
+            () = lose_access(&state, token.expose_secret()) => {
                 // Reloading fetches fragments, which ask the phone to sign in.
                 let _ = sender.send(reload()).await;
             }

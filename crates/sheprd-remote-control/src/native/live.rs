@@ -14,6 +14,7 @@ use crate::{
     web::attention::Watching,
     web::{Shared, now_ms, read_screen},
 };
+use secrecy::{ExposeSecret as _, SecretString};
 use sheprd_chat_protocol::{Change, Cursor, EntryKind, Transcript};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
@@ -118,13 +119,13 @@ impl Views {
 /// signing `device` in, which ends with a `bye`.
 pub(crate) async fn run(
     state: Shared,
-    token: String,
+    token: SecretString,
     device: DeviceId,
     mut inbound: mpsc::Receiver<ClientMessage>,
     outbound: Outbound,
 ) {
     let mut views = Views::default();
-    let lost = access_lost(&state, &token, &device);
+    let lost = access_lost(&state, token.expose_secret(), &device);
     tokio::pin!(lost);
     loop {
         tokio::select! {

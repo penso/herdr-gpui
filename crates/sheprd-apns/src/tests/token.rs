@@ -1,9 +1,10 @@
 use super::*;
+use secrecy::ExposeSecret as _;
 
 #[test]
 fn tokens_are_bounded_lowercase_hex() {
     let token = DeviceToken::parse(&"AB".repeat(32)).unwrap();
-    assert_eq!(token.as_str(), "ab".repeat(32));
+    assert_eq!(token.expose_secret(), "ab".repeat(32));
     for bad in [
         "",
         "abc",
@@ -17,4 +18,21 @@ fn tokens_are_bounded_lowercase_hex() {
             "{bad}"
         );
     }
+}
+
+#[test]
+fn debug_never_prints_the_token() {
+    let hex = "ab".repeat(32);
+    let token = DeviceToken::parse(&hex).unwrap();
+    let printed = format!("{token:?} {:?}", Some(&token));
+    assert!(!printed.contains(&hex), "{printed}");
+}
+
+#[test]
+fn a_token_still_stores_as_its_hex() {
+    let hex = "ab".repeat(32);
+    let token = DeviceToken::parse(&hex).unwrap();
+    assert_eq!(serde_json::to_value(&token).unwrap(), hex);
+    let read: DeviceToken = serde_json::from_value(serde_json::json!(hex)).unwrap();
+    assert_eq!(read, token);
 }

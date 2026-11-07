@@ -29,6 +29,7 @@ server = [
     "dep:pulldown-cmark",
     "dep:rcgen",
     "dep:rustls",
+    "dep:secrecy",
     "dep:sheprd-apns",
     "dep:sha2",
     "dep:sheprd-terminal",
@@ -48,6 +49,7 @@ path              = "src/main.rs"
 required-features = ["server"]
 
 [dependencies]
+secrecy                        = { optional = true, workspace = true }
 sheprd-apns                    = { optional = true, workspace = true }
 sheprd-chat-protocol.workspace = true
 sheprd-client.workspace        = true

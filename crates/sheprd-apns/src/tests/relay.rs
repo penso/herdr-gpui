@@ -16,6 +16,10 @@ use std::{
 };
 use tokio::{net::TcpListener, task::JoinHandle};
 
+fn handle() -> secrecy::SecretString {
+    "h".into()
+}
+
 fn push() -> Push {
     Push {
         body: br#"{"aps":{}}"#.to_vec(),
@@ -74,7 +78,10 @@ async fn relay(statuses: Vec<StatusCode>) -> (RelayClient, Arc<AtomicUsize>, Joi
 #[tokio::test]
 async fn a_good_push_is_sent_once() {
     let (client, calls, _server) = relay(vec![StatusCode::OK]).await;
-    assert_eq!(client.post("h", &push()).await, RelayOutcome::Delivered);
+    assert_eq!(
+        client.post(&handle(), &push()).await,
+        RelayOutcome::Delivered
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
@@ -86,14 +93,20 @@ async fn a_relay_that_fails_for_a_moment_gets_the_push_on_a_retry() {
         StatusCode::OK,
     ])
     .await;
-    assert_eq!(client.post("h", &push()).await, RelayOutcome::Delivered);
+    assert_eq!(
+        client.post(&handle(), &push()).await,
+        RelayOutcome::Delivered
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
 #[tokio::test]
 async fn a_relay_that_stays_down_ends_in_unavailable() {
     let (client, calls, _server) = relay(vec![StatusCode::SERVICE_UNAVAILABLE]).await;
-    assert_eq!(client.post("h", &push()).await, RelayOutcome::Unavailable);
+    assert_eq!(
+        client.post(&handle(), &push()).await,
+        RelayOutcome::Unavailable
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
@@ -107,7 +120,7 @@ async fn what_a_retry_cannot_change_is_tried_once() {
         (StatusCode::BAD_REQUEST, RelayOutcome::Invalid),
     ] {
         let (client, calls, _server) = relay(vec![status]).await;
-        assert_eq!(client.post("h", &push()).await, outcome, "{status}");
+        assert_eq!(client.post(&handle(), &push()).await, outcome, "{status}");
         assert_eq!(calls.load(Ordering::SeqCst), 1, "{status}");
     }
 }
@@ -118,7 +131,10 @@ async fn a_restarted_relay_is_reached_again_with_nothing_set_up() {
     let calls = Arc::new(AtomicUsize::new(0));
     let server = serve(first, vec![StatusCode::OK], calls.clone()).await;
     let client = RelayClient::plain(address);
-    assert_eq!(client.post("h", &push()).await, RelayOutcome::Delivered);
+    assert_eq!(
+        client.post(&handle(), &push()).await,
+        RelayOutcome::Delivered
+    );
 
     // Everything it held goes with it, its connections included.
     server.abort();
@@ -126,7 +142,10 @@ async fn a_restarted_relay_is_reached_again_with_nothing_set_up() {
 
     let again = TcpListener::bind(address).await.unwrap();
     let _server = serve(again, vec![StatusCode::OK], Arc::default()).await;
-    assert_eq!(client.post("h", &push()).await, RelayOutcome::Delivered);
+    assert_eq!(
+        client.post(&handle(), &push()).await,
+        RelayOutcome::Delivered
+    );
 }
 
 #[tokio::test]
@@ -134,8 +153,8 @@ async fn a_payload_that_is_not_text_is_refused_without_a_call() {
     let (client, calls, _server) = relay(vec![StatusCode::OK]).await;
     let mut push = push();
     push.body = vec![0xff];
-    assert!(push_body("h", &push).is_none());
-    assert_eq!(client.post("h", &push).await, RelayOutcome::Invalid);
+    assert!(push_body(&handle(), &push).is_none());
+    assert_eq!(client.post(&handle(), &push).await, RelayOutcome::Invalid);
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 

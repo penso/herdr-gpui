@@ -98,7 +98,7 @@ async fn revoking_a_handle_stops_it_and_no_other() {
     let revoked = handle(PHONE, "alert", 1);
     let kept = handle(PHONE, "alert", 2);
     let request = RevokeRequest {
-        handle: revoked.clone(),
+        handle: revoked.clone().into(),
     };
     assert_eq!(
         fixture.relay.revoke(source(), request, NOW_MS).await,
@@ -113,7 +113,9 @@ async fn revoking_a_handle_stops_it_and_no_other() {
     assert_eq!(reply, Reply::Delivered);
 
     // A daemon that retries its revocation is not told it failed.
-    let request = RevokeRequest { handle: revoked };
+    let request = RevokeRequest {
+        handle: revoked.into(),
+    };
     assert_eq!(
         fixture.relay.revoke(source(), request, NOW_MS).await,
         Reply::Revoked
@@ -124,7 +126,7 @@ async fn revoking_a_handle_stops_it_and_no_other() {
 async fn revoking_needs_a_real_handle() {
     let fixture = fixture();
     let request = RevokeRequest {
-        handle: "junk".to_owned(),
+        handle: "junk".into(),
     };
     assert_eq!(
         fixture.relay.revoke(source(), request, NOW_MS).await,
@@ -305,7 +307,9 @@ async fn revoking_has_a_tighter_limit_than_pushing() {
         (3, Reply::Limited),
     ] {
         let handle = handle(PHONE, "alert", id);
-        let request = RevokeRequest { handle };
+        let request = RevokeRequest {
+            handle: handle.into(),
+        };
         assert_eq!(
             fixture.relay.revoke(source(), request, NOW_MS).await,
             expected
@@ -323,7 +327,9 @@ async fn revoking_with_an_expired_credential_keeps_nothing() {
     let fixture = fixture();
     let handle = handle(PHONE, "alert", 1);
     let late = NOW_MS + (LIFETIME_S + 1) * 1000;
-    let request = RevokeRequest { handle };
+    let request = RevokeRequest {
+        handle: handle.into(),
+    };
     assert_eq!(
         fixture.relay.revoke(source(), request, late).await,
         Reply::Revoked

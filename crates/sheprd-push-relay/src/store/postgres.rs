@@ -13,6 +13,7 @@ use rustls::{
     ClientConfig, RootCertStore,
     pki_types::{CertificateDer, pem::PemObject},
 };
+use secrecy::{ExposeSecret, SecretString};
 use std::{path::Path, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio_postgres::{
@@ -92,8 +93,8 @@ fn tls(ca: Option<&Path>) -> Result<MakeRustlsConnect> {
 impl Postgres {
     /// Connects to `url`, trusting the private CA in `ca` as well as the
     /// usual roots, and creates the table if it is missing.
-    pub async fn connect(url: &str, ca: Option<&Path>) -> Result<Self> {
-        let mut config = encrypted(Config::from_str(url)?)?;
+    pub async fn connect(url: &SecretString, ca: Option<&Path>) -> Result<Self> {
+        let mut config = encrypted(Config::from_str(url.expose_secret())?)?;
         config.connect_timeout(CONNECT);
         let store = Self {
             client: Arc::default(),

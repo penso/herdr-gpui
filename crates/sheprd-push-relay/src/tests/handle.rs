@@ -1,5 +1,6 @@
 use super::*;
 use crate::{Kind, handle::MAX_HANDLE};
+use secrecy::ExposeSecret as _;
 
 const ID: &str = "0123456789abcdef0123456789abcdef";
 
@@ -19,7 +20,7 @@ fn opens_what_the_phone_sealed() {
         seal::HANDLE_INFO,
     );
     let handle = ring().open(&text).unwrap();
-    assert_eq!(handle.credential, "c");
+    assert_eq!(handle.credential.expose_secret(), "c");
     assert_eq!(handle.id, ID);
     assert_eq!(handle.kind, Kind::PushToStart);
     assert_eq!(handle.token, token(9));

@@ -9,6 +9,9 @@ use crate::{
     store::{Memory, Sqlite, Store},
     web::{self, Source},
 };
+#[cfg(feature = "postgres")]
+use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretSlice};
 use sheprd_apns::{Config, Sender, is_private, load_secret_key};
 use std::{
     fs,
@@ -35,11 +38,13 @@ pub async fn serve(options: Options) -> Result<()> {
 async fn postgres(options: &Options) -> Result<()> {
     use crate::store::Postgres;
     let path = options.secrets.join("postgres-url");
-    let url = String::from_utf8(read_private(&path)?)
+    let bytes = read_private(&path)?;
+    let url = std::str::from_utf8(bytes.expose_secret())
+        .map(|url| SecretString::from(url.trim()))
         .map_err(|_| Error::SecretSize { path: path.clone() })?;
     let ca = options.secrets.join("postgres-ca.pem");
     let ca = ca.exists().then_some(ca.as_path());
-    run(options, Postgres::connect(url.trim(), ca).await?).await
+    run(options, Postgres::connect(&url, ca).await?).await
 }
 
 #[cfg(not(feature = "postgres"))]
@@ -61,7 +66,8 @@ async fn run(options: &Options, store: impl Store) -> Result<()> {
             .transpose()?,
     );
     let secret = options.secrets.join("credential-secret");
-    let issuer = Issuer::new(&read_secret(&secret)?).ok_or(Error::SecretSize { path: secret })?;
+    let issuer = Issuer::new(read_secret(&secret)?.expose_secret())
+        .ok_or(Error::SecretSize { path: secret })?;
     let relay = Relay::new(
         Sender::new(config)?,
         environment,
@@ -93,7 +99,7 @@ async fn run(options: &Options, store: impl Store) -> Result<()> {
 }
 
 /// A secret file's bytes, refusing one others can read.
-fn read_private(path: &Path) -> Result<Vec<u8>> {
+fn read_private(path: &Path) -> Result<SecretSlice<u8>> {
     let read = |source| Error::SecretRead {
         path: path.to_owned(),
         source,
@@ -103,14 +109,14 @@ fn read_private(path: &Path) -> Result<Vec<u8>> {
             path: path.to_owned(),
         });
     }
-    fs::read(path).map_err(read)
+    fs::read(path).map(SecretSlice::from).map_err(read)
 }
 
 /// The credential secret, refusing a file others can read or a short one.
-pub(crate) fn read_secret(path: &Path) -> Result<Vec<u8>> {
+pub(crate) fn read_secret(path: &Path) -> Result<SecretSlice<u8>> {
     let owned = || -> PathBuf { path.to_owned() };
     let text = read_private(path)?;
-    let hex = text.trim_ascii();
+    let hex = text.expose_secret().trim_ascii();
     let bytes: Option<Vec<u8>> = hex
         .chunks(2)
         .map(|pair| {
@@ -120,6 +126,7 @@ pub(crate) fn read_secret(path: &Path) -> Result<Vec<u8>> {
         .collect();
     bytes
         .filter(|bytes| bytes.len() >= MIN_SECRET)
+        .map(SecretSlice::from)
         .ok_or_else(|| Error::SecretSize { path: owned() })
 }
 

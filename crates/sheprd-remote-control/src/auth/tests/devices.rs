@@ -1,5 +1,6 @@
 use super::*;
 use crate::auth::devices::TOUCH_PERSIST_MS;
+use secrecy::ExposeSecret as _;
 use serde_json::json;
 use std::error::Error as _;
 
@@ -140,7 +141,10 @@ fn idle_devices_expire_and_lose_their_sessions() {
         auth.expire_idle(T0 + 7 * day, 7 * day).unwrap(),
         vec![idle.clone()]
     );
-    assert!(auth.authenticate(&session.token, T0 + 7 * day).is_none());
+    assert!(
+        auth.authenticate(session.token.expose_secret(), T0 + 7 * day)
+            .is_none()
+    );
     let reloaded = Devices::load(dir.path()).unwrap();
     assert!(reloaded.get(&idle).is_none());
     assert!(reloaded.get(&active).is_some());

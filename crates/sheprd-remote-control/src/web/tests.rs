@@ -9,6 +9,7 @@ use axum::{
     extract::ConnectInfo,
     http::Request as HttpRequest,
 };
+use secrecy::ExposeSecret as _;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tower::ServiceExt;
 
@@ -148,7 +149,7 @@ pub(crate) fn signed_in(state: &Shared, seed: u8) -> (DeviceId, String) {
             now,
         )
         .unwrap();
-    (device, session.token)
+    (device, session.token.expose_secret().to_owned())
 }
 
 pub(crate) fn get(path: &str) -> HttpRequest<Body> {

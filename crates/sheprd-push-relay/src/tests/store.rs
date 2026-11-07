@@ -77,7 +77,7 @@ mod postgres {
 
     async fn store() -> Postgres {
         let url = std::env::var("SHEPRD_TEST_POSTGRES").unwrap();
-        let store = Postgres::connect(&url, None).await.unwrap();
+        let store = Postgres::connect(&url.into(), None).await.unwrap();
         store.purge(u64::MAX >> 1).await.unwrap();
         store
     }
@@ -95,7 +95,7 @@ mod postgres {
         let first = store().await;
         first.revoke(&Revoked::Device(PHONE), NOW_S).await.unwrap();
         let url = std::env::var("SHEPRD_TEST_POSTGRES").unwrap();
-        let second = Postgres::connect(&url, None).await.unwrap();
+        let second = Postgres::connect(&url.into(), None).await.unwrap();
         assert!(second.is_revoked(PHONE, ID).await.unwrap());
         first.purge(u64::MAX >> 1).await.unwrap();
     }

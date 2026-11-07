@@ -2,6 +2,7 @@
 //! token and a key of its own.
 
 use super::*;
+use secrecy::ExposeSecret as _;
 
 const CLIENT: [u8; 4] = [192, 168, 1, 30];
 
@@ -22,7 +23,7 @@ fn a_redeemed_handoff_moves_the_device_to_the_new_key() {
     let redeemed = auth
         .redeem(
             IpAddr::from(CLIENT),
-            &handoff.token,
+            handoff.token.expose_secret(),
             &public_key(&app),
             T0 + 1,
         )
@@ -32,7 +33,8 @@ fn a_redeemed_handoff_moves_the_device_to_the_new_key() {
     assert_eq!(auth.devices().len(), 1);
     assert_eq!(auth.devices().get(&device).unwrap().name, "iPhone");
     assert!(
-        auth.authenticate(&session.token, T0 + 2).is_none(),
+        auth.authenticate(session.token.expose_secret(), T0 + 2)
+            .is_none(),
         "the browser's session ended"
     );
     sign_in(&mut auth, &app, &device, T0 + 3);
@@ -55,17 +57,27 @@ fn a_handoff_is_used_once_and_expires() {
     let device = pair(&mut auth, &signing_key(1), T0);
     let client = IpAddr::from(CLIENT);
     let handoff = auth.handoff(&device, T0).unwrap();
-    auth.redeem(client, &handoff.token, &public_key(&signing_key(2)), T0)
-        .unwrap();
+    auth.redeem(
+        client,
+        handoff.token.expose_secret(),
+        &public_key(&signing_key(2)),
+        T0,
+    )
+    .unwrap();
     assert!(matches!(
-        auth.redeem(client, &handoff.token, &public_key(&signing_key(3)), T0),
+        auth.redeem(
+            client,
+            handoff.token.expose_secret(),
+            &public_key(&signing_key(3)),
+            T0
+        ),
         Err(Error::InvalidToken)
     ));
     let late = auth.handoff(&device, T0).unwrap();
     assert!(matches!(
         auth.redeem(
             client,
-            &late.token,
+            late.token.expose_secret(),
             &public_key(&signing_key(3)),
             T0 + crate::auth::handoff::HANDOFF_TTL_MS
         ),
@@ -82,11 +94,21 @@ fn minting_again_voids_the_previous_token() {
     let second = auth.handoff(&device, T0 + 1).unwrap();
     let client = IpAddr::from(CLIENT);
     assert!(matches!(
-        auth.redeem(client, &first.token, &public_key(&signing_key(2)), T0 + 2),
+        auth.redeem(
+            client,
+            first.token.expose_secret(),
+            &public_key(&signing_key(2)),
+            T0 + 2
+        ),
         Err(Error::InvalidToken)
     ));
-    auth.redeem(client, &second.token, &public_key(&signing_key(2)), T0 + 2)
-        .unwrap();
+    auth.redeem(
+        client,
+        second.token.expose_secret(),
+        &public_key(&signing_key(2)),
+        T0 + 2,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -103,7 +125,7 @@ fn only_a_paired_device_hands_off_and_revoking_voids_its_token() {
     assert!(matches!(
         auth.redeem(
             IpAddr::from(CLIENT),
-            &handoff.token,
+            handoff.token.expose_secret(),
             &public_key(&signing_key(2)),
             T0
         ),
@@ -119,11 +141,16 @@ fn a_bad_key_leaves_the_token_usable() {
     let handoff = auth.handoff(&device, T0).unwrap();
     let client = IpAddr::from(CLIENT);
     assert!(matches!(
-        auth.redeem(client, &handoff.token, "not-a-key", T0),
+        auth.redeem(client, handoff.token.expose_secret(), "not-a-key", T0),
         Err(Error::InvalidKey)
     ));
-    auth.redeem(client, &handoff.token, &public_key(&signing_key(2)), T0)
-        .unwrap();
+    auth.redeem(
+        client,
+        handoff.token.expose_secret(),
+        &public_key(&signing_key(2)),
+        T0,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -140,7 +167,7 @@ fn a_handoff_survives_a_restart_and_stays_used_after_one() {
     let redeemed = restarted
         .redeem(
             IpAddr::from(CLIENT),
-            &handoff.token,
+            handoff.token.expose_secret(),
             &public_key(&app),
             T0 + 1,
         )
@@ -152,12 +179,12 @@ fn a_handoff_survives_a_restart_and_stays_used_after_one() {
     assert!(matches!(
         again.redeem(
             IpAddr::from(CLIENT),
-            &handoff.token,
+            handoff.token.expose_secret(),
             &public_key(&signing_key(3)),
             T0 + 2
         ),
         Err(Error::InvalidToken)
     ));
     let saved = std::fs::read_to_string(dir.path().join("handoffs.json")).unwrap();
-    assert!(!saved.contains(&handoff.token));
+    assert!(!saved.contains(handoff.token.expose_secret()));
 }

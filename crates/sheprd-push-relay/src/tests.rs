@@ -80,7 +80,7 @@ fn handle(device: DeviceId, kind: &str, id_byte: u8) -> String {
 fn request(handle: String, push_type: PushType) -> PushRequest {
     PushRequest {
         collapse_id: None,
-        handle,
+        handle: handle.into(),
         payload: PAYLOAD.to_owned(),
         priority: Priority::High,
         push_type,

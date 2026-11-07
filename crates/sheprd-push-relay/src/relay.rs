@@ -8,6 +8,7 @@ use crate::{
     limit::{Limiter, Rates, source_key},
     store::{Memory, Revoked, Store},
 };
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sheprd_apns::{DeviceToken, Host, MAX_PAYLOAD, Outcome, Priority, Push, PushType, Sender};
 use std::{
@@ -41,12 +42,12 @@ impl Gateway for Sender {
 }
 
 /// `POST /v1/push`. It has no topic or host: the relay sets both.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PushRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collapse_id: Option<String>,
-    pub handle: String,
+    pub handle: SecretString,
     /// The APNs payload as JSON text.
     pub payload: String,
     pub priority: Priority,
@@ -54,10 +55,10 @@ pub struct PushRequest {
 }
 
 /// `POST /v1/revoke`.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RevokeRequest {
-    pub handle: String,
+    pub handle: SecretString,
 }
 
 /// What a caller is told. `Refused` covers every bad handle alike, so a
@@ -138,7 +139,7 @@ impl<G: Gateway, S: Store> Relay<G, S> {
         let handle = self.keys.open(text).ok_or(Reply::Refused)?;
         let credential = self
             .issuer
-            .check(&handle.credential)
+            .check(handle.credential.expose_secret())
             .filter(|credential| credential.environment == self.environment)
             .ok_or(Reply::Refused)?;
         Ok((handle, credential))
@@ -149,7 +150,7 @@ impl<G: Gateway, S: Store> Relay<G, S> {
         if !self.source_allowed(source, now_ms) {
             return Reply::Limited;
         }
-        let (handle, credential) = match self.opened(&request.handle) {
+        let (handle, credential) = match self.opened(request.handle.expose_secret()) {
             Ok(opened) => opened,
             Err(reply) => return reply,
         };
@@ -201,7 +202,7 @@ impl<G: Gateway, S: Store> Relay<G, S> {
         if !self.source_allowed(source, now_ms) {
             return Reply::Limited;
         }
-        let (handle, credential) = match self.opened(&request.handle) {
+        let (handle, credential) = match self.opened(request.handle.expose_secret()) {
             Ok(opened) => opened,
             Err(reply) => return reply,
         };

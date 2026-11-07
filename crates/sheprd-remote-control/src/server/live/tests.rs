@@ -1,5 +1,6 @@
 use super::*;
 use crate::apns::{ContentState, Phase};
+use secrecy::ExposeSecret as _;
 
 fn live(event: Event) -> Live {
     Live {
@@ -43,7 +44,7 @@ fn an_end_waits_for_the_activity_token_on_a_device_that_starts_activities() {
     let Route::Send(token) = route(&end, &with_activity) else {
         panic!("expected a send");
     };
-    assert_eq!(token.as_str(), "cd".repeat(40));
+    assert_eq!(token.expose_secret(), "cd".repeat(40));
 
     // A device that cannot start activities shows none to update.
     assert_eq!(route(&end, &Registration::default()), Route::Skip);

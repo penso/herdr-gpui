@@ -1,4 +1,5 @@
 use crate::{Error, serve::read_secret};
+use secrecy::ExposeSecret as _;
 use std::{fs, path::Path};
 
 fn write(path: &Path, text: &str, mode: u32) {
@@ -17,7 +18,7 @@ fn a_secret_is_at_least_32_bytes_of_hex() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("secret");
     write(&path, &format!("{}\n", "ab".repeat(32)), 0o600);
-    assert_eq!(read_secret(&path).unwrap(), [0xab; 32]);
+    assert_eq!(read_secret(&path).unwrap().expose_secret(), [0xab; 32]);
 
     for bad in [
         "",

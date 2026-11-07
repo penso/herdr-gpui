@@ -126,7 +126,7 @@ async fn nothing_of_a_push_reaches_the_disk_or_the_logs() {
     for _ in 0..count {
         let push = PushRequest {
             collapse_id: None,
-            handle: handle.clone(),
+            handle: handle.clone().into(),
             payload: format!(r#"{{"sealed":"{SECRET_TEXT}"}}"#),
             priority: Priority::High,
             push_type: PushType::Alert,
@@ -134,7 +134,7 @@ async fn nothing_of_a_push_reaches_the_disk_or_the_logs() {
         relay.push(source, push, NOW_S * 1000).await;
     }
     let revoke = RevokeRequest {
-        handle: handle.clone(),
+        handle: handle.clone().into(),
     };
     assert_eq!(
         relay.revoke(source, revoke, NOW_S * 1000).await,

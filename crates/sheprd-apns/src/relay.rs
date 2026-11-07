@@ -20,6 +20,7 @@ use hyper::{
 };
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use rustls::{ClientConfig, pki_types::ServerName};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 use std::{sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::Mutex};
@@ -93,12 +94,12 @@ struct PushBody<'a> {
 }
 
 /// The body of a push for `handle`; `None` when its payload is not text.
-pub fn push_body(handle: &str, push: &Push) -> Option<Result<Vec<u8>>> {
+pub fn push_body(handle: &SecretString, push: &Push) -> Option<Result<Vec<u8>>> {
     let payload = std::str::from_utf8(&push.body).ok()?;
     Some(
         serde_json::to_vec(&PushBody {
             collapse_id: push.collapse_id.as_deref(),
-            handle,
+            handle: handle.expose_secret(),
             payload,
             priority: push.priority,
             push_type: push.push_type,
@@ -162,7 +163,7 @@ impl RelayClient {
     }
 
     /// Sends `push` through the relay to the phone that made `handle`.
-    pub async fn post(&self, handle: &str, push: &Push) -> RelayOutcome {
+    pub async fn post(&self, handle: &SecretString, push: &Push) -> RelayOutcome {
         let Some(Ok(body)) = push_body(handle, push) else {
             return RelayOutcome::Invalid;
         };
@@ -171,8 +172,9 @@ impl RelayClient {
 
     /// Asks the relay to refuse `handle` from now on. Revoking twice is
     /// harmless, so a caller may repeat this until it hears back.
-    pub async fn revoke(&self, handle: &str) -> RelayOutcome {
-        let Ok(body) = serde_json::to_vec(&serde_json::json!({ "handle": handle })) else {
+    pub async fn revoke(&self, handle: &SecretString) -> RelayOutcome {
+        let Ok(body) = serde_json::to_vec(&serde_json::json!({ "handle": handle.expose_secret() }))
+        else {
             return RelayOutcome::Invalid;
         };
         self.call(REVOKE, body, &RETRIES).await

@@ -14,6 +14,7 @@ use hyper::{
 };
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use rustls::{ClientConfig, RootCertStore, crypto::ring, pki_types::ServerName};
+use secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::Mutex};
@@ -150,7 +151,7 @@ pub(crate) fn request(
     let mut request = Request::post(format!(
         "https://{}/3/device/{}",
         config.host.name(),
-        token.as_str()
+        token.expose_secret()
     ))
     .header(AUTHORIZATION, format!("bearer {bearer}"))
     .header(CONTENT_TYPE, "application/json")

@@ -14,6 +14,7 @@
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::SecretKey;
+use secrecy::SecretString;
 use serde::Deserialize;
 use sha2::{Digest as _, Sha256};
 use sheprd_apns::{DeviceToken, PushType, seal};
@@ -49,7 +50,7 @@ impl Kind {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Handle {
-    pub credential: String,
+    pub credential: SecretString,
     /// Random, chosen by the phone: what revokes this handle alone.
     pub id: String,
     pub kind: Kind,

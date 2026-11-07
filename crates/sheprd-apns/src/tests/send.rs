@@ -1,5 +1,6 @@
 use super::*;
 use crate::send::{outcome, request};
+use secrecy::ExposeSecret as _;
 
 fn live(priority: Priority, body: &[u8]) -> Push {
     Push {
@@ -27,7 +28,7 @@ fn only_apples_two_hosts() {
         assert_eq!(request.uri().port(), None);
         assert_eq!(
             request.uri().path(),
-            format!("/3/device/{}", token(1).as_str())
+            format!("/3/device/{}", token(1).expose_secret())
         );
     }
 }

@@ -1,5 +1,6 @@
 use super::*;
 use crate::apns::tokens::MAX_ACTIVITIES;
+use secrecy::ExposeSecret;
 
 #[test]
 fn parses_the_api_request() {
@@ -10,11 +11,16 @@ fn parses_the_api_request() {
     );
     let registration = Registration::parse(body.as_bytes()).unwrap();
     assert_eq!(
-        registration.push_to_start.as_ref().map(DeviceToken::as_str),
+        registration
+            .push_to_start
+            .as_ref()
+            .map(ExposeSecret::expose_secret),
         Some("aa".repeat(40).as_str())
     );
     assert_eq!(
-        registration.activity("w1-p3").map(DeviceToken::as_str),
+        registration
+            .activity("w1-p3")
+            .map(ExposeSecret::expose_secret),
         Some("bb".repeat(80).as_str())
     );
     assert!(Registration::parse(b"{}").unwrap().is_empty());
@@ -167,4 +173,16 @@ fn a_phone_keeps_its_activities_generic_until_it_says_otherwise() {
 fn a_detail_choice_alone_registers_nothing() {
     let registration = Registration::parse(br#"{"activity_detail":"generic"}"#).unwrap();
     assert!(registration.is_empty());
+}
+
+#[test]
+fn printing_a_registration_shows_no_token() {
+    let hex = "ab".repeat(32);
+    let registration = Registration {
+        alert: Some(DeviceToken::parse(&hex).unwrap()),
+        push_to_start: Some(DeviceToken::parse(&hex).unwrap()),
+        ..Registration::default()
+    };
+    let printed = format!("{registration:?}");
+    assert!(!printed.contains(&hex), "{printed}");
 }

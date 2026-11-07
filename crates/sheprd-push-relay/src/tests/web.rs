@@ -40,7 +40,13 @@ async fn send(app: &Router, request: Request<Body>) -> (StatusCode, String) {
 }
 
 fn body(handle: String) -> String {
-    serde_json::to_string(&request(handle, PushType::Alert)).unwrap()
+    json!({
+        "handle": handle,
+        "payload": PAYLOAD,
+        "priority": "high",
+        "push_type": "alert",
+    })
+    .to_string()
 }
 
 #[tokio::test]
@@ -191,6 +197,7 @@ async fn forwarded_addresses_count_only_behind_a_proxy() {
 /// The daemon's client and this relay must agree on the wire.
 #[test]
 fn the_daemons_body_is_what_the_relay_reads() {
+    use secrecy::ExposeSecret as _;
     use sheprd_apns::{Priority, Push, PushType, push_body};
     let push = Push {
         body: br#"{"aps":{}}"#.to_vec(),
@@ -198,9 +205,9 @@ fn the_daemons_body_is_what_the_relay_reads() {
         priority: Priority::Low,
         push_type: PushType::Background,
     };
-    let body = push_body("the-handle", &push).unwrap().unwrap();
+    let body = push_body(&"the-handle".into(), &push).unwrap().unwrap();
     let read: PushRequest = serde_json::from_slice(&body).unwrap();
-    assert_eq!(read.handle, "the-handle");
+    assert_eq!(read.handle.expose_secret(), "the-handle");
     assert_eq!(read.payload.as_bytes(), push.body);
     assert_eq!(read.collapse_id.as_deref(), Some("chat-1"));
     assert_eq!(read.priority, Priority::Low);
