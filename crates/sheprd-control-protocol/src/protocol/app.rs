@@ -138,6 +138,10 @@ pub enum UiOp {
     StatusBar {
         switch: Switch,
     },
+    /// The in-window menu bar; refused where the system draws the menus.
+    MenuBar {
+        switch: Switch,
+    },
     FontSize {
         size: FontSize,
     },

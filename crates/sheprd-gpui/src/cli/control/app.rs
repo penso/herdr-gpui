@@ -28,6 +28,7 @@ pub enum WindowCommand {
 pub enum UiCommand {
     Sidebar(Switch),
     StatusBar(Switch),
+    MenuBar(Switch),
     FontSize(FontSize),
     /// The activity bar section to show.
     Panel(crate::sidebar::ActivityPanel),
@@ -89,11 +90,12 @@ const PANELS: &str = "workspaces|overview|pull-requests|issues|tasks|security|au
 pub(super) fn ui(args: &mut Args) -> Result<UiCommand, CliError> {
     let verb = args.verb().ok_or(CliError::MissingArgument {
         command: "ui",
-        what: "sidebar|statusbar|font-size|panel|agent-group",
+        what: "sidebar|statusbar|menubar|font-size|panel|agent-group",
     })?;
     Ok(match verb.to_str() {
         Some("sidebar") => UiCommand::Sidebar(switch(args.positional())?),
         Some("statusbar" | "status-bar") => UiCommand::StatusBar(switch(args.positional())?),
+        Some("menubar" | "menu-bar") => UiCommand::MenuBar(switch(args.positional())?),
         Some("panel") => {
             let name = args.required_text(PANELS)?;
             UiCommand::Panel(

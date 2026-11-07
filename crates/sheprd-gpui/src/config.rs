@@ -275,6 +275,9 @@ pub struct Config {
     pub show_gpu_load: bool,
     /// Ports each workspace listens on, in the sidebar and the status bar.
     pub show_listening_ports: bool,
+    /// The in-window menu bar on Linux and Windows; `toggle_menu_bar` hides
+    /// or shows it for the session.
+    pub show_menu_bar: bool,
     /// Latency and loss from this machine, by timed TCP connects, in the status bar.
     pub show_network_quality: bool,
     /// The repository owner's avatar, or the GitHub mark, before a space's name.
@@ -466,6 +469,7 @@ impl Default for Config {
             show_device_icons: true,
             show_gpu_load: false,
             show_listening_ports: true,
+            show_menu_bar: true,
             show_network_quality: false,
             show_repository_icons: true,
             show_sidebar_gpu_load: false,
@@ -553,6 +557,7 @@ struct Settings {
     show_device_icons: Option<bool>,
     show_gpu_load: Option<bool>,
     show_listening_ports: Option<bool>,
+    show_menu_bar: Option<bool>,
     show_network_quality: Option<bool>,
     show_repository_icons: Option<bool>,
     show_sidebar_gpu_load: Option<bool>,
@@ -934,6 +939,7 @@ impl Config {
         config.show_device_icons = settings.show_device_icons.unwrap_or(true);
         config.show_gpu_load = settings.show_gpu_load.unwrap_or(false);
         config.show_listening_ports = settings.show_listening_ports.unwrap_or(true);
+        config.show_menu_bar = settings.show_menu_bar.unwrap_or(true);
         config.show_network_quality = settings.show_network_quality.unwrap_or(false);
         config.show_repository_icons = settings.show_repository_icons.unwrap_or(true);
         config.show_sidebar_gpu_load = settings.show_sidebar_gpu_load.unwrap_or(false);

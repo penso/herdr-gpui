@@ -601,6 +601,14 @@ impl SheprdWindow {
                 cx.notify();
                 return;
             }
+            Command::ToggleMenuBar => {
+                if crate::menus::IN_WINDOW {
+                    self.menu_bar_visible = !self.menu_bar_visible;
+                    window.focus(&self.focus, cx);
+                    cx.notify();
+                }
+                return;
+            }
             Command::ToggleModPanel => {
                 self.mods.set_panel_hidden(!self.mods.panel_hidden());
                 cx.notify();

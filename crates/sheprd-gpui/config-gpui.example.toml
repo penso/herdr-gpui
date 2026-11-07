@@ -137,6 +137,12 @@ smooth_scroll = true
 # On Wayland without server-side decorations (GNOME), buttons are always shown
 # regardless of this setting.
 # show_window_controls = true
+# Linux and Windows: the row of menus at the top of the window, also under
+# Settings > General. false opens windows without it; Terminal > Toggle Menu
+# Bar, or a `toggle_menu_bar` binding, hides or shows it for the session. While
+# hidden, F10 opens the menus over the window and any window controls move to
+# the title bar.
+# show_menu_bar = true
 
 # Focus split terminal panes on hover in the active window, without clicking.
 focus_follows_mouse = true
@@ -301,6 +307,7 @@ project_roots = []
 # focus_tab_1 = "cmd-1"   # through focus_tab_9 = "cmd-9"
 # toggle_sidebar = "cmd-b"
 # toggle_status_bar = "cmd-ctrl-b"   # unbound by default
+# toggle_menu_bar = "ctrl-alt-m"     # Linux and Windows; no menu bar in the window on macOS
 # toggle_zen_mode = "ctrl-cmd-z"   # Linux and Windows: "ctrl-alt-z"
 # increase_font_size = ["cmd-=", "cmd-+"]
 # decrease_font_size = "cmd--"

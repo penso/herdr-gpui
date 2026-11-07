@@ -30,6 +30,7 @@ pub(crate) enum Preference {
     Herdr2Terminals(bool),
     ShowSidebarSearch(bool),
     ShowRepositoryIcons(bool),
+    ShowMenuBar(bool),
     ShowWindowControls(bool),
     /// `status_icons`: the set agent status is drawn with.
     StatusIcons(StatusIcons),
@@ -175,6 +176,7 @@ impl Config {
                 Preference::ShowDeviceIcons(value) => {
                     (None, "show_device_icons", Some(value.into()))
                 }
+                Preference::ShowMenuBar(value) => (None, "show_menu_bar", Some(value.into())),
                 Preference::ShowWindowControls(value) => {
                     (None, "show_window_controls", Some(value.into()))
                 }

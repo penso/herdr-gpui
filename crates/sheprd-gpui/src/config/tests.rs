@@ -41,6 +41,7 @@ mod language;
 mod line_height;
 mod loading;
 mod lock_access;
+mod menu_bar;
 mod missing_fonts;
 mod notification_settings;
 mod omarchy_theme;

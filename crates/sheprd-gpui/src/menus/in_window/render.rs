@@ -8,6 +8,8 @@ use gpui::prelude::*;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BarLayer {
     Base,
+    /// The in-flow bar while hidden: it takes no room and draws nothing.
+    Collapsed,
     Overlay,
 }
 
@@ -23,12 +25,29 @@ impl SheprdWindow {
         window.viewport_size().width < px(560. * self.config.ui.size / 12. + controls)
     }
 
+    /// Tall enough for the window controls where the bar carries them.
+    fn application_bar_height(&self, window: &Window) -> f32 {
+        let font = &self.config.ui;
+        if crate::titlebar::show_controls(self.config.show_window_controls, window) {
+            (font.line_height() + 8.).max(crate::titlebar::HEIGHT)
+        } else {
+            font.line_height() + 8.
+        }
+    }
+
+    /// A hidden bar stays in the tree at no height, so its headings keep
+    /// measuring where the overlay's copy will put them when F10 opens a menu.
     pub(crate) fn render_application_bar(
         &self,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        self.application_bar(BarLayer::Base, window, cx)
+        let layer = if self.menu_bar_visible {
+            BarLayer::Base
+        } else {
+            BarLayer::Collapsed
+        };
+        self.application_bar(layer, window, cx)
     }
 
     fn application_bar(
@@ -55,7 +74,8 @@ impl SheprdWindow {
         let buttons = &self.menu.application_bar.buttons;
         // Only the in-flow bar owns anchor measurements. Its overlay copy
         // must never replace those with geometry from a different frame.
-        let measure = layer == BarLayer::Base;
+        let measure = layer != BarLayer::Overlay;
+        let collapsed = layer == BarLayer::Collapsed;
         if measure {
             buttons
                 .borrow_mut()
@@ -63,10 +83,10 @@ impl SheprdWindow {
         }
         let font = &self.config.ui;
         let theme = &self.theme;
-        let height = if crate::titlebar::show_controls(self.config.show_window_controls, window) {
-            (font.line_height() + 8.).max(crate::titlebar::HEIGHT)
+        let height = if collapsed {
+            0.
         } else {
-            font.line_height() + 8.
+            self.application_bar_height(window)
         };
         let bar = div()
             .id("application-menu-bar")
@@ -85,11 +105,14 @@ impl SheprdWindow {
             // The overlay copy lies on the one in the window, so only that
             // one takes the window's translucency.
             .bg(match layer {
-                BarLayer::Base => self.fill().panel(theme.surface),
+                BarLayer::Base | BarLayer::Collapsed => self.fill().panel(theme.surface),
                 BarLayer::Overlay => rgb(theme.surface).into(),
             })
-            .border_b_1()
-            .border_color(rgb(theme.active))
+            // A border would keep a pixel of the hidden bar on screen.
+            .when(!collapsed, |bar| {
+                bar.border_b_1().border_color(rgb(theme.active))
+            })
+            .when(collapsed, |bar| bar.overflow_hidden())
             .text_font(font)
             .text_size(px(font.size))
             .text_color(rgb(theme.foreground))
@@ -203,14 +226,17 @@ impl SheprdWindow {
                     }),
             )
             .child(div().flex_1().h_full().min_w(px(24.)))
-            .children(crate::titlebar::controls(
-                self.config.show_window_controls,
-                window,
-                theme,
-                |window, _| {
-                    window.remove_window();
-                },
-            ));
+            .children(
+                crate::titlebar::controls(
+                    self.config.show_window_controls,
+                    window,
+                    theme,
+                    |window, _| {
+                        window.remove_window();
+                    },
+                )
+                .filter(|_| !collapsed),
+            );
         // Pass controls_enabled so users who hide the WM's title bar can still
         // drag the window from the menu bar.
         crate::titlebar::movable_with_controls(bar, window, self.config.show_window_controls)
@@ -301,7 +327,9 @@ impl SheprdWindow {
         let font = &self.config.ui;
         let theme = &self.theme;
         let width = px(380. * font.size / 12.).min((content.size.width - px(16.)).max(px(0.)));
-        let top = bar.bottom();
+        // From the top, not the bar's foot: a hidden bar measures no height,
+        // while the overlay's copy this hangs from has its full height.
+        let top = bar.top() + px(self.application_bar_height(window));
         let current = menu.current();
         let items = current.map(|menu| menu.items.clone()).unwrap_or_else(|| {
             menu.menus

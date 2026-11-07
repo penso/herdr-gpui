@@ -360,6 +360,14 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
                         command: Command::ToggleStatusBar,
                     },
                 ),
+                // Only the in-window bar can hide; macOS owns its own.
+                #[cfg(not(target_os = "macos"))]
+                MenuItem::action(
+                    fl!("menus-toggle-menu-bar"),
+                    RunCommand {
+                        command: Command::ToggleMenuBar,
+                    },
+                ),
                 MenuItem::action(
                     fl!("menus-open-vs-code"),
                     RunCommand {

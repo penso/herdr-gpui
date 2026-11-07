@@ -320,6 +320,24 @@ pub(super) fn ui(call: Call<UiOp>, cx: &mut App) -> Response {
                 "Status bar hidden"
             })
         }
+        UiOp::MenuBar { switch } => {
+            if !crate::menus::IN_WINDOW {
+                return Response::error(
+                    ErrorCode::Unsupported,
+                    "macOS keeps the menus in the system's menu bar",
+                );
+            }
+            let visible = switch.apply(view.menu_bar_visible);
+            if visible != view.menu_bar_visible {
+                view.menu_bar_visible = visible;
+                cx.notify();
+            }
+            Response::done(if visible {
+                "Menu bar shown"
+            } else {
+                "Menu bar hidden"
+            })
+        }
         UiOp::FontSize { size } => {
             let step = crate::config::FONT_SIZE_STEP;
             let points = match size {

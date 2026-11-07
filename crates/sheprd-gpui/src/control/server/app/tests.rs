@@ -118,6 +118,7 @@ fn a_new_window_joins_the_callers_own_session(cx: &mut gpui::TestAppContext) {
     });
 }
 
+mod menu_bar;
 mod open;
 mod ui_agent_group;
 mod ui_panel;

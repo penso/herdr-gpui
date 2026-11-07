@@ -22,7 +22,10 @@ mod bar;
 mod config_change;
 #[cfg(any(target_os = "linux", windows))]
 mod dragging;
+#[cfg(any(target_os = "linux", windows))]
+mod hidden;
 mod navigation;
+mod no_bar_to_toggle;
 #[cfg(any(target_os = "linux", windows))]
 mod resizing;
 #[cfg(any(target_os = "linux", windows))]

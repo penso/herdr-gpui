@@ -3,6 +3,7 @@ use crate::{COMMANDS, Command};
 use gpui::{Keystroke, Modifiers};
 use std::collections::HashMap;
 
+mod toggle_menu_bar;
 mod toggle_status_bar;
 
 type Profile = fn(Command) -> &'static [&'static str];
