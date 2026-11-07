@@ -4,14 +4,23 @@
 use serde::Deserialize;
 
 macro_rules! features {
-    ($($field:ident: $variant:ident, $message:literal, $description:literal;)+) => {
-        /// Optional behaviors the config file turns on. Every flag is off by
-        /// default, so a missing or empty `[features]` table is the shipped
-        /// experience.
-        #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+    ($($field:ident: $variant:ident = $default:literal, $message:literal, $description:literal;)+) => {
+        /// Optional behaviors the config file turns on or off. Each flag
+        /// declares its own default, so a missing or empty `[features]` table
+        /// is the shipped experience, and a table naming one flag leaves the
+        /// others at theirs.
+        #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
         #[serde(default)]
         pub struct Features {
             $(#[doc = concat!("Described by the `", $description, "` message.")] pub $field: bool,)+
+        }
+
+        impl Default for Features {
+            fn default() -> Self {
+                Self {
+                    $($field: $default,)+
+                }
+            }
         }
 
         /// One `[features]` flag, for code that lists or edits them all.
@@ -68,11 +77,11 @@ macro_rules! features {
 // from parallel branches land on different lines.
 features! {
     // keep-sorted start
-    acp_chats: AcpChats, "features-acp-chats",
+    acp_chats: AcpChats = true, "features-acp-chats",
         "features-acp-chats-description";
-    qa_menu: QaMenu, "features-qa-menu",
+    qa_menu: QaMenu = false, "features-qa-menu",
         "features-qa-menu-description";
-    sidebar_hover_menu: SidebarHoverMenu, "features-sidebar-hover-menu",
+    sidebar_hover_menu: SidebarHoverMenu = false, "features-sidebar-hover-menu",
         "features-sidebar-hover-menu-description";
     // keep-sorted end
 }

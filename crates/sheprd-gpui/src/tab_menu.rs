@@ -1,5 +1,5 @@
 // i18n: migrated
-use crate::i18n::fl;
+use crate::i18n::{Localize, fl};
 use crate::{
     SheprdWindow,
     browser::GroupId,
@@ -101,11 +101,15 @@ enum Action {
     NewTab,
     Rename,
     MoveToWorkspace,
+    /// Continue the tab's terminal agent in a chat, in the same pane.
+    MoveToChat,
     /// Silence this tab's notifications, or let them through again.
     Mute,
     Unmute,
     /// The tab is silent because its workspace is muted: lift that.
     UnmuteWorkspace,
+    /// The tab is silent because its device is muted: lift that.
+    UnmuteDevice,
     Close,
 }
 
@@ -115,9 +119,11 @@ impl Action {
             Self::NewTab => fl!("tab-menu-new-tab"),
             Self::Rename => fl!("tab-menu-rename"),
             Self::MoveToWorkspace => fl!("tab-menu-move-to-workspace"),
+            Self::MoveToChat => fl!("tab-menu-move-to-chat"),
             Self::Mute => fl!("tab-menu-mute"),
             Self::Unmute => fl!("tab-menu-unmute"),
             Self::UnmuteWorkspace => fl!("tab-menu-unmute-workspace"),
+            Self::UnmuteDevice => fl!("tab-menu-unmute-device"),
             Self::Close => fl!("tab-menu-close"),
         }
     }
@@ -134,7 +140,7 @@ const ACTIONS: [Action; 4] = [
 impl TabMenu {
     /// The rows this menu offers: moving to a workspace needs a host the
     /// `herdr` CLI can run on and at least one pane in the tab. This
-    /// client's mute row comes before closing, which stays last.
+    /// client's chat and mute rows come before closing, which stays last.
     fn actions(&self) -> Vec<Action> {
         let mut actions: Vec<_> = ACTIONS
             .into_iter()
@@ -148,6 +154,9 @@ impl TabMenu {
             .position(|action| *action == Action::Close)
             .unwrap_or(actions.len());
         actions.insert(close, self.mute);
+        if self.agent_pane.is_some() {
+            actions.insert(close, Action::MoveToChat);
+        }
         actions
     }
 
@@ -172,6 +181,9 @@ pub(super) struct TabMenu {
     error: Option<String>,
     /// Whether this endpoint's host can run `herdr pane move`.
     movable: bool,
+    /// The pane whose terminal agent can move into a chat. The move names it
+    /// because the tab need not be the focused one.
+    agent_pane: Option<String>,
     /// The move in flight, which keeps the menu from starting another.
     moving: Option<u64>,
     /// The move picker's panel scroll, so a row the keyboard selects in a
@@ -204,7 +216,10 @@ impl SheprdWindow {
         }
         let connect = &self.endpoints[self.selected_endpoint].connection.target;
         let movable = pane_move::refusal(connect).is_none();
-        let mute = if self.muted_on_selected(Scope::Workspace, &target.workspace, cx) {
+        let agent_pane = self.convertible_pane(&target.workspace, &target.tab);
+        let mute = if self.selected_host_muted(cx) {
+            Action::UnmuteDevice
+        } else if self.muted_on_selected(Scope::Workspace, &target.workspace, cx) {
             Action::UnmuteWorkspace
         } else if self.muted_on_selected(Scope::Tab, &target.tab, cx) {
             Action::Unmute
@@ -221,6 +236,7 @@ impl SheprdWindow {
             pending: None,
             error: None,
             movable,
+            agent_pane,
             moving: None,
             scroll: ScrollHandle::new(),
             mute,
@@ -300,6 +316,13 @@ impl SheprdWindow {
                 self.set_muted_on_selected(scope, id, &target.boot, action == Action::Mute, cx);
                 self.dismiss_menu(window, cx);
             }
+            Action::UnmuteDevice => {
+                if self.menu_target_current() {
+                    let id = self.endpoints[self.selected_endpoint].id.clone();
+                    self.set_host_muted(&id, false, cx);
+                }
+                self.dismiss_menu(window, cx);
+            }
             Action::MoveToWorkspace => {
                 if let Some(tab) = &mut self.menu.tab {
                     tab.selected = None;
@@ -307,6 +330,21 @@ impl SheprdWindow {
                 }
                 self.menu.page = Some(Page::MoveTab);
                 cx.notify();
+            }
+            Action::MoveToChat => {
+                let Some(pane) = self
+                    .menu
+                    .tab
+                    .as_ref()
+                    .and_then(|tab| tab.agent_pane.clone())
+                else {
+                    return;
+                };
+                // A refusal leaves the agent running, and says why right here.
+                match self.convert_to_chat(Some(&pane)) {
+                    Ok(_) => self.dismiss_menu(window, cx),
+                    Err(error) => self.tab_error(error.localize(), cx),
+                }
             }
             Action::Rename => {
                 let input = cx.new(SearchInput::new);

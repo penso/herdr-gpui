@@ -181,7 +181,9 @@ def published():
 def submit(version, sums, komac, output):
     expected = installers(version, sums)
     if not os.environ.get("GITHUB_TOKEN"):
-        raise ValueError("GITHUB_TOKEN must hold the winget-pkgs submission token")
+        print(f"::warning::WINGET_TOKEN is not set, so {IDENTIFIER} was not submitted to winget-pkgs "
+              "(scripts/release/README.md)")
+        return
     if not published():
         print(f"::warning::{IDENTIFIER} is not in winget-pkgs yet; submit its first version by hand "
               "(scripts/release/README.md)")

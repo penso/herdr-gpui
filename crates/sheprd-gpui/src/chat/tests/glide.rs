@@ -104,7 +104,7 @@ fn scrolled_up_the_list_stays_while_output_arrives(cx: &mut TestAppContext) {
     redraw(&view, cx);
     // The user scrolls up with the wheel.
     let chat = cx.debug_bounds("chat-view").unwrap();
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: chat.center(),
         delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(200.))),
         ..Default::default()

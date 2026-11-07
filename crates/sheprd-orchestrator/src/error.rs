@@ -69,6 +69,10 @@ pub enum Error {
     BeadsMissing,
     #[error("Bead id {0:?} is not one bd accepts")]
     BeadId(String),
+    #[error(transparent)]
+    Azure(#[from] super::azure::Error),
+    #[error(transparent)]
+    Claim(#[from] crate::beads::claim::Error),
     /// Shown as GitHub's own failure, which already names GitHub and why.
     #[error("{0}")]
     Github(#[source] Box<sheprd_github::Error>),

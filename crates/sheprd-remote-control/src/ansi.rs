@@ -36,6 +36,17 @@ pub(crate) struct Screen {
     pub(crate) columns: usize,
 }
 
+/// The end of `text` that [`parse`] keeps whole, from the start of a line:
+/// history is read from its newest line back, where `parse` keeps the start.
+pub(crate) fn tail(text: &str) -> &str {
+    let Some((cut, _)) = text.char_indices().nth_back(MAX_TEXT) else {
+        return text;
+    };
+    text[cut..]
+        .find('\n')
+        .map_or("", |line| &text[cut + line + 1..])
+}
+
 /// Parses `text` (lines of SGR-colored text), at most [`MAX_TEXT`]
 /// characters of it.
 pub(crate) fn parse(text: &str) -> Screen {

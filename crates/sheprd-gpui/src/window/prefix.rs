@@ -215,7 +215,7 @@ mod tests {
     /// the terminal ignores cmd keys, so only the prefix can claim it.
     fn press(keystroke: &str, cx: &mut VisualTestContext) -> bool {
         let handled = cx.update(|window, cx| {
-            window.dispatch_keystroke(Keystroke::parse(keystroke).unwrap(), cx)
+            window.dispatch_keystroke(crate::keymap::parse_keystroke(keystroke).unwrap(), cx)
         });
         cx.run_until_parked();
         handled

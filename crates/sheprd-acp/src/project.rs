@@ -4,7 +4,7 @@
 //! bookkeeping ACP needs on top of it (which text entry is still streaming,
 //! which entry holds which tool call).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use acp::v1 as wire;
 use sheprd_chat_protocol::{
@@ -30,6 +30,7 @@ const MAX_SKIPPED: usize = 1024;
 
 pub(crate) mod activity;
 mod claude_code;
+pub(crate) mod todos;
 pub(crate) use activity::{Report, Tag, kill_all};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,14 +51,29 @@ struct Open {
 pub(crate) struct Projector {
     next: u64,
     open: Option<Open>,
+    /// Whether the agent sends ACP's plan, which then stands over what its
+    /// to-do tool's calls say.
+    planned: bool,
     /// Steps past [`MAX_STEPS`] that have not ended, with their sub-agent.
     skipped: HashMap<String, String>,
     /// How many steps each sub-agent has shown, by its call id.
     steps: HashMap<String, usize>,
+    /// To-do tool calls that have not ended, which show as the plan instead
+    /// of as cards.
+    todos: HashSet<String>,
     tools: HashMap<String, EntryId>,
 }
 
 impl Projector {
+    /// A projector whose entries come after `last`, the newest entry of
+    /// the history a session opened with.
+    pub(crate) fn after(last: EntryId) -> Self {
+        Self {
+            next: last.0,
+            ..Self::default()
+        }
+    }
+
     fn next_id(&mut self) -> EntryId {
         self.next += 1;
         EntryId(self.next)
@@ -328,6 +344,17 @@ impl Projector {
         *count <= MAX_STEPS
     }
 
+    /// The plan in a to-do tool call's `input`, unless the agent sends its
+    /// own.
+    fn todo_plan(&self, input: Option<&serde_json::Value>) -> Vec<Change> {
+        input
+            .filter(|_| !self.planned)
+            .and_then(todos::plan)
+            .map(plan_change)
+            .into_iter()
+            .collect()
+    }
+
     pub(crate) fn update(
         &mut self,
         transcript: &Transcript,
@@ -344,6 +371,18 @@ impl Projector {
                 let tag = Tag::read(call.meta.as_ref()).or_else(|| {
                     claude_code::tag(call.meta.as_ref(), call.raw_input.as_ref(), None)
                 });
+                if tag == Tag::default()
+                    && self.todos.len() < MAX_SKIPPED
+                    && todos::is_tool(
+                        call.name.as_deref(),
+                        &call.title,
+                        call.kind,
+                        call.raw_input.as_ref(),
+                    )
+                {
+                    self.todos.insert(call_id);
+                    return self.todo_plan(call.raw_input.as_ref());
+                }
                 return self.tagged(transcript, &call_id, &tag, now, |tool| {
                     apply_call(tool, call);
                 });
@@ -357,6 +396,22 @@ impl Projector {
                         update.fields.status,
                     )
                 });
+                if self.todos.contains(&call_id) {
+                    let input = update.fields.raw_input.as_ref();
+                    let stays =
+                        tag == Tag::default() && todos::stays_tool(update.fields.kind, input);
+                    if !stays
+                        || matches!(
+                            update.fields.status,
+                            Some(wire::ToolCallStatus::Completed | wire::ToolCallStatus::Failed)
+                        )
+                    {
+                        self.todos.remove(&call_id);
+                    }
+                    if stays {
+                        return self.todo_plan(input);
+                    }
+                }
                 // A call no longer shown, or never shown, only reports how
                 // its activity ended; it does not come back as a bare card.
                 let shown = self
@@ -376,9 +431,10 @@ impl Projector {
                     apply_fields(tool, update.fields);
                 });
             }
-            U::Plan(plan) => Some(Change::Plan {
-                plan: plan.entries.into_iter().map(plan_entry).collect(),
-            }),
+            U::Plan(plan) => {
+                self.planned = true;
+                Some(plan_change(plan))
+            }
             U::AvailableCommandsUpdate(update) => Some(Change::Commands {
                 commands: update
                     .available_commands
@@ -693,6 +749,12 @@ fn tool_content(content: wire::ToolCallContent) -> ToolContent {
         _ => ToolContent::Text {
             text: "[content]".to_owned(),
         },
+    }
+}
+
+fn plan_change(plan: wire::Plan) -> Change {
+    Change::Plan {
+        plan: plan.entries.into_iter().map(plan_entry).collect(),
     }
 }
 

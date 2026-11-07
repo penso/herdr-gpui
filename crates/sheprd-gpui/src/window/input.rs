@@ -14,7 +14,7 @@ use crate::{
 };
 use gpui::{
     Bounds, ClipboardItem, Context, KeyDownEvent, KeyUpEvent, Keystroke, Pixels, Point,
-    ScrollWheelEvent, Window, point, px, size,
+    ScrollEvent, Window, point, px, size,
 };
 
 #[cfg(test)]
@@ -94,7 +94,7 @@ impl SheprdWindow {
         modifiers: gpui::Modifiers,
     ) -> bool {
         modifiers.shift
-            || (modifiers.secondary()
+            || (crate::keymap::secondary(&modifiers)
                 && (self.terminal_link_at(position).is_some()
                     || self.daemon_link_at(position).is_some()
                     || self
@@ -111,7 +111,7 @@ impl SheprdWindow {
         position: Point<Pixels>,
         modifiers: gpui::Modifiers,
     ) -> bool {
-        modifiers.secondary()
+        crate::keymap::secondary(&modifiers)
             && (self.terminal_link_at(position).is_some()
                 || self.daemon_link_at(position).is_some()
                 || self.terminal_hyperlink_at(position)
@@ -219,7 +219,7 @@ impl SheprdWindow {
 
     pub(crate) fn scroll_wheel(
         &mut self,
-        event: &ScrollWheelEvent,
+        event: &ScrollEvent,
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {

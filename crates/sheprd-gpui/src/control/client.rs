@@ -445,6 +445,7 @@ pub(crate) fn run(invocation: Invocation) -> ExitCode {
         ControlCommand::Chat(command) => chat::chat(command, &context),
         ControlCommand::Px0 => tabs::px0(&context),
         ControlCommand::Notes(command) => work::notes(command, &context),
+        ControlCommand::Worktree(command) => work::worktree(command, &context),
         ControlCommand::Feedback { wait } => browser::feedback(wait, &context),
         ControlCommand::Checkpoint(command) => work::checkpoint(command, &context),
         ControlCommand::Scripts { kind } => work::scripts(kind, &context),

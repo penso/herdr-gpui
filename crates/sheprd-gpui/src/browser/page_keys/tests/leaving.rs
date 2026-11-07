@@ -83,7 +83,9 @@ fn rebound_keys_leave_a_page_in_place_of_the_defaults() {
 
 #[test]
 fn keys_read_as_gpui_names_them() {
-    let read = |held, plain: &str, shifted: &str| typed(held, plain, shifted).unparse();
+    let read = |held, plain: &str, shifted: &str| {
+        typed(held, plain, shifted).unparse(crate::keymap::HOST_OS)
+    };
     assert_eq!(read(SHIFT_COMMAND, "]", "}"), "cmd-shift-]");
     assert_eq!(read(ARROW_COMMAND, RIGHT, RIGHT), "cmd-right");
     assert_eq!(read(COMMAND, "\u{f704}", "\u{f704}"), "cmd-f1");

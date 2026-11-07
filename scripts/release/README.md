@@ -75,7 +75,7 @@ python3 scripts/release/generate-notices.py OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/package-macos.sh VERSION ARM64_BINARY X86_64_BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
 bash scripts/release/sign-macos.sh VERSION OUTPUT_DIR/Sheprd.app OUTPUT_DIR
 bash scripts/release/package-linux.sh VERSION TARGET BINARY OUTPUT_DIR OUTPUT_DIR/THIRD-PARTY-NOTICES.txt
-bash scripts/release/render-cask.sh VERSION SHA256 > /path/to/rendered/herdr-gpui.rb
+bash scripts/release/render-cask.sh VERSION SHA256 [TOKEN] > /path/to/rendered/TOKEN.rb
 ```
 
 macOS assembly requires Apple command-line tools. It produces unsigned
@@ -348,6 +348,10 @@ The maintainer has to:
    and URLs, and submit. Until that version is merged, the job only prints a
    warning.
 
+Without `WINGET_TOKEN` the job also prints a warning and submits nothing, so a
+release does not fail while winget is not set up. Once winget is live, that
+warning is the only sign a lost token leaves.
+
 ## Updater Signing
 
 These scripts publish the exact Sheprd names accepted by the deployed
@@ -368,11 +372,13 @@ The compatibility exceptions are intentional:
   main executable. Keep signing ID `so.pen.herdr-gpui` (and `.dev` locally),
   Developer ID team and all signing keys. There is no `Herdr` executable alias.
   The updater replaces the existing bundle directory in place.
-- Homebrew retains `penso/tap/herdr-gpui`; the cask installs `Sheprd.app` to
+- Homebrew publishes `sheprd-labs/tap/sheprd` for new installs. For existing ones,
+  `penso/tap/herdr-gpui` installs `Sheprd.app` to
   **`Herdr.app`**, so an old running updater can reopen it. The cask exposes
   `sheprd` on PATH. Moving that target or cask token needs a separate migration.
 - Linux packages retain package ownership **`herdr-gpui`**, version `VERSION-1`,
-  desktop ID `so.pen.herdr-gpui`, and a real root-owned `/usr/bin/herdr-gpui`.
+  and a real root-owned `/usr/bin/herdr-gpui`. The desktop ID is
+  `org.sheprd.Sheprd`, matching the app's Wayland app ID and X11 `WM_CLASS`.
   They also install `/usr/bin/sheprd` and both names of each owned helper.
   These are regular copies, not shell shims or symlinks.
   Distro packaging accepts only the standalone tree's exact `bin/herdr-gpui ->
@@ -442,16 +448,20 @@ See [beta releases and promotion](../../docs/updating.md#beta-releases-and-promo
 
 ## Homebrew
 
-`homebrew/Casks/herdr-gpui.rb` is deliberately a template, not an installable
-unverified release. Render with the final stapled DMG's SHA-256 (64 hex digits).
+`homebrew/Casks/sheprd.rb` and `herdr-gpui.rb` are deliberately templates, not installable
+unverified releases. Render with the final stapled DMG's SHA-256 (64 hex digits).
 Rendering is deterministic, normalizes hexadecimal to lowercase, and writes only
 stdout. Do not redirect onto the input template. The rendered cask belongs at
-`Casks/herdr-gpui.rb` in `penso/homebrew-tap`; install as
-`brew install penso/tap/herdr-gpui`. Downloads use repository
+`Casks/sheprd.rb` in `sheprd-labs/homebrew-tap`, installed as
+`brew install sheprd-labs/tap/sheprd`, or `Casks/herdr-gpui.rb` in
+`penso/homebrew-tap`. Downloads use repository
 `sheprd-labs/sheprd`, tag `vVERSION`, and the exact DMG filename above.
 
-`bash scripts/release/update-homebrew.sh VERSION RENDERED_CASK` publishes that cask
-to the resolved default branch of `penso/homebrew-tap`. Run only after the
+`bash scripts/release/update-homebrew.sh VERSION RENDERED_CASK TAP_REPOSITORY`
+publishes that cask to the resolved default branch of `sheprd-labs/homebrew-tap` or
+`penso/homebrew-tap`, refusing a cask that is not that tap's; each release runs it for both, with `SHEPRD_TAP_SSH_KEY` and
+`HOMEBREW_TAP_SSH_KEY` respectively, because Homebrew will not move an installed
+cask to an untrusted tap. Run only after the
 published DMG checksum has been verified. It requires `git`, `ssh`, `curl`, `jq`,
 and the literal private deploy key in `HOMEBREW_TAP_SSH_KEY`, supplied only to the
 approved Homebrew workflow step. It uses HTTPS GitHub metadata for strict SSH host

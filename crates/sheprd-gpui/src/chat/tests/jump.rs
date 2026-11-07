@@ -40,7 +40,7 @@ fn place(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> gpui::Pixel
 
 fn wheel(delta: f32, cx: &mut VisualTestContext) {
     let chat = cx.debug_bounds("chat-view").unwrap();
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: chat.center(),
         delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(delta))),
         ..Default::default()

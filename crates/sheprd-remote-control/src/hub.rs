@@ -7,9 +7,11 @@
 mod api;
 mod attach;
 mod chat;
+mod core;
 mod daemon;
 mod layout;
 mod recency;
+mod sessions;
 
 pub(crate) use api::ApiMethod;
 pub(crate) use chat::{Chat, Event, Summary, View};
@@ -44,6 +46,8 @@ pub enum Error {
     Busy,
     #[error("the chat program cannot be reached")]
     ChatUnavailable,
+    #[error(transparent)]
+    Core(#[from] core::Error),
     #[error("Herdr refused: {0}")]
     Daemon(String),
     #[error("Herdr is not running on this computer")]
@@ -72,39 +76,80 @@ pub(crate) struct CreatedWorkspace {
 }
 
 pub(crate) struct Hub {
-    api: api::Api,
     /// Owns the worker that projects the layout; dropping it disconnects.
     _daemon: daemon::Daemon,
-    layout: watch::Receiver<Arc<Layout>>,
-    chats: Mutex<HashMap<String, (EndpointId, Arc<Chat>)>>,
     all: broadcast::Sender<(String, Event)>,
+    api: api::Api,
     /// Where chat sockets live; `None` resolves from the environment.
     chat_dir: Option<PathBuf>,
+    chats: Mutex<HashMap<String, (EndpointId, Arc<Chat>)>>,
+    core: Option<Arc<core::Source>>,
+    layout: watch::Receiver<Arc<Layout>>,
+    /// The primary session's own layout, to tell whether it answers.
+    primary: watch::Receiver<Arc<Layout>>,
     program: Option<PathBuf>,
+    sessions: Arc<sessions::Sessions>,
+    /// Where new checkouts go for work on a core.
+    worktrees: Option<PathBuf>,
 }
 
 impl Hub {
     /// Connects to the local daemon at `socket` (discovered when `None`)
-    /// and keeps chat connections, found in `chat_dir`, in step with its
-    /// layout. Must run inside a Tokio runtime.
+    /// and every other running Herdr 1 session of this user, and keeps chat
+    /// connections, found in `chat_dir`, in step with their layout. Must run
+    /// inside a Tokio runtime.
     pub(crate) fn start(
         socket: Option<PathBuf>,
         chat_dir: Option<PathBuf>,
+        core_endpoint: crate::core_target::CoreTarget,
+        state_dir: &Path,
     ) -> std::io::Result<Arc<Self>> {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));
         let api = api::Api::new(socket.clone());
+        let primary_socket = socket
+            .clone()
+            .or_else(|| ConnectTarget::Local.socket_path().ok());
         let target = socket.map_or(ConnectTarget::Local, ConnectTarget::Socket);
-        let daemon = daemon::Daemon::start(sender, target)?;
+        let (daemon_sender, daemon_layout) = watch::channel(Arc::new(Layout::default()));
+        let daemon = daemon::Daemon::start(
+            daemon_sender,
+            target.clone(),
+            primary_socket.as_deref().and_then(sessions::session_name),
+        )?;
+        let (core_sender, core_layout) = watch::channel(Arc::new(Layout::default()));
+        let core = core::Source::start(core_sender, &target, core_endpoint, state_dir)?;
+        let (base_sender, base_layout) = watch::channel(Arc::new(Layout::default()));
+        tokio::spawn(core::merge_sources(
+            base_sender,
+            daemon_layout.clone(),
+            core_layout,
+        ));
+        let sessions = sessions::Sessions::start(primary_socket);
+        tokio::spawn(sessions::merge_sources(
+            sender,
+            base_layout,
+            sessions.clone(),
+        ));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         let hub = Arc::new(Self {
-            api,
             _daemon: daemon,
-            layout,
-            chats: Mutex::new(HashMap::new()),
             all,
+            api,
             chat_dir,
+            chats: Mutex::new(HashMap::new()),
+            core: Some(core),
+            layout,
+            primary: daemon_layout,
             program: locate_program(),
+            sessions,
+            worktrees: core::worktree::root(),
         });
+        // A daemon started from a copy of its binary finds no program, and
+        // only a phone creating work would ever find out.
+        match hub.program() {
+            Some(program) => tracing::info!(program = %program.display(), "Chat program found"),
+            None => tracing::warn!("{}", Error::ProgramMissing),
+        }
         let follower = hub.clone();
         tokio::spawn(async move { follower.follow().await });
         Ok(hub)
@@ -138,6 +183,25 @@ impl Hub {
         Arc::new(hub)
     }
 
+    /// An offline hub whose primary does not answer, beside one session
+    /// `name` listing `layout` whose API calls go to the socket beside
+    /// `client_socket`.
+    #[cfg(all(test, unix))]
+    pub(crate) fn offline_with_session(
+        layout: Layout,
+        name: &str,
+        client_socket: PathBuf,
+    ) -> Arc<Self> {
+        let merged = sessions::merge(
+            &Layout::default(),
+            &[(name.to_owned(), Arc::new(layout.clone()))],
+        );
+        let mut hub = Self::offline_in(merged, None, None);
+        hub.primary = watch::channel(Arc::new(Layout::default())).1;
+        hub.sessions = sessions::Sessions::offline_with(name, layout, client_socket);
+        Arc::new(hub)
+    }
+
     #[cfg(test)]
     fn offline_in(
         layout: Layout,
@@ -147,17 +211,21 @@ impl Hub {
         let (sender, receiver) = watch::channel(Arc::new(layout));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         Self {
+            _daemon: daemon::Daemon::offline(sender),
+            all,
             // No socket answers there unless a test serves one, so a request
             // fails rather than reach a real Herdr.
             api: api::Api::new(Some(
                 client_socket.unwrap_or_else(|| PathBuf::from("/nonexistent/herdr-client.sock")),
             )),
-            _daemon: daemon::Daemon::offline(sender),
-            layout: receiver,
-            chats: Mutex::new(HashMap::new()),
-            all,
             chat_dir,
+            chats: Mutex::new(HashMap::new()),
+            core: None,
+            primary: receiver.clone(),
+            layout: receiver,
             program: None,
+            sessions: sessions::Sessions::offline(),
+            worktrees: None,
         }
     }
 
@@ -203,8 +271,11 @@ impl Hub {
             .ok_or(Error::UnknownWorkspace)?
             .cwd
             .clone();
+        if let Some(core) = self.active_core() {
+            let (cwd, program) = (cwd.unwrap_or(&folder).to_owned(), program.to_owned());
+            return on_core(move || core.open_chat(agent, &program, &cwd)).await;
+        }
         let response = self
-            .api
             .call(
                 ApiMethod::TabCreate,
                 tab_params(workspace, cwd.unwrap_or(&folder), agent, program),
@@ -228,17 +299,36 @@ impl Hub {
     }
 
     /// A new workspace in `cwd`, on a new worktree when `branch` is given,
-    /// with a chat running `agent` in it.
+    /// with a chat running `agent` in it, in the Herdr 1 `session` this
+    /// daemon follows by that name (the primary otherwise). While a core answers the chat
+    /// starts there, in its unlisted group: the core has no workspaces or
+    /// worktrees, so a branch's checkout is made here, never by Herdr 1.
     pub(crate) async fn create_workspace(
         &self,
         cwd: &str,
         branch: Option<&str>,
         agent: Agent,
+        session: Option<&str>,
     ) -> Result<CreatedWorkspace> {
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
+        if let Some(core) = self.active_core() {
+            let (cwd, program) = (cwd.to_owned(), program.to_owned());
+            let (branch, root) = (branch.map(str::to_owned), self.worktrees.clone());
+            let pane = on_core(move || match branch {
+                Some(branch) => {
+                    core.open_worktree_chat(agent, &program, &cwd, &branch, root.as_deref())
+                }
+                None => core.open_chat(agent, &program, &cwd),
+            })
+            .await?;
+            return Ok(CreatedWorkspace {
+                workspace: core::UNLISTED.to_owned(),
+                pane,
+            });
+        }
         let opened = self
-            .api
-            .call(
+            .call_in(
+                session,
                 ApiMethod::WorkspaceCreate,
                 json!({"cwd": cwd, "focus": false}),
             )
@@ -250,7 +340,6 @@ impl Hub {
             .to_owned();
         let Some(branch) = branch else {
             let response = self
-                .api
                 .call(
                     ApiMethod::TabCreate,
                     tab_params(&workspace, cwd, agent, program),
@@ -261,7 +350,6 @@ impl Hub {
             return Ok(CreatedWorkspace { workspace, pane });
         };
         let created = self
-            .api
             .call(
                 ApiMethod::WorktreeCreate,
                 json!({"workspace_id": workspace, "branch": branch, "focus": false}),
@@ -287,18 +375,100 @@ impl Hub {
 
     /// Types `line` and Enter into `pane`, as Sheprd starts a chat.
     async fn run_line(&self, pane: &str, line: &str) -> Result<()> {
-        self.api
-            .call(
-                ApiMethod::PaneSendInput,
-                json!({"pane_id": pane, "text": line, "keys": ["Enter"]}),
-            )
-            .await?;
+        self.call(
+            ApiMethod::PaneSendInput,
+            json!({"pane_id": pane, "text": line, "keys": ["Enter"]}),
+        )
+        .await?;
         Ok(())
+    }
+
+    /// The core new work goes to, while one answers.
+    fn active_core(&self) -> Option<Arc<core::Source>> {
+        self.core.clone().filter(|core| core.connected())
+    }
+
+    /// A new tab on the core for `workspace`'s folder, answered as Herdr
+    /// answers one, once listed so a phone can open it. `None` when no
+    /// core answers and the tab is Herdr 1's to make.
+    pub(crate) async fn new_core_tab(&self, workspace: &str) -> Result<Option<Value>> {
+        let Some(core) = self.active_core() else {
+            return Ok(None);
+        };
+        let cwd = self
+            .layout()
+            .workspace(workspace)
+            .map_or_else(String::new, |workspace| workspace.cwd.clone());
+        let pane = on_core(move || core.open_shell(&cwd)).await?;
+        let mut layout = self.layout.clone();
+        let listed = layout.wait_for(|layout| layout.terminal(&pane).is_some());
+        // An unlisted tab is still made: the phone reloads and finds it.
+        let _ = tokio::time::timeout(CORE_LISTING, listed).await;
+        Ok(Some(json!({"pane": {"pane_id": pane}})))
     }
 
     /// Calls Herdr's public API, for the terminal views.
     pub(crate) async fn call(&self, method: ApiMethod, params: Value) -> Result<Value> {
-        self.api.call(method, params).await
+        if core::owns(&params) {
+            if !self.layout().connected {
+                return Err(Error::NotConnected);
+            }
+            let core = self.core.clone().ok_or(core::Error::Disconnected)?;
+            return tokio::task::spawn_blocking(move || core.call(method, &params))
+                .await
+                .map_err(|_| core::Error::Disconnected)?;
+        }
+        if let Some((session, params)) = self.session_for(method, &params)? {
+            let mut answer = session.api.call(method, params).await?;
+            sessions::prefix_answer(&mut answer, &session.name);
+            return Ok(answer);
+        }
+        match self.api.call(method, params).await {
+            Err(Error::NotConnected) if self.core.as_ref().is_some_and(|core| core.connected()) => {
+                Err(core::Error::Unsupported.into())
+            }
+            result => result,
+        }
+    }
+
+    /// [`Hub::call`] for a request whose ids do not say where it goes, such
+    /// as a new workspace: to the session this daemon follows by `session`'s
+    /// name, else as `call` sends it. The primary's own name is not among
+    /// those followed, so it goes to the primary.
+    pub(crate) async fn call_in(
+        &self,
+        session: Option<&str>,
+        method: ApiMethod,
+        params: Value,
+    ) -> Result<Value> {
+        let Some(session) = session.and_then(|name| self.sessions.get(name)) else {
+            return self.call(method, params).await;
+        };
+        let mut answer = session.api.call(method, params).await?;
+        sessions::prefix_answer(&mut answer, &session.name);
+        Ok(answer)
+    }
+
+    /// The named session a request is for, with its ids as that session
+    /// knows them; `None` for the primary.
+    fn session_for(
+        &self,
+        method: ApiMethod,
+        params: &Value,
+    ) -> Result<Option<(Arc<sessions::Session>, Value)>> {
+        if let Some((name, params)) = sessions::owner(params)? {
+            let session = self.sessions.get(&name).ok_or(Error::NotConnected)?;
+            return Ok(Some((session, params)));
+        }
+        // A new workspace has no id to route by: it goes to the primary, or
+        // to a session when only sessions answer.
+        if method == ApiMethod::WorkspaceCreate && !self.primary.borrow().connected {
+            return Ok(self
+                .sessions
+                .first_connected()
+                .map(|session| (session, params.clone())));
+        }
+        Ok(None)
     }
 
     /// Starts connections for new chat panes and closes those whose pane
@@ -349,6 +519,8 @@ impl Hub {
 /// The environment variable the typed line runs the program from, as in
 /// Sheprd.
 const PROGRAM_ENV: &str = "HERDR_ACP";
+/// How long a new core tab waits to be listed: a few of the core's polls.
+const CORE_LISTING: Duration = Duration::from_secs(2);
 const PROGRAM: &str = if cfg!(windows) {
     "herdr-acp.exe"
 } else {
@@ -376,6 +548,15 @@ fn locate_named_program(program: &str) -> Option<PathBuf> {
                 .map(|dir| dir.join(program)),
         )
         .find(|candidate| candidate.is_file())
+}
+
+/// Runs blocking core work off the runtime.
+async fn on_core<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|_| Error::from(core::Error::Disconnected))?
 }
 
 fn tab_params(workspace: &str, cwd: &str, agent: Agent, program: &Path) -> Value {

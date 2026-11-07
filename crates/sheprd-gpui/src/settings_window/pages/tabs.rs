@@ -46,6 +46,16 @@ impl SettingsWindow {
                     )),
             )
             .child(
+                ui::row(theme, "tabs-agent-title", fl!("settings-tabs-agent-title"))
+                    .description(fl!("settings-tabs-agent-title-description"))
+                    .switch(self.preference_toggle(
+                        "tabs-agent-title-toggle",
+                        self.config.tab_labels.agent_title,
+                        Preference::TabAgentTitle(!self.config.tab_labels.agent_title),
+                        cx,
+                    )),
+            )
+            .child(
                 ui::row(theme, "tabs-herdr-2", fl!("settings-tabs-herdr-2"))
                     .description(fl!("settings-tabs-herdr-2-description"))
                     .switch(self.preference_toggle(

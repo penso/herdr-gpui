@@ -2,6 +2,7 @@
 use super::*;
 use crate::config::OpenSandboxConfig;
 
+mod config_home;
 mod live;
 mod relay;
 #[cfg(unix)]

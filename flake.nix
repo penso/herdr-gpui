@@ -63,7 +63,7 @@
               ./assets
               # The agent skill is compiled into the executable.
               ./skills
-              ./scripts/release/so.pen.herdr-gpui.desktop
+              ./scripts/release/org.sheprd.Sheprd.desktop
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
@@ -107,8 +107,8 @@
           # No updater key is embedded, so this build never replaces itself;
           # Nix owns the store path and upgrades come from the flake.
           postInstall = ''
-            install -Dm644 scripts/release/so.pen.herdr-gpui.desktop \
-              $out/share/applications/so.pen.herdr-gpui.desktop
+            install -Dm644 scripts/release/org.sheprd.Sheprd.desktop \
+              $out/share/applications/org.sheprd.Sheprd.desktop
             install -Dm644 assets/icons/sheprd-linux.svg \
               $out/share/icons/hicolor/scalable/apps/sheprd.svg
           '';

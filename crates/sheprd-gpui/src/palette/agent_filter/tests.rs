@@ -4,7 +4,7 @@ use crate::NavigationTarget;
 
 #[test]
 fn alt_and_a_navigator_letter_choose_a_filter() {
-    let parse = |text| AgentFilter::from_keystroke(&Keystroke::parse(text).unwrap());
+    let parse = |text| AgentFilter::from_keystroke(&crate::keymap::parse_keystroke(text).unwrap());
     for (text, expected) in [
         ("alt-a", AgentFilter::All),
         ("alt-b", AgentFilter::Blocked),

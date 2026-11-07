@@ -25,14 +25,22 @@ fn github_tabs_are_inert_until_an_account_is_connected(cx: &mut gpui::TestAppCon
     draw(cx);
     assert_eq!(tab(&view, cx), Tab::New);
     // The branch field and its checkout preview are still what the dialog
-    // shows, and no listing was requested for an account that does not exist.
+    // shows. Without an account, the listing only looks for a GitLab project;
+    // finding none, it lists nothing and says nothing.
     assert!(cx.debug_bounds("dialog-input").is_some());
     assert!(cx.debug_bounds("dialog-checkout").is_some());
     assert!(cx.debug_bounds("worktree-row-0").is_none());
+    settle_lookup(&view, cx);
     cx.update(|_, cx| {
         let source = view.read(cx).menu.worktree.as_ref().unwrap();
-        assert!(!source.lookup.loading && source.lookup.message.is_none());
+        assert!(source.lookup.message.is_none());
+        assert!(!source.lookup.listed());
+        assert!(!matches!(
+            source.lookup.forge(),
+            Some(crate::repo_items::Forge::GitLab { .. })
+        ));
     });
+    assert_eq!(tab(&view, cx), Tab::New);
 }
 
 /// With an account, a GitHub tab replaces the branch form with its listing.

@@ -5,7 +5,7 @@
 
 use super::Localize;
 use crate::i18n::fl;
-use sheprd_orchestrator::{Error, gitlab, private_file};
+use sheprd_orchestrator::{Error, beads, gitlab, private_file};
 
 impl Localize for Error {
     fn localize(&self) -> String {
@@ -67,6 +67,8 @@ impl Localize for Error {
             Self::RemoteUrl(url) => fl!("error-orchestrator-remote-url", url = format!("{url:?}")),
             Self::BeadsMissing => fl!("error-orchestrator-beads-missing"),
             Self::BeadId(id) => fl!("error-orchestrator-bead-id", id = format!("{id:?}")),
+            Self::Azure(error) => error.localize(),
+            Self::Claim(error) => error.localize(),
             Self::Github(error) => error.localize(),
             Self::Gitlab(error) => error.localize(),
             Self::Cancelled => fl!("error-orchestrator-cancelled"),
@@ -89,28 +91,46 @@ impl Localize for Error {
 fn step(operation: &str) -> &'static str {
     match operation {
         // keep-sorted start
+        "Claiming the bead" => "claim-bead", // i18n: data
         "Creating the worktree" => "create-worktree", // i18n: data
+        "Deleting the bead" => "delete-bead", // i18n: data
         "Discovering installed agents" => "discover-agents", // i18n: data
-        "Naming the agent pane" => "name-pane",       // i18n: data
-        "Naming the agent tab" => "name-tab",         // i18n: data
+        "Naming the agent pane" => "name-pane", // i18n: data
+        "Naming the agent tab" => "name-tab", // i18n: data
         "Opening the repository" => "open-repository", // i18n: data
-        "Reading bd's options" => "read-bd-options",  // i18n: data
+        "Reading bd's options" => "read-bd-options", // i18n: data
         "Reading Beads blockers" => "read-beads-blockers", // i18n: data
-        "Reading Beads" => "read-beads",              // i18n: data
-        "Reading GitHub" => "read-github",            // i18n: data
+        "Reading Beads" => "read-beads",     // i18n: data
+        "Reading GitHub" => "read-github",   // i18n: data
         "Reading pull request checks" => "read-checks", // i18n: data
         "Reading the base commit" => "read-base-commit", // i18n: data
-        "Reading the branches" => "read-branches",    // i18n: data
+        "Reading the branches" => "read-branches", // i18n: data
         "Reading the repository" => "read-repository", // i18n: data
         "Reading the workspaces" => "read-workspaces", // i18n: data
+        "Releasing the bead" => "release-bead", // i18n: data
         "Removing the worktree" => "remove-worktree", // i18n: data
         "Resolving the Beads folder" => "resolve-beads-folder", // i18n: data
-        "Sending the message" => "send-message",      // i18n: data
-        "Sending the prompt" => "send-prompt",        // i18n: data
-        "Starting the agent" => "start-agent",        // i18n: data
-        "Stopping the agent" => "stop-agent",         // i18n: data
+        "Sending the message" => "send-message", // i18n: data
+        "Sending the prompt" => "send-prompt", // i18n: data
+        "Starting the agent" => "start-agent", // i18n: data
+        "Stopping the agent" => "stop-agent", // i18n: data
         // keep-sorted end
         _ => "other",
+    }
+}
+
+impl Localize for beads::claim::Error {
+    fn localize(&self) -> String {
+        match self {
+            Self::Held { id, holder } => fl!(
+                "error-orchestrator-bead-held",
+                id = id.as_str(),
+                holder = holder.as_str()
+            ),
+            Self::HeldByUnknown { id } => {
+                fl!("error-orchestrator-bead-held-unknown", id = id.as_str())
+            }
+        }
     }
 }
 

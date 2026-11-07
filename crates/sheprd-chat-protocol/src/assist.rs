@@ -153,8 +153,9 @@ fn typed_entry(kind: &EntryKind) -> Option<&str> {
 }
 
 /// A prompt's text without the `files` lines the transcript added after it,
-/// one per file it carried.
-fn typed(shown: &str, files: usize) -> &str {
+/// one per file it carried. `files` comes from the peer, so the work is
+/// bounded by the text: it stops at the first line that names no file.
+pub fn typed(shown: &str, files: usize) -> &str {
     let mut text = shown;
     for _ in 0..files {
         match text.rsplit_once('\n') {

@@ -18,6 +18,18 @@ impl OrchestratorView {
         self.repos.iter().filter(|repo| !repo.outside_git())
     }
 
+    /// The projects the shown list could hold: for Tasks, those with Beads.
+    pub(super) fn projects_listing(&self) -> impl Iterator<Item = &Repo> {
+        let tasks = self.tab == Tab::Tasks;
+        self.projects_named()
+            .filter(move |repo| !tasks || repo.has_beads())
+    }
+
+    /// Whether any project offers tasks, so the bar lists the section.
+    pub(crate) fn has_tasks(&self) -> bool {
+        self.repos.iter().any(Repo::has_beads)
+    }
+
     /// Tells every repository's worker whether the view is on screen; a
     /// hidden one syncs less often. Cheap, so the tick calls it each time.
     pub(crate) fn set_visible(&self, visible: bool) {
@@ -168,25 +180,42 @@ impl OrchestratorView {
                 self.yours,
                 self.sort,
             );
+            let mut tasks = if self.tab == Tab::Tasks {
+                rows::task_rows(
+                    items,
+                    &runs,
+                    &self.query,
+                    self.filters,
+                    self.sort,
+                    &self.collapsed,
+                    &self.task_filters,
+                )
+            } else {
+                Vec::new()
+            };
             if let Some(label) = &self.label {
-                issues.retain(|row| items[row.item].labels.iter().any(|has| has == label));
-                // A child kept without its parent stands on its own.
-                for row in &mut issues {
-                    row.depth = 0;
-                    row.children = None;
+                for rows in [&mut issues, &mut tasks] {
+                    rows.retain(|row| items[row.item].labels.iter().any(|has| has == label));
+                    // A child kept without its parent stands on its own.
+                    for row in rows {
+                        row.depth = 0;
+                        row.children = None;
+                    }
                 }
             }
-            for row in issues.iter_mut().chain(&mut pulls) {
+            for row in issues.iter_mut().chain(&mut pulls).chain(&mut tasks) {
                 row.repo = index;
             }
             repo.issue_rows = issues;
             repo.pull_request_rows = pulls;
+            repo.task_rows = tasks;
         }
         // The backends and projects picked narrow what every repository
         // lists, then all of it is one list.
         let shown = |repo: &Repo| self.projects.is_empty() || self.projects.contains(&repo.key);
         let backend = |row: &ItemRow| {
-            self.backends.is_empty()
+            self.tab == Tab::Tasks
+                || self.backends.is_empty()
                 || self
                     .backends
                     .contains(&self.row_item(row).key.source.provider)
@@ -199,6 +228,7 @@ impl OrchestratorView {
                 let rows = match self.tab {
                     Tab::Issues => &repo.issue_rows,
                     Tab::PullRequests => &repo.pull_request_rows,
+                    Tab::Tasks => &repo.task_rows,
                 };
                 // A child whose parent's backend is filtered out goes with it.
                 let mut kept = Vec::new();
@@ -218,7 +248,7 @@ impl OrchestratorView {
         let (merged, holders) = rows::dedupe(merged, |row| self.row_item(row).key.canonical());
         self.holders = holders;
         let lines = match self.tab {
-            Tab::Issues => rows::issue_lines(&merged, |row| self.row_item(row)),
+            Tab::Issues | Tab::Tasks => rows::issue_lines(&merged, |row| self.row_item(row)),
             Tab::PullRequests => rows::pull_request_lines(&merged, |row| {
                 let repo = &self.repos[row.repo];
                 let item = self.row_item(row);

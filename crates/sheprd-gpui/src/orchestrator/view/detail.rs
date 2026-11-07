@@ -15,7 +15,7 @@ use crate::{
     config::{corners, mix},
     fonts::StyledFont,
     i18n::fl,
-    orchestrator::{Access, Item, Owner},
+    orchestrator::{Access, Item, Owner, Provider},
     release_notes,
 };
 use gpui::{prelude::*, *};
@@ -49,6 +49,9 @@ impl OrchestratorView {
                     el.child(self.render_status_box(&item, &runs, &item_runs, cx))
                 })
                 .child(self.render_meta(&item))
+                .when(item.key.source.provider == Provider::Beads, |el| {
+                    el.child(self.render_task_facts(&item, cx))
+                })
                 .child(self.render_description(&item))
                 .into_any_element(),
             DetailTab::Conversation => div()
@@ -94,14 +97,17 @@ impl OrchestratorView {
                 "icons/git-branch.svg",
                 Tab::PullRequests,
             ),
+            None if self.tab == Tab::Tasks => {
+                (fl!("orchestrator-tasks"), "icons/beads.svg", Tab::Tasks)
+            }
             None => (fl!("orchestrator-issues"), "icons/note.svg", Tab::Issues),
         };
-        let repo = self
-            .snapshot()
-            .repo
-            .as_ref()
-            .and_then(|info| info.remote.as_ref())
-            .map(|remote| remote.source.repository.clone())
+        let repo = super::tasks::task_project(item)
+            .or_else(|| {
+                let info = self.snapshot().repo.as_ref()?;
+                let remote = info.remote.as_ref()?;
+                Some(remote.source.repository.clone())
+            })
             .unwrap_or_else(|| item.key.source.repository.clone());
         let pull_request = item.github_pull_request().is_some();
         div()
@@ -332,6 +338,7 @@ impl OrchestratorView {
             .items_center()
             .gap_1()
             .min_w_0()
+            .overflow_hidden()
             .text_size(look.size())
             .child(
                 look.icon_button(
@@ -352,7 +359,11 @@ impl OrchestratorView {
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.detail = None;
-                    this.select_tab(Tab::Issues, cx);
+                    let list = match this.tab {
+                        Tab::Tasks => Tab::Tasks,
+                        Tab::Issues | Tab::PullRequests => Tab::Issues,
+                    };
+                    this.select_tab(list, cx);
                 })),
             )
             .child(separator())
@@ -579,7 +590,7 @@ impl OrchestratorView {
         let time = |value: Option<chrono::DateTime<chrono::Utc>>| {
             value.map_or_else(|| "\u{2014}".to_owned(), |value| value.to_rfc3339())
         };
-        let deletable = item.key.source.provider == crate::orchestrator::Provider::Beads
+        let deletable = item.key.source.provider == Provider::Beads
             && self.snapshot().access == Some(Access::ReadWrite);
         let (source, id) = (item.key.source.clone(), item.key.native_id.clone());
         rows.push((fl!("orchestrator-details-created"), time(item.created_at)));

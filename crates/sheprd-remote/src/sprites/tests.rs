@@ -2,6 +2,7 @@
 use super::*;
 use crate::config::SpritesConfig;
 
+mod config_home;
 mod relay;
 
 fn settings(url: &str) -> Settings {

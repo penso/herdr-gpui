@@ -292,7 +292,7 @@ fn wrapped_rows_reflow_keep_columns_and_tail_without_changing_exports(cx: &mut T
     cx.run_until_parked();
     view.read_with(cx, |view, _| assert!(view.following));
     let position = view.read_with(cx, |view, _| view.scroll.viewport_bounds().center());
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position,
         delta: ScrollDelta::Pixels(point(px(0.), px(120.))),
         touch_phase: TouchPhase::Moved,

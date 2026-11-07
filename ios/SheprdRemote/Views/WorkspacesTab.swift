@@ -15,9 +15,11 @@ extension EnvironmentValues {
 
 /// The Workspaces tab, laid out like Sheprd's sidebar: every computer
 /// with its load, then its repositories, each with its own checkout and
-/// its linked worktrees. A workspace opens on a screen of its own with its
-/// tabs (`WorkspaceScreen`). Search covers workspaces, chats, their
-/// messages, and terminals on every computer, collapsed or not.
+/// its linked worktrees. A computer running more than one Herdr session
+/// lists its repositories under each session's name. A workspace opens on
+/// a screen of its own with its tabs (`WorkspaceScreen`). Search covers
+/// workspaces, chats, their messages, and terminals on every computer,
+/// collapsed or not.
 ///
 /// With many computers the list gets long, so each collapses to its header,
 /// all of them at once from the toolbar, and a long list gets a section
@@ -47,9 +49,9 @@ struct WorkspacesTab: View {
         .task { if UserDefaults.standard.bool(forKey: "openComputer") { details = model.computers.first?.device } }
         #endif
         .toolbar {
-            if query.isEmpty, model.fleet.machines.count > 1 {
+            if query.isEmpty, machines.count > 1 {
                 ToolbarItem(placement: .topBarTrailing) {
-                    let shown = model.fleet.machines.map(\.id)
+                    let shown = machines.map(\.id)
                     let folded = model.collapsed.computers.allCollapsed(shown)
                     Button(
                         folded ? "Expand All" : "Collapse All",
@@ -68,7 +70,8 @@ struct WorkspacesTab: View {
 
     private var list: some View {
         List {
-            ForEach(model.fleet.machines) { machine in
+            TagFilterBar()
+            ForEach(machines) { machine in
                 let collapsed = model.collapsed.computers.contains(machine.id)
                 Section {
                     if !collapsed { HostRows(computer: machine.computer) }
@@ -83,19 +86,25 @@ struct WorkspacesTab: View {
                     }
                 }
                 .sectionIndexLabel(model.displayName(machine.computer).first.map { String($0).uppercased() })
-                ForEach(collapsed ? [] : machine.home?.repositories ?? []) { repository in
-                    Section {
-                        ForEach(repository.workspaces) { workspace in
-                            NavigationLink(value: WorkspaceKey(device: machine.id, workspace: workspace.id)) {
-                                WorkspaceRow(workspace: workspace, repository: repository)
-                            }
-                        }
-                    } header: {
-                        RepositoryHeader(repository: repository, device: machine.id)
+                ForEach(collapsed ? [] : machine.home?.sessionGroups ?? []) { group in
+                    if let name = group.name {
+                        Section {} header: { SessionHeader(name: name) }
+                            .sectionIndexLabel("•")
                     }
-                    // A dot, as repositories repeat across computers: the
-                    // letters say where each computer starts.
-                    .sectionIndexLabel("•")
+                    ForEach(group.repositories) { repository in
+                        Section {
+                            ForEach(repository.workspaces) { workspace in
+                                NavigationLink(value: WorkspaceKey(device: machine.id, workspace: workspace.id)) {
+                                    WorkspaceRow(workspace: workspace, repository: repository)
+                                }
+                            }
+                        } header: {
+                            RepositoryHeader(repository: repository, device: machine.id)
+                        }
+                        // A dot, as repositories repeat across computers: the
+                        // letters say where each computer starts.
+                        .sectionIndexLabel("•")
+                    }
                 }
             }
         }
@@ -112,8 +121,14 @@ struct WorkspacesTab: View {
         }
     }
 
+    /// The computers the tag filter leaves.
+    private var machines: [Fleet.Machine] {
+        let tag = ComputerTags.active(model.tagFilter.tag, among: model.computers)
+        return model.fleet.machines.filter { $0.computer.matches(tag: tag) }
+    }
+
     private var openWorkspaces: Int {
-        model.fleet.machines
+        machines
             .filter { !model.collapsed.computers.contains($0.id) }
             .reduce(0) { $0 + ($1.home?.workspaces.count ?? 0) }
     }
@@ -177,12 +192,32 @@ private struct MachineHeader<Actions: View>: View {
                     Text(held).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
+            if !machine.computer.tags.isEmpty {
+                PillFlow {
+                    ForEach(machine.computer.tags, id: \.self) { TagPill(tag: $0) }
+                }
+            }
         }
     }
 
     private var held: String? {
         guard let count = machine.home?.workspaces.count, count > 0 else { return nil }
         return count == 1 ? "1 workspace" : "\(count) workspaces"
+    }
+}
+
+/// A Herdr session above its repositories, when the computer runs more
+/// than one.
+private struct SessionHeader: View {
+    var name: String
+
+    var body: some View {
+        Label(name, systemImage: "rectangle.stack")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+            .lineLimit(1)
+            .accessibilityLabel("Herdr session \(name)")
     }
 }
 
@@ -227,6 +262,9 @@ private struct LoadGauge: View {
                 }
             Text("\(percent)%").font(.caption2.monospacedDigit())
         }
+        // The row shares its width with the workspace count: without this
+        // the row squeezes these texts until "CPU" breaks across two lines.
+        .fixedSize(horizontal: true, vertical: false)
         .foregroundStyle(.secondary)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label) \(percent) percent")
@@ -234,7 +272,7 @@ private struct LoadGauge: View {
 }
 
 /// A repository's name over its workspaces, with a button for another
-/// worktree of it.
+/// worktree of it, in the same Herdr session.
 private struct RepositoryHeader: View {
     @Environment(AppModel.self) private var model
     var repository: Repository
@@ -245,10 +283,9 @@ private struct RepositoryHeader: View {
             RepositoryAvatar(label: repository.label)
             Text(repository.label).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
             Spacer()
-            // Its own checkout is where a new worktree branches from.
-            if let own = repository.workspaces.first(where: { $0.worktree?.linked != true }) {
+            if let own = repository.ownCheckout {
                 Button {
-                    model.creating = .workspace(device: device, folder: own.cwd)
+                    model.creating = .workspace(device: device, folder: own.cwd, session: own.session)
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -266,13 +303,17 @@ struct RepositoryAvatar: View {
 
     private static let tints: [Color] = [.green, .orange, .blue, .purple, .pink, .teal, .indigo, .brown]
 
+    /// The color `label` picks, here and on tag pills.
+    static func tint(_ label: String) -> Color {
+        tints[label.unicodeScalars.reduce(0) { $0 &+ Int($1.value) } % tints.count]
+    }
+
     var body: some View {
-        let sum = label.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
         Text(label.first.map { String($0).uppercased() } ?? "?")
             .font(.system(size: size * 0.55, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(Self.tints[sum % Self.tints.count].gradient, in: .rect(cornerRadius: size * 0.3))
+            .background(Self.tint(label).gradient, in: .rect(cornerRadius: size * 0.3))
             .accessibilityHidden(true)
     }
 }
@@ -295,7 +336,7 @@ private struct WorkspaceRow: View {
                 if let counts { Text(counts).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 4)
-            if let pullRequest = workspace.pullRequest { PullRequestPill(pullRequest: pullRequest) }
+            WorkspacePullRequestBadge(workspace: workspace)
         }
     }
 
@@ -345,6 +386,35 @@ struct WorkspaceMark: View {
             }
         }
         .frame(width: 10, height: 10)
+    }
+}
+
+/// What a workspace's row says of its pull request: the one it has, or that
+/// its commits still need one.
+struct WorkspacePullRequestBadge: View {
+    var workspace: Home.Workspace
+
+    var body: some View {
+        if let pullRequest = workspace.pullRequest {
+            PullRequestPill(pullRequest: pullRequest)
+        } else if let commits = workspace.unopenedCommits {
+            UnopenedPill(commits: commits)
+        }
+    }
+}
+
+/// Commits on a branch with no pull request yet, in the number's place and
+/// the color Sheprd's sidebar gives it.
+struct UnopenedPill: View {
+    var commits: Int
+
+    var body: some View {
+        Text(verbatim: "+PR")
+            .font(.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.yellow)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Color.yellow.opacity(0.15), in: .capsule)
+            .accessibilityLabel(commits == 1 ? "1 commit, no pull request" : "\(commits) commits, no pull request")
     }
 }
 

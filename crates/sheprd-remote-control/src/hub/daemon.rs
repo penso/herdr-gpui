@@ -30,19 +30,23 @@ struct Shared {
     /// The live connection's handle, to disconnect on drop.
     handle: Mutex<Option<ClientHandle>>,
     layout: watch::Sender<Arc<Layout>>,
+    /// The Herdr 1 session its workspaces are in, when its name is known.
+    session: Option<String>,
     stop: AtomicBool,
 }
 
 impl Daemon {
     /// Starts the worker, which connects now and again whenever the daemon
-    /// goes away.
+    /// goes away, and names `session` on every workspace it lists.
     pub(crate) fn start(
         layout: watch::Sender<Arc<Layout>>,
         target: ConnectTarget,
+        session: Option<String>,
     ) -> std::io::Result<Self> {
         let shared = Arc::new(Shared {
             handle: Mutex::new(None),
             layout,
+            session,
             stop: AtomicBool::new(false),
         });
         let worker = shared.clone();
@@ -60,6 +64,7 @@ impl Daemon {
             shared: Arc::new(Shared {
                 handle: Mutex::new(None),
                 layout,
+                session: None,
                 stop: AtomicBool::new(true),
             }),
         }
@@ -107,6 +112,9 @@ fn serve(shared: &Shared, client: sheprd_client::Client, times: &mut AgentTimes)
         match event {
             ClientEvent::Snapshot(snapshot) => {
                 let mut next = layout::project(&snapshot);
+                if let Some(session) = &shared.session {
+                    next.name_session(session);
+                }
                 times.stamp(&snapshot, &mut next, crate::web::now_ms());
                 shared.layout.send_if_modified(|current| {
                     let changed = **current != next;

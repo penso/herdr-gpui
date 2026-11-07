@@ -20,6 +20,7 @@ impl OrchestratorView {
             match tab {
                 Tab::Issues => &repo.issue_rows,
                 Tab::PullRequests => &repo.pull_request_rows,
+                Tab::Tasks => &repo.task_rows,
             }
         }
         let mut backends: Vec<(Provider, usize)> = Vec::new();
@@ -40,7 +41,7 @@ impl OrchestratorView {
         }
         backends.sort_by_key(|(provider, _)| provider_name(*provider));
         let projects: Vec<(String, String, usize)> = self
-            .projects_named()
+            .projects_listing()
             .map(|repo| {
                 let count = rows(repo, tab).iter().filter(|row| row.depth == 0).count();
                 (repo.key.clone(), self.project_label(repo), count)

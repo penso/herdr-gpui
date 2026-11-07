@@ -9,7 +9,7 @@ fn connected_horizontal_wheel_reaches_only_mouse_reporting_panes_and_popups(
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("ssh:wheel");
-    let wheel = |position, delta| gpui::ScrollWheelEvent {
+    let wheel = |position, delta| gpui::ScrollEvent {
         position,
         delta,
         modifiers: gpui::Modifiers {
@@ -17,6 +17,7 @@ fn connected_horizontal_wheel_reaches_only_mouse_reporting_panes_and_popups(
             ..Default::default()
         },
         touch_phase: gpui::TouchPhase::Moved,
+        source: gpui::ScrollSource::Pointer,
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {

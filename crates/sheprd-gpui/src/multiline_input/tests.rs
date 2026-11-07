@@ -26,11 +26,12 @@ fn draw(cx: &mut VisualTestContext) {
 
 fn scroll_up(input: &Entity<MultilineInput>, cx: &mut VisualTestContext) {
     let position = input.read_with(cx, |input, _| input.bounds.unwrap().center());
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position,
         delta: ScrollDelta::Lines(point(0., 12.)),
         modifiers: Modifiers::default(),
         touch_phase: TouchPhase::Moved,
+        source: gpui::ScrollSource::Pointer,
     });
     draw(cx);
 }

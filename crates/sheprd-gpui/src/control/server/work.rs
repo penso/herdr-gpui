@@ -1,4 +1,5 @@
-//! `notes`, `checkpoint restore`, `scripts`, `teleport`, and `fan-out`.
+//! `notes`, `worktree`, `checkpoint restore`, `scripts`, `teleport`, and
+//! `fan-out`.
 //!
 //! Every command acts on the caller's checkout: the workspace of the caller's
 //! pane on the caller's daemon, else the workspace the window focuses. A
@@ -7,6 +8,7 @@
 //! Flows that change things for real only open the app's own dialog, already
 //! pointed at that checkout; the user confirms them there.
 mod flows;
+mod mute;
 mod notes;
 #[cfg(test)]
 mod tests;
@@ -27,6 +29,10 @@ pub(super) fn serve(call: Call<WorkOp>, incoming: socket::Incoming, _: &mut Watc
         WorkOp::Notes => notes::list(cx),
         WorkOp::Note => notes::get(&caller, cx),
         WorkOp::SetNote { text } => notes::set(&caller, &text, cx),
+        WorkOp::MuteStatus => in_window(&caller, cx, |view, _, cx| mute::status(view, &caller, cx)),
+        WorkOp::Mute { muted } => in_window(&caller, cx, |view, _, cx| {
+            mute::set(view, &caller, muted, cx)
+        }),
         WorkOp::Restore { id } => in_free_window(&caller, cx, |view, window, cx| {
             flows::restore(view, &caller, id, window, cx)
         }),

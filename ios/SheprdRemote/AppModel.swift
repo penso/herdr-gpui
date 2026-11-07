@@ -43,6 +43,15 @@ final class AppModel {
     var recentAgent = UserDefaults.standard.string(forKey: "recentAgent") {
         didSet { UserDefaults.standard.set(recentAgent, forKey: "recentAgent") }
     }
+    /// What new chats start with, by agent name, kept across launches.
+    private(set) var startChoices = AppModel.savedStartChoices() {
+        didSet {
+            guard let saved = try? JSONEncoder().encode(startChoices) else { return }
+            UserDefaults.standard.set(saved, forKey: "startChoices")
+        }
+    }
+    /// Which picks in chats are the latest; see `pickStart`.
+    @ObservationIgnored private var startPicks = StartPicks()
     /// A new workspace or chat being set up, as a sheet over every tab.
     var creating: Creating?
     /// A tab to switch to, from a Control or an intent; the root view
@@ -51,9 +60,50 @@ final class AppModel {
     /// Something to tell the person once, such as a first prompt that
     /// did not go; the root view shows it and clears it.
     var notice: String?
+    /// The alert's title for `notice`, when it is not a send that failed.
+    var noticeTitle: String?
     /// What each chat's composer held when the person left it, kept
     /// until they come back, for as long as the app runs.
     @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]
+
+    private static func savedStartChoices() -> [String: StartChoice] {
+        UserDefaults.standard.data(forKey: "startChoices")
+            .flatMap { try? JSONDecoder().decode([String: StartChoice].self, from: $0) } ?? [:]
+    }
+
+    func startChoice(for agent: String) -> StartChoice {
+        startChoices[agent] ?? StartChoice()
+    }
+
+    /// Changes what new chats with `agent` start with. Agents are few; a
+    /// name past the bound is not kept, so the saved list stays small.
+    func updateStart(for agent: String, _ change: (inout StartChoice) -> Void) {
+        guard !agent.isEmpty, startChoices[agent] != nil || startChoices.count < 32 else { return }
+        var choice = startChoice(for: agent)
+        change(&choice)
+        if choice != startChoices[agent] { startChoices[agent] = choice }
+    }
+
+    /// Notes `command`, sent to a chat with `agent`, as a pick new chats may
+    /// follow, and returns what saves it once the chat took it. Requests
+    /// finish in any order, so a pick the person has since replaced is not
+    /// saved. `nil` when the command is not such a pick.
+    func pickStart(_ command: ChatCommand, agent: String) -> (() -> Void)? {
+        guard let setting = startChoice(for: agent).setting(of: command) else { return nil }
+        let pick = startPicks.begin(agent: agent, setting: setting)
+        return { [weak self] in
+            guard let self, startPicks.isLatest(pick, agent: agent, setting: setting) else { return }
+            updateStart(for: agent) { $0.follow(command) }
+        }
+    }
+
+    /// Changes `setting` for new chats with `agent` directly, as the new tab
+    /// row does. This is a pick too, so a slower one from a chat that is
+    /// still on its way does not replace it.
+    func chooseStart(_ setting: StartPicks.Setting, for agent: String, _ change: (inout StartChoice) -> Void) {
+        _ = startPicks.begin(agent: agent, setting: setting)
+        updateStart(for: agent, change)
+    }
 
     /// Spotlight follows the app lock as soon as it changes, not at the
     /// next change to the chats.
@@ -81,7 +131,9 @@ final class AppModel {
     let hostLinks: HostLinks
     let nearby = NearbyBrowser()
     let collapsed = CollapsedStore()
+    let tagFilter = TagFilterStore()
     let shortcuts = ShortcutStore()
+    let termKeys = TermKeyStore()
     let bluetooth = NearbyBluetooth()
     /// Bluetooth presence with the computers that have it on.
     let presence = PresenceCentral()
@@ -118,6 +170,8 @@ final class AppModel {
         hostLinks.computers = { [weak self] in self?.computers ?? [] }
         hostLinks.onPaired = { [weak self] in self?.add($0) }
         fleet.onOnline = { [weak self] in self?.hostLinks.check($0) }
+        fleet.onTags = { [weak self] in self?.tagsArrived($0, for: $1) }
+        fleet.onTagsAnswer = { [weak self] in self?.tagsAnswered($0, for: $1) }
         fleet.onSummary = { [spotlight] in
             let summary = WidgetSummary.load()
             spotlight.update(summary)
@@ -133,6 +187,8 @@ final class AppModel {
     }
 
     func add(_ computer: Computer) {
+        var computer = computer
+        computer.carryTags(from: computers)
         // A computer is its CA: pairing the same CA (or the same device id)
         // again replaces the old record. Names are display only.
         computers.removeAll { $0.fingerprint == computer.fingerprint || $0.device == computer.device }
@@ -148,6 +204,37 @@ final class AppModel {
         guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
         computers[index].presence = on
         save()
+    }
+
+    /// Replaces one computer's tags.
+    func setTags(_ tags: [String], for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        computers[index].tags = tags
+        computers[index].tagsUpdatedMs = UInt64(Date.now.timeIntervalSince1970 * 1000)
+        save()
+        // An edit made away from the computer goes when its home next arrives.
+        fleet.offerTags(for: computers[index])
+    }
+
+    /// What stands after this phone offered tags, which replaces its copy
+    /// even when older: a fast clock here is why they may be.
+    private func tagsAnswered(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }),
+              computers[index].tagsUpdatedMs == computer.tagsUpdatedMs else { return }
+        computers[index].adopt(remote)
+        save()
+    }
+
+    /// The tags `computer` keeps, as its home or an answer reports them.
+    private func tagsArrived(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        switch ComputerTags.step(for: computers[index], remote: remote) {
+        case .none: break
+        case .adopt:
+            computers[index].adopt(remote)
+            save()
+        case .send: fleet.offerTags(for: computers[index])
+        }
     }
 
     /// Addresses a computer sent over Bluetooth, sealed to this phone.

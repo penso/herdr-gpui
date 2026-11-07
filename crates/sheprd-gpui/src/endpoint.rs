@@ -19,6 +19,7 @@ use std::{
 
 mod catalog;
 mod config_reload;
+mod follow;
 mod history;
 mod order;
 pub(crate) mod origin;
@@ -175,6 +176,11 @@ pub(super) struct Endpoint {
     /// [`Self::reload_config`]. It outlives a reconnection, since a dropped
     /// link can come back to the same daemon process.
     config_reload_pending: bool,
+    /// A focus asked for on this host since the window last looked; see
+    /// [`SheprdWindow::follow_focus`].
+    focus_requested: bool,
+    /// When the window last stopped showing this host.
+    left_at: Option<Instant>,
     sounds: crate::sound::Policy,
 }
 
@@ -241,6 +247,8 @@ impl Endpoint {
             detached: false,
             initial_surface: false,
             config_reload_pending: false,
+            focus_requested: false,
+            left_at: None,
             sounds: Default::default(),
         }
     }
@@ -257,6 +265,7 @@ impl Endpoint {
         self.toasts.entries.clear();
         self.connection.detach(false);
         self.initial_surface = false;
+        self.focus_requested = false;
         self.online_since = None;
         self.generation += 1;
         self.live = self.connection.take_update().unwrap_or_default();
@@ -356,6 +365,7 @@ impl Endpoint {
                 (state.snapshot.as_deref(), state.surface.as_ref()),
                 crate::palette::unix_now(),
             );
+            self.observe_focus(&state, now);
             self.live = state;
             self.sync_live();
         }
@@ -752,6 +762,7 @@ impl SheprdWindow {
             cx.notify();
             return false;
         }
+        self.leave_selected(Instant::now());
         self.release_selected();
         if index == 0 {
             // Local is the escape hatch and never waits on a remote release. An

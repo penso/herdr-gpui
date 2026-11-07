@@ -66,9 +66,6 @@ finished. This only stops the viewer. The GUI can show it over the selected
 existing pane using its own config (normally `config-gpui.toml`):
 
 ```toml
-[features]
-acp_chats = true
-
 [[chat.mirrors]]
 pane = "PANE_ID"
 endpoint = "0123456789abcdef0123456789abcdef"
@@ -186,11 +183,31 @@ release changes them.
 
 What it offers: Claude Code's permission modes (Default, Accept Edits, Plan,
 Bypass Permissions), its models and effort levels from its handshake, its
-slash commands, the to-do list as the plan, diffs for edits, permission
+slash commands, its task list as the plan, diffs for edits, permission
 questions with Claude's own "don't ask again" suggestion, a plan to approve
 when leaving plan mode, and questions with choices. `--load` continues a
-session with its context, but the chat starts empty: the earlier messages
-are not shown again.
+session with its context. Claude sends none of its earlier messages when a
+session opens, so they come from the last 8 MiB of its own log, along with its
+context window use; a log that cannot be read leaves a warning and an empty
+chat.
+
+Run this way Claude Code offers no task tools unless asked, so `claude` starts
+with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` unless that is already set; setting it
+to `0` turns them off. The plan is kept from the calls of a running session, so
+a continued session shows none until Claude lists its tasks again.
+
+### The plan
+
+ACP's `plan` update is the one dependable source, and Codex's plan and Claude's
+task list reach it through their translators. OpenCode and Copilot send no plan
+but keep a list with a tool of their own (`todowrite`, `update_todo`), so those
+calls show as the plan rather than as cards (`src/project/todos.rs`). This goes
+by the tool's name and input, which neither agent promises to keep, and an agent
+that sends a `plan` update is taken at its word instead. OpenCode offers its tool
+only with `{"experimental": {"todo": true}}` in its config, and Copilot's
+checklist says only what is done, so no step shows as in progress. Gemini's
+tool calls carry no input to read and the pi translator reads no list, so
+neither shows a plan.
 
 ### Codex and pi without an adapter
 
@@ -204,11 +221,12 @@ The same holds for two more agents, each through a translator of its own
   reasoning efforts come from `model/list` and go with each turn, and command,
   file-change, and extra-access approvals become permission requests. A
   configured model the account does not offer gives way to Codex's default.
+  `--load` shows earlier messages from Codex's own rollout log, as for Claude.
 - **pi** (`@earendil-works/pi-coding-agent`) runs as `pi --mode rpc`, the JSON
   lines its `docs/rpc.md` documents. pi asks no tool approvals of its own; an
   extension's `select` and `confirm` dialogs become permission requests, and
   its models and thinking levels are the session's settings. `--load` passes
-  pi's `--session`.
+  pi's `--session`; earlier messages are not shown again.
 
 ### Enterprise endpoints
 

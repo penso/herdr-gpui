@@ -349,8 +349,8 @@ impl SheprdWindow {
             "enter" => Some(Step::Older),
             "up" if !modifiers.modified() => Some(Step::Older),
             "down" if !modifiers.modified() => Some(Step::Newer),
-            "g" if modifiers.secondary() && modifiers.shift => Some(Step::Newer),
-            "g" if modifiers.secondary() => Some(Step::Older),
+            "g" if crate::keymap::secondary(&modifiers) && modifiers.shift => Some(Step::Newer),
+            "g" if crate::keymap::secondary(&modifiers) => Some(Step::Older),
             _ => return,
         };
         if let Some(step) = step {
@@ -439,7 +439,7 @@ impl SheprdWindow {
                         .text_size(px(self.config.ui.size))
                         .shadow_md()
                         .on_key_down(cx.listener(Self::find_key_down))
-                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                        .on_scroll(|_, _, cx| cx.stop_propagation())
                         .child(div().flex_1().min_w_0().child(bar.input.clone()))
                         .child(
                             div()

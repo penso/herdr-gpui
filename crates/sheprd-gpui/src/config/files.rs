@@ -1,14 +1,12 @@
 //! The config files on disk: locking, migration, managed defaults refresh,
 //! and targeted edits to the local overrides file.
 use super::Error;
-use super::{
-    Config, DEFAULT_CONFIG, Daemon, FONT_SIZE_RANGE, FontFace, LOCAL_CONFIG, LayoutMode,
-    MANAGED_HEADER,
-};
+use super::{Config, DEFAULT_CONFIG, Daemon, FONT_SIZE_RANGE, FontFace, LOCAL_CONFIG, LayoutMode};
 use crate::{Result, contrast::Contrast};
+use sheprd_client::settings_files::{self, State};
 use std::{
     fs,
-    io::{ErrorKind, Write},
+    io::ErrorKind,
     path::{Path, PathBuf},
 };
 
@@ -21,13 +19,8 @@ impl Config {
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
         fs::create_dir_all(parent).map_err(|error| crate::Error::from(error).at_path(parent))?;
-        let lock_path = path.with_extension("lock");
-        let lock = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&lock_path)
+        let lock_path = settings_files::lock_path(path);
+        let lock = settings_files::open_lock(&lock_path)
             .inspect_err(|error| {
                 tracing::warn!(operation = "config_lock_open", kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Config lock failed");
             })
@@ -37,41 +30,30 @@ impl Config {
                 tracing::warn!(operation = "config_lock_acquire", kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Config lock failed");
             })
             .map_err(|error| crate::Error::from(error).at_path(&lock_path))?;
-        let local = path.with_extension("local.toml");
-        let original = match fs::read_to_string(path) {
-            Ok(text) => Some(text),
-            Err(error) if error.kind() == ErrorKind::NotFound => None,
-            Err(error) => return Err(crate::Error::from(error).at_path(path)),
-        };
-        let legacy = original
-            .as_deref()
-            .filter(|text| text.lines().next() != Some(MANAGED_HEADER));
+        let local = settings_files::overrides_path(path);
+        let original =
+            settings_files::read(path).map_err(|error| crate::Error::from(error).at_path(path))?;
+        let legacy = original.as_deref().and_then(settings_files::personal);
         if let Some(text) = legacy {
             // Never replace an old user's file until its exact contents are
             // safely stored in the local file. A conflict needs human resolution.
             Self::parse_over(text, &Daemon::default()).map_err(|error| error.at_path(path))?;
         }
-        match fs::read_to_string(&local) {
-            Ok(text) if legacy.is_some_and(|legacy| legacy != text) => {
+        let overrides = settings_files::read(&local)
+            .map_err(|error| crate::Error::from(error).at_path(&local))?;
+        match State::of(legacy, overrides.as_deref()) {
+            State::Conflict => {
                 return Err(Error::MigrationConflict {
                     original: path.into(),
                     local,
                 }
                 .into());
             }
-            Ok(_) => {}
-            Err(error) if error.kind() == ErrorKind::NotFound => {
-                let mut file = tempfile::NamedTempFile::new_in(parent)
+            State::Fresh | State::Personal => {
+                settings_files::create(&local, legacy.unwrap_or(LOCAL_CONFIG))
                     .map_err(|error| crate::Error::from(error).at_path(&local))?;
-                file.write_all(legacy.unwrap_or(LOCAL_CONFIG).as_bytes())
-                    .map_err(|error| crate::Error::from(error).at_path(&local))?;
-                file.as_file()
-                    .sync_all()
-                    .map_err(|error| crate::Error::from(error).at_path(&local))?;
-                file.persist_noclobber(&local)
-                    .map_err(|error| crate::Error::from(error.error).at_path(&local))?;
             }
-            Err(error) => return Err(crate::Error::from(error).at_path(&local)),
+            State::Moving | State::Overrides => {}
         }
         if legacy.is_some() {
             // Windows FlushFileBuffers requires write access, including when
@@ -403,20 +385,5 @@ impl Config {
 }
 
 pub(super) fn write_config(path: &Path, text: &str) -> Result<()> {
-    let result = (|| -> std::io::Result<()> {
-        // rename(2) replaces a symlink instead of writing through it, so write
-        // to the file the link points at. A missing path keeps its own name.
-        let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-        let parent = target
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(Path::new("."));
-        fs::create_dir_all(parent)?;
-        let mut file = tempfile::NamedTempFile::new_in(parent)?;
-        file.write_all(text.as_bytes())?;
-        file.as_file().sync_all()?;
-        file.persist(&target).map_err(|error| error.error)?;
-        Ok(())
-    })();
-    result.map_err(|error| crate::Error::from(error).at_path(path))
+    settings_files::replace(path, text).map_err(|error| crate::Error::from(error).at_path(path))
 }

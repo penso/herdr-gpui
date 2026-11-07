@@ -8,7 +8,7 @@ use super::{
     layout::{ComposerParts, layout_for},
 };
 use crate::i18n::{Localize, fl};
-use crate::{SheprdWindow, config::corners};
+use crate::{SheprdWindow, config::corners, notifications::safe_text};
 use gpui::{prelude::*, *};
 use sheprd_chat_protocol::Command;
 
@@ -93,7 +93,7 @@ impl SheprdWindow {
             // On this machine only a pasted picture is ever pending.
             let label = match &chat.target.route {
                 super::super::Route::Ssh(host) => {
-                    let host = crate::notifications::safe_text(host, 80);
+                    let host = safe_text(host, 80);
                     fl!("chat-copying-files", count = chat.uploading, host = host)
                 }
                 super::super::Route::Local => {
@@ -250,6 +250,26 @@ impl SheprdWindow {
             settings,
             usage: self.render_chat_usage(chat),
             send,
+            place: transcript
+                .session
+                .as_ref()
+                .and_then(|session| session.cwd.as_deref())
+                .map(|cwd| safe_text(cwd, 300)),
+            commands: self
+                .keymap()
+                .shortcuts(sheprd_commands::Command::Palette)
+                .next()
+                .map(|shortcut| {
+                    div()
+                        .flex()
+                        .gap(px(5.))
+                        .child(
+                            div()
+                                .text_color(rgb(theme.foreground))
+                                .child(shortcut.to_owned()),
+                        )
+                        .child(fl!("chat-status-commands"))
+                }),
         };
         let card = layout_for(self.config.chat.layout).composer(parts, &self.chat_look());
         div()

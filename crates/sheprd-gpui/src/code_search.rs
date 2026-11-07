@@ -402,7 +402,12 @@ impl SheprdWindow {
             }
             "enter" => {
                 let row = code.selected;
-                self.activate_code_search(row, keystroke.modifiers.secondary(), window, cx);
+                self.activate_code_search(
+                    row,
+                    crate::keymap::secondary(&keystroke.modifiers),
+                    window,
+                    cx,
+                );
                 true
             }
             _ => false,

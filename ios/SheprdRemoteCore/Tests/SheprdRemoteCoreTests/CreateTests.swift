@@ -17,15 +17,21 @@ import Testing
         #expect(created.pane == "p7")
         #expect(created.workspace == "w3")
         #expect(created.prompted)
+        #expect(created.started == true)
         // A new chat's answer has no workspace, and a slow chat no pane.
         let chat = try JSONDecoder().decode(Created.self, from: Data(#"{"pane":null,"prompted":false}"#.utf8))
         #expect(chat.pane == nil && chat.workspace == nil && !chat.prompted)
+        // A daemon too old for `start` says nothing, which is not a refusal.
+        #expect(chat.started == nil)
     }
 
     @Test func requestsEncodeTheFieldsTheDaemonReads() throws {
         let body = try JSONEncoder().encode(NewWorkspaceRequest(cwd: "/a", branch: "fix", agent: "codex", prompt: "go"))
         let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(object == ["cwd": "/a", "branch": "fix", "agent": "codex", "prompt": "go"])
+        let inSession = try JSONEncoder().encode(NewWorkspaceRequest(cwd: "/a", agent: "codex", session: "pilots"))
+        let named = try #require(JSONSerialization.jsonObject(with: inSession) as? [String: String])
+        #expect(named["session"] == "pilots")
     }
 
     /// The values `generated_branches_are_namespaced_and_reproducible`

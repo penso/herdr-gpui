@@ -5,15 +5,16 @@ import SwiftUI
 enum Creating: Identifiable, Hashable {
     /// A workspace, on `device` when the person came from that computer,
     /// as a new worktree of the checkout in `folder` when they came from
-    /// its repository.
-    case workspace(device: String?, folder: String? = nil)
+    /// its repository, in that repository's Herdr `session` when its
+    /// computer names one.
+    case workspace(device: String?, folder: String? = nil, session: String? = nil)
     /// A chat in an existing workspace, with `agent` chosen when the
     /// person picked one before asking for the form.
     case chat(device: String, workspace: String, label: String, agent: String? = nil)
 
     var id: String {
         switch self {
-        case let .workspace(device, folder): "workspace/\(device ?? "")/\(folder ?? "")"
+        case let .workspace(device, folder, session): "workspace/\(device ?? "")/\(folder ?? "")/\(session ?? "")"
         case let .chat(device, workspace, _, _): "chat/\(device)/\(workspace)"
         }
     }
@@ -45,11 +46,15 @@ struct NewWorkspaceSheet: View {
     /// The checkout the person came from, chosen once its computer's
     /// folders load, unless they pick another computer.
     private let preset: (device: String, folder: String)?
+    /// The checkout's Herdr session, which the workspace opens in while
+    /// the checkout stays the one chosen.
+    private let session: String?
 
-    init(device: String?, folder: String? = nil) {
+    init(device: String?, folder: String? = nil, session: String? = nil) {
         _device = State(initialValue: device)
         _worktree = State(initialValue: folder != nil)
         preset = device.flatMap { device in folder.map { (device, $0) } }
+        self.session = session
     }
 
     var body: some View {
@@ -97,6 +102,9 @@ struct NewWorkspaceSheet: View {
                 }
                 Section("Agent") {
                     AgentGrid(agents: options?.agents ?? [], selection: $agent)
+                    if let name = options?.agents.first(where: { $0.id == agent })?.name {
+                        StartChoiceRow(agent: name)
+                    }
                 }
                 Section {
                     TextField("What should it do first? (optional)", text: $prompt, axis: .vertical).lineLimit(2...6)
@@ -204,13 +212,15 @@ struct NewWorkspaceSheet: View {
 
     private func create() {
         guard let device, let folder else { return }
+        let title = options?.agents.first { $0.id == agent }?.name ?? "Chat"
         let request = NewWorkspaceRequest(
             cwd: folder,
             branch: worktree ? branch.trimmingCharacters(in: .whitespaces) : "",
             agent: agent,
-            prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            start: model.startChoice(for: title).start,
+            session: preset?.device == device && preset?.folder == folder ? session : nil
         )
-        let title = options?.agents.first { $0.id == agent }?.name ?? "Chat"
         creating = true
         Task {
             defer { creating = false }
@@ -220,7 +230,7 @@ struct NewWorkspaceSheet: View {
                 }
                 model.recentAgent = request.agent
                 dismiss()
-                model.opened(created, prompt: request.prompt, device: device, title: title)
+                model.opened(created, prompt: request.prompt, start: request.start, device: device, title: title)
             } catch {
                 problem = error.localizedDescription
             }
@@ -251,7 +261,12 @@ struct NewChatSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Agent") { AgentGrid(agents: agents, selection: $agent) }
+                Section("Agent") {
+                    AgentGrid(agents: agents, selection: $agent)
+                    if let name = agents.first(where: { $0.id == agent })?.name {
+                        StartChoiceRow(agent: name)
+                    }
+                }
                 Section {
                     TextField("What should it do first? (optional)", text: $prompt, axis: .vertical).lineLimit(2...6)
                 } header: {
@@ -284,9 +299,13 @@ struct NewChatSheet: View {
 
     private func start() {
         guard let selected = agents.first(where: { $0.id == agent }) else { return }
-        let request = NewChatRequest(agent: agent, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
-        let (device, workspace) = (device, workspace)
         let title = selected.name
+        let request = NewChatRequest(
+            agent: agent,
+            prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            start: model.startChoice(for: title).start
+        )
+        let (device, workspace) = (device, workspace)
         creating = true
         Task {
             defer { creating = false }
@@ -296,7 +315,7 @@ struct NewChatSheet: View {
                 }
                 model.recentAgent = request.agent
                 dismiss()
-                model.opened(created, prompt: request.prompt, device: device, title: title)
+                model.opened(created, prompt: request.prompt, start: request.start, device: device, title: title)
             } catch {
                 problem = error.localizedDescription
             }
@@ -384,15 +403,39 @@ extension AppModel {
     /// Opens a chat just created. A first prompt that did not go, because
     /// the agent was slow to start or refused it, waits in the chat's
     /// composer, and the person is told rather than finding it gone.
-    func opened(_ created: Created, prompt: String, device: String, title: String) {
+    func opened(_ created: Created, prompt: String, start: ChatStart?, device: String, title: String) {
         let unsent = !prompt.isEmpty && !created.prompted
         if let pane = created.pane {
-            if unsent { fleet.cache.save(draft: Cache.Draft(text: prompt, pictures: []), device: device, pane: pane) }
+            if unsent { fleet.save(draft: Cache.Draft(text: prompt, pictures: []), for: PaneKey(device: device, pane: pane)) }
             pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title)
         }
-        guard unsent else { return }
-        notice = created.pane == nil
+        let unset = startProblem(created, start: start, device: device)
+        guard unsent else {
+            if let unset { notice = unset }
+            return
+        }
+        let unsentNotice = created.pane == nil
             ? "The chat started, but your first prompt was not sent. Open the chat from Home and send it again:\n\n\(prompt)"
             : "The chat started, but your first prompt was not sent. It is in the chat's message box: send it when the agent is ready."
+        notice = unset.map { "\($0)\n\n\(unsentNotice)" } ?? unsentNotice
     }
+
+    /// What to say about a chat that did not start as asked, if anything. A
+    /// computer too old for `start` never tried, and that is what is said,
+    /// with its own alert title.
+    func startProblem(_ created: Created, start: ChatStart?, device: String) -> String? {
+        guard start != nil else { return nil }
+        switch created.started {
+        case true: return nil
+        case false: return Self.startMissed
+        case nil:
+            noticeTitle = "Update Sheprd"
+            let name = computers.first { $0.device == device }.map(displayName) ?? "This computer"
+            let prompt = created.prompted ? " Your first prompt ran in that mode too." : ""
+            return "\(name) runs an older Sheprd that cannot start a chat in the mode you picked, so this chat is in the agent's default.\(prompt) Update it from the computer's page in Settings."
+        }
+    }
+
+    /// Said when a chat may be in another mode than the one the person saw.
+    static let startMissed = "The chat may not have the mode or auto-accept you picked. Check them in its Session sheet."
 }

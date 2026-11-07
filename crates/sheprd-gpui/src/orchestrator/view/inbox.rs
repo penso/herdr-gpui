@@ -27,7 +27,7 @@ impl OrchestratorView {
             .clone()
             .map(|detail| self.render_pane(detail, window, cx));
         let filters =
-            (self.tab == Tab::Issues && self.filters_open).then(|| self.render_facets(cx));
+            (self.tab != Tab::PullRequests && self.filters_open).then(|| self.render_facets(cx));
         div()
             .flex_1()
             .min_h_0()
@@ -89,10 +89,12 @@ impl OrchestratorView {
 
     /// How many of the Issues filters narrow the list.
     pub(super) fn active_filters(&self) -> usize {
-        usize::from(self.filters.provider.is_some())
+        let tasks = self.tab == Tab::Tasks;
+        usize::from(!tasks && self.filters.provider.is_some())
             + usize::from(self.filters.has_run)
             + usize::from(self.filters.blocked)
             + usize::from(self.label.is_some())
+            + if tasks { self.task_filters.active() } else { 0 }
     }
 
     /// The Issues filters' column: state, and the labels the open issues
@@ -106,6 +108,7 @@ impl OrchestratorView {
             .iter()
             .flat_map(|repo| repo.snapshot.items.iter())
             .filter(|item| item.pull_request.is_none() && !super::rows::closed(item))
+            .filter(|item| self.tab != Tab::Tasks || item.key.source.provider == Provider::Beads)
             .collect();
         let mut labels: Vec<(String, usize)> = Vec::new();
         for label in open.iter().flat_map(|item| &item.labels) {
@@ -116,39 +119,10 @@ impl OrchestratorView {
         }
         labels.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         labels.truncate(FACET_LABELS);
-        let hover = theme.surface;
         let option = |id: SharedString, label: SharedString, count: Option<usize>, on: bool| {
-            div()
-                .id(id)
-                .flex()
-                .items_center()
-                .gap_2()
-                .px_2()
-                .py(px(3.))
-                .rounded(px(corners::SMALL))
-                .cursor_pointer()
-                .hover(move |style| style.bg(rgb(hover)))
-                .when(on, |el| el.bg(rgb(theme.primary_wash())))
-                .child(
-                    div()
-                        .flex_none()
-                        .size(px(11.))
-                        .rounded(px(2.))
-                        .border_1()
-                        .border_color(rgb(if on { theme.primary() } else { theme.muted }))
-                        .when(on, |el| el.bg(rgb(theme.primary()))),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(look.small())
-                        .child(label),
-                )
-                .children(count.map(|count| look.muted(count.to_string())))
+            self.facet(id, label, count, on)
         };
-        let heading = |text: String| look.label(text).pt_2().pb_1();
+        let heading = |text: String| self.facet_heading(text);
         let has_run = open
             .iter()
             .filter(|item| {
@@ -176,6 +150,9 @@ impl OrchestratorView {
             .flex_col()
             .border_r_1()
             .border_color(rgb(theme.active))
+            .when(self.tab == Tab::Tasks, |el| {
+                el.children(self.render_task_facets(cx))
+            })
             .child(heading(fl!("orchestrator-facets-state")))
             .child(
                 option(
@@ -224,10 +201,58 @@ impl OrchestratorView {
             })
     }
 
+    /// A filter's heading in the column.
+    pub(super) fn facet_heading(&self, text: String) -> Div {
+        self.look.label(text).pt_2().pb_1()
+    }
+
+    /// One filter of the column: its box, its name, and what it would count.
+    pub(super) fn facet(
+        &self,
+        id: SharedString,
+        label: SharedString,
+        count: Option<usize>,
+        on: bool,
+    ) -> Stateful<Div> {
+        let look = &self.look;
+        let theme = &look.theme;
+        let hover = theme.surface;
+        div()
+            .id(id)
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_2()
+            .py(px(3.))
+            .rounded(px(corners::SMALL))
+            .cursor_pointer()
+            .hover(move |style| style.bg(rgb(hover)))
+            .when(on, |el| el.bg(rgb(theme.primary_wash())))
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(11.))
+                    .rounded(px(2.))
+                    .border_1()
+                    .border_color(rgb(if on { theme.primary() } else { theme.muted }))
+                    .when(on, |el| el.bg(rgb(theme.primary()))),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(look.small())
+                    .child(label),
+            )
+            .children(count.map(|count| look.muted(count.to_string())))
+    }
+
     /// While the Issues filters are folded, the ones in use as chips that
     /// clear them.
     fn render_chips(&self, cx: &mut Context<Self>) -> Option<Div> {
-        if self.tab != Tab::Issues || self.filters_open || self.active_filters() == 0 {
+        let tasks = self.tab == Tab::Tasks;
+        if self.tab == Tab::PullRequests || self.filters_open || self.active_filters() == 0 {
             return None;
         }
         let look = &self.look;
@@ -263,7 +288,12 @@ impl OrchestratorView {
             .px_4()
             .pb_2()
             .child(look.muted(fl!("orchestrator-showing-only")));
-        if let Some(provider) = self.filters.provider {
+        if tasks {
+            for (id, text, clear) in self.task_chips() {
+                row = row.child(chip(id, text, clear));
+            }
+        }
+        if let Some(provider) = self.filters.provider.filter(|_| !tasks) {
             row = row.child(chip(
                 "orchestrator-chip-source",
                 provider_name(provider).into(),
@@ -301,7 +331,7 @@ impl OrchestratorView {
     fn render_header(&self, cx: &mut Context<Self>) -> Div {
         let look = &self.look;
         let theme = &look.theme;
-        let listed: Vec<_> = self.projects_named().collect();
+        let listed: Vec<_> = self.projects_listing().collect();
         let title = match listed.as_slice() {
             [] => fl!("orchestrator-no-repositories-yet"),
             [only] => only.name(),
@@ -311,7 +341,10 @@ impl OrchestratorView {
         // repository holds from it for a sync that has not reported a count.
         let mut providers: Vec<(Provider, Vec<(&SyncState, usize)>)> = Vec::new();
         for repo in &self.repos {
-            for status in &repo.snapshot.sources {
+            let sources = repo.snapshot.sources.iter();
+            for status in sources
+                .filter(|status| self.tab != Tab::Tasks || status.key.provider == Provider::Beads)
+            {
                 let held = repo
                     .snapshot
                     .items
@@ -366,7 +399,7 @@ impl OrchestratorView {
             });
         // A repository without a GitHub remote has no GitHub source, which
         // reads like a missing account without this.
-        let no_github = (!github && !self.repos.is_empty()).then(|| {
+        let no_github = (!github && !self.repos.is_empty() && self.tab != Tab::Tasks).then(|| {
             source_chip(look, ("orchestrator-source-none", 0), Provider::Github).child(
                 div()
                     .text_color(rgb(theme.muted))
@@ -459,7 +492,7 @@ impl OrchestratorView {
                 }))
         };
         match self.tab {
-            Tab::Issues => {
+            Tab::Issues | Tab::Tasks => {
                 let active = self.active_filters();
                 let open = self.filters_open;
                 row = row.child(
@@ -778,9 +811,10 @@ pub(super) fn failure_text(provider: Provider, error: &impl Localize) -> String 
 /// A backend's name, the product's own.
 pub(super) fn provider_name(provider: Provider) -> &'static str {
     match provider {
-        Provider::Github => "GitHub", // i18n: data
-        Provider::Beads => "Beads",   // i18n: data
-        Provider::Gitlab => "GitLab", // i18n: data
+        Provider::Azure => "Azure DevOps", // i18n: data
+        Provider::Github => "GitHub",      // i18n: data
+        Provider::Beads => "Beads",        // i18n: data
+        Provider::Gitlab => "GitLab",      // i18n: data
     }
 }
 
@@ -803,9 +837,12 @@ fn source_chip(look: &Look, id: (&'static str, usize), provider: Provider) -> St
         .child(provider_name(provider))
 }
 
-/// A backend's mark: GitHub's or GitLab's logo, else a short colored tag.
+/// A backend's mark: its forge's logo, else a short colored tag.
 pub(super) fn provider_mark(look: &Look, provider: Provider) -> AnyElement {
     match provider {
+        Provider::Azure => look
+            .icon("icons/azure-devops.svg", 12., look.theme.subtext())
+            .into_any_element(),
         Provider::Github => look
             .icon("icons/github.svg", 12., look.theme.subtext())
             .into_any_element(),

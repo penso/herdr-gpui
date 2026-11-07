@@ -15,6 +15,7 @@ use crate::app::{
     config::{Certificate, RemoteConfig},
 };
 use crate::control::{Request, Response};
+use crate::core_target::CoreTarget;
 use std::{
     ffi::OsString,
     fs, io,
@@ -49,12 +50,15 @@ pub struct Plan {
     /// `XDG_STATE_HOME`.
     pub herdr_socket: Option<PathBuf>,
     pub chat_dir: Option<PathBuf>,
+    /// The core endpoint or setup failure resolved in the desktop process.
+    pub core_endpoint: CoreTarget,
 }
 
 impl Plan {
     /// `serve --state-dir DIR --port N --bind ADDR [--cert F --key F]
-    /// --privacy generic|excerpt --device-idle-days N [--herdr-socket P]
-    /// [--chat-dir D]`.
+    /// --privacy generic|excerpt --device-idle-days N [--live-activities
+    /// generic] [--herdr-socket P] [--chat-dir D] [--core-socket P
+    /// --core-session S]`.
     pub fn args(&self) -> Vec<OsString> {
         let config = &self.config;
         let mut args: Vec<OsString> = vec![
@@ -80,11 +84,28 @@ impl Plan {
             "--device-idle-days".into(),
             config.device_idle_days.to_string().into(),
         ]);
+        // The default is left out, so the service definition, and with it
+        // the running daemon, stays as it was for everyone who keeps it.
+        if !config.live_activities.is_detailed() {
+            args.extend([
+                "--live-activities".into(),
+                config.live_activities.name().into(),
+            ]);
+        }
         if let Some(socket) = &self.herdr_socket {
             args.extend(["--herdr-socket".into(), socket.clone().into()]);
         }
         if let Some(dir) = &self.chat_dir {
             args.extend(["--chat-dir".into(), dir.clone().into()]);
+        }
+        match &self.core_endpoint {
+            CoreTarget::Endpoint(endpoint) => args.extend([
+                "--core-socket".into(),
+                endpoint.socket.clone().into(),
+                "--core-session".into(),
+                endpoint.session.clone().into(),
+            ]),
+            CoreTarget::Discover => {}
         }
         args
     }
@@ -305,7 +326,19 @@ pub fn reconcile(
     config: &RemoteConfig,
     host: &Host,
     send: impl Fn(&Request) -> Result<Response, crate::control::Error>,
+    run: impl FnMut(&Step) -> Result<()>,
+) -> Result<Outcome> {
+    reconcile_with_core(config, host, send, run, || {
+        sheprd_core_client::Endpoint::resolve(sheprd_client::login_env::var)
+    })
+}
+
+fn reconcile_with_core(
+    config: &RemoteConfig,
+    host: &Host,
+    send: impl Fn(&Request) -> Result<Response, crate::control::Error>,
     mut run: impl FnMut(&Step) -> Result<()>,
+    core_endpoint: impl FnOnce() -> sheprd_core_client::Result<sheprd_core_client::Endpoint>,
 ) -> Result<Outcome> {
     let installed = host.file.exists();
     if !config.enabled {
@@ -325,7 +358,7 @@ pub fn reconcile(
         }
         return Ok(Outcome::Removed);
     }
-    if write_definition(config, host)? {
+    if write_definition(config, host, core_endpoint())? {
         for step in host.manager.load(&host.file) {
             run(&step)?;
         }
@@ -366,7 +399,11 @@ pub fn restart(
     if !config.enabled {
         return Ok(Outcome::Unchanged);
     }
-    write_definition(config, host)?;
+    write_definition(
+        config,
+        host,
+        sheprd_core_client::Endpoint::resolve(sheprd_client::login_env::var),
+    )?;
     for step in host.manager.load(&host.file) {
         run(&step)?;
     }
@@ -375,7 +412,11 @@ pub fn restart(
 
 /// Writes the service definition for `config` unless the file already
 /// holds it. Returns whether it wrote.
-fn write_definition(config: &RemoteConfig, host: &Host) -> Result<bool> {
+fn write_definition(
+    config: &RemoteConfig,
+    host: &Host,
+    core_endpoint: sheprd_core_client::Result<sheprd_core_client::Endpoint>,
+) -> Result<bool> {
     let program = host.program.clone().ok_or(Error::ProgramMissing)?;
     let plan = Plan {
         program,
@@ -383,6 +424,7 @@ fn write_definition(config: &RemoteConfig, host: &Host) -> Result<bool> {
         config: config.clone(),
         herdr_socket: sheprd_client::ConnectTarget::Local.socket_path().ok(),
         chat_dir: sheprd_chat_protocol::endpoint_dir(),
+        core_endpoint: CoreTarget::resolved(core_endpoint),
     };
     let text = host.manager.text(&plan)?;
     let bytes = host.manager.bytes(&text);

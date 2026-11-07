@@ -1,7 +1,7 @@
 use super::*;
 
 fn key(keystroke: &str) -> Keystroke {
-    Keystroke::parse(keystroke).unwrap()
+    crate::keymap::parse_keystroke(keystroke).unwrap()
 }
 
 fn text() -> Option<ClipboardItem> {

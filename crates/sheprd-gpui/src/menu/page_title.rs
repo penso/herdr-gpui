@@ -47,6 +47,7 @@ impl Page {
             #[cfg(feature = "cloud")]
             Self::DestroyCloud => fl!("menu-page-destroy-cloud-devices"),
             Self::Devices => fl!("menu-page-devices"),
+            Self::DeviceTags => fl!("device-tags-page"),
             Self::DeviceTheme => fl!("menu-page-device-theme"),
             Self::Dialog(action) => match action {
                 WorkspaceAction::Rename => fl!("menu-page-rename-workspace"),

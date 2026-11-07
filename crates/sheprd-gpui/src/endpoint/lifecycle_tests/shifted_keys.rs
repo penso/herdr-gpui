@@ -59,7 +59,9 @@ fn window(
 
 fn press(keys: &[&str], cx: &mut gpui::VisualTestContext) {
     for key in keys {
-        cx.update(|window, cx| window.dispatch_keystroke(gpui::Keystroke::parse(key).unwrap(), cx));
+        cx.update(|window, cx| {
+            window.dispatch_keystroke(crate::keymap::parse_keystroke(key).unwrap(), cx)
+        });
     }
 }
 

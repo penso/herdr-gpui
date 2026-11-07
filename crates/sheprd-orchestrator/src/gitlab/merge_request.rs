@@ -79,6 +79,8 @@ impl Listed for MergeRequestNode {
             labels: self.labels,
             parent_id: None,
             blocked_by: Vec::new(),
+            assignee: None,
+            acceptance: None,
             priority: None,
             created_at: Some(self.created_at),
             updated_at: Some(self.updated_at),

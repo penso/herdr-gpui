@@ -22,6 +22,7 @@ mod pull;
 mod repo;
 mod rows;
 mod status;
+mod tasks;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -43,7 +44,9 @@ use repo::Repo;
 pub(crate) use rows::Tab;
 use rows::{Filters, Runs, Sort};
 use std::{
+    cell::Cell,
     collections::{HashMap, HashSet},
+    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -66,6 +69,10 @@ pub(crate) enum Event {
         host: Option<String>,
         session: Option<String>,
         workspace_id: String,
+    },
+    /// Show the workspace holding the project with repository key `repo`.
+    OpenProject {
+        repo: String,
     },
     /// Open a web address, such as an issue's page, in a browser tab.
     OpenUrl(String),
@@ -173,6 +180,8 @@ pub(crate) struct OrchestratorView {
     filters_open: bool,
     /// Only issues with this label.
     label: Option<String>,
+    /// What only the Tasks list narrows by.
+    task_filters: tasks::TaskFilters,
     collapsed: HashSet<String>,
     search: Entity<SearchInput>,
     query: String,
@@ -180,6 +189,9 @@ pub(crate) struct OrchestratorView {
     selected: Option<String>,
     detail: Option<Detail>,
     pane_width: f32,
+    /// The list's width as last laid out, which decides the columns its rows
+    /// keep beside an open item.
+    list_width: Rc<Cell<f32>>,
     focus: FocusHandle,
     scroll: UniformListScrollHandle,
     /// The shown list's lines: headings and rows.
@@ -255,12 +267,14 @@ impl OrchestratorView {
             yours: rows::Yours::default(),
             filters_open: false,
             label: None,
+            task_filters: tasks::TaskFilters::default(),
             collapsed: HashSet::new(),
             search,
             query: String::new(),
             selected: None,
             detail: None,
             pane_width: PANE_DEFAULT,
+            list_width: Rc::default(),
             focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             lines: Vec::new(),

@@ -2,7 +2,7 @@ use crate::core_terminals::view::paste::pastes;
 use gpui::Keystroke;
 
 fn key(text: &str) -> Keystroke {
-    Keystroke::parse(text).unwrap()
+    crate::keymap::parse_keystroke(text).unwrap()
 }
 
 #[test]

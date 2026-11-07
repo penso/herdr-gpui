@@ -173,7 +173,7 @@ pub(crate) fn run(options: MockupOptions) -> std::process::ExitCode {
                     window_min_size: Some(size(px(640.), px(400.))),
                     titlebar: Some(crate::titlebar::options(&title)),
                     app_owns_titlebar_drag: cfg!(target_os = "macos"),
-                    app_id: Some("so.pen.herdr-gpui.mockup".into()),
+                    app_id: Some(format!("{}.mockup", crate::constants::LINUX_APP_ID)),
                     ..Default::default()
                 },
                 |window, cx| {

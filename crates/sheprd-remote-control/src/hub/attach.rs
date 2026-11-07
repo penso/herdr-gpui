@@ -19,8 +19,18 @@ impl Hub {
         cols: u16,
         rows: u16,
     ) -> Result<TerminalAttach> {
-        let answer = self
-            .api
+        if super::core::owns(&json!({"pane_id": pane})) {
+            return Err(super::core::Error::Unsupported.into());
+        }
+        // A named session's pane is asked of, and attached on, its socket.
+        let (api, pane) = match self.session_for(ApiMethod::PaneGet, &json!({ "pane_id": pane }))? {
+            Some((session, params)) => (
+                session.api.clone(),
+                params["pane_id"].as_str().unwrap_or_default().to_owned(),
+            ),
+            None => (self.api.clone(), pane.to_owned()),
+        };
+        let answer = api
             .call(ApiMethod::PaneGet, json!({ "pane_id": pane }))
             .await?;
         let terminal = answer["pane"]["terminal_id"]
@@ -28,7 +38,7 @@ impl Hub {
             .filter(|id| !id.is_empty() && id.len() <= 256)
             .ok_or(Error::Response)?
             .to_owned();
-        let target = self.api.target();
+        let target = api.target();
         let open = move || TerminalAttach::open(&target, &terminal, cols, rows);
         let mut attempts = 0;
         loop {

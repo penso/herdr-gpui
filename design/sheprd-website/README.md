@@ -127,8 +127,8 @@ and the tap's cask still names `Herdr.app`. The CLI on main is `sheprd`, with
 4. **Experimental cloud providers**: README and Settings disagree (README:
    Boat, Daytona, Sprites, OpenSandbox, Railway; Settings tags only
    OpenSandbox and Sprites). Azure has no README section.
-5. **ACP chats default**: opt-in today (`[features] acp_chats`); confirm before
-   calling chat a headline feature.
+5. **ACP chats default**: resolved; chats are on by default, and
+   `[features] acp_chats = false` turns them off.
 6. **Phone terminal tabs**: the remote-control plan lists them as built
    (Phase 5) in one place and "not available yet" in another.
 7. **iOS distribution**: TestFlight uploads succeed but no public link exists;

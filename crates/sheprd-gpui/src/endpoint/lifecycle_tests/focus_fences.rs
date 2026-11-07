@@ -174,7 +174,7 @@ fn every_focus_changing_command_fences_immediate_input_until_ack_and_surface(
                     view.command(command, window, cx);
                 }
                 let key = |key: &str| gpui::KeyDownEvent {
-                    keystroke: gpui::Keystroke::parse(key).unwrap(),
+                    keystroke: crate::keymap::parse_keystroke(key).unwrap(),
                     is_held: false,
                     prefer_character_input: false,
                 };

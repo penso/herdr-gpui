@@ -2,6 +2,7 @@ use super::*;
 use uuid::Uuid;
 
 mod alerts;
+mod badge;
 mod presence;
 
 #[test]

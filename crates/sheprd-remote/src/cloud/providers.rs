@@ -231,6 +231,21 @@ providers! {
         image: None,
         provision: Some(crate::boat::create::provision),
     },
+    "boxd" Boxd => {
+        module: boxd,
+        name: "boxd",
+        icon: "icons/cloud/boxd.svg",
+        offer: "Create a boxd machine in Settings",
+        noun: "machine",
+        command: plain,
+        deletion: Some(Deletion {
+            noun: |_| "machine",
+            leftovers: ", with its disk,",
+            run: crate::boxd::destroy_saved,
+        }),
+        image: None,
+        provision: Some(crate::boxd::setup::provision),
+    },
     "coder" Coder => {
         module: coder,
         name: "Coder",

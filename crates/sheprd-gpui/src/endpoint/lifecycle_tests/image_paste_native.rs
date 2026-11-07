@@ -11,7 +11,7 @@ fn connected_image_paste_key_down_ctrl_v_and_cmd_v(cx: &mut gpui::TestAppContext
             for image in [false, true] {
                 let (endpoint, mut server) = connected_endpoint("image");
                 let event = gpui::KeyDownEvent {
-                    keystroke: gpui::Keystroke::parse(key).unwrap(),
+                    keystroke: crate::keymap::parse_keystroke(key).unwrap(),
                     is_held: false,
                     prefer_character_input: false,
                 };

@@ -31,7 +31,7 @@ fn serve_takes_its_defaults() {
     assert_eq!(options.port, 7443);
     assert!(options.bind.is_unspecified());
     assert_eq!(options.certificate, Certificate::Own);
-    assert_eq!(options.privacy, Privacy::Generic);
+    assert_eq!(options.privacy, Privacy::Excerpt);
     assert_eq!(
         options.device_idle,
         Some(Duration::from_secs(30 * 24 * 60 * 60))
@@ -71,6 +71,16 @@ fn every_option_is_read() {
         options.device_idle,
         Some(Duration::from_secs(7 * 24 * 60 * 60))
     );
+}
+
+#[test]
+fn live_activities_are_detailed_unless_asked() {
+    use crate::app::config::ActivityDetail;
+
+    let options = serve(&["serve", "--state-dir", "/s"]);
+    assert_eq!(options.live_activities, ActivityDetail::Detailed);
+    let args = ["serve", "--state-dir", "/s", "--live-activities", "generic"];
+    assert_eq!(serve(&args).live_activities, ActivityDetail::Generic);
 }
 
 #[test]
@@ -147,3 +157,5 @@ fn serve_takes_the_daemon_and_chat_locations_herdr_ui_resolved() {
         Err(ParseError::Missing("--chat-dir"))
     );
 }
+
+mod core_endpoint;

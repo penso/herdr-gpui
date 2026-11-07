@@ -4,7 +4,10 @@
 
 use crate::{
     ansi::{self, Color, Style},
-    control::pull_requests::{PullRequests, Tone, WorkspacePullRequest},
+    control::{
+        pull_requests::{PullRequests, Tone, WorkspacePullRequest},
+        tags::ComputerTags,
+    },
     hub::{self, ChatRow, Layout, Summary},
     load::Load,
 };
@@ -13,14 +16,23 @@ use sheprd_chat_protocol::{Cursor, Permission, Status, Transcript};
 use sheprd_client::protocol::{AgentStatus, ClientShellWorktree};
 use std::collections::HashMap;
 
+/// What this daemon offers phones. Raised when the phone starts to rely on
+/// something new; `Home.requiredAPI` in `SheprdRemoteCore` is what the
+/// phone asks for. 1: chats take a `start`, and `/api/v2/update` exists.
+pub(crate) const API_LEVEL: u32 = 1;
+
 /// Every workspace of this computer, with its chats and terminal tabs.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Home {
+    /// What this daemon can do for a phone ([`API_LEVEL`]); older servers
+    /// leave it out, which the phone reads as too old.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) api: Option<u32>,
     pub(crate) computer: String,
     pub(crate) fingerprint: String,
     /// Whether the Herdr daemon is reachable now.
     pub(crate) connected: bool,
-    /// Permission requests waiting across every chat: the app's badge.
+    /// Agents that need an answer or finished unseen: the app's badge.
     pub(crate) waiting: usize,
     /// This computer's CPU and memory; absent until first read, and from
     /// older servers.
@@ -29,7 +41,14 @@ pub(crate) struct Home {
     /// Agents working now, counted one by one; older servers leave it out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) working: Option<usize>,
+    /// The release serving, for a person to read; older servers leave it
+    /// out. Compatibility goes by `api`, as releases come more often.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) version: Option<String>,
     pub(crate) workspaces: Vec<Workspace>,
+    /// The tags this computer carries; older servers leave them out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tags: Option<ComputerTags>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -42,8 +61,15 @@ pub(crate) struct Workspace {
     /// repository's linked worktrees under it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) worktree: Option<ClientShellWorktree>,
+    /// The Herdr 1 session it is in, which a phone groups a computer's
+    /// workspaces by; older servers leave it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) session: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pull_request: Option<PullRequest>,
+    /// Commits on its branch that no pull request carries yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) unopened_commits: Option<u64>,
     pub(crate) chats: Vec<Chat>,
     pub(crate) terminals: Vec<Terminal>,
 }
@@ -222,6 +248,25 @@ fn pull_request<'a>(
     })
 }
 
+/// The commits Sheprd found waiting for a pull request on `workspace` in the
+/// same boot.
+fn unopened_commits(
+    pull_requests: &PullRequests,
+    boot: &str,
+    workspace: &hub::Workspace,
+) -> Option<u64> {
+    (pull_requests.boot_id == boot).then_some(())?;
+    pull_requests
+        .unopened
+        .iter()
+        .find(|entry| {
+            entry.workspace_id == workspace.id
+                && entry.cwd == workspace.cwd
+                && Some(entry.branch.as_str()) == workspace.branch.as_deref()
+        })
+        .map(|entry| entry.commits)
+}
+
 impl From<Summary> for ChatSummary {
     fn from(summary: Summary) -> Self {
         Self {
@@ -292,6 +337,10 @@ pub(crate) struct Sources<'a> {
     pub(crate) load: Option<Load>,
     pub(crate) summaries: HashMap<String, Summary>,
     pub(crate) pull_requests: &'a PullRequests,
+    pub(crate) tags: ComputerTags,
+    pub(crate) version: &'a str,
+    /// The panes wanting the user, from [`crate::web::State::attention`].
+    pub(crate) waiting: usize,
 }
 
 impl Home {
@@ -303,8 +352,10 @@ impl Home {
             load,
             mut summaries,
             pull_requests,
+            tags,
+            version,
+            waiting,
         } = sources;
-        let waiting = summaries.values().map(|summary| summary.questions).sum();
         let workspaces = layout
             .workspaces
             .iter()
@@ -314,6 +365,7 @@ impl Home {
                 branch: workspace.branch.clone(),
                 cwd: workspace.cwd.clone(),
                 worktree: workspace.worktree.clone(),
+                session: workspace.session.clone(),
                 pull_request: pull_request(pull_requests, &layout.boot, workspace).map(|pr| {
                     PullRequest {
                         number: pr.number,
@@ -321,6 +373,7 @@ impl Home {
                         tone: pr.tone,
                     }
                 }),
+                unopened_commits: unopened_commits(pull_requests, &layout.boot, workspace),
                 chats: workspace
                     .chats
                     .iter()
@@ -330,12 +383,15 @@ impl Home {
             })
             .collect();
         Self {
+            api: Some(API_LEVEL),
             computer: computer.to_owned(),
             fingerprint: fingerprint.to_owned(),
             connected: layout.connected,
             waiting,
             load,
             working: Some(layout.working),
+            tags: Some(tags),
+            version: Some(version.to_owned()),
             workspaces,
         }
     }

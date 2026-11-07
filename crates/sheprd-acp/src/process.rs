@@ -34,10 +34,16 @@ pub(crate) struct AgentProcess {
     stderr: Arc<Mutex<VecDeque<String>>>,
 }
 
-pub(crate) fn spawn(program: &OsString, args: &[OsString], cwd: &Path) -> Result<Spawned> {
+pub(crate) fn spawn(
+    program: &OsString,
+    args: &[OsString],
+    env: &[(&str, &str)],
+    cwd: &Path,
+) -> Result<Spawned> {
     let mut command = sheprd_client::new_command(program);
     command
         .args(args)
+        .envs(env.iter().copied())
         .current_dir(cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

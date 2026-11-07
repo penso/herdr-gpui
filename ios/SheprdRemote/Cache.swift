@@ -106,6 +106,11 @@ struct Cache: Sendable {
         return Self.writes.sync { read(Draft.self, at: file) }
     }
 
+    /// Whether a draft is on disk, without reading it.
+    func hasDraft(_ device: String, pane: String) -> Bool {
+        FileManager.default.fileExists(atPath: draftFile(device, pane).path())
+    }
+
     /// Keeps the draft across launches; `nil` removes it, as sending does.
     /// Saves run in the order they were made: a write left running must not
     /// bring back a draft that was sent after it, nor a removal erase a

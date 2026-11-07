@@ -282,6 +282,14 @@ focus nor resize anything:
   Herdr takes also reads it at once, then 50 ms and 150 ms later, so an
   echo does not wait out the timer. The ANSI (SGR only) becomes escaped
   spans on the server. No cursor position comes with it.
+- **History**: a swipe down or the wheel on the screen reads `pane.read
+  {source: recent, lines: 1000, format: ansi}` once, and the view scrolls
+  through it. It is not streamed: 1,000 lines on every change would be far
+  more than a phone should take. Live screens wait while history shows and
+  return when the view reaches its end or the phone types. A program on the
+  alternate screen has no history here, so its screen stays as it is, and
+  neither has a Herdr 2 pane yet: its read is the emulator's screen, kept
+  with no scrollback.
 - **Echo strip**: what was typed but is not on the screen yet shows,
   dotted, above the key rows (backspace takes back what it can). An input
   leaves it once Herdr took it and a screen arrived after, or 1 s after
@@ -357,6 +365,22 @@ phone never disturbs the desktop's layout.
   Until then the app holds one subscription, for one computer
   (`herdr.push-host`); Settings on any other says where notifications come
   from, and a notification opens its page on the computer shown.
+- **Tags.** Each computer's daemon keeps the tags that group it, such as
+  `personal` and `work` (`tags.json`), for every phone and desktop that
+  reaches it. No client has to match its name for a computer to another's.
+  - **The rule.** A client offers its copy with the time it was edited, and
+    the daemon answers with what stands: the latest edit wins, whole. An
+    offer counts as made by the daemon's clock at the latest, so a fast
+    clock cannot outlast later edits.
+  - **Phones.** `home` carries the tags, and `PUT /api/v2/tags` offers an
+    edit. An edit made while a computer is away is sent when its home next
+    arrives.
+  - **Sheprd.** It keeps a copy by endpoint ID, so a device away still shows
+    its tags. It meets this computer's daemon over the control socket and a
+    connected machine's by running `sheprd-remote-control tags --offer` over
+    SSH: at once after an edit, else every two minutes. A machine without
+    the program is not given one for this: no phone is paired with it, so
+    the copy is all there is.
 - **Other machines.** Allowing a phone on one computer also pairs it with
   the SSH and cloud machines that computer's Sheprd connects to. The phone
   reaches each machine's own daemon directly, so it keeps them while that
@@ -375,8 +399,10 @@ phone never disturbs the desktop's layout.
     - It runs `sheprd-remote-control enroll` there over SSH. On the way that
       sends this daemon's APNs key (0600), so the machine notifies the phone
       itself. It starts the machine's daemon as a user service unless one is
-      installed. It turns on `[remote]` in that machine's Sheprd settings,
-      if it has any. Then it adds the phone, marked `via` this computer.
+      installed, then adds the phone, marked `via` this computer. Only then
+      does it turn on `[remote]` in that machine's Sheprd settings, creating
+      them if it has none, so a Sheprd installed there later keeps the
+      daemon. A failed pairing leaves the settings alone.
     - It reports the machine's fingerprint and addresses back
       (`HostPaired`).
   - **Trust.** The phone pins that fingerprint because the computer it

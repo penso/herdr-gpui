@@ -27,6 +27,7 @@ use axum::{
     response::Response,
 };
 use model::{ChatSnapshot, Home, Sources};
+use secrecy::SecretString;
 use std::{collections::HashMap, time::Duration};
 use tokio::sync::mpsc;
 use wire::{ClientMessage, ServerMessage};
@@ -63,6 +64,9 @@ fn home(state: &Shared) -> Home {
         load: *state.load.borrow(),
         summaries,
         pull_requests: &pull_requests,
+        tags: state.tags.current(),
+        version: crate::server::version(),
+        waiting: state.attention().len(),
     })
 }
 
@@ -101,7 +105,7 @@ pub(crate) async fn live(
         return Err(ApiError::TooManyStreams);
     }
     // `Device` accepted this token, so it is present.
-    let token = bearer(&headers).unwrap_or_default().to_owned();
+    let token = SecretString::from(bearer(&headers).unwrap_or_default());
     Ok(upgrade
         .max_message_size(MAX_INBOUND)
         .max_frame_size(MAX_INBOUND)
@@ -111,7 +115,7 @@ pub(crate) async fn live(
 /// Carries messages between the socket and the session until either ends:
 /// the phone closes, sends a binary or oversized frame, or the session
 /// says `bye`.
-async fn serve(mut socket: WebSocket, state: Shared, device: DeviceId, token: String) {
+async fn serve(mut socket: WebSocket, state: Shared, device: DeviceId, token: SecretString) {
     let _connected = Connected::new(state.clone(), device.clone());
     let (to_phone, mut outbound) = mpsc::channel(OUTBOUND_QUEUE);
     let (inbound, from_phone) = mpsc::channel(INBOUND_QUEUE);

@@ -134,6 +134,7 @@ impl Localize for Error {
             Self::NotConnected => fl!("error-not-connected"),
             Self::NotificationMutes(error) => error.localize(),
             Self::NotInCheckout => fl!("error-not-in-checkout"),
+            Self::Orchestrator(error) => error.localize(),
             Self::OrchestratorItems(error) => {
                 fl!("error-orchestrator-items", error = error.localize())
             }

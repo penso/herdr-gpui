@@ -12,10 +12,11 @@ mod cards;
 mod document;
 mod ia;
 mod imessage;
+mod opencode;
 mod terminal;
 mod timeline;
 
-use super::copy::CopyPlacement;
+use super::{copy::CopyPlacement, entries::ToolState};
 use crate::{
     SheprdWindow,
     config::{ChatLayoutMode, FontConfig, Theme},
@@ -55,6 +56,10 @@ pub(super) struct Row<'a> {
     pub(super) live: bool,
     /// The entry belongs to the turn since the user's latest prompt.
     pub(super) current: bool,
+    /// The user opened the entry.
+    pub(super) expanded: bool,
+    /// Where the entry stands, when it is a tool call.
+    pub(super) tool: Option<ToolState>,
     pub(super) content: Div,
 }
 
@@ -122,6 +127,21 @@ pub(super) struct ComposerParts {
     /// Context use, once the agent reports them.
     pub(super) usage: Option<Div>,
     pub(super) send: Stateful<Div>,
+    /// The session's directory, once the agent reports it.
+    pub(super) place: Option<String>,
+    /// How to open the command palette, while it has a shortcut.
+    pub(super) commands: Option<Div>,
+}
+
+/// How much of a tool call shows until it is opened.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ToolFold {
+    /// Its title, each file's changes, and its first locations and output.
+    Preview,
+    /// Its title and each file's changes.
+    Title,
+    /// One line: its title with the changes totalled beside it.
+    Line,
 }
 
 pub(super) trait ChatLayout {
@@ -138,10 +158,22 @@ pub(super) trait ChatLayout {
         div().h(px(18.)).flex().child(button)
     }
 
-    /// Whether a folded tool call previews its files and first output
-    /// lines under its title: by default it does.
-    fn tool_preview(&self) -> bool {
-        true
+    /// How much of a tool call in `state` shows until it is opened: by
+    /// default its preview.
+    fn tool_fold(&self, _state: ToolState) -> ToolFold {
+        ToolFold::Preview
+    }
+
+    /// Whether messages keep the row's terminal font rather than the
+    /// interface's: by default they take the interface's.
+    fn mono_prose(&self) -> bool {
+        false
+    }
+
+    /// Whether the button back to the end of the list says so in words: by
+    /// default it is a bare arrow until output lands below.
+    fn jump_label(&self) -> bool {
+        false
     }
 
     /// The size the user's prompts are set at: by default the chat's text.
@@ -214,6 +246,7 @@ pub(super) fn layout_for(mode: ChatLayoutMode) -> &'static dyn ChatLayout {
         ChatLayoutMode::Cards => &cards::Cards,
         ChatLayoutMode::IMessage => &imessage::IMessage,
         ChatLayoutMode::IA => &ia::IA,
+        ChatLayoutMode::OpenCode => &opencode::OpenCode,
     }
 }
 

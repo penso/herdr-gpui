@@ -4,7 +4,7 @@ use crate::chat::{
     visual::{Shown, VisualId, Visuals},
 };
 use crate::i18n::fl;
-use crate::{SheprdWindow, config::ChatLayoutMode, fonts::StyledFont};
+use crate::{SheprdWindow, fonts::StyledFont};
 use gpui::{prelude::*, *};
 use pulldown_cmark::{Alignment, HeadingLevel};
 use std::ops::Range;
@@ -58,10 +58,7 @@ impl SheprdWindow {
             .flex()
             .flex_col()
             .min_w_0()
-            .when(
-                self.config.chat.layout != ChatLayoutMode::Terminal,
-                |view| view.text_font(&self.config.ui),
-            )
+            .when(!layout.mono_prose(), |view| view.text_font(&self.config.ui))
             .text_size(px(size))
             .when_some(layout.prose(&look), |view, ink| view.text_color(rgb(ink)))
             .line_height(relative(1.6))

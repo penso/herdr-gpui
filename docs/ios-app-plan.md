@@ -131,15 +131,18 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
 
 ```json
 {
+  "api": 1,
   "computer": "MacBook Pro",
   "fingerprint": "64 uppercase hex",
   "connected": true,
   "waiting": 1,
   "load": {"cores": 10, "cpu": 47, "load5_tenths": 42, "memory": 67},
   "working": 2,
+  "version": "20261106.1",
   "workspaces": [{
     "id": "w1", "label": "sheprd", "branch": "main", "cwd": "/Users/me/code/sheprd",
     "worktree": {"key": "/Users/me/code/sheprd/.git", "label": "sheprd", "is_linked_worktree": false},
+    "session": "default",
     "pull_request": {"number": 870, "url": "https://github.com/...", "tone": "success"},
     "chats": [{
       "pane": "p1", "tab": "t1", "title": "Equalize splits", "agent": "claude",
@@ -176,6 +179,10 @@ mirrored. Bearer auth as today (`Authorization: Bearer TOKEN`).
   Workspaces tab lists a repository's own checkouts, then its linked
   worktrees, under that name. It is absent for a folder outside a
   repository and from older daemons.
+- `session` is the Herdr 1 session the workspace is in: `default` for the
+  root session, `NAME` for `herdr --session NAME`. It is absent for a
+  Herdr 2 workspace and from older daemons. With more than one session
+  named, the Workspaces tab lists a computer's repositories under each.
 - `pull_request` is absent when the workspace has none; `tone` is
   `sheprd_github::pull_request::Tone` as serde writes it.
 - As built: `waiting` counts every waiting permission request, as the web
@@ -287,12 +294,39 @@ app learns the pane it should open:
   Agents come in Herdr's order, only those `sheprd-acp agents` finds on
   this computer (all of them if it finds none or cannot run); `id` is
   what a request names.
-- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?}`
-  and answers `{"workspace": "w3", "pane": "p7", "prompted": true}`. The
+- `POST /api/v2/workspaces` takes `{"cwd", "agent", "branch"?, "prompt"?,
+  "start"?, "session"?}` and answers `{"workspace": "w3", "pane": "p7", "prompted":
+  true, "started": true}`. The
   folder must be one `new` offers, and `branch`, when not blank, opens a
-  worktree.
-- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?}`
-  and answers `{"pane": "p7", "prompted": true}`.
+  worktree. `session`, as home names it, opens it in that Herdr 1
+  session; absent, or naming none the daemon follows, it opens where new
+  workspaces go.
+- `POST /api/v2/workspaces/{workspace}/chats` takes `{"agent", "prompt"?,
+  "start"?}` and answers `{"pane": "p7", "prompted": true, "started":
+  true}`.
+- `start` is what the chat begins with, as last picked on the phone:
+  `{"mode"?, "option"?, "auto_accept"?}`. `mode` is the mode's id, or the
+  choice's when `option` names the agent's mode setting. It goes before the
+  first prompt, asked again for up to 10 s while the chat's connection and
+  session come up, and
+  counts once the transcript shows it, since the agent may still refuse a
+  request it was sent. `started` is false otherwise: the prompt is then
+  held back, and a chat without its mode does not turn on auto-accept.
+  A daemon too old for `start` ignores it and leaves `started` out; the
+  phone then says that computer needs a newer Sheprd rather than that the
+  chat refused.
+- `api` in `Home` says what the daemon offers phones and `version` names the
+  release. The phone needs `api` to reach `Home.requiredAPI`, and an older
+  daemon, which sends neither, shows as needing a newer Sheprd in Settings
+  and on the computer's page. Compatibility goes by `api`, not `version`, so
+  a new release alone does not flag every computer.
+- `GET /api/v2/update` answers `{"app": {"stage", "latest"?, "detail"?},
+  "asked"}`, with `stage` one of `available`, `busy`, `current`, `disabled`,
+  `failed`, or `idle`. `app` is null while Sheprd is not open there. `POST`
+  asks Sheprd to update and restart, answering the same, or 409 while it is
+  not open. The phone names no release: Sheprd's own updater checks,
+  verifies, and installs, then restarts the daemon from the new binary. A
+  daemon older than this route answers 404, so that one update is by hand.
 - Both wait up to 10 s for the chat's program to report in, then send the
   first prompt if it is not blank. `pane` is `null` when the chat was not
   listed in time; `prompted` is false when there was no prompt or the
@@ -733,7 +767,8 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
   and CPU and memory, then its repositories as inset sections (initial,
   name, and + for a new worktree of it). Rows show the most pressing
   agent's mark, the checkout's branch or the worktree's name, its agent
-  and terminal counts, and the pull request's number in its tone.
+  and terminal counts, and the pull request's number in its tone, or `+PR`
+  when the computer's Sheprd finds commits with no pull request yet.
 - Home sorts its agents by a menu at the top left, newest first in each
   section: Priority (the desktop's status order), Recent, or Workspace.
 - A workspace opens on its own screen: branch, pull request, and place on
@@ -885,6 +920,8 @@ release tag; pull requests run only `ios-test` and the unsigned build.
   uploads to TestFlight itself, without fastlane or `altool`.
 - `CURRENT_PROJECT_VERSION` is the workflow's run number;
   `MARKETING_VERSION` follows the app's release version.
+- "What to Test" lists the commits since the previous build, which each
+  build's notes record in a `Source:` line (`ios/README.md`).
 - Secrets (environment `testflight`, required reviewers off for `main`):
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID`. The key is
   written to a temporary file and removed in an `always()` step.

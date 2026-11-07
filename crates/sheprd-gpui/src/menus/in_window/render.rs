@@ -237,7 +237,7 @@ impl SheprdWindow {
                 binding
                     .keystrokes()
                     .iter()
-                    .map(KeybindingKeystroke::unparse)
+                    .map(|keystroke| keystroke.unparse(crate::keymap::HOST_OS))
                     .collect::<Vec<_>>()
                     .join(" ")
             })
@@ -271,7 +271,7 @@ impl SheprdWindow {
                     this.dismiss_menu(window, cx);
                 }),
             )
-            .on_scroll_wheel(|_, _, cx| cx.stop_propagation());
+            .on_scroll(|_, _, cx| cx.stop_propagation());
         let Some(menu) = &self.menu.application else {
             return overlay;
         };

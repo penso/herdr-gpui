@@ -190,6 +190,7 @@ tab_layout = "classic"
 # New tabs run in herdr-core (Herdr 2), whose terminals Sheprd draws and
 # splits into native panes, instead of in Herdr 1. Herdr 1 tabs keep running
 # beside them. Without Herdr 1 installed, terminals are Herdr 2's anyway.
+# herdr-core runs on this computer only, so tabs on other hosts stay Herdr's.
 # Also under Settings > Tabs.
 herdr_2_terminals = false
 
@@ -263,7 +264,9 @@ project_roots = []
 # or a function key F1 through F24. Sheprd > Keyboard Shortcuts also edits,
 # unbinds, and resets them.
 # Herdr's own [keys] in config.toml (prefix chords included) add to these
-# defaults; a command named here keeps only the keystrokes listed here.
+# defaults; a command named here keeps only what is listed here. List a prefix
+# chord as prefix- and the key typed after the prefix, so to free Cmd-W and keep
+# Herdr's default chord for Close Pane: close_pane = "prefix-x".
 # The examples below use the macOS defaults. Linux and Windows have their own
 # Ctrl+Shift defaults (not Super or Win): new_tab = "ctrl-shift-t",
 # new_window = "ctrl-alt-n", close_window = "ctrl-alt-w",
@@ -434,6 +437,12 @@ size = 12
 # tint = "#7aa2f7"
 # apply_to = ["sidebar", "terminal"]
 
+[tab_labels]
+# Show the agent's terminal title on a tab with no name of its own, in place
+# of its number, cut after 28 columns. A tab you named keeps its name, and a
+# tab without an agent or a title keeps its number.
+agent_title = false
+
 [tabs]
 # Default: "Menlo" on macOS, "Cascadia Mono" on Windows (Consolas when
 # missing), "DejaVu Sans Mono" on Linux (or an installed monospace family such
@@ -506,8 +515,9 @@ size = 12
 # How chat views draw: "timeline" (entries on a line with avatars), "bubbles"
 # (your messages in bubbles on the right, like Claude's app), "terminal"
 # (Claude Code's own screen, in the terminal font), "document" (each prompt
-# a heading, the reply prose under it), "cards" (each turn in one card), or
-# "imessage" (blue and gray bubbles with tails, like Apple's Messages).
+# a heading, the reply prose under it), "cards" (each turn in one card),
+# "imessage" (blue and gray bubbles with tails, like Apple's Messages), or
+# "opencode" (tinted blocks, finished tools on one line, like OpenCode).
 # The button in a chat's header steps through them.
 # [chat]
 # layout = "timeline"
@@ -689,6 +699,19 @@ size = 12
 # memory = "4Gi"
 # allow_plaintext_credentials = false
 
+# boxd machines as devices (experimental). Settings > Cloud devices > boxd edits
+# api_url and saves the API key to the credential store; the key is never read
+# from this file. HERDR_BOXD_API_KEY overrides the saved key and
+# HERDR_BOXD_API_URL overrides api_url.
+# [boxd]
+# The API of boxd's service; a region is https://<region>.boxd.sh:9443.
+# api_url = "https://boxd.sh:9443"
+# Labels added to every machine made here, beside sheprd = "device".
+# labels = { team = "web" }
+# Same meaning as [github] allow_plaintext_credentials, for the key, which is
+# saved in its own 0600 boxd-api-key file. Default is false.
+# allow_plaintext_credentials = false
+
 # Fly Sprites as devices (experimental). Settings > Cloud devices > Sprites
 # edits this table and saves the API token to the credential store; the token
 # is never read from this file. HERDR_SPRITES_TOKEN overrides the saved token
@@ -777,8 +800,12 @@ size = 12
 # back when it ends. Unset keeps the current size.
 # font_size = 24
 
-# Optional behaviors, all off unless turned on here or in Settings > General.
+# Optional behaviors, also under Settings > General.
 # [features]
+# Show sheprd-acp chats as native chat views and offer new chats with the
+# agents installed on the host. Off, chat panes keep their terminal.
+# acp_chats = true
+#
 # Open a space's menu when the pointer rests on its sidebar row, without a
 # right click. Moving the pointer anywhere but into that menu closes it again.
 # sidebar_hover_menu = false

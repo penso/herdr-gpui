@@ -40,6 +40,7 @@ mod mods;
 mod nearby;
 mod notification_mutes;
 mod orchestrator;
+mod orchestrator_azure;
 mod overview;
 mod palette;
 mod pane_carry;

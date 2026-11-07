@@ -5,6 +5,7 @@
 mod addresses;
 mod bonjour;
 mod control;
+pub(crate) use control::version;
 mod listener;
 mod live;
 mod notifier;
@@ -88,13 +89,18 @@ pub async fn run(options: Options) -> Result<()> {
         .ok();
     let auth = Auth::load(&options.state_dir, Limits::default())?;
     let apps = auth.apps();
-    let apns = crate::apns::Sender::load(&options.state_dir)?;
+    let apns = crate::apns::Sender::load(&options.state_dir).map_err(crate::apns::Error::from)?;
     // Only origins this computer's own authority serves may be remembered.
     let seen = match &authority {
         Some(authority) => web::Origins::load(&options.state_dir, authority.fingerprint()),
         None => web::Origins::none(),
     };
-    let hub = Hub::start(options.herdr_socket.clone(), options.chat_dir.clone())?;
+    let hub = Hub::start(
+        options.herdr_socket.clone(),
+        options.chat_dir.clone(),
+        options.core_endpoint.clone(),
+        &options.state_dir,
+    )?;
     let (pull_requests, _) = watch::channel(Arc::new(Default::default()));
     let load = crate::load::start();
     let state = Arc::new(State {
@@ -106,17 +112,21 @@ pub async fn run(options: Options) -> Result<()> {
         connected: Mutex::new(HashMap::new()),
         fingerprint,
         hub,
+        live_activities: options.live_activities,
         load,
         look: web::Look::load(&options.state_dir),
         names: RwLock::new(names),
         near: Mutex::default(),
+        opened: web::attention::Opened::default(),
         port: options.port,
         privacy: options.privacy,
         pull_requests,
         push,
         reports: Mutex::new(web::report_limit()),
         seen: Mutex::new(seen),
+        tags: web::Tags::load(&options.state_dir),
         typed: web::Typed::default(),
+        updates: Mutex::default(),
         uploads: web::Uploads::new(&options.state_dir),
     });
     remember_origins(&state);

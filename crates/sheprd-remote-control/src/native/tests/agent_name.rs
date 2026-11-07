@@ -25,6 +25,9 @@ fn home_with(agent: Option<&str>, summary: Option<&str>) -> Home {
         load: None,
         summaries,
         pull_requests: &PullRequests::default(),
+        tags: Default::default(),
+        version: "20261106.1",
+        waiting: 0,
     })
 }
 
