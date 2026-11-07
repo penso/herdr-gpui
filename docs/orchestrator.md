@@ -274,7 +274,11 @@ tab, and marks the title bar's account button. Tokens are one
 credential-store record of `organization<TAB>token` lines, at most 32
 organizations: the desktop keyring (`dev.herdr.gpui.azure-devops`), or with
 `[azure_devops] allow_plaintext_credentials = true` the private `0600`
-`azure-devops-credentials` file beside the GUI config.
+`azure-devops-credentials` file beside the GUI config. Changing that setting
+reaches running workers at once, which sync again with the new store. When
+Azure DevOps refuses a token, the worker tries the saved token, then the
+Azure CLI's sign-in, and the shell's token last: that one is read once per
+run, so it may be the token just refused.
 
 Merge requests are not listed yet. They would need `PullRequest`-like
 metadata in the shared schema, which is a contract change for both

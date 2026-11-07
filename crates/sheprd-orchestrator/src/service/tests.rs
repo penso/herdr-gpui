@@ -33,6 +33,7 @@ mod current_beads;
 mod extras;
 mod glab_mapping;
 mod refresh;
+mod stores;
 mod syncing_count;
 mod unreached;
 

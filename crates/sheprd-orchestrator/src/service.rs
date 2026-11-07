@@ -89,6 +89,13 @@ const MAX_ACTIONS: usize = 4;
 /// Outcomes kept for the view between its polls.
 const MAX_NOTICES: usize = 8;
 
+/// Where the tokens pasted in the account menu are saved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stores {
+    pub azure: sheprd_credentials::Store,
+    pub gitlab: sheprd_credentials::Store,
+}
+
 /// Where the view's repository is and whom to read GitHub as.
 #[derive(Clone)]
 pub struct Request {
@@ -114,6 +121,8 @@ pub struct Request {
 enum Command {
     /// Sync every source now, reading GitHub as `token`.
     Refresh(Option<Tokens>),
+    /// Read pasted tokens from these stores, and sync now with them.
+    Stores(Stores),
     /// Do what the user asked, on a thread of its own.
     Act(Action),
     /// An action finished: read the database again, and sync when it changed
@@ -125,6 +134,22 @@ enum Command {
         endpoint: Option<String>,
         target: ConnectTarget,
     },
+}
+
+impl Request {
+    /// Where this request's pasted tokens are saved.
+    pub fn stores(&self) -> Stores {
+        Stores {
+            azure: self.azure_store,
+            gitlab: self.gitlab_store,
+        }
+    }
+
+    /// Reads pasted tokens from `stores` from now on.
+    pub fn set_stores(&mut self, stores: Stores) {
+        self.azure_store = stores.azure;
+        self.gitlab_store = stores.gitlab;
+    }
 }
 
 /// A pull request looked up for the open item.
@@ -287,6 +312,16 @@ impl Service {
         }
     }
 
+    /// Reads pasted tokens from `stores` from now on, syncing at once. False
+    /// when the queue is full: unlike a refresh, nothing already queued
+    /// carries the change, so the caller asks again.
+    pub fn set_stores(&self, stores: Stores) -> bool {
+        !matches!(
+            self.commands.try_send(Command::Stores(stores)),
+            Err(TrySendError::Full(_))
+        )
+    }
+
     /// Whether the view is on screen. Hidden, sources sync every
     /// [`schedule::HIDDEN_SYNC`]; shown again, a sync older than the visible
     /// period runs at the worker's next tick. A flag rather than a command,
@@ -380,6 +415,12 @@ impl Worker {
                     self.sync(token.as_ref());
                     last_sync = Instant::now();
                 }
+                Ok(Command::Stores(stores)) => {
+                    self.stores_changed(stores);
+                    let token = self.request.token.clone();
+                    self.sync(token.as_ref());
+                    last_sync = Instant::now();
+                }
                 Ok(Command::Act(action)) => self.act(action),
                 Ok(Command::LoadPullRequest(number)) => self.load_pull_request(number),
                 Ok(Command::LoadAgents { endpoint, target }) => {
@@ -428,6 +469,13 @@ impl Worker {
         self.azure_token = None;
         self.retry.clear();
         self.checks.clear();
+    }
+
+    /// Reads pasted tokens from `stores`, forgetting those read from the old
+    /// ones, and everything else [`Self::refreshed`] does.
+    fn stores_changed(&mut self, stores: Stores) {
+        self.request.set_stores(stores);
+        self.refreshed(self.request.token.clone());
     }
 
     /// Starts `action` on a thread of its own, at most [`MAX_ACTIONS`] at once.
