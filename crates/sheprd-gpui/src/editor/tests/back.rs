@@ -1,5 +1,5 @@
 //! Which editor panes closing brings a review back.
-use super::super::back::{Return, settle};
+use super::super::back::{Return, navigated, settle};
 use crate::browser::TabId;
 use sheprd_client::protocol::ClientShellSnapshot;
 
@@ -35,6 +35,7 @@ fn entry(pane: &str, page: TabId) -> Return {
         page,
         seen_in: None,
         in_use: false,
+        left: false,
     }
 }
 
@@ -92,6 +93,48 @@ fn a_last_pane_closed_after_the_user_left_its_tab_pulls_nobody_back() {
     let emptied = shown("boot", &[("other", "u")]);
     assert_eq!(settle(&mut returns, "local", &emptied), None);
     assert!(returns.is_empty());
+}
+
+#[test]
+fn leaving_between_two_snapshots_pulls_nobody_back() {
+    let mut returns = vec![entry("editor", page())];
+    settle(
+        &mut returns,
+        "local",
+        &shown("boot", &[("editor", "t"), ("other", "u")]),
+    );
+    // The snapshot showing the move to `u` is replaced by the next one.
+    navigated(&mut returns, "local", Some("u"));
+    let emptied = shown("boot", &[("other", "u")]);
+    assert_eq!(settle(&mut returns, "local", &emptied), None);
+    assert!(returns.is_empty());
+}
+
+#[test]
+fn coming_back_to_the_tab_counts_as_being_there() {
+    let mut returns = vec![entry("editor", page())];
+    settle(
+        &mut returns,
+        "local",
+        &shown("boot", &[("editor", "t"), ("other", "u")]),
+    );
+    navigated(&mut returns, "local", Some("u"));
+    navigated(&mut returns, "local", Some("t"));
+    let emptied = shown("boot", &[("other", "u")]);
+    assert_eq!(settle(&mut returns, "local", &emptied), Some(page()));
+}
+
+#[test]
+fn navigating_another_endpoint_leaves_nothing() {
+    let mut returns = vec![entry("editor", page())];
+    settle(
+        &mut returns,
+        "local",
+        &shown("boot", &[("editor", "t"), ("other", "u")]),
+    );
+    navigated(&mut returns, "other", None);
+    let emptied = shown("boot", &[("other", "u")]);
+    assert_eq!(settle(&mut returns, "local", &emptied), Some(page()));
 }
 
 #[test]

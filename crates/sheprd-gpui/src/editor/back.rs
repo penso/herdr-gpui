@@ -4,7 +4,7 @@
 //! is shown again. Quitting the editor is then the way back to the diff.
 
 use super::SheprdWindow;
-use crate::browser::TabId;
+use crate::{NavigationTarget, browser::TabId};
 use gpui::{Context, Window};
 use sheprd_client::protocol::ClientShellSnapshot;
 
@@ -26,6 +26,18 @@ pub(crate) struct Return {
     /// pane open. Quitting a tab's last pane empties the tab, so the snapshot
     /// after it cannot tell that from the user having left.
     pub(super) in_use: bool,
+    /// Whether this window last navigated away from that tab. Snapshots are
+    /// coalesced, so the one showing the user gone can be replaced by the
+    /// one showing the pane closed, and only the window saw them leave.
+    pub(super) left: bool,
+}
+
+/// Records a navigation of `endpoint` to terminal tab `to`, or to somewhere
+/// else with None: each return has left its tab unless that is where it went.
+pub(super) fn navigated(returns: &mut [Return], endpoint: &str, to: Option<&str>) {
+    for entry in returns.iter_mut().filter(|e| e.endpoint_id == endpoint) {
+        entry.left = entry.seen_in.as_deref() != to;
+    }
 }
 
 /// Follows `returns` through `snapshot` of `endpoint`, forgetting those of
@@ -63,7 +75,7 @@ pub(super) fn settle(
             return true;
         };
         let emptied = !snapshot.panes.iter().any(|pane| pane.tab_id == tab);
-        if focused_tab == Some(tab) || (entry.in_use && emptied) {
+        if focused_tab == Some(tab) || (entry.in_use && !entry.left && emptied) {
             page = Some(entry.page);
         }
         false
@@ -97,7 +109,35 @@ impl SheprdWindow {
             page,
             seen_in: None,
             in_use: false,
+            left: false,
         });
+    }
+
+    /// Notes a navigation about to go to `target`, which may leave the
+    /// terminal tab of an editor pane.
+    pub(crate) fn note_editor_navigation(&mut self, target: NavigationTarget<&str>) {
+        if self.editor_returns.is_empty() {
+            return;
+        }
+        let snapshot = self.live.snapshot.as_deref();
+        let to = match target {
+            NavigationTarget::Tab(tab) => Some(tab),
+            NavigationTarget::Pane(id) => snapshot.and_then(|snapshot| {
+                let pane = snapshot.panes.iter().find(|pane| pane.pane_id == id)?;
+                Some(pane.tab_id.as_str())
+            }),
+            NavigationTarget::Workspace(_) => None,
+        };
+        let endpoint = &self.endpoints[self.selected_endpoint].id;
+        navigated(&mut self.editor_returns, endpoint, to);
+    }
+
+    /// Notes a page taking the window's attention from the terminals.
+    pub(crate) fn note_editor_page_shown(&mut self) {
+        let endpoint = &self.endpoints[self.selected_endpoint].id;
+        for entry in self.editor_returns.iter_mut() {
+            entry.left |= entry.endpoint_id == *endpoint;
+        }
     }
 
     /// Runs every window tick: shows the review whose editor just quit. A

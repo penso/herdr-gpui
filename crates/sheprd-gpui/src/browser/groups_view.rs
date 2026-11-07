@@ -765,6 +765,7 @@ impl SheprdWindow {
         let Some(tab) = store(cx).and_then(|store| store.get(id)).cloned() else {
             return;
         };
+        self.note_editor_page_shown();
         let layout = self.layout_for((tab.scope.clone(), tab.workspace_id.clone()));
         let group = group.unwrap_or_else(|| layout.owner(&Pick::Page(id)));
         layout.choose(group, Pick::Page(id));
