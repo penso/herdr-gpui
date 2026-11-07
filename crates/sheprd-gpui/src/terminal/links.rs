@@ -4,7 +4,11 @@
 //! scheme. Reading a row decides nothing about the disk: whether a path is
 //! there is asked once the link modifier is held over it, and every link
 //! opens only on a link-modifier click.
-use super::{HIDDEN, InputTarget, popup_origin, selection::shown, wheel_target};
+use super::{
+    HIDDEN, InputTarget, popup_origin,
+    selection::{continuations, shown},
+    wheel_target,
+};
 use sheprd_client::protocol::{CellData, FrameData, PaneSurfaceFrame};
 use std::ops::Range;
 
@@ -302,10 +306,8 @@ fn link_cell(
         .cells
         .get(offset + usize::from(start)..offset + usize::from(end))?;
     let selected = usize::from(column - start);
-    let mut source = selected;
-    while cells.get(source)?.skip && source > 0 {
-        source -= 1;
-    }
+    let continuing = continuations(cells);
+    let source = (0..=selected).rev().find(|&i| !continuing[i]).unwrap_or(0);
     (cells.get(source)?.modifier & HIDDEN == 0).then_some((cells, selected, source))
 }
 
@@ -333,7 +335,8 @@ fn frame_link(
             Some(url) => RowTarget::Web(url),
             None => explicit_target(destination),
         };
-        let on_link = |i: &usize| cells[*i].skip || cells[*i].hyperlink == Some(index);
+        let continuing = continuations(cells);
+        let on_link = |i: &usize| continuing[*i] || cells[*i].hyperlink == Some(index);
         let first = (0..=source)
             .rev()
             .take_while(on_link)
