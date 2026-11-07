@@ -16,6 +16,10 @@ use anyhow::Result;
 use gpui::{prelude::*, *};
 use sheprd_client::ConnectTarget;
 
+mod stores;
+
+pub(crate) use stores::Stores;
+
 /// The first frame must not use default density while disk settings load.
 /// Load before the UI event loop; later windows reuse the last validated pair.
 #[derive(Clone, Default)]
@@ -55,13 +59,13 @@ pub(crate) fn light_appearance(cx: &App) -> bool {
 /// Startup reads settings before the event loop, when the system appearance
 /// is not yet known, so a theme that follows it has both sides resolved and
 /// the first frame picks one without any disk work on the UI thread.
-struct StartupAppearance {
+pub(crate) struct StartupAppearance {
     dark: InitialAppearance,
     light: Option<Theme>,
 }
 
 impl StartupAppearance {
-    fn load(load: impl FnOnce() -> crate::Result<Config>) -> Self {
+    pub(crate) fn load(load: impl FnOnce() -> crate::Result<Config>) -> Self {
         let dark = InitialAppearance::load(load, false);
         let light = (dark.error.is_none()
             && crate::config::ThemeName::follows_system(&dark.config.theme))
@@ -74,7 +78,7 @@ impl StartupAppearance {
         Self { dark, light }
     }
 
-    fn select(self, light: bool) -> InitialAppearance {
+    pub(crate) fn select(self, light: bool) -> InitialAppearance {
         match self.light {
             Some(theme) if light => InitialAppearance { theme, ..self.dark },
             _ => self.dark,
@@ -158,7 +162,7 @@ struct SharedSound(std::rc::Rc<crate::sound::Service>);
 
 impl Global for SharedSound {}
 
-fn shared_sound(cx: &mut App) -> std::rc::Rc<crate::sound::Service> {
+pub(crate) fn shared_sound(cx: &mut App) -> std::rc::Rc<crate::sound::Service> {
     if let Some(shared) = cx.try_global::<SharedSound>() {
         return shared.0.clone();
     }
@@ -375,108 +379,12 @@ pub(crate) fn run() -> std::process::ExitCode {
         }
     };
     let failed = startup_failed.clone();
-    let window_state = (mode == LaunchMode::Normal).then(crate::window_state::WindowState::load);
-    // Fixtures never ask about, or touch, agent configuration.
-    let agent_skill = if mode == LaunchMode::Normal {
-        crate::agent_skill::AgentSkill::load()
-    } else {
-        crate::agent_skill::AgentSkill::default()
-    };
-    // Fixtures start with no tabs and never write the file.
-    let browser_tabs = if mode == LaunchMode::Normal {
-        crate::browser::Store::load()
-    } else {
-        crate::browser::Store::default()
-    };
-    // Nor with usage Keychain grants, so a fixture never makes macOS ask.
-    let keychain_grants = if mode == LaunchMode::Normal {
-        crate::usage::KeychainGrants::load()
-    } else {
-        crate::usage::KeychainGrants::default()
-    };
-    // Nor with saved editor groups, which they would overwrite.
-    let group_layouts = if mode == LaunchMode::Normal {
-        crate::browser::Layouts::load()
-    } else {
-        crate::browser::Layouts::default()
-    };
-    // Nor with the user's worktree notes, which they would overwrite.
-    let worktree_notes = if mode == LaunchMode::Normal {
-        crate::worktree_notes::Notes::load()
-    } else {
-        crate::worktree_notes::Notes::default()
-    };
-    // Nor with the files the user marked viewed in reviews.
-    let review_viewed = if mode == LaunchMode::Normal {
-        crate::review::Viewed::load()
-    } else {
-        crate::review::Viewed::default()
-    };
-    // Nor with what the user snoozed, settled, or pinned in the Overview.
-    let overview_marks = if mode == LaunchMode::Normal {
-        crate::overview::Marks::load()
-    } else {
-        crate::overview::Marks::default()
-    };
-    // Nor with which workspaces and tabs the user muted.
-    let notification_mutes = if mode == LaunchMode::Normal {
-        crate::notification_mutes::Mutes::load()
-    } else {
-        crate::notification_mutes::Mutes::default()
-    };
-    // Nor with the user's jump list, which they would replace.
-    #[cfg(windows)]
-    let jump_list = (mode == LaunchMode::Normal).then(crate::jump_list::JumpList::load);
-    // Nor with which palette rows the user chooses.
-    let palette_frecency = if mode == LaunchMode::Normal {
-        crate::palette::Frecency::load()
-    } else {
-        crate::palette::Frecency::default()
-    };
-    // Nor with where the user's worktrees went.
-    let dispatch_history = if mode == LaunchMode::Normal {
-        crate::dispatch::History::load()
-    } else {
-        crate::dispatch::History::default()
-    };
-    // Nor with where the user's new worktrees land.
-    let worktree_landing = if mode == LaunchMode::Normal {
-        crate::worktree_landing::Remembered::load()
-    } else {
-        crate::worktree_landing::Remembered::default()
-    };
-    // Nor with the user's fan-outs, which they would restore or forget.
-    let fan_out_journal = if mode == LaunchMode::Normal {
-        crate::fan_out::Journal::load()
-    } else {
-        crate::fan_out::Journal::default()
-    };
-    // Whether the launcher is installed is read once here, never while a window opens.
-    let taskbar = crate::taskbar::Taskbar::load();
+    let stores = Stores::load(mode == LaunchMode::Normal);
     gpui_platform::application()
         .with_assets(icons::Icons)
         .run(move |cx| {
-            let window_count = window_state.as_ref().map_or(1, |state| state.count());
-            if let Some(state) = window_state {
-                state.install(cx);
-            }
-            browser_tabs.install(cx);
-            group_layouts.install(cx);
-            worktree_notes.install(cx);
-            review_viewed.install(cx);
-            overview_marks.install(cx);
-            notification_mutes.install(cx);
-            palette_frecency.install(cx);
-            dispatch_history.install(cx);
-            worktree_landing.install(cx);
-            fan_out_journal.install(cx);
-            agent_skill.install_global(cx);
-            keychain_grants.install(cx);
-            taskbar.install(cx);
-            #[cfg(windows)]
-            if let Some(jump_list) = jump_list {
-                jump_list.install(cx);
-            }
+            let window_count = stores.window_count();
+            stores.install(cx);
             if let Some(link) = pending_link {
                 crate::link::follow::defer(link, cx);
             }
