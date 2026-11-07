@@ -44,7 +44,8 @@ pub enum LayoutMode {
     Superset,
     /// Rounded cards with a meta line for host, branch, and pull request.
     Orca,
-    /// One line per row with only the status and the name.
+    /// One line per row with only the status, the name, and the pull request
+    /// number.
     Minimal,
     /// Each device with its agents under it, and a search over them.
     Devices,
