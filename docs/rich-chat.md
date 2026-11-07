@@ -394,8 +394,11 @@ readable without opening a same-named local file.
 
 Rich parsing lives in [`chat/rich`](../crates/sheprd-gpui/src/chat/rich.rs), with
 native layout in [`chat/view/rich.rs`](../crates/sheprd-gpui/src/chat/view/rich.rs).
-Math rasterization and syntax highlighting use the bounded visual worker queue;
-discarded streamed revisions retain their worker slots until completion.
+Math rasterization and syntax highlighting use the bounded visual worker queue,
+which a window's chats share: what is on screen goes first, a hidden chat starts
+nothing, and discarded streamed revisions retain their worker slots until
+completion. Scrolling back rebuilds evicted formulas and code, and a formula the
+texture budget refused is drawn again once it is on screen and room exists.
 
 - Message preparation is limited to 256 KiB and 2,000 lines. Rich fragments
   exceeding 4,096 words or 16,384 parser events use the bounded source renderer.

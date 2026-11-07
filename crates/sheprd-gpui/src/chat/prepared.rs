@@ -258,6 +258,31 @@ impl Prepared {
         self.text.set_expanded(expanded);
     }
 
+    /// Notes the formulas and code of a row the lazy list drew. A folded
+    /// card's source stays out, as it does from the budget.
+    pub(crate) fn request_visible(&self, id: EntryId, opened: bool) {
+        let Some((_, body)) = self.bodies.get(&id) else {
+            return;
+        };
+        match &**body {
+            Body::Message(parts) | Body::Answers { parts, .. } => {
+                for part in parts {
+                    if let Part::Rich(blocks) = part {
+                        for block in &**blocks {
+                            block.request_visible(&self.visuals);
+                        }
+                    }
+                }
+            }
+            Body::Tool(summary) if opened => {
+                for preview in &summary.previews {
+                    preview.request_visible(&self.visuals);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// The entries that draw `visual`, to measure again once it lands.
     pub(crate) fn drawing(&self, visual: VisualId) -> impl Iterator<Item = EntryId> + '_ {
         self.bodies

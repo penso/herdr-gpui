@@ -89,6 +89,7 @@ impl SheprdWindow {
                         id,
                         language,
                         source,
+                        ..
                     } => self
                         .rich_code(*id, language, source, index, &mut context)
                         .into_any_element(),
@@ -255,7 +256,7 @@ impl SheprdWindow {
                         children.push(item.into_any_element());
                     }
                 }
-                Inline::Math { id, source } => {
+                Inline::Math { id, source, .. } => {
                     let formula = self.rich_math(*id, source, context.visuals, true, context.size);
                     let formula = match &fragment {
                         Some(fragment) => fragment.range(offset..offset + source.len()).atomic(

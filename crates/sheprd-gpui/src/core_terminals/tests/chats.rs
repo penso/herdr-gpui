@@ -8,6 +8,8 @@ use crate::{
 use sheprd_backend::{RunState, TerminalId, TerminalInfo};
 use sheprd_client::protocol::AgentStatus;
 
+mod visibility;
+
 fn id(name: &str) -> TerminalId {
     TerminalId::new(name).unwrap()
 }
