@@ -224,7 +224,10 @@ mod socket {
                     }
                     method => panic!("unexpected method {method}"),
                 };
-                let response = if request["params"]["cwd"] == "/refused" {
+                let response = if request["params"]["cwd"]
+                    .as_str()
+                    .is_some_and(|cwd| cwd.ends_with("/refused"))
+                {
                     json!({"jsonrpc": "2.0", "id": request["id"],
                         "error": {"code": -32000, "message": "refused"}})
                 } else {

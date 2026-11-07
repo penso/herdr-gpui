@@ -140,6 +140,33 @@ async fn a_worktree_chat_starts_on_the_core_in_its_new_checkout() {
 }
 
 #[tokio::test]
+async fn a_worktree_whose_chat_fails_leaves_the_branch_free_to_retry() {
+    let dir = tempfile::tempdir().unwrap();
+    let repository = worktree::tests::committed_repository(dir.path());
+    let root = dir.path().join("worktrees");
+    let (source, fake) = fake();
+    source.poll().unwrap();
+    let mut hub = hub_on(&source, Layout::default());
+    hub.worktrees = Some(root.clone());
+    // The fake core refuses a folder of this name.
+    let error = hub
+        .create_workspace(repository.to_str().unwrap(), Some("refused"), Agent::Claude)
+        .await
+        .err()
+        .unwrap();
+    assert!(matches!(error, HubError::Core(Error::Client(_))), "{error}");
+    assert!(!root.join("project").join("refused").exists());
+    let branches = sheprd_client::new_command("git")
+        .current_dir(&repository)
+        .args(["branch", "--list", "refused"])
+        .output()
+        .unwrap();
+    assert!(branches.stdout.is_empty());
+    drop((hub, source));
+    fake.server.join().unwrap();
+}
+
+#[tokio::test]
 async fn a_worktree_git_refuses_starts_no_chat() {
     let dir = tempfile::tempdir().unwrap();
     let (source, fake) = fake();

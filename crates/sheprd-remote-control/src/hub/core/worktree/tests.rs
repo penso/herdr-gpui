@@ -55,6 +55,18 @@ fn a_worktree_of_a_worktree_files_under_the_same_repository() {
 }
 
 #[test]
+fn removing_a_new_worktree_frees_its_branch() {
+    let dir = tempdir().unwrap();
+    let repository = committed_repository(dir.path());
+    let root = dir.path().join("worktrees");
+    let checkout = add(&repository, "topic", &root).unwrap();
+    std::fs::write(checkout.join("from-a-hook"), "").unwrap();
+    remove(&repository, &checkout, "topic").unwrap();
+    assert!(!checkout.exists());
+    add(&repository, "topic", &root).unwrap();
+}
+
+#[test]
 fn a_taken_branch_is_refused_with_what_git_said() {
     let dir = tempdir().unwrap();
     let repository = committed_repository(dir.path());

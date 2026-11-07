@@ -63,8 +63,17 @@ impl Source {
         root: Option<&Path>,
     ) -> Result<String> {
         let root = root.ok_or(worktree::Error::NoHome).map_err(Error::from)?;
-        let checkout = worktree::add(Path::new(cwd), branch, root).map_err(Error::from)?;
-        self.open_chat(agent, program, &checkout.to_string_lossy())
+        let repository = Path::new(cwd);
+        let checkout = worktree::add(repository, branch, root).map_err(Error::from)?;
+        let started = self.open_chat(agent, program, &checkout.to_string_lossy());
+        if started.is_err() {
+            // The phone is told it failed, so its retry must find the
+            // branch free. What cannot be undone stays to clear by hand.
+            if let Err(error) = worktree::remove(repository, &checkout, branch) {
+                tracing::warn!(%error, %branch, "A worktree without a chat stayed");
+            }
+        }
+        started
     }
 
     fn run(&self, run: &Run<'_>) -> Result<String> {

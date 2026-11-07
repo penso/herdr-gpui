@@ -52,6 +52,30 @@ pub(in crate::hub) fn add(repository: &Path, branch: &str, root: &Path) -> Resul
     Ok(checkout)
 }
 
+/// Undoes [`add`] for a checkout no chat started in, so asking again finds
+/// the branch free. Only for what `add` just made: the checkout and branch
+/// are removed whatever they hold.
+pub(in crate::hub) fn remove(
+    repository: &Path,
+    checkout: &Path,
+    branch: &str,
+) -> Result<(), Error> {
+    git(
+        repository,
+        [
+            OsStr::new("worktree"),
+            OsStr::new("remove"),
+            OsStr::new("--force"),
+            checkout.as_os_str(),
+        ],
+    )?;
+    git(
+        repository,
+        [OsStr::new("branch"), OsStr::new("-D"), OsStr::new(branch)],
+    )?;
+    Ok(())
+}
+
 /// The repository's folder name, from its common Git directory: the folder
 /// holding `.git`, or a bare repository's own name without `.git`.
 fn repository_name(common: &Path) -> Option<&OsStr> {
