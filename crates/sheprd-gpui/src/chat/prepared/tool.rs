@@ -119,12 +119,15 @@ pub(super) fn preview(
                 changes.extend(shown.change());
                 return Some(shown.into_preview(original));
             }
-            let (added, removed) = diff_counts(old.as_deref().unwrap_or(""), new);
-            changes.push(DiffSummary {
-                path: path.clone(),
-                added,
-                removed,
-            });
+            // Sides that were not compared have no honest count; a whole new
+            // file's is just its lines.
+            if old.is_none() {
+                changes.push(DiffSummary {
+                    path: path.clone(),
+                    added: new.lines().count(),
+                    removed: 0,
+                });
+            }
             Some(changed_text(path, old.as_deref(), new, original))
         }
         ToolContent::Terminal { id } => Some(Preview::plain(

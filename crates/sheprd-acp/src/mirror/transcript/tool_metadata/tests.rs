@@ -2,6 +2,8 @@ use serde_json::json;
 
 use super::*;
 
+mod agents;
+
 #[test]
 fn known_tools_read_as_what_they_were_asked_to_do() {
     let cases = [

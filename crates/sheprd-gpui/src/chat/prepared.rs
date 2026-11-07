@@ -27,9 +27,6 @@ pub(crate) mod tool;
 
 /// Lines of a tool call's text output shown under it.
 const TOOL_LINES: usize = 6;
-/// Bytes of a diff's sides compared line by line; past them it is counted
-/// as changed without its lines.
-const DIFF_BYTES: usize = 512 * 1024;
 /// How much of one answer is drawn: as much text as the program keeps for
 /// an entry, with room for long code. A longer answer ends with a note.
 pub(super) const MESSAGE: release_notes::Limits = release_notes::Limits {
@@ -622,25 +619,4 @@ pub(crate) fn summarize(
         summary.previews.extend(preview);
     }
     summary
-}
-
-/// Lines added and removed between two versions of a file too large to
-/// align, by counting each distinct line on both sides.
-pub(crate) fn diff_counts(old: &str, new: &str) -> (usize, usize) {
-    if old.len() + new.len() > DIFF_BYTES {
-        return (new.lines().count(), old.lines().count());
-    }
-    let mut counts: HashMap<&str, isize> = HashMap::new();
-    for line in old.lines() {
-        *counts.entry(line).or_default() -= 1;
-    }
-    for line in new.lines() {
-        *counts.entry(line).or_default() += 1;
-    }
-    counts
-        .values()
-        .fold((0, 0), |(added, removed), &count| match count {
-            count if count > 0 => (added + count.unsigned_abs(), removed),
-            count => (added, removed + count.unsigned_abs()),
-        })
 }

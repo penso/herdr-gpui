@@ -3,6 +3,8 @@ use super::*;
 #[allow(clippy::unwrap_used)]
 mod diff;
 #[allow(clippy::unwrap_used)]
+mod diff_counts;
+#[allow(clippy::unwrap_used)]
 mod highlighting;
 
 fn previews(
@@ -130,7 +132,7 @@ fn every_content_item_stays_shown_past_the_structured_limit() {
     content.push(text(r#"{"command":"ls"}"#));
     let (preview, changes) = previews(&content, ToolKind::Edit, &mut Visuals::default());
     assert_eq!(preview.len(), content.len());
-    assert_eq!(counts(&changes), [("overflow.rs", 1, 1)]);
+    assert!(changes.is_empty(), "it was shown but never compared");
     assert!(preview[MAX_PARTS].before.is_some());
     assert_eq!(&*preview[MAX_PARTS + 1].code.source, r#"{"command":"ls"}"#);
 }
