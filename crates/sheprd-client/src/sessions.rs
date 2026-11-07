@@ -161,7 +161,15 @@ pub struct RemoteSession {
 /// first and the rest by name. Performs filesystem and socket I/O in the calling
 /// thread's time: call it from a worker, never a rendering thread.
 pub fn list_local_sessions(development: bool) -> Result<Vec<LocalSession>> {
-    list_with(&config_dir(development), |socket| {
+    list_sessions_in(&config_dir(development))
+}
+
+/// List the sessions of the installation whose configuration directory is
+/// `dir` (such as `~/.config/herdr`), as [`list_local_sessions`] does for this
+/// process's own: for a caller, such as a user service, whose environment may
+/// not resolve the directory the user's shell does. Blocking, like it.
+pub fn list_sessions_in(dir: &Path) -> Result<Vec<LocalSession>> {
+    list_with(dir, |socket| {
         // A plain connect and drop is the same availability signal upstream's own
         // session list needs. The daemon logs a client only once it handshakes.
         Stream::connect(socket).is_ok()

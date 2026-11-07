@@ -9,6 +9,22 @@ The daemon is a user service that Sheprd installs when Remote control is
 turned on, and it keeps running when the app quits. It never starts, stops,
 or upgrades a Herdr daemon.
 
+## Herdr 1 sessions
+
+The daemon follows the Herdr 1 session at `--herdr-socket` (discovered when
+absent) and every other running session of this user's installation
+(`herdr --session NAME`, under `sessions/` in Herdr's configuration
+directory), so a computer that runs only named sessions still shows phones
+all of them. The installation is the one that socket is in, as the desktop
+resolved it, since the service's environment may lack the shell's
+`XDG_CONFIG_HOME`. Sessions are listed again every 30 seconds: one started or
+stopped later is followed or let go without a restart. A named session's
+workspace, tab, and pane ids carry `herdr:NAME:`, and its requests go to its
+own API socket. The session at `--herdr-socket` keeps its ids, and desktop
+pull request data is matched against it. A new workspace goes to that
+session, or to the alphabetically first named session that answers when it
+does not.
+
 ## Herdr 2 terminals
 
 The daemon lists terminals from both Herdr 1 and a running herdr-core.

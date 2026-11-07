@@ -327,13 +327,11 @@ fn pane_id(boot: &str, address: &str) -> String {
 }
 
 pub(super) fn owns(params: &Value) -> bool {
-    ["pane_id", "tab_id", "target_pane_id", "workspace_id"]
-        .iter()
-        .any(|key| {
-            params[key]
-                .as_str()
-                .is_some_and(|id| id.starts_with(PREFIX))
-        })
+    super::sessions::ID_KEYS.iter().any(|key| {
+        params[key]
+            .as_str()
+            .is_some_and(|id| id.starts_with(PREFIX))
+    })
 }
 
 fn merge(daemon: &Layout, core: &Layout) -> Layout {
