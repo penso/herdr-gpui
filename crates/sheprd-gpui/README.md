@@ -3078,7 +3078,8 @@ come back after a restart; closing a workspace in Herdr removes its tabs.
   gets WebView2's own confirmation prompt rather than being refused outright.
 - Pages are native web views (WebKit on macOS, WebView2 on Windows). On
   macOS a page lies beneath the window's own drawing. Menus, popovers,
-  dialogs, tooltips, toasts, and the file-transfer card show over it, and
+  dialogs, tooltips, toasts, notice cards, and the file-transfer card show
+  over it, and
   the page stays live around them. The grip between two groups keeps its
   full width over a page. While a menu or dialog is open, a file dropped on
   the window never reaches a page. A file dropped on a toast or the
@@ -3086,9 +3087,11 @@ come back after a restart; closing a workspace in Herdr removes its tabs.
 - On Windows a page is layered above the window, so it steps aside for a
   menu, popover, or status bar tooltip that would fall over it, and for a
   dialog, which dims the whole window. Its place is empty until the menu
-  closes. A page also steps aside while a toast or the file-transfer card
-  falls over it, as when a page or VS Code fills the right-hand group or the
-  whole editor area, so they stay visible and clickable. A page that none of
+  closes. A page also steps aside while a toast, a notice card, or the
+  file-transfer card falls over it, as when a page or VS Code fills the
+  right-hand group or the whole editor area, so they stay visible and
+  clickable. A config warning or announcement card stays until it is
+  dismissed, and the page comes back then. A page that none of
   these reach keeps showing.
 - Linux has no embedded pages yet: browser tab requests open the system
   browser, and local files and annotations are unavailable.
