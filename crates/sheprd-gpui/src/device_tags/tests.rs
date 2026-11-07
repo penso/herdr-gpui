@@ -121,3 +121,58 @@ fn starters_are_offered_until_a_tag_is_in_use() {
     assert_eq!(offered(&Tags::default()), ["personal", "work"]);
     assert_eq!(offered(&tagged(&[("a", &["lab"])])), ["lab"]);
 }
+
+#[gpui::test]
+fn an_edit_before_the_saved_copy_is_read_joins_it(cx: &mut gpui::TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join(FILE);
+    cx.update(|cx| {
+        cx.set_global(DeviceTags {
+            file: Some(file.clone()),
+            ..DeviceTags::default()
+        });
+        DeviceTags::set(cx, "a", vec!["work".to_owned()]);
+    });
+    cx.run_until_parked();
+    // Saving now would have put one device over everyone's tags.
+    assert!(!file.exists());
+
+    cx.update(|cx| DeviceTags::finish_loading(cx, tagged(&[("a", &["old"]), ("b", &["lab"])])));
+    cx.run_until_parked();
+    let tags = cx.update(|cx| DeviceTags::current(cx));
+    assert_eq!(tags.of("a"), ["work"]);
+    assert_eq!(tags.of("b"), ["lab"]);
+    let saved = read(&file);
+    assert_eq!(saved.of("a"), ["work"]);
+    assert_eq!(saved.of("b"), ["lab"]);
+}
+
+#[test]
+fn a_saved_edit_newer_than_an_early_one_stands() {
+    let mut saved = Tags::default();
+    saved.edit("a", vec!["saved".to_owned()], 2_000);
+    let mut early = Tags::default();
+    early.edit("a", vec!["early".to_owned()], 1_000);
+    assert_eq!(saved.with_edits(&early).of("a"), ["saved"]);
+}
+
+#[gpui::test]
+fn a_slow_write_does_not_hold_up_the_next_save(cx: &mut gpui::TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join(FILE);
+    let writing = Arc::new(Mutex::new(()));
+    cx.update(|cx| {
+        cx.set_global(DeviceTags {
+            file: Some(file.clone()),
+            loaded: true,
+            writing: writing.clone(),
+            ..DeviceTags::default()
+        });
+    });
+    let held = writing.lock().unwrap();
+    // Returns while a write has its turn, as the UI thread must.
+    cx.update(|cx| DeviceTags::set(cx, "a", vec!["work".to_owned()]));
+    drop(held);
+    cx.run_until_parked();
+    assert_eq!(read(&file).of("a"), ["work"]);
+}

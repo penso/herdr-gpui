@@ -84,7 +84,40 @@ public enum SyncStep: Equatable, Sendable {
     case send
 }
 
+/// The tag offers being sent, one at a time per computer. An offer made
+/// while another is going waits, and only the latest does: it holds every
+/// edit before it.
+public struct TagOffers<Offer: Sendable>: Sendable {
+    private var going = Set<String>()
+    private var next: [String: Offer] = [:]
+
+    public init() {}
+
+    /// Whether `offer` can go now; if not, it waits for [`finish`].
+    public mutating func begin(_ device: String, _ offer: Offer) -> Bool {
+        guard going.insert(device).inserted else {
+            next[device] = offer
+            return false
+        }
+        return true
+    }
+
+    /// Ends the offer going to `device`, and returns the one to send next.
+    public mutating func finish(_ device: String) -> Offer? {
+        going.remove(device)
+        return next.removeValue(forKey: device)
+    }
+}
+
 extension Computer {
+    /// Keeps the tags of the records in `computers` this one replaces, with
+    /// when they were edited: an edit not yet sent must stay the latest.
+    public mutating func carryTags(from computers: [Computer]) {
+        let replaced = computers.filter { $0.fingerprint == fingerprint || $0.device == device }
+        tags = ComputerTags.carried(to: self, from: computers)
+        tagsUpdatedMs = replaced.map(\.tagsUpdatedMs).reduce(tagsUpdatedMs, max)
+    }
+
     /// Takes the tags the computer says stand.
     public mutating func adopt(_ remote: Home.Tags) {
         tags = remote.tags

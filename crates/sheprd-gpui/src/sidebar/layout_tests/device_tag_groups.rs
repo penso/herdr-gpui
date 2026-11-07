@@ -221,3 +221,10 @@ fn a_filter_goes_with_its_switch_or_its_segment() {
     assert!(filter_stale(&two, "lab"));
     assert!(filter_stale(&Tags::tagged(&[("ssh:a", &["work"])]), "work"));
 }
+
+#[gpui::test]
+fn two_spellings_of_a_tag_are_one_section(cx: &mut gpui::TestAppContext) {
+    let (_, cx) = grouped_window(cx, &[("ssh:a", &["work"]), ("ssh:b", &["Work"])]);
+    assert!(cx.debug_bounds("device-tag-section-work").is_some());
+    assert!(cx.debug_bounds("device-tag-section-Work").is_none());
+}

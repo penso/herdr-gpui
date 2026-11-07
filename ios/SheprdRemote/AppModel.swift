@@ -187,7 +187,7 @@ final class AppModel {
 
     func add(_ computer: Computer) {
         var computer = computer
-        computer.tags = ComputerTags.carried(to: computer, from: computers)
+        computer.carryTags(from: computers)
         // A computer is its CA: pairing the same CA (or the same device id)
         // again replaces the old record. Names are display only.
         computers.removeAll { $0.fingerprint == computer.fingerprint || $0.device == computer.device }

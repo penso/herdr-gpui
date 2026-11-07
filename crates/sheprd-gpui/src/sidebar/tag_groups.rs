@@ -25,6 +25,15 @@ fn fold_key(section: Option<&str>) -> Option<String> {
     section.map(str::to_lowercase)
 }
 
+/// Whether two devices list together: `work` and `Work` are one section.
+pub(super) fn same_section(one: Option<&str>, other: Option<&str>) -> bool {
+    match (one, other) {
+        (Some(one), Some(other)) => sheprd_remote_control::control::tags::same(one, other),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
 fn in_use(tags: &Tags, tag: &str) -> bool {
     tags.all()
         .iter()
@@ -264,14 +273,7 @@ impl SheprdWindow {
             .iter()
             .filter(|endpoint| self.device_visible(&endpoint.id))
             .filter(|endpoint| {
-                let own = self.device_tags.section(&endpoint.id, filter);
-                match (own, section) {
-                    (Some(own), Some(section)) => {
-                        sheprd_remote_control::control::tags::same(own, section)
-                    }
-                    (None, None) => true,
-                    _ => false,
-                }
+                same_section(self.device_tags.section(&endpoint.id, filter), section)
             })
             .count()
     }

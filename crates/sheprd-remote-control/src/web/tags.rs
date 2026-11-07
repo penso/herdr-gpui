@@ -5,12 +5,18 @@
 use super::{ApiError, Device, Shared, now_ms};
 use crate::{app, control::tags::ComputerTags};
 use axum::{Json, extract::State};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Mutex, PoisonError},
+};
 use tokio::sync::watch;
 
 pub(crate) struct Tags {
     file: PathBuf,
     current: watch::Sender<ComputerTags>,
+    /// Held across a whole offer: two read as one, the older could finish
+    /// last, and both write the same partial file.
+    offering: Mutex<()>,
 }
 
 impl Tags {
@@ -18,7 +24,11 @@ impl Tags {
     pub(crate) fn load(state_dir: &Path) -> Self {
         let file = app::tags::file(state_dir);
         let current = watch::Sender::new(app::tags::load(&file));
-        Self { file, current }
+        Self {
+            file,
+            current,
+            offering: Mutex::default(),
+        }
     }
 
     pub(crate) fn current(&self) -> ComputerTags {
@@ -33,6 +43,7 @@ impl Tags {
     /// before anyone hears of it, and an edit that cannot be saved is refused
     /// so its sender keeps it and tries again.
     pub(crate) fn offer(&self, offer: ComputerTags, now_ms: u64) -> app::Result<ComputerTags> {
+        let _offering = self.offering.lock().unwrap_or_else(PoisonError::into_inner);
         let stored = self.current();
         let merged = stored.clone().merged(offer, now_ms);
         if merged != stored {

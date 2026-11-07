@@ -154,7 +154,7 @@ impl SheprdWindow {
             }
             if grouped {
                 let own = self.device_tags.section(&endpoint.id, tag_filter);
-                if section != Some(own) {
+                if !section.is_some_and(|last| super::tag_groups::same_section(last, own)) {
                     section = Some(own);
                     let count = self.tag_section_count(own);
                     spaces = spaces.child(self.tag_section(own, count, heading_look, cx));

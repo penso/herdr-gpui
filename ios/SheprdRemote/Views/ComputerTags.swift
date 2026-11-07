@@ -142,7 +142,7 @@ struct ComputerTagsSection: View {
         } header: {
             Text("Tags")
         } footer: {
-            Text("Tags stay on this \(UIDevice.current.model). Filter by them at the top of Workspaces.")
+            Text("Tags sync through this computer to the phones and desktops paired with it. Filter by them at the top of Workspaces.")
         }
     }
 

@@ -59,3 +59,27 @@ async fn a_phone_edits_the_tags_and_the_latest_edit_stands() {
         "an edit is on disk before it is answered"
     );
 }
+
+#[test]
+fn offers_at_once_leave_the_latest_in_memory_and_on_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let tags = Arc::new(Tags::load(dir.path()));
+    let workers: Vec<_> = (1..=32_u64)
+        .map(|edit| {
+            let tags = tags.clone();
+            std::thread::spawn(move || {
+                let offer = ComputerTags::new([format!("tag{edit}")], edit);
+                tags.offer(offer, 1_000).unwrap();
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    let latest = ComputerTags::new(["tag32"], 32);
+    assert_eq!(tags.current(), latest);
+    assert_eq!(
+        crate::app::tags::load(&crate::app::tags::file(dir.path())),
+        latest
+    );
+}

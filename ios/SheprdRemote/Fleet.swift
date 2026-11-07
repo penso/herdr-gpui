@@ -247,7 +247,7 @@ final class Fleet {
     @ObservationIgnored var onTagsAnswer: ((Home.Tags, Computer) -> Void)?
     /// Devices with an offer of tags on its way, so a home arriving
     /// meanwhile does not send it again.
-    @ObservationIgnored private var offeringTags = Set<String>()
+    @ObservationIgnored private var tagOffers = TagOffers<Computer>()
 
     // MARK: Views
 
@@ -365,10 +365,12 @@ final class Fleet {
     /// away or too old to keep tags refuses; the copy stays, and its next
     /// home brings this back.
     func offerTags(for computer: Computer) {
-        guard offeringTags.insert(computer.device).inserted else { return }
+        guard tagOffers.begin(computer.device, computer) else { return }
         let offer = Home.Tags(tags: computer.tags, updatedMs: computer.tagsUpdatedMs)
         Task {
-            defer { offeringTags.remove(computer.device) }
+            defer {
+                if let next = tagOffers.finish(computer.device) { offerTags(for: next) }
+            }
             guard let answer = try? await call(computer.device, { client, token in
                 try await client.offerTags(offer, bearer: token)
             }) else { return }

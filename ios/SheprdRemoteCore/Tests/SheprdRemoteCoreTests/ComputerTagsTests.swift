@@ -122,4 +122,30 @@ import Testing
         )
         #expect(home.tags == Home.Tags(tags: ["work"], updatedMs: 7))
     }
+
+    @Test func pairingAgainKeepsAnUnsentEditTheLatest() throws {
+        var old = try computer("a", tags: ["work"])
+        old.tagsUpdatedMs = 2_000
+        var paired = try computer("a")
+        paired.carryTags(from: [old, try computer("b", tags: ["lab"])])
+        #expect(paired.tags == ["work"])
+        #expect(paired.tagsUpdatedMs == 2_000)
+        let older = Home.Tags(tags: ["personal"], updatedMs: 1_000)
+        #expect(ComputerTags.step(for: paired, remote: older) == .send)
+    }
+
+    @Test func offersGoOneAtATimeAndOnlyTheLatestWaits() {
+        var offers = TagOffers<Int>()
+        let first = offers.begin("a", 1)
+        let other = offers.begin("b", 1)
+        let second = offers.begin("a", 2)
+        let third = offers.begin("a", 3)
+        #expect(first && other && !second && !third)
+        let next = offers.finish("a")
+        let none = offers.finish("a")
+        let otherNext = offers.finish("b")
+        #expect(next == 3 && none == nil && otherNext == nil)
+        let again = offers.begin("a", 4)
+        #expect(again)
+    }
 }

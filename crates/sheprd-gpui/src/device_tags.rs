@@ -161,6 +161,21 @@ impl Tags {
     fn offer(&self, id: &str) -> ComputerTags {
         self.records.get(id).cloned().unwrap_or_default()
     }
+
+    /// This saved copy with `early`'s edits, made before it was read, over
+    /// whatever they are newer than.
+    fn with_edits(mut self, early: &Self) -> Self {
+        for (id, edit) in &early.records {
+            if self
+                .records
+                .get(id)
+                .is_none_or(|saved| saved.updated_ms <= edit.updated_ms)
+            {
+                self.records.insert(id.clone(), edit.clone());
+            }
+        }
+        self
+    }
 }
 
 /// Where a device's tags stand with its daemon.
@@ -199,14 +214,18 @@ pub(crate) struct DeviceTags {
     tags: Arc<Tags>,
     file: Option<PathBuf>,
     /// Whether the saved copy was read: until then an exchange would offer
-    /// nothing and could lose an edit made while the app was closed.
+    /// nothing and could lose an edit made while the app was closed, and a
+    /// save would write over the other devices' tags.
     loaded: bool,
     /// The devices windows can reach now, by endpoint ID.
     daemons: BTreeMap<String, Daemon>,
     links: HashMap<String, Link>,
     /// The newest copy to write, shared with the writer so a slow write
-    /// never puts an older copy back.
+    /// never puts an older copy back. Only ever held for a moment, as the UI
+    /// thread takes it.
     saving: Arc<Mutex<Option<Arc<Tags>>>>,
+    /// Held by the writer across a write, so they land one at a time.
+    writing: Arc<Mutex<()>>,
 }
 
 impl Global for DeviceTags {}
@@ -224,14 +243,23 @@ impl DeviceTags {
             .spawn(async move { file.as_deref().map(read).unwrap_or_default() });
         cx.spawn(async move |cx| {
             let tags = read.await;
-            cx.update(|cx| {
-                cx.update_global::<Self, _>(|this, _| {
-                    this.tags = Arc::new(tags);
-                    this.loaded = true;
-                });
-            });
+            cx.update(|cx| Self::finish_loading(cx, tags));
         })
         .detach();
+    }
+
+    /// Takes the saved copy, keeping any edit made while it was being read.
+    fn finish_loading(cx: &mut App, saved: Tags) {
+        let edited = cx.update_global::<Self, _>(|this, _| {
+            let edited = !this.tags.records.is_empty();
+            this.tags = Arc::new(saved.with_edits(&this.tags));
+            this.loaded = true;
+            edited
+        });
+        if edited {
+            Self::save(cx);
+        }
+        Self::tick(cx);
     }
 
     /// The copy to draw from; empty before [`Self::install`], as in tests.
@@ -377,17 +405,18 @@ impl DeviceTags {
 
     fn save(cx: &mut App) {
         let this = cx.global::<Self>();
-        let Some(file) = this.file.clone() else {
+        let Some(file) = this.file.clone().filter(|_| this.loaded) else {
             return;
         };
-        let saving = this.saving.clone();
+        let (saving, writing) = (this.saving.clone(), this.writing.clone());
         *saving.lock().unwrap_or_else(PoisonError::into_inner) = Some(this.tags.clone());
         cx.background_executor()
             .spawn(async move {
-                // Held across the write, so writes land one at a time and the
-                // last one holds the newest copy.
-                let mut newest = saving.lock().unwrap_or_else(PoisonError::into_inner);
-                if let Some(tags) = newest.take()
+                // The newest copy is taken with the write's turn in hand, so
+                // the last write holds it.
+                let _writing = writing.lock().unwrap_or_else(PoisonError::into_inner);
+                let newest = saving.lock().unwrap_or_else(PoisonError::into_inner).take();
+                if let Some(tags) = newest
                     && let Err(error) = write(&file, &tags)
                 {
                     tracing::warn!(%error, "Could not save device tags");
