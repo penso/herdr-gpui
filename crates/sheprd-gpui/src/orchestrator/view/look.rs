@@ -49,6 +49,12 @@ impl Look {
         base * (self.ui.size / DESIGNED).max(1.)
     }
 
+    /// A column `base` pixels wide at the usual text size, grown like a row
+    /// so the text it holds keeps fitting.
+    pub(crate) fn column(&self, base: f32) -> f32 {
+        self.row(base)
+    }
+
     pub(crate) fn tiny(&self) -> Pixels {
         px((self.ui.size - 2.).max(9.))
     }

@@ -25,7 +25,8 @@ const PROJECT_WIDTH: f32 = 130.;
 const SOURCE_WIDTH: f32 = 22.;
 /// The column holding a row's action, such as Start agent.
 const ACTION_WIDTH: f32 = 96.;
-/// The columns saying where a pull request stands.
+/// The columns saying where a pull request stands, at the usual text size:
+/// see [`Look::column`].
 const STATUS_WIDTH: f32 = 72.;
 const CHECKS_WIDTH: f32 = 70.;
 
@@ -135,9 +136,15 @@ impl OrchestratorView {
                 } else {
                     head.extend([
                         (fl!("orchestrator-column-author"), Some(100.)),
-                        (fl!("orchestrator-column-status"), Some(STATUS_WIDTH)),
+                        (
+                            fl!("orchestrator-column-status"),
+                            Some(look.column(STATUS_WIDTH)),
+                        ),
                         (fl!("orchestrator-column-review"), Some(124.)),
-                        (fl!("orchestrator-column-checks"), Some(CHECKS_WIDTH)),
+                        (
+                            fl!("orchestrator-column-checks"),
+                            Some(look.column(CHECKS_WIDTH)),
+                        ),
                         (fl!("orchestrator-column-size"), Some(70.)),
                         (fl!("orchestrator-column-run"), Some(30.)),
                     ]);
@@ -598,7 +605,7 @@ impl OrchestratorView {
                     .child(
                         div()
                             .flex_none()
-                            .w(px(STATUS_WIDTH))
+                            .w(px(look.column(STATUS_WIDTH)))
                             .overflow_hidden()
                             .flex()
                             .children(
@@ -614,7 +621,7 @@ impl OrchestratorView {
                     .child(
                         div()
                             .flex_none()
-                            .w(px(CHECKS_WIDTH))
+                            .w(px(look.column(CHECKS_WIDTH)))
                             .overflow_hidden()
                             .flex()
                             .children(checks_count(look, status)),

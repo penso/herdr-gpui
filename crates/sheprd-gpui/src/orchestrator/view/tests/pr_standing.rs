@@ -1,4 +1,7 @@
-use super::super::list::{row_tone, standing_word};
+use super::super::{
+    list::{row_tone, standing_word},
+    look::Look,
+};
 use super::*;
 use crate::{
     i18n::fl,
@@ -70,4 +73,20 @@ fn the_word_names_what_keeps_a_pull_request_from_merging() {
         word(&row("merged"), MergeState::Clean),
         Some(fl!("orchestrator-standing-merged"))
     );
+}
+
+#[test]
+fn the_status_columns_grow_with_the_text_and_never_shrink_below_their_width() {
+    let config = crate::config::Config::default();
+    let mut look = Look {
+        theme: crate::config::Theme::default(),
+        ui: config.ui.clone(),
+        mono: config.terminal.clone(),
+    };
+    look.ui.size = 14.;
+    assert_eq!(look.column(70.), 70.);
+    look.ui.size = 10.;
+    assert_eq!(look.column(70.), 70.);
+    look.ui.size = 28.;
+    assert_eq!(look.column(70.), 140.);
 }
