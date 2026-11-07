@@ -296,7 +296,18 @@ fn contents(path: &Path) -> io::Result<Vec<u8>> {
 /// finds each one by its old side, which does not depend on those before it.
 fn patch(diff: &[u8], hunk: &Hunk, clean: impl Fn(&str) -> String) -> Result<Vec<u8>, Error> {
     let (header, parts) = split(diff);
-    let mut patch = header.to_vec();
+    // A file become a link, or a link a file, is two diffs: not one hunk's.
+    let files = diff.split(|byte| *byte == b'\n');
+    if files.filter(|line| line.starts_with(b"diff ")).count() > 1 {
+        return Err(Error::Changed);
+    }
+    // Only lines are staged: the review shows no change of mode.
+    let mut patch: Vec<u8> = header
+        .split_inclusive(|byte| *byte == b'\n')
+        .filter(|line| !line.starts_with(b"old mode ") && !line.starts_with(b"new mode "))
+        .flatten()
+        .copied()
+        .collect();
     let mut staged = false;
     for part in parts {
         let Some(walked) = read_hunk(part) else {

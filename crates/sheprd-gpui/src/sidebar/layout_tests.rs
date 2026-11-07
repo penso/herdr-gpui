@@ -730,6 +730,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         title: crate::WINDOW_TITLE.to_owned(),
         cell_width: 9.,
         hovered_terminal_link: false,
+        hunks_staging: 0,
         pressed_terminal_link: None,
         link_complaint: None,
         links: Default::default(),

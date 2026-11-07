@@ -90,6 +90,21 @@ fn a_status_landing_after_the_dialog_opened_keeps_the_commit_to_what_is_staged(
 }
 
 #[gpui::test]
+fn no_commit_starts_while_a_hunk_is_being_staged(cx: &mut TestAppContext) {
+    let (view, cx) = commit_dialog(status(3, 1, 2), cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.hunks_staging = 1;
+            view.submit_git_commit(cx);
+        })
+    });
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.git.running(), None);
+        assert!(view.menu.input.is_some(), "the message stays to commit");
+    });
+}
+
+#[gpui::test]
 fn the_users_choice_outlives_a_new_status(cx: &mut TestAppContext) {
     let (view, cx) = commit_dialog(staged(1), cx);
     draw(cx);

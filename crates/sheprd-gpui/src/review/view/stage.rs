@@ -157,7 +157,11 @@ impl SheprdWindow {
         let Some(review) = self.reviews.get_mut(&id) else {
             return;
         };
-        if review.staging || review.hunk_staged(file, header) != Some(false) {
+        // A commit under way owns the index.
+        if review.staging
+            || review.hunk_staged(file, header) != Some(false)
+            || self.git.running().is_some()
+        {
             return;
         }
         let (Some(hunk), Some(loaded)) = (review.stage_request(file, header), review.loaded())
@@ -172,6 +176,7 @@ impl SheprdWindow {
             .get(file)
             .is_some_and(|entry| entry.status == Status::Untracked);
         review.staging = true;
+        self.hunks_staging += 1;
         let staging = cx.background_executor().spawn(async move {
             if untracked {
                 stage::stage_file(&checkout, &hunk, clean)
@@ -200,6 +205,7 @@ impl SheprdWindow {
         if let Some(review) = self.reviews.get_mut(&id) {
             review.staging = false;
         }
+        self.hunks_staging = self.hunks_staging.saturating_sub(1);
         // The chrome may have moved to another checkout, which this says
         // nothing about; the tab may have closed, which changes nothing.
         let tracked = self.git.tracked() == Some(source);

@@ -196,3 +196,31 @@ fn a_changed_link_compares_by_its_target() {
 
     assert_eq!(git(root, &["show", ":link"]), "second");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_mode_changed_beside_the_lines_stays_unstaged() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let (dir, checkout) = checkout();
+    let root = dir.path();
+    std::fs::write(root.join("a.txt"), numbered(&[(5, "five")])).unwrap();
+    let executable = std::fs::Permissions::from_mode(0o755);
+    std::fs::set_permissions(root.join("a.txt"), executable).unwrap();
+
+    stage_hunk(&checkout, &hunk(5, "five"), same).unwrap();
+
+    assert_eq!(git(root, &["show", ":a.txt"]), numbered(&[(5, "five")]));
+    let listed = git(root, &["ls-files", "--stage", "a.txt"]);
+    assert!(listed.starts_with("100644 "), "{listed}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_file_become_a_link_stages_nothing() {
+    let (dir, checkout) = checkout();
+    let root = dir.path();
+    std::fs::remove_file(root.join("a.txt")).unwrap();
+    std::os::unix::fs::symlink("five", root.join("a.txt")).unwrap();
+
+    refused(stage_hunk(&checkout, &hunk(1, "five"), same), root);
+}

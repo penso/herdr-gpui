@@ -298,11 +298,13 @@ impl SheprdWindow {
     }
 
     pub(super) fn submit_git_commit(&mut self, cx: &mut Context<Self>) {
-        if self
-            .menu
-            .input
-            .as_ref()
-            .is_some_and(|input| input.marked.is_some())
+        // A hunk still reaching the index decides what the commit takes.
+        if self.hunks_staging > 0
+            || self
+                .menu
+                .input
+                .as_ref()
+                .is_some_and(|input| input.marked.is_some())
         {
             return;
         }
@@ -691,7 +693,8 @@ impl SheprdWindow {
             .menu
             .input
             .as_ref()
-            .is_some_and(|input| !input.text.trim().is_empty());
+            .is_some_and(|input| !input.text.trim().is_empty())
+            && self.hunks_staging == 0;
         let mut body = div()
             .flex()
             .flex_col()

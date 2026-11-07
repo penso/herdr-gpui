@@ -278,6 +278,24 @@ fn a_stage_outliving_its_tab_still_says_something_is_staged(cx: &mut gpui::TestA
 }
 
 #[gpui::test]
+fn no_hunk_stages_while_a_commit_runs(cx: &mut gpui::TestAppContext) {
+    let dir = checkout();
+    let (view, cx) = window(cx, None);
+    open(&view, cx, dir.path());
+    let hunks = headers(&view, cx);
+    view.update_in(cx, |view, _, _| {
+        view.git
+            .start(crate::git::Action::CommitStaged("A message".into()), None)
+            .unwrap();
+    });
+
+    stage(&view, cx, hunks[0]);
+
+    assert_eq!(git(dir.path(), &["diff", "--cached", "--name-only"]), "");
+    view.read_with(cx, |view, _| assert_eq!(view.hunks_staging, 0));
+}
+
+#[gpui::test]
 fn a_new_file_grown_since_the_review_stages_nothing(cx: &mut gpui::TestAppContext) {
     let dir = checkout();
     let root = dir.path();

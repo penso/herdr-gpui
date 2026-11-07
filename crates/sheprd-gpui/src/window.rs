@@ -222,6 +222,8 @@ pub(crate) struct SheprdWindow {
     /// The menu that resting opened, which the pointer closes by leaving it.
     pub(crate) hover_menu: Option<sidebar::HoverMenu>,
     pub(crate) hovered_terminal_link: bool,
+    /// Hunks on their way to the index, whose tabs may have closed since.
+    pub(crate) hunks_staging: usize,
     /// Names the missing icon font once a pane draws an icon it lacks.
     pub(crate) icon_font_notice: crate::icon_font_notice::IconFontNotice,
     #[cfg(feature = "integration-test")]
