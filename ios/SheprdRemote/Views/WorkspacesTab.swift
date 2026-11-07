@@ -311,7 +311,7 @@ private struct WorkspaceRow: View {
                 if let counts { Text(counts).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer(minLength: 4)
-            if let pullRequest = workspace.pullRequest { PullRequestPill(pullRequest: pullRequest) }
+            WorkspacePullRequestBadge(workspace: workspace)
         }
     }
 
@@ -361,6 +361,35 @@ struct WorkspaceMark: View {
             }
         }
         .frame(width: 10, height: 10)
+    }
+}
+
+/// What a workspace's row says of its pull request: the one it has, or that
+/// its commits still need one.
+struct WorkspacePullRequestBadge: View {
+    var workspace: Home.Workspace
+
+    var body: some View {
+        if let pullRequest = workspace.pullRequest {
+            PullRequestPill(pullRequest: pullRequest)
+        } else if let commits = workspace.unopenedCommits {
+            UnopenedPill(commits: commits)
+        }
+    }
+}
+
+/// Commits on a branch with no pull request yet, in the number's place and
+/// the color Sheprd's sidebar gives it.
+struct UnopenedPill: View {
+    var commits: Int
+
+    var body: some View {
+        Text(verbatim: "+PR")
+            .font(.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.yellow)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Color.yellow.opacity(0.15), in: .capsule)
+            .accessibilityLabel(commits == 1 ? "1 commit, no pull request" : "\(commits) commits, no pull request")
     }
 }
 

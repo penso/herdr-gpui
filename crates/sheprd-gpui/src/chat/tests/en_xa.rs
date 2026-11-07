@@ -89,6 +89,12 @@ fn a_chat_shows_only_messages_and_its_conversation_under_en_xa() {
             .into_iter()
             .chain(STEPS)
             .map(str::to_owned)
+            .chain(view.read_with(cx, |view, _| {
+                view.keymap()
+                    .shortcuts(sheprd_commands::Command::Palette)
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            }))
             .collect();
         // GPUI shapes a line once, so a layout that cuts a line an earlier
         // one drew whole shows only the cut; it is checked against them all.

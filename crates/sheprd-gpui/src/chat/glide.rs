@@ -12,8 +12,15 @@
 //! entry grew or the list itself got shorter. With `[chat] glide` off, the
 //! list is put at its end before each layout instead, so new text shows
 //! in the frame it arrives in. Either way, scrolling up stops the
-//! following; scrolling back to the end starts it again.
+//! following; scrolling back to the end starts it again, as does the
+//! button [`Glide::away_shown`] shows while the list is left behind.
+//!
+//! Whether a scroll left the end is only decided after layout, in
+//! [`Glide::watch`]: a row redrawn by a chunk counts no height until it is
+//! laid out, so before layout a tall reply makes any place look like the
+//! end, and a reader scrolling up would be pulled back down.
 
+use crate::motion;
 use gpui::{ListOffset, ListState, canvas, prelude::*, px};
 use std::{cell::Cell, ops::Range, rc::Rc, time::Instant};
 
@@ -32,6 +39,12 @@ const MIN_STEP: f32 = 0.5;
 /// a long burst of output does not take seconds to scroll past.
 const MAX_BEHIND: f32 = 0.5;
 
+/// Whether the list's top moved to another row, or to or from a row's start.
+fn crossed(before: ListOffset, after: ListOffset) -> bool {
+    before.item_ix != after.item_ix
+        || (before.offset_in_item > px(0.)) != (after.offset_in_item > px(0.))
+}
+
 #[derive(Debug)]
 pub(crate) struct Glide {
     /// Shared with the frame's [`Self::watch`], which reads it after layout.
@@ -43,6 +56,15 @@ pub(crate) struct Glide {
     last_step: Option<Instant>,
     /// The spring's speed, in pixels a second.
     speed: f32,
+    /// The button back to the end, open while the list stays behind it.
+    /// Shared with [`Self::watch`], which alone knows the list's real end.
+    away: Rc<Cell<motion::Toggle>>,
+    /// Whether output landed below since the button last closed.
+    waiting: Rc<Cell<bool>>,
+    /// Where the last layout left the list's top. Render cannot ask the
+    /// list: until layout it answers with where it was told to go, which
+    /// while following is past the end, however short the conversation.
+    top: Rc<Cell<ListOffset>>,
 }
 
 impl Glide {
@@ -58,10 +80,14 @@ impl Glide {
             scrolled,
             last_step: None,
             speed: 0.,
+            away: Rc::default(),
+            waiting: Rc::default(),
+            top: Rc::default(),
         }
     }
 
-    /// Back to following, with `list`, which starts over, at its end.
+    /// Back to following, with `list` at its end: it started over, or the
+    /// user asked to go there.
     pub(crate) fn reset(&mut self, list: &ListState) {
         self.following.set(true);
         self.scrolled.set(false);
@@ -79,15 +105,63 @@ impl Glide {
         self.scrolled.set(true);
     }
 
+    /// Whether the user left the list, or is leaving it, above its end.
+    pub(crate) fn stopped(&self) -> bool {
+        self.scrolled.get() || !self.following.get()
+    }
+
+    /// Where the last layout left the list's top.
+    pub(crate) fn top(&self) -> ListOffset {
+        self.top.get()
+    }
+
+    /// New output landed at the end of the list.
+    pub(crate) fn note_output(&self) {
+        self.waiting.set(true);
+    }
+
+    /// Whether output is waiting below a list left above its end.
+    pub(crate) fn waiting(&self) -> bool {
+        self.waiting.get()
+    }
+
     /// An empty element to place after `list` in the frame: once the list
     /// is laid out, with heights the frame's render could not know yet, it
-    /// asks for another frame if the list is behind its end and following.
-    pub(crate) fn watch(&self, list: &ListState) -> impl IntoElement + use<> {
+    /// settles what the user's scrolling meant and whether the button back
+    /// to the end shows, and asks for another frame if the list is behind
+    /// its end and following or the button is moving. A list `held` in
+    /// place, as a selection holds it, follows nothing until it is let go,
+    /// but is still away from its end.
+    pub(crate) fn watch(&self, list: &ListState, held: bool) -> impl IntoElement + use<> {
         let following = self.following.clone();
+        let scrolled = self.scrolled.clone();
+        let away = self.away.clone();
+        let waiting = self.waiting.clone();
+        let top = self.top.clone();
         let list = list.clone();
         canvas(
             move |_, window, _| {
-                if following.get() && behind(&list) > MIN_STEP {
+                let settled = list.logical_scroll_top();
+                // What reads the top only cares which row it is in, and
+                // whether that row starts there.
+                if crossed(top.replace(settled), settled) {
+                    window.request_animation_frame();
+                }
+                let left = behind(&list);
+                if !held {
+                    settle(&following, &scrolled, left);
+                }
+                let stopped = held || scrolled.get() || !following.get();
+                let now = motion::now();
+                let mut button = away.get();
+                button.set(stopped && left > AT_END, now, false);
+                away.set(button);
+                if button.moving(now) {
+                    window.request_animation_frame();
+                } else if !button.is_open() {
+                    waiting.set(false);
+                }
+                if !held && following.get() && left > MIN_STEP {
                     window.request_animation_frame();
                 }
             },
@@ -97,9 +171,23 @@ impl Glide {
         .size_0()
     }
 
+    /// How much of the button back to the end shows at `now`, if any of it
+    /// does.
+    pub(crate) fn away_shown(&self, now: Instant) -> Option<f32> {
+        let button = self.away.get();
+        let shown = button.shown(now);
+        (button.is_open() || shown > 0.).then_some(shown)
+    }
+
     /// Scrolls `list` one frame's step toward its end, or with `smooth`
     /// off all the way there, and says whether to draw another frame.
     pub(crate) fn tick(&mut self, list: &ListState, now: Instant, smooth: bool) -> bool {
+        // The user's scroll stands until this frame's layout judges it.
+        if self.scrolled.get() {
+            self.last_step = None;
+            self.speed = 0.;
+            return false;
+        }
         let top = -f32::from(list.scroll_px_offset_for_scrollbar().y);
         let end = top + behind(list);
         if !smooth {
@@ -107,7 +195,7 @@ impl Glide {
             self.speed = 0.;
             // At the end before this frame's layout, which then lays out
             // whatever arrived with the end in view.
-            if self.follows(end - top) {
+            if self.following.get() {
                 list.scroll_to(ListOffset {
                     item_ix: list.item_count(),
                     offset_in_item: px(0.),
@@ -122,20 +210,11 @@ impl Glide {
         self.last_step.is_some()
     }
 
-    /// Whether to follow the end, `remaining` pixels away: the user's
-    /// scroll leaves the list following only at its end.
-    fn follows(&mut self, remaining: f32) -> bool {
-        if self.scrolled.take() {
-            self.following.set(remaining <= AT_END);
-        }
-        self.following.get()
-    }
-
     /// How far to scroll this frame, from the top's offset, the offset at
     /// the end, and the viewport's height, all in pixels.
     fn step(&mut self, top: f32, end: f32, viewport: f32, now: Instant) -> Option<f32> {
         let remaining = end - top;
-        if !self.follows(remaining) || remaining <= MIN_STEP {
+        if !self.following.get() || remaining <= MIN_STEP {
             self.last_step = None;
             self.speed = 0.;
             return None;
@@ -164,6 +243,14 @@ impl Glide {
         }
         let distance = (jump + (left - rest).max(MIN_STEP)).min(remaining);
         Some(distance)
+    }
+}
+
+/// Settles a user's scroll, `remaining` pixels from the end as laid out: it
+/// leaves the list following only at its end.
+fn settle(following: &Cell<bool>, scrolled: &Cell<bool>, remaining: f32) {
+    if scrolled.take() {
+        following.set(remaining <= AT_END);
     }
 }
 

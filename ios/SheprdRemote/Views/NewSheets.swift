@@ -97,6 +97,9 @@ struct NewWorkspaceSheet: View {
                 }
                 Section("Agent") {
                     AgentGrid(agents: options?.agents ?? [], selection: $agent)
+                    if let name = options?.agents.first(where: { $0.id == agent })?.name {
+                        StartChoiceRow(agent: name)
+                    }
                 }
                 Section {
                     TextField("What should it do first? (optional)", text: $prompt, axis: .vertical).lineLimit(2...6)
@@ -196,7 +199,7 @@ struct NewWorkspaceSheet: View {
                 ?? checkout.flatMap { loaded.folders.contains($0) ? $0 : nil }
                 ?? loaded.folders.first { URL(filePath: $0).lastPathComponent == name }
                 ?? loaded.recent.first
-            if !loaded.agents.contains(where: { $0.id == agent }), let first = loaded.agents.first { agent = first.id }
+            agent = loaded.agent(preferring: agent)?.id ?? ""
         } catch where !Task.isCancelled {
             problem = error.localizedDescription
         } catch {}
@@ -204,13 +207,14 @@ struct NewWorkspaceSheet: View {
 
     private func create() {
         guard let device, let folder else { return }
+        let title = options?.agents.first { $0.id == agent }?.name ?? "Chat"
         let request = NewWorkspaceRequest(
             cwd: folder,
             branch: worktree ? branch.trimmingCharacters(in: .whitespaces) : "",
             agent: agent,
-            prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            start: model.startChoice(for: title).start
         )
-        let title = options?.agents.first { $0.id == agent }?.name ?? "Chat"
         creating = true
         Task {
             defer { creating = false }
@@ -220,7 +224,7 @@ struct NewWorkspaceSheet: View {
                 }
                 model.recentAgent = request.agent
                 dismiss()
-                model.opened(created, prompt: request.prompt, device: device, title: title)
+                model.opened(created, prompt: request.prompt, start: request.start, device: device, title: title)
             } catch {
                 problem = error.localizedDescription
             }
@@ -251,7 +255,12 @@ struct NewChatSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Agent") { AgentGrid(agents: agents, selection: $agent) }
+                Section("Agent") {
+                    AgentGrid(agents: agents, selection: $agent)
+                    if let name = agents.first(where: { $0.id == agent })?.name {
+                        StartChoiceRow(agent: name)
+                    }
+                }
                 Section {
                     TextField("What should it do first? (optional)", text: $prompt, axis: .vertical).lineLimit(2...6)
                 } header: {
@@ -265,12 +274,15 @@ struct NewChatSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    if creating { ProgressView() } else { Button("Start") { start() }.disabled(agents.isEmpty) }
+                    if creating { ProgressView() } else { Button("Start") { start() }.disabled(!agents.contains { $0.id == agent }) }
                 }
             }
             .task {
                 do {
-                    agents = try await model.fleet.call(device) { client, token in try await client.newOptions(bearer: token) }.agents
+                    let loaded = try await model.fleet.call(device) { client, token in try await client.newOptions(bearer: token) }
+                    guard !Task.isCancelled else { return }
+                    agents = loaded.agents
+                    agent = loaded.agent(preferring: agent)?.id ?? ""
                 } catch {
                     problem = error.localizedDescription
                 }
@@ -280,9 +292,14 @@ struct NewChatSheet: View {
     }
 
     private func start() {
-        let request = NewChatRequest(agent: agent, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard let selected = agents.first(where: { $0.id == agent }) else { return }
+        let title = selected.name
+        let request = NewChatRequest(
+            agent: agent,
+            prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            start: model.startChoice(for: title).start
+        )
         let (device, workspace) = (device, workspace)
-        let title = agents.first { $0.id == agent }?.name ?? "Chat"
         creating = true
         Task {
             defer { creating = false }
@@ -292,7 +309,7 @@ struct NewChatSheet: View {
                 }
                 model.recentAgent = request.agent
                 dismiss()
-                model.opened(created, prompt: request.prompt, device: device, title: title)
+                model.opened(created, prompt: request.prompt, start: request.start, device: device, title: title)
             } catch {
                 problem = error.localizedDescription
             }
@@ -380,15 +397,23 @@ extension AppModel {
     /// Opens a chat just created. A first prompt that did not go, because
     /// the agent was slow to start or refused it, waits in the chat's
     /// composer, and the person is told rather than finding it gone.
-    func opened(_ created: Created, prompt: String, device: String, title: String) {
+    func opened(_ created: Created, prompt: String, start: ChatStart?, device: String, title: String) {
         let unsent = !prompt.isEmpty && !created.prompted
         if let pane = created.pane {
             if unsent { fleet.cache.save(draft: Cache.Draft(text: prompt, pictures: []), device: device, pane: pane) }
             pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title)
         }
-        guard unsent else { return }
-        notice = created.pane == nil
+        let unset = start != nil && !created.started
+        guard unsent else {
+            if unset { notice = Self.startMissed }
+            return
+        }
+        let unsentNotice = created.pane == nil
             ? "The chat started, but your first prompt was not sent. Open the chat from Home and send it again:\n\n\(prompt)"
             : "The chat started, but your first prompt was not sent. It is in the chat's message box: send it when the agent is ready."
+        notice = unset ? "\(Self.startMissed)\n\n\(unsentNotice)" : unsentNotice
     }
+
+    /// Said when a chat may be in another mode than the one the person saw.
+    static let startMissed = "The chat may not have the mode or auto-accept you picked. Check them in its Session sheet."
 }

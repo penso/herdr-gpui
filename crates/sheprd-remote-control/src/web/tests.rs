@@ -30,6 +30,8 @@ mod stream;
 #[cfg(unix)]
 mod streaming;
 mod tags;
+#[cfg(unix)]
+mod term_history;
 mod terminal;
 mod uploads;
 

@@ -1,5 +1,5 @@
-//! ACP chats are an opt-in feature: off, nothing attaches, nothing is
-//! offered or looked for, and a start is refused.
+//! ACP chats ship on, and a person can turn them off: off, nothing attaches,
+//! nothing is offered or looked for, and a start is refused.
 
 use super::{
     overlay::{open, poll},

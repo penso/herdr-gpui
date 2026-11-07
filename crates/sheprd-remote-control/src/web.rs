@@ -226,6 +226,7 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/f/new-chat", get(fragments::new_chat))
         .route("/f/settings", get(fragments::settings))
         .route("/f/term/{pane}", get(terminal::fragment))
+        .route("/f/term/{pane}/history", get(terminal::history))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .layer(middleware::from_fn_with_state(state.clone(), cors))
         .layer(middleware::from_fn(security_headers))

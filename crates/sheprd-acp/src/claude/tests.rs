@@ -107,6 +107,7 @@ fn a_whole_turn_reaches_the_transcript_through_the_bridge() {
         agent: "Claude".to_owned(),
         cwd: PathBuf::from("/work"),
         exit_with_agent: false,
+        history: None,
         load: None,
         login_hint: None,
         pane: None,

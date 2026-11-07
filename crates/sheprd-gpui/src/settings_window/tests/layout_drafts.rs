@@ -176,3 +176,22 @@ fn layout_close_failure_retains_live_draft_until_explicit_retry(cx: &mut TestApp
         [LayoutMode::Orca, LayoutMode::Orca]
     );
 }
+
+#[gpui::test]
+fn a_settings_draft_outlives_a_view_menu_choice_during_a_reload(cx: &mut TestAppContext) {
+    use crate::config::LayoutMode;
+    let main = cx.add_window(crate::sidebar::layout_tests::fixture_window);
+    main.update(cx, |view, _, cx| {
+        view.set_layout_with(LayoutMode::Minimal, |_| Ok(()), cx);
+        let stale = view.config.clone();
+        let theme = view.theme.clone();
+        view.load_gui_config_with(move || Ok((stale, theme)), cx);
+        layouts::draft_layout(LayoutMode::Orca, cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    main.update(cx, |view, _, _| {
+        assert_eq!(view.config.layout.mode, LayoutMode::Orca);
+    })
+    .unwrap();
+}

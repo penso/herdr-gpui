@@ -475,18 +475,14 @@ mod unix {
             assert!(start.elapsed() < Duration::from_secs(10));
             let pids = std::fs::read_to_string(dir.path().join("shell.pids")).unwrap();
             for pid in pids.split_whitespace() {
+                let pid = pid.parse().unwrap();
                 let deadline = Instant::now() + Duration::from_secs(2);
                 loop {
-                    let output = std::process::Command::new("/bin/ps")
-                        .args(["-o", "stat=", "-p", pid])
-                        .output()
-                        .unwrap();
-                    let state = String::from_utf8(output.stdout).unwrap();
                     // Orphaned children may remain zombies until the system reaps them.
-                    if state.trim().is_empty() || state.trim().starts_with('Z') {
+                    if crate::test_process::is_dead(pid).unwrap() {
                         break;
                     }
-                    assert!(Instant::now() < deadline, "process {pid} survived: {state}");
+                    assert!(Instant::now() < deadline, "process {pid} survived");
                     std::thread::sleep(Duration::from_millis(10));
                 }
             }

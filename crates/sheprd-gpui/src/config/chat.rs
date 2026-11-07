@@ -161,6 +161,10 @@ chat_layouts! {
     /// hung from a gutter mark, the agent's prose in full ink, and earlier
     /// turns muted until pointed at, like iA Writer.
     IA => "ia", "chat-layout-ia";
+    /// The terminal's font, prompts and open tool calls as tinted blocks
+    /// behind a bar, finished calls folded to one line, and a status row
+    /// under the composer, like OpenCode's own screen.
+    OpenCode => "opencode", "chat-layout-opencode";
 }
 
 impl ChatLayoutMode {

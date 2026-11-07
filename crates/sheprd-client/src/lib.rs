@@ -33,6 +33,7 @@ mod script;
 pub mod scrollback;
 mod session;
 pub mod sessions;
+pub mod settings_files;
 pub mod ssh;
 mod surface_images;
 pub mod terminal_attach;
@@ -45,6 +46,10 @@ pub mod wsl;
 #[cfg(all(test, unix))]
 #[path = "../../test-support/executable.rs"]
 mod test_executable;
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+#[allow(unsafe_code)]
+#[path = "../../test-support/process.rs"]
+mod test_process;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests;

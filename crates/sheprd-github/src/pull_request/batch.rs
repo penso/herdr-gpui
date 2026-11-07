@@ -6,7 +6,7 @@
 use super::{
     Input, Origin, Origins, Result,
     fetch::{Ask, FIELDS, Head, NUMBER_QUERY, TIMEOUT, Target, target},
-    parse::current,
+    parse::{current, moved_head},
     parse_graphql, parse_numbered,
 };
 use crate::{Error, Tokens};
@@ -31,11 +31,12 @@ pub(super) const HEAD_LIMIT: u64 = 5;
 /// so one slow SSH device cannot hold every other checkout's answer back.
 const PREPARE: Duration = TIMEOUT;
 
-const SETTINGS: &str = "mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed";
+const SETTINGS: &str = "mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed nameWithOwner";
 
 /// Only the heads of a crowded branch name's pull requests: cheap to list.
-const HEADS: &str = r#"query($owner: String!, $repo: String!, $branch: String!) {
+pub(super) const HEADS: &str = r#"query($owner: String!, $repo: String!, $branch: String!) {
   repository(owner: $owner, name: $repo) {
+    nameWithOwner
     pullRequests(first: 100, headRefName: $branch, orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo { hasNextPage }
       nodes { number state headRepositoryOwner { login } headRepository { name } }
@@ -285,7 +286,8 @@ fn crowded(
     );
     hold(cooldown, pause);
     let heads = heads?;
-    let number = matching_number(&heads, head)?;
+    let moved = moved_head(&heads["data"]["repository"], (owner, repo), head);
+    let number = matching_number(&heads, &moved)?;
     let Some(number) = number else {
         return Ok(None);
     };

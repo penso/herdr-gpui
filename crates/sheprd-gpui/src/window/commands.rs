@@ -110,6 +110,24 @@ impl SheprdWindow {
         );
     }
 
+    /// The layout after the one showing now, not the one the last frame
+    /// drew: a second click can land before the next frame.
+    pub(crate) fn step_chat_layout(&mut self, cx: &mut Context<Self>) {
+        self.step_chat_layout_with(
+            |mode| Config::save_preference(Preference::ChatLayout(mode)),
+            cx,
+        );
+    }
+
+    /// `save` persists the choice, as in [`Self::set_chat_layout_with`].
+    pub(crate) fn step_chat_layout_with(
+        &mut self,
+        save: impl FnOnce(ChatLayoutMode) -> crate::Result<()> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_chat_layout_with(self.config.chat.layout.next(), save, cx);
+    }
+
     /// `save` persists the choice; tests pass one that leaves the real
     /// config alone.
     pub(crate) fn set_chat_layout_with(
@@ -126,6 +144,7 @@ impl SheprdWindow {
             cx.global_mut::<InitialAppearance>().config.chat.layout = mode;
         }
         self.chats.relayout(mode);
+        crate::menus::install(cx);
         cx.notify();
         let saves = cx.default_global::<LayoutSaves>().chat.clone();
         saves.want(mode);
@@ -494,8 +513,9 @@ impl SheprdWindow {
             }
             // Every interactive creation path ends here, so Herdr's name prompt
             // covers buttons, menus, shortcuts, and the palette alike.
-            // With Herdr 2 chosen for new terminals, a new tab is herdr-core's.
-            Command::Tab if self.config.herdr_2_terminals => {
+            // With Herdr 2 chosen for new terminals, a new tab on this computer
+            // is herdr-core's.
+            Command::Tab if self.new_tabs_use_core() => {
                 self.new_core_terminal(window, cx);
                 return;
             }
@@ -600,6 +620,10 @@ impl SheprdWindow {
             // A herdr-core pane with the keyboard mirrors itself above.
             Command::MirrorCorePane => {
                 self.show_flash(Flash::warning(fl!("core-terminals-mirror-needs-pane")), cx);
+                return;
+            }
+            Command::ConvertToChat => {
+                self.convert_to_chat_or_flash(cx);
                 return;
             }
             // A focused page zooms instead of the terminal font, and keeps

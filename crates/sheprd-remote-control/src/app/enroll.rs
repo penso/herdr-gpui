@@ -6,12 +6,18 @@
 //! [`Enrolled`] answer as JSON. On the way it:
 //! - saves the APNs key the other computer sent, so this host can notify
 //!   the phone too;
+//! - reads this host's Sheprd settings, refusing ones it could not change;
 //! - makes sure the daemon runs: it installs the user service unless one is
-//!   installed already, as Sheprd on this host would, and turns on
-//!   `[remote]` in this host's Sheprd settings when there are any, so
-//!   that app does not stop it again;
+//!   installed already, as Sheprd on this host would;
 //! - asks the running daemon to add the phone, so `devices.json` keeps one
-//!   writer.
+//!   writer;
+//! - turns on `[remote]` in those settings, creating them when there are
+//!   none, so that app, now or once installed, does not stop the daemon.
+//!
+//! The settings come last on purpose. A running Sheprd follows them and
+//! rewrites the service for its own program, restarting the daemon, which
+//! must not happen under the steps above; and a pairing that failed must
+//! not leave remote control turned on for a later install.
 
 use super::{
     config::RemoteConfig,
@@ -22,6 +28,7 @@ use crate::control::{
     hosts::{Enroll, Enrolled},
 };
 use serde::{Deserialize, Serialize};
+use sheprd_client::settings_files::{self, State};
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -32,6 +39,10 @@ use std::{
 /// How long `enroll` waits for a daemon it started to answer.
 const START_WAIT: Duration = Duration::from_secs(20);
 const START_POLL: Duration = Duration::from_millis(250);
+/// How long `enroll` waits for Sheprd to finish a save of its settings.
+/// With [`START_WAIT`], well inside the idle limit of the SSH job.
+const SETTINGS_LOCK_WAIT: Duration = Duration::from_secs(10);
+const SETTINGS_LOCK_POLL: Duration = Duration::from_millis(50);
 /// The largest APNs config or key accepted; both are a few hundred bytes.
 const MAX_APNS_FILE: usize = 16 * 1024;
 
@@ -52,6 +63,8 @@ pub enum Error {
     NotStarted(#[source] control::Error),
     #[error("the remote control daemon on this host is older than Sheprd; update it")]
     Outdated,
+    #[error("Sheprd on this host kept {} locked", path.display())]
+    SettingsLocked { path: PathBuf },
     #[error("the remote control daemon gave an answer of the wrong kind")]
     Unexpected,
     // keep-sorted end
@@ -111,7 +124,37 @@ pub fn enroll(input: &Input, state_dir: &Path, program: PathBuf) -> super::Resul
         Some(apns) => write_apns(state_dir, apns)?,
         None => false,
     };
-    ensure_running(state_dir, program, apns_changed)?;
+    let settings = settings_path();
+    enroll_then_keep(
+        settings.as_deref(),
+        state_dir,
+        |config| ensure_running(config, state_dir, program, apns_changed),
+        || add_phone(input, state_dir),
+    )
+}
+
+/// `start`s the daemon with the settings at `path` and `add`s the phone,
+/// then turns those settings on. Settings that cannot be changed stop it
+/// before anything starts.
+fn enroll_then_keep(
+    path: Option<&Path>,
+    state_dir: &Path,
+    start: impl FnOnce(&RemoteConfig) -> super::Result<()>,
+    add: impl FnOnce() -> super::Result<Enrolled>,
+) -> super::Result<Enrolled> {
+    let plan = path.map(plan_settings).transpose()?;
+    match &plan {
+        Some(plan) => start(&plan.config)?,
+        None => start(&enabled(RemoteConfig::default()))?,
+    }
+    let enrolled = add()?;
+    if let (Some(path), Some(plan)) = (path, plan) {
+        keep_settings(path, plan.state, state_dir, &enrolled)?;
+    }
+    Ok(enrolled)
+}
+
+fn add_phone(input: &Input, state_dir: &Path) -> super::Result<Enrolled> {
     let address = control::address(state_dir);
     match control::request(&address, &Request::Enroll(input.enroll.clone())) {
         Ok(Response::Enrolled(enrolled)) => Ok(enrolled),
@@ -120,6 +163,30 @@ pub fn enroll(input: &Input, state_dir: &Path, program: PathBuf) -> super::Resul
         Err(control::Error::NoAnswer | control::Error::Frame(_)) => Err(Error::Outdated.into()),
         Err(error) => Err(error.into()),
     }
+}
+
+/// Turns on the settings at `path` for the phone just `enrolled`. A host
+/// with no Sheprd files has no app to stop the daemon, so failing there
+/// costs only a later install and the pairing stands. With Sheprd here the
+/// daemon would not last: the pairing fails, and the phone, told so, is
+/// removed again rather than left behind.
+fn keep_settings(
+    path: &Path,
+    state: State,
+    state_dir: &Path,
+    enrolled: &Enrolled,
+) -> super::Result<()> {
+    let Err(error) = enable_settings_at(path, SETTINGS_LOCK_WAIT) else {
+        return Ok(());
+    };
+    if state == State::Fresh {
+        tracing::warn!(%error, "Could not turn on remote control in new Sheprd settings");
+        return Ok(());
+    }
+    if let Err(error) = revoke(state_dir, enrolled.device.clone()) {
+        tracing::warn!(%error, "Could not remove a phone whose pairing failed");
+    }
+    Err(error)
 }
 
 /// Revokes `device` on this host's daemon; one already gone is fine.
@@ -154,8 +221,12 @@ fn write_apns(state_dir: &Path, apns: &Apns) -> super::Result<bool> {
     Ok(true)
 }
 
-fn ensure_running(state_dir: &Path, program: PathBuf, restart: bool) -> super::Result<()> {
-    let config = enable_settings()?;
+fn ensure_running(
+    config: &RemoteConfig,
+    state_dir: &Path,
+    program: PathBuf,
+    restart: bool,
+) -> super::Result<()> {
     let manager = Manager::current()?;
     let home = sheprd_client::local_path::home_dir().ok_or(Error::NoHome)?;
     let config_home = sheprd_client::local_var("XDG_CONFIG_HOME")
@@ -195,7 +266,7 @@ fn ensure_running(state_dir: &Path, program: PathBuf, restart: bool) -> super::R
         }
         Outcome::Started
     } else {
-        service::reconcile(&config, &host, send, service::run)?
+        service::reconcile(config, &host, send, service::run)?
     };
     if restart && outcome == Outcome::Unchanged {
         for step in host.manager.load(&host.file) {
@@ -205,44 +276,157 @@ fn ensure_running(state_dir: &Path, program: PathBuf, restart: bool) -> super::R
     wait_for_daemon(&address)
 }
 
-/// The `[remote]` settings of Sheprd on this host, turned on. When that
-/// app has a settings file, `enabled = true` is written to it, so it keeps
-/// the daemon running rather than stopping it. Blocking.
-fn enable_settings() -> super::Result<RemoteConfig> {
-    match sheprd_client::local_path::config_root() {
-        Ok(root) => enable_settings_at(&root.join("herdr/config-gpui.toml")),
-        Err(_) => Ok(enabled(RemoteConfig::default())),
+/// Sheprd's settings on this host, `None` when it has no configuration
+/// root.
+fn settings_path() -> Option<PathBuf> {
+    let root = sheprd_client::local_path::config_root().ok()?;
+    Some(root.join("herdr/config-gpui.toml"))
+}
+
+/// What turning on the settings at a path takes, worked out before any of
+/// it is done, so every file is checked before one is written.
+#[derive(Debug)]
+struct SettingsPlan {
+    /// `[remote]` as those settings set it, turned on.
+    config: RemoteConfig,
+    state: State,
+    changes: Vec<SettingsChange>,
+}
+
+#[derive(Debug)]
+enum SettingsChange {
+    Create(PathBuf, String),
+    Remove(PathBuf),
+    Replace(PathBuf, String),
+}
+
+impl SettingsChange {
+    fn apply(&self) -> super::Result<()> {
+        match self {
+            Self::Create(path, text) => {
+                settings_files::create(path, text).map_err(io_error("create", path))
+            }
+            Self::Remove(path) => fs::remove_file(path).map_err(io_error("remove", path)),
+            Self::Replace(path, text) => {
+                settings_files::replace(path, text).map_err(io_error("write", path))
+            }
+        }
     }
 }
 
-/// [`enable_settings`] for the settings file at `path`.
-fn enable_settings_at(path: &Path) -> super::Result<RemoteConfig> {
+/// [`SettingsPlan`] for Sheprd's settings at `path`, as Sheprd reads them:
+/// it rewrites a managed `path` and loads its overrides beside it. Those
+/// take the change, seeded as Sheprd's first launch would seed them when
+/// missing. A personal `path` from before overrides, which Sheprd moves
+/// into them, takes it instead. Writes nothing. Blocking.
+fn plan_settings(path: &Path) -> super::Result<SettingsPlan> {
+    let local = settings_files::overrides_path(path);
+    let original = settings_files::read(path).map_err(io_error("read", path))?;
+    let personal = original.as_deref().and_then(settings_files::personal);
+    let overrides = settings_files::read(&local).map_err(io_error("read", &local))?;
+    let state = State::of(personal, overrides.as_deref());
+    let personal_on = personal.map(|text| turned_on(path, text)).transpose()?;
+    let overrides_on = overrides
+        .as_deref()
+        .map(|text| turned_on(&local, text))
+        .transpose()?;
+    let replace = |path: &Path, text| SettingsChange::Replace(path.to_owned(), text);
+    let (config, changes) = match (personal_on, overrides_on) {
+        (Some((config, changed)), None) => (
+            config,
+            changed
+                .map(|text| replace(path, text))
+                .into_iter()
+                .collect(),
+        ),
+        // A copy of `path` Sheprd made and has yet to finish moving. It
+        // matches byte for byte, so it is dropped and Sheprd moves `path`
+        // again, with the change: stopping between the two steps leaves a
+        // move Sheprd starts over, never two files that differ.
+        (Some((config, changed)), Some(_)) if state == State::Moving => {
+            let changes = match changed {
+                Some(text) => vec![SettingsChange::Remove(local), replace(path, text)],
+                None => Vec::new(),
+            };
+            (config, changes)
+        }
+        // Overrides, and maybe a personal file that differs from them,
+        // which Sheprd leaves for a person to settle: both take the change.
+        (personal_on, Some((config, changed))) => {
+            let personal_changed = personal_on.and_then(|(_, changed)| changed);
+            let changes = changed
+                .map(|text| replace(&local, text))
+                .into_iter()
+                .chain(personal_changed.map(|text| replace(path, text)))
+                .collect();
+            (config, changes)
+        }
+        (None, None) => {
+            let (config, changed) = turned_on(&local, settings_files::OVERRIDES_SEED)?;
+            let text = changed.unwrap_or_else(|| settings_files::OVERRIDES_SEED.to_owned());
+            (config, vec![SettingsChange::Create(local, text)])
+        }
+    };
+    Ok(SettingsPlan {
+        config,
+        state,
+        changes,
+    })
+}
+
+/// Turns on the settings at `path`, so Sheprd keeps the daemon running
+/// rather than stopping it, including when it is installed here later.
+/// Sheprd's own lock, waited for up to `wait`, keeps its saves and moves
+/// apart from this. Blocking.
+fn enable_settings_at(path: &Path, wait: Duration) -> super::Result<RemoteConfig> {
+    let parent = path.parent().unwrap_or(Path::new("."));
+    fs::create_dir_all(parent).map_err(io_error("create", parent))?;
+    let _lock = lock_settings(path, wait)?;
+    let plan = plan_settings(path)?;
+    for change in &plan.changes {
+        change.apply()?;
+    }
+    Ok(plan.config)
+}
+
+/// Takes Sheprd's lock on the settings at `path`, held until the file
+/// returned is dropped. Sheprd may be stopped while holding it, so this
+/// gives up after `wait` rather than outlasting the SSH job that ran it.
+fn lock_settings(path: &Path, wait: Duration) -> super::Result<fs::File> {
+    let lock_path = settings_files::lock_path(path);
+    let lock = settings_files::open_lock(&lock_path).map_err(io_error("open", &lock_path))?;
+    let deadline = Instant::now() + wait;
+    loop {
+        match lock.try_lock() {
+            Ok(()) => return Ok(lock),
+            Err(fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                thread::sleep(SETTINGS_LOCK_POLL);
+            }
+            Err(fs::TryLockError::WouldBlock) => {
+                return Err(Error::SettingsLocked { path: lock_path }.into());
+            }
+            Err(fs::TryLockError::Error(source)) => {
+                return Err(io_error("lock", &lock_path)(source));
+            }
+        }
+    }
+}
+
+/// `[remote]` as `text` sets it, turned on, and `text` with `enabled =
+/// true` when it does not say so already.
+fn turned_on(path: &Path, text: &str) -> super::Result<(RemoteConfig, Option<String>)> {
     #[derive(Deserialize)]
     struct File {
         #[serde(default)]
         remote: RemoteConfig,
     }
-    let path = path.to_owned();
-    let text = match fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Ok(enabled(RemoteConfig::default()));
-        }
-        Err(source) => {
-            return Err(super::Error::Io {
-                operation: "read",
-                path,
-                source,
-            });
-        }
-    };
     let config_error = |source: Box<dyn std::error::Error + Send + Sync>| Error::Config {
-        path: path.clone(),
+        path: path.to_owned(),
         source,
     };
-    let file: File = toml::from_str(&text).map_err(|error| config_error(Box::new(error)))?;
+    let file: File = toml::from_str(text).map_err(|error| config_error(Box::new(error)))?;
     if file.remote.enabled {
-        return Ok(file.remote);
+        return Ok((file.remote, None));
     }
     let mut document: toml_edit::DocumentMut = text
         .parse()
@@ -254,12 +438,16 @@ fn enable_settings_at(path: &Path) -> super::Result<RemoteConfig> {
     if let Some(table) = remote.as_table_like_mut() {
         table.insert(key, toml_edit::Item::Value(value));
     }
-    fs::write(&path, document.to_string()).map_err(|source| super::Error::Io {
-        operation: "write",
-        path: path.clone(),
+    Ok((enabled(file.remote), Some(document.to_string())))
+}
+
+fn io_error(operation: &'static str, path: &Path) -> impl FnOnce(io::Error) -> super::Error {
+    let path = path.to_owned();
+    move |source| super::Error::Io {
+        operation,
+        path,
         source,
-    })?;
-    Ok(enabled(file.remote))
+    }
 }
 
 fn enabled(config: RemoteConfig) -> RemoteConfig {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::menu::worktree_source::signed_out_hint;
+use crate::menu::worktree_source::faded_hint;
 
 /// A faded GitHub tab says why on hover: Herdr keeps its own GitHub sign-in,
 /// so a `gh` login elsewhere does not enable it.
@@ -44,10 +44,10 @@ fn a_connected_github_tab_has_no_sign_in_hint(cx: &mut gpui::TestAppContext) {
 #[test]
 fn the_hint_names_the_listing_and_where_to_sign_in() {
     for kind in [Kind::PullRequest, Kind::Issue] {
-        let hint = signed_out_hint(kind);
+        let hint = faded_hint(kind, false);
         assert!(hint.contains("Sign in to GitHub in Sheprd"), "{hint}");
         assert!(hint.contains("account button"), "{hint}");
     }
-    assert!(signed_out_hint(Kind::PullRequest).ends_with("pull requests."));
-    assert!(signed_out_hint(Kind::Issue).ends_with("issues."));
+    assert!(faded_hint(Kind::PullRequest, false).ends_with("pull requests."));
+    assert!(faded_hint(Kind::Issue, false).ends_with("issues."));
 }

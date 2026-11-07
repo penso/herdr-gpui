@@ -2,7 +2,7 @@
 
 use super::Localize;
 use crate::{
-    chat::{Error, StartError, page, pasted, visual, widgets},
+    chat::{ConvertError, Error, StartError, page, pasted, visual, widgets},
     config::chat::{MAX_ENV, MAX_ENV_BYTES},
     i18n::fl,
 };
@@ -17,6 +17,7 @@ impl Localize for Error {
             Self::Bye(reason) => fl!("error-chat-bye", reason = format!("{reason:?}")),
             Self::Closed => fl!("error-chat-closed"),
             Self::Connect(_) => fl!("error-chat-connect"),
+            Self::Convert(error) => error.localize(),
             Self::EnvironmentName { name } => {
                 fl!("error-chat-environment-name", name = name.as_str())
             }
@@ -43,6 +44,59 @@ impl Localize for Error {
                 after = format!("{after:?}")
             ),
             Self::Version(version) => fl!("error-chat-version", version = *version),
+            // keep-sorted end
+        }
+    }
+}
+
+impl Localize for ConvertError {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::AlreadyChat => fl!("error-chat-convert-already-chat"),
+            Self::AlreadyConverting => fl!("error-chat-convert-already-converting"),
+            Self::Answer(_) => fl!("error-chat-convert-answer"),
+            Self::Busy(agent) => fl!("error-chat-convert-busy", agent = agent.display_name()),
+            Self::Disabled => fl!("error-chat-start-disabled"),
+            // Discovery's own diagnostics, which have no message of their own.
+            Self::Existing(error) => error.to_string(),
+            Self::HostProgram(_) => fl!("error-chat-convert-host-program"),
+            Self::Line => fl!("error-chat-convert-line"),
+            Self::Moved => fl!("error-chat-convert-moved"),
+            Self::NoAgent => fl!("error-chat-convert-no-agent"),
+            Self::NoSession(agent) => {
+                fl!(
+                    "error-chat-convert-no-session",
+                    agent = agent.display_name(),
+                    command = agent.name()
+                )
+            }
+            Self::NotConnected => fl!("error-chat-start-not-connected"),
+            Self::NotReachable => fl!("error-chat-convert-not-reachable"),
+            Self::NotRunning(agent) => {
+                fl!(
+                    "error-chat-convert-not-running",
+                    agent = agent.display_name()
+                )
+            }
+            Self::Program(error) => error.localize(),
+            Self::Stale => fl!("error-chat-convert-stale"),
+            Self::StillRunning(agent) => {
+                fl!(
+                    "error-chat-convert-still-running",
+                    agent = agent.display_name()
+                )
+            }
+            Self::Stopped => fl!("error-chat-convert-stopped"),
+            Self::Type(error) => error.localize(),
+            Self::Unknown(name) => fl!("error-chat-convert-unknown", name = name.as_str()),
+            Self::Unsupported(agent) => {
+                fl!(
+                    "error-chat-convert-unsupported",
+                    agent = agent.display_name()
+                )
+            }
+            Self::Worker(_) => fl!("error-chat-convert-worker"),
             // keep-sorted end
         }
     }

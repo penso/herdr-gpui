@@ -77,3 +77,13 @@ fn a_new_chat_names_a_known_agent_and_needs_herdr_acp(cx: &mut gpui::TestAppCont
         assert_eq!(code(&missing), Some(ErrorCode::Unsupported));
     });
 }
+
+#[gpui::test]
+fn converting_needs_chats_on_and_an_agent_to_move(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    view.update(cx, |view, _| view.config.features.acp_chats = false);
+    cx.cx.update(|cx| {
+        let off = serve(call(ChatOp::Convert { pane: None }), cx);
+        assert_eq!(code(&off), Some(ErrorCode::Unsupported));
+    });
+}

@@ -71,12 +71,16 @@ public struct Home: Codable, Hashable, Sendable {
         /// The repository checkout it is; older computers leave it out.
         public var worktree: Worktree?
         public var pullRequest: PullRequest?
+        /// Commits on its branch that no pull request carries yet; older
+        /// computers leave it out.
+        public var unopenedCommits: Int?
         public var chats: [ChatRow]
         public var terminals: [TerminalRow]
 
         enum CodingKeys: String, CodingKey {
             case id, label, branch, cwd, worktree, chats, terminals
             case pullRequest = "pull_request"
+            case unopenedCommits = "unopened_commits"
         }
     }
 

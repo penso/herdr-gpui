@@ -7,6 +7,7 @@
 mod api;
 mod attach;
 mod chat;
+mod core;
 mod daemon;
 mod layout;
 mod recency;
@@ -44,6 +45,8 @@ pub enum Error {
     Busy,
     #[error("the chat program cannot be reached")]
     ChatUnavailable,
+    #[error(transparent)]
+    Core(#[from] core::Error),
     #[error("Herdr refused: {0}")]
     Daemon(String),
     #[error("Herdr is not running on this computer")]
@@ -72,14 +75,15 @@ pub(crate) struct CreatedWorkspace {
 }
 
 pub(crate) struct Hub {
-    api: api::Api,
     /// Owns the worker that projects the layout; dropping it disconnects.
     _daemon: daemon::Daemon,
-    layout: watch::Receiver<Arc<Layout>>,
-    chats: Mutex<HashMap<String, (EndpointId, Arc<Chat>)>>,
     all: broadcast::Sender<(String, Event)>,
+    api: api::Api,
     /// Where chat sockets live; `None` resolves from the environment.
     chat_dir: Option<PathBuf>,
+    chats: Mutex<HashMap<String, (EndpointId, Arc<Chat>)>>,
+    core: Option<Arc<core::Source>>,
+    layout: watch::Receiver<Arc<Layout>>,
     program: Option<PathBuf>,
 }
 
@@ -90,24 +94,36 @@ impl Hub {
     pub(crate) fn start(
         socket: Option<PathBuf>,
         chat_dir: Option<PathBuf>,
+        core_endpoint: crate::core_target::CoreTarget,
+        state_dir: &Path,
     ) -> std::io::Result<Arc<Self>> {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));
         let api = api::Api::new(socket.clone());
         let target = socket.map_or(ConnectTarget::Local, ConnectTarget::Socket);
-        let daemon = daemon::Daemon::start(sender, target)?;
+        let (daemon_sender, daemon_layout) = watch::channel(Arc::new(Layout::default()));
+        let daemon = daemon::Daemon::start(daemon_sender, target.clone())?;
+        let (core_sender, core_layout) = watch::channel(Arc::new(Layout::default()));
+        let core = core::Source::start(core_sender, &target, core_endpoint, state_dir)?;
+        tokio::spawn(core::merge_sources(sender, daemon_layout, core_layout));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         let hub = Arc::new(Self {
-            api,
             _daemon: daemon,
-            layout,
-            chats: Mutex::new(HashMap::new()),
             all,
+            api,
             chat_dir,
+            chats: Mutex::new(HashMap::new()),
+            core: Some(core),
+            layout,
             program: locate_program(),
         });
         let follower = hub.clone();
         tokio::spawn(async move { follower.follow().await });
         Ok(hub)
+    }
+
+    /// The `sheprd-acp` chats start with, when one was found.
+    pub(crate) fn program(&self) -> Option<&Path> {
+        self.program.as_deref()
     }
 
     /// A hub showing `layout` that never connects to a daemon or a chat,
@@ -142,16 +158,17 @@ impl Hub {
         let (sender, receiver) = watch::channel(Arc::new(layout));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         Self {
+            _daemon: daemon::Daemon::offline(sender),
+            all,
             // No socket answers there unless a test serves one, so a request
             // fails rather than reach a real Herdr.
             api: api::Api::new(Some(
                 client_socket.unwrap_or_else(|| PathBuf::from("/nonexistent/herdr-client.sock")),
             )),
-            _daemon: daemon::Daemon::offline(sender),
-            layout: receiver,
-            chats: Mutex::new(HashMap::new()),
-            all,
             chat_dir,
+            chats: Mutex::new(HashMap::new()),
+            core: None,
+            layout: receiver,
             program: None,
         }
     }
@@ -198,8 +215,11 @@ impl Hub {
             .ok_or(Error::UnknownWorkspace)?
             .cwd
             .clone();
+        if let Some(core) = self.active_core() {
+            let (cwd, program) = (cwd.unwrap_or(&folder).to_owned(), program.to_owned());
+            return on_core(move || core.open_chat(agent, &program, &cwd)).await;
+        }
         let response = self
-            .api
             .call(
                 ApiMethod::TabCreate,
                 tab_params(workspace, cwd.unwrap_or(&folder), agent, program),
@@ -223,7 +243,9 @@ impl Hub {
     }
 
     /// A new workspace in `cwd`, on a new worktree when `branch` is given,
-    /// with a chat running `agent` in it.
+    /// with a chat running `agent` in it. While a core answers the chat
+    /// starts there, in its unlisted group: the core has no workspaces or
+    /// worktrees, so a branch is refused rather than sent to Herdr 1.
     pub(crate) async fn create_workspace(
         &self,
         cwd: &str,
@@ -231,8 +253,18 @@ impl Hub {
         agent: Agent,
     ) -> Result<CreatedWorkspace> {
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
+        if let Some(core) = self.active_core() {
+            if branch.is_some() {
+                return Err(core::Error::Unsupported.into());
+            }
+            let (cwd, program) = (cwd.to_owned(), program.to_owned());
+            let pane = on_core(move || core.open_chat(agent, &program, &cwd)).await?;
+            return Ok(CreatedWorkspace {
+                workspace: core::UNLISTED.to_owned(),
+                pane,
+            });
+        }
         let opened = self
-            .api
             .call(
                 ApiMethod::WorkspaceCreate,
                 json!({"cwd": cwd, "focus": false}),
@@ -245,7 +277,6 @@ impl Hub {
             .to_owned();
         let Some(branch) = branch else {
             let response = self
-                .api
                 .call(
                     ApiMethod::TabCreate,
                     tab_params(&workspace, cwd, agent, program),
@@ -256,7 +287,6 @@ impl Hub {
             return Ok(CreatedWorkspace { workspace, pane });
         };
         let created = self
-            .api
             .call(
                 ApiMethod::WorktreeCreate,
                 json!({"workspace_id": workspace, "branch": branch, "focus": false}),
@@ -282,18 +312,55 @@ impl Hub {
 
     /// Types `line` and Enter into `pane`, as Sheprd starts a chat.
     async fn run_line(&self, pane: &str, line: &str) -> Result<()> {
-        self.api
-            .call(
-                ApiMethod::PaneSendInput,
-                json!({"pane_id": pane, "text": line, "keys": ["Enter"]}),
-            )
-            .await?;
+        self.call(
+            ApiMethod::PaneSendInput,
+            json!({"pane_id": pane, "text": line, "keys": ["Enter"]}),
+        )
+        .await?;
         Ok(())
+    }
+
+    /// The core new work goes to, while one answers.
+    fn active_core(&self) -> Option<Arc<core::Source>> {
+        self.core.clone().filter(|core| core.connected())
+    }
+
+    /// A new tab on the core for `workspace`'s folder, answered as Herdr
+    /// answers one, once listed so a phone can open it. `None` when no
+    /// core answers and the tab is Herdr 1's to make.
+    pub(crate) async fn new_core_tab(&self, workspace: &str) -> Result<Option<Value>> {
+        let Some(core) = self.active_core() else {
+            return Ok(None);
+        };
+        let cwd = self
+            .layout()
+            .workspace(workspace)
+            .map_or_else(String::new, |workspace| workspace.cwd.clone());
+        let pane = on_core(move || core.open_shell(&cwd)).await?;
+        let mut layout = self.layout.clone();
+        let listed = layout.wait_for(|layout| layout.terminal(&pane).is_some());
+        // An unlisted tab is still made: the phone reloads and finds it.
+        let _ = tokio::time::timeout(CORE_LISTING, listed).await;
+        Ok(Some(json!({"pane": {"pane_id": pane}})))
     }
 
     /// Calls Herdr's public API, for the terminal views.
     pub(crate) async fn call(&self, method: ApiMethod, params: Value) -> Result<Value> {
-        self.api.call(method, params).await
+        if core::owns(&params) {
+            if !self.layout().connected {
+                return Err(Error::NotConnected);
+            }
+            let core = self.core.clone().ok_or(core::Error::Disconnected)?;
+            return tokio::task::spawn_blocking(move || core.call(method, &params))
+                .await
+                .map_err(|_| core::Error::Disconnected)?;
+        }
+        match self.api.call(method, params).await {
+            Err(Error::NotConnected) if self.core.as_ref().is_some_and(|core| core.connected()) => {
+                Err(core::Error::Unsupported.into())
+            }
+            result => result,
+        }
     }
 
     /// Starts connections for new chat panes and closes those whose pane
@@ -344,6 +411,8 @@ impl Hub {
 /// The environment variable the typed line runs the program from, as in
 /// Sheprd.
 const PROGRAM_ENV: &str = "HERDR_ACP";
+/// How long a new core tab waits to be listed: a few of the core's polls.
+const CORE_LISTING: Duration = Duration::from_secs(2);
 const PROGRAM: &str = if cfg!(windows) {
     "herdr-acp.exe"
 } else {
@@ -371,6 +440,15 @@ fn locate_named_program(program: &str) -> Option<PathBuf> {
                 .map(|dir| dir.join(program)),
         )
         .find(|candidate| candidate.is_file())
+}
+
+/// Runs blocking core work off the runtime.
+async fn on_core<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<T> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|_| Error::from(core::Error::Disconnected))?
 }
 
 fn tab_params(workspace: &str, cwd: &str, agent: Agent, program: &Path) -> Value {

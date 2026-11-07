@@ -23,20 +23,30 @@ final class Dictation {
     private var analyzer: SpeechAnalyzer?
     private var feed: AudioFeed?
     private var reader: Task<Void, Never>?
+    /// Which `start` is current. `stop` moves it on, so a `start` still
+    /// waiting on permission or a download gives up instead of opening
+    /// the microphone after the person left.
+    private var attempt = 0
 
     var text: String { settled + guess }
     var active: Bool { phase == .preparing || phase == .listening }
 
     func start() async {
         guard !active else { return }
+        attempt += 1
+        let mine = attempt
         phase = .preparing
         settled = ""
         guess = ""
-        guard await AVAudioApplication.requestRecordPermission() else {
+        let allowed = await AVAudioApplication.requestRecordPermission()
+        guard mine == attempt else { return }
+        guard allowed else {
             phase = .failed("Allow the microphone in Settings to dictate.")
             return
         }
-        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: .current) else {
+        let supported = await SpeechTranscriber.supportedLocale(equivalentTo: .current)
+        guard mine == attempt else { return }
+        guard let locale = supported else {
             phase = .failed("Dictation does not support your language yet.")
             return
         }
@@ -54,6 +64,7 @@ final class Dictation {
             guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
                 throw DictationError.noFormat
             }
+            guard mine == attempt else { return }
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
@@ -75,19 +86,28 @@ final class Dictation {
                 }
             }
             try await analyzer.start(inputSequence: input)
+            self.analyzer = analyzer
+            guard mine == attempt else {
+                // `finish` reads to the end of the input, so it must end.
+                feeding.finish()
+                await finish()
+                return
+            }
             let feed = AudioFeed(format: format, into: feeding)
             try feed.start()
-            self.analyzer = analyzer
             self.feed = feed
             phase = .listening
         } catch {
+            guard mine == attempt else { return }
             await finish()
             phase = .failed(error.localizedDescription)
         }
     }
 
-    /// Stops listening and waits for the last phrase to settle.
+    /// Stops listening, or a start still under way, and waits for the last
+    /// phrase to settle.
     func stop() async {
+        attempt += 1
         await finish()
         if active { phase = .idle }
     }

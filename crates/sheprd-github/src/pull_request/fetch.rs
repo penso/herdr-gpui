@@ -39,7 +39,7 @@ pub(super) const FIELDS: &str = fields!();
 pub(super) const NUMBER_QUERY: &str = concat!(
     r#"query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
-    mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
+    nameWithOwner mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
     pullRequest(number: $number) { ...PullRequestFields }
   }
 }"#,

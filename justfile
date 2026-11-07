@@ -263,6 +263,7 @@ ios-generate:
 
 # Swift package tests, against the fixtures the daemon's Rust tests write.
 ios-test:
+    PYTHONDONTWRITEBYTECODE=1 python3 ios/tools/test_testflight_notes.py
     cd ios/SheprdRemoteCore && swift test
 
 # Unsigned build of the app and its extensions for the simulator.

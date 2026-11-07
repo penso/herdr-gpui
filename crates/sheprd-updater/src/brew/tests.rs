@@ -7,6 +7,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 mod migration;
 mod relaunch;
 mod rename;
+mod tokens;
 
 /// A Homebrew prefix that owns `target`, returning the artifact link.
 fn caskroom(prefix: &Path, version: &str, target: &Path) -> anyhow::Result<PathBuf> {
@@ -77,6 +78,7 @@ fn cask(script: &str, root: &Path) -> anyhow::Result<Cask> {
         bundle: root.join(BUNDLE),
         legacy: None,
         home: root.into(),
+        token: TOKEN,
     })
 }
 

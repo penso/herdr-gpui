@@ -221,10 +221,22 @@ impl CoreTerminals {
 }
 
 impl SheprdWindow {
+    /// Whether a new tab runs in herdr-core. The window's core is on this
+    /// computer, so a tab on another host stays with that host's Herdr, where
+    /// its shell starts on the host and in the workspace's folder.
+    pub(crate) fn new_tabs_use_core(&self) -> bool {
+        self.config.herdr_2_terminals && !self.selected_is_remote()
+    }
+
     /// The `new_core_terminal` command: starts a shell in herdr-core and
     /// shows it in a tab of the focused workspace. With no core running, the
-    /// user's own `herdr-core` or the bundled one starts.
+    /// user's own `herdr-core` or the bundled one starts. Refused on another
+    /// host, where the shell would run on this computer instead.
     pub(crate) fn new_core_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_is_remote() {
+            self.show_flash(Flash::warning(fl!("core-terminals-local-only")), cx);
+            return;
+        }
         let Some((scope, workspace)) = self.browser_key() else {
             self.show_flash(Flash::warning(fl!("core-terminals-open-workspace")), cx);
             return;

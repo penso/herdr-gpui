@@ -89,3 +89,19 @@ fn chat_new_has_a_stable_wire_form() {
     let text = serde_json::to_string(&started).unwrap();
     assert_eq!(serde_json::from_str::<Response>(&text).unwrap(), started);
 }
+
+#[test]
+fn chat_convert_has_a_stable_wire_form() {
+    let op: ChatOp = serde_json::from_str(r#"{"op":"convert"}"#).unwrap();
+    assert_eq!(op, ChatOp::Convert { pane: None });
+    let reply = Reply::Converting {
+        agent: "claude".into(),
+        pane_id: "w1:p1".into(),
+    };
+    let text = serde_json::to_string(&reply).unwrap();
+    assert_eq!(
+        text,
+        r#"{"kind":"converting","agent":"claude","pane_id":"w1:p1"}"#
+    );
+    assert_eq!(serde_json::from_str::<Reply>(&text).unwrap(), reply);
+}

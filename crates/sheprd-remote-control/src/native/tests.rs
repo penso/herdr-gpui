@@ -5,8 +5,10 @@ use sheprd_client::protocol::AgentStatus;
 
 mod agent_name;
 mod create;
+mod create_start;
 mod fixtures;
 mod hosts;
+mod installed_agents;
 #[cfg(unix)]
 mod live_chat;
 mod messages;

@@ -9,8 +9,10 @@ mod copy;
 mod disclosure;
 mod embeds;
 mod entries;
+mod jump;
 mod layout;
 mod panels;
+mod pinned;
 mod rail;
 mod rich;
 pub(crate) mod running;
@@ -431,12 +433,14 @@ impl SheprdWindow {
                                     .when_some(chat.text_focus.as_ref(), |view, focus| {
                                         view.track_focus(focus)
                                     })
-                                    .child(entries),
+                                    .child(entries)
+                                    .children(self.render_chat_pinned(chat, cx))
+                                    .children(self.render_chat_jump(chat, cx)),
                             )
-                            .when(
-                                chat.selection.is_empty() && !chat.selection.is_selecting(),
-                                |view| view.child(chat.glide.watch(&chat.list)),
-                            )
+                            .child(chat.glide.watch(
+                                &chat.list,
+                                !chat.selection.is_empty() || chat.selection.is_selecting(),
+                            ))
                             .children(
                                 self.render_chat_working(chat, cx)
                                     .map(|content| self.chat_column(content)),
@@ -634,7 +638,7 @@ impl SheprdWindow {
                 .child(current.label())
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
-                    this.set_chat_layout(current.next(), cx);
+                    this.step_chat_layout(cx);
                 }))
         };
         let rail = self.render_chat_rail_controls(chat, rail_fits, cx);

@@ -181,13 +181,17 @@ fn rejects_invalid_settings() {
 }
 
 #[test]
-fn features_are_opt_in_per_flag() -> anyhow::Result<()> {
+fn features_keep_their_own_default_per_flag() -> anyhow::Result<()> {
+    assert!(Config::default().features.acp_chats, "ACP chats ship on");
+    assert!(Config::parse("[features]")?.features.acp_chats);
+    // Naming another flag leaves ACP chats on, and an explicit off still holds.
     assert!(
-        !Config::default().features.acp_chats,
-        "ACP chats are opt-in"
+        Config::parse("[features]\nqa_menu = true")?
+            .features
+            .acp_chats
     );
     assert!(
-        Config::parse("[features]\nacp_chats = true")?
+        !Config::parse("[features]\nacp_chats = false")?
             .features
             .acp_chats
     );
