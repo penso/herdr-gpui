@@ -6,7 +6,10 @@ use std::collections::{HashMap, HashSet};
 use acp::v1 as wire;
 use serde_json::{Value, json};
 
-use super::{background, background::Background, permission, settings, settings::Settings, tools};
+use super::{
+    background, background::Background, permission, settings, settings::Settings, tasks,
+    tasks::Tasks, tools,
+};
 use crate::{
     harness::{
         Out, Translator, out,
@@ -31,6 +34,8 @@ enum Control {
 struct Call {
     /// Shown otherwise than as a call (the to-do list is the plan).
     hidden: bool,
+    /// What a hidden call was given, which its result is read with.
+    input: Value,
     name: String,
 }
 
@@ -62,6 +67,7 @@ pub(super) struct Bridge {
     /// Messages whose text came in pieces, so the whole message that follows
     /// is not shown again.
     streamed: HashSet<String>,
+    tasks: Tasks,
 }
 
 impl Bridge {
@@ -80,6 +86,7 @@ impl Bridge {
             prompt: None,
             session,
             streamed: HashSet::new(),
+            tasks: Tasks::default(),
         }
     }
 }
@@ -508,7 +515,8 @@ impl Bridge {
         let text = |key: &str| block.get(key).and_then(Value::as_str);
         let (call, name) = (text("id")?, text("name")?);
         let input = block.get("input").cloned().unwrap_or(Value::Null);
-        let hidden = name == tools::TODOS;
+        let todos = name == tools::TODOS;
+        let hidden = todos || tasks::is_tool(name);
         // A sub-agent's own to-do list is not the conversation's plan.
         if hidden && parent.is_some() {
             return None;
@@ -517,11 +525,16 @@ impl Bridge {
             call.to_owned(),
             Call {
                 hidden,
+                input: if hidden { input.clone() } else { Value::Null },
                 name: name.to_owned(),
             },
         );
-        if hidden {
+        if todos {
             return Some(self.update(wire::SessionUpdate::Plan(tools::plan(&input))));
+        }
+        // A task changes the plan once its call has succeeded.
+        if hidden {
+            return None;
         }
         let tag = self.background.started(call, name, &input, parent);
         let mut tool_call = tools::call(call, name, &input);
@@ -603,11 +616,21 @@ impl Bridge {
             let Some(id) = block.get("tool_use_id").and_then(Value::as_str) else {
                 continue;
             };
-            let Some(call) = self.calls.get(id).filter(|call| !call.hidden) else {
+            let Some(call) = self.calls.get(id) else {
                 continue;
             };
             let failed = block.get("is_error").and_then(Value::as_bool) == Some(true);
             let output = block.get("content").unwrap_or(&Value::Null);
+            if call.hidden {
+                let plan = (!failed)
+                    .then(|| {
+                        self.tasks
+                            .finished(&call.name, &call.input, output, structured)
+                    })
+                    .flatten();
+                outs.extend(plan.map(|plan| self.update(wire::SessionUpdate::Plan(plan))));
+                continue;
+            }
             let name = call.name.clone();
             let (report, elsewhere) = self
                 .background
