@@ -2,6 +2,9 @@
 
 Native macOS screenshots for the rate-limit indicator and account dialog.
 
+These captures predate the Sheprd rename and retain the names and artwork of
+the original builds. The reproduction command below uses the current crate name.
+
 - `before-account-dialog.png`: the installed Herdr `20261102.2` account
   dialog, cropped to exclude the surrounding workspace. It shows sign-in
   status but no quota information.
@@ -15,6 +18,6 @@ after captures with an absolute output prefix:
 
 ```sh
 HERDR_TEST_GITHUB_CAPTURE=/absolute/path/github-quota \
-  cargo test --locked -p herdr-gpui --features integration-test,mockup \
+  cargo test --locked -p sheprd-gpui --features integration-test,mockup \
   --test live_gui native_github_quota -- --ignored --nocapture --test-threads=1
 ```

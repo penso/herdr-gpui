@@ -20,6 +20,10 @@ case "$round" in
      ipad="" ;;
   forget) phone="forget-A-0 forget-A-1 forget-B-0 forget-B-1 forget-C-0 forget-C-1 forget-D-0 forget-D-1"
      ipad="" ;;
+  newtab) phone="newtab-A-0 newtab-B-0 newtab-B-1 newtab-C-0 newtab-C-1 newtab-D-0 newtab-D-1"
+     ipad="" ;;
+  voice) phone="voice-A-0 voice-A-1 voice-A-2 voice-A-3 voice-B-0 voice-B-1 voice-B-2 voice-B-3 voice-C-0 voice-C-1 voice-C-2 voice-C-3 voice-D-0 voice-D-1 voice-D-2 voice-D-3"
+     ipad="" ;;
   *) echo "unknown round $round" >&2; exit 2 ;;
 esac
 
@@ -31,13 +35,13 @@ udid_of() {
 render() {
   device="$1"; shift
   udid=$(udid_of "$device")
-  xcodebuild -project HerdrMockups.xcodeproj -scheme HerdrMockups \
+  xcodebuild -project SheprdMockups.xcodeproj -scheme SheprdMockups \
     -destination "platform=iOS Simulator,id=$udid" -derivedDataPath build -quiet build
   xcrun simctl boot "$udid" 2>/dev/null || true
   xcrun simctl bootstatus "$udid" >/dev/null
   xcrun simctl ui "$udid" appearance "$appearance"
   xcrun simctl status_bar "$udid" override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
-  xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/HerdrMockups.app
+  xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/SheprdMockups.app
   for shot in "$@"; do
     screen=${shot%%-*}; rest=${shot#*-}; variant=${rest%%-*}; state=${rest#*-}
     xcrun simctl launch --terminate-running-process "$udid" so.pen.herdr-mockups \

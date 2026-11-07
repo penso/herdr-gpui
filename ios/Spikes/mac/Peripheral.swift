@@ -1,6 +1,6 @@
 // The Mac side of the Bluetooth spike: a GATT peripheral with the nearby
 // service, an echo characteristic, and an L2CAP channel that receives
-// 1 MiB and sends 1 MiB back. Built into HerdrBLESpike.app by run.sh, so
+// 1 MiB and sends 1 MiB back. Built into SheprdBLESpike.app by run.sh, so
 // macOS asks for Bluetooth permission for the bundle.
 
 import CoreBluetooth
@@ -44,7 +44,7 @@ final class Peripheral: NSObject, CBPeripheralManagerDelegate, StreamDelegate {
         log("service added error=\(String(describing: error))")
         peripheral.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [service.uuid],
-            CBAdvertisementDataLocalNameKey: "Herdr spike",
+            CBAdvertisementDataLocalNameKey: "Sheprd spike",
         ])
     }
 

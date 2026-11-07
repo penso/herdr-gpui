@@ -1,0 +1,219 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-gpui"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[[bin]]
+name = "sheprd"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+url.workspace = true
+ammonia.workspace              = true
+anyhow.workspace               = true
+base64.workspace               = true
+chrono.workspace               = true
+config_loader.workspace        = true
+flate2.workspace               = true
+getrandom.workspace            = true
+gpui.workspace                 = true
+# Unlike gpui 0.2.2, the platform crate enables nothing by default: without
+# font-kit (macOS) or a Linux backend, text silently goes to a no-op system.
+gpui_platform                  = { features = ["font-kit", "runtime_shaders", "wayland", "x11"], workspace = true }
+gix.workspace                  = true
+# Only the reports `sheprd-automate --json` prints: the workspace entry turns
+# default features off, so no Luau is built here.
+sheprd-automation.workspace     = true
+sheprd-chat-protocol.workspace  = true
+sheprd-backend.workspace        = true
+sheprd-client.workspace         = true
+sheprd-commands.workspace       = true
+sheprd-control-protocol.workspace = true
+sheprd-core-client.workspace    = true
+sheprd-session.workspace        = true
+sheprd-credentials.workspace    = true
+sheprd-diagnostics.workspace    = true
+sheprd-github.workspace         = true
+sheprd-i18n.workspace           = true
+sheprd-mods.workspace           = true
+sheprd-orchestrator.workspace   = true
+sheprd-remote.workspace         = true
+# Remote control without its server: the control protocol and `app`.
+sheprd-remote-control.workspace         = true
+sheprd-updater.workspace        = true
+sheprd-usage.workspace          = true
+sheprd-vcs.workspace            = true
+if-addrs.workspace             = true
+image                          = { features = ["bmp", "tiff"], workspace = true }
+keepawake.workspace            = true
+mdns-sd.workspace              = true
+mermaid-rs-renderer.workspace  = true
+nucleo-matcher.workspace       = true
+percent-encoding.workspace     = true
+pulldown-cmark.workspace       = true
+ratex-layout.workspace         = true
+ratex-parser.workspace         = true
+ratex-render.workspace         = true
+ratex-types.workspace          = true
+rodio.workspace                = true
+secrecy.workspace              = true
+serde.workspace                = true
+serde_ignored.workspace        = true
+serde_json.workspace           = true
+sha2.workspace                 = true
+skrifa.workspace               = true
+sysinfo.workspace              = true
+syntect.workspace              = true
+tempfile.workspace             = true
+thiserror.workspace            = true
+toml.workspace                 = true
+toml_edit.workspace            = true
+tracing.workspace              = true
+tracing-subscriber.workspace   = true
+unicode-bidi.workspace = true
+unicode-properties.workspace = true
+unicode-segmentation.workspace = true
+unicode-width.workspace        = true
+ureq.workspace                 = true
+uuid.workspace                 = true
+
+[build-dependencies]
+# Parses the `.ftl` files so `fl!` calls are checked against them.
+fluent-syntax.workspace = true
+winresource.workspace = true
+
+[dev-dependencies]
+gpui = { features = ["test-support"], workspace = true }
+sheprd-client = { features = ["test-support"], workspace = true }
+sheprd-commands = { features = ["test-support"], workspace = true }
+sheprd-remote = { features = ["test-support"], workspace = true }
+sheprd-control-protocol = { features = ["test-support"], workspace = true }
+sheprd-diagnostics = { features = ["test-support"], workspace = true }
+sheprd-github = { features = ["test-support"], workspace = true }
+sheprd-orchestrator = { features = ["test-support"], workspace = true }
+sheprd-usage = { features = ["test-support"], workspace = true }
+sheprd-vcs = { features = ["test-support"], workspace = true }
+socket2.workspace = true
+test-case.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+libc.workspace = true
+
+[features]
+default = ["azure", "boat", "boxd", "coder", "container", "daytona", "opensandbox", "railway", "sprites"]
+# Machines from cloud providers as devices: the shared device list, background
+# jobs, and connector. Turned on by each provider below; not useful alone.
+cloud = ["sheprd-client/cloud", "sheprd-remote/cloud", "sheprd-usage/cloud", "sheprd-vcs/cloud"]
+# Azure VMs and Container Apps sandboxes as devices, with generic credentials
+# or local Azure CLI. Sandboxes are reached over the data plane's exec stream.
+azure = ["cloud", "sheprd-client/azure", "sheprd-remote/azure", "sheprd-usage/azure", "sheprd-vcs/azure"]
+# Boat sandboxes as devices, with an API key and per-machine SSH key setup.
+boat = ["cloud", "sheprd-client/boat", "sheprd-remote/boat"]
+# boxd machines as devices, with an API key and this app as their exec relay.
+boxd = ["cloud", "sheprd-client/boxd", "sheprd-remote/boxd"]
+# Coder workspaces as devices, with OAuth2 sign-in.
+coder = ["cloud", "sheprd-client/coder", "sheprd-remote/coder"]
+# Containers on this computer's Docker or Podman engine as devices.
+container = ["cloud", "sheprd-client/container", "sheprd-remote/container"]
+# Daytona sandboxes as devices, with an API key and its SSH gateway.
+daytona = ["cloud", "sheprd-client/daytona", "sheprd-remote/daytona"]
+# Railway free VMs as devices, reached over SSH with a saved key identity.
+# Sandboxes on a self-hosted OpenSandbox server as devices, through this app as their exec relay.
+opensandbox = ["cloud", "sheprd-client/opensandbox", "sheprd-remote/opensandbox"]
+railway = ["cloud", "sheprd-client/railway", "sheprd-remote/railway"]
+# Fly Sprites as devices, with an API token and this app as their exec relay.
+sprites = ["cloud", "sheprd-client/sprites", "sheprd-remote/sprites"]
+# Development only: `--mockup` shows UI variants from HERDR_MOCKUP_FILE side by
+# side in a native window. Never enabled in release builds. GPUI's test support
+# provides `Window::render_to_image`, so `--capture` needs no screen-recording
+# permission.
+mockup = ["gpui_platform/test-support"]
+integration-test = [
+  "sheprd-github/test-support",
+  "objc2-app-kit/NSPasteboardItem",
+  "dep:cocoa",
+  "dep:core-graphics",
+  "dep:foreign-types",
+  "dep:objc",
+  "dep:raw-window-handle",
+]
+
+[target.'cfg(unix)'.dependencies]
+# `system`: the host name nearby pairing advertises over Bluetooth.
+rustix = { features = ["system"], workspace = true }
+
+# wry has no working GPUI child-view backend on Linux yet; browser tabs there
+# open in the system browser instead.
+[target.'cfg(any(target_os = "macos", windows))'.dependencies]
+wry.workspace = true
+
+# `windows-sys` sets the window attributes and reads the
+# system settings GPUI leaves to the app, and opens avatar cache entries without following reparse points. It also
+# registers with Restart Manager (`restart_manager`), and sends the
+# performance fixture its window messages.
+# `clipboard-win` reads the clipboard on a background thread (see
+# `window/clipboard`). `windows` has the shell's COM and WinRT interfaces (the
+# taskbar, the jump list, and toasts); `windows-registry` reads the link
+# handler and the startup entry, failing with `windows-result` errors.
+[target.'cfg(windows)'.dependencies]
+clipboard-win.workspace     = true
+raw-window-handle.workspace = true
+windows = { features = [
+  "Data_Xml_Dom",
+  "UI_Notifications",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_Shell_Common",
+  "Win32_UI_WindowsAndMessaging",
+], workspace = true }
+windows-registry.workspace = true
+windows-result.workspace   = true
+windows-sys = { features = [
+  "Wdk_System_SystemServices",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Console",
+  "Win32_System_Recovery",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_UI_Accessibility",
+  "Win32_UI_WindowsAndMessaging",
+], workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fontdb.workspace       = true
+futures-lite.workspace = true
+nix.workspace          = true
+oo7.workspace          = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+accesskit_macos.workspace       = true
+font-kit.workspace              = true
+block2.workspace                = true
+dispatch2.workspace             = true
+objc2-core-foundation.workspace = true
+objc2-web-kit.workspace         = true
+objc2-user-notifications.workspace = true
+cocoa                        = { optional = true, workspace = true }
+core-graphics                = { optional = true, workspace = true }
+foreign-types                = { optional = true, workspace = true }
+nix.workspace                = true
+objc                         = { optional = true, workspace = true }
+objc2.workspace              = true
+objc2-app-kit.workspace      = true
+objc2-foundation.workspace   = true
+raw-window-handle            = { optional = true, workspace = true }
+
+[[test]]
+name              = "live_gui"
+required-features = ["integration-test"]
+
+[[test]]
+name              = "performance_gui"
+required-features = ["integration-test"]

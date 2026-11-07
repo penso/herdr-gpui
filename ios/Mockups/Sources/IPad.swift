@@ -25,7 +25,7 @@ private struct Sidebar: View {
                 }
             }
         }
-        .navigationTitle("Herdr")
+        .navigationTitle("Sheprd")
     }
 }
 

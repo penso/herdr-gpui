@@ -1,0 +1,16 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-session"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace          = true
+serde_json.workspace     = true
+sheprd-backend.workspace = true
+thiserror.workspace      = true

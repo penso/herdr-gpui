@@ -1,7 +1,7 @@
 // Fills the repeated parts (terminal text, keyboard), then handles picks.
 const SESSION = `<span class="p">~/code/herdr-gpui</span> <span class="g">feat/remote-control</span>
-<span class="b">❯</span> cargo test -p herdr-remote-control
-<span class="m">   Compiling herdr-remote-control v0.9.0</span>
+<span class="b">❯</span> cargo test -p sheprd-remote-control
+<span class="m">   Compiling sheprd-remote-control v0.9.0</span>
 <span class="m">    Finished \`test\` profile in 41.2s</span>
      Running unittests src/lib.rs
 running 211 tests
@@ -16,7 +16,7 @@ test server::tests::control_socket ... <span class="y">running</span>
 <span class="m">^C</span>
 <span class="b">❯</span> git status -sb
 <span class="g">## feat/remote-control</span>...origin
- <span class="r">M</span> crates/herdr-remote-control/src/web.rs
+ <span class="r">M</span> crates/sheprd-remote-control/src/web.rs
  <span class="r">M</span> docs/mockups/remote-control/terminal.html
 <span class="b">❯</span> <span class="cursor"></span>`;
 
@@ -75,7 +75,7 @@ document.getElementById("send").addEventListener("click", () => {
   const data = { ...picks, notes };
   if (window.herdr && window.herdr.send(summary, data)) return;
   navigator.clipboard?.writeText(summary);
-  label.textContent = "Copied to clipboard (not in Herdr UI).";
+  label.textContent = "Copied to clipboard (not in Sheprd).";
 });
 
 label.textContent = describe();

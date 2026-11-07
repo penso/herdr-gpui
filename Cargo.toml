@@ -1,11 +1,11 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/herdr-acp", "crates/herdr-automate", "crates/herdr-automation", "crates/herdr-backend", "crates/herdr-chat-protocol", "crates/herdr-client", "crates/herdr-commands", "crates/herdr-control-protocol", "crates/herdr-core-client", "crates/herdr-credentials", "crates/herdr-diagnostics", "crates/herdr-github", "crates/herdr-gpui", "crates/herdr-gpui-launcher", "crates/herdr-i18n", "crates/herdr-luau", "crates/herdr-mods", "crates/herdr-nearby", "crates/herdr-orchestrator", "crates/herdr-protocol", "crates/herdr-remote", "crates/herdr-remote-control", "crates/herdr-terminal", "crates/herdr-updater", "crates/herdr-usage", "crates/herdr-vcs"]
+members  = ["crates/embed-resource", "crates/sheprd-acp", "crates/sheprd-apns", "crates/sheprd-automate", "crates/sheprd-automation", "crates/sheprd-backend", "crates/sheprd-chat-protocol", "crates/sheprd-client", "crates/sheprd-commands", "crates/sheprd-control-protocol", "crates/sheprd-core-client", "crates/sheprd-credentials", "crates/sheprd-diagnostics", "crates/sheprd-github", "crates/sheprd-gpui", "crates/sheprd-launcher", "crates/sheprd-i18n", "crates/sheprd-luau", "crates/sheprd-mods", "crates/sheprd-nearby", "crates/sheprd-orchestrator", "crates/sheprd-protocol", "crates/sheprd-push-relay", "crates/sheprd-remote", "crates/sheprd-remote-control", "crates/sheprd-session", "crates/sheprd-terminal", "crates/sheprd-updater", "crates/sheprd-usage", "crates/sheprd-vcs"]
 resolver = "2"
 
 [workspace.package]
 edition      = "2024"
 license      = "Apache-2.0"
-rust-version = "1.96"
+rust-version = "1.99"
 # Cargo metadata only. Releases carry a derived calendar version YYYYMMDD.COUNTER
 # that CI embeds as HERDR_RELEASE_VERSION; this value never reaches the UI.
 version = "0.1.0"
@@ -25,7 +25,7 @@ unwrap_used = "deny"
 # Zed's fork, the revision Arbor runs.
 alacritty_terminal   = "0.26.0"
 url = "2"
-# ACP wire types for herdr-acp; its own transport, so no async runtime.
+# ACP wire types for sheprd-acp; its own transport, so no async runtime.
 acp                  = { default-features = false, package = "agent-client-protocol-schema", version = "1.12" }
 anyhow               = "1"
 aes                  = "0.9.3"
@@ -54,8 +54,9 @@ ed25519-dalek        = { default-features = false, features = ["std"], version =
 flate2               = "1"
 # Use the same strict macOS family lookup as GPUI, including legacy aliases.
 font-kit             = { package = "zed-font-kit", version = "=0.14.1-zed" }
-# Fluent messages (docs/i18n.md): `herdr-i18n` loads them through
-# i18n-embed's loader and negotiates the locale; `herdr-gpui`'s build script
+libc                 = "0.2"
+# Fluent messages (docs/i18n.md): `sheprd-i18n` loads them through
+# i18n-embed's loader and negotiates the locale; `sheprd-gpui`'s build script
 # parses them to check `fl!` calls. i18n-embed 0.16 does not build without
 # its default `rust-embed` feature, though the app embeds files itself.
 fluent               = "0.17"
@@ -71,11 +72,11 @@ jiff                 = "0.2.38"
 fontdb               = "0.24"
 foreign-types        = "0.5"
 futures-lite         = "2"
-# Sends frames on herdr-remote-control's WebSocket test client; axum already links it.
+# Sends frames on sheprd-remote-control's WebSocket test client; axum already links it.
 futures-util         = { default-features = false, features = ["sink"], version = "0.3" }
 getrandom            = "0.4.3"
-gpui                 = { package = "gpui-pre", version = "=0.3.6" }
-gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
+gpui                 = { package = "gpui-pre", version = "=0.3.10" }
+gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.10" }
 # The adapter GPUI's macOS backend links; its window focus forwarder.
 accesskit_macos      = "=0.26.3"
 # Reads local repositories for the orchestrator without starting `git`:
@@ -84,27 +85,29 @@ gix                  = { default-features = false, features = ["sha1"], version 
 # The web views behind browser tabs; `browser::page` lays them out in the window.
 wry                  = { package = "lb-wry", version = "=0.53.3" }
 # Reports only by default; the daemon turns on the Luau engine.
-herdr-automation     = { default-features = false, path = "crates/herdr-automation" }
-herdr-backend        = { path = "crates/herdr-backend" }
-herdr-chat-protocol  = { path = "crates/herdr-chat-protocol" }
-herdr-client         = { path = "crates/herdr-client" }
-herdr-commands       = { path = "crates/herdr-commands" }
-herdr-control-protocol = { path = "crates/herdr-control-protocol" }
-herdr-core-client    = { path = "crates/herdr-core-client" }
-herdr-credentials    = { path = "crates/herdr-credentials" }
-herdr-diagnostics    = { path = "crates/herdr-diagnostics" }
-herdr-github         = { path = "crates/herdr-github" }
-herdr-i18n           = { path = "crates/herdr-i18n" }
-herdr-luau           = { path = "crates/herdr-luau" }
-herdr-mods           = { path = "crates/herdr-mods" }
-herdr-orchestrator   = { path = "crates/herdr-orchestrator" }
-herdr-protocol       = { path = "crates/herdr-protocol" }
-herdr-remote         = { default-features = false, path = "crates/herdr-remote" }
-herdr-remote-control         = { default-features = false, path = "crates/herdr-remote-control" }
-herdr-terminal       = { path = "crates/herdr-terminal" }
-herdr-updater        = { path = "crates/herdr-updater" }
-herdr-usage          = { path = "crates/herdr-usage" }
-herdr-vcs            = { path = "crates/herdr-vcs" }
+sheprd-automation     = { default-features = false, path = "crates/sheprd-automation" }
+sheprd-backend        = { path = "crates/sheprd-backend" }
+sheprd-apns           = { path = "crates/sheprd-apns" }
+sheprd-chat-protocol  = { path = "crates/sheprd-chat-protocol" }
+sheprd-client         = { path = "crates/sheprd-client" }
+sheprd-commands       = { path = "crates/sheprd-commands" }
+sheprd-control-protocol = { path = "crates/sheprd-control-protocol" }
+sheprd-core-client    = { path = "crates/sheprd-core-client" }
+sheprd-credentials    = { path = "crates/sheprd-credentials" }
+sheprd-diagnostics    = { path = "crates/sheprd-diagnostics" }
+sheprd-github         = { path = "crates/sheprd-github" }
+sheprd-i18n           = { path = "crates/sheprd-i18n" }
+sheprd-luau           = { path = "crates/sheprd-luau" }
+sheprd-mods           = { path = "crates/sheprd-mods" }
+sheprd-orchestrator   = { path = "crates/sheprd-orchestrator" }
+sheprd-protocol       = { path = "crates/sheprd-protocol" }
+sheprd-remote         = { default-features = false, path = "crates/sheprd-remote" }
+sheprd-remote-control         = { default-features = false, path = "crates/sheprd-remote-control" }
+sheprd-session        = { path = "crates/sheprd-session" }
+sheprd-terminal       = { path = "crates/sheprd-terminal" }
+sheprd-updater        = { path = "crates/sheprd-updater" }
+sheprd-usage          = { path = "crates/sheprd-usage" }
+sheprd-vcs            = { path = "crates/sheprd-vcs" }
 interprocess         = "2.4.2"
 # Local interface addresses, so Bonjour discovery skips this machine; the
 # version mdns-sd already uses.
@@ -127,7 +130,7 @@ objc                 = "0.2"
 # The Secret Service client GPUI's Linux platform links, with its async-io backend.
 oo7                  = { default-features = false, features = ["async-std", "native_crypto"], version = "0.6" }
 objc2                = "0.6.4"
-objc2-app-kit        = { default-features = false, features = ["NSApplication", "NSColor", "NSDockTile", "NSDragging", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSImageRep", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSTextInputContext", "NSTrackingArea", "NSView", "NSWindow", "block2", "objc2-core-foundation", "std"], version = "0.3.2" }
+objc2-app-kit        = { default-features = false, features = ["NSAppearance", "NSApplication", "NSColor", "NSDockTile", "NSDragging", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSImageRep", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSTextInputContext", "NSTrackingArea", "NSView", "NSWindow", "block2", "objc2-core-foundation", "std"], version = "0.3.2" }
 objc2-foundation     = { default-features = false, features = ["NSArray", "NSBundle", "NSData", "NSError", "NSProcessInfo", "NSString", "NSURL", "std"], version = "0.3.2" }
 # The WebKit snapshot behind page annotation screenshots and the popups pages
 # open, at the versions wry uses.
@@ -138,7 +141,7 @@ objc2-web-kit        = { default-features = false, features = ["WKSnapshotConfig
 # Asks for Dock badge permission; the version GPUI's macOS platform already links.
 objc2-user-notifications ={ default-features = false, features = ["UNUserNotificationCenter", "block2", "std"], version = "0.3.2" }
 raw-window-handle    = "0.6"
-# herdr-acp's in-pane chat view.
+# sheprd-acp's in-pane chat view.
 ratatui              = { default-features = false, features = ["crossterm"], version = "0.30" }
 crossterm            = "0.29"
 # TLS for the Azure sandbox exec stream, with the ring provider and roots
@@ -161,13 +164,14 @@ serde                = { features = ["derive"], version = "1" }
 serde_json           = "1"
 serde_ignored        = "0.1.14"
 sha1                 = "0.11.0"
-# herdr-remote: P-256 verifies the signatures paired phones make with their
+# sheprd-remote: P-256 verifies the signatures paired phones make with their
 # WebCrypto keys, and with HKDF and AES-GCM implements Web Push (VAPID ES256,
 # RFC 8291 encryption) on the sha2 below. Not web-push-native, which brings
 # jwt-simple and a second crypto stack; not ring, whose ECDH cannot take the
 # fixed key RFC 8291's test vector uses.
 aes-gcm              = { default-features = false, features = ["aes", "alloc"], version = "0.11" }
 hkdf                 = "0.13"
+hmac                 = "0.13"
 p256                 = { default-features = false, features = ["ecdh", "ecdsa", "pem", "std"], version = "0.14" }
 sha2                 = "0.11.0"
 # Reads embedded bitmap strikes to spot fonts GPUI's Linux rasterizer panics on.
@@ -184,18 +188,18 @@ tar                  = "0.4"
 tempfile             = "3"
 test-case            = "3"
 thiserror            = "2"
-# The remote control daemon's runtime and web server; only herdr-remote-control uses them.
+# The remote control daemon's runtime and web server; only sheprd-remote-control uses them.
 tokio                = { features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"], version = "1" }
 # Server-rendered HTML for the remote control web app, escaped by default.
 maud                 = "0.27"
 axum                 = { default-features = false, features = ["http1", "json", "matched-path", "query", "tokio", "ws"], version = "0.8" }
-# Drives herdr-remote-control's router in tests without a socket; axum already links it.
+# Drives sheprd-remote-control's router in tests without a socket; axum already links it.
 tower                = { default-features = false, features = ["util"], version = "0.5" }
-# A WebSocket client for herdr-remote-control's live socket tests; axum's
+# A WebSocket client for sheprd-remote-control's live socket tests; axum's
 # `ws` feature already links this version.
 tokio-tungstenite    = { default-features = false, features = ["handshake"], version = "0.30" }
 tokio-rustls         = { default-features = false, features = ["ring", "tls12"], version = "0.26" }
-# herdr-remote-control's APNs sender for iOS Live Activities: APNs speaks only
+# sheprd-remote-control's APNs sender for iOS Live Activities: APNs speaks only
 # HTTP/2, which ureq lacks. hyper's own HTTP/2 client (plus h2) over the
 # tokio-rustls above on the daemon's Tokio runtime is the smallest maintained
 # stack for it: axum already links hyper, hyper-util, and http-body-util, so
@@ -211,6 +215,9 @@ toml_edit            = "0.25"
 tracing              = "0.1"
 # The Azure sandbox exec stream; TLS comes from `rustls` above.
 tungstenite          = { default-features = false, features = ["handshake"], version = "0.30" }
+# The response head of boxd's exec stream (grpc-web over HTTP/1.1); tungstenite
+# already links it.
+httparse             = "1.10"
 tracing-subscriber   = { default-features = false, features = ["registry", "std"], version = "0.3" }
 unicode-normalization = "0.1.26"
 unicode-bidi         = "0.3.18"
@@ -219,6 +226,9 @@ unicode-segmentation = "1"
 unicode-width        = "0.2.2"
 ureq                 = "3"
 webpki-roots         = "1"
+# The push relay's optional shared store; TLS comes from `rustls` above.
+tokio-postgres       = { default-features = false, features = ["runtime"], version = "0.7" }
+tokio-postgres-rustls = "0.13"
 uuid                 = { features = ["serde", "v4", "v5"], version = "1" }
 # Window shell properties behind the taskbar relaunch identity; the version
 # GPUI's Windows platform already links.
@@ -234,13 +244,13 @@ zbus                 = { default-features = false, version = "5.19" }
 zeroize              = "=1.9.1"
 
 # Line tables keep file:line in backtraces and crash reports while cutting most
-# of the debug info a full build writes and links for herdr-gpui. Use
+# of the debug info a full build writes and links for sheprd-gpui. Use
 # `CARGO_PROFILE_DEV_DEBUG=full` for a debugger session that needs locals.
 [profile.dev]
 debug = "line-tables-only"
 
 # GPUI's build script embeds its own Windows manifest through embed-resource,
-# which would clash with Herdr's (crates/herdr-gpui/windows.manifest); this
+# which would clash with Herdr's (crates/sheprd-gpui/windows.manifest); this
 # no-op stands in for it. See crates/embed-resource.
 [patch.crates-io]
 embed-resource = { path = "crates/embed-resource" }

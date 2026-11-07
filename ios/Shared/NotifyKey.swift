@@ -1,6 +1,6 @@
 import CryptoKit
 import Foundation
-import HerdrRemoteCore
+import SheprdRemoteCore
 import Security
 
 /// The keys sealed alerts are opened with (`NotificationSeal`), one per

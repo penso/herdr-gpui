@@ -1,5 +1,5 @@
 import AppIntents
-import HerdrRemoteCore
+import SheprdRemoteCore
 
 /// Answers a chat's question from its Live Activity without opening the
 /// app. iOS runs a `LiveActivityIntent` in the app's process, which signs

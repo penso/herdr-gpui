@@ -1,4 +1,4 @@
-/* Shared mockup kit: a realistic Herdr UI window, video placeholder, shot tiles.
+/* Shared illustration kit: a Sheprd window, video placeholder, shot tiles.
    Pages theme the surroundings; the window itself follows data-theme. */
 .hm-app { --bg:#131518; --side:#191b1f; --fg:#d9dce1; --dim:#7a808a; --ln:rgba(255,255,255,.075); --sel:rgba(255,255,255,.07); --acc:#3dd6d0; --card:#1b1e23;
   background:var(--bg); color:var(--fg); border-radius:12px; overflow:hidden; font:12px/1.45 -apple-system, BlinkMacSystemFont, "Inter", sans-serif;

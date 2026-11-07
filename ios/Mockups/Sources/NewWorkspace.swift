@@ -41,7 +41,7 @@ struct NewWorkspaceForm: View {
                         NavigationLink {} label: {
                             LabeledContent("Project") {
                                 VStack(alignment: .trailing, spacing: 0) {
-                                    Text("herdr-gpui").foregroundStyle(.primary)
+                                    Text("sheprd").foregroundStyle(.primary)
                                     Text("~/code").font(.caption)
                                 }
                             }
@@ -55,7 +55,7 @@ struct NewWorkspaceForm: View {
                     } header: {
                         Text("Branch")
                     } footer: {
-                        Text("Created from main in ~/.herdr/worktrees/herdr-gpui.")
+                        Text("Created from main in ~/.herdr/worktrees/sheprd.")
                     }
                     Section("Agent") {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
@@ -102,9 +102,9 @@ private struct AgentTile: View {
 }
 
 struct NewWorkspacePicker: View {
-    private let recent: [(String, String)] = [("herdr-gpui", "~/code"), ("herdr", "~/code")]
+    private let recent: [(String, String)] = [("sheprd", "~/code"), ("herdr", "~/code")]
     private let folders: [(String, String)] = [
-        ("herdr-gpui-site", "~/code"), ("herdr-acp-bridge", "~/code/experiments"),
+        ("sheprd-site", "~/code"), ("herdr-acp-bridge", "~/code/experiments"),
         ("herdr-themes", "~/code/forks"), ("herdr-ios-spike", "~/Desktop"),
     ]
 
@@ -166,7 +166,7 @@ struct NewWorkspacePrompt: View {
                         GlassEffectContainer {
                             HStack(spacing: 8) {
                                 ChoiceChip(symbol: "laptopcomputer", text: "MacBook Pro")
-                                ChoiceChip(symbol: "folder", text: "herdr-gpui")
+                                ChoiceChip(symbol: "folder", text: "sheprd")
                                 ChoiceChip(symbol: "arrow.triangle.branch", text: "feat/share-extension")
                             }
                         }

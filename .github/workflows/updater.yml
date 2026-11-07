@@ -5,9 +5,9 @@ name: Updater Packaging
 on:
   pull_request:
     paths:
-      - 'crates/herdr-updater/**'
-      - 'crates/herdr-client/**'
-      - 'crates/herdr-protocol/**'
+      - 'crates/sheprd-updater/**'
+      - 'crates/sheprd-client/**'
+      - 'crates/sheprd-protocol/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
@@ -19,9 +19,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'crates/herdr-updater/**'
-      - 'crates/herdr-client/**'
-      - 'crates/herdr-protocol/**'
+      - 'crates/sheprd-updater/**'
+      - 'crates/sheprd-client/**'
+      - 'crates/sheprd-protocol/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
