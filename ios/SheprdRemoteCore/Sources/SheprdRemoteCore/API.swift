@@ -106,15 +106,27 @@ public enum API {
         /// The public key alerts are sealed to (`NotificationSeal`), as
         /// base64url X9.63 bytes.
         public let notifyKey: String?
+        /// Whether this phone keeps its Live Activities generic. Sent only
+        /// when true, so a phone on the default still registers with older
+        /// daemons, which refuse a key they do not know.
+        public let genericActivities: Bool
 
-        public init(pushToStart: String?, activities: [Activity], alert: String? = nil, notifyKey: String? = nil) {
+        public init(
+            pushToStart: String?,
+            activities: [Activity],
+            alert: String? = nil,
+            notifyKey: String? = nil,
+            genericActivities: Bool = false
+        ) {
             self.pushToStart = pushToStart
             self.activities = activities
             self.alert = alert
             self.notifyKey = notifyKey
+            self.genericActivities = genericActivities
         }
 
         enum CodingKeys: String, CodingKey {
+            case activityDetail = "activity_detail"
             case pushToStart = "push_to_start"
             case notifyKey = "notify_key"
             case alert
@@ -127,6 +139,9 @@ public enum API {
             try container.encode(activities, forKey: .activities)
             try container.encodeIfPresent(alert, forKey: .alert)
             try container.encodeIfPresent(notifyKey, forKey: .notifyKey)
+            if genericActivities {
+                try container.encode("generic", forKey: .activityDetail)
+            }
         }
     }
 }

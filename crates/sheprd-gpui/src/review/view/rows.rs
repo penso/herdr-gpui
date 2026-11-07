@@ -141,6 +141,11 @@ fn number(theme: &Theme, value: Option<u32>) -> Div {
 
 /// A small copy icon, for a header's row.
 pub(super) fn copy_button(theme: &Theme, line_height: f32) -> Div {
+    header_button(theme, line_height, "icons/copy.svg")
+}
+
+/// A small icon button, for a header's row.
+pub(super) fn header_button(theme: &Theme, line_height: f32, icon: &'static str) -> Div {
     div()
         .flex_none()
         .size(px(line_height))
@@ -150,12 +155,7 @@ pub(super) fn copy_button(theme: &Theme, line_height: f32) -> Div {
         .cursor_pointer()
         .rounded(px(crate::config::corners::CONTROL))
         .hover(|button| button.bg(rgb(theme.surface)))
-        .child(
-            svg()
-                .path("icons/copy.svg")
-                .size(px(12.))
-                .text_color(rgb(theme.muted)),
-        )
+        .child(svg().path(icon).size(px(12.)).text_color(rgb(theme.muted)))
 }
 
 /// The slot a note's number shows in, empty without one.

@@ -230,6 +230,24 @@ stays at the far right, as in `Editing server/purpose.ts… · 42s +1 more 11m 1
 Click the row to list the running steps in full, each with its own time; click
 again to close the list. It keeps the newest 16 and says how many more run. A chat from an older `sheprd-acp` has no step times.
 
+## Tool calls
+
+A folded tool call says what it did: the command, file, search, or sub-agent
+task. Click anywhere on its header to open or fold it. Screen readers hear the
+same expanded state and can use the Expand and Collapse actions.
+
+Opening a call shows each thing it reported as source: a command as shell, known
+arguments as JSON, and edits as a red and green diff with a little context and
+syntax colors. **Copy diff** or **Copy code** copies what is drawn, and
+**Copy original** gives the exact payload when the preview left part of it out.
+Output the app can't read as structure stays as plain text.
+
+A diff compares only the text the agent reported, so its line numbers are not
+the file's. When the agent didn't report a file's earlier text, as with a
+whole-file write, the card shows the written text and counts its lines without
+claiming any were removed. Changes too large to compare show their text before
+and after. A tool the app doesn't know keeps its own name.
+
 ## Sub-agents and background shells
 
 When the agent hands a task to a sub-agent or leaves a command running in the
@@ -327,6 +345,9 @@ The choice belongs to this pane and is bounded when the window shrinks. The
 original editor's cursor remains visible even if it needs more rows than chosen.
 Unusual full-screen dialogs may require the terminal view.
 Leaving the agent returns to the ordinary terminal.
+
+CLI logs keep only a tool's name and arguments, so the reader takes the command,
+file, search term, or task from the arguments of the tools it knows.
 
 If another window owns a larger terminal grid, **Activate to fit agent input**
 and **Fit input** let the normal window geometry update restore the editor and

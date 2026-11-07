@@ -157,6 +157,7 @@ fn home() -> Home {
         pull_requests: &pull_requests,
         tags: crate::control::tags::ComputerTags::new(["work"], 1_770_000_000_000),
         version: "20261106.1",
+        waiting: 1,
     })
 }
 

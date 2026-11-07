@@ -90,6 +90,7 @@ pub(super) async fn fragment(
     known(&state.hub.layout(), &pane)?;
     let text = read_screen(&state, &pane).await?;
     let layout = state.hub.layout();
+    state.mark_opened(&layout, &pane);
     let (workspace, terminal) = layout.terminal(&pane).ok_or(ApiError::NotFound)?;
     let row = terminal
         .panes

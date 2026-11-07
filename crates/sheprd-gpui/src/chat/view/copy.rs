@@ -35,10 +35,20 @@ pub(super) const CODE: RichCopy = RichCopy {
     label: "chat-copy-code-label",
     copied: "chat-copy-code-done",
 };
+pub(super) const DIFF: RichCopy = RichCopy {
+    name: "chat-copy-diff",
+    label: "chat-copy-diff-label",
+    copied: "chat-copy-diff-done",
+};
 pub(super) const LATEX: RichCopy = RichCopy {
     name: "chat-copy-latex",
     label: "chat-copy-latex-label",
     copied: "chat-copy-latex-done",
+};
+pub(super) const ORIGINAL: RichCopy = RichCopy {
+    name: "chat-copy-original",
+    label: "chat-copy-original-label",
+    copied: "chat-copy-original-done",
 };
 // keep-sorted end
 

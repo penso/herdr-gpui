@@ -10,7 +10,7 @@ use crate::direction::Logical;
 use crate::{
     config::{
         preferences::Preference,
-        remote::{Bind, Certificate, Edit, Privacy},
+        remote::{ActivityDetail, Bind, Certificate, Edit, Privacy},
     },
     i18n::{Localize, fl},
     remote::{Health, Supervisor, supervisor::Lease},
@@ -385,6 +385,33 @@ impl SettingsWindow {
                     !self.busy(),
                     on_value(cx, |this, privacy, _, cx| {
                         this.save_remote(Edit::Notifications(privacy), cx)
+                    }),
+                )),
+            )
+            .child(
+                ui::row(
+                    theme,
+                    "remote-live-activities",
+                    fl!("settings-remote-live-activities"),
+                )
+                .description(fl!("settings-remote-live-activities-note"))
+                .control(ui::segmented(
+                    theme,
+                    "remote-live-activities-control",
+                    &[
+                        (
+                            ActivityDetail::Detailed,
+                            fl!("settings-remote-live-activities-detailed"),
+                        ),
+                        (
+                            ActivityDetail::Generic,
+                            fl!("settings-remote-live-activities-generic"),
+                        ),
+                    ],
+                    Some(remote.live_activities),
+                    !self.busy(),
+                    on_value(cx, |this, detail, _, cx| {
+                        this.save_remote(Edit::LiveActivities(detail), cx)
                     }),
                 )),
             )

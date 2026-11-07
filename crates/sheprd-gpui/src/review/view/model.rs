@@ -6,6 +6,7 @@
 use super::{Layout, Review};
 use crate::review::diff::{Body, FileDiff, RowId, SplitRow};
 use gpui::{ListOffset, px};
+use std::path::{Path, PathBuf};
 
 /// One row of the list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -142,20 +143,45 @@ impl Review {
         self.top_item().and_then(|item| self.row_at(item))
     }
 
-    /// Where the editor opens for the row at the top of the diff: its file,
-    /// relative to the checkout as Git names it, and the line in the
+    /// The row `e` opens: the line clicked or selected while it is in view,
+    /// which is how a click points at a line, else the top of the diff.
+    pub(super) fn editor_row(&self) -> Option<RowId> {
+        self.selection
+            .map(|selection| RowId::Line {
+                file: selection.file,
+                line: selection.head.line,
+            })
+            .filter(|&row| self.in_view(row))
+            .or_else(|| self.top_row())
+    }
+
+    fn in_view(&self, row: RowId) -> bool {
+        let view = self.scroll.viewport_bounds();
+        self.position_of(row)
+            .and_then(|position| self.scroll.bounds_for_item(position))
+            .is_some_and(|bounds| bounds.intersects(&view))
+    }
+
+    /// Where the editor opens for `row`: its file, and the line in the
     /// changed file nearest that row. A removed line or a hunk header goes
-    /// to the next line the file still has.
-    pub(super) fn editor_spot(&self) -> Option<(&str, Option<u32>)> {
-        let row = self.top_row()?;
-        let file = self.loaded()?.diff.files.get(row.file())?;
-        let line = match row {
-            RowId::Header(_) => None,
-            RowId::Line { line, .. } => file
-                .lines()
-                .and_then(|lines| lines.iter().skip(line).find_map(|line| line.new)),
+    /// to the next line the file still has, and a file's header to its
+    /// first hunk. Git names the file from the top level the diff was read
+    /// from, which the review's own checkout need not hold: a worktree the
+    /// daemon made has only its key, and a space may sit in a subdirectory.
+    pub(super) fn editor_spot(&self, row: RowId) -> Option<(PathBuf, Option<u32>)> {
+        let loaded = self.loaded()?;
+        let file = loaded.diff.files.get(row.file())?;
+        let from = match row {
+            RowId::Header(_) => 0,
+            RowId::Line { line, .. } => line,
         };
-        Some((file.git_path(), line))
+        let line = file
+            .lines()
+            .and_then(|lines| lines.iter().skip(from).find_map(|line| line.new));
+        Some((
+            Path::new(&loaded.source.checkout).join(file.git_path()),
+            line,
+        ))
     }
 
     /// The file whose rows are at the top of the diff.

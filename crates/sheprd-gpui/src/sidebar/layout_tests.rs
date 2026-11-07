@@ -63,6 +63,8 @@ mod local_counts_chip;
 #[cfg(test)]
 mod mark_sizes;
 #[cfg(test)]
+mod minimal_pull_requests;
+#[cfg(test)]
 mod mod_places;
 #[cfg(test)]
 mod mutes;
@@ -614,6 +616,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         wsl_paste: None,
         editor_open: None,
         editor_panes: Vec::new(),
+        editor_returns: Vec::new(),
         teleport: None,
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,

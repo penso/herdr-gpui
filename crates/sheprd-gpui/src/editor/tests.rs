@@ -182,6 +182,25 @@ fn the_split_response_names_the_new_pane() {
 }
 
 #[test]
+fn a_closed_pane_falls_back_to_the_focused_one() {
+    let pane = |id: &str| {
+        serde_json::json!({
+            "pane_id": id, "workspace_id": "w0", "tab_id": "t0", "label": null,
+            "cwd": null, "foreground_cwd": null, "focused": false,
+            "right_click_passthrough": false
+        })
+    };
+    let mut shown = serde_json::to_value(crate::sidebar::layout_tests::snapshot(1)).unwrap();
+    shown["focused_pane_id"] = "w0:focused".into();
+    shown["panes"] = serde_json::json!([pane("w0:focused"), pane("w0:agent")]);
+    let snapshot = serde_json::from_value(shown).unwrap();
+    let opened = |beside| anchor(&snapshot, beside).map(|pane| pane.pane_id.as_str());
+    assert_eq!(opened(Some("w0:agent")), Some("w0:agent"));
+    assert_eq!(opened(Some("w0:closed")), Some("w0:focused"));
+    assert_eq!(opened(None), Some("w0:focused"));
+}
+
+#[test]
 fn media_files_are_left_to_the_system() {
     let dir = tempfile::tempdir().unwrap();
     for (name, editable) in [
@@ -199,6 +218,8 @@ fn media_files_are_left_to_the_system() {
     let metadata = std::fs::metadata(dir.path()).unwrap();
     assert!(!EditorTarget::editable(dir.path(), &metadata));
 }
+
+mod back;
 
 // The editor starts from a Unix shell; see `SUPPORTED`.
 #[cfg(unix)]

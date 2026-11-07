@@ -2,6 +2,7 @@ use super::*;
 use crate::controls::{COMMANDS, Command};
 use gpui::{Modifiers, TestAppContext, size};
 
+mod chords;
 mod en_xa;
 mod focus;
 
@@ -34,7 +35,7 @@ fn editor_shows_unbound_commands_and_cancels_without_changing_bindings(cx: &mut 
     view.read_with(cx, |view, cx| {
         let editor = view.menu.shortcut_editor.as_ref().unwrap();
         assert_eq!(editor.info.command, Command::ReloadConfig);
-        assert_eq!(editor.input.read(cx).text(), "");
+        assert_eq!(editor.input.read(cx).text(), "prefix-shift-r");
     });
     cx.simulate_keystrokes("escape");
     view.read_with(cx, |view, _| {

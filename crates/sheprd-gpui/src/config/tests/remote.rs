@@ -1,7 +1,7 @@
 use super::*;
 use crate::config::{
     preferences::Preference,
-    remote::{Bind, Certificate, Edit, Privacy},
+    remote::{ActivityDetail, Bind, Certificate, Edit, Privacy},
 };
 
 #[test]
@@ -13,7 +13,7 @@ fn remote_control_is_off_with_its_defaults() -> anyhow::Result<()> {
     assert_eq!(config.remote.port, 7443);
     assert_eq!(config.remote.bind, Bind::All);
     assert_eq!(config.remote.certificate, Certificate::Own);
-    assert_eq!(config.remote.notifications, Privacy::Generic);
+    assert_eq!(config.remote.notifications, Privacy::Excerpt);
     assert_eq!(config.remote.device_idle_days, 30);
     // The managed file documents the table without setting it.
     assert_eq!(
@@ -134,6 +134,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
         Edit::Certificate(files.clone()),
         Edit::KeepRunning(false),
         Edit::Notifications(Privacy::Excerpt),
+        Edit::LiveActivities(ActivityDetail::Generic),
         Edit::DeviceIdleDays(90),
         Edit::Presence(true),
     ] {
@@ -148,6 +149,7 @@ fn remote_edits_write_what_loading_reads() -> anyhow::Result<()> {
             device_idle_days: 90,
             enabled: true,
             keep_running: false,
+            live_activities: ActivityDetail::Generic,
             notifications: Privacy::Excerpt,
             port: 9443,
             presence: true,

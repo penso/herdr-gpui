@@ -64,8 +64,8 @@ targets:
           NSAllowsArbitraryLoads: true
         NSCameraUsageDescription: Sheprd reads the pairing QR code Sheprd shows on your computer, and takes photos you send to a chat.
         NSFaceIDUsageDescription: Sheprd asks for Face ID before a chat allows every tool call without asking.
-        NSMicrophoneUsageDescription: Sheprd listens while you dictate a prompt, transcribing it on your phone.
-        NSSpeechRecognitionUsageDescription: Sheprd transcribes your dictated prompts on your phone.
+        NSMicrophoneUsageDescription: Sheprd listens while you dictate a prompt or talk to it, transcribing it on your phone.
+        NSSpeechRecognitionUsageDescription: Sheprd transcribes your dictated prompts and spoken commands on your phone.
         NSLocalNetworkUsageDescription: Sheprd talks to Sheprd on your computers over your local network.
         NSBonjourServices: [_herdr-remote._tcp]
         NSBluetoothAlwaysUsageDescription: Sheprd finds your computers nearby over Bluetooth when you pair one, and, when you turn it on, tells them you are near so they hold alerts while you are at the desk.

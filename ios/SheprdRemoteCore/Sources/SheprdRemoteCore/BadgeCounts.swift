@@ -1,10 +1,10 @@
 import Foundation
 
 /// The app icon's badge across paired computers. Each computer counts only
-/// its own waiting questions, so a push carries that count and the badge
-/// shows the sum of the last one from each.
+/// its own agents that need an answer or finished unseen, so a push carries
+/// that count and the badge shows the sum of the last one from each.
 public struct BadgeCounts: Codable, Hashable, Sendable {
-    /// Waiting questions by computer (its CA fingerprint in hex).
+    /// Agents wanting the user, by computer (its CA fingerprint in hex).
     public private(set) var counts: [String: Int] = [:]
 
     public init(counts: [String: Int] = [:]) {

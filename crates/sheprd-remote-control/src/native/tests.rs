@@ -106,7 +106,7 @@ impl Session {
         let (outbound, from_live) = mpsc::channel(OUTBOUND_QUEUE);
         tokio::spawn(live::run(
             state.clone(),
-            token,
+            token.into(),
             device.clone(),
             inbound,
             outbound,

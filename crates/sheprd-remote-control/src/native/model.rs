@@ -32,7 +32,7 @@ pub(crate) struct Home {
     pub(crate) fingerprint: String,
     /// Whether the Herdr daemon is reachable now.
     pub(crate) connected: bool,
-    /// Permission requests waiting across every chat: the app's badge.
+    /// Agents that need an answer or finished unseen: the app's badge.
     pub(crate) waiting: usize,
     /// This computer's CPU and memory; absent until first read, and from
     /// older servers.
@@ -339,6 +339,8 @@ pub(crate) struct Sources<'a> {
     pub(crate) pull_requests: &'a PullRequests,
     pub(crate) tags: ComputerTags,
     pub(crate) version: &'a str,
+    /// The panes wanting the user, from [`crate::web::State::attention`].
+    pub(crate) waiting: usize,
 }
 
 impl Home {
@@ -352,8 +354,8 @@ impl Home {
             pull_requests,
             tags,
             version,
+            waiting,
         } = sources;
-        let waiting = summaries.values().map(|summary| summary.questions).sum();
         let workspaces = layout
             .workspaces
             .iter()

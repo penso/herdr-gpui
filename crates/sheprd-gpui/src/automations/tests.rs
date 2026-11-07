@@ -13,6 +13,7 @@ mod actions;
 mod autostart;
 mod branding;
 mod en_xa;
+mod local_update;
 mod notify;
 mod parse;
 mod review;

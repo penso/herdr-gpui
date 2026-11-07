@@ -1,5 +1,6 @@
 use super::*;
 use crate::auth::session::{CHALLENGE_TTL_MS, MAX_CHALLENGES_PER_DEVICE, SESSION_TTL_MS};
+use secrecy::ExposeSecret as _;
 
 /// A store holding device 1, with its key.
 fn store(dir: &Path) -> (Devices, DeviceId, SigningKey) {
@@ -23,7 +24,10 @@ fn a_signed_challenge_starts_a_session() {
         .unwrap();
     assert_eq!(session.device, id);
     assert_eq!(session.expires_ms, T0 + SESSION_TTL_MS);
-    assert_eq!(sessions.authenticate(&session.token, T0), Some(id));
+    assert_eq!(
+        sessions.authenticate(session.token.expose_secret(), T0),
+        Some(id)
+    );
 }
 
 #[test]
@@ -188,12 +192,15 @@ fn a_session_lasts_twelve_hours() {
     let device = pair(&mut auth, &key, T0);
     let session = sign_in(&mut auth, &key, &device, T0);
     assert_eq!(
-        auth.authenticate(&session.token, T0 + SESSION_TTL_MS - 1),
+        auth.authenticate(session.token.expose_secret(), T0 + SESSION_TTL_MS - 1),
         Some(device)
     );
-    assert_eq!(auth.authenticate(&session.token, T0 + SESSION_TTL_MS), None);
+    assert_eq!(
+        auth.authenticate(session.token.expose_secret(), T0 + SESSION_TTL_MS),
+        None
+    );
     // Gone for good, even at an earlier clock.
-    assert_eq!(auth.authenticate(&session.token, T0), None);
+    assert_eq!(auth.authenticate(session.token.expose_secret(), T0), None);
 }
 
 #[test]
@@ -227,8 +234,11 @@ fn revoking_ends_the_devices_sessions_and_challenges() {
     let pending = auth.challenge(client, &device, T0).unwrap();
 
     assert!(auth.revoke(&device).unwrap());
-    assert_eq!(auth.authenticate(&session.token, T0), None);
-    assert_eq!(auth.authenticate(&kept.token, T0), Some(other));
+    assert_eq!(auth.authenticate(session.token.expose_secret(), T0), None);
+    assert_eq!(
+        auth.authenticate(kept.token.expose_secret(), T0),
+        Some(other)
+    );
     let error = auth
         .verify(&pending.id, &sign(&key, &pending.nonce), T0)
         .unwrap_err();

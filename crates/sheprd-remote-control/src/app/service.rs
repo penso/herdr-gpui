@@ -57,8 +57,9 @@ pub struct Plan {
 
 impl Plan {
     /// `serve --state-dir DIR --port N --bind ADDR [--cert F --key F]
-    /// --privacy generic|excerpt --device-idle-days N [--herdr-socket P]
-    /// [--chat-dir D] [--wsl-catalog F] [--core-socket P --core-session S]`.
+    /// --privacy generic|excerpt --device-idle-days N [--live-activities
+    /// generic] [--herdr-socket P] [--chat-dir D] [--wsl-catalog F]
+    /// [--core-socket P --core-session S]`.
     pub fn args(&self) -> Vec<OsString> {
         let config = &self.config;
         let mut args: Vec<OsString> = vec![
@@ -84,6 +85,14 @@ impl Plan {
             "--device-idle-days".into(),
             config.device_idle_days.to_string().into(),
         ]);
+        // The default is left out, so the service definition, and with it
+        // the running daemon, stays as it was for everyone who keeps it.
+        if !config.live_activities.is_detailed() {
+            args.extend([
+                "--live-activities".into(),
+                config.live_activities.name().into(),
+            ]);
+        }
         if let Some(socket) = &self.herdr_socket {
             args.extend(["--herdr-socket".into(), socket.clone().into()]);
         }

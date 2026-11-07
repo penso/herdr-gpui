@@ -149,14 +149,17 @@ enum DictationError: Error, LocalizedError {
 /// The microphone, converted to the transcriber's format. Not actor
 /// isolated: the tap runs on the audio thread, and its block must not
 /// inherit the main actor.
-private final class AudioFeed: @unchecked Sendable {
+final class AudioFeed: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let format: AVAudioFormat
     private let feeding: AsyncStream<AnalyzerInput>.Continuation
+    /// Called on the audio thread with each buffer's loudness, 0 to 1.
+    private let level: (@Sendable (Float) -> Void)?
 
-    init(format: AVAudioFormat, into feeding: AsyncStream<AnalyzerInput>.Continuation) {
+    init(format: AVAudioFormat, into feeding: AsyncStream<AnalyzerInput>.Continuation, level: (@Sendable (Float) -> Void)? = nil) {
         self.format = format
         self.feeding = feeding
+        self.level = level
     }
 
     func start() throws {
@@ -165,7 +168,9 @@ private final class AudioFeed: @unchecked Sendable {
         guard let converter = AVAudioConverter(from: source, to: format) else { throw DictationError.noConverter }
         let format = format
         let feeding = feeding
+        let level = level
         input.installTap(onBus: 0, bufferSize: 4096, format: source) { buffer, _ in
+            level?(Self.loudness(buffer))
             let ratio = format.sampleRate / source.sampleRate
             let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 1
             guard let converted = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return }
@@ -186,6 +191,15 @@ private final class AudioFeed: @unchecked Sendable {
         }
         engine.prepare()
         try engine.start()
+    }
+
+    /// The buffer's root mean square, on a scale speech fills.
+    private static func loudness(_ buffer: AVAudioPCMBuffer) -> Float {
+        guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
+        let count = Int(buffer.frameLength)
+        var sum: Float = 0
+        for index in 0..<count { sum += samples[index] * samples[index] }
+        return min((sum / Float(count)).squareRoot() * 8, 1)
     }
 
     func stop() {

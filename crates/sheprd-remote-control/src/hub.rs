@@ -91,6 +91,8 @@ pub(crate) struct Hub {
     primary: watch::Receiver<Arc<Layout>>,
     program: Option<PathBuf>,
     sessions: Arc<sessions::Sessions>,
+    /// Where new checkouts go for work on a core.
+    worktrees: Option<PathBuf>,
 }
 
 impl Hub {
@@ -143,7 +145,14 @@ impl Hub {
             primary: daemon_layout,
             program: locate_program(),
             sessions,
+            worktrees: core::worktree::root(),
         });
+        // A daemon started from a copy of its binary finds no program, and
+        // only a phone creating work would ever find out.
+        match hub.program() {
+            Some(program) => tracing::info!(program = %program.display(), "Chat program found"),
+            None => tracing::warn!("{}", Error::ProgramMissing),
+        }
         let follower = hub.clone();
         tokio::spawn(async move { follower.follow().await });
         Ok(hub)
@@ -219,6 +228,7 @@ impl Hub {
             layout: receiver,
             program: None,
             sessions: sessions::Sessions::offline(),
+            worktrees: None,
         }
     }
 
@@ -300,7 +310,7 @@ impl Hub {
     /// with a chat running `agent` in it, in the Herdr 1 `session` this
     /// daemon follows by that name (the primary otherwise). While a core answers the chat
     /// starts there, in its unlisted group: the core has no workspaces or
-    /// worktrees, so a branch is refused rather than sent to Herdr 1.
+    /// worktrees, so a branch's checkout is made here, never by Herdr 1.
     pub(crate) async fn create_workspace(
         &self,
         cwd: &str,
@@ -315,11 +325,15 @@ impl Hub {
         }
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         if let Some(core) = self.active_core() {
-            if branch.is_some() {
-                return Err(core::Error::Unsupported.into());
-            }
             let (cwd, program) = (cwd.to_owned(), program.to_owned());
-            let pane = on_core(move || core.open_chat(agent, &program, &cwd)).await?;
+            let (branch, root) = (branch.map(str::to_owned), self.worktrees.clone());
+            let pane = on_core(move || match branch {
+                Some(branch) => {
+                    core.open_worktree_chat(agent, &program, &cwd, &branch, root.as_deref())
+                }
+                None => core.open_chat(agent, &program, &cwd),
+            })
+            .await?;
             return Ok(CreatedWorkspace {
                 workspace: core::UNLISTED.to_owned(),
                 pane,

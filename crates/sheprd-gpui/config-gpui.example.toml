@@ -264,7 +264,9 @@ project_roots = []
 # or a function key F1 through F24. Sheprd > Keyboard Shortcuts also edits,
 # unbinds, and resets them.
 # Herdr's own [keys] in config.toml (prefix chords included) add to these
-# defaults; a command named here keeps only the keystrokes listed here.
+# defaults; a command named here keeps only what is listed here. List a prefix
+# chord as prefix- and the key typed after the prefix, so to free Cmd-W and keep
+# Herdr's default chord for Close Pane: close_pane = "prefix-x".
 # The examples below use the macOS defaults. Linux and Windows have their own
 # Ctrl+Shift defaults (not Super or Win): new_tab = "ctrl-shift-t",
 # new_window = "ctrl-alt-n", close_window = "ctrl-alt-w",

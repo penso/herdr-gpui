@@ -12,19 +12,25 @@
 //! Anything else opens in the system's default application instead.
 //!
 //! When the editor is Neovim it listens on a private socket, and later
-//! files for the same tab open in that pane (see [`nvim`]).
+//! files for the same tab open in that pane (see [`nvim`]). An editor opened
+//! from a review brings that review back when it quits (see [`back`]).
 
+mod back;
 mod error;
 mod nvim;
 
 // i18n: migrated
+pub(crate) use back::Return;
 pub(crate) use error::Error;
 
-use crate::{NavigationTarget, SheprdWindow};
+use crate::{NavigationTarget, SheprdWindow, browser::TabId};
 use gpui::Context;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sheprd_client::{Method, protocol::ClientPaneInputEvent};
+use sheprd_client::{
+    Method,
+    protocol::{ClientPaneInputEvent, ClientShellPane, ClientShellSnapshot},
+};
 use std::path::{Path, PathBuf};
 
 /// Whether this build starts the editor: the typed line runs POSIX `sh`,
@@ -198,6 +204,20 @@ pub(crate) struct Job {
     request: String,
     line: String,
     socket: Option<PathBuf>,
+    page: Option<TabId>,
+}
+
+/// The pane an editor opens beside: `beside` while it is still open, as an
+/// agent's pane may not be by the time its review is read, else the focused
+/// pane.
+fn anchor<'a>(
+    snapshot: &'a ClientShellSnapshot,
+    beside: Option<&str>,
+) -> Option<&'a ClientShellPane> {
+    let pane = |id: &str| snapshot.panes.iter().find(|pane| pane.pane_id == id);
+    beside
+        .and_then(pane)
+        .or_else(|| snapshot.focused_pane_id.as_deref().and_then(pane))
 }
 
 /// The new pane a `pane.split` response names.
@@ -221,11 +241,23 @@ impl SheprdWindow {
         beside: Option<&str>,
         cx: &mut Context<Self>,
     ) {
+        self.open_in_editor_from(target, beside, None, cx);
+    }
+
+    /// Opens `target` as [`Self::open_in_editor`] does, for `page`, the tab
+    /// that comes back when the editor quits.
+    pub(crate) fn open_in_editor_from(
+        &mut self,
+        target: &EditorTarget,
+        beside: Option<&str>,
+        page: Option<TabId>,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(reused) = self.reusable_editor(beside) {
-            self.reuse_editor(reused, target.clone(), beside.map(str::to_owned), cx);
+            self.reuse_editor(reused, target.clone(), beside.map(str::to_owned), page, cx);
             return;
         }
-        if let Err(error) = self.start_editor(target, beside) {
+        if let Err(error) = self.start_editor(target, beside, page) {
             self.editor_failed(target, error, cx);
         }
         cx.notify();
@@ -264,11 +296,7 @@ impl SheprdWindow {
                     .iter()
                     .any(|pane| pane.pane_id == editor.pane_id)
         });
-        let tab = beside
-            .or(snapshot.focused_pane_id.as_deref())
-            .and_then(|id| snapshot.panes.iter().find(|pane| pane.pane_id == id))?
-            .tab_id
-            .clone();
+        let tab = anchor(&snapshot, beside)?.tab_id.clone();
         self.editor_panes
             .iter()
             .rev()
@@ -292,6 +320,7 @@ impl SheprdWindow {
         editor: EditorPane,
         target: EditorTarget,
         beside: Option<String>,
+        page: Option<TabId>,
         cx: &mut Context<Self>,
     ) {
         let socket = editor.socket.clone();
@@ -314,6 +343,12 @@ impl SheprdWindow {
                     }
                 };
                 if !gone {
+                    this.note_editor_return(
+                        &editor.endpoint_id,
+                        &editor.boot,
+                        &editor.pane_id,
+                        page,
+                    );
                     this.navigate_endpoint(
                         &editor.endpoint_id,
                         NavigationTarget::Pane(&editor.pane_id),
@@ -322,7 +357,7 @@ impl SheprdWindow {
                     return;
                 }
                 this.editor_panes.retain(|kept| *kept != editor);
-                if let Err(error) = this.start_editor(&target, beside.as_deref()) {
+                if let Err(error) = this.start_editor(&target, beside.as_deref(), page) {
                     this.editor_failed(&target, error, cx);
                 }
                 cx.notify();
@@ -331,7 +366,12 @@ impl SheprdWindow {
         .detach();
     }
 
-    fn start_editor(&mut self, target: &EditorTarget, beside: Option<&str>) -> crate::Result<()> {
+    fn start_editor(
+        &mut self,
+        target: &EditorTarget,
+        beside: Option<&str>,
+        page: Option<TabId>,
+    ) -> crate::Result<()> {
         if self.editor_open.is_some() && self.editor_current() {
             return Err(Error::Busy.into());
         }
@@ -350,10 +390,7 @@ impl SheprdWindow {
             .as_deref()
             .filter(|_| self.live.status.is_connected())
             .ok_or(crate::Error::NotConnected)?;
-        let pane = beside
-            .or(snapshot.focused_pane_id.as_deref())
-            .and_then(|id| snapshot.panes.iter().find(|pane| pane.pane_id == id))
-            .ok_or(Error::NoPane)?;
+        let pane = anchor(snapshot, beside).ok_or(Error::NoPane)?;
         let cwd = pane
             .foreground_cwd
             .clone()
@@ -385,6 +422,7 @@ impl SheprdWindow {
             request,
             line,
             socket,
+            page,
         });
         Ok(())
     }
@@ -442,6 +480,7 @@ impl SheprdWindow {
             });
         match typed {
             Ok(pane) => {
+                self.note_editor_return(&job.endpoint_id, &job.boot, &pane, job.page);
                 // Remembered whatever the editor turns out to be: a socket
                 // nothing listens on is found out, and forgotten, on reuse.
                 if let Some(socket) = job.socket {

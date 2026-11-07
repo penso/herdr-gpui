@@ -9,5 +9,6 @@ struct SheprdRemoteWidgetsBundle: WidgetBundle {
         AttentionWidget()
         BoardControl()
         NewWorkspaceControl()
+        TalkControl()
     }
 }

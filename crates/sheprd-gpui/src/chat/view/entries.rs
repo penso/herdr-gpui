@@ -5,7 +5,7 @@
 use super::{
     super::{
         chats::ChatPane,
-        prepared::{Body, Part, ToolSummary, folded_thought, notice_label, tool_header, tool_text},
+        prepared::{Body, Part, ToolSummary, folded_thought, notice_label, tool_header},
         rich::{Block, Inline},
         selection::{Cell, Region},
         visual::Visuals,
@@ -22,6 +22,7 @@ use sheprd_chat_protocol::{
     ActivityState, Entry, EntryKind, NoticeLevel, Tool, ToolKind, ToolStatus,
 };
 
+mod previews;
 mod questions;
 mod steps;
 use steps::steps_label;
@@ -357,6 +358,11 @@ impl SheprdWindow {
         let header = div()
             .id(("chat-tool", entry.0))
             .debug_selector(move || format!("chat-tool-{}", entry.0))
+            .aria_label(fl!(
+                "rich-tools-details",
+                kind = tool_kind(tool.kind),
+                label = tool_header(&tool.title)
+            ))
             .flex()
             .items_center()
             .gap(px(6.))
@@ -447,34 +453,17 @@ impl SheprdWindow {
                                 location.clone(),
                                 cx,
                             )
-                        }))
-                        .children(tool.content.iter().enumerate().filter_map(|(index, item)| {
-                            tool_text(item).map(|text| {
-                                // Keep the full retained output; long unbroken lines
-                                // scroll horizontally instead of disappearing.
-                                div()
-                                    .id(SharedString::from(format!(
-                                        "chat-tool-content-{}-{index}",
-                                        entry.0
-                                    )))
-                                    .debug_selector(move || {
-                                        format!("chat-tool-content-{}-{index}", entry.0)
-                                    })
-                                    .w_full()
-                                    .overflow_x_scroll()
-                                    .py(px(3.))
-                                    .child(self.render_chat_text(
-                                        pane_id,
-                                        entry,
-                                        Region::ToolContent,
-                                        Cell::block(index),
-                                        text,
-                                        cx,
-                                    ))
-                            })
                         })),
                 )
-            });
+            })
+            .children(
+                summary
+                    .filter(|_| expanded)
+                    .into_iter()
+                    .flat_map(|summary| {
+                        self.render_chat_tool_previews(pane_id, entry, summary, visuals, cx)
+                    }),
+            );
         let mut row = div().flex().flex_col().gap(px(2.));
         if let Some(indent) = indent {
             row = row.pl(px(indent.header));

@@ -93,6 +93,9 @@ public struct Home: Codable, Hashable, Sendable {
         public var chats: [ChatRow]
         public var terminals: [TerminalRow]
 
+        /// Its pull request is merged, so the work here is done.
+        public var merged: Bool { pullRequest?.tone == .merged }
+
         enum CodingKeys: String, CodingKey {
             case id, label, branch, cwd, worktree, session, chats, terminals
             case pullRequest = "pull_request"

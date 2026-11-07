@@ -33,6 +33,11 @@ fn keyboard_shortcuts_and_the_editor_show_only_messages_under_en_xa() {
             view.edit_shortcut(info(Command::ReloadConfig), window, cx)
         });
         draw(cx);
+        // The field holds the command's shortcuts as the config file spells them.
+        let data = view.read_with(cx, |view, _| {
+            let entries = view.keymap().entries(Command::ReloadConfig);
+            data.iter().cloned().chain(entries).collect::<Vec<_>>()
+        });
         assert_translated("Keyboard Shortcuts > Edit", &recorder.take(), &data);
     });
 }

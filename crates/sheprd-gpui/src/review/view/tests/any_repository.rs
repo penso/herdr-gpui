@@ -3,7 +3,7 @@
 //! is found from that directory, as its pull request already is; a folder
 //! outside any repository still has nothing to review.
 use super::{SheprdWindow, State, window};
-use crate::{browser::Location, pull_request::Input};
+use crate::{browser::Location, pull_request::Input, review::diff::RowId};
 use gpui::{Entity, VisualTestContext};
 use sheprd_client::protocol::ClientShellWorktree;
 use std::{
@@ -106,10 +106,19 @@ fn review(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> (Input, Ve
     (checkout, files)
 }
 
+/// Where the editor would open the review's first file, as Git found it.
+fn editor_path(view: &Entity<SheprdWindow>, cx: &mut VisualTestContext) -> PathBuf {
+    let path = view.read_with(cx, |view, _| {
+        let review = view.reviews.values().next().unwrap();
+        review.editor_spot(RowId::Header(0)).unwrap().0
+    });
+    path.canonicalize().unwrap()
+}
+
 #[gpui::test]
 fn a_space_in_a_cloned_repository_is_reviewed_from_its_directory(cx: &mut gpui::TestAppContext) {
     let root = tempfile::tempdir().unwrap();
-    let (_, space) = clone(root.path());
+    let (top, space) = clone(root.path());
     let (view, cx) = window(cx, None);
     space_in(&view, cx, &space, Some("main"), None);
     let (checkout, files) = review(&view, cx);
@@ -124,6 +133,10 @@ fn a_space_in_a_cloned_repository_is_reviewed_from_its_directory(cx: &mut gpui::
     );
     // Read from the repository's top level, not the subdirectory.
     assert_eq!(files, ["src/lib.rs"]);
+    assert_eq!(
+        editor_path(&view, cx),
+        top.canonicalize().unwrap().join("src/lib.rs")
+    );
 }
 
 #[gpui::test]
@@ -149,6 +162,11 @@ fn a_worktree_herdr_made_is_still_reviewed_by_its_daemon_key(cx: &mut gpui::Test
         "daemon metadata wins, and the directory is never trusted"
     );
     assert_eq!(files, ["src/lib.rs"]);
+    // The review keeps no path of its own, yet `e` still finds the file.
+    assert_eq!(
+        editor_path(&view, cx),
+        clone.canonicalize().unwrap().join("src/lib.rs")
+    );
 }
 
 #[gpui::test]

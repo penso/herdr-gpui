@@ -34,7 +34,7 @@ final class NearbyClient: NSObject, URLSessionDelegate, Sendable {
         guard let http = response as? HTTPURLResponse else { throw RemoteError.notHTTP }
         guard http.statusCode == 200 else {
             if http.statusCode == 409 { throw NearbyFailure.notPairing }
-            throw RemoteError.status(http.statusCode, String(decoding: data.prefix(300), as: UTF8.self))
+            throw RemoteError.status(http.statusCode, Refusal.text(status: http.statusCode, body: data))
         }
         return try JSONDecoder().decode(Answer.self, from: data)
     }

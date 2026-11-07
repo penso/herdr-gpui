@@ -1,5 +1,5 @@
 use super::*;
-use crate::push::throttle::{CHAT_INTERVAL_MS, HOUR_MS, MAX_PER_HOUR};
+use crate::push::throttle::{CHAT_INTERVAL_MS, HOUR_MS, MAX_CLEARS_PER_HOUR, MAX_PER_HOUR};
 
 fn notification(pane: &str, kind: Kind, body: &str) -> Notification {
     Notification {
@@ -139,4 +139,46 @@ fn memory_stays_bounded() {
     assert!(throttle.remembered() <= MAX_PER_HOUR);
     throttle.due(10_000 * 1_000 + HOUR_MS);
     assert_eq!(throttle.remembered(), 0);
+}
+
+fn clear(chat: &str) -> Notification {
+    Notification {
+        clear: true,
+        ..notification(chat, Kind::Question, "")
+    }
+}
+
+#[test]
+fn clears_never_spend_what_questions_need() {
+    let mut throttle = Throttle::default();
+    for index in 0..MAX_CLEARS_PER_HOUR {
+        let chat = format!("clear-{index}");
+        assert!(throttle.offer(clear(&chat), index as u64).is_some());
+    }
+    let late = MAX_CLEARS_PER_HOUR as u64;
+    assert!(throttle.offer(clear("more"), late).is_none());
+    let question = notification("asking", Kind::Question, "");
+    assert!(throttle.offer(question, late).is_some());
+}
+
+#[test]
+fn alerts_never_spend_what_clears_need() {
+    let mut throttle = Throttle::default();
+    for index in 0..MAX_PER_HOUR {
+        let chat = format!("alert-{index}");
+        let question = notification(&chat, Kind::Question, "");
+        assert!(throttle.offer(question, index as u64).is_some());
+    }
+    assert!(throttle.offer(clear("a"), MAX_PER_HOUR as u64).is_some());
+}
+
+#[test]
+fn the_clear_cap_frees_up_after_an_hour() {
+    let mut throttle = Throttle::default();
+    for index in 0..MAX_CLEARS_PER_HOUR {
+        let chat = format!("clear-{index}");
+        assert!(throttle.offer(clear(&chat), 0).is_some());
+    }
+    assert!(throttle.offer(clear("more"), HOUR_MS - 1).is_none());
+    assert!(throttle.offer(clear("more"), HOUR_MS).is_some());
 }

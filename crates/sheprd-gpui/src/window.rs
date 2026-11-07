@@ -202,6 +202,8 @@ pub(crate) struct SheprdWindow {
     pub(crate) editor_open: Option<crate::editor::Job>,
     /// Editor panes whose Neovim later files open in.
     pub(crate) editor_panes: Vec<crate::editor::EditorPane>,
+    /// Pages to bring back when the editor panes opened from them quit.
+    pub(crate) editor_returns: Vec<crate::editor::Return>,
     pub(crate) endpoints: Vec<endpoint::Endpoint>,
     /// A prompt fanned out to several agents; once launched it outlives its
     /// dialog so the lanes can be compared later.
@@ -680,6 +682,7 @@ impl SheprdWindow {
             self.poll_cloud_setup_tab(cx);
         }
         self.poll_editor_open(cx);
+        self.poll_editor_returns(window, cx);
         self.poll_worktree_source(cx);
         self.poll_hover_menu(std::time::Instant::now(), window, cx);
         if self.tick_flash(std::time::Instant::now()) {

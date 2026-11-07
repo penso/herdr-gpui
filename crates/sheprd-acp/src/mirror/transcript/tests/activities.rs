@@ -1,4 +1,4 @@
-use sheprd_chat_protocol::{ActivityKind, ActivityState};
+use sheprd_chat_protocol::{ActivityKind, ActivityState, ToolKind};
 
 use super::*;
 
