@@ -1,0 +1,28 @@
+[package]
+description            = "Sheprd in a window laid out by Moonframe"
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-moonframe"
+publish                = false
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "sheprd-moonframe"
+path = "src/main.rs"
+
+[dependencies]
+# `acp` runs the agent behind the sparkles (the built-in `feedback` mod).
+moonframe               = { features = ["acp"], workspace = true }
+sheprd-gpui.path        = "../sheprd-gpui"
+
+[features]
+# Writes the app's own rendered frame to `MOONFRAME_CAPTURE`, for checks
+# where the session has no screen recording permission.
+capture = ["moonframe/capture"]
+# Sends the input in `SPIKE_DRIVE` to the view, for native checks. Turns on
+# `integration-test`, so never make it a default.
+drive = ["sheprd-gpui/integration-test"]

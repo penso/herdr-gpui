@@ -1,6 +1,11 @@
 default:
     @just --list
 
+# Sheprd in a Moonframe window, on your settings and daemon: quit Sheprd first.
+run-moonframe *args:
+    cargo build --locked --release -p sheprd-acp -p sheprd-automate
+    cargo run --locked --release -p sheprd-moonframe -- {{args}}
+
 # Launch the bundle so macOS reads Sheprd's identity and privacy declarations.
 run *args:
     #!/usr/bin/env bash

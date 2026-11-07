@@ -1,0 +1,13 @@
+# The agent behind the sparkles (the built-in `feedback` mod). Kept here, not
+# inherited: agents work in the repository holding this file, and the built-in
+# one sits in Cargo's cache of Moonframe. An installed app uses the user's
+# folder instead.
+interval = 0.25
+kind     = "native"
+
+[settings]
+agent = "claude"
+# Only the sparkles may start agents.
+starters = ["feedback"]
+# Agents read freely and ask before anything else, in the dialog.
+allow = { feedback = "read" }

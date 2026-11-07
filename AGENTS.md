@@ -31,6 +31,7 @@ Closing or detaching the GUI must leave the daemons and their terminals running.
 | `crates/sheprd-core-client` | herdr-core (`hc`, Herdr 2): endpoint discovery, the framed JSON-RPC connection worker, credit-flowed terminal and event streams, starting a core, and its `sheprd-backend` implementation; no GPUI |
 | `crates/sheprd-terminal` | The terminal emulator for herdr-core's raw byte streams (alacritty_terminal): bytes in, `sheprd-protocol` cells and damage out, and semantic input encoded for the program's modes; no GPUI or I/O |
 | `crates/sheprd-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
+| `crates/sheprd-moonframe` | All of `sheprd-gpui`'s main view in a window Moonframe lays out from `app/main.luau`, with the sparkles to ask an agent for changes (`just run-moonframe`). Early: the control socket, system notifications, links, the updater, and the app menus are not hosted yet |
 | `crates/sheprd-control-protocol` | The control socket between `sheprd <command>` and the running app: request and response types, bounds, and the Unix socket or named pipe; no GPUI |
 | `crates/sheprd-commands` | The command catalog: each command's name, default shortcuts per platform, and the daemon request it becomes against a snapshot; no GPUI (the app binds the keys and runs window commands) |
 | `crates/sheprd-usage` | Plan usage of AI services on a host: the providers, their probes and sign-ins, the registry, and the read worker; no GPUI (the app draws the status bar and panel) |
