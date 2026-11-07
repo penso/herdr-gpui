@@ -1,8 +1,7 @@
 use super::{Direction, PaletteKey};
-use gpui::Keystroke;
 
 fn key(text: &str) -> Option<PaletteKey> {
-    PaletteKey::of(&Keystroke::parse(text).unwrap())
+    PaletteKey::of(&crate::keymap::parse_keystroke(text).unwrap())
 }
 
 #[test]

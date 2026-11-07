@@ -160,7 +160,7 @@ Then install the latest stable release:
 
 | Platform | Command |
 | --- | --- |
-| macOS | `brew install penso/tap/herdr-gpui` |
+| macOS | `brew install sheprd-labs/tap/sheprd` |
 | Linux (APT, DNF or pacman) | `curl -fsSL https://sheprd.org/install.sh \| sh` |
 | Windows (PowerShell) | `irm https://sheprd.org/install.ps1 \| iex` |
 | iPhone and iPad (beta) | Join on TestFlight: [sheprd.org/testflight](https://sheprd.org/testflight/) |
@@ -179,25 +179,21 @@ Requires [Homebrew](https://brew.sh/) and macOS 14.2 Sonoma or newer, on Apple
 Silicon or Intel. The cask installs the signed, notarized universal app.
 
 ```sh
-brew install penso/tap/herdr-gpui
-open /Applications/Herdr.app
+brew install sheprd-labs/tap/sheprd
+open /Applications/Sheprd.app
 ```
 
-`brew install` resolves casks directly, so `--cask` is not required. To update it
-later, or to install by its short name, tap once first:
+`brew install` resolves casks directly, so `--cask` is not required. Use the full
+name: it taps `sheprd-labs/tap` and trusts the cask for you, which Homebrew requires
+for any non-official tap. `brew install sheprd` alone needs `brew trust --cask
+sheprd-labs/tap/sheprd` first.
 
-```sh
-brew tap penso/tap
-brew install herdr-gpui
-```
-
-The stable cask token remains `herdr-gpui` in `penso/tap`. It displays **Sheprd**
-and installs the `Sheprd.app` payload at the legacy `Herdr.app` target so existing
-clients can restart in place. The cask is published from the
-[tap](https://github.com/penso/homebrew-tap) by the
-release workflow. A cask install updates itself through Homebrew: the in-app
-updater detects that Homebrew owns the bundle and runs `brew upgrade --cask
-herdr-gpui` for you, so Homebrew's records stay correct. If its metadata is stale,
+The cask is published to the [tap](https://github.com/sheprd-labs/homebrew-tap) by
+the release workflow. Installs from the older `penso/tap` keep upgrading as
+`herdr-gpui` at `Herdr.app`, because every release publishes there too. A cask
+install updates itself through Homebrew: the in-app updater detects that Homebrew
+owns the bundle and runs `brew upgrade --cask` on its cask for you, so Homebrew's
+records stay correct. If its metadata is stale,
 the updater runs `brew update` and retries once. The update panel shows progress
 throughout. macOS `.dmg`, Linux packages, and Windows installers
 and `.zip`s are also published on [Releases](https://github.com/sheprd-labs/sheprd/releases).
@@ -303,7 +299,7 @@ too.
 ### From source
 
 Install Rust/rustup and, on macOS, the Xcode command-line tools. The repository
-pins Rust 1.96.1 and GPUI 0.3.6 (the `gpui-pre` snapshot crate); the Rust version
+pins Rust 1.99.0 and GPUI 0.3.10 (the `gpui-pre` snapshot crate); the Rust version
 is declared in `rust-toolchain.toml` and mirrored in `mise.toml`, so `mise install`
 also provisions it.
 

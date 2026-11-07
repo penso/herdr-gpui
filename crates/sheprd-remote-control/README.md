@@ -9,6 +9,30 @@ The daemon is a user service that Sheprd installs when Remote control is
 turned on, and it keeps running when the app quits. It never starts, stops,
 or upgrades a Herdr daemon.
 
+## Herdr 1 sessions
+
+The daemon follows the Herdr 1 session at `--herdr-socket` (discovered when
+absent) and every other running session of this user's installation
+(`herdr --session NAME`, under `sessions/` in Herdr's configuration
+directory), so a computer that runs only named sessions still shows phones
+all of them. The installation is the one that socket is in, as the desktop
+resolved it, since the service's environment may lack the shell's
+`XDG_CONFIG_HOME`. Sessions are listed again every 30 seconds: one started or
+stopped later is followed or let go without a restart. A named session's
+workspace, tab, and pane ids carry `herdr:NAME:`, and its requests go to its
+own API socket. The session at `--herdr-socket` keeps its ids, and desktop
+pull request data is matched against it. A new workspace goes to that
+session, or to the alphabetically first named session that answers when it
+does not.
+
+A socket outside such an installation (a sandbox's, or a development
+daemon's) keeps the daemon to that one session: no other is followed. Chats
+are bounded across all sessions, the primary's first and then by name.
+
+Pairing a phone gives it this computer, not one session: a paired phone can
+read and type into every session the daemon follows, including one started
+after it was paired.
+
 ## Herdr 2 terminals
 
 The daemon lists terminals from both Herdr 1 and a running herdr-core.
@@ -83,6 +107,17 @@ devices in `devices.json` (0600, replaced atomically), challenge-signed
 sessions, and per-address rate limits. It is synchronous and takes every time
 as milliseconds since the Unix epoch, so the server calls it under a mutex and
 tests pass explicit times.
+
+### Updating from a phone
+
+`POST /api/v2/update` asks Sheprd to update, and this daemon only relays
+(`control::app_update`). Sheprd sends `AppUpdate` with each poll while a window
+runs its updater, and the answer hands it a phone's request, which its updater
+carries out up to the restart. Each report names the app's process, and a
+request goes only to the run a phone saw, so it cannot update unseen an app
+reopened later, however soon. Without a report for 15 seconds the app counts as
+closed and a request is refused. A machine with no app open
+cannot update from a phone.
 
 ### Other machines
 

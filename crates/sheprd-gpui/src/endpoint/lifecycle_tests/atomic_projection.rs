@@ -32,7 +32,7 @@ fn metadata_gaps_deliver_keys_wheel_and_click_without_waiting_for_surface(
             view.send(ClientPaneInputEvent::TextCommit("immediate".into()), cx);
             let position = mouse_position(view, 3.5, 4.5);
             view.scroll_wheel(
-                &gpui::ScrollWheelEvent {
+                &gpui::ScrollEvent {
                     position,
                     delta: gpui::ScrollDelta::Lines(point(
                         0.,
@@ -40,6 +40,7 @@ fn metadata_gaps_deliver_keys_wheel_and_click_without_waiting_for_surface(
                     )),
                     modifiers: Default::default(),
                     touch_phase: gpui::TouchPhase::Moved,
+                    source: gpui::ScrollSource::Pointer,
                 },
                 window,
                 cx,

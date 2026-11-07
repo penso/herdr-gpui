@@ -223,6 +223,23 @@ final class TermKeyStore {
     }
 }
 
+/// The tag the Workspaces tab shows computers of, kept on this phone and
+/// shared by its windows. Read it through `ComputerTags.active`: the tag may
+/// have left every computer since.
+@MainActor
+@Observable
+final class TagFilterStore {
+    private static let key = "computerTagFilter"
+
+    var tag: String? {
+        didSet { UserDefaults.standard.set(tag, forKey: Self.key) }
+    }
+
+    init() {
+        tag = UserDefaults.standard.string(forKey: Self.key)
+    }
+}
+
 /// The composer's text shortcuts, kept on this phone.
 @MainActor
 @Observable

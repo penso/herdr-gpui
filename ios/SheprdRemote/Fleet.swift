@@ -78,6 +78,9 @@ final class Fleet {
         /// changed in between as it happened.
         var watching = false
         var id: String { computer.device }
+        /// The computer answered and runs a Sheprd too old for this app. A
+        /// cached `home` may predate an update, so only a fresh one counts.
+        var needsUpdate: Bool { !stale && home?.needsUpdate == true }
     }
 
     private(set) var machines: [Machine] = []
@@ -91,6 +94,10 @@ final class Fleet {
     @ObservationIgnored private var termViewers: [PaneKey: Int] = [:]
     /// One client per computer, kept while its address and CA stay.
     @ObservationIgnored private var clients: [String: RemoteClient] = [:]
+    /// Calls that got no answer, for the computer's log once it is back.
+    @ObservationIgnored private var unreported: [String: UnreportedFailures] = [:]
+    /// Computers a report is on its way to, so only one task sends them.
+    @ObservationIgnored private var reporting: Set<String> = []
     /// Commands sent to chats that have not come back yet.
     let pending = PendingCommands()
     private var active = false
@@ -108,6 +115,7 @@ final class Fleet {
         for machine in machines where !wanted.contains(machine.id) {
             stopLink(machine.id)
             cache.clear(machine.id)
+            unreported[machine.id] = nil
         }
         machines = computers.map { computer in
             if var known = machines.first(where: { $0.id == computer.device }) {
@@ -238,6 +246,13 @@ final class Fleet {
     @ObservationIgnored var onSummary: (() -> Void)?
     /// Called when a computer's link comes online, for host pairing.
     @ObservationIgnored var onOnline: ((Computer) -> Void)?
+    /// The tags a computer's home reports.
+    @ObservationIgnored var onTags: ((Home.Tags, Computer) -> Void)?
+    /// What stood after this phone offered `Computer`'s tags.
+    @ObservationIgnored var onTagsAnswer: ((Home.Tags, Computer) -> Void)?
+    /// Devices with an offer of tags on its way, so a home arriving
+    /// meanwhile does not send it again.
+    @ObservationIgnored private var tagOffers = TagOffers<Computer>()
 
     // MARK: Views
 
@@ -340,15 +355,79 @@ final class Fleet {
         guard let machine = machines.first(where: { $0.id == device }),
               case let .online(origin) = machine.status
         else { throw FleetError.offline(machines.first { $0.id == device }?.computer.name ?? "The computer") }
-        let token = try await sessions.token(for: machine.computer, at: origin)
-        let client: RemoteClient
-        if let known = clients[device], known.origin == origin, known.fingerprint == machine.computer.fingerprint {
-            client = known
-        } else {
-            client = RemoteClient(origin: origin, fingerprint: machine.computer.fingerprint)
-            clients[device] = client
+        let started = ContinuousClock.now
+        do {
+            let token = try await sessions.token(for: machine.computer, at: origin)
+            let client: RemoteClient
+            if let known = clients[device], known.origin == origin, known.fingerprint == machine.computer.fingerprint {
+                client = known
+            } else {
+                client = RemoteClient(origin: origin, fingerprint: machine.computer.fingerprint)
+                clients[device] = client
+            }
+            return try await body(client, token)
+        } catch where PathFailure.isDead(error) {
+            pathFailed(error, device: device, origin: origin, started: started)
+            throw error
         }
-        return try await body(client, token)
+    }
+
+    /// A call got no answer: the link looks for an address that gives one,
+    /// and the client goes, as its open connections use the dead path. The
+    /// call is not sent again, as it may have reached the computer.
+    private func pathFailed(_ error: Error, device: String, origin: String, started: ContinuousClock.Instant) {
+        let summary = PathFailure.summary(error, after: ContinuousClock.now - started)
+        let line = "\(PathFailure.route((error as? URLError)?.failingURL)) at \(origin): \(summary)"
+        log.error("no answer from \(device, privacy: .public): \(line, privacy: .public)")
+        clients[device] = nil
+        unreported[device, default: UnreportedFailures()].add(line)
+        Task { await links[device]?.pathFailed(origin, started: started) }
+        // The link may already be back elsewhere, with no update to come.
+        reportFailures(of: device)
+    }
+
+    /// Tells the computer, while it answers, what this phone saw while it
+    /// did not: the daemon's log otherwise shows only silence. What it does
+    /// not take waits for the next failure or the next time it comes online.
+    private func reportFailures(of device: String) {
+        guard !reporting.contains(device) else { return }
+        reporting.insert(device)
+        Task {
+            defer { reporting.remove(device) }
+            var client: RemoteClient?
+            var refused: String?
+            while let line = unreported[device]?.lines.first,
+                  let computer = machines.first(where: { $0.id == device })?.computer,
+                  case let .online(origin)? = machines.first(where: { $0.id == device })?.status,
+                  origin != refused {
+                let reporter = client?.origin == origin ? client : RemoteClient(origin: origin, fingerprint: computer.fingerprint)
+                client = reporter
+                do {
+                    try await reporter?.report(context: "ios network", message: "\(line); back at \(origin)")
+                    unreported[device]?.accepted(line)
+                } catch {
+                    refused = origin
+                    log.error("could not report to \(computer.name, privacy: .public): \(String(describing: error), privacy: .public)")
+                }
+            }
+        }
+    }
+
+    /// Offers `computer` this phone's copy of its tags. A computer that is
+    /// away or too old to keep tags refuses; the copy stays, and its next
+    /// home brings this back.
+    func offerTags(for computer: Computer) {
+        guard tagOffers.begin(computer.device, computer, edit: computer.tagsUpdatedMs) else { return }
+        let offer = Home.Tags(tags: computer.tags, updatedMs: computer.tagsUpdatedMs)
+        Task {
+            defer {
+                if let next = tagOffers.finish(computer.device) { offerTags(for: next) }
+            }
+            guard let answer = try? await call(computer.device, { client, token in
+                try await client.offerTags(offer, bearer: token)
+            }) else { return }
+            onTagsAnswer?(answer, computer)
+        }
     }
 
     /// Closes the pane a chat runs in, which stops its agent in Sheprd.
@@ -365,6 +444,15 @@ final class Fleet {
         let pane = key.pane
         try await call(key.device) { client, token in
             try await client.rename(label, pane: pane, bearer: token)
+        }
+    }
+
+    /// Names a workspace; the next `home` from the computer carries the
+    /// name to every list.
+    func renameWorkspace(_ key: WorkspaceKey, to label: String) async throws {
+        let workspace = key.workspace
+        try await call(key.device) { client, token in
+            try await client.renameWorkspace(workspace, to: label, bearer: token)
         }
     }
 
@@ -402,11 +490,16 @@ final class Fleet {
         guard let index = machines.firstIndex(where: { $0.id == device }) else { return }
         switch update {
         case let .status(status):
+            log.notice("\(self.machines[index].computer.name, privacy: .public) is \(String(describing: status), privacy: .public)")
             machines[index].status = status
             if case .online = status {} else { machines[index].watching = false }
             if case .revoked = status { stopLink(device) }
-            if case .online = status { onOnline?(machines[index].computer) }
+            if case .online = status {
+                onOnline?(machines[index].computer)
+                reportFailures(of: device)
+            }
         case let .event(.home(home)):
+            if let tags = home.tags { onTags?(tags, machines[index].computer) }
             // The computer's load moves every few seconds; only the header
             // shows it, so the cache, widgets, and Spotlight wait for a
             // change to the workspaces.

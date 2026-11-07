@@ -1,5 +1,6 @@
 use super::*;
 use crate::chat::visual::{DiagramStyle, Drawn, Output, Source};
+use crate::config::ChatLayoutMode;
 use core::prelude::v1::test;
 use std::sync::Arc;
 

@@ -348,6 +348,9 @@ pub fn parse_remote_url(value: &str) -> Result<SourceKey> {
             (host.to_owned(), path.to_owned())
         }
     };
+    if let Some(source) = super::azure::source(&host, &path) {
+        return Ok(source);
+    }
     let trimmed = path.trim_matches('/');
     let repository = trimmed.strip_suffix(".git").unwrap_or(trimmed).to_owned();
     if repository.split('/').count() < 2 || repository.ends_with('/') {

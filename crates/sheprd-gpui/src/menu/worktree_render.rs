@@ -5,7 +5,7 @@
 // i18n: migrated
 use super::{
     Page, WorkspaceAction,
-    worktree_source::{Row, Tab, signed_out_hint},
+    worktree_source::{Row, Tab, faded_hint},
 };
 use crate::{
     SheprdWindow,
@@ -32,10 +32,11 @@ impl SheprdWindow {
     /// what the search kept in it, so a match elsewhere is visible from any
     /// tab. The GitHub tabs are inert until an account is connected, because
     /// neither listing can be fetched without one, and look it; hovering one
-    /// says where to sign in.
+    /// says where to sign in. A GitLab project's issue tab needs no account,
+    /// and its pull request tab says merge requests are not listed.
     pub(super) fn render_worktree_tabs(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
-        let connected = self.pr_profile().is_some();
+        let gitlab = self.worktree_on_gitlab();
         let Some(source) = &self.menu.worktree else {
             return div();
         };
@@ -52,7 +53,7 @@ impl SheprdWindow {
             .pt(px(10.));
         for tab in Tab::ALL {
             let (key, label) = (tab.key(), tab.label());
-            let enabled = connected || tab.kind().is_none();
+            let enabled = self.worktree_tab_enabled(tab);
             let selected = tab == source.tab;
             // A tab that cannot be opened drops its outline and fades, so it
             // never reads as one more button to press.
@@ -98,7 +99,7 @@ impl SheprdWindow {
                     .when_some(tab.kind().filter(|_| !enabled), |button, kind| {
                         button.tooltip(move |_, cx| {
                             cx.new(|_| crate::usage::Hint {
-                                text: signed_out_hint(kind).into(),
+                                text: faded_hint(kind, gitlab).into(),
                                 foreground,
                                 surface,
                             })
@@ -383,25 +384,31 @@ impl SheprdWindow {
     }
 
     /// Move to the next tab of the strip, or the previous one, skipping the
-    /// GitHub tabs while no account is connected.
+    /// tabs that cannot be opened. It steps from the open tab's place in the
+    /// strip, so it still moves when that tab itself can no longer be opened.
     fn step_worktree_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let current = self
             .menu
             .worktree
             .as_ref()
             .map_or(Tab::New, |source| source.tab);
-        let connected = self.pr_profile().is_some();
-        let tabs: Vec<Tab> = Tab::ALL
-            .into_iter()
-            .filter(|tab| tab.kind().is_none() || connected)
-            .collect();
-        if let Some(index) = tabs.iter().position(|tab| *tab == current) {
-            let next = if forward {
-                (index + 1) % tabs.len()
-            } else {
-                (index + tabs.len() - 1) % tabs.len()
-            };
-            self.select_worktree_tab(tabs[next], window, cx);
+        let count = Tab::ALL.len();
+        let at = Tab::ALL
+            .iter()
+            .position(|tab| *tab == current)
+            .unwrap_or_default();
+        let next = (1..count)
+            .map(|step| {
+                let index = if forward {
+                    at + step
+                } else {
+                    at + count - step
+                };
+                Tab::ALL[index % count]
+            })
+            .find(|tab| self.worktree_tab_enabled(*tab));
+        if let Some(tab) = next {
+            self.select_worktree_tab(tab, window, cx);
         }
     }
 

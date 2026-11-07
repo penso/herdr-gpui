@@ -492,3 +492,20 @@ fn the_remote_listing_walks_the_shared_candidate_roots() {
         Err(crate::Error::Ssh(ssh::Error::InvalidTarget))
     ));
 }
+
+#[test]
+fn stopped_sessions_do_not_count_toward_the_running_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("herdr");
+    for index in 0..=LIMIT {
+        fs::create_dir_all(root.join("sessions").join(format!("s{index:03}"))).unwrap();
+    }
+    let live = session_socket(&root, "s007").unwrap();
+    let sessions = running_with(&root, |socket| socket == live).unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].name, "s007");
+    assert!(matches!(
+        running_with(&root, |_| true),
+        Err(crate::Error::Sessions(Error::Limit))
+    ));
+}

@@ -27,10 +27,16 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
     /// The paired computer that vouched for this one's fingerprint when it
     /// paired the phone with one of its hosts; `nil` when paired directly.
     public var via: Fingerprint?
+    /// The person's labels for it, which the computer itself keeps for all
+    /// its clients; this is the copy to show while it is away (`ComputerTags`).
+    public var tags: [String]
+    /// When `tags` were last edited, in milliseconds since the epoch, as
+    /// `updated_ms` on the computer: 0 for tags never edited.
+    public var tagsUpdatedMs: UInt64
 
     public var id: String { device }
 
-    enum CodingKeys: String, CodingKey { case device, name, origins, fingerprint, keyKind, keyData, presence, via }
+    enum CodingKeys: String, CodingKey { case device, name, origins, fingerprint, keyKind, keyData, presence, via, tags, tagsUpdatedMs }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -44,6 +50,11 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
         presence = try c.decodeIfPresent(Bool.self, forKey: .presence) ?? false
         // Records saved before host pairing were all paired directly.
         via = try c.decodeIfPresent(Fingerprint.self, forKey: .via)
+        // Records saved before tags existed have none.
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        // Tags saved before they synced are older than any edit made on the
+        // computer, but newer than none, so they reach it once.
+        tagsUpdatedMs = try c.decodeIfPresent(UInt64.self, forKey: .tagsUpdatedMs) ?? (tags.isEmpty ? 0 : 1)
     }
 
     public init(
@@ -54,7 +65,9 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
         keyKind: KeyKind,
         keyData: Data,
         presence: Bool = false,
-        via: Fingerprint? = nil
+        via: Fingerprint? = nil,
+        tags: [String] = [],
+        tagsUpdatedMs: UInt64 = 0
     ) {
         self.device = device
         self.name = name
@@ -64,6 +77,8 @@ public struct Computer: Codable, Hashable, Identifiable, Sendable {
         self.keyData = keyData
         self.presence = presence
         self.via = via
+        self.tags = tags
+        self.tagsUpdatedMs = tagsUpdatedMs
     }
 
     /// The addresses to try, the pairing address first, without repeats.

@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{EntityInputHandler, Keystroke, PlatformInput, VisualTestContext, point};
+use gpui::{EntityInputHandler, PlatformInput, VisualTestContext, point};
 
 /// Keep a deliberately invalid draft so a regression cannot write real config.
 /// It must not even be validated while the search field owns the keyboard.
@@ -97,7 +97,7 @@ fn search_composition_enter_and_escape_cannot_save_or_discard_a_draft(cx: &mut T
         for key in ["enter", "escape"] {
             window.dispatch_event(
                 PlatformInput::KeyDown(KeyDownEvent {
-                    keystroke: Keystroke::parse(key).unwrap(),
+                    keystroke: crate::keymap::parse_keystroke(key).unwrap(),
                     is_held: false,
                     prefer_character_input: false,
                 }),

@@ -13,6 +13,7 @@ workspace = true
 base64.workspace                 = true
 chrono.workspace                 = true
 getrandom.workspace              = true
+httparse                         = { optional = true, workspace = true }
 sheprd-client.workspace           = true
 sheprd-control-protocol.workspace = true
 sheprd-credentials.workspace      = true
@@ -49,6 +50,9 @@ cloud = ["sheprd-client/cloud"]
 # Azure VMs and Container Apps sandboxes, reached over the data plane's exec stream.
 azure = ["cloud", "sheprd-client/azure", "dep:rustls", "dep:tungstenite", "dep:webpki-roots"]
 boat = ["cloud", "sheprd-client/boat"]
+# boxd machines, with an API key and this app as their exec relay (grpc-web
+# over HTTP/1.1, so no async runtime).
+boxd = ["cloud", "sheprd-client/boxd", "dep:httparse", "dep:rustls", "dep:tungstenite", "dep:webpki-roots"]
 coder = ["cloud", "sheprd-client/coder"]
 container = ["cloud", "sheprd-client/container"]
 daytona = ["cloud", "sheprd-client/daytona"]

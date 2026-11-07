@@ -10,7 +10,9 @@ fn decoded(command: &str) -> String {
         .unwrap();
     let bytes = STANDARD.decode(encoded).unwrap();
     let utf16 = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
         .collect::<Vec<_>>();
     String::from_utf16(&utf16).unwrap()

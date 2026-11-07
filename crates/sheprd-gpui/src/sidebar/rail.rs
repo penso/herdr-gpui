@@ -193,6 +193,13 @@ impl SheprdWindow {
                 } else {
                     endpoint.label.clone()
                 };
+                // An offline or folded host has no rows to carry the mark.
+                let text = muted_word(
+                    Some(text.clone()),
+                    crate::notification_mutes::Mutes::any(cx)
+                        .is_some_and(|mutes| mutes.host(&endpoint.id)),
+                )
+                .unwrap_or(text);
                 let box_id = endpoint_id.clone();
                 let chrome = host_chrome(selected, look, theme);
                 spaces = spaces.child(
@@ -269,9 +276,9 @@ impl SheprdWindow {
                 let context_id = id.clone();
                 let focused = selected && workspace.focused;
                 let number = workspace.number.to_string();
-                let muted = silenced
-                    .get(&endpoint_index)
-                    .is_some_and(|silenced| silenced.workspace(&workspace.workspace_id));
+                let muted = silenced.get(&endpoint_index).is_some_and(|silenced| {
+                    silenced.host() || silenced.workspace(&workspace.workspace_id)
+                });
                 let marks = div()
                     .row()
                     .items_center()

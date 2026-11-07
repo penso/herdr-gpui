@@ -57,8 +57,11 @@ fn omo_embedded_png_decodes_through_gpui_without_color_or_alpha_loss(cx: &mut Te
     let pixels = rendered.as_bytes(0).unwrap();
     assert_eq!(pixels.len(), source.as_raw().len());
     // GPUI stores BGRA; only the red/blue channel order may change.
-    for (actual, expected) in pixels.chunks_exact(4).zip(source.pixels()) {
-        assert_eq!(actual, [expected[2], expected[1], expected[0], expected[3]]);
+    for (actual, expected) in pixels.as_chunks::<4>().0.iter().zip(source.pixels()) {
+        assert_eq!(
+            *actual,
+            [expected[2], expected[1], expected[0], expected[3]]
+        );
     }
 }
 

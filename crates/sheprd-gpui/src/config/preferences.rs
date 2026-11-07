@@ -26,7 +26,7 @@ pub(crate) enum Preference {
     AgentCheckpoints(bool),
     ShowListeningPorts(bool),
     ShowAgentsHeader(bool),
-    /// `herdr_2_terminals`: new tabs run in herdr-core.
+    /// `herdr_2_terminals`: new tabs on this computer run in herdr-core.
     Herdr2Terminals(bool),
     ShowSidebarSearch(bool),
     ShowRepositoryIcons(bool),

@@ -35,6 +35,11 @@ pub(super) const HEIGHT: f32 = 34.;
 /// mouse buttons still travel.
 const NAVIGATION_MIN_WIDTH: f32 = 320.;
 
+/// The narrowest window that spells out commits without a pull request. Below
+/// it the words would push the Git button and the account out of the window,
+/// so the Git icon takes their color instead, which needs no room.
+const UNOPENED_NOTE_MIN_WIDTH: f32 = 720.;
+
 impl SheprdWindow {
     fn open_profile(&mut self, connect: bool, window: &mut Window, cx: &mut Context<Self>) {
         let shown = matches!(self.menu.page, Some(Page::GitHub | Page::GitLab));
@@ -68,8 +73,10 @@ impl SheprdWindow {
     /// meaning different things. A branch with a prefetched pull request shows
     /// that pull request, exactly as its sidebar row does, and a badge when the
     /// checkout also has uncommitted work; the popup says how much. A branch
-    /// without one shows what a commit would include right now.
-    fn render_git_button(&self, cx: &mut Context<Self>) -> Option<Div> {
+    /// without one shows what a commit would include right now, and says so
+    /// when commits are waiting for a pull request: a clean tree alone would
+    /// leave the slot empty though there is still work to send.
+    fn render_git_button(&self, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
         self.git.tracked()?;
         let theme = &self.theme;
         let font = &self.config.ui;
@@ -77,15 +84,21 @@ impl SheprdWindow {
         let status = self.git.status();
         let running = self.git.running().is_some();
         let anchor = self.git_anchor.clone();
-        let pr = self.git_pull_request().map(|pr| {
-            (
-                format!("#{}", pr.number),
-                crate::pull_request::color(&pr, theme),
-                pr.additions,
-                pr.deletions,
-                pr.url.clone(),
-            )
-        });
+        let unopened = self.git_unopened_commits();
+        let note =
+            unopened.filter(|_| f32::from(window.viewport_size().width) >= UNOPENED_NOTE_MIN_WIDTH);
+        let pr = self
+            .git_pull_request()
+            .filter(|_| unopened.is_none())
+            .map(|pr| {
+                (
+                    format!("#{}", pr.number),
+                    crate::pull_request::color(&pr, theme),
+                    pr.additions,
+                    pr.deletions,
+                    pr.url.clone(),
+                )
+            });
         Some(
             div()
                 .debug_selector(|| "titlebar-git-slot".into())
@@ -98,6 +111,32 @@ impl SheprdWindow {
                 .text_font(font)
                 .text_size(px(font.size))
                 .text_color(rgb(theme.foreground))
+                .when_some(note, |button, commits| {
+                    button.child(
+                        div()
+                            .id("titlebar-git-unopened")
+                            .debug_selector(|| "titlebar-git-unopened".into())
+                            .row()
+                            .items_center()
+                            .flex_none()
+                            .h(px(24.))
+                            .px(px(6.))
+                            .rounded(px(crate::config::corners::CONTROL))
+                            .cursor_pointer()
+                            .hover(|link| {
+                                link.bg(background.blend(rgba((theme.foreground << 8) | 0x14)))
+                            })
+                            .text_color(rgb(crate::pull_request::unopened_color(theme)))
+                            .child(fl!("titlebar-unopened", commits = commits))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.open_git_menu_on_pull_request(event.position, window, cx);
+                                }),
+                            ),
+                    )
+                })
                 .map(|button| match pr {
                     Some((number, color, additions, deletions, url)) => button
                         .child(
@@ -209,8 +248,11 @@ impl SheprdWindow {
                                 .path("icons/git-branch.svg")
                                 .size(px(14.))
                                 .flex_none()
+                                .debug_selector(|| "titlebar-git-icon".into())
                                 .text_color(rgb(if running {
                                     theme.ink(theme.palette[3])
+                                } else if unopened.is_some() {
+                                    crate::pull_request::unopened_color(theme)
                                 } else {
                                     theme.muted
                                 })),
@@ -235,7 +277,14 @@ impl SheprdWindow {
                             MouseButton::Left,
                             cx.listener(|this, event: &MouseDownEvent, window, cx| {
                                 cx.stop_propagation();
-                                this.open_git_menu(event.position, window, cx);
+                                match this.git_unopened_commits() {
+                                    Some(_) => this.open_git_menu_on_pull_request(
+                                        event.position,
+                                        window,
+                                        cx,
+                                    ),
+                                    None => this.open_git_menu(event.position, window, cx),
+                                }
                             }),
                         ),
                 ),
@@ -326,7 +375,7 @@ impl SheprdWindow {
             .row()
             .flex_none()
             .items_center()
-            .children(self.render_git_button(cx))
+            .children(self.render_git_button(window, cx))
             .children(self.remote_indicator(cx))
             .child(
                 div()

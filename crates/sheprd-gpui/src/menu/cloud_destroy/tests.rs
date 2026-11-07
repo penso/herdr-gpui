@@ -5,6 +5,7 @@ use core::prelude::v1::test;
 use gpui::{TestAppContext, VisualTestContext};
 
 mod en_xa;
+mod mutes;
 
 fn target(provider: CloudProvider, id: &str) -> Target {
     Target {

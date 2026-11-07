@@ -78,6 +78,8 @@ impl Source {
             Self::Cloud(crate::cloud::CloudProvider::Azure) => "add-device-source-azure",
             #[cfg(feature = "boat")]
             Self::Cloud(crate::cloud::CloudProvider::Boat) => "add-device-source-boat",
+            #[cfg(feature = "boxd")]
+            Self::Cloud(crate::cloud::CloudProvider::Boxd) => "add-device-source-boxd",
             #[cfg(feature = "coder")]
             Self::Cloud(crate::cloud::CloudProvider::Coder) => "add-device-source-coder",
             #[cfg(feature = "container")]

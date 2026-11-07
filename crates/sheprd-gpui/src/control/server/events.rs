@@ -106,7 +106,7 @@ fn look(cx: &mut App) -> Seen {
     for handle in main_windows(cx) {
         let id = handle.window_id().as_u64();
         seen.windows.push(id);
-        if let Ok(hosts) = handle.read_with(cx, |view, _| view.control_hosts()) {
+        if let Ok(hosts) = handle.read_with(cx, |view, cx| view.control_hosts(cx)) {
             for host in hosts {
                 seen.hosts.insert((id, host.id), host.status);
             }

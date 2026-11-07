@@ -138,7 +138,7 @@ fn finish_setup(
         report(step(readiness));
     })
     .map_err(crate::Error::from)
-    .map_err(&setup_error)?;
+    .map_err(setup_error)?;
     prepare(&sandbox).map_err(setup_error)?;
     device.machine = sandbox.name;
     save_device(&device, &mut save)?;

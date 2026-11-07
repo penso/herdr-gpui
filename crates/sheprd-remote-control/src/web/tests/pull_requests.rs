@@ -18,6 +18,7 @@ fn badge() -> PullRequests {
             url: "https://github.com/sheprd-labs/sheprd/pull/850".into(),
             tone: Tone::Held,
         }],
+        unopened: Vec::new(),
     }
 }
 

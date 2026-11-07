@@ -2,7 +2,8 @@
 //! The sidebar host header's context menu. Saved SSH devices and cloud devices
 //! have this one, each with the actions its kind supports; a WSL
 //! distribution's only offers its removal (see `wsl`). Local is always
-//! present, and an explicit socket is not in the catalog.
+//! present, so it offers only its grouping and mute, and an explicit socket is
+//! not in the catalog.
 use super::setup;
 use crate::i18n::fl;
 use crate::{
@@ -12,52 +13,17 @@ use crate::{
     menu::Page,
     search_input::SearchInput,
 };
+#[cfg(feature = "cloud")]
+use actions::CLOUD_ACTIONS;
+use actions::{Action, LOCAL_ACTIONS, SSH_ACTIONS};
 use gpui::{prelude::*, *};
 use sheprd_client::ConnectTarget;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Action {
-    Rename,
-    /// Toggles `[devices.<id>] keybindings` between local and server.
-    ServerKeybindings,
-    /// Forwards one of the host's listening ports to this computer.
-    #[cfg(unix)]
-    ForwardPort,
-    /// Picks `[devices.<id>] theme`, the terminal's colors on this device.
-    Theme,
-    /// Opens Settings > Cloud devices on the device's provider.
-    #[cfg(feature = "cloud")]
-    ProviderSettings,
-    /// Runs the configured setup script on the cloud device again.
-    #[cfg(feature = "cloud")]
-    RunSetup,
-    Remove,
-}
-
-/// Each row's action and the message naming it.
-const SSH_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "host-menu-rename"),
-    (Action::ServerKeybindings, "host-menu-server-keybindings"),
-    // Port forwards need an `ssh` control master, which Windows OpenSSH lacks.
-    #[cfg(unix)]
-    (Action::ForwardPort, "host-menu-forward-port"),
-    (Action::Theme, "host-menu-theme"),
-    (Action::Remove, "host-menu-remove"),
-];
-
-/// Port forwards, server keybindings, and the terminal theme go through the
-/// SSH profile, which a cloud device does not have.
-#[cfg(feature = "cloud")]
-const CLOUD_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "host-menu-rename"),
-    (Action::ProviderSettings, "host-menu-cloud-settings"),
-    (Action::RunSetup, "host-menu-run-setup"),
-    (Action::Remove, "host-menu-remove"),
-];
 
 /// The saved entry the menu acts on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Saved {
+    /// This computer's daemon, which is not in any catalog.
+    Local,
     /// A catalog profile, which the `herdr machine` commands name.
     Ssh { profile: String },
     /// A machine in the GUI's cloud device list, keyed by its provider's ID.
@@ -97,11 +63,14 @@ pub(crate) struct HostMenu {
     error: Option<String>,
     /// The terminal theme picker, while it is the page shown.
     theme: Option<theme::DeviceThemePicker>,
+    /// The tag picker, while it is the page shown.
+    tags: Option<tags::TagPicker>,
 }
 
 impl HostMenu {
     fn actions(&self) -> &'static [(Action, &'static str)] {
         match self.saved {
+            Saved::Local => LOCAL_ACTIONS,
             Saved::Ssh { .. } => SSH_ACTIONS,
             #[cfg(feature = "cloud")]
             Saved::Cloud { .. } => CLOUD_ACTIONS,
@@ -113,6 +82,7 @@ impl HostMenu {
     fn profile(&self) -> Option<&str> {
         match &self.saved {
             Saved::Ssh { profile } => Some(profile),
+            Saved::Local => None,
             #[cfg(feature = "cloud")]
             Saved::Cloud { .. } => None,
         }
@@ -159,6 +129,7 @@ impl SheprdWindow {
         // The saved entry, not the live target: removal claims and names the
         // profile, whichever session the list has attached the device to.
         let (saved, target, session) = match endpoint.saved_target() {
+            _ if endpoint.id == crate::endpoint::LOCAL => (Saved::Local, "", ""),
             ConnectTarget::Ssh { target, session } => {
                 // The CLI edits the default catalog, the one device setup also uses.
                 if let Some(reason) = self.device_setup_unavailable() {
@@ -182,8 +153,8 @@ impl SheprdWindow {
                     Saved::Ssh {
                         profile: profile.to_owned(),
                     },
-                    target,
-                    session,
+                    target.as_str(),
+                    session.as_str(),
                 )
             }
             #[cfg(feature = "cloud")]
@@ -198,14 +169,14 @@ impl SheprdWindow {
                     provider: *provider,
                     id: machine_id.clone(),
                 },
-                machine,
-                session,
+                machine.as_str(),
+                session.as_str(),
             ),
             _ => {
                 tracing::info!(
                     category = "device_remove",
                     id,
-                    "Host menu refused: the device is not a saved SSH or cloud device"
+                    "Host menu refused: the device is not Local or a saved device"
                 );
                 return;
             }
@@ -226,6 +197,7 @@ impl SheprdWindow {
             renaming: false,
             error: None,
             theme: None,
+            tags: None,
         };
         if !self.open_menu(window, cx) {
             tracing::info!(
@@ -275,8 +247,16 @@ impl SheprdWindow {
                 }
                 self.menu.page = Some(Page::RenameDevice);
             }
+            Action::Mute => {
+                if let Some(id) = self.menu.host.as_ref().map(|host| host.id.clone()) {
+                    let muted = crate::notification_mutes::Mutes::of(cx)
+                        .is_some_and(|mutes| mutes.host(&id));
+                    self.set_host_muted(&id, !muted, cx);
+                }
+            }
             Action::ServerKeybindings => self.toggle_server_keybindings(cx),
             Action::Theme => self.open_device_theme(window, cx),
+            Action::Tags(mode) => self.open_device_tags(mode, window, cx),
             #[cfg(feature = "cloud")]
             Action::ProviderSettings => {
                 if let Some(HostMenu {
@@ -439,6 +419,8 @@ impl SheprdWindow {
         // credential that only matters once the device is gone.
         let background = cx.background_executor().spawn(async move {
             match saved {
+                // Offers no Remove.
+                Saved::Local => Ok(Ok(())),
                 Saved::Ssh { profile } => {
                     let _claim = setup::claim_saved(&target, &session)?;
                     setup::remove(&profile)?;
@@ -467,8 +449,24 @@ impl SheprdWindow {
         });
         self.menu.removing_devices.insert(id.clone());
         self.dismiss_menu(window, cx);
-        cx.spawn(async move |this, cx| {
+        Self::follow_removal(cx.entity().downgrade(), background, id, label, forget, cx);
+    }
+
+    /// Applies a removal's result. Its mute goes first, from the app: the
+    /// window that started the removal may have closed by the time it ends.
+    fn follow_removal(
+        this: WeakEntity<Self>,
+        background: Task<crate::Result<crate::Result<()>>>,
+        id: String,
+        label: String,
+        forget: bool,
+        cx: &mut App,
+    ) {
+        cx.spawn(async move |cx| {
             let result = background.await;
+            if result.is_ok() {
+                cx.update(|cx| crate::notification_mutes::Mutes::forget_host(cx, &id));
+            }
             let _ = this.update(cx, |this, cx| {
                 this.device_removed(&id, &label, forget, result, cx)
             });
@@ -630,20 +628,28 @@ impl SheprdWindow {
                             .truncate()
                             .child(host.label.clone()),
                     )
-                    .child(
-                        div()
-                            .text_size(px(self.config.ui.size * 0.85))
-                            .text_color(rgb(theme.muted))
-                            .truncate()
-                            // The device's target and session.
-                            .child(format!("{} · {}", host.target, host.session)), // i18n: data
-                    ),
+                    .when(!host.target.is_empty(), |header| {
+                        header.child(
+                            div()
+                                .text_size(px(self.config.ui.size * 0.85))
+                                .text_color(rgb(theme.muted))
+                                .truncate()
+                                // The device's target and session.
+                                .child(format!("{} · {}", host.target, host.session)), // i18n: data
+                        )
+                    }),
             );
             let server_keys = self.config.keybinding_source(&host.id) == KeybindingSource::Server;
             let device_theme = self.device_theme_value(&host.id).map(str::to_owned);
+            let muted =
+                crate::notification_mutes::Mutes::of(cx).is_some_and(|mutes| mutes.host(&host.id));
             for (index, &(action, message)) in host.actions().iter().enumerate() {
                 let label = crate::i18n::message(message, &[]);
-                let toggle = action == Action::ServerKeybindings;
+                let toggle = match action {
+                    Action::Mute => Some(muted),
+                    Action::ServerKeybindings => Some(server_keys),
+                    _ => None,
+                };
                 body = body.child(
                     div()
                         .id(("host-menu-action", index))
@@ -654,11 +660,11 @@ impl SheprdWindow {
                         .items_center()
                         .gap(px(8.))
                         .cursor_pointer()
-                        .when(toggle, |row| {
+                        .when_some(toggle, |row, checked| {
                             row.child(crate::toggles::checkbox(
                                 theme,
                                 self.config.ui.size + 2.,
-                                server_keys,
+                                checked,
                             ))
                         })
                         .when(action == Action::Remove, |row| {
@@ -701,7 +707,7 @@ impl SheprdWindow {
                 );
                 // Opting in never silently changes nothing: say why the
                 // device is still on local keys.
-                if let Some(error) = toggle
+                if let Some(error) = (action == Action::ServerKeybindings)
                     .then(|| self.server_keybindings_error(&host.id))
                     .flatten()
                 {
@@ -733,6 +739,9 @@ impl SheprdWindow {
         }
         if self.menu.page == Some(Page::DeviceTheme) {
             return self.render_device_theme(host, cx);
+        }
+        if self.menu.page == Some(Page::DeviceTags) {
+            return self.render_device_tags(host, cx);
         }
         let github = self.host_has_github(&host.id);
         body = body
@@ -807,114 +816,14 @@ impl SheprdWindow {
             );
         body
     }
-
-    /// A centered modal like Add Device: header with the title and Close,
-    /// the name field in the body, and the action in the footer.
-    fn render_rename_device(&self, host: &HostMenu, cx: &mut Context<Self>) -> Div {
-        let theme = &self.theme;
-        let header = div()
-            .debug_selector(|| "rename-device-header".into())
-            .flex_none()
-            .p(px(16.))
-            .border_b_1()
-            .border_color(rgb(theme.active))
-            .flex()
-            .items_center()
-            .gap(px(12.))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .text_size(px(self.config.ui.size * 1.35))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(fl!("host-menu-rename-title")),
-            )
-            .child(
-                div()
-                    .id("rename-device-close")
-                    .debug_selector(|| "rename-device-close".into())
-                    .px_2()
-                    .py_1()
-                    .cursor_pointer()
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .hover(|s| s.bg(rgb(theme.active)))
-                    .child(fl!("host-menu-close"))
-                    .on_click(cx.listener(|this, _, window, cx| this.dismiss_menu(window, cx))),
-            );
-        let body = div()
-            .debug_selector(|| "rename-device".into())
-            .min_h_0()
-            .p(px(16.))
-            .flex()
-            .flex_col()
-            .gap(px(12.))
-            .child(
-                div()
-                    .text_color(rgb(theme.muted))
-                    .child(format!("{} · {}", host.target, host.session)), // i18n: data
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.))
-                    .child(fl!("host-menu-rename-name"))
-                    .when_some(host.input.clone(), |field, input| {
-                        if host.renaming {
-                            field.child(div().child(input.read(cx).text().to_owned()))
-                        } else {
-                            field.child(input)
-                        }
-                    }),
-            )
-            .when_some(host.error.clone(), |body, error| {
-                body.child(div().text_color(crate::menu::danger(theme)).child(error))
-            });
-        let ready = !host.renaming;
-        let footer = div()
-            .debug_selector(|| "rename-device-footer".into())
-            .flex_none()
-            .p(px(16.))
-            .border_t_1()
-            .border_color(rgb(theme.active))
-            .flex()
-            .justify_end()
-            .child(
-                div()
-                    .id("rename-device-submit")
-                    .debug_selector(|| "rename-device-submit".into())
-                    .p(px(8.))
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .bg(rgb(theme.active))
-                    .when(ready, |button| {
-                        button.cursor_pointer().hover(|s| {
-                            s.bg(rgb(theme.active).blend(rgba((theme.foreground << 8) | 0x20)))
-                        })
-                    })
-                    .when(!ready, |button| button.text_color(rgb(theme.muted)))
-                    .child(if ready {
-                        fl!("host-menu-rename-submit")
-                    } else {
-                        fl!("host-menu-renaming")
-                    })
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.submit_rename_device(window, cx)),
-                    ),
-            );
-        div()
-            .flex()
-            .flex_col()
-            .min_h_0()
-            .child(header)
-            .child(body)
-            .child(footer)
-    }
 }
 
 /// Rename the saved entry: through `herdr machine rename` for an SSH profile,
 /// in the GUI's own list for a cloud device. Blocks; run on a worker.
 fn rename(saved: &Saved, label: &str) -> crate::Result<()> {
     match saved {
+        // Offers no Rename.
+        Saved::Local => Ok(()),
         Saved::Ssh { profile } => setup::rename(profile, label),
         #[cfg(feature = "cloud")]
         Saved::Cloud { provider, id } => Ok(crate::cloud::rename(*provider, id, label)?),
@@ -929,6 +838,7 @@ fn removal_note(host: &HostMenu) -> String {
         return note;
     }
     match host.saved {
+        Saved::Local => String::new(),
         Saved::Ssh { .. } => fl!(
             "host-menu-remove-ssh-note",
             device = host.label.as_str(),
@@ -950,7 +860,10 @@ fn removal_note(host: &HostMenu) -> String {
 mod destroy;
 #[cfg(feature = "cloud")]
 use destroy::remove_label;
+mod actions;
 mod forwards;
+mod rename;
+mod tags;
 mod theme;
 
 #[cfg(not(feature = "cloud"))]
