@@ -435,7 +435,7 @@ fn held_keys_release_what_was_pressed_only_under_report_all() {
     let press = |s: &str| {
         key_input(
             &KeyDownEvent {
-                keystroke: Keystroke::parse(s).unwrap(),
+                keystroke: crate::keymap::parse_keystroke(s).unwrap(),
                 is_held: true,
                 prefer_character_input: false,
             },
@@ -485,7 +485,7 @@ fn held_keys_release_what_was_pressed_only_under_report_all() {
 
 #[test]
 fn special_keys_and_text_are_separate() {
-    let key = |s| Keystroke::parse(s).unwrap();
+    let key = |s| crate::keymap::parse_keystroke(s).unwrap();
     for alt_keys in [false, true] {
         let code = |s| key_code(&key(s), alt_keys);
         assert_eq!(code("ctrl-c"), Some(ClientKeyCode::Char('c')));
@@ -531,7 +531,7 @@ fn a_pane_key_sends_its_target_held_as_typed() {
     assert!(reaches_pane(&Keystroke::parse("alt-b").unwrap()));
     for unsendable in ["cmd-a", "a", "shift-a"] {
         assert!(
-            !reaches_pane(&Keystroke::parse(unsendable).unwrap()),
+            !reaches_pane(&crate::keymap::parse_keystroke(unsendable).unwrap()),
             "{unsendable}"
         );
     }
@@ -542,7 +542,7 @@ fn alt_characters_reach_the_pane_as_shortcuts() {
     let alt = |s| {
         key_input(
             &KeyDownEvent {
-                keystroke: Keystroke::parse(s).unwrap(),
+                keystroke: crate::keymap::parse_keystroke(s).unwrap(),
                 is_held: false,
                 prefer_character_input: false,
             },

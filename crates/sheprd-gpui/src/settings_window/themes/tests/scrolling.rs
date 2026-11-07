@@ -36,12 +36,26 @@ fn offsets(view: &Entity<SettingsWindow>, cx: &VisualTestContext) -> [Point<Pixe
 }
 
 fn scroll(cx: &mut VisualTestContext, position: Point<Pixels>, delta: ScrollDelta) {
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position,
         delta,
         ..Default::default()
     });
     draw(cx);
+}
+
+#[gpui::test]
+fn theme_grid_viewport_fills_its_list(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture);
+    for width in [680., 960.] {
+        show_grid(&view, cx, width);
+        let list = cx.debug_bounds("settings-theme-list").unwrap();
+        let viewport = view.read_with(cx, |view, _| {
+            view.themes.scroll.0.borrow().last_item_size.unwrap().item
+        });
+        // The list's 1px border is all that may separate them.
+        assert_eq!(viewport.height, list.size.height - px(2.), "width {width}");
+    }
 }
 
 #[gpui::test]

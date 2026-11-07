@@ -1,7 +1,7 @@
 //! Herdr's shared `[ui]` input settings, applied where the GUI handles input.
 
 use super::*;
-use gpui::{ScrollDelta, ScrollWheelEvent, TouchPhase};
+use gpui::{ScrollDelta, ScrollEvent, TouchPhase};
 use sheprd_client::protocol::PaneSurfaceScrollMetrics;
 
 fn shared(view: &mut SheprdWindow, text: &str) {
@@ -9,8 +9,8 @@ fn shared(view: &mut SheprdWindow, text: &str) {
 }
 
 /// One discrete wheel notch, whatever line count the platform reports for it.
-fn notch(view: &SheprdWindow, notches: f32) -> ScrollWheelEvent {
-    ScrollWheelEvent {
+fn notch(view: &SheprdWindow, notches: f32) -> ScrollEvent {
+    ScrollEvent {
         position: mouse_position(view, 3.5, 4.5),
         delta: ScrollDelta::Lines(point(
             0.,
@@ -203,7 +203,7 @@ fn right_click_passthrough_wins_over_a_link_under_the_pointer(cx: &mut gpui::Tes
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("ssh:mouse");
-    let link_modifier = gpui::Modifiers::secondary_key();
+    let link_modifier = crate::keymap::secondary_key();
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             prepare_mouse(view, endpoint, cx);

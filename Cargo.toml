@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.package]
 edition      = "2024"
 license      = "Apache-2.0"
-rust-version = "1.96"
+rust-version = "1.99"
 # Cargo metadata only. Releases carry a derived calendar version YYYYMMDD.COUNTER
 # that CI embeds as HERDR_RELEASE_VERSION; this value never reaches the UI.
 version = "0.1.0"
@@ -75,8 +75,8 @@ futures-lite         = "2"
 # Sends frames on sheprd-remote-control's WebSocket test client; axum already links it.
 futures-util         = { default-features = false, features = ["sink"], version = "0.3" }
 getrandom            = "0.4.3"
-gpui                 = { package = "gpui-pre", version = "=0.3.6" }
-gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.6" }
+gpui                 = { package = "gpui-pre", version = "=0.3.10" }
+gpui_platform        = { package = "gpui-pre-platform", version = "=0.3.10" }
 # Reads local repositories for the orchestrator without starting `git`:
 # discovery, config with its includes and URL rewrites, refs, and rev-parse.
 gix                  = { default-features = false, features = ["sha1"], version = "0.90" }

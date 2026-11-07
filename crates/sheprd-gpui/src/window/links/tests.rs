@@ -160,8 +160,8 @@ fn a_wrapped_link_is_resolved_underlined_and_activated_by_the_daemon(
 
     // Movement within the delay leaves one request, for the latest cell.
     let elsewhere = at(&view, cx, 9, 2);
-    cx.simulate_mouse_move(elsewhere, None, Modifiers::secondary_key());
-    cx.simulate_mouse_move(continuation, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(elsewhere, None, crate::keymap::secondary_key());
+    cx.simulate_mouse_move(continuation, None, crate::keymap::secondary_key());
     resolve_after_delay(cx);
     let request = peer.request();
     assert_eq!(request["method"], "pane.link.resolve");
@@ -188,16 +188,16 @@ fn a_wrapped_link_is_resolved_underlined_and_activated_by_the_daemon(
             link.frame_rows().collect::<Vec<_>>(),
             vec![(0, 0..20), (1, 0..12)]
         );
-        assert!(view.terminal_link_hovered(continuation, Modifiers::secondary_key()));
-        assert!(view.link_modifier_held(continuation, Modifiers::secondary_key()));
+        assert!(view.terminal_link_hovered(continuation, crate::keymap::secondary_key()));
+        assert!(view.link_modifier_held(continuation, crate::keymap::secondary_key()));
     });
 
     // Moving along the link asks nothing new. A click goes to the daemon;
     // a plugin handler that claims it leaves nothing to open here.
     let first_row = at(&view, cx, 5, 0);
-    cx.simulate_mouse_move(first_row, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(first_row, None, crate::keymap::secondary_key());
     resolve_after_delay(cx);
-    cx.simulate_click(continuation, Modifiers::secondary_key());
+    cx.simulate_click(continuation, crate::keymap::secondary_key());
     let request = peer.request();
     assert_eq!(request["method"], "pane.link.activate");
     assert_eq!(request["params"]["viewport_row"], 1);
@@ -212,7 +212,7 @@ fn a_wrapped_link_is_resolved_underlined_and_activated_by_the_daemon(
     assert!(cx.opened_url().is_none());
 
     // When nothing claims it, the whole wrapped address opens here.
-    cx.simulate_click(continuation, Modifiers::secondary_key());
+    cx.simulate_click(continuation, crate::keymap::secondary_key());
     let request = peer.request();
     assert_eq!(request["method"], "pane.link.activate");
     assert!(cx.opened_url().is_none());
@@ -259,7 +259,7 @@ fn a_daemon_without_link_methods_keeps_the_local_detector(cx: &mut gpui::TestApp
     let peer = MockPeer::new();
     let (view, cx) = window(&peer, false, cx);
     let link = at(&view, cx, 2, 0);
-    cx.simulate_mouse_move(link, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(link, None, crate::keymap::secondary_key());
     resolve_after_delay(cx);
     view.read_with(cx, |view, _| {
         assert!(view.links.hover.is_none() && view.links.resolving.is_none());
@@ -269,13 +269,13 @@ fn a_daemon_without_link_methods_keeps_the_local_detector(cx: &mut gpui::TestApp
     let continuation = at(&view, cx, 2, 1);
     for position in [link, continuation] {
         view.read_with(cx, |view, _| {
-            assert!(!view.terminal_link_hovered(position, Modifiers::secondary_key()));
+            assert!(!view.terminal_link_hovered(position, crate::keymap::secondary_key()));
             assert!(
                 view.terminal_link_press(position, Modifiers::default())
                     .is_none()
             );
         });
-        cx.simulate_click(position, Modifiers::secondary_key());
+        cx.simulate_click(position, crate::keymap::secondary_key());
     }
     assert!(cx.opened_url().is_none());
 }
@@ -285,7 +285,7 @@ fn a_replaced_connection_retires_link_requests_unanswered(cx: &mut gpui::TestApp
     let mut peer = MockPeer::advertising(&["pane.link.resolve", "pane.link.activate"]);
     let (view, cx) = window(&peer, true, cx);
     let continuation = at(&view, cx, 2, 1);
-    cx.simulate_mouse_move(continuation, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(continuation, None, crate::keymap::secondary_key());
     resolve_after_delay(cx);
     assert_eq!(peer.request()["method"], "pane.link.resolve");
     view.update(cx, |view, _| {

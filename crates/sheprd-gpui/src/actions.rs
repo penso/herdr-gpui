@@ -124,13 +124,22 @@ pub(crate) fn bind_keys(cx: &mut App) {
         .unwrap_or_default();
     #[cfg(target_os = "macos")]
     crate::browser::bind_page_keys(&keymap);
-    cx.bind_keys(keymap.bindings().map(|(command, keystroke)| {
-        if command == Command::Quit {
-            KeyBinding::new(keystroke, Quit, None)
-        } else {
-            KeyBinding::new(keystroke, RunCommand { command }, None)
-        }
-    }));
+    // Shortcuts come from the user's config, so one GPUI refuses is skipped
+    // and logged rather than taking the app down.
+    let bindings: Vec<_> = keymap
+        .bindings()
+        .filter_map(|(command, keystroke)| {
+            let action: Box<dyn Action> = if command == Command::Quit {
+                Box::new(Quit)
+            } else {
+                Box::new(RunCommand { command })
+            };
+            KeyBinding::load(keystroke, action, None, false, None, cx)
+                .inspect_err(|error| tracing::warn!(%error, keystroke, "skipped a shortcut"))
+                .ok()
+        })
+        .collect();
+    cx.bind_keys(bindings);
     cx.bind_keys(crate::log_window::key_bindings());
     cx.bind_keys(crate::settings_window::key_bindings());
     let [cut, copy, paste, select_all] = EDIT_KEYS;
@@ -211,10 +220,10 @@ const SYSTEM_KEYS: [&str; 3] = ["cmd-h", "cmd-alt-h", "cmd-m"];
 fn free_system_keys(keymap: &crate::keymap::Keymap) -> impl Iterator<Item = &'static str> {
     let bound: Vec<Keystroke> = keymap
         .bindings()
-        .filter_map(|(_, label)| Keystroke::parse(label).ok())
+        .filter_map(|(_, label)| crate::keymap::parse_keystroke(label).ok())
         .collect();
     SYSTEM_KEYS.into_iter().filter(move |system| {
-        Keystroke::parse(system).is_ok_and(|system| {
+        crate::keymap::parse_keystroke(system).is_ok_and(|system| {
             bound
                 .iter()
                 .all(|bound| (bound.modifiers, &bound.key) != (system.modifiers, &system.key))

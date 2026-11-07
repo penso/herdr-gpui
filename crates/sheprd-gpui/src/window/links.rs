@@ -276,8 +276,7 @@ impl SheprdWindow {
     ) {
         self.links.pointer = Some((position, modifiers));
         let mut examined = false;
-        let local = modifiers
-            .secondary()
+        let local = crate::keymap::secondary(&modifiers)
             .then(|| self.local_link_at(position))
             .flatten()
             .and_then(|link| {
@@ -304,7 +303,7 @@ impl SheprdWindow {
             self.links.local = local;
             cx.notify();
         }
-        let cell = (modifiers.secondary() && self.live.supports_link_resolve)
+        let cell = (crate::keymap::secondary(&modifiers) && self.live.supports_link_resolve)
             .then(|| self.link_cell_at(position))
             .flatten();
         if cell == self.links.hover {
@@ -434,7 +433,7 @@ impl SheprdWindow {
         position: Point<Pixels>,
         modifiers: Modifiers,
     ) -> Option<PressedLink> {
-        if !modifiers.secondary() {
+        if !crate::keymap::secondary(&modifiers) {
             return None;
         }
         let url = self.terminal_link_at(position);

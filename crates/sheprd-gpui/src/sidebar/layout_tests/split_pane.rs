@@ -71,7 +71,7 @@ fn sidebar_split_drag_clamps_releases_outside_and_resets(cx: &mut gpui::TestAppC
 
 #[gpui::test]
 fn sidebar_split_preserves_independent_scrolling_and_agents_toggle(cx: &mut gpui::TestAppContext) {
-    use gpui::{MouseButton, ScrollDelta, ScrollWheelEvent};
+    use gpui::{MouseButton, ScrollDelta, ScrollEvent};
 
     let (view, cx) = cx.add_window_view(|window, cx| {
         let mut view = fixture_window(window, cx);
@@ -103,7 +103,7 @@ fn sidebar_split_preserves_independent_scrolling_and_agents_toggle(cx: &mut gpui
             view.sidebar_scroll.each_ref().map(|scroll| scroll.offset())
         });
         let position = cx.debug_bounds(selector).unwrap().center();
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position,
             delta: ScrollDelta::Pixels(point(px(0.), px(-40.))),
             ..Default::default()

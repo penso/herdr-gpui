@@ -12,7 +12,7 @@ fn an_unchecked_path_leaves_the_click_to_the_application(cx: &mut gpui::TestAppC
     });
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("local:mouse");
-    let held = gpui::Modifiers::secondary_key();
+    let held = crate::keymap::secondary_key();
     let position = cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             prepare_mouse(view, endpoint, cx);

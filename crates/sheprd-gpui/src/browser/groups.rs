@@ -168,7 +168,7 @@ impl SavedLayout {
             let keeps = |group: &SavedGroup| kept(pick, group);
             let active = self.groups.get(self.active);
             let using = |wanted: &dyn Fn(&SavedGroup) -> bool| {
-                Some(self.active).filter(|_| active.is_some_and(wanted))
+                active.is_some_and(wanted).then_some(self.active)
             };
             let owner = using(&shows)
                 .or_else(|| self.groups.iter().position(shows))

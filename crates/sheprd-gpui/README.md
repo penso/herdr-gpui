@@ -1,6 +1,6 @@
 # Sheprd Native Workspace
 
-A GPUI 0.3.6 (`gpui-pre`) workspace for terminals and AI agents on local,
+A GPUI 0.3.10 (`gpui-pre`) workspace for terminals and AI agents on local,
 SSH, and cloud machines, with macOS support, Linux x86_64/ARM64 builds, and
 a Windows build with native CI coverage. See [Windows](#windows) for what is
 unavailable there. It supports existing Herdr 1 sessions and

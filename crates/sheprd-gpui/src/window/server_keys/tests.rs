@@ -8,7 +8,7 @@ const HOST: &str = "ssh:0123456789abcdef0123456789abcdef";
 const PROFILE: &str = "[keys]\nprefix = \"cmd+j\"\ntoggle_sidebar = \"prefix+cmd+b\"\n";
 
 fn key(text: &str) -> Keystroke {
-    Keystroke::parse(text).unwrap()
+    crate::keymap::parse_keystroke(text).unwrap()
 }
 
 /// A window with Local and one saved device, which is not enabled so the

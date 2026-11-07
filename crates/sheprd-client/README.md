@@ -4,7 +4,7 @@ Local, SSH, and WSL client for Herdr's stable generation 1 endpoint. Local
 connections and SSH endpoints work on Unix and on Windows, and WSL
 distributions are Windows-only. This crate
 does not link Herdr, GPUI, ratatui, crossterm, Tokio, or a PTY implementation.
-The workspace centralizes the pinned GPUI dependency (`gpui-pre` 0.3.6) for the GUI member.
+The workspace centralizes the pinned GPUI dependency (`gpui-pre` 0.3.10) for the GUI member.
 
 ```rust,no_run
 use sheprd_client::{connect, ClientEvent, ConnectOptions, ConnectTarget};

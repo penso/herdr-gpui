@@ -591,7 +591,7 @@ pub fn start_sidebar(handle: WindowHandle<SheprdWindow>, cx: &mut App) {
                     let menu::Cover::Panel(panel) = view.read(cx).menu.cover.get() else {
                         bail!("workspace popover has no painted panel bounds");
                     };
-                    window.dispatch_event(PlatformInput::ScrollWheel(ScrollWheelEvent {
+                    window.dispatch_event(PlatformInput::Scroll(ScrollEvent {
                         position: panel.center(),
                         delta: ScrollDelta::Pixels(gpui::point(px(0.), -window.viewport_size().height)),
                         ..Default::default()
@@ -622,7 +622,7 @@ pub fn start_sidebar(handle: WindowHandle<SheprdWindow>, cx: &mut App) {
                     let steps = view.read(cx).native_workspace_dialog_steps(action)
                         .context("workspace dialog is absent from its menu")?;
                     for key in std::iter::repeat_n("down", steps).chain(std::iter::once("enter")) {
-                        window.dispatch_keystroke(Keystroke::parse(key)?, cx);
+                        window.dispatch_keystroke(crate::keymap::parse_keystroke(key)?, cx);
                     }
                     window.draw(cx).clear(cx);
                     if view.read(cx).menu.page != Some(menu::Page::Dialog(action)) {
@@ -654,7 +654,7 @@ pub fn start_sidebar(handle: WindowHandle<SheprdWindow>, cx: &mut App) {
                     if matches!(action, menu::WorkspaceAction::Rename | menu::WorkspaceAction::NewWorktree) {
                         window.dispatch_keystroke(Keystroke::parse("cmd-a")?, cx);
                         for ch in "long-label-\u{65e5}\u{672c}-\u{1f600}".repeat(4).chars() {
-                            window.dispatch_keystroke(Keystroke::parse(&ch.to_string())?, cx);
+                            window.dispatch_keystroke(crate::keymap::parse_keystroke(&ch.to_string())?, cx);
                         }
                         window.draw(cx).clear(cx);
                         if let Some(name) = name {

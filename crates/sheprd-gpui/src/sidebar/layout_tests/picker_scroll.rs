@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{ScrollDelta, ScrollWheelEvent};
+use gpui::{ScrollDelta, ScrollEvent};
 
 /// A footer picker whose rows fit has nothing to scroll: the wheel over it
 /// must leave every row where it was.
@@ -38,7 +38,7 @@ fn the_wheel_does_not_move_a_device_picker_that_fits(cx: &mut gpui::TestAppConte
     let last = cx.debug_bounds("device-row-3").unwrap();
     assert!(panel.contains(&first.origin) && last.bottom() <= panel.bottom());
 
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: panel.center(),
         delta: ScrollDelta::Pixels(point(px(0.), px(-40.))),
         ..Default::default()
@@ -84,7 +84,7 @@ fn a_device_picker_that_overflows_scrolls_its_list(cx: &mut gpui::TestAppContext
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
     let panel = cx.debug_bounds("menu-panel").unwrap();
     let first = cx.debug_bounds("device-row-0").unwrap();
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: panel.center(),
         delta: ScrollDelta::Pixels(point(px(0.), px(-40.))),
         ..Default::default()

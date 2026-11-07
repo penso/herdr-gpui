@@ -194,7 +194,7 @@ fn edit_menu_carries_standard_items_and_shortcut_labels(cx: &mut gpui::TestAppCo
             assert_eq!(bindings.len(), 1, "{name}");
             assert_eq!(
                 bindings[0].keystrokes()[0].inner(),
-                &gpui::Keystroke::parse(keystroke).unwrap()
+                &crate::keymap::parse_keystroke(keystroke).unwrap()
             );
             // No element sets the context, so the keystroke never dispatches
             // the action ahead of the focused element's own key handler.
