@@ -21,6 +21,7 @@ const MAX_ACTIVITIES_TRACKED: usize = 2 * sheprd_chat_protocol::MAX_ACTIVITIES;
 /// The most text one entry keeps; later chunks are dropped.
 pub(crate) const MAX_ENTRY_TEXT: usize = 256 * 1024;
 const TRUNCATED: &str = "\n… (truncated)";
+const EDIT_NOTICE: &str = "Original edit context exceeds live preview limits.";
 /// The most steps of one sub-agent the transcript shows; later ones only
 /// update its activity's detail.
 pub(crate) const MAX_STEPS: usize = 64;
@@ -738,9 +739,22 @@ fn tool_content(content: wire::ToolCallContent) -> ToolContent {
                 text: bounded(block_text(&content.content)),
             },
         },
+        // A clipped side changes the diff's meaning: what was cut from the
+        // new text reads as deleted. Keep both sides whole or neither.
+        wire::ToolCallContent::Diff(diff)
+            if diff.new_text.len() > MAX_ENTRY_TEXT
+                || diff
+                    .old_text
+                    .as_ref()
+                    .is_some_and(|old| old.len() > MAX_ENTRY_TEXT) =>
+        {
+            ToolContent::Text {
+                text: EDIT_NOTICE.to_owned(),
+            }
+        }
         wire::ToolCallContent::Diff(diff) => ToolContent::Diff {
-            new: bounded(diff.new_text),
-            old: diff.old_text.map(bounded),
+            new: diff.new_text,
+            old: diff.old_text,
             path: diff.path.display().to_string(),
         },
         wire::ToolCallContent::Terminal(terminal) => ToolContent::Terminal {
