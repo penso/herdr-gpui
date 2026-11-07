@@ -1,5 +1,6 @@
-//! A file's header in the diff, which folds it, copies its path, marks it
-//! viewed and takes a note on the whole file, and the line that stands for
+//! A file's header in the diff, which folds it, copies its path, opens it in
+//! the editor, marks it viewed and takes a note on the whole file, and the
+//! line that stands for
 //! its lines while they are unread, binary, or too large to read unasked.
 use super::{Review, rows::mark_slot};
 use crate::{
@@ -113,6 +114,26 @@ impl SheprdWindow {
                         .child(removed),
                 )
         });
+        // A deleted file has nothing to open, and Windows no shell to open
+        // it from.
+        let edit = (crate::editor::SUPPORTED && entry.status != Status::Deleted).then(|| {
+            let (foreground, surface) = (theme.foreground, theme.surface);
+            super::rows::header_button(theme, line_height, "icons/pencil.svg")
+                .id(("review-open-editor", file))
+                .debug_selector(move || format!("review-open-editor-{file}"))
+                .tooltip(move |_, cx| {
+                    cx.new(|_| crate::usage::Hint {
+                        text: fl!("review-open-in-editor").into(),
+                        foreground,
+                        surface,
+                    })
+                    .into()
+                })
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.open_review_in_editor(id, RowId::Header(file), cx);
+                }))
+        });
         div()
             .id(("review-header", file))
             .debug_selector(move || format!("review-header-{file}"))
@@ -156,6 +177,7 @@ impl SheprdWindow {
                         this.copy_review_path(id, file, cx);
                     })),
             )
+            .children(edit)
             .child(check)
             .into_any_element()
     }

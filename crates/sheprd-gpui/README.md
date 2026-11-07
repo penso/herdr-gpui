@@ -2879,8 +2879,8 @@ next to the agent that is changing the code.
 - **Open in your editor.** Cmd-click (Ctrl-click elsewhere) a printed path
   such as `src/main.rs:42` to open it at that line in your terminal editor, in
   a new pane split to the right of the pane that printed it. In a
-  [review](#reviewing-an-agents-changes), `e` opens the file at the top of the
-  diff the same way. Quitting the editor closes its pane. When the editor is
+  [review](#reviewing-an-agents-changes), `e` or a file header's pencil opens
+  the file the same way. Quitting the editor closes its pane. When the editor is
   Neovim, later files for the same tab open in that Neovim instead of a new
   split, as [herdr-nvim](https://github.com/ChmaraX/herdr-nvim)'s sidebar
   does.
@@ -3244,6 +3244,13 @@ the titlebar's Git menu where its button would.
   Up/Down a page, `]`/`[` move to the next or previous hunk and `.`/`,` to
   the next or previous file, `x` folds the file at the top and `v` marks it
   viewed.
+- `e` opens the file in your [editor](#code-navigation), beside the agent's
+  pane: at the line you clicked while it is in view, else at the top of the
+  diff. On a file clicked or picked in the list, and from the pencil in each
+  file's header, it opens at the file's first change. Quitting the editor
+  brings the review back, reading your edits as it reads any other change,
+  unless you have moved to another tab by then. A file no longer in the
+  checkout says so.
 - The review reads its changes again when the checkout's change counts
   move, keeping the line it was on, unless a note is being written.
 - A scrollbar along the diff's right edge shows how much of it is in view

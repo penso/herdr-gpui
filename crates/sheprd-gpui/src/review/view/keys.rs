@@ -1,11 +1,14 @@
 //! Keys in the diff, while it holds the keyboard: `j`/`k` and the arrows
 //! scroll a line, Space and Page Up/Down a page, `]`/`[` move between hunks
 //! and `.`/`,` between files, `/` finds, `n`/`N` step through the matches,
-//! `x` folds the file at the top, `v` marks it viewed, and `e` opens it in
-//! the editor at that line. Cmd-C copies the selected code, Cmd-A selects
+//! `x` folds the file at the top, `v` marks it viewed, and `e` opens the line
+//! clicked, or the top one, in the editor. Cmd-C copies the selected code, Cmd-A selects
 //! the file's, and Escape clears it. Fields in the review keep their own keys.
 use super::Review;
-use crate::{SheprdWindow, browser::TabId, editor::EditorTarget, review::diff::RowId};
+use crate::{
+    SheprdWindow, browser::TabId, editor::EditorTarget, i18n::fl, review::diff::RowId,
+    window::Flash,
+};
 use gpui::{prelude::*, *};
 
 /// A move through the diff.
@@ -96,30 +99,32 @@ impl Review {
 }
 
 impl SheprdWindow {
-    /// Opens the file at the top of the diff in the editor, beside the
-    /// agent's pane when the review knows it, once a background check finds
-    /// the file still in the checkout.
-    fn open_review_in_editor(&mut self, id: TabId, cx: &mut Context<Self>) {
+    /// Opens `row` in the editor, beside the agent's pane when the review
+    /// knows it, once a background check finds the file still in the
+    /// checkout. A file that left it, deleted or since moved, is reported.
+    /// Quitting the editor brings the review back.
+    pub(super) fn open_review_in_editor(&mut self, id: TabId, row: RowId, cx: &mut Context<Self>) {
         let Some(review) = self.reviews.get(&id) else {
             return;
         };
-        let (Some((path, line)), Some(checkout)) =
-            (review.editor_spot(), review.checkout.checkout.as_deref())
-        else {
+        let Some((path, line)) = review.editor_spot(row) else {
             return;
         };
-        let path = std::path::Path::new(checkout).join(path);
         let beside = review.agent.as_ref().map(|agent| agent.pane_id.clone());
-        let found = cx
-            .background_executor()
-            .spawn(async move { path.is_file().then_some(path) });
+        let found = cx.background_executor().spawn({
+            let path = path.clone();
+            async move { path.is_file() }
+        });
         cx.spawn(async move |this, cx| {
-            let Some(path) = found.await else {
-                return;
-            };
-            let target = EditorTarget { path, line };
+            let found = found.await;
             let _ = this.update(cx, |this, cx| {
-                this.open_in_editor(&target, beside.as_deref(), cx);
+                if found {
+                    let target = EditorTarget { path, line };
+                    this.open_in_editor_from(&target, beside.as_deref(), Some(id), cx);
+                } else {
+                    let path = path.display().to_string();
+                    this.show_flash(Flash::warning(fl!("review-file-gone", path = path)), cx);
+                }
             });
         })
         .detach();
@@ -197,7 +202,11 @@ impl SheprdWindow {
                     }
                 }
             }
-            ("e", false) => self.open_review_in_editor(id, cx),
+            ("e", false) => {
+                if let Some(row) = self.reviews.get(&id).and_then(Review::editor_row) {
+                    self.open_review_in_editor(id, row, cx);
+                }
+            }
             ("home", false) => {
                 if let Some(review) = self.reviews.get_mut(&id) {
                     review.scroll.scroll_to(ListOffset {
