@@ -130,7 +130,7 @@ fn open_window_placed(
             window_min_size: Some(size(px(640.), px(400.))),
             titlebar: Some(titlebar::options(WINDOW_TITLE)),
             app_owns_titlebar_drag: cfg!(target_os = "macos"),
-            app_id: Some(crate::constants::APP_ID.into()),
+            app_id: Some(crate::constants::LINUX_APP_ID.into()),
             ..Default::default()
         },
         |window, cx| {

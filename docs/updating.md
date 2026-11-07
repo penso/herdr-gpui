@@ -274,7 +274,10 @@ Installation contracts, beyond accepting a filename:
   has the asset's exact stem without `-update.tar.gz`, namely
   `herdr-gpui-VERSION-TARGET` or `sheprd-VERSION-TARGET`. It replaces and relaunches
   the existing user-owned executable path, even if that path is still named
-  `herdr-gpui`. Companion binaries and desktop integration are not migrated.
+  `herdr-gpui`. Companion binaries and desktop integration are not migrated, so
+  a desktop entry copied from an older archive keeps `so.pen.herdr-gpui` and no
+  longer matches the window; replace it with `org.sheprd.Sheprd.desktop` from the
+  current manual archive to get the dock icon back.
 - **Linux packages:** the current client accepts both asset filename generations
   during preparation and through both verifiers. The deployed `v20261103.1`
   bridge still requires a legacy filename during preparation, so publication
