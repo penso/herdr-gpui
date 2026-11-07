@@ -41,6 +41,8 @@ pub(crate) enum Page {
     #[cfg(feature = "cloud")]
     DestroyCloud,
     Devices,
+    /// Groups a device by tag.
+    DeviceTags,
     /// Picks a saved SSH device's terminal theme.
     DeviceTheme,
     Dialog(WorkspaceAction),

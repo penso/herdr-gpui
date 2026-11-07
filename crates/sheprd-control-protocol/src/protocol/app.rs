@@ -182,6 +182,9 @@ pub struct HostInfo {
     /// "online", "connecting", "reconnecting", "detached", "disabled", ...
     pub status: String,
     pub selected: bool,
+    /// What groups it in the sidebar.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -65,7 +65,8 @@ impl SheprdWindow {
         // which grow with the font as the label does.
         let (arrow_width, dot) = (scaled(font, HOST_ARROW_WIDTH), scaled(font, STATUS_WIDTH));
         let host_label_width =
-            (look.content_width(width) - arrow_width - 2. * host_gap - dot).max(0.);
+            (look.content_width(width) - look.group_indent - arrow_width - 2. * host_gap - dot)
+                .max(0.);
         let prefix = if pinned { "sticky-" } else { "" };
         let endpoint_id = endpoint.id.clone();
         let collapse_id = endpoint_id.clone();
@@ -173,7 +174,8 @@ impl SheprdWindow {
             .flex()
             .flex_col()
             .justify_center()
-            .px(px(content_x))
+            .ps(px(content_x + look.group_indent))
+            .pe(px(content_x))
             // Rows scrolling underneath show through anything translucent, so
             // the copy paints the sidebar's own background. It stops hover and
             // clicks reaching those rows but not the wheel, which must keep

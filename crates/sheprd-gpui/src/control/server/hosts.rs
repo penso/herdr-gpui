@@ -40,6 +40,7 @@ pub(super) fn serve(
         HostOp::Select { id } => in_free_window(caller, cx, |view, _, cx| {
             select(view, &id, |view, id| view.select_endpoint(id, cx))
         }),
+        HostOp::Tag { id, tags } => in_window(caller, cx, |view, _, cx| tag(view, &id, tags, cx)),
         HostOp::Pr => in_window(caller, cx, |view, _, _| pr::status(view, caller)),
         HostOp::PrQuota => in_window(caller, cx, |view, _, _| pr::quota(view)),
         HostOp::PrComments => return pr::comments(call.caller, incoming, watches, cx),
@@ -137,6 +138,28 @@ impl Place {
                 .and_then(|snapshot| snapshot.focused_workspace_id.as_deref())
                 == Some(self.workspace.as_str())
     }
+}
+
+/// Replaces the tags of the host named by ID or label.
+fn tag(view: &mut SheprdWindow, name: &str, tags: Vec<String>, cx: &mut App) -> Response {
+    let found = view
+        .endpoints
+        .iter()
+        .find(|endpoint| endpoint.id == name)
+        .or_else(|| {
+            view.endpoints
+                .iter()
+                .find(|endpoint| endpoint.label.eq_ignore_ascii_case(name))
+        });
+    let Some(endpoint) = found else {
+        return Response::error(
+            ErrorCode::NotFound,
+            format!("No host is named {name}; `sheprd host list` lists them"),
+        );
+    };
+    let (id, label) = (endpoint.id.clone(), endpoint.label.clone());
+    crate::device_tags::DeviceTags::set(cx, &id, tags);
+    Response::done(format!("Tagged {label}"))
 }
 
 /// Shows the host named by ID or label. `choose` is the window's own
