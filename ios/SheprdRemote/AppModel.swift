@@ -133,6 +133,7 @@ final class AppModel {
     let collapsed = CollapsedStore()
     let tagFilter = TagFilterStore()
     let shortcuts = ShortcutStore()
+    let termKeys = TermKeyStore()
     let bluetooth = NearbyBluetooth()
     /// Bluetooth presence with the computers that have it on.
     let presence = PresenceCentral()

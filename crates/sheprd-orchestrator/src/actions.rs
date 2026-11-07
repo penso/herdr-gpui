@@ -4,7 +4,7 @@
 //! start never holds up syncing, and writes only runs herdr-gpui owns.
 
 use super::{
-    Error, HerdrSession, Owner, Result, Run, RunState, SourceKey, Store, beads,
+    Error, HerdrSession, ItemKey, Owner, Provider, Result, Run, RunState, SourceKey, Store, beads,
     error::script,
     model::{Backend, Workspace},
 };
@@ -60,6 +60,16 @@ pub struct DispatchRequest {
     pub elsewhere: Option<Elsewhere>,
 }
 
+impl DispatchRequest {
+    /// The item's key when it is a bead.
+    fn bead(&self) -> Option<ItemKey> {
+        self.item_key
+            .parse::<ItemKey>()
+            .ok()
+            .filter(|key| key.source.provider == Provider::Beads)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Action {
     Dispatch(Box<DispatchRequest>),
@@ -84,6 +94,15 @@ pub enum Action {
 }
 
 impl Action {
+    /// Whether it changes a source's items, which the next sync then shows.
+    pub(crate) fn changes_items(&self) -> bool {
+        match self {
+            Self::DeleteBead { .. } => true,
+            Self::Dispatch(request) => request.bead().is_some(),
+            Self::Stop { .. } | Self::Send { .. } | Self::Remove { .. } => false,
+        }
+    }
+
     /// What the user reads once it succeeded.
     fn done(&self) -> Done {
         match self {
@@ -348,7 +367,32 @@ struct Destination {
     prepared: Option<teleport::Prepared>,
 }
 
+/// Dispatches `request`. An agent sent to a bead claims it first, on the
+/// host of its database, so a bead someone holds starts nothing. A launch
+/// that fails gives the claim back, so nothing stays in progress that no
+/// agent is working on; the bead's status is otherwise the agent's to change.
 fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> Result<()> {
+    let Some(key) = request.bead() else {
+        return start_run(site, request, cancelled);
+    };
+    let claim = beads::claim::take(&site.host, &key.source, &key.native_id, cancelled)?;
+    let outcome = start_run(site, request, cancelled);
+    if outcome.is_err() {
+        // Run even when cancelled, as a failed run's worktree is removed.
+        let released =
+            beads::claim::release(&site.host, &key.source, &claim, &AtomicBool::new(false));
+        if let Err(error) = released {
+            tracing::warn!(
+                category = "orchestrator",
+                %error,
+                "A failed dispatch could not give its claim back"
+            );
+        }
+    }
+    outcome
+}
+
+fn start_run(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> Result<()> {
     let mut store = Store::open(&site.database)?;
     let name = agent_name();
     let now = Utc::now();

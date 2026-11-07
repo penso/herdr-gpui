@@ -5,6 +5,10 @@
 # $id is the text that was read, in quotes. bd is the Beads program.
 error-orchestrator-bead-id = Bead id { $id } is not one bd accepts
 error-orchestrator-beads-missing = Beads is not installed on this host (bd was not found)
+# $id is a Beads task id. $holder is who holds it, as bd names them.
+error-orchestrator-bead-held = { $id } is already claimed by { $holder }
+# $id is a Beads task id.
+error-orchestrator-bead-held-unknown = { $id } is already claimed
 error-orchestrator-busy = Several actions are already running; try again when one finishes
 error-orchestrator-cancelled = Cancelled
 # $error is the database's own description of the failure.
@@ -12,7 +16,9 @@ error-orchestrator-database = Orchestrator database failed: { $error }
 # $kind is the step that failed. $operation is its English description,
 # shown for a step not listed here.
 error-orchestrator-failed = { $kind ->
+    [claim-bead] Claiming the bead failed: { $error }
     [create-worktree] Creating the worktree failed: { $error }
+    [delete-bead] Deleting the bead failed: { $error }
     [discover-agents] Discovering installed agents failed: { $error }
     [name-pane] Naming the agent pane failed: { $error }
     [name-tab] Naming the agent tab failed: { $error }
@@ -26,6 +32,7 @@ error-orchestrator-failed = { $kind ->
     [read-github] Reading GitHub failed: { $error }
     [read-repository] Reading the repository failed: { $error }
     [read-workspaces] Reading the workspaces failed: { $error }
+    [release-bead] Releasing the bead failed: { $error }
     [remove-worktree] Removing the worktree failed: { $error }
     [resolve-beads-folder] Resolving the Beads folder failed: { $error }
     [send-message] Sending the message failed: { $error }
@@ -53,7 +60,9 @@ error-orchestrator-nothing-to-open = This run has no Herdr workspace to show
 # $kind is the step that failed. $operation is its English description,
 # shown for a step not listed here.
 error-orchestrator-output = { $kind ->
+    [claim-bead] Claiming the bead returned unexpected output
     [create-worktree] Creating the worktree returned unexpected output
+    [delete-bead] Deleting the bead returned unexpected output
     [discover-agents] Discovering installed agents returned unexpected output
     [name-pane] Naming the agent pane returned unexpected output
     [name-tab] Naming the agent tab returned unexpected output
@@ -67,6 +76,7 @@ error-orchestrator-output = { $kind ->
     [read-github] Reading GitHub returned unexpected output
     [read-repository] Reading the repository returned unexpected output
     [read-workspaces] Reading the workspaces returned unexpected output
+    [release-bead] Releasing the bead returned unexpected output
     [remove-worktree] Removing the worktree returned unexpected output
     [resolve-beads-folder] Resolving the Beads folder returned unexpected output
     [send-message] Sending the message returned unexpected output
@@ -78,7 +88,9 @@ error-orchestrator-output = { $kind ->
 # $kind is the step that failed. $operation is its English description,
 # shown for a step not listed here. $error is the JSON parser's own words.
 error-orchestrator-output-json = { $kind ->
+    [claim-bead] Claiming the bead returned invalid JSON: { $error }
     [create-worktree] Creating the worktree returned invalid JSON: { $error }
+    [delete-bead] Deleting the bead returned invalid JSON: { $error }
     [discover-agents] Discovering installed agents returned invalid JSON: { $error }
     [name-pane] Naming the agent pane returned invalid JSON: { $error }
     [name-tab] Naming the agent tab returned invalid JSON: { $error }
@@ -92,6 +104,7 @@ error-orchestrator-output-json = { $kind ->
     [read-github] Reading GitHub returned invalid JSON: { $error }
     [read-repository] Reading the repository returned invalid JSON: { $error }
     [read-workspaces] Reading the workspaces returned invalid JSON: { $error }
+    [release-bead] Releasing the bead returned invalid JSON: { $error }
     [remove-worktree] Removing the worktree returned invalid JSON: { $error }
     [resolve-beads-folder] Resolving the Beads folder returned invalid JSON: { $error }
     [send-message] Sending the message returned invalid JSON: { $error }

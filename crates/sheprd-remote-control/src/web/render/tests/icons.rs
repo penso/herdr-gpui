@@ -45,4 +45,13 @@ fn agents_show_their_logos_not_symbols() {
         agent_icon(Some("copilot"), "").into_string(),
         agent_icon(Some("pi"), "").into_string()
     );
+    // Herdr names these; each has its own logo, not the generic one.
+    let generic = agent_icon(None, "").into_string();
+    for agent in ["grok", "cursor"] {
+        assert_ne!(
+            agent_icon(Some(agent), "").into_string(),
+            generic,
+            "{agent}"
+        );
+    }
 }
