@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{Pixels, ScrollDelta, ScrollWheelEvent, VisualTestContext};
+use gpui::{Pixels, ScrollDelta, ScrollEvent, VisualTestContext};
 
 const WORKSPACES: usize = 12;
 /// Past a header's own edge, so it is unambiguously above the list's top.
@@ -167,7 +167,7 @@ fn the_pinned_header_takes_input_instead_of_the_rows_under_it(cx: &mut gpui::Tes
 
     // The wheel still scrolls the list with the pointer on the pinned header.
     let before = view.read_with(cx, |view, _| view.sidebar_scroll[0].offset());
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: pinned.center(),
         delta: ScrollDelta::Pixels(point(px(0.), px(-20.))),
         ..Default::default()

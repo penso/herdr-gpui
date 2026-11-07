@@ -368,7 +368,6 @@ fn config_reload_rebinds_the_keymap(cx: &mut gpui::TestAppContext) {
         config::Config,
         keymap::{Binding, Keymap},
     };
-    use gpui::Keystroke;
 
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     cx.update(|_, cx| crate::bind_keys(cx));
@@ -376,7 +375,7 @@ fn config_reload_rebinds_the_keymap(cx: &mut gpui::TestAppContext) {
         cx.update(|_, cx| {
             cx.key_bindings()
                 .borrow()
-                .all_bindings_for_input(&[Keystroke::parse(keystroke).unwrap()])
+                .all_bindings_for_input(&[crate::keymap::parse_keystroke(keystroke).unwrap()])
                 .iter()
                 .any(|binding| binding.action().partial_eq(&RunCommand { command }))
         })
@@ -421,7 +420,8 @@ fn config_reload_rebinds_the_keymap(cx: &mut gpui::TestAppContext) {
         } else {
             "cmd-l"
         };
-        let console = keymap.all_bindings_for_input(&[Keystroke::parse(level).unwrap()]);
+        let console =
+            keymap.all_bindings_for_input(&[crate::keymap::parse_keystroke(level).unwrap()]);
         assert_eq!(console.len(), 1);
     });
     view.read_with(cx, |view, _| {

@@ -7,7 +7,7 @@ fn word(key: &str) -> Keystroke {
     } else {
         "ctrl"
     };
-    Keystroke::parse(&format!("{word}-{key}")).unwrap_or_default()
+    crate::keymap::parse_keystroke(&format!("{word}-{key}")).unwrap_or_default()
 }
 
 #[gpui::test]

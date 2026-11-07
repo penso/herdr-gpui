@@ -1,6 +1,7 @@
 {
   "type": "home",
   "home": {
+    "api": 1,
     "computer": "MacBook Pro",
     "fingerprint": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
     "connected": true,
@@ -12,6 +13,7 @@
       "memory": 67
     },
     "working": 2,
+    "version": "20261106.1",
     "workspaces": [
       {
         "id": "w1",
@@ -113,9 +115,16 @@
           "label": "work",
           "is_linked_worktree": true
         },
+        "unopened_commits": 3,
         "chats": [],
         "terminals": []
       }
-    ]
+    ],
+    "tags": {
+      "tags": [
+        "work"
+      ],
+      "updated_ms": 1770000000000
+    }
   }
 }

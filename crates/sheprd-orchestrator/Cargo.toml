@@ -10,8 +10,10 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
+base64.workspace            = true
 chrono.workspace            = true
 gix.workspace               = true
+percent-encoding.workspace  = true
 sheprd-client.workspace      = true
 sheprd-credentials.workspace = true
 sheprd-github.workspace      = true

@@ -49,6 +49,12 @@ impl Look {
         base * (self.ui.size / DESIGNED).max(1.)
     }
 
+    /// A column `base` pixels wide at the usual text size, grown like a row
+    /// so the text it holds keeps fitting.
+    pub(crate) fn column(&self, base: f32) -> f32 {
+        self.row(base)
+    }
+
     pub(crate) fn tiny(&self) -> Pixels {
         px((self.ui.size - 2.).max(9.))
     }
@@ -78,13 +84,18 @@ impl Look {
 
     /// A short colored word, such as a state or priority.
     pub(crate) fn badge(&self, text: impl Into<SharedString>, index: usize) -> Div {
+        self.badge_in(text, self.hue(index))
+    }
+
+    /// A [`Self::badge`] in a color already inked for the theme.
+    pub(crate) fn badge_in(&self, text: impl Into<SharedString>, color: u32) -> Div {
         div()
             .flex_none()
             .whitespace_nowrap()
             .px(px(6.))
             .rounded(px(corners::SMALL))
-            .bg(rgb(self.wash(index)))
-            .text_color(rgb(self.hue(index)))
+            .bg(rgb(mix(self.theme.background, color, 16)))
+            .text_color(rgb(color))
             .text_size(self.tiny())
             .child(text.into())
     }

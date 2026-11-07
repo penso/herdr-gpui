@@ -11,7 +11,7 @@ use super::{
 use crate::multiline_input::MultilineInput;
 use crate::search_input::SearchInput;
 use gpui::{App, Entity, FocusHandle, ListAlignment, ListState, Window, px};
-use sheprd_chat_protocol::{ClientMessage, Command, Cursor, EndpointId, EntryId};
+use sheprd_chat_protocol::{ClientMessage, Command, Cursor, EntryId};
 use std::{
     collections::HashSet,
     time::{Duration, Instant},
@@ -533,8 +533,9 @@ pub(crate) struct Chats {
     panes: Vec<ChatPane>,
     /// The `herdr-acp` new chats run.
     pub(crate) program: super::Program,
-    /// Programs whose panes the user turned back to their terminal.
-    raw: HashSet<EndpointId>,
+    /// Exact pane/process/host targets the user turned back to their terminal.
+    /// Two panes may legitimately observe the same session endpoint.
+    raw: HashSet<Target>,
     /// Textures of panes no longer attached, for the window to drop.
     released: Vec<std::sync::Arc<gpui::RenderImage>>,
     /// Chats being continued in the panes Herdr restored.
@@ -676,12 +677,8 @@ impl Chats {
             });
         }
         self.panes = panes;
-        let endpoints: HashSet<&EndpointId> = self
-            .panes
-            .iter()
-            .map(|pane| &pane.target.endpoint)
-            .collect();
-        self.raw.retain(|endpoint| endpoints.contains(endpoint));
+        let targets: HashSet<&Target> = self.panes.iter().map(|pane| &pane.target).collect();
+        self.raw.retain(|target| targets.contains(target));
         for pane in &mut self.panes {
             let due =
                 pane.link.is_none() && !pane.permanent && pane.retry_at.is_none_or(|at| at <= now);
@@ -732,25 +729,25 @@ impl Chats {
     /// Whether `pane_id` shows the chat view rather than its terminal.
     pub(crate) fn shown(&self, pane_id: &str) -> bool {
         self.pane(pane_id)
-            .is_some_and(|pane| pane.available() && !self.raw.contains(&pane.target.endpoint))
+            .is_some_and(|pane| pane.available() && !self.raw.contains(&pane.target))
     }
 
     /// Whether the user turned `pane_id` back to its terminal.
     pub(crate) fn raw(&self, pane_id: &str) -> bool {
         self.pane(pane_id)
-            .is_some_and(|pane| self.raw.contains(&pane.target.endpoint))
+            .is_some_and(|pane| self.raw.contains(&pane.target))
     }
 
     /// Shows the chat view over `pane_id`, or its terminal; `false` when the
     /// pane has no chat to show.
     pub(crate) fn set_raw(&mut self, pane_id: &str, raw: bool) -> bool {
-        let Some(endpoint) = self.pane(pane_id).map(|pane| pane.target.endpoint.clone()) else {
+        let Some(target) = self.pane(pane_id).map(|pane| pane.target.clone()) else {
             return false;
         };
         if raw {
-            self.raw.insert(endpoint);
+            self.raw.insert(target);
         } else {
-            self.raw.remove(&endpoint);
+            self.raw.remove(&target);
         }
         true
     }

@@ -26,13 +26,15 @@ pub(crate) enum Preference {
     AgentCheckpoints(bool),
     ShowListeningPorts(bool),
     ShowAgentsHeader(bool),
-    /// `herdr_2_terminals`: new tabs run in herdr-core.
+    /// `herdr_2_terminals`: new tabs on this computer run in herdr-core.
     Herdr2Terminals(bool),
     ShowSidebarSearch(bool),
     ShowRepositoryIcons(bool),
     ShowWindowControls(bool),
     /// `status_icons`: the set agent status is drawn with.
     StatusIcons(StatusIcons),
+    /// `[tab_labels] agent_title`: unnamed tabs show their agent's title.
+    TabAgentTitle(bool),
     /// `tab_layout`: how tab strips draw their tabs.
     TabLayout(TabLayoutMode),
     /// `edge_rail`: the bar on busy and finished rows.
@@ -181,6 +183,9 @@ impl Config {
                     (None, "status_icons", Some(value.as_str().into()))
                 }
                 Preference::EdgeRail(value) => (None, "edge_rail", Some(value.into())),
+                Preference::TabAgentTitle(value) => {
+                    (Some("tab_labels"), "agent_title", Some(value.into()))
+                }
                 Preference::TabLayout(mode) => (None, "tab_layout", Some(mode.name().into())),
                 Preference::FocusFollowsMouse(value) => {
                     (None, "focus_follows_mouse", Some(value.into()))

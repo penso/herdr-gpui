@@ -6,6 +6,7 @@ use super::*;
 
 mod activities;
 mod images;
+mod todos;
 mod tool_start;
 
 fn update(value: Value) -> wire::SessionUpdate {

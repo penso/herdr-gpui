@@ -35,6 +35,7 @@ pub(crate) enum ApiMethod {
     TabCreate,
     TabRename,
     WorkspaceCreate,
+    WorkspaceRename,
     WorktreeCreate,
     // keep-sorted end
 }
@@ -55,6 +56,7 @@ impl ApiMethod {
             Self::TabCreate => "tab.create",
             Self::TabRename => "tab.rename",
             Self::WorkspaceCreate => "workspace.create",
+            Self::WorkspaceRename => "workspace.rename",
             Self::WorktreeCreate => "worktree.create",
         }
     }

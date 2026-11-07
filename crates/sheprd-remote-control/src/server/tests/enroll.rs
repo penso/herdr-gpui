@@ -43,6 +43,25 @@ fn enroll_and_revoke_take_an_optional_state_directory() {
 }
 
 #[test]
+fn tags_read_or_take_an_offer() {
+    assert_eq!(
+        parse(args(&["tags"])).unwrap(),
+        Invocation::Tags {
+            state_dir: None,
+            offer: false,
+        }
+    );
+    assert_eq!(
+        parse(args(&["tags", "--offer", "--state-dir", "/s"])).unwrap(),
+        Invocation::Tags {
+            state_dir: Some("/s".into()),
+            offer: true,
+        }
+    );
+    assert!(parse(args(&["tags", "--nope"])).is_err());
+}
+
+#[test]
 fn the_daemon_enrolls_a_phone_and_says_where_it_answers() {
     let dir = tempfile::tempdir().unwrap();
     let state = web::tests::state(dir.path());

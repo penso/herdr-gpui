@@ -131,8 +131,8 @@ impl From<String> for State {
 /// a value added upstream degrades to "unavailable" instead of failing the
 /// lookup. Parsing here is also why the raw field needs no `clean`: an
 /// unrecognized string never reaches a label.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(from = "String")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(from = "String", into = "String")]
 pub enum MergeState {
     Clean,
     Dirty,
@@ -172,6 +172,22 @@ impl From<String> for MergeState {
             "HAS_HOOKS" => Self::HasHooks,
             _ => Self::Unknown,
         }
+    }
+}
+
+impl From<MergeState> for String {
+    fn from(state: MergeState) -> Self {
+        match state {
+            MergeState::Clean => "CLEAN",
+            MergeState::Dirty => "DIRTY",
+            MergeState::Behind => "BEHIND",
+            MergeState::Blocked => "BLOCKED",
+            MergeState::Unstable => "UNSTABLE",
+            MergeState::Draft => "DRAFT",
+            MergeState::HasHooks => "HAS_HOOKS",
+            MergeState::Unknown => "UNKNOWN",
+        }
+        .to_owned()
     }
 }
 
@@ -340,10 +356,45 @@ pub enum Tone {
     Muted,
 }
 
+/// Where an open, non-draft pull request stands: what decides its [`Tone`],
+/// whichever read it came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Standing {
+    pub merge: MergeState,
+    pub review: ReviewDecision,
+    /// A check failed.
+    pub failed: bool,
+    /// A check is still running.
+    pub running: bool,
+}
+
+impl Standing {
+    /// Ready only when no known blocker remains.
+    pub fn tone(self) -> Tone {
+        // GitHub also reports UNSTABLE while checks are still running, so it
+        // only means attention once nothing is pending; failed checks are
+        // caught directly.
+        if self.merge == MergeState::Dirty
+            || (self.merge == MergeState::Unstable && !self.running)
+            || self.review == ReviewDecision::ChangesRequested
+            || self.failed
+        {
+            return Tone::Attention;
+        }
+        if self.running || self.review == ReviewDecision::ReviewRequired {
+            return Tone::Waiting;
+        }
+        match self.merge {
+            MergeState::Clean => Tone::Ready,
+            MergeState::Blocked | MergeState::Behind => Tone::Held,
+            _ => Tone::Waiting,
+        }
+    }
+}
+
 impl PullRequest {
-    /// Lifecycle takes precedence; an open PR is ready only when no known
-    /// blocker remains. Shared by sidebar and titlebar badges and the
-    /// workspace menu.
+    /// Lifecycle takes precedence over the [`Standing`]. Shared by sidebar
+    /// and titlebar badges and the workspace menu.
     pub fn tone(&self) -> Tone {
         match self.state {
             State::Merged => return Tone::Merged,
@@ -358,25 +409,13 @@ impl PullRequest {
                 .flatten()
                 .any(|check| check.outcome() == outcome)
         };
-        // GitHub also reports UNSTABLE while checks are still running, so it
-        // only means attention once nothing is pending; failed checks are
-        // caught directly.
-        let running = has_check(Outcome::Pending);
-        if self.merge_state_status == MergeState::Dirty
-            || (self.merge_state_status == MergeState::Unstable && !running)
-            || self.review_decision == ReviewDecision::ChangesRequested
-            || has_check(Outcome::Failed)
-        {
-            return Tone::Attention;
+        Standing {
+            merge: self.merge_state_status,
+            review: self.review_decision,
+            failed: has_check(Outcome::Failed),
+            running: has_check(Outcome::Pending),
         }
-        if running || self.review_decision == ReviewDecision::ReviewRequired {
-            return Tone::Waiting;
-        }
-        match self.merge_state_status {
-            MergeState::Clean => Tone::Ready,
-            MergeState::Blocked | MergeState::Behind => Tone::Held,
-            _ => Tone::Waiting,
-        }
+        .tone()
     }
 
     pub fn lifecycle(&self) -> &'static str {

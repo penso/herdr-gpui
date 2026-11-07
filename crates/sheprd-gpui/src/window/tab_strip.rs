@@ -3,6 +3,7 @@
 //! shows is its own choice.
 // i18n: migrated
 
+mod agent_title;
 mod curved;
 mod dividers;
 mod launcher;
@@ -174,12 +175,7 @@ impl SheprdWindow {
                     .filter(|t| Some(&t.workspace_id) == snapshot.focused_workspace_id.as_ref())
                     .map(|t| {
                         (
-                            (
-                                Pick::Herdr(t.tab_id.clone()),
-                                SharedString::from(
-                                    sheprd_client::text::tab_label(snapshot, t).to_owned(),
-                                ),
-                            ),
+                            (Pick::Herdr(t.tab_id.clone()), self.strip_label(snapshot, t)),
                             herdr_mark(snapshot, t).lead(),
                             t.zoomed,
                             silenced.tab(&t.tab_id),
@@ -249,7 +245,7 @@ impl SheprdWindow {
                 let close_id = id.clone();
                 let selected = matches!(&pick, Some(Pick::Herdr(picked)) if *picked == id);
                 let muted = silenced.tab(&id);
-                let label = sheprd_client::text::tab_label(snapshot, tab);
+                let label = self.strip_label(snapshot, tab);
                 let base = div()
                     .id(SharedString::from(format!("tab-{id}")))
                     .debug_selector({
@@ -258,16 +254,14 @@ impl SheprdWindow {
                     })
                     .role(Role::Tab)
                     .aria_label(if muted {
-                        fl!("tab-strip-muted", label = label)
+                        fl!("tab-strip-muted", label = label.as_ref())
                     } else {
-                        label.to_owned()
+                        label.to_string()
                     })
                     .aria_selected(selected)
                     .map(|control| faces.stop(control));
                 let face = TabFace {
-                    label: sheprd_client::text::tab_label(snapshot, tab)
-                        .to_owned()
-                        .into(),
+                    label,
                     mark: herdr_mark(snapshot, tab),
                     zoomed: tab.zoomed,
                     muted,
@@ -658,10 +652,10 @@ impl SheprdWindow {
                             .tabs
                             .iter()
                             .find(|candidate| &candidate.tab_id == tab)
-                            .map(|tab| sheprd_client::text::tab_label(snapshot, tab).to_owned())
+                            .map(|tab| self.strip_label(snapshot, tab))
                     })
-                    .unwrap_or_else(|| tab.clone());
-                (label.into(), fl!("tab-strip-opening"))
+                    .unwrap_or_else(|| tab.clone().into());
+                (label, fl!("tab-strip-opening"))
             }
             // A terminal group whose connection has not shown its tab yet.
             Shown::Terminal => ("".into(), fl!("tab-strip-opening")),

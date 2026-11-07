@@ -43,6 +43,8 @@ fn right_clicking_a_cloud_device_offers_rename_settings_setup_and_removal(cx: &m
         CloudProvider::Azure => "host-azure:w1",
         #[cfg(feature = "boat")]
         CloudProvider::Boat => "host-boat:w1",
+        #[cfg(feature = "boxd")]
+        CloudProvider::Boxd => "host-boxd:w1",
         #[cfg(feature = "coder")]
         CloudProvider::Coder => "host-coder:w1",
         #[cfg(feature = "container")]
@@ -75,19 +77,10 @@ fn right_clicking_a_cloud_device_offers_rename_settings_setup_and_removal(cx: &m
         assert!(!view.host_menu_lists_forwards());
     });
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
-    let rows = [
-        "host-menu-0",
-        "host-menu-1",
-        "host-menu-2",
-        "host-menu-3",
-        "host-menu-4",
-        "host-menu-5",
-    ];
-    let (shown, past) = rows.split_at(CLOUD_ACTIONS.len());
-    for row in shown {
-        assert!(cx.debug_bounds(row).is_some(), "{row}");
+    for index in 0..CLOUD_ACTIONS.len() {
+        assert!(cx.debug_bounds(menu_row(index)).is_some(), "{index}");
     }
-    assert!(cx.debug_bounds(past[0]).is_none());
+    assert!(cx.debug_bounds(menu_row(CLOUD_ACTIONS.len())).is_none());
 
     // Removal is last, and says the machine itself stays at the provider.
     cx.simulate_keystrokes("up enter");

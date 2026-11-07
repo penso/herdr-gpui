@@ -11,6 +11,7 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 use sheprd_client::ConnectTarget;
 
 mod prompt_width;
+mod setting_icons;
 mod terminal_footer;
 
 fn switch(view: &Entity<SheprdWindow>, mode: ChatLayoutMode, cx: &mut VisualTestContext) {
@@ -112,6 +113,7 @@ fn each_layout_marks_the_conversation_its_own_way(cx: &mut TestAppContext) {
         (ChatLayoutMode::Cards, "chat-card-1"),
         (ChatLayoutMode::IMessage, "chat-imessage-1"),
         (ChatLayoutMode::IA, "chat-ia-1"),
+        (ChatLayoutMode::OpenCode, "chat-opencode-1"),
     ];
     assert_eq!(marks.len(), ChatLayoutMode::ALL.len());
     for (mode, mark) in marks {
@@ -154,4 +156,42 @@ fn the_layouts_step_round() {
     }
     assert_eq!(mode, ChatLayoutMode::default());
     assert_eq!(seen, ChatLayoutMode::ALL);
+}
+
+#[gpui::test]
+fn two_quick_clicks_on_the_layout_button_move_two_layouts(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let _stream = attach_with(&view, &program, conversation(false), cx);
+    let start = view.read_with(cx, |view, _| view.config.chat.layout);
+    // No frame between them, as when the layout is slow to draw.
+    view.update(cx, |view, cx| {
+        view.step_chat_layout_with(|_| Ok(()), cx);
+        view.step_chat_layout_with(|_| Ok(()), cx);
+    });
+    assert_eq!(
+        view.read_with(cx, |view, _| view.config.chat.layout),
+        start.next().next()
+    );
+}
+
+#[gpui::test]
+fn the_reload_of_an_earlier_save_leaves_a_newer_layout_alone(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let _stream = attach_with(&view, &program, conversation(false), cx);
+    switch(&view, ChatLayoutMode::Cards, cx);
+    cx.run_until_parked();
+    // The reload has started on the first choice when the second is made.
+    view.update(cx, |view, cx| {
+        let stale = view.config.clone();
+        let theme = view.theme.clone();
+        view.load_gui_config_with(move || Ok((stale, theme)), cx);
+        view.set_chat_layout_with(ChatLayoutMode::Bubbles, |_| Ok(()), cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        view.read_with(cx, |view, _| view.config.chat.layout),
+        ChatLayoutMode::Bubbles
+    );
 }

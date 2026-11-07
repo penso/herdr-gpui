@@ -23,6 +23,14 @@ import Testing
         #expect(collapsed.devices.isEmpty)
     }
 
+    @Test func toggleAllLeavesComputersAFilterHides() {
+        var collapsed = CollapsedComputers(["hidden"])
+        collapsed.toggleAll(["a", "b"])
+        #expect(collapsed.devices == ["a", "b", "hidden"])
+        collapsed.toggleAll(["a", "b"])
+        #expect(collapsed.devices == ["hidden"])
+    }
+
     @Test func noComputersAreNeverAllCollapsed() {
         #expect(!CollapsedComputers(["a"]).allCollapsed([String]()))
     }

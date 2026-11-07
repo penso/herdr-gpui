@@ -207,11 +207,11 @@ fn link_modifier_click_bypasses_mouse_reporting_only_on_links(cx: &mut gpui::Tes
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| {
         assert!(!view.terminal_link_hovered(link, Modifiers::default()));
-        assert!(view.terminal_link_hovered(link, Modifiers::secondary_key()));
-        assert!(!view.terminal_link_hovered(plain, Modifiers::secondary_key()));
-        assert!(!view.link_modifier_held(plain, Modifiers::secondary_key()));
+        assert!(view.terminal_link_hovered(link, crate::keymap::secondary_key()));
+        assert!(!view.terminal_link_hovered(plain, crate::keymap::secondary_key()));
+        assert!(!view.link_modifier_held(plain, crate::keymap::secondary_key()));
     });
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     assert_eq!(cx.opened_url().as_deref(), Some("https://example.com/app"));
 }
 
@@ -263,7 +263,7 @@ fn click_dispatch_opens_browser_and_respects_menu_and_revision(cx: &mut gpui::Te
         position + point(px(0.), px(20.)),
         position - point(px(20.), px(20.)),
     ] {
-        let held = gpui::Modifiers::secondary_key();
+        let held = crate::keymap::secondary_key();
         cx.simulate_mouse_down(position, gpui::MouseButton::Left, held);
         cx.simulate_mouse_move(away, gpui::MouseButton::Left, held);
         cx.simulate_mouse_move(position, gpui::MouseButton::Left, held);
@@ -275,7 +275,7 @@ fn click_dispatch_opens_browser_and_respects_menu_and_revision(cx: &mut gpui::Te
     cx.simulate_click(position, Default::default());
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| assert!(view.pressed_terminal_link.is_none()));
-    cx.simulate_click(position, gpui::Modifiers::secondary_key());
+    cx.simulate_click(position, crate::keymap::secondary_key());
     assert_eq!(
         cx.opened_url().as_deref(),
         Some("https://example.com/click")

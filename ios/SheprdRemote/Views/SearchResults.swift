@@ -36,7 +36,7 @@ struct SearchResults: View {
                                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 Spacer(minLength: 4)
-                                if let pullRequest = workspace.pullRequest { PullRequestPill(pullRequest: pullRequest) }
+                                WorkspacePullRequestBadge(workspace: workspace)
                             }
                         }
                     }

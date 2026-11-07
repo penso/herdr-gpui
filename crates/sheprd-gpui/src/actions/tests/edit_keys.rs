@@ -30,7 +30,7 @@ fn edit_keys_follow_the_platform_scheme() {
     };
     assert_eq!(EDIT_KEYS, expected);
     for key in EDIT_KEYS {
-        assert!(Keystroke::parse(key).is_ok(), "{key}");
+        assert!(crate::keymap::parse_keystroke(key).is_ok(), "{key}");
         // A daemon custom command never takes an Edit key.
         assert!(
             reserved_keystrokes().any(|reserved| reserved == key),

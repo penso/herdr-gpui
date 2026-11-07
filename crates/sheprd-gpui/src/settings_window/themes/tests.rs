@@ -431,7 +431,7 @@ fn composition_navigation_and_escape_remain_in_search(cx: &mut TestAppContext) {
             for key in ["up", "down", "enter", "escape"] {
                 view.theme_browser_key(
                     &KeyDownEvent {
-                        keystroke: Keystroke::parse(key).unwrap(),
+                        keystroke: crate::keymap::parse_keystroke(key).unwrap(),
                         is_held: false,
                         prefer_character_input: false,
                     },

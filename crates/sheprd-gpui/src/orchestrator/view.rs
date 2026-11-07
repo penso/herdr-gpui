@@ -44,7 +44,9 @@ use repo::Repo;
 pub(crate) use rows::Tab;
 use rows::{Filters, Runs, Sort};
 use std::{
+    cell::Cell,
     collections::{HashMap, HashSet},
+    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -187,6 +189,9 @@ pub(crate) struct OrchestratorView {
     selected: Option<String>,
     detail: Option<Detail>,
     pane_width: f32,
+    /// The list's width as last laid out, which decides the columns its rows
+    /// keep beside an open item.
+    list_width: Rc<Cell<f32>>,
     focus: FocusHandle,
     scroll: UniformListScrollHandle,
     /// The shown list's lines: headings and rows.
@@ -269,6 +274,7 @@ impl OrchestratorView {
             selected: None,
             detail: None,
             pane_width: PANE_DEFAULT,
+            list_width: Rc::default(),
             focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             lines: Vec::new(),

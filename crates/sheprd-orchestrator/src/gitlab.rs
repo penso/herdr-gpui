@@ -235,7 +235,7 @@ impl Scheme {
             .map_or(Self::Https, |remote| Self::of_remote(&remote.url))
     }
 
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::Http => "http",
             Self::Https => "https",
@@ -469,6 +469,43 @@ pub fn issues_url(
     listing_url::<IssueNode>(project, after)
 }
 
+/// The API address of `source`'s `count` most recently updated open
+/// issues, newest first: one page for a picker, never a full listing.
+pub fn recent_issues_url(project: (&SourceKey, &Api), count: usize) -> Result<url::Url, Error> {
+    let mut url = collection_url::<IssueNode>(project)?;
+    url.query_pairs_mut()
+        .append_pair("state", "opened")
+        .append_pair("scope", "all")
+        .append_pair("order_by", "updated_at")
+        .append_pair("sort", "desc")
+        .append_pair("per_page", &count.clamp(1, PAGE).to_string());
+    Ok(url)
+}
+
+/// `source`'s `count` most recently updated open issues, newest first, in
+/// one bounded request, read as `token` when the scheme keeps it private.
+/// Blocks on the network: call it from a worker.
+pub fn recent_issues(
+    (source, api): (&SourceKey, &Api),
+    token: Option<&SecretString>,
+    count: usize,
+    cooldown: &mut Option<Duration>,
+) -> super::Result<Vec<Item>> {
+    let url = recent_issues_url((source, api), count)?;
+    let nodes: Vec<IssueNode> = get_page(
+        &agent(TIMEOUT),
+        (source, api),
+        Credential::new(api.scheme, token),
+        url,
+        cooldown,
+    )?;
+    Ok(nodes
+        .into_iter()
+        .take(count)
+        .map(|node| node.into_item(source))
+        .collect())
+}
+
 /// The API address of `source`'s open merge requests created at or after
 /// `after`.
 pub fn merge_requests_url(
@@ -478,10 +515,8 @@ pub fn merge_requests_url(
     listing_url::<MergeRequestNode>(project, after)
 }
 
-fn listing_url<N: Listed>(
-    (source, api): (&SourceKey, &Api),
-    after: Option<DateTime<Utc>>,
-) -> Result<url::Url, Error> {
+/// The API address of `source`'s collection of kind `N`, without a query.
+fn collection_url<N: Listed>((source, api): (&SourceKey, &Api)) -> Result<url::Url, Error> {
     let invalid = || Error::Address(source.repository.clone());
     let base = format!("{}/api/v4/projects", api.origin());
     let mut url = url::Url::parse(&base).map_err(|_| invalid())?;
@@ -490,6 +525,14 @@ fn listing_url<N: Listed>(
         .map_err(|()| invalid())?
         .push(&source.repository)
         .push(N::COLLECTION);
+    Ok(url)
+}
+
+fn listing_url<N: Listed>(
+    (source, api): (&SourceKey, &Api),
+    after: Option<DateTime<Utc>>,
+) -> Result<url::Url, Error> {
+    let mut url = collection_url::<N>((source, api))?;
     let mut query = url.query_pairs_mut();
     query
         .append_pair("state", "opened")
@@ -515,8 +558,20 @@ fn fetch_page<N: Listed>(
     after: Option<DateTime<Utc>>,
     cooldown: &mut Option<Duration>,
 ) -> Result<Vec<N>, Error> {
+    let url = listing_url::<N>((source, api), after)?;
+    get_page(agent, (source, api), credential, url, cooldown)
+}
+
+/// One page of `source`'s collection of kind `N` from `url`.
+fn get_page<N: Listed>(
+    agent: &ureq::Agent,
+    (source, api): (&SourceKey, &Api),
+    credential: Credential<'_>,
+    url: url::Url,
+    cooldown: &mut Option<Duration>,
+) -> Result<Vec<N>, Error> {
     let mut request = agent
-        .get(listing_url::<N>((source, api), after)?.as_str())
+        .get(url.as_str())
         .header("User-Agent", "Sheprd")
         .header("Accept", "application/json");
     if let Credential::Token(token) = credential {

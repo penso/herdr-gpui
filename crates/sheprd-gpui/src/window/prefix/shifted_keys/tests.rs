@@ -77,7 +77,7 @@ fn shift_is_restored_on_the_key_gpui_names_on_each_layout() {
         assert_eq!(
             restored(&typed, &chars(keys, false)),
             shifted(typed.modifiers, expected),
-            "{layout}: {typed}"
+            "{layout}: {typed:?}"
         );
     }
     // Russian letters are not ASCII, so GPUI names every key from the
@@ -93,7 +93,7 @@ fn shift_is_restored_on_the_key_gpui_names_on_each_layout() {
             assert_eq!(
                 restored(&typed, &chars(keys, true)),
                 shifted(modifiers, expected),
-                "Russian: {typed}"
+                "Russian: {typed:?}"
             );
         }
     }
@@ -123,7 +123,7 @@ fn the_event_is_read_only_for_a_character_without_shift() {
         Keystroke::parse("f20").unwrap(),
         key(NONE, ""),
     ] {
-        assert_eq!(restore(&typed, unread, unlooked), None, "{typed}");
+        assert_eq!(restore(&typed, unread, unlooked), None, "{typed:?}");
     }
     // Shift is not down, or there is no key event: nothing was dropped.
     assert_eq!(
@@ -181,8 +181,9 @@ fn window<'a>(
 }
 
 fn press(keystroke: &str, cx: &mut VisualTestContext) -> bool {
-    let handled =
-        cx.update(|window, cx| window.dispatch_keystroke(Keystroke::parse(keystroke).unwrap(), cx));
+    let handled = cx.update(|window, cx| {
+        window.dispatch_keystroke(crate::keymap::parse_keystroke(keystroke).unwrap(), cx)
+    });
     cx.run_until_parked();
     handled
 }

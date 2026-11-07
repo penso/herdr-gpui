@@ -94,3 +94,47 @@ async fn renaming_needs_a_session_and_a_known_pane() {
         assert_ne!(status, StatusCode::OK, "{pane}: {body}");
     }
 }
+
+#[test]
+fn a_workspace_is_named_by_its_id_and_needs_a_name() {
+    let target = RenameTarget::Workspace { workspace: "w1" };
+    let (method, params) = rename_call(target, "  release ").unwrap();
+    assert_eq!(method, ApiMethod::WorkspaceRename);
+    assert_eq!(method.name(), "workspace.rename");
+    assert_eq!(params, json!({ "workspace_id": "w1", "label": "release" }));
+    let target = RenameTarget::Workspace { workspace: "w1" };
+    assert!(matches!(
+        rename_call(target, " "),
+        Err(ApiError::Invalid(_))
+    ));
+}
+
+#[tokio::test]
+async fn renaming_a_workspace_needs_a_session_a_known_workspace_and_a_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = with_chat_and_terminal(dir.path());
+    let rename = |workspace: &str, label: &str| {
+        post(
+            &format!("/api/v2/workspaces/{workspace}/rename"),
+            json!({ "label": label }),
+        )
+    };
+    assert_eq!(
+        send(&state, rename("w1", "x")).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (_, token) = signed_in(&state, 7);
+    let authorized =
+        |workspace: &str, label: &str| terminal::authorized(rename(workspace, label), &token);
+    assert_eq!(
+        send(&state, authorized("w9", "x")).await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        send(&state, authorized("w1", " ")).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    // It reaches Herdr, which this test has none of.
+    let (status, _, body) = send(&state, authorized("w1", "x")).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+}

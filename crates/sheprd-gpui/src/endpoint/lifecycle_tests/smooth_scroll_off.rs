@@ -1,6 +1,6 @@
 use super::*;
 use crate::sidebar::layout_tests::full_draw;
-use gpui::{ScrollDelta, ScrollWheelEvent, TouchPhase};
+use gpui::{ScrollDelta, ScrollEvent, TouchPhase};
 use sheprd_client::protocol::PaneSurfaceScrollMetrics;
 
 /// Turning smooth scrolling off while a pane rests a quarter row into history
@@ -33,7 +33,7 @@ fn turning_smooth_scrolling_off_snaps_a_resting_pane_to_its_row(cx: &mut gpui::T
     });
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            let event = ScrollWheelEvent {
+            let event = ScrollEvent {
                 position: mouse_position(view, 3.5, 4.5),
                 delta: ScrollDelta::Pixels(point(px(0.), px(height / 4.))),
                 touch_phase: TouchPhase::Moved,

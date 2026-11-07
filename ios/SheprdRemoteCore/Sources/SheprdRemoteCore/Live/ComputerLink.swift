@@ -85,6 +85,9 @@ public actor ComputerLink {
     /// The size each watched terminal asked for, sent again on reconnect.
     private var sizes: [LiveView: TermSize] = [:]
     private var connection: LiveConnection?
+    /// The address `connection` is open at, and since when.
+    private var connected: String?
+    private var connectedAt: ContinuousClock.Instant?
     private var runner: Task<Void, Never>?
     private var wake: CheckedContinuation<Void, Never>?
     private var attempt = 0
@@ -146,6 +149,19 @@ public actor ComputerLink {
         wakeUp()
     }
 
+    /// A call to `origin` that began at `started` got no answer. A socket
+    /// over a path that stopped carrying traffic can look open for a minute
+    /// or more, so this leaves it and tries every address again. A failure
+    /// at an address the link already left changes nothing, and neither
+    /// does a call older than this socket, even at the same address: it
+    /// used the path the link has already recovered from.
+    public func pathFailed(_ origin: String, started: ContinuousClock.Instant) {
+        guard let connection, origin == connected, let connectedAt, started >= connectedAt else { return }
+        attempt = 0
+        retryNow = true
+        connection.close()
+    }
+
     public func updateOrigins(_ origins: [String]) {
         self.origins = origins
     }
@@ -163,6 +179,8 @@ public actor ComputerLink {
                 let token = try await io.session(origin)
                 let opened = try await io.connect(origin, token)
                 connection = opened
+                connected = origin
+                connectedAt = .now
                 attempt = 0
                 retryNow = false
                 offline = false

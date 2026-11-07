@@ -1,6 +1,6 @@
 # Sheprd Native Workspace
 
-A GPUI 0.3.6 (`gpui-pre`) workspace for terminals and AI agents on local,
+A GPUI 0.3.10 (`gpui-pre`) workspace for terminals and AI agents on local,
 SSH, and cloud machines, with macOS support, Linux x86_64/ARM64 builds, and
 a Windows build with native CI coverage. See [Windows](#windows) for what is
 unavailable there. It supports existing Herdr 1 sessions and
@@ -128,6 +128,14 @@ Hovering a pane focuses it when the window is active and
 terminal input has keyboard focus. Held mouse buttons, modifiers, dragging,
 IME composition, menus, and terminal popups suppress hover focus.
 
+A tab with no name of its own shows its number. To tell agent sessions apart,
+turn on **Show agent titles on tabs** in **Settings > Tabs & panes > Layout**,
+or run `sheprd config set tab_labels.agent_title true`. An unnamed tab then
+shows its first agent's terminal title, cut after 28 columns. A tab you named
+keeps its name, a tab without an agent or a title keeps its number, and the
+rename and close dialogs keep the daemon's label. The phone keeps the
+daemon's label too.
+
 Normal launches restore the main windows left open at quit, including each
 window's size and screen position, using the current launch's connection options.
 Closing an individual window removes it from the saved set; closing the final
@@ -146,7 +154,7 @@ Updates...**. Background offers change the status version label without taking
 focus. **Download** and **Install Update** are separate approvals; closing the
 panel does not cancel work. Explicit **Cancel** requests cancellation.
 The panel shows archive download progress and an animated bar for work without a
-known percentage. Homebrew-managed installs use `brew upgrade --cask herdr-gpui`;
+known percentage. Homebrew-managed installs use `brew upgrade --cask` on their cask;
 if the installed version is behind the offer, `brew update` refreshes metadata
 before one retry. Linux distribution installs download the signed package matching
 the owning package manager and invoke APT, DNF, or pacman through PolicyKit.
@@ -365,13 +373,13 @@ choose **Remove device…** to forget it. Renaming runs `herdr machine rename`;
 an empty name falls back to the SSH target, as when adding. Removal runs the installed `herdr machine remove`, which
 edits only the local catalog: the host's own Herdr keeps running. When the
 device has its own GitHub sign-in, the confirmation also offers to delete it,
-since its account panel goes away with the device. Local has no such menu.
+since its account panel goes away with the device. Local's menu offers neither.
 
-A cloud device's header (Azure, Boat, Coder, Container, Daytona, OpenSandbox,
-Railway, or Sprites) has a menu too: **Rename…** changes the name the sidebar
+A cloud device's header (Azure, Boat, boxd, Coder, Container, Daytona,
+OpenSandbox, Railway, or Sprites) has a menu too: **Rename…** changes the name the sidebar
 shows, falling back to the machine's name when left empty; **Cloud device
 settings…** opens its provider under Settings > Cloud devices; and **Remove
-device…** removes it from this computer. For an Azure machine, a Boat,
+device…** removes it from this computer. For an Azure or boxd machine, a Boat,
 Daytona, or OpenSandbox sandbox, a Coder workspace, a container, or a sprite,
 it deletes the machine at the provider by default, with **Remove from Herdr
 only** beside it; a Railway VM is left as it is and expires on its own. Before
@@ -475,7 +483,7 @@ the app.
 ### Coder workspaces
 
 Settings > **Cloud devices** holds accounts with providers that create machines
-to use as devices: Azure, Boat, Coder, Container, Daytona, OpenSandbox,
+to use as devices: Azure, Boat, boxd, Coder, Container, Daytona, OpenSandbox,
 Railway, and Sprites.
 Coder's card edits the `[coder]` keys (see `config-gpui.example.toml`), saves the OAuth client secret to the
 credential store rather than the config file, signs in and out, and lists the
@@ -654,6 +662,31 @@ a WebSocket whose binary frames carry stdin, stdout, stderr, and the exit code
 unchanged. The token stays on this computer. Sprites are unavailable on
 Windows, like every cloud device. This provider is tested against a scripted
 exec stream and API replies, but not yet against a live Sprites account.
+
+### boxd (experimental)
+
+Settings > **Cloud devices** > **boxd** holds a [boxd](https://boxd.sh/?ref=sheprd)
+account: the API URL (`https://boxd.sh:9443` for boxd's service, or a region
+such as `https://nyc.boxd.sh:9443`), saved to `[boxd]`, and an API key saved
+to the credential store (`HERDR_BOXD_API_KEY` takes precedence, and
+`HERDR_BOXD_API_URL` replaces the URL). Create a key in the boxd console or
+with `boxd auth keys create <name>`; a key belongs to one organization, and
+the machines are made there. **Create machine** makes a machine with a
+generated name from boxd's default Ubuntu image, labelled `sheprd=device` and
+with any `[boxd] labels`, installs Herdr in it when the **Install Herdr**
+switch is on (the default), and saves the device; a failure deletes the
+machine again. boxd machines are full Linux microVMs with a persistent disk.
+One that went to standby or hibernated after being idle, or was stopped, is
+resumed, woken, or started when Sheprd connects. Once a boxd device exists,
+Smart Dispatch's dialogs offer a new machine like **New container**.
+
+The app reaches a machine without SSH keys: it runs itself as a relay
+(`sheprd __boxd-exec`) over the API's `Exec` stream, which boxd serves as
+grpc-web over HTTP/1.1 in both directions at once, so stdin, stdout, stderr,
+end of input, and the exit code pass unchanged, without an async runtime. The
+API key stays on this computer and goes only to the configured API URL. boxd
+is unavailable on Windows, like every cloud device. Tested against the live
+boxd service and against a scripted exec stream.
 
 ### OpenSandbox (experimental)
 
@@ -1281,25 +1314,32 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
-To quiet one workspace or tab instead of every notification, right-click it:
-the workspace menu's header has **Mute** (**Unmute** while it is muted), and
-the tab menu has **Mute Notifications**. Muting a workspace silences every tab
-in it, including tabs opened later; a tab can also be muted on its own, and
-while its workspace's mute covers it, its menu offers **Unmute Workspace**
-instead. Nothing from a muted workspace or tab asks for you: no toast, no OS
+To quiet one device, workspace, or tab instead of every notification,
+right-click it: the menu of a device's sidebar header, Local included, has
+**Mute notifications**, the workspace menu's header has **Mute** (**Unmute**
+while it is muted), and the tab menu has **Mute Notifications**. Muting a
+device silences everything on it, in every session, and muting a workspace
+silences every tab in it, including tabs opened later; a tab can also be muted
+on its own. While a workspace's or device's mute covers a tab, the tab's menu
+offers **Unmute Workspace** or **Unmute Device** instead. `sheprd host mute`
+and `sheprd worktree mute` do the same from a pane. Nothing from a muted device, workspace,
+or tab asks for you: no toast, no OS
 notification, no notification sound, and its agents leave the Dock badge,
 the Windows taskbar overlay, and the Overview's count in the activity bar.
 Status dots and the Overview's rows still show what its agents do. A struck
-through bell marks the muted workspace's sidebar row and its place in the
-compact rail, each tab it silences, and its agents' Overview rows. Muting
+through bell marks a muted device's sidebar header, the muted workspace's
+sidebar row and its place in the compact rail, each tab it silences, and its
+agents' Overview rows. In the compact rail, a muted device marks each of its
+workspaces and says so in its header's tooltip. Muting
 takes away a toast already showing, and notifications dropped while muted are
 not replayed on unmuting. An OS notification posted before the mute stays, and
-clicking it still opens its pane. Three things a mute does not hold back:
-notifications posted with `herdr notification show` and terminal bells
-(`[bell]`), which Herdr sends without the workspace or pane they came from,
-and the phone notifications of
+clicking it still opens its pane. Three things a workspace or tab mute does
+not hold back: notifications posted with `herdr notification show` and terminal
+bells (`[bell]`), which Herdr sends without the workspace or pane they came
+from, and the phone notifications of
 [remote control](../sheprd-remote-control/README.md), which its own daemon
-sends.
+sends. A device's mute does hold back the first two, since they still arrive
+from that device, but not the phone's.
 
 Mutes stay in this client, in `notification-mutes.json` in its state
 directory, and every window shows the same ones. A mute follows its workspace
@@ -1312,7 +1352,9 @@ the same name under the same ID takes the mute too, and shows the
 struck-through bell. The others are dropped: a daemon started afresh numbers
 its workspaces from the start again and names them after their folder, and
 tabs after their position, so the same ID and name can come back on new
-work.
+work. A device's mute names only the device, so it holds while the device is
+offline and across its daemon's restarts, until you lift it or remove the
+device.
 
 The sidebar button at the left of the titlebar hides or shows the sidebar.
 On Linux and Windows it stays in the same position when the sidebar collapses
@@ -1538,8 +1580,9 @@ repeating the other field. `FontConfig::line_height()` returns `size * 20 / 14` 
 weight name or 100 to 900; bold cells draw `bold_font_weight` of it, 300
 heavier and at least bold. On macOS, font resolution reports a weight the
 family has no face for; other platforms do not check.
-The `[features]` table holds opt-in behaviors as `Features`, with every flag off
-by default and unknown keys rejected like the other sections; Preferences lists
+The `[features]` table holds optional behaviors as `Features`, each flag with
+its own default (`acp_chats` on, the rest off) and unknown keys rejected like
+the other sections; Preferences lists
 each flag and its state read-only, since only the config file turns one on.
 First-frame config and theme loading is read-only: no config lock, migration,
 writes, or fsync delays window creation. It reads local overrides (or the legacy
@@ -1776,7 +1819,10 @@ Herdr 1 tabs, and nothing moves from one to the other.
 
 - **Opening one:** **New Herdr 2 Terminal** in the command palette, or
   `sheprd run new_core_terminal`. With `herdr_2_terminals = true`
-  (**Settings > Tabs > New terminals use Herdr 2**), every new tab is one.
+  (**Settings > Tabs > New terminals use Herdr 2**), every new tab on this
+  computer is one. herdr-core runs only on this computer, so a new tab in a
+  workspace on an SSH, WSL, or cloud host stays a Herdr tab on that host, and
+  **New Herdr 2 Terminal** is refused there.
 - **Starting herdr-core:** the app joins a core that already runs. Otherwise
   it starts the user's own `herdr-core`, or the pinned one every release
   bundles beside the app, and only when a Herdr 2 terminal is asked for.
@@ -3953,6 +3999,16 @@ Ctrl+Shift+U is left unbound for
   upstream repository: its own branches are fetched from `upstream`, pull
   requests from the fork behind `origin` check out their real branch from
   `origin`, and other forks use the PR head ref fetched from `upstream`.
+  A GitLab project (its `origin` remote, else `upstream`, on a host named
+  "gitlab" or one glab knows as an instance) fills the issues tab with its 50
+  most recently updated open issues, and needs no GitHub account: without one,
+  the dialog looks for a GitLab remote as it opens and enables the issues tab
+  when it finds one. They are read with the token the Orchestrator reads that
+  instance with (an `.envrc`'s or the shell's `GITLAB_TOKEN`, an account
+  connected in the account menu, or glab's); a public project lists without
+  one. Picking an issue creates a new branch named after it, and the agent
+  context note says it is a GitLab issue. Merge requests are not listed, so the
+  PR tab stays faded for a GitLab project.
 - Open worktree... asynchronously lists the clicked parent's existing checkouts
   through `worktree.list`, including already-open and detached checkouts but
   excluding bare/prunable entries. Use Up/Down and Enter, the Open button, or
@@ -4075,6 +4131,15 @@ Ctrl+Shift+U is left unbound for
   conflicts or blockers, and passed/failed/pending/skipped check counts. Repeated
   opens share an in-flight lookup; account authentication/rate-limit pauses still
   apply.
+  A branch with commits past the default branch and no pull request carrying
+  them shows a yellow `+PR` in the number's place in the sidebar, and
+  `3 commits, no PR` in the titlebar, which opens the Git menu on Create pull
+  request; a window under 720 points wide colors the Git icon instead. Pushing does not clear it, only a pull request does. It needs a
+  finished lookup, so a signed-out or non-GitHub checkout shows nothing, and a
+  squash-merged branch shows its number until it moves past the merged head. The
+  default branch is the remote's `HEAD` (`upstream` before `origin`); a clone
+  without one has nothing to compare with and shows nothing, until
+  `git remote set-head origin --auto`. This machine's checkouts only.
   PR numbers in the sidebar and titlebar share readiness colors: green for a clean
   merge, red for conflicts, failing checks, or requested changes, yellow for pending
   checks/reviews or an unknown merge status, and orange for a blocked/behind branch

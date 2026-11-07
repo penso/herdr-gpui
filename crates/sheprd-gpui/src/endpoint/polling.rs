@@ -114,14 +114,16 @@ impl SheprdWindow {
             // Bells are a presentation effect: only the selected endpoint's
             // ring, as the TUI drops them from inactive endpoints.
             let bells = std::mem::take(&mut endpoint.live.bells);
-            if index == self.selected_endpoint {
+            let host_muted = Mutes::any(cx).is_some_and(|mutes| mutes.host(&endpoint.id));
+            if index == self.selected_endpoint && !host_muted {
                 self.bell.queue(bells);
             }
             selected_changed |= index == self.selected_endpoint && updated != Redraw::None;
-            let silenced = muted
-                .as_ref()
-                .zip(Mutes::any(cx))
-                .map(|((daemon, snapshot), mutes)| mutes.silenced(daemon, snapshot))
+            let silenced = Mutes::any(cx)
+                .map(|mutes| match &muted {
+                    Some((daemon, snapshot)) => mutes.silenced(daemon, snapshot),
+                    None => mutes.silenced_offline(&endpoint.id),
+                })
                 .unwrap_or_default();
             self.sound.poll(
                 &mut endpoint.sounds,

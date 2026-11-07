@@ -1,7 +1,7 @@
 use crate::{Direction, Error, Locale, Pseudo, Result, pseudo};
 use fluent::FluentArgs;
 use i18n_embed::{I18nAssets, LanguageLoader, fluent::FluentLanguageLoader};
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap, sync::RwLock};
 
 /// One embedded `.ftl` file: a feature's messages in one language.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,6 +62,11 @@ impl I18nAssets for Files<'_> {
 pub struct Catalog {
     locale: Locale,
     loader: FluentLanguageLoader,
+    /// Messages without arguments as [`text`](Self::text) formatted them.
+    /// They cannot change, and windows ask for the same ones on every draw.
+    /// Only messages the catalog holds are kept, which bounds it, and a
+    /// locale switch loads a new catalog, which drops it.
+    formatted: RwLock<HashMap<String, String>>,
 }
 
 impl Catalog {
@@ -91,7 +96,11 @@ impl Catalog {
             }
             None => {}
         }
-        Ok(Self { locale, loader })
+        Ok(Self {
+            locale,
+            loader,
+            formatted: RwLock::default(),
+        })
     }
 
     /// The fallback's English without Unicode isolation marks, for text
@@ -161,7 +170,27 @@ impl Catalog {
     }
 
     pub fn text(&self, id: &str) -> String {
-        self.finish(self.loader.get(id))
+        if let Some(text) = self
+            .formatted
+            .read()
+            .ok()
+            .and_then(|formatted| formatted.get(id).cloned())
+        {
+            return text;
+        }
+        let text = self.finish(self.loader.get(id));
+        if self.has(id)
+            && let Ok(mut formatted) = self.formatted.write()
+        {
+            formatted.insert(id.to_owned(), text.clone());
+        }
+        text
+    }
+
+    /// How many messages [`text`](Self::text) has kept.
+    #[cfg(test)]
+    pub(crate) fn formatted(&self) -> usize {
+        self.formatted.read().map_or(0, |formatted| formatted.len())
     }
 
     pub fn text_with(&self, id: &str, args: &FluentArgs<'_>) -> String {

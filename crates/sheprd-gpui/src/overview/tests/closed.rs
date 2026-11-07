@@ -113,7 +113,7 @@ fn a_twin_still_running_keeps_its_closed_namesake_listed() {
     }
     rows.push(twin.clone());
     closed.observe("local", &shown, &rows, at(10));
-    shown.panes.truncate(0);
+    shown.panes.clear();
     closed.observe("local", &shown, [&twin], at(20));
     closed.observe("local", &shown, [&twin], at(30));
     assert_eq!(names(&closed), ["a"]);

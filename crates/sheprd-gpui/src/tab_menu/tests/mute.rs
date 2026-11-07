@@ -21,7 +21,7 @@ fn mute_row(view: &SheprdWindow) -> Action {
     let row = actions[actions.len() - 2];
     assert!(matches!(
         row,
-        Action::Mute | Action::Unmute | Action::UnmuteWorkspace
+        Action::Mute | Action::Unmute | Action::UnmuteWorkspace | Action::UnmuteDevice
     ));
     row
 }
@@ -105,5 +105,30 @@ fn a_mute_row_from_a_stale_menu_changes_nothing(cx: &mut TestAppContext) {
                 v.dismiss_menu(window, cx);
             }
         })
+    });
+}
+
+#[gpui::test]
+fn the_tab_menu_lifts_the_mute_of_the_device_it_falls_under(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(|window, cx| {
+        crate::bind_keys(cx);
+        let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
+        view.live.snapshot = Some(Arc::new(snapshot()));
+        view
+    });
+    cx.update(|window, cx| {
+        view.update(cx, |v, cx| {
+            let id = v.endpoints[0].id.clone();
+            assert!(Mutes::update(cx, |mutes| mutes.set_host(&id, true)));
+            v.open_tab_menu("w1:t2", None, Point::default(), window, cx);
+            assert_eq!(mute_row(v), Action::UnmuteDevice);
+            assert_eq!(Action::UnmuteDevice.label(), "Unmute Device");
+            v.activate_tab_menu(Action::UnmuteDevice, window, cx);
+            assert!(v.menu.page.is_none(), "applied at once");
+            assert!(Mutes::of(cx).is_some_and(|mutes| !mutes.host(&id)));
+
+            v.open_tab_menu("w1:t2", None, Point::default(), window, cx);
+            assert_eq!(mute_row(v), Action::Mute);
+        });
     });
 }

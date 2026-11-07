@@ -39,6 +39,8 @@ mod device_removing;
 #[cfg(test)]
 mod device_sessions_unfold;
 #[cfg(test)]
+mod device_tag_groups;
+#[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
 mod gpu_line;
@@ -689,6 +691,9 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         status_bar_visible: true,
         zen: Default::default(),
         device_filter: Default::default(),
+        device_tag_filter: None,
+        device_tag_folds: Default::default(),
+        device_tags: Default::default(),
         endpoints: vec![crate::endpoint::Endpoint::new(
             crate::endpoint::LOCAL.into(),
             "Local".into(),
@@ -808,6 +813,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         _notification_mutes: SheprdWindow::observe_notification_mutes(cx),
         browser: crate::browser::Browser::new(cx),
         _browser_tabs: cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify()),
+        _device_tags: cx.observe_global::<crate::device_tags::DeviceTags>(|_, cx| cx.notify()),
         _worktree_notes: SheprdWindow::observe_worktree_notes(window, cx),
         prefix_armed: false,
         resize_mode: false,

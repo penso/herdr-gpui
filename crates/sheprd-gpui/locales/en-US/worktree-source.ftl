@@ -14,6 +14,8 @@ worktree-source-tab-issues = issues
 worktree-source-tab-hits = { $tab } { $hits }
 worktree-source-sign-in-pull-requests = Sign in to GitHub in Sheprd (account button, top right) to list pull requests.
 worktree-source-sign-in-issues = Sign in to GitHub in Sheprd (account button, top right) to list issues.
+# The pull request tab of a GitLab project, which lists only its issues.
+worktree-source-gitlab-merge-requests = GitLab merge requests are not listed here yet; the issues tab lists the project's issues.
 
 worktree-source-search = Search checkouts, branches, pull requests, issues...
 # The new checkout's name field, empty until the user types one.

@@ -1,6 +1,6 @@
 use super::*;
 use crate::update_panel::scroll_thumb;
-use gpui::{ScrollDelta, ScrollWheelEvent};
+use gpui::{ScrollDelta, ScrollEvent};
 
 fn viewport() -> Bounds<Pixels> {
     Bounds::new(point(px(10.), px(100.)), size(px(200.), px(100.)))
@@ -90,7 +90,7 @@ fn long_notes_show_a_scrollbar_that_follows_them(cx: &mut gpui::TestAppContext) 
     let line = cx.debug_bounds("app-update-notes-line-0").unwrap();
     assert!(line.right() <= top.left(), "{line:?} under {top:?}");
 
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: body.center(),
         delta: ScrollDelta::Pixels(point(px(0.), px(-1_000_000.))),
         ..Default::default()
