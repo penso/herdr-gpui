@@ -1361,6 +1361,7 @@ async function postLink(vouch, link) {
   const name = waitingName(vouch, link.host);
   if (links.posting.has(name)) return false;
   links.posting.add(name);
+  let sent = false;
   try {
     if (await waitingKey(vouch, link.host)) return false;
     const { pair, publicKey } = await newDeviceKey();
@@ -1374,12 +1375,13 @@ async function postLink(vouch, link) {
     }
     const path = `/api/v2/hosts/${encodeURIComponent(link.host)}/pair`;
     const options = { method: "POST", body: { public_key: publicKey }, origin: app.origin, computer: vouch };
+    sent = true;
     link.state = (await (await api(path, options)).json()).state;
     return false;
   } catch (error) {
-    // Anything but the computer's refusal leaves open that it took the key,
-    // so the key stays and the next list says.
-    if (!(error instanceof HttpError)) {
+    // Once sent, anything but the computer's refusal leaves open that it
+    // took the key, so the key stays and the next list says.
+    if (sent && !(error instanceof HttpError)) {
       link.state = "pending";
       return false;
     }
@@ -1436,12 +1438,16 @@ async function settleLink(vouch, link, asked) {
   // While the computer keeps the request the machine reads `asking` or
   // `pending`; any other state ended it, and `paired` then names the key it
   // enrolled, unless that is still the device this key was to replace.
-  const early = waiting.since + LINK_POST_MS >= asked;
-  if (early || link.state === "asking" || link.state === "pending") return { waits: true };
+  if (waiting.since + LINK_POST_MS >= asked) {
+    // Its row must not offer a retry yet: the key still fills the one attempt.
+    link.state = "pending";
+    return { waits: true };
+  }
+  if (link.state === "asking" || link.state === "pending") return { waits: true };
   const enrolled = link.state === "paired" && link.device !== waiting.replaces;
   const kept = enrolled && (await keepLink(vouch, link, waiting.pair));
   // No room for it yet: the machine holds this key, so it stays for Try again.
-  if (enrolled && link.state === "failed") return { waits: false };
+  if (enrolled && link.state === "failed") return { waits: false, full: true };
   // Only now: a reload before this finds the key and keeps the machine.
   await dropWaiting(vouch, link.host);
   return { waits: false, kept, unsent: link.state === "allowed" };
@@ -1498,7 +1504,7 @@ async function followLinks() {
       }
       drawLinks();
       const waits = await Promise.all(rows.map((link) => waitingKey(vouch, link.host)));
-      if (!waits.some((waiting, index) => waiting && rows[index].state !== "failed")) return;
+      if (!waits.some((waiting, index) => waiting && !settled[index].full)) return;
     }
     await new Promise((resolve) => setTimeout(resolve, LINK_POLL_MS));
     if (!current() || document.visibilityState === "hidden") return;
