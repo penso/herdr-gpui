@@ -73,6 +73,54 @@ fn the_session_chip_unfolds_sessions_under_their_device(cx: &mut gpui::TestAppCo
     assert!(cx.debug_bounds("sessions-row-0").is_none());
 }
 
+/// Moves this machine's row onto session `name` and draws it.
+fn on_session(view: &Entity<SheprdWindow>, cx: &mut gpui::VisualTestContext, name: &str) {
+    view.update(cx, |view, _| {
+        view.endpoints[0].connection.target = ConnectTarget::Session {
+            name: name.into(),
+            development: true,
+        };
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+}
+
+#[gpui::test]
+fn a_long_session_name_stays_inside_its_chip(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = open_picker(cx);
+    on_session(&view, cx, "work");
+    let short = cx.debug_bounds("device-sessions-1").unwrap();
+    let word = cx.debug_bounds("device-session-word-1").unwrap();
+    assert!(short.contains(&word.center()), "the chip says what it is");
+    on_session(
+        &view,
+        cx,
+        "a-session-name-long-enough-to-need-cutting-short",
+    );
+    let chip = cx.debug_bounds("device-sessions-1").unwrap();
+    let row = cx.debug_bounds(LOCAL_ROW).unwrap();
+    assert!(chip.size.width > short.size.width);
+    assert!(chip.size.width <= px(160.), "{:?}", chip.size.width);
+    assert!(chip.right() <= row.right());
+    assert!(
+        chip.left() - row.left() >= px(60.),
+        "the device's name keeps its room"
+    );
+    // Only the name gives way: the word keeps its width.
+    let long = cx.debug_bounds("device-session-word-1").unwrap();
+    assert_eq!(long.size.width, word.size.width);
+}
+
+#[gpui::test]
+fn an_explicit_socket_has_no_session_to_name(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = open_picker(cx);
+    view.update(cx, |view, _| {
+        view.endpoints[0].connection.target = ConnectTarget::Socket("/tmp/herdr.sock".into());
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    assert!(cx.debug_bounds("device-sessions-1").is_some());
+    assert!(cx.debug_bounds("device-session-word-1").is_none());
+}
+
 #[gpui::test]
 fn right_unfolds_the_selected_device_and_left_folds_it(cx: &mut gpui::TestAppContext) {
     let (view, cx) = open_picker(cx);
