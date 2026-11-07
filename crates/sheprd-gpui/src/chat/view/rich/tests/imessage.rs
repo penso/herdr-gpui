@@ -1,4 +1,5 @@
 use super::*;
+use crate::chat::view::layout::Side;
 use crate::chat::visual::{DiagramStyle, Drawn, Output, Source};
 use crate::config::ChatLayoutMode;
 use core::prelude::v1::test;
@@ -33,7 +34,10 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
                 &[],
                 &visuals,
                 &selection,
-                view.chat_text_size(),
+                Voice {
+                    side: Side::User,
+                    size: view.chat_text_size(),
+                },
                 cx,
             );
             assert_eq!(prose.text_style().color, None, "{name}: inherit bubble ink");
@@ -45,22 +49,27 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
                 },
             ] {
                 assert_eq!(
-                    view.rich_style(&style).color,
+                    view.rich_style(&style, None).color,
                     None,
                     "{name}: prose/link ink"
                 );
             }
-            let inline_code = view.rich_style(&Style {
-                code: true,
-                ..Style::default()
-            });
-            assert_eq!(inline_code.color, ink);
-            assert!(crate::contrast::ratio(view.theme.foreground, view.theme.active) >= 4.5);
+            let inline_code = view.rich_style(
+                &Style {
+                    code: true,
+                    ..Style::default()
+                },
+                None,
+            );
+            let code = code_ink(&view.theme);
+            assert_eq!(inline_code.color, Some(rgb(code).into()));
+            assert!(crate::contrast::ratio(code, view.theme.active) >= 4.5);
 
             let source: Arc<str> = "plain code".into();
             let (mut code, mut table) = {
                 let links = Links::new(view, "fixture", cx);
                 let mut context = RichContext {
+                    accents: None,
                     visuals: &visuals,
                     links,
                     selection: &selection,
@@ -133,7 +142,10 @@ fn imessage_prose_inherits_its_bubble_while_rich_surfaces_keep_theme_ink(cx: &mu
                 &[],
                 &visuals,
                 &selection,
-                view.chat_text_size(),
+                Voice {
+                    side: Side::Agent,
+                    size: view.chat_text_size(),
+                },
                 cx,
             );
             assert_eq!(

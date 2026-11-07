@@ -9,19 +9,23 @@ use gpui::{prelude::*, *};
 use pulldown_cmark::{Alignment, HeadingLevel};
 use std::ops::Range;
 
+mod accents;
 mod code;
 mod links;
 mod rhythm;
 
 use super::{
     copy,
-    layout::layout_for,
+    layout::{Voice, layout_for},
     selection::{Fragment, Scope, selectable, styled_text},
 };
 use crate::chat::selection::Cell;
+use accents::{Accents, code_ink};
 use links::Links;
 
 struct RichContext<'a, 'b, 'c> {
+    /// The message's accents; `None` keeps the ink of a colored fill.
+    accents: Option<Accents>,
     visuals: &'a Visuals,
     links: Links,
     selection: &'a Scope<'a>,
@@ -37,13 +41,18 @@ impl SheprdWindow {
         blocks: &[Block],
         visuals: &Visuals,
         selection: &Scope<'_>,
-        size: f32,
+        voice: Voice,
         cx: &mut Context<Self>,
     ) -> Div {
         let links = Links::new(self, pane_id, cx);
         let look = self.chat_look();
         let layout = layout_for(self.config.chat.layout);
+        let size = voice.size;
+        let accents = layout
+            .ground(voice.side, &look)
+            .map(|ground| Accents::on(&self.theme, ground));
         let mut context = RichContext {
+            accents,
             visuals,
             links,
             selection,
@@ -124,13 +133,21 @@ impl SheprdWindow {
         let row = row
             .when_some(heading(kind), |row, level| {
                 row.font_weight(FontWeight::SEMIBOLD)
+                    .when_some(context.accents, |row, accents| {
+                        row.text_color(rgb(accents.heading))
+                    })
                     .text_size(px(context.size * rhythm::heading_scale(level)))
                     .line_height(relative(1.3))
             })
+            // A quote owns its fill and ink, so it reads in any message.
             .when(kind == Kind::Quote, |row| {
-                row.pl(px(10.))
+                row.px(px(12.))
+                    .py(px(7.))
+                    .rounded(px(4.))
+                    .bg(rgb(self.theme.surface))
+                    .text_color(rgb(self.theme.foreground))
                     .border_l_2()
-                    .border_color(rgb(self.theme.active))
+                    .border_color(rgb(self.theme.ink(self.theme.palette[4])))
             });
         let marker = match kind {
             Kind::Bullet => Some("•".to_owned()),
@@ -172,7 +189,7 @@ impl SheprdWindow {
         if let Some(Prose { text, spans }) = prose_spans(&content) {
             let highlights = spans
                 .iter()
-                .map(|(range, style)| (range.clone(), self.rich_style(style)));
+                .map(|(range, style)| (range.clone(), self.rich_style(style, context.accents)));
             let fonts = spans
                 .iter()
                 .filter(|(_, style)| style.code)
@@ -228,7 +245,7 @@ impl SheprdWindow {
                             .as_ref()
                             .map(|fragment| fragment.range(offset..offset + word.len()));
                         offset += word.len();
-                        let marks = [(0..word.len(), self.rich_style(style))];
+                        let marks = [(0..word.len(), self.rich_style(style, context.accents))];
                         let styled =
                             styled_text(selected.as_ref(), word.to_owned(), marks, &self.theme);
                         item = selectable(
@@ -459,16 +476,20 @@ impl SheprdWindow {
             }))
     }
 
-    fn rich_style(&self, style: &Style) -> HighlightStyle {
+    fn rich_style(&self, style: &Style, accents: Option<Accents>) -> HighlightStyle {
         HighlightStyle {
             font_weight: style.bold.then_some(FontWeight::SEMIBOLD),
             font_style: style.italic.then_some(FontStyle::Italic),
-            color: style
-                .link
-                .as_ref()
-                .and_then(|_| layout_for(self.config.chat.layout).link(&self.chat_look()))
-                .or_else(|| style.code.then_some(self.theme.foreground))
-                .map(|color| rgb(color).into()),
+            color: if style.code {
+                Some(code_ink(&self.theme))
+            } else if style.link.is_some() {
+                accents.map(|accents| accents.link)
+            } else if style.bold || style.italic {
+                accents.map(|accents| accents.emphasis)
+            } else {
+                None
+            }
+            .map(|color| rgb(color).into()),
             underline: style.link.as_ref().map(|_| UnderlineStyle {
                 thickness: px(1.),
                 ..Default::default()

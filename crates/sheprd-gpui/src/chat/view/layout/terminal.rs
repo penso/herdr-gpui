@@ -18,7 +18,19 @@ fn gutter(look: &Look<'_>) -> Pixels {
     px(look.mono.size * 1.6)
 }
 
+/// The shading of a prompt's line.
+fn prompt_fill(look: &Look<'_>) -> u32 {
+    mix(look.theme.background, look.theme.foreground, 7)
+}
+
 impl ChatLayout for Terminal {
+    fn ground(&self, side: Side, look: &Look<'_>) -> Option<u32> {
+        Some(match side {
+            Side::User => prompt_fill(look),
+            Side::Agent => look.theme.background,
+        })
+    }
+
     fn compact_settings(&self) -> bool {
         true
     }
@@ -73,7 +85,7 @@ impl ChatLayout for Terminal {
                 .mt(px(if speaker { 14. } else { 2. }))
                 .px(px(8.))
                 .py(px(4.))
-                .bg(rgb(mix(theme.background, theme.foreground, 7)))
+                .bg(rgb(prompt_fill(look)))
                 .text_color(rgb(theme.subtext())),
             Side::Agent => line.mt(px(if speaker { 10. } else { 6. })),
         };

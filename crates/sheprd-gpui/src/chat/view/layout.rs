@@ -31,6 +31,13 @@ pub(super) enum Side {
     Agent,
 }
 
+/// How a message's words are set: who says them, and at what size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Voice {
+    pub(super) side: Side,
+    pub(super) size: f32,
+}
+
 pub(super) fn side(kind: &EntryKind) -> Option<Side> {
     match kind {
         EntryKind::User { .. }
@@ -199,10 +206,11 @@ pub(super) trait ChatLayout {
         Some(look.theme.foreground)
     }
 
-    /// The color of a link in a message: by default the theme's blue.
-    /// `None` draws it as the text around it.
-    fn link(&self, look: &Look<'_>) -> Option<u32> {
-        Some(look.theme.ink(look.theme.palette[4]))
+    /// What `side`'s messages sit on, which their accents must read
+    /// against: by default the theme's background. `None` is a fill with a
+    /// color of its own, where no accent reads and text keeps the row's ink.
+    fn ground(&self, _side: Side, look: &Look<'_>) -> Option<u32> {
+        Some(look.theme.background)
     }
 
     /// The fill behind what is drawn for the theme's background inside a
@@ -265,6 +273,11 @@ pub(super) fn summary_row(row: Row<'_>, look: &Look<'_>, above: f32) -> AnyEleme
     .into_any_element()
 }
 
+/// The fill of the user's bubble in a [`bubble_row`].
+pub(super) fn bubble_fill(look: &Look<'_>) -> u32 {
+    crate::config::mix(look.theme.background, look.theme.foreground, 9)
+}
+
 /// The user's words in a bubble on the right, and the agent's as plain
 /// text across the column, as chat apps draw them. `radius` and `padding`
 /// shape the bubble, and `gap` is the space where the speaker changes.
@@ -277,7 +290,7 @@ pub(super) fn bubble_row(row: Row<'_>, look: &Look<'_>, bubble: Bubble) -> AnyEl
     let id = row.entry.id.0;
     let body = match row.side() {
         Some(Side::User) => {
-            let fill = crate::config::mix(look.theme.background, look.theme.foreground, 9);
+            let fill = bubble_fill(look);
             // Measure rich blocks against the available cross-axis width.
             // A horizontal auto flex basis collapses their percentage widths
             // to the Copy button's width before the text is laid out.

@@ -54,6 +54,13 @@ fn block(look: &Look<'_>, bar: u32, fill: u32, body: Div) -> Div {
 }
 
 impl ChatLayout for OpenCode {
+    fn ground(&self, side: Side, look: &Look<'_>) -> Option<u32> {
+        Some(match side {
+            Side::User => tint(look.theme, PROMPT_TINT),
+            Side::Agent => look.theme.background,
+        })
+    }
+
     fn compact_settings(&self) -> bool {
         true
     }

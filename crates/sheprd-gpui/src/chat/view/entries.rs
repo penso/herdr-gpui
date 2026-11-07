@@ -13,7 +13,7 @@ use super::{
     Hues,
     copy::CopyPlacement,
     disclosure::{HeaderText, chevron},
-    layout::{Row, ToolFold, layout_for, side},
+    layout::{Row, Side, ToolFold, Voice, layout_for, side},
     visuals::Frame,
 };
 use crate::{SheprdWindow, config::corners, fonts::StyledFont, i18n::fl, notifications::safe_text};
@@ -129,11 +129,15 @@ impl SheprdWindow {
         let content = match &entry.kind {
             EntryKind::User { text, .. } | EntryKind::Agent { text } => {
                 // A layout may set the user's prompts in a quieter voice.
-                let size = match &entry.kind {
-                    EntryKind::User { .. } => {
-                        layout_for(self.config.chat.layout).prompt_text(&self.chat_look())
-                    }
-                    _ => self.chat_text_size(),
+                let voice = match &entry.kind {
+                    EntryKind::User { .. } => Voice {
+                        side: Side::User,
+                        size: layout_for(self.config.chat.layout).prompt_text(&self.chat_look()),
+                    },
+                    _ => Voice {
+                        side: Side::Agent,
+                        size: self.chat_text_size(),
+                    },
                 };
                 let message = match body.as_deref() {
                     Some(Body::Message(parts)) => self.render_chat_message(
@@ -141,7 +145,7 @@ impl SheprdWindow {
                         entry.id,
                         parts,
                         &chat.prepared.visuals,
-                        size,
+                        voice,
                         cx,
                     ),
                     Some(Body::Summary(summary)) => {

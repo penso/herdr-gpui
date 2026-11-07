@@ -31,7 +31,10 @@ impl SheprdWindow {
             entry.id,
             parts,
             &chat.prepared.visuals,
-            self.chat_text_size(),
+            Voice {
+                side: Side::User,
+                size: self.chat_text_size(),
+            },
             cx,
         );
         let id = entry.id.0;
