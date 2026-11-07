@@ -10,7 +10,8 @@ use super::{
 use crate::{
     fonts::StyledFont,
     i18n::fl,
-    orchestrator::{Access, CheckState, PrStatus, Provider, Review, SyncState},
+    orchestrator::{Access, CheckState, Item, PrStatus, Provider, Review, SyncState},
+    pull_request::{MergeState, Tone, tone_color},
 };
 use gpui::{prelude::*, *};
 
@@ -24,8 +25,9 @@ const PROJECT_WIDTH: f32 = 130.;
 const SOURCE_WIDTH: f32 = 22.;
 /// The column holding a row's action, such as Start agent.
 const ACTION_WIDTH: f32 = 96.;
-/// Checks a row names before counting the rest.
-const CHECK_PILLS: usize = 3;
+/// The columns saying where a pull request stands.
+const STATUS_WIDTH: f32 = 72.;
+const CHECKS_WIDTH: f32 = 70.;
 
 /// Why the list is empty.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,8 +135,9 @@ impl OrchestratorView {
                 } else {
                     head.extend([
                         (fl!("orchestrator-column-author"), Some(100.)),
+                        (fl!("orchestrator-column-status"), Some(STATUS_WIDTH)),
                         (fl!("orchestrator-column-review"), Some(124.)),
-                        (fl!("orchestrator-column-checks"), Some(150.)),
+                        (fl!("orchestrator-column-checks"), Some(CHECKS_WIDTH)),
                         (fl!("orchestrator-column-size"), Some(70.)),
                         (fl!("orchestrator-column-run"), Some(30.)),
                     ]);
@@ -332,7 +335,7 @@ impl OrchestratorView {
     fn row_shell(
         &self,
         id: (&'static str, usize),
-        item: &crate::orchestrator::model::Item,
+        item: &Item,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let key = item.key.canonical();
@@ -513,6 +516,7 @@ impl OrchestratorView {
             .as_deref()
             .is_some_and(|head| head != item.key.source.repository);
         let draft = item.state == "draft";
+        let tone = row_tone(item, status);
         let key = item.key.canonical();
         self.row_shell(("orchestrator-pr", index), item, cx)
             .debug_selector(move || format!("orchestrator-row-{key}"))
@@ -523,11 +527,7 @@ impl OrchestratorView {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(look.icon(
-                        "icons/pull-request.svg",
-                        12.,
-                        if draft { theme.muted } else { look.hue(GREEN) },
-                    ))
+                    .child(look.icon("icons/pull-request.svg", 12., tone_color(tone, theme)))
                     .child(
                         look.mono(item.identifier.clone())
                             .text_color(rgb(theme.muted)),
@@ -595,6 +595,17 @@ impl OrchestratorView {
                             .text_color(rgb(theme.subtext()))
                             .child(item.author.clone().unwrap_or_default()),
                     )
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(STATUS_WIDTH))
+                            .overflow_hidden()
+                            .flex()
+                            .children(
+                                standing_word(tone, item, status)
+                                    .map(|word| look.badge_in(word, tone_color(tone, theme))),
+                            ),
+                    )
                     .child(div().flex_none().w(px(124.)).flex().children(review_badge(
                         look,
                         status,
@@ -603,12 +614,10 @@ impl OrchestratorView {
                     .child(
                         div()
                             .flex_none()
-                            .w(px(150.))
+                            .w(px(CHECKS_WIDTH))
                             .overflow_hidden()
                             .flex()
-                            .items_center()
-                            .gap(px(3.))
-                            .children(check_pills(look, status)),
+                            .children(checks_count(look, status)),
                     )
                     .child(diff_squares(look, pr.additions, pr.deletions).w(px(70.)))
                     .child(self.run_mark(&row))
@@ -748,32 +757,56 @@ fn checks_dot(look: &Look, status: Option<&PrStatus>) -> Option<Div> {
     Some(look.dot(check_hue(look, state), 7.))
 }
 
-/// The first checks as short colored pills, failures first, then a count of
-/// the rest.
-fn check_pills(look: &Look, status: Option<&PrStatus>) -> Vec<Div> {
-    let Some(status) = status else {
-        return Vec::new();
-    };
-    let mut checks: Vec<_> = status.checks.iter().collect();
-    checks.sort_by_key(|check| check.state);
-    let mut pills: Vec<Div> = checks
-        .iter()
-        .take(CHECK_PILLS)
-        .map(|check| {
-            let hue = check_hue(look, check.state);
-            let short = crate::truncate::cut_width(&check.name, 4).unwrap_or(&check.name);
-            div()
-                .flex_none()
-                .px(px(4.))
-                .rounded(px(crate::config::corners::SMALL))
-                .bg(rgb(crate::config::mix(look.theme.background, hue, 18)))
-                .text_color(rgb(hue))
-                .text_size(look.tiny())
-                .child(short.to_owned())
-        })
-        .collect();
-    if checks.len() > CHECK_PILLS {
-        pills.push(look.muted(format!("+{}", checks.len() - CHECK_PILLS)));
+/// The tone of a row's pull request, the one its sidebar badge takes. One
+/// with no status yet, or a merge request, says nothing rather than ready.
+pub(super) fn row_tone(item: &Item, status: Option<&PrStatus>) -> Tone {
+    match item.state.as_str() {
+        "merged" => Tone::Merged,
+        "closed" => Tone::Attention,
+        "draft" => Tone::Muted,
+        _ => status.map_or(Tone::Muted, PrStatus::tone),
     }
-    pills
+}
+
+/// The word beside the tone's color, naming what no other column shows:
+/// conflicts and a branch behind its base. A draft's badge is by its title.
+pub(super) fn standing_word(tone: Tone, item: &Item, status: Option<&PrStatus>) -> Option<String> {
+    let merge = status.map_or(MergeState::Unknown, |status| status.merge);
+    Some(match tone {
+        Tone::Attention if item.state == "closed" => fl!("orchestrator-standing-closed"),
+        Tone::Attention if merge == MergeState::Dirty => fl!("orchestrator-standing-conflicts"),
+        Tone::Attention => fl!("orchestrator-standing-attention"),
+        Tone::Held if merge == MergeState::Behind => fl!("orchestrator-standing-behind"),
+        Tone::Held => fl!("orchestrator-badge-blocked"),
+        Tone::Merged => fl!("orchestrator-standing-merged"),
+        Tone::Muted => return None,
+        Tone::Ready => fl!("orchestrator-standing-ready"),
+        Tone::Waiting => fl!("orchestrator-standing-waiting"),
+    })
+}
+
+/// How many checks are fine out of how many reported, in the color and mark
+/// of what they add up to.
+fn checks_count(look: &Look, status: Option<&PrStatus>) -> Option<Div> {
+    let status = status.filter(|status| !status.checks.is_empty())?;
+    let state = status.checks_state().unwrap_or(CheckState::Skipped);
+    let icon = match state {
+        CheckState::Failed => "icons/error.svg",
+        CheckState::Pending => "icons/refresh.svg",
+        CheckState::Passed => "icons/check.svg",
+        CheckState::Skipped => "icons/pass.svg",
+    };
+    let hue = check_hue(look, state);
+    Some(
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .child(look.icon(icon, 11., hue))
+            .child(
+                look.mono(format!("{}/{}", status.checks_ok(), status.checks.len()))
+                    .text_size(look.small())
+                    .text_color(rgb(hue)),
+            ),
+    )
 }

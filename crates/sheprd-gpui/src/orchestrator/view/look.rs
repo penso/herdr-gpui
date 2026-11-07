@@ -78,13 +78,18 @@ impl Look {
 
     /// A short colored word, such as a state or priority.
     pub(crate) fn badge(&self, text: impl Into<SharedString>, index: usize) -> Div {
+        self.badge_in(text, self.hue(index))
+    }
+
+    /// A [`Self::badge`] in a color already inked for the theme.
+    pub(crate) fn badge_in(&self, text: impl Into<SharedString>, color: u32) -> Div {
         div()
             .flex_none()
             .whitespace_nowrap()
             .px(px(6.))
             .rounded(px(corners::SMALL))
-            .bg(rgb(self.wash(index)))
-            .text_color(rgb(self.hue(index)))
+            .bg(rgb(mix(self.theme.background, color, 16)))
+            .text_color(rgb(color))
             .text_size(self.tiny())
             .child(text.into())
     }
