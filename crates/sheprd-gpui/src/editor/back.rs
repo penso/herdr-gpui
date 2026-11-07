@@ -33,10 +33,12 @@ pub(crate) struct Return {
 }
 
 /// Records a navigation of `endpoint` to terminal tab `to`, or to somewhere
-/// else with None: each return has left its tab unless that is where it went.
+/// else with None: each return has left its tab unless that is where it
+/// went. A pane no snapshot has listed has no tab to leave yet, as when the
+/// window brings forward the Neovim pane it just sent a file to.
 pub(super) fn navigated(returns: &mut [Return], endpoint: &str, to: Option<&str>) {
     for entry in returns.iter_mut().filter(|e| e.endpoint_id == endpoint) {
-        entry.left = entry.seen_in.as_deref() != to;
+        entry.left = entry.seen_in.as_deref().is_some_and(|tab| Some(tab) != to);
     }
 }
 
@@ -130,14 +132,6 @@ impl SheprdWindow {
         };
         let endpoint = &self.endpoints[self.selected_endpoint].id;
         navigated(&mut self.editor_returns, endpoint, to);
-    }
-
-    /// Notes a page taking the window's attention from the terminals.
-    pub(crate) fn note_editor_page_shown(&mut self) {
-        let endpoint = &self.endpoints[self.selected_endpoint].id;
-        for entry in self.editor_returns.iter_mut() {
-            entry.left |= entry.endpoint_id == *endpoint;
-        }
     }
 
     /// Runs every window tick: shows the review whose editor just quit. A

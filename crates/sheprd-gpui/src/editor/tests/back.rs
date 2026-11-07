@@ -125,6 +125,19 @@ fn coming_back_to_the_tab_counts_as_being_there() {
 }
 
 #[test]
+fn bringing_forward_a_pane_not_listed_yet_is_not_leaving() {
+    let mut returns = vec![entry("editor", page())];
+    navigated(&mut returns, "local", Some("t"));
+    settle(
+        &mut returns,
+        "local",
+        &shown("boot", &[("editor", "t"), ("other", "u")]),
+    );
+    let emptied = shown("boot", &[("other", "u")]);
+    assert_eq!(settle(&mut returns, "local", &emptied), Some(page()));
+}
+
+#[test]
 fn navigating_another_endpoint_leaves_nothing() {
     let mut returns = vec![entry("editor", page())];
     settle(
