@@ -146,7 +146,7 @@ Updates...**. Background offers change the status version label without taking
 focus. **Download** and **Install Update** are separate approvals; closing the
 panel does not cancel work. Explicit **Cancel** requests cancellation.
 The panel shows archive download progress and an animated bar for work without a
-known percentage. Homebrew-managed installs use `brew upgrade --cask herdr-gpui`;
+known percentage. Homebrew-managed installs use `brew upgrade --cask` on their cask;
 if the installed version is behind the offer, `brew update` refreshes metadata
 before one retry. Linux distribution installs download the signed package matching
 the owning package manager and invoke APT, DNF, or pacman through PolicyKit.
@@ -3932,6 +3932,16 @@ Ctrl+Shift+U is left unbound for
   upstream repository: its own branches are fetched from `upstream`, pull
   requests from the fork behind `origin` check out their real branch from
   `origin`, and other forks use the PR head ref fetched from `upstream`.
+  A GitLab project (its `origin` remote, else `upstream`, on a host named
+  "gitlab" or one glab knows as an instance) fills the issues tab with its 50
+  most recently updated open issues, and needs no GitHub account: without one,
+  the dialog looks for a GitLab remote as it opens and enables the issues tab
+  when it finds one. They are read with the token the Orchestrator reads that
+  instance with (an `.envrc`'s or the shell's `GITLAB_TOKEN`, an account
+  connected in the account menu, or glab's); a public project lists without
+  one. Picking an issue creates a new branch named after it, and the agent
+  context note says it is a GitLab issue. Merge requests are not listed, so the
+  PR tab stays faded for a GitLab project.
 - Open worktree... asynchronously lists the clicked parent's existing checkouts
   through `worktree.list`, including already-open and detached checkouts but
   excluding bare/prunable entries. Use Up/Down and Enter, the Open button, or
@@ -4054,6 +4064,15 @@ Ctrl+Shift+U is left unbound for
   conflicts or blockers, and passed/failed/pending/skipped check counts. Repeated
   opens share an in-flight lookup; account authentication/rate-limit pauses still
   apply.
+  A branch with commits past the default branch and no pull request carrying
+  them shows a yellow `+PR` in the number's place in the sidebar, and
+  `3 commits, no PR` in the titlebar, which opens the Git menu on Create pull
+  request; a window under 720 points wide colors the Git icon instead. Pushing does not clear it, only a pull request does. It needs a
+  finished lookup, so a signed-out or non-GitHub checkout shows nothing, and a
+  squash-merged branch shows its number until it moves past the merged head. The
+  default branch is the remote's `HEAD` (`upstream` before `origin`); a clone
+  without one has nothing to compare with and shows nothing, until
+  `git remote set-head origin --auto`. This machine's checkouts only.
   PR numbers in the sidebar and titlebar share readiness colors: green for a clean
   merge, red for conflicts, failing checks, or requested changes, yellow for pending
   checks/reviews or an unknown merge status, and orange for a blocked/behind branch

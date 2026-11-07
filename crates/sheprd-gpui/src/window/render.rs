@@ -835,6 +835,11 @@ impl Render for SheprdWindow {
                 }),
             )
             .on_action(
+                cx.listener(|this, action: &crate::actions::SetChatLayout, _, cx| {
+                    this.set_chat_layout(action.mode, cx);
+                }),
+            )
+            .on_action(
                 cx.listener(|this, action: &crate::actions::SetTabLayout, _, cx| {
                     this.set_tab_layout(action.mode, cx);
                 }),

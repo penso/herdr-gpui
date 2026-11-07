@@ -31,6 +31,8 @@ struct WireTests {
         #expect(workspace.terminals.first?.firstPane?.pane == "p2")
         #expect(workspace.terminals.first?.agent?.status == .done)
         #expect(home.workspaces[1].pullRequest == nil)
+        #expect(workspace.unopenedCommits == nil)
+        #expect(home.workspaces[2].unopenedCommits == 3)
     }
 
     @Test func decodesChatSnapshotAndTheRestEndpoint() throws {

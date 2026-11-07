@@ -5,6 +5,7 @@
 use super::label_text;
 use crate::{
     config::{FontConfig, Theme},
+    i18n::fl,
     sidebar::{glyph_width, layout::SidebarMetrics, line_height},
 };
 use gpui::{prelude::*, *};
@@ -230,6 +231,15 @@ impl PrBadge {
         Self {
             number: format!("#{}", pr.number),
             color: crate::pull_request::color(pr, theme),
+        }
+    }
+
+    /// Commits on the branch that no pull request carries yet, in the slot a
+    /// number would take, so every layout shows it where it shows a number.
+    pub(in crate::sidebar) fn unopened(theme: &Theme) -> Self {
+        Self {
+            number: fl!("sidebar-pull-request-unopened"),
+            color: crate::pull_request::unopened_color(theme),
         }
     }
 }

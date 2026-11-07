@@ -14,6 +14,14 @@ use std::{
     time::Duration,
 };
 
+/// The accounts a listing may read with: GitHub's, when one is connected,
+/// and where saved GitLab tokens are kept.
+#[derive(Clone)]
+pub(crate) struct Accounts {
+    pub github: Option<Tokens>,
+    pub gitlab: sheprd_credentials::Store,
+}
+
 /// What the worker was asked to do. Listing and preparing are both bounded,
 /// Git and GitHub work; fetching updates refs but never checkout files.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,13 +36,18 @@ pub(super) enum Task {
 #[derive(Debug)]
 pub(crate) enum Done {
     Listed(Origin, Vec<Item>),
+    /// A GitHub repository with no GitHub account: nothing to list, and
+    /// nothing to report, since its tabs say where to sign in.
+    Unlisted,
     Fetched(String),
 }
 
-type Answer = crate::Result<Done>;
+/// The forge a listing found, which outlives a failed listing, and what the
+/// worker finished.
+type Answer = (Option<super::Forge>, crate::Result<Done>);
 
 struct Worker {
-    requests: mpsc::SyncSender<(u64, Target, Tokens, Task)>,
+    requests: mpsc::SyncSender<(u64, Target, Accounts, Task)>,
     results: mpsc::Receiver<(u64, Answer)>,
 }
 
@@ -43,7 +56,7 @@ pub(crate) struct Lookup {
     worker: Option<Worker>,
     generation: Arc<AtomicU64>,
     busy: bool,
-    waiting: Option<(Target, Tokens, Task)>,
+    waiting: Option<(Target, Accounts, Task)>,
     /// Set while any request is outstanding, so the tabs can say so.
     pub loading: bool,
     pub origin: Option<Origin>,
@@ -51,6 +64,11 @@ pub(crate) struct Lookup {
     pub message: Option<String>,
     /// The branch a finished fetch made available, for the window to act on.
     pub ready: Option<String>,
+    /// Where the repository lives, once a listing found its remote.
+    forge: Option<super::Forge>,
+    /// The listing runs without a GitHub account, only to find a GitLab
+    /// project: its failures are logged, not shown, unless it found one.
+    quiet: bool,
     cooldown: Option<Duration>,
 }
 
@@ -65,17 +83,28 @@ impl Lookup {
         self.origin.is_some()
     }
 
-    pub fn list(&mut self, input: Target, tokens: impl Into<Tokens>) {
-        self.request(input, tokens.into(), Task::List);
+    pub fn list(&mut self, input: Target, accounts: Accounts) {
+        self.quiet = accounts.github.is_none();
+        self.request(input, accounts, Task::List);
         self.items.clear();
         self.origin = None;
     }
 
-    pub fn fetch_branch(&mut self, input: Target, tokens: impl Into<Tokens>, item: &Item) {
-        self.request(input, tokens.into(), Task::Fetch(item.clone()));
+    pub fn fetch_branch(&mut self, input: Target, accounts: Accounts, item: &Item) {
+        self.request(input, accounts, Task::Fetch(item.clone()));
     }
 
-    fn request(&mut self, input: Target, token: Tokens, task: Task) {
+    /// Where the repository lives, once a listing found its remote.
+    pub fn forge(&self) -> Option<&super::Forge> {
+        self.forge.as_ref()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn install_forge(&mut self, forge: super::Forge) {
+        self.forge = Some(forge);
+    }
+
+    fn request(&mut self, input: Target, token: Accounts, task: Task) {
         self.generation.fetch_add(1, Ordering::Relaxed);
         self.waiting = Some((input, token, task));
         self.loading = true;
@@ -89,17 +118,21 @@ impl Lookup {
         let mut changed = false;
         if let Some(worker) = &self.worker {
             match worker.results.try_recv() {
-                Ok((generation, result)) => {
+                Ok((generation, (forge, result))) => {
                     self.busy = false;
                     if generation == self.generation.load(Ordering::Relaxed) {
                         self.loading = false;
                         changed = true;
+                        if forge.is_some() {
+                            self.forge = forge;
+                        }
                         match result {
                             Ok(Done::Listed(origin, items)) => {
                                 self.origin = Some(origin);
                                 self.items = items;
                                 self.message = None;
                             }
+                            Ok(Done::Unlisted) => self.message = None,
                             Ok(Done::Fetched(branch)) => {
                                 self.ready = Some(branch);
                                 self.message = None;
@@ -110,7 +143,9 @@ impl Lookup {
                                     detail = %error,
                                     "Listing pull requests and issues failed"
                                 );
-                                self.message = Some(error.to_string());
+                                let gitlab =
+                                    matches!(self.forge, Some(super::Forge::GitLab { .. }));
+                                self.message = (!self.quiet || gitlab).then(|| error.to_string());
                             }
                         }
                     }
@@ -144,7 +179,7 @@ impl Lookup {
     }
 
     fn start(&mut self) -> bool {
-        let (requests, incoming) = mpsc::sync_channel::<(u64, Target, Tokens, Task)>(1);
+        let (requests, incoming) = mpsc::sync_channel::<(u64, Target, Accounts, Task)>(1);
         let (outgoing, results) = mpsc::sync_channel(1);
         let current = self.generation.clone();
         let mut cooldown = self.cooldown;
@@ -154,10 +189,19 @@ impl Lookup {
                 for (generation, input, token, task) in incoming {
                     let cancelled = || current.load(Ordering::Relaxed) != generation;
                     let result = match &task {
-                        Task::List => fetch::list(&input, &token, cancelled, &mut cooldown)
-                            .map(|(origin, items)| Done::Listed(origin, items)),
-                        Task::Fetch(item) => fetch::fetch_branch(&input, item, &cancelled)
-                            .map(|()| Done::Fetched(item.branch())),
+                        Task::List => {
+                            let listing = fetch::list(&input, &token, cancelled, &mut cooldown);
+                            let done = listing.listed.map(|listed| match listed {
+                                Some((origin, items)) => Done::Listed(origin, items),
+                                None => Done::Unlisted,
+                            });
+                            (listing.forge, done)
+                        }
+                        Task::Fetch(item) => (
+                            None,
+                            fetch::fetch_branch(&input, item, &cancelled)
+                                .map(|()| Done::Fetched(item.branch())),
+                        ),
                     };
                     if outgoing.send((generation, result)).is_err() {
                         break;

@@ -33,6 +33,7 @@ menus-select-all = Select All
 menus-view = View
 menus-layout = Layout
 menus-tab-layout = Tab Layout
+menus-chat-layout = Agent Layout
 menus-increase-font-size = Increase Font Size
 menus-decrease-font-size = Decrease Font Size
 menus-reset-font-size = Reset Font Size

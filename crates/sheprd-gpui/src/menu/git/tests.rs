@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 mod commit_staged;
 mod en_xa;
+mod unopened;
 
 fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
     Status {

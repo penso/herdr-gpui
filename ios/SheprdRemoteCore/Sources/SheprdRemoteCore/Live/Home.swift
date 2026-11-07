@@ -3,6 +3,12 @@ import Foundation
 /// What one computer lists: `GET /api/v2/home` and the live socket's
 /// `home` message (`crates/sheprd-remote-control/src/native/model.rs`).
 public struct Home: Codable, Hashable, Sendable {
+    /// The `api` this app relies on: `API_LEVEL` in the daemon's `model.rs`
+    /// raised to something new means raising this with it.
+    public static let requiredAPI = 1
+
+    /// What the computer's daemon offers phones; older computers leave it out.
+    public var api: Int?
     public var computer: String
     public var fingerprint: String
     /// Whether the computer's Herdr daemon is reachable.
@@ -15,17 +21,24 @@ public struct Home: Codable, Hashable, Sendable {
     /// Agents working now, counted one by one, as a terminal tab lists only
     /// its most pressing agent; older computers leave it out.
     public var working: Int?
+    /// The release serving, to show; older computers leave it out.
+    public var version: String?
     public var workspaces: [Workspace]
 
-    public init(computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, workspaces: [Workspace]) {
+    public init(api: Int? = nil, computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, version: String? = nil, workspaces: [Workspace]) {
+        self.api = api
         self.computer = computer
         self.fingerprint = fingerprint
         self.connected = connected
         self.waiting = waiting
         self.load = load
         self.working = working
+        self.version = version
         self.workspaces = workspaces
     }
+
+    /// Whether the computer runs a Sheprd too old for this app.
+    public var needsUpdate: Bool { (api ?? 0) < Self.requiredAPI }
 
     /// CPU and memory in whole percentages, 0 to 100. Older computers
     /// send neither `cores` nor `load5Tenths`, and a computer whose OS
@@ -51,12 +64,16 @@ public struct Home: Codable, Hashable, Sendable {
         /// The repository checkout it is; older computers leave it out.
         public var worktree: Worktree?
         public var pullRequest: PullRequest?
+        /// Commits on its branch that no pull request carries yet; older
+        /// computers leave it out.
+        public var unopenedCommits: Int?
         public var chats: [ChatRow]
         public var terminals: [TerminalRow]
 
         enum CodingKeys: String, CodingKey {
             case id, label, branch, cwd, worktree, chats, terminals
             case pullRequest = "pull_request"
+            case unopenedCommits = "unopened_commits"
         }
     }
 

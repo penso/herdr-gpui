@@ -70,6 +70,7 @@ struct ComputerScreen: View {
             } footer: {
                 Text("Over Bluetooth, \(name) knows when you are near it and holds phone alerts while you use it.")
             }
+            ComputerUpdateSection(device: device, name: name)
             Section("Certificate") {
                 Text(Self.grouped(computer.fingerprint.hex))
                     .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)

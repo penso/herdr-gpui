@@ -12,6 +12,7 @@ mod entries;
 mod jump;
 mod layout;
 mod panels;
+mod pinned;
 mod rail;
 mod rich;
 pub(crate) mod running;
@@ -433,6 +434,7 @@ impl SheprdWindow {
                                         view.track_focus(focus)
                                     })
                                     .child(entries)
+                                    .children(self.render_chat_pinned(chat, cx))
                                     .children(self.render_chat_jump(chat, cx)),
                             )
                             .child(chat.glide.watch(
@@ -636,7 +638,7 @@ impl SheprdWindow {
                 .child(current.label())
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
-                    this.set_chat_layout(current.next(), cx);
+                    this.step_chat_layout(cx);
                 }))
         };
         let rail = self.render_chat_rail_controls(chat, rail_fits, cx);

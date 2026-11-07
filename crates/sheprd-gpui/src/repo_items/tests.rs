@@ -5,6 +5,7 @@ use crate::Error;
 use core::prelude::v1::test;
 use serde_json::json;
 
+mod gitlab;
 #[cfg(unix)]
 mod remote;
 mod remote_target;

@@ -17,6 +17,7 @@ impl SheprdWindow {
         let theme = &self.theme;
         let pane = chat.target.pane_id.clone();
         let waiting = chat.glide.waiting();
+        let labelled = layout::layout_for(self.config.chat.layout).jump_label();
         Some(
             div()
                 .absolute()
@@ -43,7 +44,7 @@ impl SheprdWindow {
                         .gap(px(6.))
                         .h(px(SIZE))
                         .min_w(px(SIZE))
-                        .when(waiting, |button| button.px(px(12.)))
+                        .when(waiting || labelled, |button| button.px(px(12.)))
                         .rounded_full()
                         .border_1()
                         .border_color(rgb(theme.active))
@@ -59,6 +60,15 @@ impl SheprdWindow {
                                     .child(fl!("chat-jump-waiting")),
                                 SharedString::from(format!("chat-jump-waiting-{pane}")),
                             ))
+                        })
+                        .when(labelled && !waiting, |button| {
+                            button.child(
+                                div()
+                                    .debug_selector(|| "chat-jump-label".into())
+                                    .text_size(self.chat_small_text())
+                                    .text_color(rgb(theme.foreground))
+                                    .child(fl!("chat-jump-to-end")),
+                            )
                         })
                         .child(
                             svg()

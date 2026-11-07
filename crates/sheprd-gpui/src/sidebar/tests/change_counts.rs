@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     config::ChangeCounts,
-    git::{Counted, Git, Status},
+    git::{Ahead, Counted, Git, Status},
     sidebar::workspaces::workspace_badge,
 };
 use std::time::Instant;
@@ -92,4 +92,70 @@ fn a_row_shows_only_the_change_counts_the_setting_picks() {
     let mut git = Git::default();
     git.seed_probe(input("worktree/sidebar-child"), true, now);
     assert_eq!(counts(child, &cache, &git, ChangeCounts::Local), None);
+}
+
+/// The row's pull request slot as drawn, or `None` when it is empty.
+fn pr_slot(
+    workspace: &ClientShellWorkspace,
+    cache: &crate::pull_request::Cache,
+    git: &Git,
+) -> Option<String> {
+    let marks = crate::teleport::Marks::detached();
+    workspace_badge(
+        workspace,
+        Some((cache, &crate::pull_request::View::default())),
+        (Some(git), ChangeCounts::PullRequest),
+        (&marks, crate::endpoint::LOCAL),
+        (None, false),
+        &Theme::default(),
+    )?
+    .pr
+    .map(|pr| pr.number)
+}
+
+fn ahead(head: &str) -> Ahead {
+    Ahead {
+        commits: 2,
+        head: head.into(),
+    }
+}
+
+#[test]
+fn commits_without_a_pull_request_take_the_number_slot_once_a_lookup_finished() {
+    let snapshot = layout_tests::snapshot(6);
+    let child = &snapshot.workspaces[4];
+    let branch = input("worktree/sidebar-child");
+    let now = Instant::now();
+    let mut cache = crate::pull_request::Cache::default();
+    let mut git = Git::default();
+    git.seed_ahead(branch.clone(), ahead("tip"), now);
+    assert_eq!(pr_slot(child, &cache, &git), None, "not looked up yet");
+    cache.seed_none(branch.clone(), now);
+    assert_eq!(pr_slot(child, &cache, &git).as_deref(), Some("+PR"));
+    // Nothing ahead, as on a branch just cut or the default branch.
+    assert_eq!(pr_slot(child, &cache, &Git::default()), None);
+}
+
+#[test]
+fn a_merged_pull_request_keeps_its_number_until_the_branch_moves_past_it() {
+    let snapshot = layout_tests::snapshot(6);
+    let child = &snapshot.workspaces[4];
+    let branch = input("worktree/sidebar-child");
+    let now = Instant::now();
+    let mut pr = crate::pull_request::fixture().unwrap();
+    pr.state = crate::pull_request::State::Merged;
+    pr.head_ref_oid = "merged".into();
+    let number = format!("#{}", pr.number);
+    let mut cache = crate::pull_request::Cache::default();
+    cache.seed(branch.clone(), pr, now);
+    let mut git = Git::default();
+    git.seed_ahead(branch.clone(), ahead("merged"), now);
+    assert_eq!(pr_slot(child, &cache, &git), Some(number));
+    git.seed_ahead(branch, ahead("newer"), now);
+    assert_eq!(pr_slot(child, &cache, &git).as_deref(), Some("+PR"));
+    assert_eq!(
+        counts(child, &cache, &git, ChangeCounts::PullRequest),
+        None,
+        "the merged pull request's counts do not describe the new commits"
+    );
 }

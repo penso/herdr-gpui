@@ -29,15 +29,24 @@ fn remote_picker_uses_the_hosts_account_and_repository(cx: &mut gpui::TestAppCon
                 main.0.input.repo_key.as_deref(),
                 Some("/fixture/agent-launcher/.git")
             );
-            assert_eq!(main.1.key(), view.main_tokens().unwrap().key());
+            assert_eq!(
+                main.1.github.as_ref().unwrap().key(),
+                view.main_tokens().unwrap().key()
+            );
 
             let mut auth = crate::github::Auth::connected_fixture();
             auth.profile.as_mut().unwrap().login = "work-user".into();
             view.menu.github_hosts.insert("ssh:work".into(), auth);
             view.menu.github = Default::default();
             let (_, tokens) = view.repo_items_request().unwrap();
-            assert_eq!(tokens.key(), view.pr_tokens().unwrap().key());
-            assert_ne!(tokens.key(), main.1.key());
+            assert_eq!(
+                tokens.github.as_ref().unwrap().key(),
+                view.pr_tokens().unwrap().key()
+            );
+            assert_ne!(
+                tokens.github.as_ref().unwrap().key(),
+                main.1.github.as_ref().unwrap().key()
+            );
 
             // A device-only sign-in enables both tabs even with Local signed out.
             for kind in [Kind::Issue, Kind::PullRequest] {

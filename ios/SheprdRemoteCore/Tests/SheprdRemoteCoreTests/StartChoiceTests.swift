@@ -104,6 +104,6 @@ import Testing
 
     @Test func aDaemonThatDoesNotSayStartedDidNot() throws {
         let created = try JSONDecoder().decode(Created.self, from: Data(#"{"pane":"p1","prompted":false}"#.utf8))
-        #expect(!created.started)
+        #expect(created.started == nil)
     }
 }

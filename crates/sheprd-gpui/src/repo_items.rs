@@ -7,6 +7,7 @@
 mod branches;
 mod context;
 mod fetch;
+mod gitlab;
 mod lookup;
 mod model;
 mod remote;
@@ -17,7 +18,7 @@ mod tests;
 pub(crate) use {
     branches::{Branch, list as list_branches},
     context::write_on as write_context,
-    lookup::Lookup,
+    lookup::{Accounts, Lookup},
     model::{Item, Kind},
 };
 
@@ -34,8 +35,20 @@ pub(crate) struct Target {
     pub input: crate::pull_request::Input,
 }
 
-/// The GitHub repository a workspace's pull requests are opened against: its
-/// `upstream` remote in a fork checkout, otherwise `origin`.
+/// Where a listed repository lives.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Forge {
+    #[default]
+    GitHub,
+    /// A GitLab instance, by the host its remote names; only its issues are
+    /// listed.
+    GitLab { host: String },
+}
+
+/// The repository a workspace's pull requests and issues come from. On
+/// GitHub, its `upstream` remote in a fork checkout, otherwise `origin`; on
+/// GitLab, the remote the Orchestrator reads, with `owner` the project's
+/// namespace (groups included) and `repo` its name.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Origin {
     pub owner: String,
@@ -45,6 +58,7 @@ pub(crate) struct Origin {
     /// For an `upstream` listing, the owner of the fork behind `origin`, whose
     /// pull request heads are already this checkout's own branches.
     pub fork_owner: Option<String>,
+    pub forge: Forge,
 }
 
 impl From<crate::pull_request::Base> for Origin {
@@ -54,6 +68,7 @@ impl From<crate::pull_request::Base> for Origin {
             repo: base.repo,
             remote: base.remote,
             fork_owner: base.fork_owner,
+            forge: Forge::GitHub,
         }
     }
 }

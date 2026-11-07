@@ -283,3 +283,72 @@ fn a_clean_checkout_with_a_pull_request_shows_no_dot(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("titlebar-git-pr-lines").is_some());
     assert!(cx.debug_bounds("titlebar-git-dirty").is_none());
 }
+
+#[gpui::test]
+fn commits_without_a_pull_request_say_so_and_open_the_menu_on_its_row(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(crate::titlebar::tests::header_window);
+    let input = Input {
+        checkout: None,
+        repo_key: Some(REPO_KEY.into()),
+        branch: "develop".into(),
+    };
+    cx.simulate_resize(size(px(900.), px(600.)));
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let now = std::time::Instant::now();
+            view.git = Git::fixture(input.clone(), Status::default());
+            view.git.seed_ahead(
+                input.clone(),
+                crate::git::Ahead {
+                    commits: 3,
+                    head: "tip".into(),
+                },
+                now,
+            );
+            view.menu.github = crate::github::Auth::connected_fixture();
+            view.seed_no_pr(input, now);
+            cx.notify();
+        })
+    });
+    for width in [900., 720., 719., 640., 480., 360.] {
+        cx.simulate_resize(size(px(width), px(600.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        let button = cx.debug_bounds("titlebar-git").unwrap();
+        let avatar = cx.debug_bounds("titlebar-avatar").unwrap();
+        assert!(button.right() <= avatar.left(), "width {width}");
+        // The words must never cost the controls after them their place.
+        assert!(avatar.right() <= px(width), "width {width}");
+        let note = cx.debug_bounds("titlebar-git-unopened");
+        assert_eq!(note.is_some(), width >= 720., "width {width}");
+        if let Some(note) = note {
+            assert!(note.right() <= button.left(), "width {width}");
+        }
+    }
+    cx.simulate_resize(size(px(900.), px(600.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+    let note = cx.debug_bounds("titlebar-git-unopened").unwrap();
+    cx.simulate_event(MouseDownEvent {
+        button: MouseButton::Left,
+        position: note.center(),
+        modifiers: Modifiers::default(),
+        click_count: 1,
+        first_mouse: false,
+    });
+    cx.update(|_, cx| {
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.menu.page, Some(Page::Git));
+            assert!(
+                view.git.running().is_none(),
+                "opening it stays a second step"
+            );
+        })
+    });
+}

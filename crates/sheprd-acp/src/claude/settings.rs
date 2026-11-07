@@ -6,14 +6,16 @@ use serde_json::Value;
 
 pub(super) const MODEL: &str = "model";
 pub(super) const EFFORT: &str = "effort";
-/// The effort choice that leaves the model's own default.
+/// The effort choice that leaves the level to the model.
 const DEFAULT_EFFORT: &str = "default";
+/// What Claude calls its stand-in for whichever model it recommends.
+const DEFAULT_MODEL: &str = "Default";
 /// Models kept from the handshake, so a long list cannot grow the session.
 const MAX_MODELS: usize = 64;
 
 /// Claude Code's permission modes, in the order they cycle.
 const MODES: [(&str, &str, &str); 4] = [
-    ("default", "Default", "Ask before edits and commands"),
+    ("default", "Ask First", "Ask before edits and commands"),
     ("acceptEdits", "Accept Edits", "Edit files without asking"),
     ("plan", "Plan", "Explore and plan without changing anything"),
     (
@@ -51,8 +53,12 @@ impl Settings {
             .flatten()
             .filter_map(|model| {
                 let text = |key: &str| model.get(key).and_then(Value::as_str).map(str::to_owned);
+                let description = text("description");
+                let resolved = text("resolvedModel");
+                let name = text("displayName").or_else(|| text("value"))?;
                 Some(Model {
-                    description: text("description"),
+                    name: named(name, description.as_deref(), resolved.as_deref()),
+                    description,
                     efforts: model
                         .get("supportedEffortLevels")
                         .and_then(Value::as_array)
@@ -61,8 +67,7 @@ impl Settings {
                         .filter_map(Value::as_str)
                         .map(str::to_owned)
                         .collect(),
-                    name: text("displayName").or_else(|| text("value"))?,
-                    resolved: text("resolvedModel"),
+                    resolved,
                     value: text("value")?,
                 })
             })
@@ -115,10 +120,7 @@ impl Settings {
         }
         let efforts = self.efforts();
         if !efforts.is_empty() {
-            let mut choices = vec![wire::SessionConfigSelectOption::new(
-                DEFAULT_EFFORT,
-                "Default",
-            )];
+            let mut choices = vec![wire::SessionConfigSelectOption::new(DEFAULT_EFFORT, "Auto")];
             choices.extend(efforts.iter().map(|level| {
                 wire::SessionConfigSelectOption::new(level.clone(), capitalized(level))
             }));
@@ -201,6 +203,19 @@ pub(super) fn effort_setting(level: &str) -> Value {
         Value::Null
     } else {
         Value::String(level.to_owned())
+    }
+}
+
+/// A model's name with "Default" swapped for the model it runs now, from
+/// Claude's "Opus 5.5 · Best for..." description or else the model's id.
+fn named(name: String, description: Option<&str>, resolved: Option<&str>) -> String {
+    let actual = description
+        .and_then(|description| description.split(" · ").next())
+        .filter(|actual| !actual.is_empty())
+        .or(resolved);
+    match actual {
+        Some(actual) if name.starts_with(DEFAULT_MODEL) => name.replacen(DEFAULT_MODEL, actual, 1),
+        _ => name,
     }
 }
 
