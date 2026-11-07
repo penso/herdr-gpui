@@ -200,3 +200,12 @@ fn classifier_stops_at_line_and_byte_budgets_without_interpreting_a_partial_head
     let header = format!("@@ {}", "x".repeat(MAX_HEADER_BYTES));
     assert_eq!(counts(&header), None);
 }
+
+#[test]
+fn both_sides_share_one_file_while_keeping_their_own_paths() {
+    let classified = rows("--- a/file.rs\n+++ b/file.rs\n@@ -1 +1 @@\n-old\n+new\n", 8);
+    assert_eq!(classified[3].path, Some("a/file.rs"));
+    assert_eq!(classified[4].path, Some("b/file.rs"));
+    assert_eq!(classified[3].file, Some("file.rs"));
+    assert_eq!(classified[4].file, Some("file.rs"));
+}

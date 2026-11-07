@@ -227,7 +227,7 @@ fn patch_changes(source: &str) -> Vec<DiffSummary> {
     let mut changes: Vec<DiffSummary> = Vec::new();
     for row in rows {
         let (Some(path), added, removed) = (
-            row.path,
+            row.file,
             usize::from(row.kind == Kind::Added),
             usize::from(row.kind == Kind::Removed),
         ) else {

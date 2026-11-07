@@ -245,3 +245,53 @@ fn incomplete_malformed_and_unanchored_patches_remain_original_text() {
         assert_eq!(&*preview.original, raw);
     }
 }
+
+fn files(patch: &str) -> Vec<(String, usize, usize)> {
+    patch_changes(patch)
+        .into_iter()
+        .map(|change| (change.path, change.added, change.removed))
+        .collect()
+}
+
+#[test]
+fn both_sides_of_a_prefixed_patch_count_as_one_file() {
+    assert_eq!(
+        files("--- a/src/file.rs\n+++ b/src/file.rs\n@@ -1 +1 @@\n-old\n+new\n"),
+        [("src/file.rs".to_owned(), 1, 1)]
+    );
+}
+
+#[test]
+fn a_renamed_file_counts_once_under_its_new_name() {
+    assert_eq!(
+        files("--- a/old.rs\n+++ b/new.rs\n@@ -1 +1 @@\n-old\n+new\n"),
+        [("new.rs".to_owned(), 1, 1)]
+    );
+    assert_eq!(
+        files(
+            "*** Begin Patch\n*** Update File: old.rs\n*** Move to: new.rs\n@@\n-old\n+new\n*** End Patch\n"
+        ),
+        [("new.rs".to_owned(), 1, 1)]
+    );
+}
+
+#[test]
+fn a_git_patch_names_created_and_deleted_files_without_their_prefix() {
+    let patch = "diff --git a/new.rs b/new.rs\nnew file mode 100644\n--- /dev/null\n+++ b/new.rs\n@@ -0,0 +1 @@\n+new\ndiff --git a/gone.rs b/gone.rs\ndeleted file mode 100644\n--- a/gone.rs\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n";
+    assert_eq!(
+        files(patch),
+        [("new.rs".to_owned(), 1, 0), ("gone.rs".to_owned(), 0, 1)]
+    );
+}
+
+#[test]
+fn a_real_directory_named_like_a_git_prefix_keeps_its_path() {
+    assert_eq!(
+        files("--- a/file.rs\n+++ a/file.rs\n@@ -1 +1 @@\n-old\n+new\n"),
+        [("a/file.rs".to_owned(), 1, 1)]
+    );
+    assert_eq!(
+        files("--- /dev/null\n+++ b/file.rs\n@@ -0,0 +1 @@\n+new\n"),
+        [("b/file.rs".to_owned(), 1, 0)]
+    );
+}

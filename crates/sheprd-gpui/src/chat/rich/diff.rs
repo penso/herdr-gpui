@@ -20,6 +20,9 @@ pub(crate) struct Row<'a> {
     /// unrecognized text. It is a grammar offset, not permission to alter copy.
     pub(crate) prefix: usize,
     pub(crate) path: Option<&'a str>,
+    /// The file this row belongs to, the same for both sides of a change:
+    /// its name after any rename, without the prefixes of a Git patch.
+    pub(crate) file: Option<&'a str>,
 }
 
 /// Whether a code block in `language` shows a patch.
@@ -43,6 +46,8 @@ enum Mode {
 struct Parser<'a> {
     mode: Mode,
     apply: bool,
+    /// Under a `diff --git` header, whose sides carry `a/` and `b/`.
+    git: bool,
     old: Option<&'a str>,
     new: Option<&'a str>,
 }
@@ -101,6 +106,7 @@ fn unknown() -> Row<'static> {
         kind: Kind::Context,
         prefix: 0,
         path: None,
+        file: None,
     }
 }
 
@@ -110,6 +116,19 @@ impl<'a> Parser<'a> {
             kind: Kind::Meta,
             prefix: 0,
             path: self.new.or(self.old),
+            file: self.file(),
+        }
+    }
+
+    /// A side's `a/` or `b/` is only Git's when the header says so or the
+    /// other side has its own: `a/` alone may be a real directory.
+    fn file(&self) -> Option<&'a str> {
+        let old = self.old.and_then(|name| name.strip_prefix("a/"));
+        let new = self.new.and_then(|name| name.strip_prefix("b/"));
+        if self.git || (old.is_some() && new.is_some()) {
+            new.or(self.new).or(old).or(self.old)
+        } else {
+            self.new.or(self.old)
         }
     }
 
@@ -119,6 +138,7 @@ impl<'a> Parser<'a> {
             *self = Self {
                 // i18n: data
                 apply: line == "*** Begin Patch",
+                git: line.starts_with("diff --git "),
                 ..Self::default()
             };
             return self.meta();
@@ -200,6 +220,7 @@ impl<'a> Parser<'a> {
                 kind,
                 prefix: 1,
                 path,
+                file: self.file(),
             };
         }
         if line.starts_with("\\ ") {
