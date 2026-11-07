@@ -187,6 +187,7 @@ impl SheprdWindow {
             dispatch_setups: Default::default(),
             editor_open: None,
             editor_panes: Vec::new(),
+            editor_returns: Vec::new(),
             endpoints: vec![endpoint::Endpoint::new(
                 endpoint::LOCAL.into(),
                 // i18n: data
