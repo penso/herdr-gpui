@@ -58,6 +58,7 @@ impl SheprdWindow {
         };
         let selector = format!("local-port-{index}");
         let usage_selector = format!("local-port-{index}-usage");
+        let name_selector = format!("local-port-{index}-name");
         div()
             .id(("local-port", index))
             .debug_selector(move || selector.clone())
@@ -96,11 +97,13 @@ impl SheprdWindow {
                     .child(
                         div()
                             .row()
+                            .flex_wrap()
                             .items_center()
-                            .gap_2()
+                            .gap_x_2()
                             .min_w_0()
                             .child(
                                 div()
+                                    .debug_selector(move || name_selector.clone())
                                     .min_w_0()
                                     .truncate()
                                     .font_weight(FontWeight::SEMIBOLD)

@@ -198,6 +198,22 @@ fn rows_wrap_inside_a_narrow_window(cx: &mut gpui::TestAppContext) {
     }
 }
 
+#[gpui::test]
+fn a_narrow_window_keeps_a_paused_process_named(cx: &mut gpui::TestAppContext) {
+    let paused = Listener {
+        name: "Python".into(),
+        paused: true,
+        ..listener(3000, 44632, 10)
+    };
+    let (_, cx, _channels) = fixture(cx, vec![paused]);
+    redraw(cx);
+    let whole = cx.debug_bounds("local-port-0-name").unwrap().size.width;
+    cx.simulate_resize(size(px(480.), px(700.)));
+    redraw(cx);
+    let narrow = cx.debug_bounds("local-port-0-name").unwrap().size.width;
+    assert_eq!(narrow, whole);
+}
+
 /// Windows lists nothing and says why, with nothing to refresh.
 #[cfg(not(unix))]
 #[gpui::test]
