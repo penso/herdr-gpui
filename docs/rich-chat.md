@@ -230,6 +230,17 @@ stays at the far right, as in `Editing server/purpose.ts… · 42s +1 more 11m 1
 Click the row to list the running steps in full, each with its own time; click
 again to close the list. It keeps the newest 16 and says how many more run. A chat from an older `sheprd-acp` has no step times.
 
+The row's dot pulses in a color for what the agent does: thinking, writing, or
+running a step. When the agent stops on your answer, the dot gives way to a
+still mark and the row says where to answer. The header gives the same state in
+a word and a mark: **Working**, **Needs input**, and once the agent is idle how
+its last turn ended, **Completed**, **Stopped** (cancelled, refused, or out of
+turns) or **Failed**. An observed CLI agent's state comes from the daemon, and
+its log only shows steps it recorded, so between them the row says **Working**.
+Times and token counts appear only when reported: the turn's line in the
+conversation has them, and the composer the context meter. A chat with no
+composer shows that meter in its header, when the pane is wide enough.
+
 ## Tool calls
 
 A folded tool call says what it did: the command, file, search, or sub-agent

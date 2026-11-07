@@ -149,7 +149,9 @@ impl SheprdWindow {
                 }
                 cx.notify();
             }))
-            .when(idle, |words| words.child(super::working::pulse(&look)))
+            .when(idle, |words| {
+                words.child(super::working::pulse(theme.primary(), &look))
+            })
             .when(!idle, |words| {
                 words.child(div().text_color(rgb(theme.muted)).child("\u{b7}"))
             })

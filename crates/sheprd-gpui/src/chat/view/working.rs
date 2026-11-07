@@ -4,8 +4,14 @@
 //! It sits outside the list, so it shows however far the conversation is
 //! scrolled back.
 
-use super::{layout::Look, rail::short_path};
-use crate::{SheprdWindow, chat::chats::ChatPane, i18n::fl, motion, notifications::safe_text};
+use super::{Hues, layout::Look, rail::short_path};
+use crate::{
+    SheprdWindow,
+    chat::chats::{ChatInput, ChatPane},
+    i18n::fl,
+    motion,
+    notifications::safe_text,
+};
 use gpui::{prelude::*, *};
 use sheprd_chat_protocol::{EntryKind, Status, Tool, ToolKind, ToolStatus, Transcript};
 use std::time::Duration;
@@ -29,6 +35,36 @@ const MAX_LINE: usize = 300;
 /// Lines the open list shows before it scrolls.
 const LINES: f32 = 6.;
 
+/// The mark of an agent waiting on the user, which holds still: a pulse
+/// would say it is busy.
+pub(super) const WAITING_ICON: &str = "icons/status-orca-blocked.svg";
+
+/// The kind of thing the agent is doing, which picks the row's mark.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Phase {
+    /// A step runs.
+    Running,
+    Thinking,
+    /// It is stopped on the user's answer, though its turn still runs.
+    Waiting,
+    /// Busy, with nothing to say what at: all an observed agent's log tells
+    /// between the records it saves.
+    Working,
+    Writing,
+}
+
+impl Phase {
+    fn color(self, look: &Look<'_>) -> u32 {
+        let hues = Hues::of(look.theme);
+        match self {
+            Self::Running => hues.blue,
+            Self::Thinking => hues.purple,
+            Self::Waiting => hues.yellow,
+            Self::Working | Self::Writing => look.theme.primary(),
+        }
+    }
+}
+
 /// What the agent is doing while a turn runs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Working {
@@ -41,6 +77,7 @@ pub(super) struct Working {
     pub(super) more: usize,
     /// Whether the steps show in full under the row, which the pane knows.
     pub(super) open: bool,
+    pub(super) phase: Phase,
     /// How long the step `doing` names has run, once it is a second or more.
     pub(super) step: Option<String>,
 }
@@ -97,12 +134,15 @@ impl Working {
             return None;
         }
         let running = running_steps(transcript);
-        let doing = match (running.first(), transcript.entries.last()) {
-            (Some(tool), _) => step_doing(tool),
+        let (phase, doing) = match (running.first(), transcript.entries.last()) {
+            (Some(tool), _) if tool.kind == ToolKind::Think => (Phase::Thinking, step_doing(tool)),
+            (Some(tool), _) => (Phase::Running, step_doing(tool)),
+            // A log saves whole records, so its last says nothing of now.
+            _ if transcript.read_only => (Phase::Working, fl!("chat-working")),
             (None, Some(entry)) if matches!(entry.kind, EntryKind::Agent { .. }) => {
-                fl!("chat-working-writing")
+                (Phase::Writing, fl!("chat-working-writing"))
             }
-            _ => fl!("chat-working-thinking"),
+            _ => (Phase::Thinking, fl!("chat-working-thinking")),
         };
         Some(Self {
             doing,
@@ -115,11 +155,27 @@ impl Working {
                 .count()
                 .saturating_sub(1),
             open: false,
+            phase,
             step: running
                 .first()
                 .and_then(|tool| tool.started_ms)
                 .and_then(|started| since(started, now_ms)),
         })
+    }
+
+    /// The same turn stopped on the user's answer, saying where `input` has
+    /// them give it. The header says that it waits; this says what to do.
+    pub(super) fn waiting(self, input: ChatInput) -> Self {
+        let doing = match input {
+            ChatInput::Composer => fl!("chat-activity-review"),
+            ChatInput::ReadOnly => fl!("chat-activity-answer-terminal"),
+            ChatInput::Terminal => fl!("chat-activity-answer-below"),
+        };
+        Self {
+            doing,
+            phase: Phase::Waiting,
+            ..self
+        }
     }
 }
 
@@ -216,13 +272,28 @@ fn plain(text: &str) -> &str {
         .unwrap_or(text)
 }
 
-/// A dot in the theme's accent that pulses while the agent works.
-pub(super) fn pulse(look: &Look<'_>) -> impl IntoElement {
+/// The row's mark: a dot in the phase's color that pulses while the agent
+/// works, or a still icon while it waits.
+pub(super) fn sign(phase: Phase, look: &Look<'_>) -> AnyElement {
+    let color = phase.color(look);
+    if phase == Phase::Waiting {
+        return svg()
+            .flex_none()
+            .path(WAITING_ICON)
+            .size(px((look.text * 0.85).max(11.)))
+            .text_color(rgb(color))
+            .into_any_element();
+    }
+    pulse(color, look).into_any_element()
+}
+
+/// A dot of `color` that pulses while something runs.
+pub(super) fn pulse(color: u32, look: &Look<'_>) -> impl IntoElement {
     div()
         .flex_none()
         .size(px((look.text * 0.42).max(6.)))
         .rounded_full()
-        .bg(rgb(look.theme.primary()))
+        .bg(rgb(color))
         .with_animation(
             "chat-working-pulse",
             Animation::new(motion::duration(PULSE)).repeat(),
@@ -253,14 +324,24 @@ pub(super) fn row(working: Option<&Working>, look: &Look<'_>) -> Div {
             None => row.invisible(),
             Some(working) => row
                 .debug_selector(|| "chat-working".into())
-                .child(pulse(look))
-                .child(
+                .child(sign(working.phase, look))
+                .child(if working.phase == Phase::Waiting {
+                    div()
+                        .debug_selector(|| "chat-waiting".into())
+                        .min_w_0()
+                        .truncate()
+                        .text_color(rgb(super::text_ink(
+                            working.phase.color(look),
+                            theme.background,
+                        )))
+                        .child(working.doing.clone())
+                } else {
                     div()
                         .min_w_0()
                         .truncate()
                         .text_color(rgb(theme.subtext()))
-                        .child(fl!("chat-working-doing", doing = working.doing.as_str())),
-                )
+                        .child(fl!("chat-working-doing", doing = working.doing.as_str()))
+                })
                 .children(working.step.clone().map(|step| {
                     div()
                         .flex_none()

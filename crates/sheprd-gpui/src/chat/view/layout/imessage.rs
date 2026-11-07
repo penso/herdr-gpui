@@ -155,14 +155,23 @@ impl ChatLayout for IMessage {
         working: Option<&super::super::working::Working>,
         look: &Look<'_>,
     ) -> Option<Div> {
+        use super::super::working::{Phase, sign};
+        // Stopped on the user's answer, the other side is not typing.
+        let waiting = working.filter(|working| working.phase == Phase::Waiting);
         Some(
             div()
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .when(working.is_some(), |row| {
-                    row.debug_selector(|| "chat-typing".into())
-                        .child(super::super::working::pulse(look))
+                .when_some(working, |row, working| {
+                    row.debug_selector(|| {
+                        if working.phase == Phase::Waiting {
+                            "chat-waiting".into()
+                        } else {
+                            "chat-typing".into()
+                        }
+                    })
+                    .child(sign(working.phase, look))
                 })
                 .when(working.is_none(), |row| row.invisible())
                 .px(px(16. + 12. * look.text / TEXT))
@@ -170,7 +179,7 @@ impl ChatLayout for IMessage {
                 .text_size(px((look.text - 2.).max(10.)))
                 .italic()
                 .text_color(rgb(look.theme.muted))
-                .child(fl!("chat-typing")),
+                .child(waiting.map_or_else(|| fl!("chat-typing"), |working| working.doing.clone())),
         )
     }
 
