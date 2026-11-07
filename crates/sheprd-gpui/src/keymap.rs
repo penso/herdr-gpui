@@ -11,6 +11,7 @@ mod custom;
 pub(crate) mod daemon;
 mod error;
 mod host;
+mod section;
 
 pub(crate) use custom::Reach;
 pub(crate) use daemon::DaemonKeys;
@@ -18,10 +19,11 @@ pub(crate) use error::Error;
 #[cfg(test)]
 pub(crate) use host::secondary_key;
 pub(crate) use host::{HOST_OS, parse_keystroke, secondary};
+pub(crate) use section::Section;
 
 use crate::{
     Result,
-    controls::{COMMANDS, Command},
+    controls::{COMMANDS, Command, CommandInfo},
 };
 use daemon::Trigger;
 use gpui::{KeybindingKeystroke, Keystroke, Modifiers};
@@ -410,6 +412,20 @@ impl Keymap {
             .iter()
             .any(|prefix| typed_matches(typed, prefix))
     }
+
+    /// Every key that completes a chord, with the command it runs, in catalog
+    /// order.
+    pub(crate) fn chords(&self) -> impl Iterator<Item = (&'static CommandInfo, &Keystroke)> {
+        COMMANDS
+            .iter()
+            .zip(&self.shortcuts)
+            .flat_map(|(info, shortcuts)| {
+                shortcuts
+                    .iter()
+                    .filter_map(move |shortcut| Some((info, shortcut.chord.as_ref()?)))
+            })
+    }
+
     /// The command a chord runs when `typed` follows the prefix.
     pub(crate) fn chord(&self, typed: &Keystroke) -> Option<Command> {
         COMMANDS

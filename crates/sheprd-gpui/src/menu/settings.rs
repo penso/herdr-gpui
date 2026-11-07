@@ -5,7 +5,11 @@
 // i18n: migrated
 use super::{Page, accent};
 use crate::i18n::fl;
-use crate::{SheprdWindow, config::Config, keymap::Reach};
+use crate::{
+    SheprdWindow,
+    config::Config,
+    keymap::{Reach, Section},
+};
 use gpui::{prelude::*, *};
 use sheprd_client::protocol::ClientShellCommand;
 use std::borrow::Cow;
@@ -303,123 +307,24 @@ impl SheprdWindow {
             .children(editor);
         let paste = paste_label();
         let mut groups = [
-            (fl!("menu-settings-workspaces"), Vec::new()),
-            (fl!("menu-settings-navigation"), Vec::new()),
+            (Section::Workspaces.title(), Vec::new()),
+            (Section::Navigation.title(), Vec::new()),
             (
-                fl!("menu-settings-application"),
+                Section::Application.title(),
                 vec![(
                     vec![(Cow::Borrowed(crate::actions::EDIT_KEYS[2]), None)],
                     Cow::Owned(paste.clone()),
                     None,
                 )],
             ),
-            (fl!("menu-settings-commands"), Vec::new()),
+            (Section::Commands.title(), Vec::new()),
         ];
         for info in COMMANDS {
             let mut keys: Vec<&str> = self.keymap().shortcuts(info.command).collect();
             if info.command == Command::Palette && self.config.palette.double_shift {
                 keys.push("shift shift"); // i18n: data
             }
-            let group = match info.command {
-                Command::Workspace
-                | Command::NewWorktree
-                | Command::OpenWorktree
-                | Command::RemoveWorktree
-                | Command::EditWorktreeNote
-                | Command::Tab
-                | Command::SplitRight
-                | Command::SplitDown
-                | Command::Zoom
-                | Command::ClearPane
-                | Command::Find
-                | Command::FindNext
-                | Command::FindPrevious
-                | Command::CopyMode
-                | Command::AnnotateSelection
-                | Command::EditScrollback
-                | Command::ClosePane
-                | Command::CloseTab
-                | Command::ReopenClosedTab
-                | Command::NewBrowserTab
-                | Command::OpenOrchestrator
-                | Command::ReviewChanges
-                | Command::GitMenu
-                | Command::ToggleAnnotate
-                | Command::SplitEditor
-                | Command::MoveTabPrevious
-                | Command::MoveTabNext
-                | Command::RenameTab
-                | Command::SwapLeft
-                | Command::SwapRight
-                | Command::SwapUp
-                | Command::SwapDown
-                | Command::ResizeLeft
-                | Command::ResizeRight
-                | Command::ResizeUp
-                | Command::ResizeDown
-                | Command::ResizeMode
-                | Command::EqualizeSplits
-                | Command::RenamePane
-                | Command::MovePane
-                | Command::RenameWorkspace
-                | Command::CloseWorkspace => 0,
-                Command::NextTab
-                | Command::PreviousTab
-                | Command::FocusLeft
-                | Command::FocusRight
-                | Command::FocusUp
-                | Command::FocusDown
-                | Command::NextPane
-                | Command::PreviousPane
-                | Command::TabNumber(_)
-                | Command::WorkspacePicker
-                | Command::GoToSymbol
-                | Command::GoToFile
-                | Command::WorktreeNotes
-                | Command::LastPane
-                | Command::Back
-                | Command::Forward
-                | Command::PreviousWorkspace
-                | Command::NextWorkspace
-                | Command::WorkspaceNumber(_)
-                | Command::PreviousAgent
-                | Command::NextAgent
-                | Command::AgentNumber(_) => 1,
-                Command::NewWindow
-                | Command::ToggleSidebar
-                | Command::OpenCode
-                | Command::OpenPx0
-                | Command::RemotePair
-                | Command::ToggleStatusBar
-                | Command::ToggleModPanel
-                | Command::FocusNextRegion
-                | Command::FocusPreviousRegion
-                | Command::ToggleZenMode
-                | Command::DevicesOverview
-                | Command::NewCoreTerminal
-                | Command::MirrorCorePane
-                | Command::ConvertToChat
-                | Command::IncreaseFontSize
-                | Command::DecreaseFontSize
-                | Command::ResetFontSize
-                | Command::Settings
-                | Command::Keybinds
-                | Command::Sessions
-                | Command::Themes
-                | Command::Palette
-                | Command::ResumePalette
-                | Command::Detach
-                | Command::Reconnect
-                | Command::Quit
-                | Command::Logs
-                | Command::About
-                | Command::InstallBrowserSkill
-                | Command::ToggleFullScreen
-                | Command::CycleWindows
-                | Command::CloseWindow
-                | Command::ReloadConfig => 2,
-                Command::OpenNotificationTarget => 1,
-            };
+            let group = Section::of(info.command) as usize;
             groups[group].1.push((
                 keys.into_iter()
                     .map(|key| (Cow::Borrowed(key), None))
@@ -436,10 +341,12 @@ impl SheprdWindow {
         {
             let commands = &snapshot.commands;
             let bindings = self.keymap().custom_bindings(commands);
-            groups[3]
-                .1
-                .extend(commands.iter().zip(bindings).enumerate().map(
-                    |(index, (command, bindings))| {
+            groups[Section::Commands as usize].1.extend(
+                commands
+                    .iter()
+                    .zip(bindings)
+                    .enumerate()
+                    .map(|(index, (command, bindings))| {
                         let description = command_name(command);
                         // A row's name keys its selectors and is all that tells
                         // rows apart, so one already used by a built-in action
@@ -468,8 +375,8 @@ impl SheprdWindow {
                             Cow::Owned(description),
                             None,
                         )
-                    },
-                ));
+                    }),
+            );
         }
         let total: usize = groups.iter().map(|(_, shortcuts)| shortcuts.len()).sum();
         let mut count = 0;
@@ -527,19 +434,7 @@ impl SheprdWindow {
                                         .flex_col()
                                         .gap(px(3.))
                                         .child(div().flex().flex_wrap().gap(px(4.)).children(
-                                            keycaps(&keys).map(|key| {
-                                                div()
-                                                    .flex_none()
-                                                    .px(px(6.))
-                                                    .py(px(2.))
-                                                    .rounded(px(crate::config::corners::SMALL))
-                                                    .border_1()
-                                                    .border_color(rgb(theme.active))
-                                                    .bg(rgb(theme.background))
-                                                    .text_size(px(font.size * 0.9))
-                                                    .font_weight(FontWeight::MEDIUM)
-                                                    .child(key)
-                                            }),
+                                            keycaps(&keys).map(|key| keycap(key, theme, font.size)),
                                         ))
                                         .when_some(note, |binding, note| {
                                             binding.child(
@@ -687,7 +582,7 @@ impl SheprdWindow {
 /// keystrokes in turn. `cmd--` splits into `cmd` and a `-` key rather than an
 /// empty cap, as does a chord's bare `-`.
 /// A custom command's row name: its description, or its ID without one.
-fn command_name(command: &ClientShellCommand) -> &str {
+pub(crate) fn command_name(command: &ClientShellCommand) -> &str {
     command
         .description
         .as_deref()
@@ -708,7 +603,22 @@ fn reach_note(reach: Reach) -> Option<String> {
     })
 }
 
-pub(super) fn keycaps(shortcut: &str) -> impl Iterator<Item = String> + '_ {
+/// One key of a shortcut, drawn as a keycap in text of `size`.
+pub(crate) fn keycap(key: String, theme: &crate::config::Theme, size: f32) -> Div {
+    div()
+        .flex_none()
+        .px(px(6.))
+        .py(px(2.))
+        .rounded(px(crate::config::corners::SMALL))
+        .border_1()
+        .border_color(rgb(theme.active))
+        .bg(rgb(theme.background))
+        .text_size(px(size * 0.9))
+        .font_weight(FontWeight::MEDIUM)
+        .child(key)
+}
+
+pub(crate) fn keycaps(shortcut: &str) -> impl Iterator<Item = String> + '_ {
     shortcut
         .split(' ')
         .flat_map(|keystroke| {

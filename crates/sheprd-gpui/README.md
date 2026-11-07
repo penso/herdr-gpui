@@ -3857,6 +3857,20 @@ two explicitly configured commands cannot share a shortcut. Daemon/plugin
 shortcuts remain visible in the reference and are configured in Herdr's own
 `[keys]` / `[[keys.command]]` tables. Clipboard shortcuts are fixed Edit actions.
 
+After the prefix, a short pause opens a panel above the status bar listing every
+key that can follow it, grouped as in **Keyboard Shortcuts**. It shows what would
+actually run: chords from Herdr's `[keys]`, custom `[[keys.command]]` shortcuts,
+less any command `[keybindings]` rebound. The next key, or Escape, closes it, and
+a chord typed without pausing never shows it.
+
+**View > Toggle Pass-Through** hands the app's keys to the focused Herdr pane, for
+full-screen programs that want them: Ctrl-Shift shortcuts, the prefix, custom
+commands, and the app's clipboard keys all reach the program, with a mark in the
+status bar. The command's own shortcut (Ctrl+Cmd+P on macOS, Ctrl+Alt+Shift+K on
+Linux and Windows) ends it, so it will not start while that command is unbound.
+Cmd shortcuts stay with the app on macOS, as a terminal cannot receive them, and
+chats, herdr-core terminals, and open menus keep their usual keys.
+
 Defaults are selected independently for Linux, macOS, and Windows. macOS uses
 Cmd. Linux uses **Ctrl+Shift** for terminal-facing application actions, keeping
 Super available to the desktop and plain Ctrl keys available to terminal

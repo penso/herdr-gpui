@@ -318,6 +318,8 @@ impl SheprdWindow {
             changed = Redraw::Window;
         }
         self.sync_server_keymap(cx);
+        self.sync_next_keys(cx);
+        self.sync_pass_through(cx);
         match changed {
             Redraw::None => {}
             Redraw::Terminal => self.redraw_terminal(cx),

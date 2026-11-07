@@ -73,6 +73,27 @@ impl Keymap {
         })
     }
 
+    /// The key after the prefix of each chord that runs here, for every
+    /// custom command that has one.
+    pub(crate) fn custom_chords<'a>(
+        &self,
+        commands: &'a [ClientShellCommand],
+    ) -> Vec<(&'a ClientShellCommand, String)> {
+        commands
+            .iter()
+            .zip(self.custom_bindings(commands))
+            .flat_map(|(command, bindings)| {
+                bindings
+                    .into_iter()
+                    .filter(|binding| binding.reach == Reach::Runs)
+                    .filter_map(move |binding| {
+                        let (_, key) = binding.label.split_once(' ')?;
+                        Some((command, key.to_owned()))
+                    })
+            })
+            .collect()
+    }
+
     /// Every binding of each command, parallel to `commands`, including those
     /// that cannot run here so a conflict stays discoverable. A trigger
     /// listed twice is shown once.

@@ -97,6 +97,7 @@ commands-toggle-sidebar = Toggle Sidebar
 commands-toggle-status-bar = Toggle Status Bar
 commands-toggle-mod-panel = Toggle Mod Panel
 commands-toggle-zen-mode = Toggle Zen Mode
+commands-toggle-pass-through = Toggle Pass-Through
 commands-toggle-zoom = Toggle Pane Zoom
 commands-workspace-picker = Go To
 commands-worktree-notes = Worktree Notes

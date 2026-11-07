@@ -378,8 +378,8 @@ fn corner(position: ToastHerdrPosition, width: Pixels) -> Div {
 }
 
 impl SheprdWindow {
-    /// Whether toasts, ones still sliding out among them, or the
-    /// file-transfer card show now, as their renders decide: nothing shows
+    /// Whether toasts, ones still sliding out among them, the panel of next
+    /// keys, fading out or not, or the file-transfer card show now, as their renders decide: nothing shows
     /// over an open menu or in a window too small.
     /// Only Windows hides pages under these.
     #[cfg(windows)]
@@ -388,6 +388,7 @@ impl SheprdWindow {
             return false;
         }
         self.file_transfer.is_some()
+            || self.next_keys.showing(crate::motion::now())
             || (!self.toasts_hidden
                 && (self
                     .toast_motion

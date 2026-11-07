@@ -45,6 +45,7 @@ pub(super) fn defaults(command: Command) -> &'static [&'static str] {
         FocusNextRegion => &["cmd-f6"],
         FocusPreviousRegion => &["cmd-shift-f6"],
         ToggleZenMode => &["ctrl-cmd-z"],
+        TogglePassThrough => &["ctrl-cmd-p"],
         IncreaseFontSize => &["cmd-=", "cmd-+"],
         DecreaseFontSize => &["cmd--"],
         ResetFontSize => &["cmd-0"],

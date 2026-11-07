@@ -235,6 +235,7 @@ impl SheprdWindow {
             #[cfg(feature = "integration-test")]
             navigations: Default::default(),
             network_quality_seen: 0,
+            next_keys: Default::default(),
             next_orchestrator: 0,
             notes_width: crate::panel_resize::NOTES,
             notice_overflow: Default::default(),
@@ -246,6 +247,7 @@ impl SheprdWindow {
             overview: Default::default(),
             painter: Default::default(),
             pane_carry: None,
+            pass_through: false,
             pending_images: Vec::new(),
             pending_input: Default::default(),
             pending_navigation: None,
