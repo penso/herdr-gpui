@@ -92,12 +92,12 @@ final class Fleet {
     /// One client per computer, kept while its address and CA stay.
     @ObservationIgnored private var clients: [String: RemoteClient] = [:]
     /// Calls that got no answer, for the computer's log once it is back.
-    @ObservationIgnored private var unreported: [String: [String]] = [:]
+    @ObservationIgnored private var unreported: [String: UnreportedFailures] = [:]
+    /// Computers a report is on its way to, so only one task sends them.
+    @ObservationIgnored private var reporting: Set<String> = []
     /// Commands sent to chats that have not come back yet.
     let pending = PendingCommands()
     private var active = false
-    /// The most failures held for one computer; the daemon takes ten at once.
-    private static let maxUnreported = 8
     let sessions: Sessions
     let cache: Cache
 
@@ -112,6 +112,7 @@ final class Fleet {
         for machine in machines where !wanted.contains(machine.id) {
             stopLink(machine.id)
             cache.clear(machine.id)
+            unreported[machine.id] = nil
         }
         machines = computers.map { computer in
             if var known = machines.first(where: { $0.id == computer.device }) {
@@ -356,7 +357,7 @@ final class Fleet {
             }
             return try await body(client, token)
         } catch where PathFailure.isDead(error) {
-            pathFailed(error, device: device, origin: origin, after: ContinuousClock.now - started)
+            pathFailed(error, device: device, origin: origin, started: started)
             throw error
         }
     }
@@ -364,27 +365,40 @@ final class Fleet {
     /// A call got no answer: the link looks for an address that gives one,
     /// and the client goes, as its open connections use the dead path. The
     /// call is not sent again, as it may have reached the computer.
-    private func pathFailed(_ error: Error, device: String, origin: String, after elapsed: Duration) {
-        let route = PathFailure.route((error as? URLError)?.failingURL)
-        let line = "\(route) at \(origin): \(PathFailure.summary(error, after: elapsed))"
+    private func pathFailed(_ error: Error, device: String, origin: String, started: ContinuousClock.Instant) {
+        let summary = PathFailure.summary(error, after: ContinuousClock.now - started)
+        let line = "\(PathFailure.route((error as? URLError)?.failingURL)) at \(origin): \(summary)"
         log.error("no answer from \(device, privacy: .public): \(line, privacy: .public)")
         clients[device] = nil
-        unreported[device] = (unreported[device, default: []] + [line]).suffix(Self.maxUnreported)
-        Task { await links[device]?.pathFailed(origin) }
+        unreported[device, default: UnreportedFailures()].add(line)
+        Task { await links[device]?.pathFailed(origin, started: started) }
+        // The link may already be back elsewhere, with no update to come.
+        reportFailures(of: device)
     }
 
-    /// Tells the computer, now that it answers again, what this phone saw
-    /// while it did not: the daemon's log otherwise shows only silence.
-    private func reportFailures(of computer: Computer, at origin: String) {
-        guard let lines = unreported.removeValue(forKey: computer.device) else { return }
-        let client = RemoteClient(origin: origin, fingerprint: computer.fingerprint)
+    /// Tells the computer, while it answers, what this phone saw while it
+    /// did not: the daemon's log otherwise shows only silence. What it does
+    /// not take waits for the next failure or the next time it comes online.
+    private func reportFailures(of device: String) {
+        guard !reporting.contains(device) else { return }
+        reporting.insert(device)
         Task {
-            do {
-                for line in lines {
-                    try await client.report(context: "ios network", message: "\(line); back at \(origin)")
+            defer { reporting.remove(device) }
+            var client: RemoteClient?
+            var refused: String?
+            while let line = unreported[device]?.lines.first,
+                  let computer = machines.first(where: { $0.id == device })?.computer,
+                  case let .online(origin)? = machines.first(where: { $0.id == device })?.status,
+                  origin != refused {
+                let reporter = client?.origin == origin ? client : RemoteClient(origin: origin, fingerprint: computer.fingerprint)
+                client = reporter
+                do {
+                    try await reporter?.report(context: "ios network", message: "\(line); back at \(origin)")
+                    unreported[device]?.accepted(line)
+                } catch {
+                    refused = origin
+                    log.error("could not report to \(computer.name, privacy: .public): \(String(describing: error), privacy: .public)")
                 }
-            } catch {
-                log.error("could not report to \(computer.name, privacy: .public): \(String(describing: error), privacy: .public)")
             }
         }
     }
@@ -453,9 +467,9 @@ final class Fleet {
             machines[index].status = status
             if case .online = status {} else { machines[index].watching = false }
             if case .revoked = status { stopLink(device) }
-            if case let .online(origin) = status {
+            if case .online = status {
                 onOnline?(machines[index].computer)
-                reportFailures(of: machines[index].computer, at: origin)
+                reportFailures(of: device)
             }
         case let .event(.home(home)):
             // The computer's load moves every few seconds; only the header

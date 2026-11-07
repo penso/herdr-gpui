@@ -13,7 +13,7 @@ struct LinkPathFailureTests {
         _ = await collect(link) { $0.contains(.status(.online(origin: "https://tailscale"))) }
         await computer.setPing("https://tailscale", String(repeating: "CD", count: 32))
         await computer.setPing("https://lan", mac)
-        await link.pathFailed("https://tailscale")
+        await link.pathFailed("https://tailscale", started: .now)
         // The fake's backoff lasts a minute: this only arrives if the link
         // retries at once.
         let moved = await collect(link) { $0.contains(.status(.online(origin: "https://lan"))) }
@@ -29,7 +29,7 @@ struct LinkPathFailureTests {
         let link = ComputerLink(fingerprint: mac, origins: ["https://lan"], io: await computer.io())
         await link.start()
         _ = await collect(link) { $0.contains(.status(.online(origin: "https://lan"))) }
-        await link.pathFailed("https://tailscale")
+        await link.pathFailed("https://tailscale", started: .now)
         await computer.emit(.error("still here"))
         let seen = await collect(link) { updates in
             updates.contains { update in
@@ -42,6 +42,58 @@ struct LinkPathFailureTests {
         #expect(seen.contains(.event(.error("still here"))))
         #expect(await computer.connects == ["https://lan"])
         await link.stop()
+    }
+
+    /// Two calls can fail on one dead path: the second must not take down
+    /// the socket the first one's failure got the link back on.
+    @Test func aCallOlderThanTheSocketKeepsItEvenAtTheSameAddress() async {
+        let computer = FakeComputer()
+        await computer.setPing("https://lan", mac)
+        let link = ComputerLink(fingerprint: mac, origins: ["https://lan"], io: await computer.io())
+        await link.start()
+        _ = await collect(link) { $0.contains(.status(.online(origin: "https://lan"))) }
+        let older = ContinuousClock.now
+        await link.pathFailed("https://lan", started: .now)
+        _ = await collect(link) { $0.contains(.status(.online(origin: "https://lan"))) }
+        await link.pathFailed("https://lan", started: older)
+        await computer.emit(.error("still here"))
+        let seen = await collect(link) { updates in
+            updates.contains { update in
+                switch update {
+                case .event(.error), .status(.offline): true
+                default: false
+                }
+            }
+        }
+        #expect(seen.contains(.event(.error("still here"))))
+        #expect(await computer.connects == ["https://lan", "https://lan"])
+        await link.stop()
+    }
+}
+
+struct UnreportedFailuresTests {
+    @Test func aLineStaysUntilTheComputerAcceptsIt() {
+        var failures = UnreportedFailures()
+        failures.add("first")
+        failures.add("second")
+        failures.accepted("first")
+        #expect(failures.lines == ["second"])
+    }
+
+    @Test func theOldestLinesGoPastTheLimit() {
+        var failures = UnreportedFailures()
+        for index in 0...UnreportedFailures.limit { failures.add("\(index)") }
+        #expect(failures.lines.count == UnreportedFailures.limit)
+        #expect(failures.lines.first == "1")
+    }
+
+    /// Newer failures can push out the line a report is carrying.
+    @Test func acceptingALineAlreadyPushedOutRemovesNothingElse() {
+        var failures = UnreportedFailures()
+        failures.add("old")
+        for index in 0..<UnreportedFailures.limit { failures.add("\(index)") }
+        failures.accepted("old")
+        #expect(failures.lines.count == UnreportedFailures.limit)
     }
 }
 

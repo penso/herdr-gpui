@@ -1,5 +1,26 @@
 import Foundation
 
+/// Failures waiting to reach a computer's log, oldest first. Bounded, as a
+/// computer may stay away; a line stays until the computer accepts it.
+public struct UnreportedFailures: Equatable, Sendable {
+    /// The daemon takes ten reports at once from an address.
+    public static let limit = 8
+
+    public private(set) var lines: [String] = []
+
+    public init() {}
+
+    public mutating func add(_ line: String) {
+        lines = Array((lines + [line]).suffix(Self.limit))
+    }
+
+    /// The computer took `line`. Newer failures may have pushed it out
+    /// while it was on its way, which leaves nothing to remove.
+    public mutating func accepted(_ line: String) {
+        if let index = lines.firstIndex(of: line) { lines.remove(at: index) }
+    }
+}
+
 /// What a failed call says about the address it used, and how logs name it.
 public enum PathFailure {
     /// Path segments followed by an identifier, which logs leave out: a
