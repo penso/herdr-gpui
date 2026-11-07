@@ -19,8 +19,8 @@ devices-hosts = { $count ->
     }
 # The picker's heading.
 devices-heading = DEVICES & SESSIONS
-devices-multi-select-macos = ⌘-click or Space for several
-devices-multi-select = Ctrl-click or Space for several
+devices-multi-select-macos = ⌘-click for several
+devices-multi-select = Ctrl-click for several
 devices-all-detail = { $count ->
         [one] { $count } device · { $connected } connected
        *[other] { $count } devices · { $connected } connected
