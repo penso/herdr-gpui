@@ -24,7 +24,7 @@ private struct SpaceSummary: View {
                 }
                 .font(.subheadline)
             }
-            Label("m4max · herdr-gpui", systemImage: "laptopcomputer").font(.caption).foregroundStyle(.secondary)
+            Label("m4max · sheprd", systemImage: "laptopcomputer").font(.caption).foregroundStyle(.secondary)
         }
     }
 }

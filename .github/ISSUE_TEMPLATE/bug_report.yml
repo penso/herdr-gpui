@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug or unexpected behavior in Herdr UI
+description: Report a bug or unexpected behavior in Sheprd
 title: "[Bug]: "
 labels:
   - bug
@@ -7,14 +7,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Help us reproduce the problem in the native Herdr UI client.
+        Help us reproduce the problem in the native Sheprd client.
         Redact secrets, private paths, and confidential terminal content from logs and screenshots.
   - type: checkboxes
     id: preflight
     attributes:
       label: Preflight checklist
       options:
-        - label: I have searched [existing issues](https://github.com/penso/herdr-gpui/issues) for duplicates.
+        - label: I have searched [existing issues](https://github.com/sheprd-labs/sheprd/issues) for duplicates.
           required: true
   - type: textarea
     id: actual
@@ -39,7 +39,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Running Herdr UI version
+      label: Running Sheprd version
       description: Copy the version shown at the right of the GUI status bar. The Report issue button prefills this field. For source builds, also include the commit if known.
       placeholder: "20260920.1 (release) or dev (local build)"
     validations:

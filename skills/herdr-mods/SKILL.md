@@ -1,16 +1,19 @@
 ---
 name: herdr-mods
-description: "Write Herdr UI mods: small sandboxed Luau extensions that add a status bar item, a sidebar section, a section of the right-hand mod panel, palette commands, or an app with its own activity bar icon to Herdr UI without changing its code, reloaded live when saved. Use it inside Herdr (HERDR_ENV=1) when the user asks to extend, customize, or add to Herdr UI's own interface: show a count, a list, a meter, or a button in the status bar, the sidebar, or a panel beside the terminals (like opencode's sidebar), add a palette command, add an activity bar app such as a dashboard of agents or workspaces, or write a mod, plugin, extension, or widget for Herdr UI. It covers the folder layout, the element tree, checking a mod with herdr-gpui mod check, and reading its errors and logs."
+description: "Write Sheprd mods: small sandboxed Luau extensions that add a status bar item, a sidebar section, a section of the right-hand mod panel, palette commands, or an app with its own activity bar icon to Sheprd without changing its code, reloaded live when saved. Use it inside Herdr (HERDR_ENV=1) when the user asks to extend, customize, or add to Sheprd's own interface: show a count, a list, a meter, or a button in the status bar, the sidebar, or a panel beside the terminals (like opencode's sidebar), add a palette command, add an activity bar app such as a dashboard of agents or workspaces, or write a mod, plugin, extension, or widget for Sheprd. It covers the folder layout, the element tree, checking a mod with sheprd mod check, and reading its errors and logs."
 ---
-<!-- herdr-gpui-managed-skill v1: Herdr UI keeps this file up to date. Edit a copy under another name to keep your changes. -->
+<!-- herdr-gpui-managed-skill v1: Sheprd keeps this file up to date. Edit a copy under another name to keep your changes. -->
 
-# Herdr UI mods
+# Sheprd mods
 
-A mod is a folder of sandboxed Luau that Herdr UI runs and draws. Its `view`
+A mod is a folder of sandboxed Luau that Sheprd runs and draws. Its `view`
 returns a tree of plain tables (`ui.row`, `ui.badge`, `ui.button`, ...) that
 the app draws in the user's theme. Mods cannot touch files, the network, or
 processes; they read the app's state, keep their own, and run the app's own
 commands when the user clicks. Saving a file reloads the mod.
+
+The skill identifier, existing mod folder, `herdr.*` API and `@herdr/ui`
+module name remain stable so installed mods continue to work after the rename.
 
 ## How to make one
 
@@ -20,13 +23,13 @@ commands when the user clicks. Saving a file reloads the mod.
 2. Create `~/.config/herdr/gpui-mods/NAME/` (`$XDG_CONFIG_HOME/herdr/gpui-mods`
    when that is set; `%APPDATA%\herdr\gpui-mods` on Windows) with `mod.toml`
    and `main.luau`. The folder name must equal `name`.
-3. Run `herdr-gpui mod check DIR` and fix every error it names, until it says
+3. Run `sheprd mod check DIR` and fix every error it names, until it says
    the mod is valid. It runs the mod once without the app.
-4. Run `herdr-gpui mod` to see that the app loaded it and drew it, with no
-   error. For an app, `herdr-gpui mod open NAME` shows it. Edits reload within a second; `herdr-gpui mod reload NAME` forces
-   it. `herdr-gpui mod logs NAME` shows what `herdr.log` wrote.
+4. Run `sheprd mod` to see that the app loaded it and drew it, with no
+   error. For an app, `sheprd mod open NAME` shows it. Edits reload within a second; `sheprd mod reload NAME` forces
+   it. `sheprd mod logs NAME` shows what `herdr.log` wrote.
 5. Tell the user where it appears. A mod is turned off with
-   `herdr-gpui config set mods.disabled '["NAME"]'`.
+   `sheprd config set mods.disabled '["NAME"]'`.
 
 ## A mod
 
@@ -71,7 +74,7 @@ return herdr.mod({
 A mod panel section uses `places = ["panel"]` and an optional `[panel]`
 table with `title` and `order` (sections are ordered by it, then by name).
 Its view may return `nil` to show no section; watch `focus` to describe the
-focused workspace. `herdr-gpui mod panel show` shows the panel.
+focused workspace. `sheprd mod panel show` shows the panel.
 
 An activity bar app adds this to `mod.toml`, with `icon.svg` beside it (a
 24x24 stroke icon drawn with `currentColor`, which the bar tints); its
@@ -88,7 +91,7 @@ icon = "icon.svg"
 - `init()` returns the state (a table by default). `update(state, msg)` gets
   each message and returns the new state (nil keeps it), and optionally a
   list of effects: `herdr.run("COMMAND")` runs an app command, as the
-  palette would (`herdr-gpui commands` lists them; it runs only after a
+  palette would (`sheprd commands` lists them; it runs only after a
   click or palette pick, never from a timer), and `herdr.timer(seconds, msg)`
   sends `msg` once after 1 to 86400 seconds.
 - `view(state, app)` returns the tree, or `nil` to draw nothing. It runs when a watched topic changes
@@ -96,7 +99,7 @@ icon = "icon.svg"
 - A palette command declared in `mod.toml` sends `command:ID`.
 - A message is nil, a boolean, a number, a string, or a table of those;
   never a function.
-- `herdr.log(...)` writes to `herdr-gpui mod logs NAME`; `herdr.now()` is
+- `herdr.log(...)` writes to `sheprd mod logs NAME`; `herdr.now()` is
   Unix seconds.
 - `require("./parts")` loads `parts.luau` from the same folder.
 
@@ -136,5 +139,5 @@ container is text, and `ui.text("x")` works too.
 - Each call gets 2 million instruction checks and 16 MiB; a view has at most
   200 elements, nested 16 deep. A mod past a limit fails that call and keeps
   its last drawing.
-- A broken save keeps the last working version drawn; `herdr-gpui mod`
+- A broken save keeps the last working version drawn; `sheprd mod`
   shows the error. Check the mod again after every change.

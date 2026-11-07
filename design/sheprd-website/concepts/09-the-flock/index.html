@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheprd — Herd your agents</title>
+<meta name="description" content="Sheprd is an open-source desktop app for running a team of coding agents: every agent, worktree and machine in one friendly native window on macOS, Linux and Windows.">
+<!-- Social card direction (The Flock): cream field with the orange paw tile at left,
+     "Herd your agents." in rounded heavy type, and five status-coloured flock dots
+     trailing to the right. No screenshot: warm and brand-led. -->
+<meta property="og:title" content="Sheprd — Herd your agents">
+<meta property="og:description" content="Every coding agent, worktree and machine in one friendly native window. Open source, for macOS, Linux and Windows.">
+<meta property="og:image" content="../../assets/paw-512.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../assets/paw.svg">
+<link rel="stylesheet" href="../../assets/base.css">
+<link rel="stylesheet" href="style.css">
+<script src="../../assets/features.js" defer></script>
+<script src="script.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Concept 09 · The Flock</strong> — mockup, not the live site.</span><span>sheprd.org is not live yet; Sheprd-named builds arrive with the next release.</span><a href="../../index.html">Back to gallery</a></div>
+
+<svg width="0" height="0" class="sr-only" aria-hidden="true" focusable="false">
+  <symbol id="paw" viewBox="0 0 100 100">
+    <path d="M50 50 C60 50 70 60 72 68 C74 76 68 80 61 79 C56 78 54 76 50 76 C46 76 44 78 39 79 C32 80 26 76 28 68 C30 60 40 50 50 50Z"/>
+    <ellipse cx="27" cy="45" rx="7" ry="9" transform="rotate(-25 27 45)"/>
+    <ellipse cx="41" cy="31" rx="7" ry="10" transform="rotate(-8 41 31)"/>
+    <ellipse cx="59" cy="31" rx="7" ry="10" transform="rotate(8 59 31)"/>
+    <ellipse cx="73" cy="45" rx="7" ry="9" transform="rotate(25 73 45)"/>
+  </symbol>
+</svg>
+
+<header class="top">
+  <a class="brand" href="#main"><img src="../../assets/paw.svg" alt="" width="36" height="36"><span>Sheprd</span></a>
+  <nav aria-label="Primary">
+    <a href="#story">How it works</a>
+    <a href="#questions">New to agents?</a>
+    <a href="#features">Everything</a>
+    <a class="pill" href="#install">Get Sheprd</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="kicker">Open source · macOS, Linux &amp; Windows</p>
+      <h1 id="hero-title">Herd your agents.</h1>
+      <p class="lede">Claude Code here, Codex there, three worktrees and a server in the closet. Sheprd gathers every coding agent, checkout and machine into one calm native window, and tells you which one needs you.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#install">Get Sheprd</a>
+        <a class="btn btn-ghost" href="#story">Walk the field</a>
+      </div>
+      <ul class="agents" aria-label="Works with agent CLIs such as">
+        <li><img src="../../assets/agent-claude.svg" alt="" width="22" height="22">Claude Code</li>
+        <li><img src="../../assets/agent-codex.svg" alt="" width="22" height="22">Codex</li>
+        <li><img src="../../assets/agent-gemini.svg" alt="" width="22" height="22">Gemini</li>
+        <li><img src="../../assets/agent-copilot.svg" alt="" width="22" height="22">Copilot</li>
+        <li><img src="../../assets/agent-opencode.svg" alt="" width="22" height="22">OpenCode</li>
+      </ul>
+    </div>
+
+    <figure class="field">
+      <span class="tag-illustration">Illustration</span>
+      <svg viewBox="0 0 560 420" role="img" aria-labelledby="field-title field-desc">
+        <title id="field-title">A flock of agents in a field</title>
+        <desc id="field-desc">Seven sheep stand in a green field, each wearing a status collar: three working, one waiting on you, two done and one idle. A large orange paw tile watches over them.</desc>
+        <defs>
+          <linearGradient id="pawbg" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#f39a5a"/><stop offset="1" stop-color="#d65f2a"/></linearGradient>
+          <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfdcbf"/><stop offset="1" stop-color="#b7cba3"/></linearGradient>
+          <g id="sheep">
+            <ellipse cx="0" cy="0" rx="34" ry="24" fill="#fffaf2"/>
+            <circle cx="-22" cy="-12" r="12" fill="#fffaf2"/><circle cx="-4" cy="-19" r="13" fill="#fffaf2"/><circle cx="16" cy="-16" r="12" fill="#fffaf2"/><circle cx="26" cy="2" r="11" fill="#fffaf2"/>
+            <ellipse cx="38" cy="-6" rx="11" ry="13" fill="#3b2c22"/>
+            <rect x="-20" y="18" width="6" height="16" rx="3" fill="#3b2c22"/><rect x="12" y="18" width="6" height="16" rx="3" fill="#3b2c22"/>
+          </g>
+        </defs>
+        <rect width="560" height="420" rx="36" fill="#f6ead6"/>
+        <path d="M0 250 C120 200 230 230 330 210 C430 190 500 220 560 200 L560 420 L0 420Z" fill="url(#hill)"/>
+        <path d="M0 310 C140 280 260 320 380 300 C470 286 520 300 560 292 L560 420 L0 420Z" fill="#a9c093"/>
+        <g transform="translate(420 40)">
+          <rect width="104" height="104" rx="24" fill="url(#pawbg)"/>
+          <use href="#paw" x="2" y="2" width="100" height="100" fill="#fff8f0"/>
+        </g>
+        <g class="flock">
+          <g class="sheep s-working" transform="translate(110 262)"><use href="#sheep"/><circle class="collar" cx="38" cy="10" r="7"/></g>
+          <g class="sheep s-working" transform="translate(220 300) scale(.92)"><use href="#sheep"/><circle class="collar" cx="38" cy="10" r="7"/></g>
+          <g class="sheep s-blocked" transform="translate(330 248)"><use href="#sheep"/><circle class="collar" cx="38" cy="10" r="7"/></g>
+          <g class="sheep s-done" transform="translate(440 300) scale(.95)"><use href="#sheep"/><circle class="collar" cx="38" cy="10" r="7"/></g>
+          <g class="sheep s-idle" transform="translate(70 352) scale(.85)"><use href="#sheep"/><circle class="collar" cx="38" cy="10" r="7"/></g>
+          <g class="sheep s-done" transform="translate(300 362) scale(.85)"><use href="#sheep"/><circle class="collar" cx="38" cy="10" r="7"/></g>
+          <g class="sheep s-working" transform="translate(480 372) scale(.8)"><use href="#sheep"/><circle class="collar" cx="38" cy="10" r="7"/></g>
+        </g>
+        <g class="bubble" transform="translate(300 170)">
+          <rect x="0" y="0" width="150" height="40" rx="14" fill="#fffaf2" stroke="#e6cfae"/>
+          <text x="75" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#8a3412" font-family="ui-rounded, system-ui, sans-serif">Needs you: 1</text>
+        </g>
+      </svg>
+      <figcaption>
+        <ul class="legend">
+          <li><i class="dot d-working"></i>Working</li>
+          <li><i class="dot d-blocked"></i>Waiting on you</li>
+          <li><i class="dot d-done"></i>Done</li>
+          <li><i class="dot d-idle"></i>Idle</li>
+        </ul>
+        The same four states appear on every tab, sidebar row and badge in Sheprd.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="promise" aria-label="What Sheprd promises">
+    <div><h2>Everyone in one field</h2><p>Every agent CLI, worktree and machine in one window, with the status that matters.</p></div>
+    <div><h2>Nothing wanders off</h2><p>Agents keep running when you close the window. A Git checkpoint lands at every agent turn.</p></div>
+    <div><h2>You stay the shepherd</h2><p>Read the diff, leave notes, then commit, push and open the pull request yourself.</p></div>
+  </section>
+
+  <section id="story" class="story" aria-labelledby="story-title">
+    <div class="section-head">
+      <p class="kicker">Follow the paw prints</p>
+      <h2 id="story-title">A day with the flock</h2>
+      <p>Six moments from a normal day running coding agents. Every picture below is the real app, with demo projects.</p>
+    </div>
+
+    <ol class="trail">
+      <li class="chapter">
+        <div class="step"><svg aria-hidden="true"><use href="#paw"/></svg><span>1</span></div>
+        <div class="chapter-text">
+          <h3>Gather the flock</h3>
+          <p>Each repository gets a row, and every worktree nests under it with its branch, pull request and changes. Agents sit in their own list, so you see at a glance that Claude is editing <em>ledger-api</em> while Codex fixes rounding next door.</p>
+          <p class="note">Start a new worktree with <code>claude</code> or <code>codex</code> already running in it (macOS and Linux).</p>
+        </div>
+        <figure class="shot">
+          <img src="../../assets/shots/workspaces.jpg" alt="Sheprd window: a sidebar of workspaces with nested worktrees and an agent list, beside an editor and two terminal panes running git log and tests." width="1800" height="1125">
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
+        </figure>
+      </li>
+
+      <li class="chapter">
+        <div class="step"><svg aria-hidden="true"><use href="#paw"/></svg><span>2</span></div>
+        <div class="chapter-text">
+          <h3>Read what they made</h3>
+          <p>Open Review Changes for a pull-request-style diff of the work. Click a line, write what you think, and send your notes straight back to the agent that wrote it. When you are happy, the Git menu commits, pushes and opens the pull request.</p>
+          <p class="note">Review works on local checkouts. Pull request badges need a GitHub sign-in.</p>
+        </div>
+        <figure class="shot">
+          <img src="../../assets/shots/review.jpg" alt="The Review Changes tab: a file list, a coloured diff of ledger.rs and two numbered review notes with a Send to agent button." width="1800" height="1125" loading="lazy">
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
+        </figure>
+      </li>
+
+      <li class="chapter">
+        <div class="step"><svg aria-hidden="true"><use href="#paw"/></svg><span>3</span></div>
+        <div class="chapter-text">
+          <h3>Point at the thing</h3>
+          <p>Agents open their previews in a browser tab beside the terminal. Instead of describing which button is wrong, pin a note to it. Your notes, with the element they belong to, go back to the agent.</p>
+          <p class="note">Browser tabs and annotations: macOS and Windows. On Linux, pages open in your system browser.</p>
+        </div>
+        <figure class="shot">
+          <img src="../../assets/shots/browser-annotate.jpg" alt="A browser tab showing a docs page with two numbered annotations pinned to a button and a card, and a notes panel on the right." width="1800" height="1125" loading="lazy">
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
+        </figure>
+      </li>
+
+      <li class="chapter">
+        <div class="step"><svg aria-hidden="true"><use href="#paw"/></svg><span>4</span></div>
+        <div class="chapter-text">
+          <h3>Move to greener pastures</h3>
+          <p>Laptop getting warm? Teleport a worktree, its tabs, running programs and agent sessions to a bigger machine over SSH or to a cloud sandbox, and bring it back later. Smart Dispatch picks the least busy machine for new work.</p>
+          <p class="note">Teleport, Fan-out and Smart Dispatch run from macOS and Linux clients.</p>
+        </div>
+        <figure class="shot shot-small">
+          <img src="../../assets/shots/teleport.png" alt="The Teleport dialog listing two SSH machines, build-box and gpu-runner, as destinations for the feat-multi-currency worktree." width="1180" height="640" loading="lazy">
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
+        </figure>
+      </li>
+
+      <li class="chapter">
+        <div class="step"><svg aria-hidden="true"><use href="#paw"/></svg><span>5</span></div>
+        <div class="chapter-text">
+          <h3>Watch the grass</h3>
+          <p>Agents eat plan limits. Sheprd reads usage for 85+ AI services and shows the one closest to its limit in the status bar, next to CPU and memory for every machine.</p>
+          <p class="note">Each service needs its own sign-in or key on the machine it runs on.</p>
+        </div>
+        <figure class="shot shot-small">
+          <img src="../../assets/shots/usage.png" alt="A usage panel for Codex showing 97 percent of the weekly limit left, reset credits and a credit balance." width="1000" height="800" loading="lazy">
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
+        </figure>
+      </li>
+
+      <li class="chapter">
+        <div class="step"><svg aria-hidden="true"><use href="#paw"/></svg><span>6</span></div>
+        <div class="chapter-text">
+          <h3>Make the field yours</h3>
+          <p>Hundreds of themes, sidebar layouts from roomy to minimal, your fonts and your shortcuts. Add your own status items or panels with small Luau mods, and schedule nightly jobs that only run after you approve the script.</p>
+          <p class="note">English is the only language that ships today; translations are planned.</p>
+        </div>
+        <figure class="shot">
+          <img src="../../assets/shots/layouts.jpg" alt="Five sidebar layouts side by side: comfortable-rounded, compact, superset, orca and minimal." width="1800" height="1162" loading="lazy">
+          <figcaption><span class="tag-screenshot">Real screenshot · pre-rename build, Herdr UI branding</span></figcaption>
+        </figure>
+      </li>
+    </ol>
+
+    <aside class="pocket" aria-labelledby="pocket-title">
+      <div>
+        <p class="kicker">And when you step away</p>
+        <h3 id="pocket-title">The flock follows you home</h3>
+        <p>Turn on remote control and your computer serves a small app to your phone: read the chat, answer an agent's question, get a notification when it is done. Pairing needs approval on both screens.</p>
+        <ul class="caveats">
+          <li><span class="st st-optin">Opt-in</span> Remote control in any phone browser</li>
+          <li><span class="st st-testflight">TestFlight beta</span> Native iPhone and iPad app</li>
+          <li><span class="st st-experimental">Experimental</span> Live Activities, widgets and Apple Watch</li>
+        </ul>
+      </div>
+      <div class="phone" aria-hidden="true">
+        <span class="tag-illustration">Illustration</span>
+        <div class="phone-body">
+          <div class="phone-row"><i class="dot d-blocked"></i><b>ledger-api</b><small>asks: run migrations?</small></div>
+          <div class="phone-btns"><span>Allow once</span><span>Deny</span></div>
+          <div class="phone-row"><i class="dot d-done"></i><b>fix/rounding</b><small>finished · 2 files</small></div>
+          <div class="phone-row"><i class="dot d-working"></i><b>pixel-forge</b><small>working · 4m</small></div>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <section id="questions" class="questions" aria-labelledby="q-title">
+    <div class="section-head">
+      <p class="kicker">New to all this?</p>
+      <h2 id="q-title">Four friendly answers</h2>
+    </div>
+    <div class="qa">
+      <details>
+        <summary>What is a coding agent CLI?</summary>
+        <p>A program like Claude Code, Codex, Gemini CLI or OpenCode that runs in a terminal, reads your code and makes changes when you ask. Sheprd does not replace them: it gives each one a home, shows what it is doing and helps you check its work.</p>
+      </details>
+      <details>
+        <summary>What is a worktree, and why one per agent?</summary>
+        <p>A Git worktree is a second (or tenth) checkout of the same repository on another branch. Give each agent its own and they never trip over each other's files. Sheprd creates them, nests them in the sidebar and cleans them up safely.</p>
+      </details>
+      <details>
+        <summary>What runs my terminals?</summary>
+        <p>A small terminal server: Herdr's <code>herdr server</code>, or herdr-core, which ships with Sheprd. It keeps your agents running even when the window is closed. Sheprd is an independent client for these servers, not part of the Herdr project.</p>
+      </details>
+      <details>
+        <summary>Does it cost anything, and does it phone home?</summary>
+        <p>Sheprd is free and open source under Apache-2.0. Sign-ins live in your system keychain, logs and crash reports stay on your computer, and updates are signed.</p>
+      </details>
+    </div>
+  </section>
+
+  <section id="features" class="features" aria-labelledby="features-title">
+    <div class="section-head">
+      <p class="kicker">The whole pasture</p>
+      <h2 id="features-title">Everything Sheprd does</h2>
+      <p>Grouped by what you are trying to do. Each badge says whether it ships today, is opt-in, experimental or still planned.</p>
+    </div>
+    <div id="directory" class="directory"><p class="noscript">The feature directory needs JavaScript. The full list is in FEATURE-INVENTORY.md.</p></div>
+  </section>
+
+  <section id="install" class="install" aria-labelledby="install-title">
+    <div class="section-head">
+      <p class="kicker">Open the gate</p>
+      <h2 id="install-title">Get Sheprd</h2>
+      <p>Releases come from <a href="https://github.com/sheprd-labs/sheprd">github.com/sheprd-labs/sheprd</a>. Homebrew keeps its <code>penso/tap</code> tap and <code>herdr-gpui</code> token, so existing installs keep upgrading.</p>
+    </div>
+    <div class="install-grid">
+      <article class="card">
+        <h3>macOS</h3><p class="req">14.2 or newer · Apple silicon &amp; Intel</p>
+        <pre><code>brew install penso/tap/herdr-gpui</code></pre>
+        <button class="copy" type="button" data-copy="brew install penso/tap/herdr-gpui">Copy</button>
+        <p class="chan">Current channel</p>
+      </article>
+      <article class="card">
+        <h3>Linux</h3><p class="req">x86_64 &amp; ARM64 · APT, DNF, pacman</p>
+        <pre><code>curl -fsSL https://sheprd.org/install.sh | sh</code></pre>
+        <button class="copy" type="button" data-copy="curl -fsSL https://sheprd.org/install.sh | sh">Copy</button>
+        <p class="chan">Current channel</p>
+      </article>
+      <article class="card">
+        <h3>Windows</h3><p class="req">x86_64 &amp; ARM64 · PowerShell</p>
+        <pre><code>irm https://sheprd.org/install.ps1 | iex</code></pre>
+        <button class="copy" type="button" data-copy="irm https://sheprd.org/install.ps1 | iex">Copy</button>
+        <p class="chan">Current channel</p>
+      </article>
+      <article class="card">
+        <h3>Nix</h3><p class="req">x86_64 &amp; ARM64 Linux, from source</p>
+        <pre><code>nix run github:sheprd-labs/sheprd</code></pre>
+        <button class="copy" type="button" data-copy="nix run github:sheprd-labs/sheprd">Copy</button>
+        <p class="chan">Current channel</p>
+      </article>
+      <article class="card card-soft">
+        <h3>iPhone &amp; iPad</h3><p class="req">iOS 26</p>
+        <p>Native app in TestFlight beta for testers; no public link yet. You can build it from source.</p>
+        <span class="st st-testflight">TestFlight beta</span>
+      </article>
+      <article class="card card-soft">
+        <h3>Any phone</h3><p class="req">Android, iPhone, any modern browser</p>
+        <p>Turn on remote control in Settings, scan the QR code, approve on both screens.</p>
+        <span class="st st-optin">Opt-in</span>
+      </article>
+    </div>
+    <p class="gh"><a class="btn btn-ghost" href="https://github.com/sheprd-labs/sheprd">Sheprd on GitHub</a></p>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-brand"><img src="../../assets/paw.svg" alt="" width="28" height="28"><strong>Sheprd</strong><span>sheprd.org</span></div>
+  <p class="attrib">Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>.</p>
+  <p class="small">Screenshots predate the rename and still show Herdr UI branding, with demo projects.</p>
+</footer>
+</body>
+</html>

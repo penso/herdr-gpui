@@ -28,6 +28,8 @@ class CompactChecksumsTests(unittest.TestCase):
                 (self.directory / f"{name}.{algorithm}").write_text(f"{digest}  {name}\n")
             for suffix in ("sig", "crt"):
                 (self.directory / f"{name}.{suffix}").write_text("signature fixture\n")
+        for alias, original in MANIFEST.package_aliases(version).items():
+            (self.directory / alias).write_bytes((self.directory / original).read_bytes())
 
     def run_manifest(self, mode, version=VERSION, success=True):
         result = subprocess.run(
@@ -50,7 +52,8 @@ class CompactChecksumsTests(unittest.TestCase):
         self.assertFalse(any(name.endswith(".sha512") for name in names))
         sha512 = (self.directory / "SHA512SUMS").read_text()
         self.assertEqual(sha512, "".join(
-            f"{hashlib.sha512(signed[name]).hexdigest()}  {name}\n" for name in bases))
+            f"{hashlib.sha512((self.directory / name).read_bytes()).hexdigest()}  {name}\n"
+            for name in [*bases, *MANIFEST.package_aliases(VERSION)]))
         self.assertIn("  SHA512SUMS\n", (self.directory / "SHA256SUMS").read_text())
         for name, data in signed.items():
             self.assertEqual((self.directory / name).read_bytes(), data)

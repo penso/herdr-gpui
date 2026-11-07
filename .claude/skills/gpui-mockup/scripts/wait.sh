@@ -2,8 +2,8 @@
 # Usage: wait.sh FEEDBACK [SECONDS]
 # Waits for the mockup window's "Send to agent" and prints the notes.
 #
-# In a Herdr pane with Herdr UI running, the window hands the notes to Herdr
-# GPUI, and this waits for them with `herdr-gpui browser feedback --wait`, so
+# In a Herdr pane with Sheprd running, the window hands the notes to Sheprd,
+# and this waits for them with `sheprd browser feedback --wait`, so
 # they are not typed into the pane as well. It also watches FEEDBACK, since
 # an older app can accept feedback waits but reject notes.send. This prints
 # the fallback file and moves it aside to FEEDBACK.N so the next wait
@@ -55,7 +55,7 @@ finish_feedback() {
 
 # The binary `just mockup` builds; any build answers `browser feedback`.
 root=$(cd "$(dirname "$0")/../../../.." && pwd)
-app=$root/target/debug/herdr-gpui
+app=$root/target/debug/sheprd
 if [ -n "${HERDR_PANE_ID:-}" ] && [ -x "$app" ]; then
     output=$(mktemp -d "${TMPDIR:-/tmp}/gpui-feedback.XXXXXX")
     args=(browser feedback)

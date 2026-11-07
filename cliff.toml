@@ -9,7 +9,7 @@
 header = """
 # Changelog
 
-All notable changes to Herdr UI, generated from git history at release time.
+All notable changes to Sheprd, generated from git history at release time.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Release tags follow `vYYYYMMDD.COUNTER`.

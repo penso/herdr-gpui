@@ -1,12 +1,16 @@
 # Windows before and after
 
+Historical Sheprd captures from before the rename: names, ram artwork and
+accessibility dumps below reflect the builds actually captured. They have not
+been refreshed to show the current paw icon or Sheprd labels.
+
 Captured on Windows 11 Pro (10.0.26300, x64) from real windows. Each "before"
 comes from a build of the `windows` branch without the change, each "after" from
 the branch with it.
 
 | Change | Before | After |
 | --- | --- | --- |
-| Installer shows Herdr's icon instead of Inno Setup's stock graphic | ![](installer-before.png) | ![](installer-after.png) |
+| Installer shows the former ram icon instead of Inno Setup's stock graphic | ![](installer-before.png) | ![](installer-after.png) |
 | `herdr-gpui.exe` carries a name, version, and icon (Properties → Details) | ![](exe-details-before.png) | ![](exe-details-after.png) |
 | Ctrl-V in a WSL pane: "Image not sent" before; text pastes after (Ctrl-Shift-V shown, Ctrl-V reaches the shell as a key) | ![](wsl-ctrl-v-before.png) | ![](wsl-ctrl-v-after.png) |
 | CPU and memory of a WSL distribution in the sidebar and status bar (25% under an 8-thread load) | ![](wsl-cpu-memory-before.png) | ![](wsl-cpu-memory-after.png) |
@@ -25,7 +29,7 @@ behind the window.
 
 ## Snap Layouts
 
-Herdr UI keeps the system-drawn title bar on Windows, so its maximize button
+Sheprd keeps the system-drawn title bar on Windows, so its maximize button
 is the system's own and hovering it opens the Snap Layouts flyout. There is
 nothing to capture between before and after; the window's hit-test answer
 over its caption shows it (`WM_NCHITTEST` sent to the main window at 150%
@@ -68,7 +72,7 @@ Window '9950x3d: ~'
 ```
 
 Now, with the menu bar, activity bar, sidebar, and status bar, read by
-`crates/herdr-gpui/tests/support/uia_tree.ps1` from a window on an isolated
+`crates/sheprd-gpui/tests/support/uia_tree.ps1` from a window on an isolated
 daemon with three workspaces (patterns and states in brackets):
 
 ```text

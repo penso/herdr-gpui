@@ -38,23 +38,10 @@ h1 .soft { color:var(--mut); }
 .btn.pri { background:var(--acc); border-color:var(--acc); color:#1c1300; }
 .btn.pri:hover { color:#1c1300; filter:brightness(1.05); }
 
-/* Before/after slider. The stage is drawn at a fixed size and scaled to fit. */
-.compare-fit { margin:44px auto 0; max-width:1120px; overflow:visible; }
-@media (max-width: 1160px) { .compare-fit { overflow:hidden; border-radius:12px; } }
-.compare { position:relative; width:1120px; height:458px; border-radius:12px; touch-action:pan-y; transform-origin:top left; cursor:ew-resize; }
-.compare, .compare * { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
-.compare .layer { position:absolute; inset:0; }
-.compare .gpui { clip-path:inset(0 0 0 var(--split,50%)); }
-.tui { height:100%; border-radius:12px; overflow:hidden; background:#0d0e10; border:1px solid var(--g3); box-shadow:0 50px 120px -20px rgba(0,0,0,.55); display:grid; place-items:center; }
-.tui pre { margin:0; font:12px/17.4px ui-monospace, "SF Mono", Menlo, monospace; color:#b9bdc4; }
-.t-b { color:#4c5059; } .t-h { color:#e7e8ea; font-weight:700; } .t-w { color:#f5a524; } .t-r { color:#ff6b6b; } .t-g { color:#57d38c; } .t-d { color:#6c7078; } .t-c { color:#7cb7ff; } .t-m { color:#cfa6ff; } .t-sel { background:#2a2d33; color:#fff; }
-.handle { position:absolute; top:-14px; bottom:-14px; left:var(--split,50%); width:2px; margin-left:-1px; background:var(--acc); cursor:ew-resize; z-index:5; touch-action:none; }
-.handle span { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:40px; height:40px; border-radius:50%; background:var(--acc); color:#1c1300; display:grid; place-items:center; font-weight:800; font-size:14px; box-shadow:0 6px 24px rgba(0,0,0,.5); letter-spacing:-2px; }
-.labels { max-width:1120px; margin:14px auto 0; display:flex; justify-content:space-between; gap:20px; font-size:13px; color:var(--mut); }
-.labels b { color:var(--fg); }
-.same { margin:26px auto 0; display:flex; justify-content:center; align-items:center; gap:14px; font-size:14px; color:var(--mut); flex-wrap:wrap; }
-.same .daemon { color:var(--fg); border:1px solid var(--g3); padding:6px 12px; border-radius:8px; }
-.same .ln { width:60px; height:1px; background:var(--g3); }
+/* The illustrative app stage is drawn at a fixed size and scaled to fit. */
+.preview-fit { margin:44px auto 0; max-width:1120px; overflow:hidden; border-radius:12px; }
+.preview { width:1120px; height:458px; transform-origin:top left; }
+.preview-label { text-align:center; color:var(--mut); font-size:13px; margin:14px auto 0; }
 
 section { padding:90px 0 0; scroll-margin-top:20px; }
 .sh { margin-bottom:26px; }
@@ -68,17 +55,10 @@ section { padding:90px 0 0; scroll-margin-top:20px; }
 /* Capability rows */
 .rows { border-top:1px solid var(--g2); }
 .row > div { min-width:0; }
-.row { display:grid; grid-template-columns:300px minmax(0,1fr) minmax(0,1fr); gap:24px; padding:30px 0; border-bottom:1px solid var(--g2); align-items:start; }
+.row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); gap:40px; padding:30px 0; border-bottom:1px solid var(--g2); align-items:start; }
 .row h3 { margin:6px 0 8px; font-size:21px; letter-spacing:-.015em; }
 .row p { margin:0 0 12px; color:var(--mut); font-size:14px; }
-.verdict { display:inline-flex; gap:7px; align-items:center; font-size:12px; padding:4px 9px; border-radius:6px; border:1px solid var(--g3); color:var(--mut); }
-.verdict.only { color:var(--acc-ink); border-color:rgba(255,181,71,.4); background:rgba(255,181,71,.07); }
-.verdict.both, .verdict.more { color:var(--ok); border-color:rgba(87,211,140,.35); background:rgba(87,211,140,.06); }
 .side-lbl { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; display:flex; justify-content:space-between; gap:12px; }
-.mini-tui { background:#0d0e10; border:1px solid var(--g3); border-radius:9px; height:250px; padding:12px 14px; overflow:hidden; }
-.mini-tui pre { margin:0; font:11.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; color:#b9bdc4; white-space:pre; }
-.mini-tui.empty { display:flex; flex-direction:column; justify-content:center; align-items:center; gap:10px; text-align:center; color:var(--dim); font-size:13px; background:repeating-linear-gradient(135deg, rgba(255,255,255,.025) 0 10px, transparent 10px 20px), #0d0e10; }
-.mini-tui.empty b { font-size:22px; color:var(--g3); font-family:ui-monospace, Menlo, monospace; }
 .mini-gpui { height:250px; overflow:hidden; border-radius:9px; }
 .mini-gpui .scaler { width:780px; transform-origin:top left; }
 .mini-gpui .scaler [data-hm-app] { --h:460px; }
@@ -132,7 +112,6 @@ footer .disc { margin-left:auto; max-width:460px; text-align:right; color:var(--
   .hero { padding-top:48px; }
   h1 { font-size:40px; }
   .sh h2 { font-size:28px; }
-  .labels { flex-direction:column; gap:4px; }
   .row { grid-template-columns:minmax(0,1fr); }
   .gal { grid-template-columns:repeat(2,1fr); }
   .install { grid-template-columns:1fr; padding:28px; }
@@ -147,23 +126,9 @@ footer .disc { margin-left:auto; max-width:460px; text-align:right; color:var(--
   footer .links { order:-1; gap:22px; font-size:13.5px; color:var(--mut); }
   footer .disc { max-width:320px; text-align:center; font-size:11.5px; color:var(--dim); }
 }
-/* Phones: the side-by-side slider is unreadable at this width, so show one
-   client at a time, larger, and let it pan sideways. site.js sets .narrow. */
-.cmp-tabs { display:none; }
-.narrow .cmp-tabs { display:flex; justify-content:center; margin:36px auto 0; }
-.cmp-tabs button { all:unset; cursor:pointer; padding:7px 14px; font-size:13.5px; font-weight:600; color:var(--mut); border:1px solid var(--g3); }
-.cmp-tabs button:focus-visible { outline:2px solid var(--acc); outline-offset:3px; }
-.cmp-tabs button:first-child { border-radius:9px 0 0 9px; } .cmp-tabs button:last-child { border-radius:0 9px 9px 0; border-left:0; }
-.cmp-tabs button[aria-pressed="true"] { color:var(--fg); background:var(--g2); }
-.narrow .compare-fit { margin-top:14px; overflow-x:auto; overflow-y:hidden; border-radius:12px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
-.narrow .compare-fit::-webkit-scrollbar { display:none; }
-.narrow .compare { cursor:auto; touch-action:auto; }
-.narrow .compare .handle { display:none; }
-.narrow .labels { margin-top:10px; justify-content:center; text-align:center; }
-.narrow .labels span:not(.on) { display:none; }
-.narrow .same { flex-direction:column; gap:6px; font-size:13px; }
-.narrow .same .ln { width:1px; height:14px; }
-.narrow .same .daemon { font-size:11.5px; text-align:center; }
+/* Phones pan the app illustration at a legible scale. site.js sets .narrow. */
+.narrow .preview-fit { overflow-x:auto; overflow-y:hidden; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.narrow .preview-fit::-webkit-scrollbar { display:none; }
 .narrow .mini-gpui { height:auto; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
 .narrow .mini-gpui::-webkit-scrollbar { display:none; }
 

@@ -1,5 +1,6 @@
 """Independent geometry checks: regeneration alone cannot prove a circular icon."""
 from pathlib import Path
+import math
 import re
 import unittest
 import xml.etree.ElementTree as ET
@@ -58,21 +59,36 @@ class LinuxIconGeometryTests(unittest.TestCase):
         # Independent design contract: 64px of transparency on all four sides.
         self.assertEqual((cx - radius, cy - radius, 1024 - cx - radius,
                           1024 - cy - radius), (64, 64, 64, 64))
-        path = root.find(f"{SVG}path")
-        self.assertIsNotNone(path)
+        paw = root.find(f"{SVG}g")
+        self.assertIsNotNone(paw)
         pair = rf"\(\s*({NUMBER})[\s,]+({NUMBER})\s*\)"
-        transform = re.fullmatch(rf"translate{pair}\s+scale{pair}", path.get("transform", ""))
+        transform = re.fullmatch(rf"translate{pair}\s+scale\(({NUMBER})\)", paw.get("transform", ""))
         self.assertIsNotNone(transform, "Update the geometry reader for a new SVG transform syntax")
-        tx, ty, sx, sy = map(float, transform.groups())
-        points = list(control_points(path.get("d")))
-        self.assertTrue(points)
-        for x, y in points:
-            x, y = tx + sx * x, ty + sy * y
-            self.assertLessEqual((x - cx)**2 + (y - cy)**2, radius**2,
-                                 f"Ram control point {(x, y)} escapes the circle")
+        tx, ty, scale = map(float, transform.groups())
+        self.assertGreater(scale, 0)
+        self.assertTrue(len(paw))
+        for shape in paw:
+            if shape.tag == SVG + "path":
+                self.assertIsNone(shape.get("transform"))
+                points = list(control_points(shape.get("d")))
+                self.assertTrue(points)
+                for x, y in points:
+                    x, y = tx + scale * x, ty + scale * y
+                    self.assertLessEqual(math.hypot(x - cx, y - cy), radius,
+                                         f"Paw control point {(x, y)} escapes the circle")
+            else:
+                self.assertEqual(shape.tag, SVG + "ellipse")
+                x, y, rx, ry = (float(shape.get(key)) for key in ("cx", "cy", "rx", "ry"))
+                rotation = re.fullmatch(rf"rotate\(({NUMBER}) ({NUMBER}) ({NUMBER})\)", shape.get("transform", ""))
+                self.assertIsNotNone(rotation)
+                self.assertEqual(tuple(map(float, rotation.groups()[1:])), (x, y))
+                self.assertGreater(min(rx, ry), 0)
+                # A rotated ellipse fits inside its circumscribed disc.
+                self.assertLessEqual(math.hypot(tx + scale * x - cx, ty + scale * y - cy)
+                                     + scale * max(rx, ry), radius)
 
-    def test_both_shipped_icons_have_64px_margins_and_contain_the_entire_ram(self):
-        for name in ("herdr-linux.svg", "herdr-linux-worktree.svg"):
+    def test_both_shipped_icons_have_64px_margins_and_contain_the_entire_paw(self):
+        for name in ("sheprd-linux.svg", "sheprd-linux-worktree.svg"):
             with self.subTest(icon=name):
                 self.check_geometry(ET.parse(ASSETS / name).getroot())
 
@@ -80,12 +96,13 @@ class LinuxIconGeometryTests(unittest.TestCase):
         for tag, attribute, value in (
             ("circle", "r", "512"),
             ("circle", "cx", "540"),
-            ("path", "transform", "translate(400 792) scale(.15 -.15)"),
-            ("path", "transform", "translate(51 792) scale(.3 -.3)"),
+            ("g", "transform", "translate(400 792) scale(8.96)"),
+            ("g", "transform", "translate(64 64) scale(30)"),
+            ("ellipse", "rx", "100"),
             ("path", "d", "M 0 0 C 20000 0 20000 0 0 0 Z"),
         ):
-            root = ET.parse(ASSETS / "herdr-linux.svg").getroot()
-            root.find(SVG + tag).set(attribute, value)
+            root = ET.parse(ASSETS / "sheprd-linux.svg").getroot()
+            root.find(".//" + SVG + tag).set(attribute, value)
             with self.subTest(attribute=attribute, value=value), self.assertRaises(AssertionError):
                 self.check_geometry(root)
 

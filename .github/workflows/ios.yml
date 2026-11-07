@@ -13,8 +13,8 @@ on:
       # Design mockups: their own project, not built here.
       - '!ios/Mockups/**'
       # The daemon's wire types, which write the Swift tests' fixtures.
-      - 'crates/herdr-remote-control/src/native.rs'
-      - 'crates/herdr-remote-control/src/native/**'
+      - 'crates/sheprd-remote-control/src/native.rs'
+      - 'crates/sheprd-remote-control/src/native/**'
       - '.github/workflows/ios.yml'
   pull_request:
     paths:
@@ -23,8 +23,8 @@ on:
       # Design mockups: their own project, not built here.
       - '!ios/Mockups/**'
       # The daemon's wire types, which write the Swift tests' fixtures.
-      - 'crates/herdr-remote-control/src/native.rs'
-      - 'crates/herdr-remote-control/src/native/**'
+      - 'crates/sheprd-remote-control/src/native.rs'
+      - 'crates/sheprd-remote-control/src/native/**'
       - '.github/workflows/ios.yml'
   workflow_dispatch:
 
@@ -50,12 +50,14 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Swift package tests (fixtures shared with the daemon's Rust tests)
-        run: cd ios/HerdrRemoteCore && swift test
+        run: cd ios/SheprdRemoteCore && swift test
       - name: Unsigned simulator build of the app and its extensions
         run: |
           cd ios
           xcodegen -q
-          xcodebuild -project HerdrRemote.xcodeproj -scheme HerdrRemote \
+          python3 tools/test_branding.py
+          python3 tools/test_testflight_notes.py
+          xcodebuild -project SheprdRemote.xcodeproj -scheme SheprdRemote \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO -quiet build
 
@@ -63,17 +65,20 @@ jobs:
     name: TestFlight upload
     needs: check
     if: >-
-      github.repository == 'penso/herdr-gpui' &&
+      (github.repository == 'sheprd-labs/sheprd' || github.repository == 'penso/herdr-gpui') &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: macos-26
-    timeout-minutes: 45
+    # The archive, then up to 30 minutes for App Store Connect to take the notes.
+    timeout-minutes: 75
     environment: testflight
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The notes list the commits since the last build's.
+          fetch-depth: 0
           persist-credentials: false
       - name: Install XcodeGen
         run: brew install xcodegen
