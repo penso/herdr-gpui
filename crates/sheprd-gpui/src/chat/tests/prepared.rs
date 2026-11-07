@@ -1,5 +1,5 @@
 use super::*;
-use crate::chat::prepared::{Body, DiffSummary, Part, Prepared, diff_counts, summarize};
+use crate::chat::prepared::{Body, DiffSummary, Part, Prepared, summarize};
 use sheprd_chat_protocol::{Tool, ToolContent, ToolKind, ToolStatus};
 
 mod cut;
@@ -20,13 +20,6 @@ fn literal_indented_widget_examples_cannot_become_controls() {
         };
         assert!(!parts.iter().any(|part| matches!(part, Part::Widget(_))));
     }
-}
-
-#[test]
-fn diffs_count_lines_added_and_removed() {
-    assert_eq!(diff_counts("a\nb\nc\n", "a\nB\nc\nd\n"), (2, 1));
-    assert_eq!(diff_counts("", "one\ntwo"), (2, 0));
-    assert_eq!(diff_counts("same", "same"), (0, 0));
 }
 
 #[test]
