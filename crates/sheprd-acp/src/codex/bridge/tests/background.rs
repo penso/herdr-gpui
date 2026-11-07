@@ -293,3 +293,48 @@ fn a_reused_background_id_cannot_bypass_the_new_commands_turn_fence() {
     );
     assert!(bridge.prompt.is_some());
 }
+
+#[test]
+fn a_background_command_ending_leaves_its_id_free_in_the_later_turn() {
+    let mut bridge = opened();
+    prompt(&mut bridge, 2);
+    let item = json!({"type": "commandExecution", "id": "exec-reused",
+        "command": "serve", "status": "inProgress"});
+    notify(
+        &mut bridge,
+        "item/started",
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": item}),
+    );
+    notify(
+        &mut bridge,
+        "turn/completed",
+        json!({"threadId": THREAD, "turn": {"id": "turn-1", "status": "completed"}}),
+    );
+    prompt(&mut bridge, 3);
+    notify(
+        &mut bridge,
+        "turn/started",
+        json!({"threadId": THREAD, "turn": {"id": "turn-2"}}),
+    );
+    let ended = notify(
+        &mut bridge,
+        "item/completed",
+        json!({"threadId": THREAD, "turnId": "turn-1", "item": {
+            "type": "commandExecution", "id": "exec-reused", "command": "serve",
+            "status": "completed", "aggregatedOutput": "bye", "exitCode": 0,
+        }}),
+    );
+    assert_eq!(ended.len(), 1);
+    let started = notify(
+        &mut bridge,
+        "item/started",
+        json!({"threadId": THREAD, "turnId": "turn-2", "item": item}),
+    );
+    assert_eq!(started.len(), 1);
+    let output = notify(
+        &mut bridge,
+        "item/commandExecution/outputDelta",
+        json!({"threadId": THREAD, "turnId": "turn-2", "itemId": "exec-reused", "delta": "new"}),
+    );
+    assert_eq!(update(&output[0])["content"][0]["content"]["text"], "new");
+}

@@ -78,7 +78,10 @@ pub(super) fn finished(name: &str, result: &Value, failed: bool) -> wire::ToolCa
 /// last one rather than being appended to it.
 #[derive(Debug)]
 pub(super) struct Progress {
+    /// What the call started with, within a preview's limit.
     base: Vec<wire::ToolCallContent>,
+    /// The same within an entry's limit, which the finished card gets back.
+    full: Vec<wire::ToolCallContent>,
     latest: Option<Vec<wire::ToolCallContent>>,
 }
 
@@ -91,6 +94,7 @@ impl Progress {
     pub(super) fn new(name: &str, args: &Value) -> Self {
         Self {
             base: content::initial(name, args, BASE_TEXT),
+            full: content::initial(name, args, MAX_ENTRY_TEXT),
             latest: None,
         }
     }
@@ -119,8 +123,9 @@ impl Progress {
             .content(Some(content))
     }
 
-    /// What the finished call shows: the final result in place of the last
-    /// partial one, which stays when the final result carries none.
+    /// What the finished call shows: its whole input again, and the final
+    /// result in place of the last partial one, which stays when the final
+    /// result carries none.
     pub(super) fn finish(
         self,
         name: &str,
@@ -135,10 +140,17 @@ impl Progress {
         } else {
             wire::ToolCallStatus::Completed
         };
-        let output = content::result(result, PARTIAL_TEXT, sheprd_chat_protocol::MAX_IMAGE_DATA)
-            .or(self.latest);
+        // The card's input comes first, as it did when the call started.
+        let room = MAX_ENTRY_TEXT.saturating_sub(content::size(&self.full));
+        let output = content::result(result, room, sheprd_chat_protocol::MAX_IMAGE_DATA)
+            .or_else(|| self.latest.filter(|latest| content::size(latest) <= room));
         wire::ToolCallUpdateFields::new()
             .status(Some(status))
-            .content(output.map(|output| self.base.into_iter().chain(output).collect()))
+            .content(Some(
+                self.full
+                    .into_iter()
+                    .chain(output.into_iter().flatten())
+                    .collect(),
+            ))
     }
 }

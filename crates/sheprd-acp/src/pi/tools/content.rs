@@ -26,6 +26,23 @@ impl TextBudget {
     }
 }
 
+/// The bytes of text in `content`; images have a limit of their own.
+pub(super) fn size(content: &[wire::ToolCallContent]) -> usize {
+    content
+        .iter()
+        .map(|part| match part {
+            wire::ToolCallContent::Content(wire::Content {
+                content: wire::ContentBlock::Text(text),
+                ..
+            }) => text.text.len(),
+            wire::ToolCallContent::Diff(diff) => {
+                diff.new_text.len() + diff.old_text.as_ref().map_or(0, String::len)
+            }
+            _ => 0,
+        })
+        .sum()
+}
+
 pub(super) fn initial(name: &str, args: &Value, limit: usize) -> Vec<wire::ToolCallContent> {
     let field = |key: &str| args.get(key).and_then(Value::as_str);
     let mut budget = TextBudget(limit);

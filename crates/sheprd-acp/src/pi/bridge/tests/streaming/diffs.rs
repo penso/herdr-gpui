@@ -10,7 +10,7 @@ fn diff_count(out: &Out) -> usize {
 }
 
 #[test]
-fn oversized_edit_sides_are_omitted_together_in_running_and_final_updates() {
+fn an_edit_too_large_to_preview_gets_its_diff_back_when_it_finishes() {
     let limit = crate::project::MAX_ENTRY_TEXT / 4;
     for (old, new) in [
         ("α".repeat(limit), "replacement".into()),
@@ -35,20 +35,34 @@ fn oversized_edit_sides_are_omitted_together_in_running_and_final_updates() {
                 .any(|text| text.contains("exceeds live preview limits"))
         );
         let finished = end(&mut bridge, "edit", "edit", "saved", false);
-        assert_eq!(diff_count(&finished[0]), 0);
-        assert!(
-            texts(&finished[0])
-                .iter()
-                .any(|text| text.contains("exceeds live preview limits"))
-        );
-        assert!(
-            texts(&finished[0])
-                .iter()
-                .map(|text| text.len())
-                .sum::<usize>()
-                <= crate::project::MAX_ENTRY_TEXT
-        );
+        assert_eq!(diff_count(&finished[0]), 1);
+        assert_eq!(texts(&finished[0]), ["saved"]);
     }
+}
+
+#[test]
+fn an_edit_too_large_for_an_entry_stays_omitted_and_within_it() {
+    let limit = crate::project::MAX_ENTRY_TEXT;
+    let mut bridge = opened();
+    prompt(&mut bridge, 2);
+    start(
+        &mut bridge,
+        "edit",
+        "edit",
+        json!({
+            "path": "a.rs", "edits": [{"oldText": "a".repeat(limit), "newText": "b"}],
+        }),
+    );
+    partial(&mut bridge, "edit", "edit", "editing");
+    let finished = end(&mut bridge, "edit", "edit", &"c".repeat(limit * 2), false);
+    assert_eq!(diff_count(&finished[0]), 0);
+    let texts = texts(&finished[0]);
+    assert!(
+        texts
+            .iter()
+            .any(|text| text.contains("exceeds live preview limits"))
+    );
+    assert!(texts.iter().map(|text| text.len()).sum::<usize>() <= limit);
 }
 
 #[test]

@@ -406,7 +406,7 @@ impl Bridge {
                 return Vec::new();
             }
             // The final output replaces what streamed, even when empty.
-            self.commands.complete(id);
+            self.command_ended(params, id);
         }
         let streamed = self.streamed.remove(id);
         match item.get("type").and_then(Value::as_str) {

@@ -25,8 +25,7 @@ impl Commands {
         self.completed.clear();
     }
 
-    pub(super) fn complete(&mut self, id: &str) {
-        self.active.remove(id);
+    fn complete(&mut self, id: &str) {
         if self.completed.len() < MAX_COMPLETED && !id.is_empty() && id.len() <= MAX_ITEM_ID {
             self.completed.insert(id.to_owned());
         }
@@ -123,6 +122,15 @@ impl Bridge {
             })
             .into_iter()
             .collect()
+    }
+
+    /// A command ended. Only one of the running turn counts as that turn's:
+    /// a background command ending now leaves its id free for a new command.
+    pub(super) fn command_ended(&mut self, params: &Value, id: &str) {
+        self.commands.active.remove(id);
+        if self.current_command(params) {
+            self.commands.complete(id);
+        }
     }
 
     /// Whether `params` name this thread's running turn.
