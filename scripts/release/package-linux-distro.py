@@ -25,7 +25,7 @@ TREE = {
     "bin/herdr-core", "bin/herdr-gpui", "bin/sheprd",
     *(f"bin/{prefix}-{helper}" for prefix in ("sheprd", "herdr")
       for helper in ("acp", "automate", "nearby", "remote-control")),
-    "share/applications/so.pen.herdr-gpui.desktop",
+    "share/applications/org.sheprd.Sheprd.desktop",
     "share/icons/hicolor/scalable/apps/sheprd.svg",
     *(f"share/licenses/herdr-gpui/{name}" for name in (
         "LICENSE", "NOTICE", "LICENSE-octicons", "LICENSE-APACHE", "NOTICE.md",
