@@ -969,6 +969,15 @@ colours. Theme ends with the window backdrop and terminal padding. Custom sound
 paths and per-agent sound policies remain shared-file settings. Configuration
 paths are diagnostic facts rather than editable preference values.
 
+Coordinator groups have no switch here yet: `[sidebar] coordinator_suffix`
+turns them on. With it set to `-coord`, a session named `demo-coord` shows the
+coordinator mark in place of its agent's, and the agents header gains a filter
+whose clicks step through each group and back to all groups. A group shows its
+coordinator first, then the sessions named `demo-12`, `demo-13`, and so on, on
+any host, and the agent shortcuts step through those same rows. Groups follow
+names, so a replacement session given the coordinator's name takes the group
+over. `sheprd ui agent-group` lists and picks groups from a script.
+
 These native edits save automatically through the serial background save path,
 preserving unrelated TOML keys/comments and pending theme/layout selections.
 Controls are disabled while a save or reload is in progress. Shared settings

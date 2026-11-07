@@ -19,6 +19,7 @@ use sheprd_client::{ConnectOptions, ConnectTarget};
 use std::sync::Arc;
 
 #[cfg(test)]
+mod agent_groups;
 mod agent_menu;
 #[cfg(test)]
 mod agent_rows;
@@ -787,6 +788,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         sidebar_split_modified: false,
         sidebar_preferences: None,
         sidebar_modified: false,
+        agent_group: None,
         agent_sort: Default::default(),
         agent_sort_modified: false,
         avatars: None,

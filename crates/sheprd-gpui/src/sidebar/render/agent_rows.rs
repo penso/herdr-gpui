@@ -1,11 +1,12 @@
 //! The agents list: every listed host's agents in the panel's one order, so a
 //! blocked agent on one host can sit above an idle one on another.
 
+use crate::i18n::fl;
 use crate::{
     NavigationTarget, SheprdWindow,
     sidebar::{
         Indicators, agent_name,
-        agents::{agent_place, pane_name, state_label, status_text},
+        agents::{agent_icon, agent_place, pane_name, state_label, status_text},
         cell::{AgentRow, Cell, RowContext, RowData, layout_for},
         layout::SidebarLook,
         line_height, tokens, wash,
@@ -144,12 +145,18 @@ impl SheprdWindow {
             place,
             row_cx.host,
         );
+        let icon = agent_icon(agent, snapshot, &self.config.sidebar_style);
+        let spoken = if icon == crate::icons::AgentIcon::Coordinator {
+            fl!("sidebar-coordinator-row", row = spoken)
+        } else {
+            spoken
+        };
         Cell::new(
             rows,
             RowData::Agent(AgentRow {
                 key: format!("agent-{id}"),
                 name,
-                icon: crate::icons::AgentIcon::from_identity(agent.agent.as_deref()),
+                icon,
                 status: agent.agent_status,
                 place,
                 pane,

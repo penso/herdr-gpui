@@ -2,7 +2,10 @@
 //! next, and numbered shortcuts step through, as Herdr's TUI steps through
 //! its own sidebar: every listed host's rows, top to bottom.
 
-use super::{agents::panel_agents, visible_workspace_entries};
+use super::{
+    agents::{groups::Groups, panel_agents},
+    visible_workspace_entries,
+};
 use crate::{SheprdWindow, controls::Command, state::LiveState};
 use sheprd_client::protocol::{ClientShellAgent, ClientShellSnapshot};
 
@@ -55,9 +58,48 @@ impl SheprdWindow {
     }
 
     /// The agents the panel paints, by host index, in its order. Painting
-    /// and stepping both read it, so a shortcut lands on the row below.
+    /// and stepping both read it, so a shortcut lands on the row below. A
+    /// picked coordinator group narrows it for both.
     pub(super) fn panel_agents(&self) -> Vec<(usize, &ClientShellAgent)> {
-        panel_agents(self.listed_lives(), self.agent_sort)
+        let rows = panel_agents(self.listed_lives(), self.agent_sort);
+        let (Some(groups), Some(group)) = (self.agent_groups(), self.agent_group_filter()) else {
+            return rows;
+        };
+        let hosts: Vec<_> = self.listed_hosts().collect();
+        groups.narrow(
+            group,
+            rows.into_iter().filter_map(|(index, agent)| {
+                let (_, snapshot) = hosts.iter().find(|(host, _)| *host == index)?;
+                Some((index, agent, *snapshot))
+            }),
+        )
+    }
+
+    /// The suffix that names coordinators, while the agents panel is there to
+    /// show groups: the other placements have no header to say a filter is on.
+    fn panel_coordinator_suffix(&self) -> Option<&str> {
+        let panel = self.config.show_agents
+            && self.config.agents_placement == crate::config::AgentsPlacement::Panel
+            && self.config.layout.mode.lists_workspaces();
+        panel
+            .then_some(self.config.sidebar_style.coordinator_suffix.as_deref())
+            .flatten()
+    }
+
+    /// The coordinator groups of every listed host, or None while the agents
+    /// panel offers none.
+    pub(crate) fn agent_groups(&self) -> Option<Groups<'_>> {
+        let suffix = self.panel_coordinator_suffix()?;
+        let sessions = self
+            .listed_hosts()
+            .flat_map(|(_, snapshot)| snapshot.agents.iter().map(move |agent| (agent, snapshot)));
+        Some(Groups::new(suffix, sessions, self.agent_group.as_deref()))
+    }
+
+    /// The group the agents panel is narrowed to.
+    pub(super) fn agent_group_filter(&self) -> Option<&str> {
+        self.panel_coordinator_suffix()?;
+        self.agent_group.as_deref()
     }
 
     /// The agent panel's rows, whether or not the panel is shown, as Herdr

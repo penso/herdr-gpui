@@ -118,6 +118,9 @@ pub(crate) struct SheprdWindow {
     pub(crate) active: bool,
     /// The activity bar's panel and filter.
     pub(crate) activity: sidebar::Activity,
+    /// The coordinator group the agents panel is narrowed to, by name: a
+    /// group outlives its coordinator's pane. None lists every group.
+    pub(crate) agent_group: Option<String>,
     pub(crate) agent_sort: preferences::AgentSort,
     /// Whether the user chose the sort with the panel toggle, now or in a
     /// stored session. Until then the daemon's `ui.agent_panel_sort` decides,
