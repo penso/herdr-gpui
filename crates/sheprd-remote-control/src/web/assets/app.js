@@ -1377,8 +1377,9 @@ async function postLink(vouch, link) {
     link.state = (await (await api(path, options)).json()).state;
     return false;
   } catch (error) {
-    // No answer: the computer may have taken it, and the next list says.
-    if (error instanceof TypeError) {
+    // Anything but the computer's refusal leaves open that it took the key,
+    // so the key stays and the next list says.
+    if (!(error instanceof HttpError)) {
       link.state = "pending";
       return false;
     }
@@ -1439,9 +1440,11 @@ async function settleLink(vouch, link, asked) {
   if (early || link.state === "asking" || link.state === "pending") return { waits: true };
   const enrolled = link.state === "paired" && link.device !== waiting.replaces;
   const kept = enrolled && (await keepLink(vouch, link, waiting.pair));
+  // No room for it yet: the machine holds this key, so it stays for Try again.
+  if (enrolled && link.state === "failed") return { waits: false };
   // Only now: a reload before this finds the key and keeps the machine.
   await dropWaiting(vouch, link.host);
-  return { waits: false, kept };
+  return { waits: false, kept, unsent: link.state === "allowed" };
 }
 
 /// Lists the machines of the computer shown and pairs the ones the desktop
@@ -1479,6 +1482,13 @@ async function followLinks() {
         const allowed = rows.filter((link, index) => link.state === "allowed" && !settled[index].waits);
         await Promise.all(allowed.map((link) => postLink(vouch, link)));
         if (!current()) return;
+      } else {
+        // Allowed machines pair on the first list only, so a key that never
+        // arrived needs the person's retry.
+        for (const link of rows.filter((_, index) => settled[index].unsent)) {
+          link.state = "failed";
+          link.reason = "Pairing did not start.";
+        }
       }
       first = false;
       const kept = rows.filter((_, index) => settled[index].kept);
@@ -1488,7 +1498,7 @@ async function followLinks() {
       }
       drawLinks();
       const waits = await Promise.all(rows.map((link) => waitingKey(vouch, link.host)));
-      if (!waits.some(Boolean)) return;
+      if (!waits.some((waiting, index) => waiting && rows[index].state !== "failed")) return;
     }
     await new Promise((resolve) => setTimeout(resolve, LINK_POLL_MS));
     if (!current() || document.visibilityState === "hidden") return;
