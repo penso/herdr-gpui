@@ -373,7 +373,7 @@ pub fn start(exe: &Path, paths: &Paths) -> crate::Result<bool> {
     })
 }
 
-/// Asks the daemon to stop after its runs, and waits. Returns whether one
+/// Asks the daemon to stop its runs and exit, and waits. Returns whether one
 /// was running.
 pub fn shutdown(paths: &Paths, store: &Store) -> crate::Result<bool> {
     if !Lock::held(paths) {

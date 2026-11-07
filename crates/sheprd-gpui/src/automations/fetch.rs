@@ -234,24 +234,27 @@ pub(crate) fn act_within(
     answered(query_within(host, args, idle, cancelled)?)
 }
 
-/// [`act_within`] through the `herdr-automate` installed on `host`, which on
-/// this machine is not the one the app ships ([`installed_command`]).
+/// [`query`] through the `herdr-automate` installed on `host`, which on this
+/// machine is not the one the app ships ([`installed_command`]).
+pub(crate) fn query_installed<T: DeserializeOwned>(
+    host: &Host,
+    args: &[&str],
+    idle: Duration,
+    cancelled: &AtomicBool,
+) -> Result<T, Error> {
+    let args: Vec<&str> = args.iter().copied().chain(["--json"]).collect();
+    let local = host.is_local().then(|| installed_command(host, &args));
+    parse(&run_on(host, local, &args, &[][..], idle, cancelled)?)
+}
+
+/// [`act_within`] through the `herdr-automate` installed on `host`.
 pub(crate) fn act_installed(
     host: &Host,
     args: &[&str],
     idle: Duration,
     cancelled: &AtomicBool,
 ) -> Result<Done, Error> {
-    let args: Vec<&str> = args.iter().copied().chain(["--json"]).collect();
-    let local = host.is_local().then(|| installed_command(host, &args));
-    answered(parse(&run_on(
-        host,
-        local,
-        &args,
-        &[][..],
-        idle,
-        cancelled,
-    )?)?)
+    answered(query_installed(host, args, idle, cancelled)?)
 }
 
 fn answered(done: Done) -> Result<Done, Error> {

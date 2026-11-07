@@ -33,6 +33,7 @@ impl Localize for Error {
             ),
             Self::Refused(error) => fl!("error-automations-refused", error = error.as_str()),
             Self::Run(error) => fl!("error-automations-run", error = error.localize()),
+            Self::RunsActive => fl!("error-automations-runs-active"),
             Self::UnknownHost(host) => {
                 fl!("error-automations-unknown-host", host = host.as_str())
             }

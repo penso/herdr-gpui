@@ -49,22 +49,30 @@ fn this_computer_is_not_offered_an_update_it_cannot_run(cx: &mut gpui::TestAppCo
     });
 }
 
-/// A `herdr-automate` that logs the path it ran from and its arguments.
+/// A `herdr-automate` that logs the path it ran from and its arguments, and
+/// answers `status` with the file beside it.
 #[cfg(unix)]
 const FAKE: &str = r#"#!/bin/sh
 echo "$0 $*" >> "$HOME/calls"
+if [ "$1" = status ]; then cat "$HOME/status.json"; exit; fi
 echo '{"ok":true,"message":"done","run":null}'
 "#;
 
+/// Updates this computer in a fresh home reporting `status`; the result, the
+/// home, and the directory that holds it.
 #[cfg(unix)]
-#[test]
-fn updating_this_computer_runs_the_copy_in_home_not_the_app() {
+fn update_with(status: &Status) -> (Result<String, Error>, std::path::PathBuf, tempfile::TempDir) {
     use crate::automations::install;
     use std::{fs, sync::atomic::AtomicBool};
 
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join("home");
     fs::create_dir(&home).unwrap();
+    fs::write(
+        home.join("status.json"),
+        serde_json::to_vec(status).unwrap(),
+    )
+    .unwrap();
     let source = dir.path().join("build");
     fs::write(&source, FAKE).unwrap();
 
@@ -78,18 +86,44 @@ fn updating_this_computer_runs_the_copy_in_home_not_the_app() {
         size,
         sha256,
     };
+    let result = install::install(&host, &plan, true, &AtomicBool::new(false));
+    (result, home, dir)
+}
 
-    let said = install::install(&host, &plan, true, &AtomicBool::new(false)).unwrap();
-    assert_eq!(said, "done");
+#[cfg(unix)]
+fn idle() -> Status {
+    let mut idle = status();
+    for script in &mut idle.scripts {
+        script.running = None;
+    }
+    idle
+}
+
+#[cfg(unix)]
+#[test]
+fn updating_this_computer_runs_the_copy_in_home_not_the_app() {
+    let (said, home, _dir) = update_with(&idle());
+    assert_eq!(said.unwrap(), "done");
 
     let link = home.join(".local/bin/herdr-automate");
     assert_eq!(
-        fs::read_link(&link).unwrap(),
+        std::fs::read_link(&link).unwrap(),
         home.join(".local/share/herdr-automate/bin/0.4.0/herdr-automate")
     );
-    let calls = fs::read_to_string(home.join("calls")).unwrap();
-    let expected: String = ["shutdown", "install-service", "start"]
+    let calls = std::fs::read_to_string(home.join("calls")).unwrap();
+    let expected: String = ["status", "shutdown", "install-service", "start"]
         .map(|command| format!("{} {command} --json\n", link.display()))
         .concat();
     assert_eq!(calls, expected);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_update_never_stops_a_run_that_is_going() {
+    let mut busy = idle();
+    busy.scripts[0].running = Some(128);
+    let (said, home, _dir) = update_with(&busy);
+    assert!(matches!(said, Err(Error::RunsActive)), "{said:?}");
+    let calls = std::fs::read_to_string(home.join("calls")).unwrap();
+    assert!(!calls.contains("shutdown"), "{calls}");
 }

@@ -25,7 +25,7 @@ Running them on this host:
 
 The daemon:
   serve                      Run the scheduler in the foreground
-  start | shutdown           Start it detached, or stop it after its runs
+  start | shutdown           Start it detached, or stop it and its runs
   install-service | uninstall-service
                              Keep it running across logins and crashes
 
