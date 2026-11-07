@@ -166,6 +166,23 @@ async fn a_worktree_whose_chat_fails_leaves_the_branch_free_to_retry() {
     fake.server.join().unwrap();
 }
 
+#[test]
+fn only_a_start_that_surely_ran_nothing_may_lose_its_checkout() {
+    use super::super::create::ran_nothing;
+    use sheprd_core_client::{Error as CoreError, Method};
+    let client = |error: CoreError| HubError::Core(Error::Client(error));
+    assert!(ran_nothing(&HubError::Core(Error::Disconnected)));
+    assert!(ran_nothing(&client(CoreError::Refused {
+        method: Method::TerminalRun,
+        kind: None,
+        message: "no".to_owned(),
+    })));
+    assert!(!ran_nothing(&client(CoreError::Lost)));
+    assert!(!ran_nothing(&client(CoreError::Timeout(
+        Method::TerminalRun
+    ))));
+}
+
 #[tokio::test]
 async fn a_worktree_git_refuses_starts_no_chat() {
     let dir = tempfile::tempdir().unwrap();

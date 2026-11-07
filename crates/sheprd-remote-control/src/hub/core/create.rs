@@ -6,7 +6,7 @@
 //! one: the core keeps no pane metadata a program could report through, so
 //! the endpoint is chosen here and kept as a label.
 
-use super::{Error, Result, Source, lock, pane_id, worktree};
+use super::{Error, HubError, Result, Source, lock, pane_id, worktree};
 use crate::hub::Layout;
 use serde_json::{Value, json};
 use sheprd_chat_protocol::{Agent, ENDPOINT_ENV, EndpointId, TOKEN};
@@ -66,10 +66,13 @@ impl Source {
         let repository = Path::new(cwd);
         let checkout = worktree::add(repository, branch, root).map_err(Error::from)?;
         let started = self.open_chat(agent, program, &checkout.to_string_lossy());
-        if started.is_err() {
-            // The phone is told it failed, so its retry must find the
-            // branch free. What cannot be undone stays to clear by hand.
-            if let Err(error) = worktree::remove(repository, &checkout, branch) {
+        if let Err(error) = &started {
+            // A retry must find the branch free, but only a start that
+            // surely ran nothing may go: a chat may be working in the
+            // checkout after any other failure.
+            if !ran_nothing(error) {
+                tracing::warn!(%error, %branch, "A worktree stayed: its chat may have started");
+            } else if let Err(error) = worktree::remove(repository, &checkout, branch) {
                 tracing::warn!(%error, %branch, "A worktree without a chat stayed");
             }
         }
@@ -113,6 +116,18 @@ impl Source {
             .retain(|terminal| terminal.address != address);
         Ok(json!({}))
     }
+}
+
+/// Whether a failed start surely started no terminal: the core refused it,
+/// or there was no core to ask. A timeout or lost connection may come after
+/// the core acted on the request.
+pub(super) fn ran_nothing(error: &HubError) -> bool {
+    matches!(
+        error,
+        HubError::Core(
+            Error::Disconnected | Error::Client(sheprd_core_client::Error::Refused { .. })
+        )
+    )
 }
 
 /// The panes of each tab in `layout`. A chat is listed apart from its tab's
