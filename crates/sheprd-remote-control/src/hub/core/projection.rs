@@ -113,6 +113,7 @@ fn add(layout: &mut Layout, workspace: &str, terminal: Terminal) {
         cwd: terminal.cwd.clone().unwrap_or_default(),
         id: workspace.to_owned(),
         label: label(workspace, terminal.cwd.as_deref()),
+        session: None,
         terminals: vec![terminal],
         worktree: None,
     });

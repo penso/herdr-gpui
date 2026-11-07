@@ -29,7 +29,7 @@ use crate::{
 use gpui::Context;
 use sheprd_chat_protocol::{Agent, restore};
 use sheprd_client::{
-    protocol::{AgentStatus, ClientShellAgent},
+    protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot},
     shell_quote,
 };
 use std::{
@@ -62,8 +62,8 @@ fn convertible(agent: Agent) -> bool {
     }
 }
 
-/// Whether what the window sees of a pane lets its agent move.
-fn check(reported: &ClientShellAgent) -> Result<Agent, Error> {
+/// Whether the pane's agent is one that can move at all, however busy it is.
+fn movable(reported: &ClientShellAgent) -> Result<Agent, Error> {
     if discovery::endpoint(&reported.tokens).is_some() {
         return Err(Error::AlreadyChat);
     }
@@ -72,12 +72,31 @@ fn check(reported: &ClientShellAgent) -> Result<Agent, Error> {
     if !convertible(agent) {
         return Err(Error::Unsupported(agent));
     }
+    Ok(agent)
+}
+
+/// Whether what the window sees of a pane lets its agent move.
+fn check(reported: &ClientShellAgent) -> Result<Agent, Error> {
+    let agent = movable(reported)?;
     match reported.agent_status {
         AgentStatus::Idle | AgentStatus::Done => Ok(agent),
         AgentStatus::Working | AgentStatus::Blocked | AgentStatus::Unknown => {
             Err(Error::Busy(agent))
         }
     }
+}
+
+/// The pane of `tab` whose agent its menu would move: the tab's focused pane
+/// when that one can, else its first that can. A busy agent counts, so the
+/// row stays and says why it has to wait rather than vanishing mid-turn.
+fn tab_pane<'a>(snapshot: &'a ClientShellSnapshot, workspace: &str, tab: &str) -> Option<&'a str> {
+    snapshot
+        .agents
+        .iter()
+        .filter(|agent| agent.workspace_id == workspace && agent.tab_id == tab)
+        .filter(|agent| movable(agent).is_ok())
+        .min_by_key(|agent| !agent.focused)
+        .map(|agent| agent.pane_id.as_str())
 }
 
 /// Whether the host's own answer, fresher than the window's snapshot, still
@@ -387,6 +406,18 @@ impl SheprdWindow {
             scope,
         })?);
         Ok((pane, agent))
+    }
+
+    /// The pane a tab's menu offers to move into a chat, if this window could
+    /// move one there. What only waiting fixes is left to the refusal.
+    pub(crate) fn convertible_pane(&self, workspace: &str, tab: &str) -> Option<String> {
+        if !self.config.features.acp_chats
+            || matches!(self.chat_route()?, Route::Local if cfg!(windows))
+        {
+            return None;
+        }
+        let snapshot = self.live.snapshot.as_deref()?;
+        tab_pane(snapshot, workspace, tab).map(str::to_owned)
     }
 
     /// [`Self::convert_to_chat`], reporting a failure as a flash.

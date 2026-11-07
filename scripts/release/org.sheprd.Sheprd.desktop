@@ -9,4 +9,4 @@ Exec=sheprd
 Icon=sheprd
 Terminal=false
 Categories=Development;
-StartupWMClass=so.pen.herdr-gpui
+StartupWMClass=org.sheprd.Sheprd

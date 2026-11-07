@@ -27,6 +27,7 @@ fn workspace(id: &str, cwd: &str) -> Workspace {
         label: id.to_owned(),
         terminals: Vec::new(),
         worktree: None,
+        session: None,
     }
 }
 
@@ -109,7 +110,7 @@ async fn a_core_failure_is_reported_and_not_retried_on_herdr_one() {
     source.poll().unwrap();
     let hub = hub_on(&source, Layout::default());
     let error = hub
-        .create_workspace("/refused", None, Agent::Claude)
+        .create_workspace("/refused", None, Agent::Claude, None)
         .await
         .err()
         .unwrap();
@@ -128,7 +129,12 @@ async fn a_worktree_chat_starts_on_the_core_in_its_new_checkout() {
     let mut hub = hub_on(&source, Layout::default());
     hub.worktrees = Some(root.clone());
     let created = hub
-        .create_workspace(repository.to_str().unwrap(), Some("topic"), Agent::Claude)
+        .create_workspace(
+            repository.to_str().unwrap(),
+            Some("topic"),
+            Agent::Claude,
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(created.workspace, UNLISTED);
@@ -150,7 +156,12 @@ async fn a_worktree_whose_chat_fails_leaves_the_branch_free_to_retry() {
     hub.worktrees = Some(root.clone());
     // The fake core refuses a folder of this name.
     let error = hub
-        .create_workspace(repository.to_str().unwrap(), Some("refused"), Agent::Claude)
+        .create_workspace(
+            repository.to_str().unwrap(),
+            Some("refused"),
+            Agent::Claude,
+            None,
+        )
         .await
         .err()
         .unwrap();
@@ -191,7 +202,12 @@ async fn a_worktree_git_refuses_starts_no_chat() {
     let mut hub = hub_on(&source, Layout::default());
     hub.worktrees = Some(dir.path().join("worktrees"));
     let error = hub
-        .create_workspace(dir.path().to_str().unwrap(), Some("topic"), Agent::Claude)
+        .create_workspace(
+            dir.path().to_str().unwrap(),
+            Some("topic"),
+            Agent::Claude,
+            None,
+        )
         .await
         .err()
         .unwrap();

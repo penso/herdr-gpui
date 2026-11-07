@@ -51,7 +51,7 @@ cache=$(ldconfig -p)
 for library in libvulkan.so.1 libwayland-client.so.0; do
     grep -q "^[[:space:]]*$library " <<<"$cache" || { echo "missing dlopen target $library" >&2; exit 1; }
 done
-test -f /usr/share/applications/so.pen.herdr-gpui.desktop
+test -f /usr/share/applications/org.sheprd.Sheprd.desktop
 test -f /usr/share/icons/hicolor/scalable/apps/sheprd.svg
 test -f /usr/share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt
 '

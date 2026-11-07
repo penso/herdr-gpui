@@ -143,7 +143,11 @@ impl Sessions {
 
     fn follow(self: &Arc<Self>, name: &str, socket: PathBuf) -> std::io::Result<Session> {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));
-        let daemon = Daemon::start(sender, ConnectTarget::Socket(socket.clone()))?;
+        let daemon = Daemon::start(
+            sender,
+            ConnectTarget::Socket(socket.clone()),
+            Some(name.to_owned()),
+        )?;
         let mut changes = layout.clone();
         let sessions = Arc::downgrade(self);
         tokio::spawn(async move {
@@ -226,6 +230,18 @@ fn installation(socket: &Path) -> Option<&Path> {
         _ => dir,
     };
     (dir.file_name()? == "herdr").then_some(dir)
+}
+
+/// The session whose client socket `socket` is, by where it is in its
+/// installation: `default` for `DIR/herdr-client.sock`, `NAME` for
+/// `DIR/sessions/NAME/herdr-client.sock`; `None` outside an installation.
+pub(super) fn session_name(socket: &Path) -> Option<String> {
+    let dir = installation(socket)?;
+    let parent = socket.parent()?;
+    if parent == dir {
+        return Some("default".to_owned());
+    }
+    parent.file_name()?.to_str().map(str::to_owned)
 }
 
 /// The sessions to follow: those running, except the primary's, whose names
