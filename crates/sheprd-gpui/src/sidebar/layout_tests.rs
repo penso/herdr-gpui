@@ -689,6 +689,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         sidebar_visible: true,
         sidebar_start_pending: true,
         status_bar_visible: true,
+        menu_bar_visible: true,
         zen: Default::default(),
         device_filter: Default::default(),
         device_tag_filter: None,

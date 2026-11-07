@@ -484,9 +484,11 @@ impl SheprdWindow {
                             }),
                     ),
             )
-            // The in-window menu bar carries the window controls instead.
-            .when(!crate::menus::IN_WINDOW, |end| {
-                end.children(controls(false, window, &self.theme, |window, _| {
+            // The in-window menu bar carries the window controls instead,
+            // until it is hidden and they would leave with it.
+            .when(!self.menu_bar_shown(), |end| {
+                let enabled = crate::menus::IN_WINDOW && self.config.show_window_controls;
+                end.children(controls(enabled, window, &self.theme, |window, _| {
                     window.remove_window();
                 }))
             })

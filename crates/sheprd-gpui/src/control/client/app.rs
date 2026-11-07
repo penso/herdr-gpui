@@ -130,6 +130,7 @@ pub(super) fn ui(command: UiCommand, context: &Context) -> crate::Result<Output>
     let op = match command {
         UiCommand::Sidebar(switch) => UiOp::Sidebar { switch },
         UiCommand::StatusBar(switch) => UiOp::StatusBar { switch },
+        UiCommand::MenuBar(switch) => UiOp::MenuBar { switch },
         UiCommand::FontSize(size) => UiOp::FontSize { size },
         UiCommand::Panel(panel) => UiOp::Panel { panel },
     };

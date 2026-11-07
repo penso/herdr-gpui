@@ -261,6 +261,9 @@ pub(crate) struct SheprdWindow {
     /// UTF-16; `None` puts the caret after it.
     pub(crate) marked_selection: Option<std::ops::Range<usize>>,
     pub(crate) menu: menu::MenuState,
+    /// Starts as `config.show_menu_bar`; Toggle Menu Bar flips it for the
+    /// session, and a reload that changes the setting applies it again.
+    pub(crate) menu_bar_visible: bool,
     /// Removing worktrees whose pull request is merged, when enabled.
     pub(crate) merged_cleanup: crate::merged_cleanup::Cleanup,
     /// The mod panel's width; see `crate::mods::panel`.

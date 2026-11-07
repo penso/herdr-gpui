@@ -216,6 +216,9 @@ impl SheprdWindow {
                         if config.status_bar.show != this.config.status_bar.show {
                             this.status_bar_visible = config.status_bar.show;
                         }
+                        if config.show_menu_bar != this.config.show_menu_bar {
+                            this.menu_bar_visible = config.show_menu_bar;
+                        }
                         this.config = config.clone();
                         // i18n: data
                         if this.config.theme != "Follow Herdr" {
@@ -391,6 +394,7 @@ impl SheprdWindow {
                 | Command::OpenPx0
                 | Command::RemotePair
                 | Command::ToggleStatusBar
+                | Command::ToggleMenuBar
                 | Command::ToggleModPanel
                 | Command::FocusNextRegion
                 | Command::FocusPreviousRegion

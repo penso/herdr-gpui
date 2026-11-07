@@ -66,7 +66,7 @@ Every command accepts:
 | `window fullscreen [on\|off\|toggle]` | |
 | `window size [WIDTHxHEIGHT]` | Print or set the window's size; windows cannot be moved |
 | `window detach\|reconnect` | Detach from, or reconnect to, the selected host |
-| `ui sidebar\|statusbar [on\|off\|toggle]` | For this window and session |
+| `ui sidebar\|statusbar\|menubar [on\|off\|toggle]` | For this window and session. `menubar` is the in-window menu bar on Linux and Windows; macOS, whose menus are the system's, exits 8 |
 | `ui font-size +\|-\|reset\|POINTS` | The terminal font size for this session |
 | `ui panel workspaces\|overview\|pull-requests\|issues\|security\|automations\|usage` | Show an activity bar section: Workspaces with the sidebar expanded, Overview of what needs you on every host, the focused workspace's pull requests or issues across the window, the vulnerability reports and Dependabot alerts of your repositories, every host's automation scripts and runs, or every host's plan usage |
 | `run COMMAND` | Any app command by its `[keybindings]` name, as the palette runs it |

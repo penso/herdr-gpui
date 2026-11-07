@@ -110,6 +110,12 @@ fn validate(menu: &mut OwnedMenu, window: &Window, cx: &mut App) {
 }
 
 impl SheprdWindow {
+    /// Whether the window draws a menu bar in its own layout. macOS keeps its
+    /// menus in the system's bar, so its window never does.
+    pub(crate) fn menu_bar_shown(&self) -> bool {
+        super::IN_WINDOW && self.menu_bar_visible
+    }
+
     pub(crate) fn application_menu_shortcut(
         &mut self,
         event: &KeyDownEvent,

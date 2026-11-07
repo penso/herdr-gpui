@@ -722,6 +722,7 @@ impl SheprdWindow {
                 .filter(|info| match info.command {
                     Command::ClearPane => self.live.supports_pane_clear,
                     Command::EditScrollback => self.live.supports_edit_scrollback,
+                    Command::ToggleMenuBar => crate::menus::IN_WINDOW,
                     _ => true,
                 })
                 .map(|info| {

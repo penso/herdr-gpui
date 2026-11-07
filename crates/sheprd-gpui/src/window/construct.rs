@@ -81,6 +81,7 @@ impl SheprdWindow {
         } = appearance;
         // Effects run here in a fixed order, so the fields below can stay sorted.
         let configured_terminal_size = config.terminal.size;
+        let menu_bar_visible = config.show_menu_bar;
         let status_bar_visible = config.status_bar.show;
         let mut gui_config_diagnostic = crate::config_diagnostic::ConfigDiagnostic::default();
         gui_config_diagnostic.sync_own(config.diagnostic().as_deref());
@@ -228,6 +229,7 @@ impl SheprdWindow {
             marked: String::new(),
             marked_selection: None,
             menu,
+            menu_bar_visible,
             merged_cleanup: Default::default(),
             mod_panel_width: crate::panel_resize::MOD_PANEL,
             mods: Default::default(),

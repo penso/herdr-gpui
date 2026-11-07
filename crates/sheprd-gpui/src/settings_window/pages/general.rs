@@ -102,6 +102,18 @@ impl SettingsWindow {
                     cx,
                 )),
             )
+            .when(crate::menus::IN_WINDOW, |page| {
+                page.child(
+                    ui::row(theme, "general-menu-bar", fl!("settings-general-menu-bar"))
+                        .description(fl!("settings-general-menu-bar-description"))
+                        .switch(self.preference_toggle(
+                            "general-menu-bar-toggle",
+                            self.config.show_menu_bar,
+                            Preference::ShowMenuBar(!self.config.show_menu_bar),
+                            cx,
+                        )),
+                )
+            })
             .when(cfg!(target_os = "linux"), |page| {
                 page.child(
                     ui::row(

@@ -19,8 +19,10 @@ settings-general-language-system = System ({ $language })
 # tag (fr-CA); $language names, in itself, the language shown instead.
 settings-general-language-unavailable = { $tag }, shown in { $language }
 
+settings-general-menu-bar = Show menu bar
+settings-general-menu-bar-description = The row of menus at the top of the window. While hidden, F10 opens the menus over the window and Toggle Menu Bar brings the row back.
 settings-general-window-controls = Show window controls
-settings-general-window-controls-description = Draw minimize, maximize, and close buttons in the menu bar. Disable server-side decorations in your window manager to avoid a double bar.
+settings-general-window-controls-description = Draw minimize, maximize, and close buttons in the menu bar, or the title bar while the menu bar is hidden. Disable server-side decorations in your window manager to avoid a double bar.
 settings-general-chat-layout = Chat layout
 settings-general-chat-layout-description = How chat views draw messages and the composer: on a timeline, as bubbles like Claude's app, as Claude Code's terminal screen, as a document, as one card per turn, as Messages bubbles, or in one quiet column like iA Writer. The button in a chat's header steps through them too.
 settings-general-chat-launcher = Chat launcher
