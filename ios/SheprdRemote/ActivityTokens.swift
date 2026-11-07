@@ -114,16 +114,16 @@ final class ActivityTokens {
     /// starts before it hears.
     func genericChanged(to generic: Bool) async {
         if generic {
-            for activity in Activity<ChatActivityAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
+            for id in Activity<ChatActivityAttributes>.activities.map(\.id) {
+                await Self.end(id)
             }
         }
         await sync()
     }
 
-    /// Ends the activity with `id` at once. By id, since an activity this
-    /// actor holds cannot be sent to ActivityKit.
-    private static func end(_ id: String) async {
+    /// Ends the activity with `id` at once. By id and off this actor, since
+    /// an activity it holds cannot be sent to ActivityKit.
+    private nonisolated static func end(_ id: String) async {
         await Activity<ChatActivityAttributes>.activities.first { $0.id == id }?
             .end(nil, dismissalPolicy: .immediate)
     }
