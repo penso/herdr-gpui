@@ -58,7 +58,7 @@ pub(crate) struct Preview {
 }
 
 impl Preview {
-    pub(super) fn codes(&self) -> impl Iterator<Item = &Code> {
+    pub(in crate::chat) fn codes(&self) -> impl Iterator<Item = &Code> {
         std::iter::once(&self.code).chain(&self.before)
     }
 

@@ -674,6 +674,15 @@ fn visuals_ready(view: &SheprdWindow) -> Result<bool> {
                     });
                 }
             }
+            // Only opened previews ask for a grammar; plain ones never land.
+            Body::Tool(summary) => ids.extend(
+                summary
+                    .previews
+                    .iter()
+                    .flat_map(super::prepared::tool::Preview::codes)
+                    .map(|code| code.id)
+                    .filter(|id| pane.prepared.visuals.wants(*id)),
+            ),
             _ => {}
         }
     }

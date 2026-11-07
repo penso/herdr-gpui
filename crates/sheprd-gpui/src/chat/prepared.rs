@@ -166,7 +166,9 @@ pub(crate) enum Body {
 }
 
 impl Body {
-    fn visuals(&self) -> impl Iterator<Item = VisualId> + '_ {
+    /// What this body draws. A tool's previews only count when `opened`: a
+    /// folded card holds no slot of the budget message code shares.
+    fn visuals(&self, opened: bool) -> impl Iterator<Item = VisualId> + '_ {
         let (parts, images): (&[Part], &[VisualId]) = match self {
             Self::Message(parts) | Self::Answers { parts, .. } => (parts, &[]),
             Self::Summary(_) => (&[], &[]),
@@ -189,7 +191,7 @@ impl Body {
             .chain(images.iter().copied())
             .chain(
                 match self {
-                    Self::Tool(summary) => &summary.previews[..],
+                    Self::Tool(summary) if opened => &summary.previews[..],
                     _ => &[],
                 }
                 .iter()
@@ -260,7 +262,7 @@ impl Prepared {
     pub(crate) fn drawing(&self, visual: VisualId) -> impl Iterator<Item = EntryId> + '_ {
         self.bodies
             .iter()
-            .filter(move |(_, (_, body))| body.visuals().any(|id| id == visual))
+            .filter(move |(_, (_, body))| body.visuals(true).any(|id| id == visual))
             .map(|(id, _)| *id)
     }
 
@@ -351,8 +353,8 @@ impl Prepared {
         }
         let live: HashSet<VisualId> = self
             .bodies
-            .values()
-            .flat_map(|(_, body)| body.visuals())
+            .iter()
+            .flat_map(|(id, (_, body))| body.visuals(self.text.expanded().contains(id)))
             .collect();
         self.visuals.retain(&live);
     }
