@@ -29,7 +29,7 @@ const ACTION_WIDTH: f32 = 96.;
 const ISSUE_AUTHOR_WIDTH: f32 = 110.;
 const PULL_REQUEST_AUTHOR_WIDTH: f32 = 100.;
 /// What a title keeps before an author joins it beside an open item.
-const AUTHOR_TITLE_MIN: f32 = 280.;
+pub(super) const AUTHOR_TITLE_MIN: f32 = 280.;
 /// The gap between a row's cells, and its padding on either side.
 const CELL_GAP: f32 = 8.;
 const ROW_PADDING: f32 = 16.;
@@ -60,7 +60,7 @@ impl OrchestratorView {
     }
 
     /// The list width at which a row beside an open item fits its author.
-    fn author_fit(&self) -> f32 {
+    pub(super) fn author_fit(&self) -> f32 {
         let (cells, fixed) = match self.tab {
             // Age, run, title, author, and action.
             Tab::Issues => (5., 32. + 30. + ISSUE_AUTHOR_WIDTH + ACTION_WIDTH),
@@ -95,7 +95,7 @@ impl OrchestratorView {
     }
 
     /// Whether rows of several projects are listed, so each names its own.
-    fn listing_projects(&self) -> bool {
+    pub(super) fn listing_projects(&self) -> bool {
         self.projects_named().count() > 1 && self.projects.len() != 1
     }
 
@@ -488,6 +488,7 @@ impl OrchestratorView {
             .children(self.project_cell(&row))
             .child(
                 div()
+                    .debug_selector(|| "orchestrator-row-title".into())
                     .flex_1()
                     .min_w_0()
                     .flex()
@@ -589,6 +590,7 @@ impl OrchestratorView {
             .children(self.project_cell(&row))
             .child(
                 div()
+                    .debug_selector(|| "orchestrator-row-title".into())
                     .flex_1()
                     .min_w_0()
                     .flex()
