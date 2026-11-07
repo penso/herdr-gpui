@@ -129,3 +129,15 @@ struct PathFailureTests {
         #expect(summary.hasSuffix("after 1.2s") || summary.hasSuffix("after 1.3s"))
     }
 }
+
+struct RefusalTests {
+    @Test func aDaemonErrorReadsAsItsMessage() {
+        let body = #"{"error":"sheprd-acp was not found"}"#
+        #expect(Refusal.text(status: 503, body: body) == "sheprd-acp was not found")
+    }
+
+    @Test func anythingElseKeepsTheStatusAndBody() {
+        #expect(Refusal.text(status: 502, body: "Bad Gateway") == "The computer answered 502: Bad Gateway")
+        #expect(Refusal.text(status: 500, body: #"{"error":""}"#) == #"The computer answered 500: {"error":""}"#)
+    }
+}

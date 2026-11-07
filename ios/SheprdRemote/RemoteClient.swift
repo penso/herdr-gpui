@@ -104,7 +104,7 @@ enum RemoteError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case let .status(code, body): "The computer answered \(code): \(body)"
+        case let .status(code, body): Refusal.text(status: code, body: body)
         case .notHTTP: "The computer's answer was not HTTP."
         case .unreachable: "None of the computer's addresses answered."
         }
@@ -403,6 +403,7 @@ final class RemoteClient: Sendable {
         guard let http = response as? HTTPURLResponse else { throw RemoteError.notHTTP }
         guard (200..<300).contains(http.statusCode) else {
             let text = String(decoding: data.prefix(300), as: UTF8.self)
+            log.error("\(PathFailure.route(http.url), privacy: .public) refused with \(http.statusCode): \(text, privacy: .public)")
             throw RemoteError.status(http.statusCode, text)
         }
         return try JSONDecoder().decode(Answer.self, from: data)

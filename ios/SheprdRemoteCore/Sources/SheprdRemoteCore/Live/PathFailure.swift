@@ -21,6 +21,19 @@ public struct UnreportedFailures: Equatable, Sendable {
     }
 }
 
+/// What a computer said when it refused a call.
+public enum Refusal {
+    /// The daemon's `{"error": "..."}` as a sentence for the screen, else
+    /// the status with whatever came back.
+    public static func text(status: Int, body: String) -> String {
+        struct Answer: Decodable { let error: String }
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: Data(body.utf8)), !answer.error.isEmpty else {
+            return "The computer answered \(status): \(body)"
+        }
+        return answer.error
+    }
+}
+
 /// What a failed call says about the address it used, and how logs name it.
 public enum PathFailure {
     /// Path segments followed by an identifier, which logs leave out: a
