@@ -96,6 +96,9 @@ pub fn load_profiles(home: &Path) -> Vec<Profile> {
 /// untrusted data: anyone who can file an issue writes them, so they must
 /// not read as part of the instructions.
 pub fn built_in(item: &Item) -> String {
+    if item.key.source.provider == Provider::Beads {
+        return task(item);
+    }
     let nonce = nonce();
     let description = bounded(item.description.as_deref().unwrap_or(""), MAX_DESCRIPTION);
     format!(
@@ -106,6 +109,47 @@ pub fn built_in(item: &Item) -> String {
         fence(&item.title, &nonce),
         fence(description, &nonce),
         item.url.as_deref().unwrap_or(""),
+    )
+}
+
+/// The prompt for a bead: the task, and how to work it with `bd`. Beads
+/// stays the record of the work, so an agent reports through it, and only
+/// finished work closes the task.
+fn task(item: &Item) -> String {
+    let nonce = nonce();
+    let description = bounded(item.description.as_deref().unwrap_or(""), MAX_DESCRIPTION);
+    let acceptance = bounded(item.acceptance.as_deref().unwrap_or(""), MAX_DESCRIPTION);
+    // Outside the fences, so only what can be an id.
+    let blockers: Vec<&str> = item
+        .blocked_by
+        .iter()
+        .map(String::as_str)
+        .filter(|id| super::beads::valid_id(id))
+        .collect();
+    let blockers = match blockers.as_slice() {
+        [] => "none".to_owned(),
+        ids => ids.join(", "),
+    };
+    format!(
+        "Work on this Beads task.\n\nTask: {id}\nProject: {repository}\nTitle: {title}\nDescription: {description}\nAcceptance criteria: {acceptance}\nBlocked by: {blockers}\n\n{rules}",
+        id = item.identifier,
+        repository = item.key.source.repository,
+        title = fence(&item.title, &nonce),
+        description = fence(description, &nonce),
+        acceptance = fence(acceptance, &nonce),
+        rules = task_rules(item),
+    )
+}
+
+/// How an agent works a bead, whichever prompt it starts from.
+fn task_rules(item: &Item) -> String {
+    let id = &item.identifier;
+    format!(
+        "This task is already claimed for you with `bd update {id} --claim`.\n\
+         - First read it with `bd show {id}`, inspect its dependencies, and follow this project's agent instructions.\n\
+         - While you work, run `bd heartbeat {id}` every few minutes: the claim's lease expires otherwise.\n\
+         - When the acceptance criteria are met, close it with `bd close {id} --reason \"...\"`, giving a summary of the work and the validation evidence.\n\
+         - If you stop before that, leave it unfinished: do not close it, and say why with `bd comments add {id} \"...\"`."
     )
 }
 
@@ -140,6 +184,10 @@ pub fn compose(item: &Item, profile: Option<&Profile>, extra: &str) -> String {
         Some(profile) => render(&profile.template, item).trim().to_owned(),
         None => built_in(item),
     };
+    if profile.is_some() && item.key.source.provider == Provider::Beads {
+        prompt.push_str("\n\n");
+        prompt.push_str(&task_rules(item));
+    }
     push_extra(&mut prompt, extra);
     prompt
 }
@@ -270,6 +318,10 @@ fn issue_variable(name: &str, item: &Item, nonce: &str) -> Option<String> {
                 fence(description, nonce)
             }
         }
+        "issue_acceptance_criteria" => match item.acceptance.as_deref() {
+            Some(text) => fence(bounded(text, MAX_DESCRIPTION), nonce),
+            None => "(no acceptance criteria provided)".to_owned(),
+        },
         "issue_title" => inline_title(&item.title, "issue"),
         "issue_link" => item
             .url

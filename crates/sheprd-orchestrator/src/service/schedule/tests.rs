@@ -22,6 +22,8 @@ fn pull(number: u64, state: &str, head: &str, updated: DateTime<Utc>) -> Item {
         labels: Vec::new(),
         parent_id: None,
         blocked_by: Vec::new(),
+        assignee: None,
+        acceptance: None,
         priority: None,
         created_at: None,
         updated_at: Some(updated),

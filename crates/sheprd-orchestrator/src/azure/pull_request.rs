@@ -87,6 +87,8 @@ impl PullRequestNode {
             labels: self.labels.into_iter().map(|label| label.name).collect(),
             parent_id: None,
             blocked_by: Vec::new(),
+            assignee: None,
+            acceptance: None,
             priority: None,
             created_at: Some(self.creation_date),
             // The listing carries no update time.

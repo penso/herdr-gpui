@@ -128,6 +128,14 @@ Hovering a pane focuses it when the window is active and
 terminal input has keyboard focus. Held mouse buttons, modifiers, dragging,
 IME composition, menus, and terminal popups suppress hover focus.
 
+A tab with no name of its own shows its number. To tell agent sessions apart,
+turn on **Show agent titles on tabs** in **Settings > Tabs & panes > Layout**,
+or run `sheprd config set tab_labels.agent_title true`. An unnamed tab then
+shows its first agent's terminal title, cut after 28 columns. A tab you named
+keeps its name, a tab without an agent or a title keeps its number, and the
+rename and close dialogs keep the daemon's label. The phone keeps the
+daemon's label too.
+
 Normal launches restore the main windows left open at quit, including each
 window's size and screen position, using the current launch's connection options.
 Closing an individual window removes it from the saved set; closing the final
@@ -2454,8 +2462,8 @@ restart an agent already waiting on you counts as new once.
 
 ## Orchestrator
 
-The activity bar's **Pull requests** and **Issues** sections list, across the
-window, every repository the workspaces of every connected local or SSH host
+The activity bar's **Pull requests**, **Issues**, and **Tasks** sections list,
+across the window, every repository the workspaces of every connected local or SSH host
 hold: their GitHub issues and pull requests or GitLab issues, their
 [Beads](https://github.com/steveyegge/beads) issues when a main checkout has a
 `.beads` folder, and the agent runs dispatched for them. Folders outside Git
@@ -2486,6 +2494,31 @@ remote" when none of them has one.
   labels, state, and body, case-insensitively unless a word has a capital, and
   keeps a match's parents in view. **Start agent** on a row opens the dispatch
   dialog.
+- **Tasks** lists [Beads](https://github.com/steveyegge/beads) tasks alone,
+  across every project with a `.beads` folder, and shows on the bar only while
+  one is open. Each row has its project, status, assignee, and priority group,
+  and a lock while it is blocked. Besides the pills, **Filters** narrows by
+  status (which is also how closed tasks are listed), priority, and assignee.
+  A task's page shows who holds it, its acceptance criteria, and the tasks it
+  is tied to (parent, blockers, what it blocks, children), each opening its
+  own page, and **Open project** goes to the workspace holding it. Beads stays
+  the source of truth: tasks are read with `bd`, each sync (every minute while
+  the section shows, or on Refresh) picking up what `bd` or an agent changed.
+  Tasks are told apart by database and id, so projects with the same ids stay
+  separate. Worktrees of a repository, and projects whose `.beads/redirect`
+  names one `.beads` folder, list its tasks once. A project whose database
+  cannot be read shows its error and leaves the others listed. Creating and
+  editing tasks, and comments, are still done with `bd`.
+
+  **Start agent** claims the task with `bd update --claim` on its own host
+  first, so a task someone else holds starts nothing and the banner says who
+  holds it. The agent gets the task's id, description, and acceptance criteria,
+  with instructions to read its dependencies, follow the project's agent
+  instructions, keep its claim alive, and close it only with a summary and
+  validation evidence. A launch that fails gives back a claim it took, and
+  nothing ever marks a task finished for the agent. The task keeps its run,
+  whose page opens the agent's pane. Agents start on the database's own host,
+  so the dialog offers no other.
 - **Pull requests** is a table grouped by what each waits on: a review asked
   of you, your own to fix (changes requested or failing checks), those ready to
   merge, the rest, and recently closed or merged ones. Each row shows its

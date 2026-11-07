@@ -1,4 +1,4 @@
-//! The activity bar's Pull requests and Issues sections: one orchestrator
+//! The activity bar's Pull requests, Issues, and Tasks sections: one orchestrator
 //! view the window owns, listing every repository the connected hosts'
 //! workspaces hold, drawn across the window in place of its terminals on the
 //! list the section names. The menus and `sheprd orchestrator` open it
@@ -192,6 +192,7 @@ impl SheprdWindow {
 pub(crate) fn list_of(section: ActivityPanel) -> Option<List> {
     match section {
         ActivityPanel::Issues => Some(List::Issues),
+        ActivityPanel::Tasks => Some(List::Tasks),
         ActivityPanel::PullRequests => Some(List::PullRequests),
         ActivityPanel::Overview
         | ActivityPanel::Security

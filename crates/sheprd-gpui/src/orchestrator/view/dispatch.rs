@@ -7,7 +7,7 @@ use crate::{
     config::{corners, mix},
     i18n::{Localize, fl},
     orchestrator::{
-        Action, DispatchRequest, Item, Notice, SourceKey,
+        Action, DispatchRequest, Item, Notice, Provider, SourceKey,
         actions::valid_model,
         prompt::{self, MAX_EXTRA},
     },
@@ -538,6 +538,7 @@ impl OrchestratorView {
             .items
             .iter()
             .find(|item| item.key.canonical() == dialog.item);
+        let bead = item.is_some_and(|item| item.key.source.provider == Provider::Beads);
         let host = match self
             .target()
             .cloned()
@@ -687,14 +688,23 @@ impl OrchestratorView {
                     ),
             )
             .when_some(item, |el, item| el.child(item_line(look, item)))
+            .when(bead, |el| {
+                el.child(
+                    look.muted(fl!("orchestrator-claims-task"))
+                        .debug_selector(|| "orchestrator-claims-task".into()),
+                )
+            })
             .child(section(
                 fl!("orchestrator-section-prompt"),
                 segmented.into_any_element(),
             ))
             .child(section(fl!("orchestrator-section-agent"), tiles))
-            .when_some(self.render_hosts(dialog, cx), |el, hosts| {
-                el.child(section(fl!("orchestrator-section-host"), hosts))
-            })
+            // A bead's database stays on its own host, out of an agent's
+            // reach on any other.
+            .when_some(
+                (!bead).then(|| self.render_hosts(dialog, cx)).flatten(),
+                |el, hosts| el.child(section(fl!("orchestrator-section-host"), hosts)),
+            )
             .child(section(
                 fl!("orchestrator-section-model"),
                 field(&dialog.model).into_any_element(),

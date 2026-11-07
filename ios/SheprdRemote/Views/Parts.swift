@@ -9,17 +9,15 @@ struct AgentIcon: View {
     var size: CGFloat = 28
 
     private var look: (mark: String, tile: AnyShapeStyle, ink: Color) {
-        let name = (agent ?? "").lowercased()
-        let plain = AnyShapeStyle(.fill.secondary)
-        // Copilot before Pi: "copilot" holds "pi".
-        if name.contains("claude") { return ("claude", AnyShapeStyle(Color(red: 0xD9 / 255, green: 0x64 / 255, blue: 0x3A / 255)), .white) }
-        if name.contains("codex") { return ("codex", AnyShapeStyle(Color(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255)), .white) }
-        if name.contains("gemini") { return ("gemini", AnyShapeStyle(Color(red: 0x3B / 255, green: 0x7C / 255, blue: 0xF0 / 255)), .white) }
-        if name.contains("copilot") { return ("copilot", AnyShapeStyle(Color(red: 0x6E / 255, green: 0x40 / 255, blue: 0xC9 / 255)), .white) }
-        if name.contains("opencode") { return ("opencode", plain, .primary) }
-        if name.contains("amp") { return ("amp", plain, .primary) }
-        if name.contains("pi") { return ("pi", plain, .primary) }
-        return ("generic", plain, .primary)
+        let mark = AgentMark.named(agent)
+        let brand: [String: Color] = [
+            "claude": Color(red: 0xD9 / 255, green: 0x64 / 255, blue: 0x3A / 255),
+            "codex": Color(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255),
+            "gemini": Color(red: 0x3B / 255, green: 0x7C / 255, blue: 0xF0 / 255),
+            "copilot": Color(red: 0x6E / 255, green: 0x40 / 255, blue: 0xC9 / 255),
+        ]
+        guard let tile = brand[mark] else { return (mark, AnyShapeStyle(.fill.secondary), .primary) }
+        return (mark, AnyShapeStyle(tile), .white)
     }
 
     var body: some View {

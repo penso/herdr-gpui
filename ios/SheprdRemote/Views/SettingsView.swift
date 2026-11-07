@@ -62,6 +62,14 @@ struct SettingsView: View {
                     LabeledContent("Text Shortcuts", value: "\(model.shortcuts.shortcuts.count)")
                 }
             }
+            Section("Terminal") {
+                NavigationLink {
+                    TerminalKeysView()
+                } label: {
+                    let layout = model.termKeys.layout
+                    LabeledContent("Terminal Keys", value: "\(layout.top.count + layout.bottom.count)")
+                }
+            }
             Section {
                 if !ActivityAuthorizationInfo().areActivitiesEnabled {
                     Label("Live Activities are off for Sheprd. Turn them on in Settings.", systemImage: "exclamationmark.triangle")
