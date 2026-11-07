@@ -99,6 +99,8 @@ final class Fleet {
     /// Computers a report is on its way to, so only one task sends them.
     @ObservationIgnored private var reporting: Set<String> = []
     /// Commands sent to chats that have not come back yet.
+    /// Addresses named in a report, which the daemon cuts at 600 characters.
+    private static let failuresReported = 6
     let pending = PendingCommands()
     private var active = false
     let sessions: Sessions
@@ -529,6 +531,12 @@ final class Fleet {
             terms[PaneKey(device: device, pane: screen.pane)]?.apply(screen)
         case let .event(event):
             guard let pane = event.pane, let store = chats[PaneKey(device: device, pane: pane)] else { return }
+        case let .unreachable(failures):
+            // Kept for the computer's log, which shows only silence for
+            // this: nothing here reached it.
+            let line = "offline from \(Date.now.ISO8601Format()): " + failures.prefix(Self.failuresReported).joined(separator: "; ")
+            log.error("\(self.machines[index].computer.name, privacy: .public) \(line, privacy: .public)")
+            unreported[device, default: UnreportedFailures()].add(line)
             let before = store.diverged
             store.apply(event)
             pending.settle(store.key) { shown($0) }

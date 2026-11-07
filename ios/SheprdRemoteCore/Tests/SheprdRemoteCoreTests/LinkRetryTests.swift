@@ -46,3 +46,24 @@ struct LinkOutdatedTests {
         await link.stop()
     }
 }
+
+/// Each address's failure is kept once per outage, for the computer's log.
+struct LinkUnreachableTests {
+    @Test func goingOfflineSaysWhyEachAddressFailedOnce() async {
+        let computer = FakeComputer()
+        await computer.setPing("https://other", "AA:BB")
+        let origins = ["https://lan", "https://other"]
+        let link = ComputerLink(fingerprint: mac, origins: origins, io: await computer.io())
+        await link.start()
+        let first = await collect(link) { $0.contains { if case .status(.offline) = $0 { true } else { false } } }
+        let reports = first.compactMap { if case let .unreachable(failures) = $0 { failures } else { nil } }
+        #expect(reports.count == 1)
+        #expect(reports.first?.count == 2)
+        #expect(reports.first?.contains("https://other: another computer answered") == true)
+        #expect(reports.first?.contains { $0.hasPrefix("https://lan: ") } == true)
+        await link.networkChanged()
+        let retry = await collect(link) { $0.contains { if case .status(.offline) = $0 { true } else { false } } }
+        #expect(!retry.contains { if case .unreachable = $0 { true } else { false } })
+        await link.stop()
+    }
+}

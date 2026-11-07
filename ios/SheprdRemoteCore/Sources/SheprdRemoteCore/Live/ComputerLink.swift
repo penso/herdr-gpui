@@ -18,6 +18,9 @@ public enum LinkStatus: Hashable, Sendable {
 public enum LinkUpdate: Hashable, Sendable {
     case status(LinkStatus)
     case event(LiveEvent)
+    /// Why each address failed, once as the link goes offline: the status
+    /// keeps a short reason for the screen, and a retry says the same again.
+    case unreachable([String])
 }
 
 /// Failures the I/O closures report that change what the link does next.
@@ -173,7 +176,9 @@ public actor ComputerLink {
         while !Task.isCancelled {
             if !offline { continuation.yield(.status(.connecting)) }
             do {
-                guard let origin = await race() else {
+                let race = await race()
+                guard let origin = race.found else {
+                    if !offline { continuation.yield(.unreachable(race.failures)) }
                     throw Offline(reason: "No address answered (\(origins.count) tried)")
                 }
                 let token = try await io.session(origin)
@@ -261,27 +266,46 @@ public actor ComputerLink {
     }
 
     /// The first address that answers as this computer, trying them in
-    /// order with a short head start each.
-    private func race() async -> String? {
+    /// order with a short head start each, and how the others failed.
+    private func race() async -> (found: String?, failures: [String]) {
         let candidates = origins
         let io = io
         let fingerprint = fingerprint
-        return await withTaskGroup(of: String?.self) { group in
+        return await withTaskGroup(of: Probe.self) { group in
             for (index, origin) in candidates.enumerated() {
                 group.addTask {
                     if index > 0 { try? await io.sleep(Self.stagger * index) }
-                    guard !Task.isCancelled, let answer = try? await io.ping(origin) else { return nil }
-                    return Self.normalized(answer) == fingerprint ? origin : nil
+                    guard !Task.isCancelled else { return .failed("\(origin): cancelled") }
+                    let started = ContinuousClock.now
+                    do {
+                        let answer = try await io.ping(origin)
+                        guard Self.normalized(answer) == fingerprint else {
+                            return .failed("\(origin): another computer answered")
+                        }
+                        return .found(origin)
+                    } catch {
+                        let summary = PathFailure.summary(error, after: ContinuousClock.now - started)
+                        return .failed("\(origin): \(summary)")
+                    }
                 }
             }
-            for await found in group {
-                if let found {
+            var failures: [String] = []
+            for await probe in group {
+                switch probe {
+                case let .found(origin):
                     group.cancelAll()
-                    return found
+                    return (origin, failures)
+                case let .failed(failure):
+                    failures.append(failure)
                 }
             }
-            return nil
+            return (nil, failures)
         }
+    }
+
+    private enum Probe: Sendable {
+        case found(String)
+        case failed(String)
     }
 
     /// Waits 1, 1.5, 2.25… seconds up to the cap, or until woken.
