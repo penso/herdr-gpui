@@ -80,6 +80,7 @@ fn waiting_scrolls_merge_one_way_and_keep_their_order() {
     let attach = TerminalAttach {
         shared: Arc::new(pending),
         worker: None,
+        _bridge: None,
     };
     attach.scroll(AttachScrollDirection::Up, 3).unwrap();
     attach.scroll(AttachScrollDirection::Up, 2).unwrap();

@@ -13,8 +13,19 @@ fn plan() -> Plan {
         },
         herdr_socket: None,
         chat_dir: None,
+        wsl_catalog: None,
         core_endpoint: Default::default(),
     }
+}
+
+#[test]
+fn the_daemon_reads_the_wsl_catalog_this_app_resolved() {
+    let mut located = plan();
+    located.wsl_catalog = Some("/state/herdr/client/wsl.json".into());
+    let args = located.args();
+    let flag = args.iter().position(|arg| arg == "--wsl-catalog").unwrap();
+    assert_eq!(args[flag + 1], "/state/herdr/client/wsl.json");
+    assert!(!plan().args().iter().any(|arg| arg == "--wsl-catalog"));
 }
 
 #[test]

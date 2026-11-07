@@ -25,7 +25,7 @@ use sheprd_client::ConnectTarget;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex, PoisonError, atomic::AtomicBool},
     time::Duration,
 };
 use tokio::sync::{broadcast, watch};
@@ -64,6 +64,8 @@ pub enum Error {
     UnknownChat,
     #[error("no such workspace")]
     UnknownWorkspace,
+    #[error("chats cannot start inside WSL from here; open a terminal tab and start it there")]
+    WslChat,
     // keep-sorted end
 }
 
@@ -96,11 +98,12 @@ pub(crate) struct Hub {
 impl Hub {
     /// Connects to the local daemon at `socket` (discovered when `None`)
     /// and every other running Herdr 1 session of this user, and keeps chat
-    /// connections, found in `chat_dir`, in step with their layout. Must run
-    /// inside a Tokio runtime.
+    /// connections, found in `chat_dir`, in step with their layout, and the
+    /// distributions saved in `wsl_catalog`. Must run inside a Tokio runtime.
     pub(crate) fn start(
         socket: Option<PathBuf>,
         chat_dir: Option<PathBuf>,
+        wsl_catalog: Option<PathBuf>,
         core_endpoint: crate::core_target::CoreTarget,
         state_dir: &Path,
     ) -> std::io::Result<Arc<Self>> {
@@ -124,7 +127,7 @@ impl Hub {
             daemon_layout.clone(),
             core_layout,
         ));
-        let sessions = sessions::Sessions::start(primary_socket);
+        let sessions = sessions::Sessions::start(primary_socket, wsl_catalog);
         tokio::spawn(sessions::merge_sources(
             sender,
             base_layout,
@@ -264,6 +267,11 @@ impl Hub {
         agent: Agent,
         cwd: Option<&str>,
     ) -> Result<String> {
+        // The program here is this computer's: it cannot run in a
+        // distribution, and its endpoint could not be reached there.
+        if sessions::in_wsl(workspace) {
+            return Err(Error::WslChat);
+        }
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         let layout = self.layout();
         let folder = layout
@@ -310,6 +318,11 @@ impl Hub {
         agent: Agent,
         session: Option<&str>,
     ) -> Result<CreatedWorkspace> {
+        // As in [`Hub::start_chat`]: the program here cannot run in a
+        // distribution, and a core would open the chat on this computer.
+        if session.is_some_and(sessions::is_wsl) {
+            return Err(Error::WslChat);
+        }
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         if let Some(core) = self.active_core() {
             let (cwd, program) = (cwd.to_owned(), program.to_owned());
@@ -390,8 +403,12 @@ impl Hub {
 
     /// A new tab on the core for `workspace`'s folder, answered as Herdr
     /// answers one, once listed so a phone can open it. `None` when no
-    /// core answers and the tab is Herdr 1's to make.
+    /// core answers, or `workspace` is in WSL, and the tab is Herdr 1's to make.
     pub(crate) async fn new_core_tab(&self, workspace: &str) -> Result<Option<Value>> {
+        // A core on this computer knows neither a distribution nor its paths.
+        if sessions::in_wsl(workspace) {
+            return Ok(None);
+        }
         let Some(core) = self.active_core() else {
             return Ok(None);
         };
@@ -447,6 +464,27 @@ impl Hub {
         let mut answer = session.api.call(method, params).await?;
         sessions::prefix_answer(&mut answer, &session.name);
         Ok(answer)
+    }
+
+    /// Where `path`, a file on this computer, is for the program in `pane`
+    /// when that pane is in a WSL distribution; `None` when it is not, and
+    /// the path reads the same there.
+    pub(crate) async fn wsl_path(&self, pane: &str, path: &Path) -> Result<Option<String>> {
+        if !sessions::in_wsl(pane) {
+            return Ok(None);
+        }
+        let (name, _) = sessions::owner(&json!({"pane_id": pane}))?.ok_or(Error::Response)?;
+        let session = self.sessions.get(&name).ok_or(Error::NotConnected)?;
+        let ConnectTarget::Wsl { distro, .. } = session.api.target() else {
+            return Ok(None);
+        };
+        let path = path.to_owned();
+        let mut paths = tokio::task::spawn_blocking(move || {
+            sheprd_client::wsl_paths(&distro, &[path], &AtomicBool::new(false))
+        })
+        .await
+        .map_err(|_| Error::NotConnected)??;
+        paths.pop().map(Some).ok_or(Error::Response)
     }
 
     /// The named session a request is for, with its ids as that session

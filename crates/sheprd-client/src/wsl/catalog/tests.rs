@@ -13,6 +13,13 @@ fn a_missing_file_is_an_empty_list() {
 }
 
 #[test]
+fn hosts_load_from_the_file_named() {
+    let path = scratch("named");
+    add(&path, "Ubuntu", "default").unwrap();
+    assert_eq!(load_wsl_hosts_at(&path).unwrap().hosts.len(), 1);
+}
+
+#[test]
 fn hosts_are_added_once_selected_and_removed_with_their_selection() {
     let path = scratch("lifecycle");
     add(&path, "Ubuntu", "default").unwrap();

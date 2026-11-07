@@ -62,37 +62,32 @@ impl ApiMethod {
     }
 }
 
-/// Where the API socket is: beside the client socket the daemon follows.
+/// Where the API socket is: beside the client socket the daemon follows, or
+/// behind Herdr's API bridge in a WSL distribution.
 #[derive(Clone, Debug)]
 pub(crate) struct Api {
-    /// The client socket Sheprd resolved; `None` discovers it.
-    client_socket: Option<PathBuf>,
+    target: ConnectTarget,
 }
 
 impl Api {
+    /// The API of the daemon at `client_socket`; `None` discovers it.
     pub(crate) fn new(client_socket: Option<PathBuf>) -> Self {
-        Self { client_socket }
+        Self::at(client_socket.map_or(ConnectTarget::Local, ConnectTarget::Socket))
     }
 
-    /// The client socket itself, where a direct terminal attach connects.
+    pub(crate) fn at(target: ConnectTarget) -> Self {
+        Self { target }
+    }
+
+    /// Where a direct terminal attach connects.
     pub(crate) fn target(&self) -> ConnectTarget {
-        self.client_socket
-            .clone()
-            .map_or(ConnectTarget::Local, ConnectTarget::Socket)
-    }
-
-    fn path(&self) -> Result<PathBuf> {
-        let client = match &self.client_socket {
-            Some(path) => path.clone(),
-            None => ConnectTarget::Local.socket_path()?,
-        };
-        api_socket(&client).ok_or(Error::NotConnected)
+        self.target.clone()
     }
 
     /// Calls `method` and returns its `result`. Runs on the blocking pool.
     pub(crate) async fn call(&self, method: ApiMethod, params: Value) -> Result<Value> {
-        let path = self.path()?;
-        tokio::task::spawn_blocking(move || call(&path, method, &params))
+        let target = self.target.clone();
+        tokio::task::spawn_blocking(move || call(&target, method, &params))
             .await
             .map_err(|_| Error::NotConnected)?
     }
@@ -107,8 +102,18 @@ pub(crate) fn api_socket(client: &Path) -> Option<PathBuf> {
 }
 
 /// One request on its own connection. Blocking.
-fn call(path: &Path, method: ApiMethod, params: &Value) -> Result<Value> {
+fn call(target: &ConnectTarget, method: ApiMethod, params: &Value) -> Result<Value> {
+    if let ConnectTarget::Wsl { distro, session } = target {
+        let mut bridge =
+            sheprd_client::wsl_api_bridge(distro, session).map_err(|_| Error::NotConnected)?;
+        return exchange(bridge.stream_mut(), method, params);
+    }
+    let path = api_socket(&target.socket_path()?).ok_or(Error::NotConnected)?;
     let mut stream = Stream::connect(path).map_err(|_| Error::NotConnected)?;
+    exchange(&mut stream, method, params)
+}
+
+fn exchange(stream: &mut Stream, method: ApiMethod, params: &Value) -> Result<Value> {
     stream
         .set_read_timeout(Some(TIMEOUT))
         .map_err(|_| Error::NotConnected)?;
@@ -119,12 +124,16 @@ fn call(path: &Path, method: ApiMethod, params: &Value) -> Result<Value> {
         .and_then(|()| stream.flush())
         .map_err(|_| Error::NotConnected)?;
     let mut answer = String::new();
-    BufReader::new((&mut stream).take(MAX_ANSWER))
+    BufReader::new(stream.take(MAX_ANSWER))
         .read_line(&mut answer)
         .map_err(|error| match error.kind() {
             std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => Error::Timeout,
             _ => Error::NotConnected,
         })?;
+    // A bridge that found no Herdr to run closes without a word.
+    if answer.is_empty() {
+        return Err(Error::NotConnected);
+    }
     let answer: Value = serde_json::from_str(&answer).map_err(|_| Error::Response)?;
     result(answer)
 }

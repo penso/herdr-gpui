@@ -19,7 +19,7 @@ fn args(list: &[&str]) -> Vec<OsString> {
 
 fn serve(list: &[&str]) -> Options {
     match parse(args(list)).unwrap() {
-        Invocation::Serve(options) => options,
+        Invocation::Serve(options) => *options,
         other => panic!("expected serve, got {other:?}"),
     }
 }
@@ -146,12 +146,15 @@ fn serve_takes_the_daemon_and_chat_locations_herdr_ui_resolved() {
         "/h/herdr-client.sock",
         "--chat-dir",
         "/h/acp",
+        "--wsl-catalog",
+        "/h/wsl.json",
     ]);
     assert_eq!(
         options.herdr_socket,
         Some(PathBuf::from("/h/herdr-client.sock"))
     );
     assert_eq!(options.chat_dir, Some(PathBuf::from("/h/acp")));
+    assert_eq!(options.wsl_catalog, Some(PathBuf::from("/h/wsl.json")));
     assert_eq!(
         parse(args(&["serve", "--state-dir", "/s", "--chat-dir"])),
         Err(ParseError::Missing("--chat-dir"))

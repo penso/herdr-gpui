@@ -44,12 +44,13 @@ pub struct Plan {
     pub program: PathBuf,
     pub state_dir: PathBuf,
     pub config: RemoteConfig,
-    /// The Herdr daemon's client socket and the chat socket folder as this
-    /// app resolved them, passed on because a service manager's
-    /// environment may lack the shell's `XDG_CONFIG_HOME` or
-    /// `XDG_STATE_HOME`.
+    /// The Herdr daemon's client socket, the chat socket folder, and on
+    /// Windows the saved WSL distributions as this app resolved them, passed
+    /// on because a service manager's environment may lack the shell's
+    /// `XDG_CONFIG_HOME` or `XDG_STATE_HOME`.
     pub herdr_socket: Option<PathBuf>,
     pub chat_dir: Option<PathBuf>,
+    pub wsl_catalog: Option<PathBuf>,
     /// The core endpoint or setup failure resolved in the desktop process.
     pub core_endpoint: CoreTarget,
 }
@@ -57,8 +58,8 @@ pub struct Plan {
 impl Plan {
     /// `serve --state-dir DIR --port N --bind ADDR [--cert F --key F]
     /// --privacy generic|excerpt --device-idle-days N [--live-activities
-    /// generic] [--herdr-socket P] [--chat-dir D] [--core-socket P
-    /// --core-session S]`.
+    /// generic] [--herdr-socket P] [--chat-dir D] [--wsl-catalog F]
+    /// [--core-socket P --core-session S]`.
     pub fn args(&self) -> Vec<OsString> {
         let config = &self.config;
         let mut args: Vec<OsString> = vec![
@@ -97,6 +98,9 @@ impl Plan {
         }
         if let Some(dir) = &self.chat_dir {
             args.extend(["--chat-dir".into(), dir.clone().into()]);
+        }
+        if let Some(catalog) = &self.wsl_catalog {
+            args.extend(["--wsl-catalog".into(), catalog.clone().into()]);
         }
         match &self.core_endpoint {
             CoreTarget::Endpoint(endpoint) => args.extend([
@@ -424,6 +428,7 @@ fn write_definition(
         config: config.clone(),
         herdr_socket: sheprd_client::ConnectTarget::Local.socket_path().ok(),
         chat_dir: sheprd_chat_protocol::endpoint_dir(),
+        wsl_catalog: cfg!(windows).then(|| sheprd_client::wsl_hosts_path(false)),
         core_endpoint: CoreTarget::resolved(core_endpoint),
     };
     let text = host.manager.text(&plan)?;

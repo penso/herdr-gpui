@@ -6,7 +6,9 @@
 //!
 //! Every `wsl.exe` call is bounded: a distribution waiting on a first-run prompt
 //! or a pending update makes `wsl.exe` print nothing and never exit.
-use crate::{Result, session_socket};
+#[cfg(any(windows, test))]
+use crate::ssh::{CANDIDATES, quote};
+use crate::{Result, session_socket, ssh::Bridge};
 #[cfg(windows)]
 use crate::{
     limits::POLL,
@@ -170,6 +172,22 @@ pub fn list_distros() -> Result<Vec<String>> {
     Err(Error::Unsupported.into())
 }
 
+/// The distributions running now. Asking boots none of them. Blocks for at
+/// most `LIST_TIMEOUT`: call it from a background thread.
+#[cfg(windows)]
+pub fn list_running_distros() -> Result<Vec<String>> {
+    let mut command = wsl_exe();
+    command.args(["--list", "--running", "--quiet"]);
+    // With none running `wsl.exe` fails with a message: an empty list.
+    let (_, output) = ssh::run(&mut command, LIST_TIMEOUT, || false).map_err(wsl_error)?;
+    Ok(parse_distro_list(&output))
+}
+
+#[cfg(not(windows))]
+pub fn list_running_distros() -> Result<Vec<String>> {
+    Err(Error::Unsupported.into())
+}
+
 /// What a distribution offers for `session`, learned without installing,
 /// upgrading, or starting anything beyond the distribution itself. Blocks for
 /// at most the probe timeout: call it from a background thread.
@@ -239,19 +257,7 @@ pub(crate) fn connect(
     stop: &AtomicBool,
 ) -> Result<(Stream, ChildGuard)> {
     validate(distro, session)?;
-    let (mut stream, stdin, stdout) = Stream::child()?;
-    stream.set_read_timeout(Some(POLL))?;
-    stream.set_write_timeout(Some(Duration::from_secs(1)))?;
-    let mut command = command(distro, &ssh::bridge_script(session));
-    command
-        .stdin(stdin)
-        .stdout(stdout)
-        // Distribution diagnostics are unbounded and may carry secrets.
-        .stderr(Stdio::null());
-    let child = ChildGuard(command.spawn()?);
-    // The command still owns the child's ends of the pipes; while it lives,
-    // a bridge that exits early never reads as closed, only as timed out.
-    drop(command);
+    let (mut stream, child) = spawn(command(distro, &ssh::bridge_script(session)))?;
     ssh::handshake(&mut stream, stop).map_err(wsl_error)?;
     Ok((stream, child))
 }
@@ -264,6 +270,81 @@ pub(crate) fn connect(
 ) -> Result<(crate::Stream, crate::ssh::ChildGuard)> {
     validate(distro, session)?;
     Err(Error::Unsupported.into())
+}
+
+/// [`connect`] for a client that sends no keepalives, such as a direct
+/// terminal attach, which an idle-timeout bridge would close while the
+/// terminal is quiet.
+#[cfg(windows)]
+pub(crate) fn connect_quiet(
+    distro: &str,
+    session: &str,
+    stop: &AtomicBool,
+) -> Result<(Stream, ChildGuard)> {
+    validate(distro, session)?;
+    let (mut stream, child) = spawn(command(distro, &ssh::bridge_script(session)))?;
+    ssh::handshake_quiet(&mut stream, stop).map_err(wsl_error)?;
+    Ok((stream, child))
+}
+
+#[cfg(not(windows))]
+pub(crate) fn connect_quiet(
+    distro: &str,
+    session: &str,
+    _stop: &AtomicBool,
+) -> Result<(crate::Stream, crate::ssh::ChildGuard)> {
+    validate(distro, session)?;
+    Err(Error::Unsupported.into())
+}
+
+/// Herdr's API socket for `session` inside `distro`, over the child's streams.
+/// One bridge carries one connection, as the socket itself does. Unlike the
+/// client bridge it starts no server: a stopped session simply does not answer.
+#[cfg(windows)]
+pub fn wsl_api_bridge(distro: &str, session: &str) -> Result<Bridge> {
+    validate(distro, session)?;
+    let (stream, child) = spawn(command(distro, &api_bridge_script(session)))?;
+    Ok(Bridge { stream, child })
+}
+
+#[cfg(not(windows))]
+pub fn wsl_api_bridge(distro: &str, session: &str) -> Result<Bridge> {
+    validate(distro, session)?;
+    Err(Error::Unsupported.into())
+}
+
+/// The first Herdr installed that has an API bridge, run for `session`.
+#[cfg(any(windows, test))]
+pub(crate) fn api_bridge_script(session: &str) -> String {
+    format!(
+        r#"{CANDIDATES}
+    if [ -n "$path" ] && [ -x "$path" ]; then
+        capability=$("$path" --session {session} remote-api-bridge --check </dev/null 2>/dev/null) || continue
+        [ "$capability" = herdr-api-bridge-v1 ] || continue
+        exec "$path" --session {session} remote-api-bridge
+    fi
+done
+exit 127"#,
+        session = quote(session)
+    )
+}
+
+/// Starts `command` on a stream of its own.
+#[cfg(windows)]
+fn spawn(mut command: Command) -> Result<(Stream, ChildGuard)> {
+    let (mut stream, stdin, stdout) = Stream::child()?;
+    stream.set_read_timeout(Some(POLL))?;
+    stream.set_write_timeout(Some(Duration::from_secs(1)))?;
+    command
+        .stdin(stdin)
+        .stdout(stdout)
+        // Distribution diagnostics are unbounded and may carry secrets.
+        .stderr(Stdio::null());
+    let child = ChildGuard(command.spawn()?);
+    // The command still owns the child's ends of the pipes; while it lives,
+    // a bridge that exits early never reads as closed, only as timed out.
+    drop(command);
+    Ok((stream, child))
 }
 
 /// The shared bridge and runner report SSH failures; say WSL instead, since the
@@ -281,7 +362,8 @@ mod catalog;
 mod error;
 mod paths;
 pub use catalog::{
-    WslHost, WslHosts, add_wsl_host, load_wsl_hosts, remove_wsl_host, store_wsl_selection,
+    WslHost, WslHosts, add_wsl_host, load_wsl_hosts, load_wsl_hosts_at, remove_wsl_host,
+    store_wsl_selection, wsl_hosts_path,
 };
 pub use error::Error;
 pub use paths::wsl_paths;

@@ -49,3 +49,42 @@ fn a_shell_command_needs_windows() {
         Err(crate::Error::Wsl(Error::Unsupported))
     ));
 }
+
+#[test]
+fn the_api_bridge_checks_each_herdr_and_quotes_the_session() {
+    let script = api_bridge_script("work's");
+    let check = script
+        .find("--session 'work'\\''s' remote-api-bridge --check")
+        .unwrap();
+    let run = script
+        .find("exec \"$path\" --session 'work'\\''s' remote-api-bridge\n")
+        .unwrap();
+    // A Herdr too old for the bridge is skipped, never run.
+    assert!(check < run);
+    assert!(script.contains("herdr-api-bridge-v1"));
+}
+
+#[test]
+fn the_api_bridge_refuses_what_a_distribution_or_session_cannot_be() {
+    assert!(matches!(
+        wsl_api_bridge("a;b", "default"),
+        Err(crate::Error::Wsl(Error::InvalidDistro))
+    ));
+    assert!(matches!(
+        wsl_api_bridge("Ubuntu", "a b"),
+        Err(crate::Error::InvalidSession)
+    ));
+}
+
+#[cfg(not(windows))]
+#[test]
+fn the_api_bridge_needs_windows() {
+    assert!(matches!(
+        wsl_api_bridge("Ubuntu", "default"),
+        Err(crate::Error::Wsl(Error::Unsupported))
+    ));
+    assert!(matches!(
+        list_running_distros(),
+        Err(crate::Error::Wsl(Error::Unsupported))
+    ));
+}

@@ -203,6 +203,14 @@ fn a_pasted_picture_is_typed_as_a_dropped_file() {
     );
 }
 
+#[test]
+fn a_picture_for_a_distribution_is_escaped_for_its_shell_on_any_computer() {
+    assert_eq!(
+        crate::web::terminal::dropped_unix_path("/mnt/c/Users/me/a b.png"),
+        r"/mnt/c/Users/me/a\ b.png "
+    );
+}
+
 #[tokio::test]
 async fn pictures_reach_only_terminal_panes() {
     let dir = tempfile::tempdir().unwrap();
