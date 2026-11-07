@@ -102,6 +102,10 @@ and nothing goes through your phone.
      computer's page from that tab.
    - `-syncBar waiting|failed` shows the sync bar as if a change were on
      its way or had failed.
+   - `-voiceSay TEXT` runs a spoken command as if it were heard, since the
+     simulator has no microphone, and `-voiceConfirm YES` then presses Start
+     which creates what the card shows. Run it
+     against a sandboxed Herdr, not your own.
    - With `-openLink`, `-session YES` opens the chat's session sheet and
      `-draft TEXT` types into its composer (`-draft /` lists the slash
      commands).
@@ -111,6 +115,33 @@ and nothing goes through your phone.
      (`xcrun simctl get_app_container DEVICE so.pen.herdr.remote group.so.pen.herdr.remote`).
    - Avoid `simctl openurl`: its confirmation alert needs a tap, and it
      keeps the app inactive until the simulator restarts.
+
+## Voice commands
+
+The waveform button on Home, the Talk to Sheprd Control (for the Action
+button), and Siri open a sheet that listens for a command, such as "new
+worktree on studio about the login bug, and ask Claude to fix it". Commands
+are read as English unless Settings > Voice > Use Phone Language is on, which
+is experimental: only the model reads those, and it cannot stop or answer a
+chat. They can refer back ("stop it", "same thing on the mini"), name several
+computers ("on every host"), and reach agents in terminal tabs, which take
+pasted text and Escape but show no structured questions. How long the app
+waits for more words depends on what was said (`VoiceEndpoint`). Confirm by
+Voice reads the plan aloud and takes a plain yes, for a new worktree only.
+
+| Step | Where | What |
+| --- | --- | --- |
+| Hear | `SheprdRemote/Voice/VoiceListener.swift` | `DictationTranscriber` on the phone, primed with the fleet's names |
+| Read | `SheprdRemoteCore/.../Voice/VoiceParser.swift` | Rules, on every word, so the card fills in during the sentence |
+| Read what is left | `VoiceModel.swift` | The on-device model, only for sentences the rules cannot place; its schema lists only what exists |
+| Check | `VoiceDraft.adopting` | A name counts only if it was heard, and a task only if the words are the speaker's own. The model cannot stop a chat or answer a question |
+| Plan | `VoicePlan.swift` | Fills in what was not said and labels it. Something named that does not exist becomes a question, never a substitute |
+| Confirm | `SheprdRemote/Views/VoiceSheet.swift` | The card is the request. Starting an agent, sending, stopping, and answering take a tap on Start |
+
+`VOICE_EVAL=1 swift test --filter VoiceEvalTests` scores every sentence in
+`Fixtures/voice` against the real model, which needs Apple Intelligence on the
+Mac. Add new phrasing to `heldout2.json` only after checking it fails or
+passes untouched: a set the rules were tuned on stops measuring anything.
 
 ## Sign with your own team
 

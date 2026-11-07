@@ -1,0 +1,6 @@
+[
+{"u":"Create a work tree in sheprd on studio with Claude","action":"new_workspace","computer":"studio","project":"sheprd","agent":"claude"},
+{"u":"Create a work tree in Shepherd on studio with Claude","action":"new_workspace","computer":"studio","project":"sheprd","agent":"claude"},
+{"u":"Start Codex and moltis on build-01 asking it to update her","action":"new_workspace","computer":"build-01","project":"moltis","agent":"codex","task":"update her"},
+{"u":"Create a work tree on studio about the login, redirect fog and spin up Claude asking it to fix the redirect loop after the OAuth callback returns.","action":"new_workspace","computer":"studio","agent":"claude","task":"fix the redirect loop after the OAuth callback returns"}
+]
