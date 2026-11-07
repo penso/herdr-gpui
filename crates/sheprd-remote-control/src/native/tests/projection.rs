@@ -39,6 +39,7 @@ fn project(summaries: HashMap<String, Summary>, pull_requests: &PullRequests) ->
         load: None,
         summaries,
         pull_requests,
+        version: "20261106.1",
     })
 }
 
