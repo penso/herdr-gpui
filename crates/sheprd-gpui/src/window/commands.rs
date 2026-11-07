@@ -585,6 +585,10 @@ impl SheprdWindow {
                 cx.notify();
                 return;
             }
+            Command::TogglePassThrough => {
+                self.toggle_pass_through(cx);
+                return;
+            }
             Command::ToggleZenMode => {
                 self.toggle_zen(window, cx);
                 return;

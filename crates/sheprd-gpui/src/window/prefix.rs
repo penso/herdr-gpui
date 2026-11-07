@@ -18,7 +18,7 @@ use sheprd_client::protocol::ClientShellCommandAction;
 mod shifted_keys;
 
 pub(crate) use shifted_keys::KeyChars;
-use shifted_keys::Typed;
+pub(super) use shifted_keys::Typed;
 pub(super) use shifted_keys::current_layout;
 
 /// What a keystroke is bound to here.
@@ -61,6 +61,10 @@ impl SheprdWindow {
     }
 
     fn prefix_keystroke(&mut self, typed: &Typed<'_>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.pass_through {
+            self.pass_through_keystroke(typed, window, cx);
+            return;
+        }
         if self.resize_mode {
             self.resize_keystroke(typed, window, cx);
             return;

@@ -1,4 +1,6 @@
 use super::*;
+use serde_json::json;
+use sheprd_client::{Method, protocol::ClientShellSnapshot};
 
 fn snapshot() -> ClientShellSnapshot {
     serde_json::from_str(include_str!(
@@ -99,6 +101,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (FocusNextRegion, &["cmd-f6"]),
         (FocusPreviousRegion, &["cmd-shift-f6"]),
         (ToggleZenMode, &["ctrl-cmd-z"]),
+        (TogglePassThrough, &["ctrl-cmd-p"]),
         (DevicesOverview, &[]),
         (NewCoreTerminal, &[]),
         (MirrorCorePane, &[]),
@@ -196,6 +199,7 @@ fn gui_commands_never_send_daemon_requests() {
         Command::ToggleSidebar,
         Command::ToggleStatusBar,
         Command::ToggleZenMode,
+        Command::TogglePassThrough,
         Command::IncreaseFontSize,
         Command::DecreaseFontSize,
         Command::ResetFontSize,

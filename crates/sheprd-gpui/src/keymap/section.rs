@@ -112,6 +112,7 @@ impl Section {
             | Command::FocusNextRegion
             | Command::FocusPreviousRegion
             | Command::ToggleZenMode
+            | Command::TogglePassThrough
             | Command::DevicesOverview
             | Command::NewCoreTerminal
             | Command::MirrorCorePane

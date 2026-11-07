@@ -240,6 +240,7 @@ impl SheprdWindow {
             overview: Default::default(),
             painter: Default::default(),
             pane_carry: None,
+            pass_through: false,
             pending_images: Vec::new(),
             pending_input: Default::default(),
             pending_navigation: None,

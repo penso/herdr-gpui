@@ -247,6 +247,12 @@ pub(crate) fn menus(config: &Config) -> Vec<Menu> {
                         command: Command::ToggleZenMode,
                     },
                 ),
+                MenuItem::action(
+                    fl!("menus-toggle-pass-through"),
+                    RunCommand {
+                        command: Command::TogglePassThrough,
+                    },
+                ),
             ],
         },
         Menu {
