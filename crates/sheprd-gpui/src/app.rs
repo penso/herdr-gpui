@@ -233,6 +233,10 @@ pub(crate) fn run() -> std::process::ExitCode {
     if let Some(exit) = crate::azure::sandbox::relay::run_helper(&args) {
         return exit;
     }
+    #[cfg(feature = "boxd")]
+    if let Some(exit) = crate::boxd::relay::run_helper(&args) {
+        return exit;
+    }
     #[cfg(feature = "sprites")]
     if let Some(exit) = crate::sprites::relay::run_helper(&args) {
         return exit;
@@ -492,6 +496,7 @@ pub(crate) fn run() -> std::process::ExitCode {
                 crate::px0::Launcher::install(cx);
                 // Nor do they install or ask the remote control service.
                 crate::remote::Supervisor::install(cx);
+                crate::device_tags::DeviceTags::install(cx);
                 #[cfg(feature = "cloud")]
                 crate::cloud::install_idle_checks(cx);
             }

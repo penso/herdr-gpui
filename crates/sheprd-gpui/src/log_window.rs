@@ -660,7 +660,7 @@ impl Render for LogWindow {
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
-                    .on_scroll_wheel(cx.listener(|this, _, _, cx| {
+                    .on_scroll(cx.listener(|this, _, _, cx| {
                         this.following = false;
                         cx.notify();
                     }))

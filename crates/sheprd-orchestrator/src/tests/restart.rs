@@ -21,6 +21,7 @@ fn status() -> PrStatus {
             name: "ci".into(),
             state: CheckState::Passed,
         }],
+        merge: sheprd_github::pull_request::MergeState::Dirty,
     }
 }
 

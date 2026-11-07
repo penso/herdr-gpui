@@ -21,7 +21,7 @@ fn one(keystroke: &str) -> Binding {
 }
 
 fn keystroke(text: &str) -> Keystroke {
-    Keystroke::parse(text).unwrap()
+    parse_keystroke(text).unwrap()
 }
 
 /// A daemon config that binds nothing, isolating the GUI layers.
@@ -242,7 +242,7 @@ fn daemon_keystrokes_move_from_gui_defaults_but_not_from_gui_config() {
     )
     .unwrap();
     // Daemon keystrokes read in GPUI's platform spelling (`super-d` on Linux).
-    let moved = keystroke(default("cmd-d")).unparse();
+    let moved = keystroke(default("cmd-d")).unparse(HOST_OS);
     assert_eq!(
         list(&keymap, Command::Zoom),
         [default("cmd-shift-enter"), moved.as_str()]
@@ -423,7 +423,7 @@ fn every_prefix_arms_and_the_first_labels_chords() {
     assert!(keymap.is_prefix(&keystroke("ctrl-space")));
     assert!(keymap.is_prefix(&keystroke("ctrl-s")));
     assert!(!keymap.is_prefix(&keystroke("ctrl-b")));
-    let first = keystroke("ctrl-space").unparse();
+    let first = keystroke("ctrl-space").unparse(HOST_OS);
     assert_eq!(keymap.prefix_label().as_deref(), Some(first.as_str()));
     assert_eq!(
         list(&keymap, Command::Tab),
@@ -520,7 +520,10 @@ fn pane_keys_take_keystrokes_from_default_and_daemon_commands() {
     assert_eq!(keymap.primary(Command::ClearPane), "");
     assert_eq!(keymap.primary(Command::Themes), "");
     assert!(!keymap.is_prefix(&keystroke("ctrl-b")));
-    assert_eq!(keymap.prefix_label(), Some(keystroke("ctrl-s").unparse()));
+    assert_eq!(
+        keymap.prefix_label(),
+        Some(keystroke("ctrl-s").unparse(HOST_OS))
+    );
     assert!(
         keymap
             .bindings()

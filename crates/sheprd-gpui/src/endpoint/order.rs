@@ -51,6 +51,12 @@ impl SheprdWindow {
                 .map_or(devices.len(), |at| at + 1);
             devices[..at].rotate_left(1);
         }
+        // Grouped by tag, each section keeping the user's order.
+        if self.device_tags.any() {
+            let all = self.device_tags.all();
+            let filter = self.device_tag_filter.as_deref();
+            devices.sort_by_key(|(_, endpoint)| self.device_tags.rank(&endpoint.id, filter, &all));
+        }
         devices
     }
 

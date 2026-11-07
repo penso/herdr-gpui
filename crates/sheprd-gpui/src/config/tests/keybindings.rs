@@ -237,9 +237,9 @@ fn pane_keys_reach_the_keymap_as_written() -> anyhow::Result<()> {
     let keymap = &config.keybindings;
     let sent = |typed| {
         keymap
-            .pane_key(&gpui::Keystroke::parse(typed).unwrap_or_default())
+            .pane_key(&crate::keymap::parse_keystroke(typed).unwrap_or_default())
             .and_then(|sent| match sent {
-                crate::keymap::PaneKey::Key(key) => Some(key.unparse()),
+                crate::keymap::PaneKey::Key(key) => Some(key.unparse(crate::keymap::HOST_OS)),
                 crate::keymap::PaneKey::Text(_) => None,
             })
     };

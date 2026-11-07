@@ -179,3 +179,9 @@ fn a_whole_turn_reaches_the_transcript_through_the_bridge() {
     let closed = delivered.recv_timeout(WAIT).unwrap();
     assert!(matches!(closed, Inbound::Closed(_)));
 }
+
+#[test]
+fn the_task_tools_are_asked_for_unless_the_user_chose() {
+    assert_eq!(env(None), [(TODO_TOOLS, "1")]);
+    assert!(env(Some(OsStr::new("0"))).is_empty());
+}

@@ -3,7 +3,7 @@ use super::{
     *,
 };
 use crate::chat::prepared::{Body, Part};
-use gpui::{Modifiers, ScrollDelta, ScrollWheelEvent, TestAppContext, point, px};
+use gpui::{Modifiers, ScrollDelta, ScrollEvent, TestAppContext, point, px};
 
 #[test]
 fn an_indented_markdown_image_remains_literal_code() {
@@ -51,7 +51,7 @@ fn long_code_scrolls_within_its_pane_and_copy_preserves_tabs(cx: &mut TestAppCon
         line.size.height, blank.size.height,
         "blank and nonblank lines share one baseline grid"
     );
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: viewport.center(),
         delta: ScrollDelta::Pixels(point(px(-120.), px(0.))),
         ..Default::default()

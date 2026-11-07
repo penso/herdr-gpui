@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod ahead;
 mod counted_probes;
 
 #[test]

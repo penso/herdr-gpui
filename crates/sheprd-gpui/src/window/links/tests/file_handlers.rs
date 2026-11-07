@@ -105,7 +105,7 @@ fn file_hyperlinks_go_to_plugin_handlers_before_opening_here(cx: &mut gpui::Test
     });
 
     // The handler fails: its reason is shown and nothing opens.
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     let request = activation(&mut peer);
     assert_eq!(
         request["params"],
@@ -133,7 +133,7 @@ fn file_hyperlinks_go_to_plugin_handlers_before_opening_here(cx: &mut gpui::Test
     });
 
     // A handler claims it: still nothing opens here.
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     let request = activation(&mut peer);
     reply(
         &mut peer,
@@ -145,7 +145,7 @@ fn file_hyperlinks_go_to_plugin_handlers_before_opening_here(cx: &mut gpui::Test
     assert!(cx.opened_url().is_none());
 
     // Nothing claims it: the file opens here, once.
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     let request = activation(&mut peer);
     assert!(cx.opened_url().is_none(), "the daemon answers first");
     reply(
@@ -171,7 +171,7 @@ fn a_resolved_file_hyperlink_keeps_its_local_fallback(cx: &mut gpui::TestAppCont
     let (view, cx) = window(&peer, true, cx);
     view.update(cx, |view, _| show(view, &document));
     let link = at(&view, cx, 3, 0);
-    cx.simulate_mouse_move(link, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(link, None, crate::keymap::secondary_key());
     resolve_after_delay(cx);
     let request = peer.request();
     assert_eq!(request["method"], "pane.link.resolve");
@@ -186,7 +186,7 @@ fn a_resolved_file_hyperlink_keeps_its_local_fallback(cx: &mut gpui::TestAppCont
     );
     view.read_with(cx, |view, _| assert!(view.hovered_daemon_link().is_some()));
 
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     let request = activation(&mut peer);
     reply(
         &mut peer,
@@ -224,7 +224,7 @@ fn a_remote_file_hyperlink_still_reaches_plugin_handlers(cx: &mut gpui::TestAppC
     });
 
     for handled in [true, false] {
-        cx.simulate_click(link, Modifiers::secondary_key());
+        cx.simulate_click(link, crate::keymap::secondary_key());
         let request = activation(&mut peer);
         assert_eq!(request["params"]["col"], 3);
         reply(

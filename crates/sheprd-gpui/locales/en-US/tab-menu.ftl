@@ -10,6 +10,8 @@ tab-menu-mute = Mute Notifications
 tab-menu-unmute = Unmute Notifications
 # The tab's whole workspace is muted; the row unmutes the workspace.
 tab-menu-unmute-workspace = Unmute Workspace
+# The tab's whole device is muted; the row unmutes the device.
+tab-menu-unmute-device = Unmute Device
 tab-menu-close = Close Tab
 
 tab-menu-rename-placeholder = Tab name

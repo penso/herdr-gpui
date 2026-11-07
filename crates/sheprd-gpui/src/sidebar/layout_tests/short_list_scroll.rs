@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{ScrollDelta, ScrollWheelEvent, VisualTestContext};
+use gpui::{ScrollDelta, ScrollEvent, VisualTestContext};
 
 /// A window whose two hosts list one workspace each, far shorter than the
 /// spaces list, drawn until it is settled at the top.
@@ -43,7 +43,7 @@ fn the_wheel_over_a_list_that_fits_moves_and_pins_nothing(cx: &mut gpui::TestApp
     let remote = cx.debug_bounds("host-ssh:test").unwrap();
     // Several wheel steps, each drawn as the event loop would after it.
     for _ in 0..3 {
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: list.center(),
             delta: ScrollDelta::Pixels(point(px(0.), px(-30.))),
             ..Default::default()

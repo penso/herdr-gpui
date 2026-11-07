@@ -11,6 +11,8 @@
 pub mod azure;
 #[cfg(feature = "boat")]
 pub mod boat;
+#[cfg(feature = "boxd")]
+pub mod boxd;
 #[cfg(feature = "cloud")]
 pub mod cloud;
 #[cfg(feature = "coder")]
@@ -21,6 +23,7 @@ pub mod container;
 #[cfg(any(
     feature = "azure",
     feature = "boat",
+    feature = "boxd",
     feature = "coder",
     feature = "daytona",
     feature = "opensandbox",

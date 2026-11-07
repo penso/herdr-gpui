@@ -58,7 +58,7 @@ fn the_device_picker_lists_several_devices_at_once(cx: &mut gpui::TestAppContext
     cx.simulate_click(picker, Modifiers::default());
     draw(cx);
     let a = row(cx, A_ROW);
-    cx.simulate_click(a, Modifiers::secondary_key());
+    cx.simulate_click(a, crate::keymap::secondary_key());
     draw(cx);
     assert_eq!(filter(cx), scope(["local", "ssh:a"]));
     assert!(cx.debug_bounds("menu-panel").is_some());
@@ -79,15 +79,15 @@ fn the_device_picker_lists_several_devices_at_once(cx: &mut gpui::TestAppContext
 
     // Taking away the device on screen selects the first one still listed.
     let local = row(cx, LOCAL_ROW);
-    cx.simulate_click(local, Modifiers::secondary_key());
+    cx.simulate_click(local, crate::keymap::secondary_key());
     draw(cx);
     assert_eq!(filter(cx), DeviceScope::only("local"));
     let b = row(cx, B_ROW);
-    cx.simulate_click(b, Modifiers::secondary_key());
+    cx.simulate_click(b, crate::keymap::secondary_key());
     draw(cx);
     assert_eq!(filter(cx), scope(["local", "ssh:b"]));
     let local = row(cx, LOCAL_ROW);
-    cx.simulate_click(local, Modifiers::secondary_key());
+    cx.simulate_click(local, crate::keymap::secondary_key());
     draw(cx);
     assert_eq!(filter(cx), DeviceScope::only("ssh:b"));
     view.read_with(cx, |view, _| {
@@ -99,7 +99,7 @@ fn the_device_picker_lists_several_devices_at_once(cx: &mut gpui::TestAppContext
     draw(cx);
     // The last listed device cannot be taken away.
     let b = row(cx, B_ROW);
-    cx.simulate_click(b, Modifiers::secondary_key());
+    cx.simulate_click(b, crate::keymap::secondary_key());
     draw(cx);
     assert_eq!(filter(cx), DeviceScope::only("ssh:b"));
 

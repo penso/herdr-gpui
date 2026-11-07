@@ -34,6 +34,8 @@ fn document_prompt_body_keeps_normal_text_below_its_speaker_label(cx: &mut TestA
                     agent: "Codex",
                     live: false,
                     current: true,
+                    expanded: false,
+                    tool: None,
                     content,
                 },
                 &view.chat_look(),

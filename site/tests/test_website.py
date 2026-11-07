@@ -187,7 +187,7 @@ class WebsiteTests(unittest.TestCase):
         script = (WEBSITE / "assets/site.js").read_text()
         self.assertIn('id="hero-install"', html)
         self.assertIn('href="#get"', html)
-        for command in ("brew install penso/tap/herdr-gpui",
+        for command in ("brew install sheprd-labs/tap/sheprd",
                         "curl -fsSL https://sheprd.org/install.sh | sh",
                         "irm https://sheprd.org/install.ps1 | iex"):
             with self.subTest(command=command):

@@ -268,6 +268,9 @@ pub(crate) enum HeaderCase {
 #[derive(Clone, Copy)]
 pub(super) struct SidebarLook {
     pub(super) density: SidebarMetrics,
+    /// How far a device and its rows step in under a tag's section heading;
+    /// none outside a section.
+    pub(super) group_indent: f32,
     /// How solid a row's highlight paints; see [`crate::backdrop::Fill::mark`].
     pub(super) mark: f32,
 }
@@ -320,7 +323,7 @@ impl SidebarLook {
     /// How far rows step in under a host header, so a host reads as the
     /// parent of its workspaces the way a repository does of its worktrees.
     pub(super) fn nest_indent(&self) -> f32 {
-        self.density.nest
+        self.density.nest + self.group_indent
     }
 
     pub(super) fn header_label(&self, label: &str) -> String {
@@ -590,6 +593,7 @@ const LIFT_RADIUS: f32 = 4.;
 pub(super) fn for_mode(mode: LayoutMode) -> SidebarLook {
     SidebarLook {
         density: SidebarMetrics::for_mode(mode),
+        group_indent: 0.,
         mark: 1.,
     }
 }
@@ -602,6 +606,7 @@ pub(super) fn for_config(config: &crate::config::Config, fill: Fill) -> SidebarL
         density: SidebarMetrics::for_mode(config.layout.mode)
             .with(&config.sidebar_style.overrides)
             .with_guides(config.worktrees.sidebar),
+        group_indent: 0.,
         mark: fill.mark(),
     }
 }

@@ -6,6 +6,8 @@ use std::io;
 mod azure;
 #[cfg(feature = "boat")]
 mod boat;
+#[cfg(feature = "boxd")]
+mod boxd;
 #[cfg(feature = "cloud")]
 mod cloud;
 #[cfg(feature = "coder")]

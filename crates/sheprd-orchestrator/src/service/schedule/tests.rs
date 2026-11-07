@@ -45,6 +45,7 @@ fn status(state: CheckState) -> PrStatus {
             name: "ci".into(),
             state,
         }],
+        merge: MergeState::Clean,
         ..PrStatus::default()
     }
 }
@@ -83,6 +84,30 @@ fn only_open_pull_requests_are_compared() {
         open,
         [(1, "a".to_owned(), Some(at)), (2, "b".to_owned(), Some(at))]
     );
+}
+
+#[test]
+fn an_undecided_merge_state_is_read_again_until_github_has_worked_it_out() {
+    let updated = Utc::now();
+    let now = Instant::now();
+    let open = open_pulls(&[pull(1, "open", "a", updated)]);
+    let fresh = ChecksRead {
+        at: now,
+        open: open.clone(),
+    };
+    let statuses = |merge| {
+        let status = PrStatus {
+            merge,
+            ..status(CheckState::Passed)
+        };
+        HashMap::from([(("penso/herdr-gpui".to_owned(), 1), status)])
+    };
+    let due =
+        |repository, merge| checks_due(Some(&fresh), &open, repository, &statuses(merge), now);
+    assert!(due("penso/herdr-gpui", MergeState::Unknown));
+    assert!(!due("penso/herdr-gpui", MergeState::Clean));
+    // Another repository's answer costs this one no read.
+    assert!(!due("penso/other", MergeState::Unknown));
 }
 
 #[test]

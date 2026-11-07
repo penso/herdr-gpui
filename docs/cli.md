@@ -123,6 +123,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/sheprd-gpui
 | --- | --- |
 | `notes [list]` | Every worktree note |
 | `notes get\|clear`, `notes set TEXT` | The note on your checkout (its repository and branch) |
+| `worktree [status]`, `worktree mute\|unmute` | Whether your worktree's notifications are muted; silence them or let them through again |
 | `feedback [--wait S]` | Notes the user sent your pane from pages, reviews, or terminals |
 | `checkpoint [list]` | Checkpoints of the current directory's checkout, newest first (no app needed) |
 | `checkpoint create [LABEL]` | Take one now (no app needed) |
@@ -153,7 +154,9 @@ not take it either.
 
 | Command | What it does |
 | --- | --- |
-| `host [list]`, `host select ID` | The window's hosts; show another one |
+| `host [list]`, `host select ID` | The window's hosts, with their tags; show another one |
+| `host mute\|unmute [HOST]` | Silence a host's notifications as a whole, or let them through again, by ID or label; absent, your host. Works while it is offline |
+| `host tag ID [TAG...]` | Replace the tags that group a host in the sidebar and on paired phones; with no tags, clear them. Each computer's daemon keeps its own tags, so a host away gets the edit once it is back |
 | `pr [status]\|checks\|comments\|open` | Your branch's pull request, on the window's selected host. `comments` needs your workspace focused |
 | `pr quota` | Last reported GraphQL points used, limit, and remaining, plus rate-limit retry delays for the window's GitHub accounts. `--json` returns records merged by login: known observations are preferred, then the latest reset window and greatest usage within it; retry delays retain the longest pause. Usage is never summed across credentials. Unavailable quotas are `null`. No network request is made. |
 | `ports [list]` | Ports your workspace listens on, and forwards |
@@ -243,7 +246,7 @@ destroy it like any other. Coder takes `--template` and `--preset` by name
 (without them, the deployment's only template and its default preset);
 Azure makes a Container Apps sandbox with `--sandbox`. Boat and Railway make
 their machines one at a time. Providers are named by key or name: azure,
-boat, coder, container, daytona, opensandbox, railway, sprites. The device
+boat, boxd, coder, container, daytona, opensandbox, railway, sprites. The device
 list keeps at most 64 cloud devices, counting those being made.
 
 `cloud exec` runs one command on a saved cloud machine, named as for
@@ -269,7 +272,7 @@ sheprd cloud exec herdr-tidy-lark-aa --cwd ~/code/app -- sh -c 'git switch -c fi
 An agent that worked on cloud machines removes them with `cloud destroy`,
 naming each by its machine ID, host ID, or label (a label two machines share
 is refused), or with `--batch` every machine a batch named. The window asks
-once, listing each machine and what happens to it: Azure, Boat, Coder,
+once, listing each machine and what happens to it: Azure, Boat, boxd, Coder,
 Container, Daytona, OpenSandbox, and Sprites delete the machine with what
 goes with it and then forget it here;
 Railway VMs cannot be deleted from this app, so they are only forgotten and

@@ -13,7 +13,7 @@ use std::{
     path::Path,
     sync::Arc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::watch;
 
@@ -184,6 +184,18 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             }
             Err(error) => Err(error),
         },
+        Request::Tags { offer } => {
+            let Some(offer) = offer else {
+                return Response::Tags(state.tags.current());
+            };
+            return match state.tags.offer(offer, now) {
+                Ok(tags) => Response::Tags(tags),
+                Err(error) => Response::Error {
+                    code: ErrorCode::Unsaved,
+                    message: error.to_string(),
+                },
+            };
+        }
         Request::Indicators { set } => {
             return match state.look.set(crate::web::Indicators::from_config(&set)) {
                 Ok(()) => Response::Done,
@@ -191,6 +203,17 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
                     code: ErrorCode::Other,
                     message: error.to_string(),
                 },
+            };
+        }
+        Request::AppUpdate { instance, update } => {
+            if !update.valid() {
+                return Response::Error {
+                    code: ErrorCode::Unsupported,
+                    message: "Invalid update report".into(),
+                };
+            }
+            return Response::AppUpdate {
+                requested: state.updates().report(instance, update, Instant::now()),
             };
         }
         Request::Shutdown => {
