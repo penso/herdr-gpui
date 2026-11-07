@@ -225,7 +225,7 @@ struct WorkspaceScreen: View {
                     try await client.startChat(NewChatRequest(agent: agent.id, start: start), workspace: id, bearer: token)
                 }
                 model.recentAgent = agent.id
-                if start != nil, !created.started { model.notice = AppModel.startMissed }
+                if let problem = model.startProblem(created, start: start, device: device) { model.notice = problem }
                 if let pane = created.pane { opened = .chat(PaneKey(device: device, pane: pane), title: agent.name) }
             } catch {
                 problem = error.localizedDescription

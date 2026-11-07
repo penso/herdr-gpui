@@ -183,6 +183,18 @@ final class RemoteClient: Sendable {
         try await send("POST", "/api/v2/workspaces/\(Self.segment(workspace))/chats", body: request, bearer: bearer, timeout: 30)
     }
 
+    // MARK: Updates
+
+    /// Where Sheprd's updater stands there. An older computer answers 404.
+    func computerUpdate(bearer: String) async throws -> ComputerUpdate {
+        try await send("GET", "/api/v2/update", bearer: bearer)
+    }
+
+    /// Asks Sheprd there to update and restart.
+    func askToUpdate(bearer: String) async throws -> ComputerUpdate {
+        try await send("POST", "/api/v2/update", bearer: bearer)
+    }
+
     // MARK: Hosts
 
     /// The other hosts this computer may pair the phone with.

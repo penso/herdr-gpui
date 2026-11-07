@@ -61,6 +61,8 @@ final class AppModel {
     /// Something to tell the person once, such as a first prompt that
     /// did not go; the root view shows it and clears it.
     var notice: String?
+    /// The alert's title for `notice`, when it is not a send that failed.
+    var noticeTitle: String?
     /// What each chat's composer held when the person left it, kept
     /// until they come back, for as long as the app runs.
     @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]

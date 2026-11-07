@@ -9,6 +9,7 @@
 //! in the daemon.
 
 use sheprd_chat_protocol::{read_frame, write_frame};
+pub mod app_update;
 pub mod changes;
 pub mod hosts;
 pub mod pull_requests;
@@ -193,6 +194,13 @@ pub enum Request {
     /// `herdr-remote-control enroll` asks. Sheprd never sends it to its
     /// own daemon.
     Enroll(hosts::Enroll),
+    /// Where the app's updater stands, sent with each poll while a window
+    /// runs it. Answered with whether a phone asked to update. `instance`
+    /// names this run of the app: a request is only for the run a phone saw.
+    AppUpdate {
+        instance: u32,
+        update: app_update::AppUpdate,
+    },
     /// Takes the phones' questions about workspaces, waiting up to
     /// [`ASK_WAIT`] for one. Sheprd sends it while a phone is connected.
     ChangeAsks,
@@ -243,6 +251,10 @@ pub enum Response {
         revokes: Vec<hosts::HostRevoke>,
     },
     Enrolled(hosts::Enrolled),
+    AppUpdate {
+        /// A phone asked to update since the last report. Taken by reading.
+        requested: bool,
+    },
     ChangeAsks {
         asks: Vec<changes::Ask>,
     },

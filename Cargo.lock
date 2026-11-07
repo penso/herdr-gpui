@@ -9546,8 +9546,10 @@ dependencies = [
 name = "sheprd-orchestrator"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "chrono",
  "gix",
+ "percent-encoding",
  "rusqlite",
  "rustix",
  "secrecy",
@@ -9618,6 +9620,7 @@ dependencies = [
  "futures-lite",
  "futures-util",
  "getrandom 0.4.3",
+ "gix",
  "hkdf 0.13.0",
  "http-body-util",
  "hyper",
@@ -9637,7 +9640,9 @@ dependencies = [
  "sha2 0.11.1",
  "sheprd-chat-protocol",
  "sheprd-client",
+ "sheprd-core-client",
  "sheprd-github",
+ "sheprd-terminal",
  "socket2",
  "sysinfo 0.39.6",
  "tempfile",

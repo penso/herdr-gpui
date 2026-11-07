@@ -92,9 +92,9 @@ public struct Created: Codable, Hashable, Sendable {
     public var pane: String?
     /// Whether the first prompt went to the chat.
     public var prompted: Bool
-    /// Whether the chat took what it was asked to start with. A daemon too
-    /// old to know the request's `start` does not say.
-    public var started: Bool
+    /// Whether the chat took what it was asked to start with; `nil` from a
+    /// daemon too old to know the request's `start`, which ignored it.
+    public var started: Bool?
 
     enum CodingKeys: String, CodingKey { case workspace, pane, prompted, started }
 
@@ -103,6 +103,6 @@ public struct Created: Codable, Hashable, Sendable {
         workspace = try c.decodeIfPresent(String.self, forKey: .workspace)
         pane = try c.decodeIfPresent(String.self, forKey: .pane)
         prompted = try c.decodeIfPresent(Bool.self, forKey: .prompted) ?? false
-        started = try c.decodeIfPresent(Bool.self, forKey: .started) ?? false
+        started = try c.decodeIfPresent(Bool.self, forKey: .started)
     }
 }

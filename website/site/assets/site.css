@@ -366,3 +366,18 @@ tr[data-s="idle"] .s { box-shadow: inset 0 0 0 1.5px var(--idle); }
 .ph-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
 .ph-actions span { text-align: center; padding: .45rem; border-radius: 12px; background: var(--slate); color: #fff; font-size: .78rem; font-weight: 650; }
 .ph-actions span + span { background: #fff; color: var(--slate); }
+
+/* The TestFlight page at /testflight/: the one place the invite link lives. */
+.tf { padding: clamp(3rem, 7vw, 5.5rem) 0 4rem; }
+.tf-hero { max-width: 44rem; }
+.tf-hero .kicker { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
+.tf-phone { font: 500 .9rem/1.5 var(--sans); color: var(--ink-2); margin: 1rem 0 0; }
+.tf-steps { list-style: none; margin: 3.5rem 0 2rem; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+.tf-steps li { position: relative; background: #fffdf9; border: 1px solid var(--rule); border-radius: 14px; padding: 1.4rem 1.4rem 1.2rem; }
+.tf-n { display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; background: var(--ink); color: var(--paper); font: 700 .9rem/1 var(--sans); }
+.tf-steps h2 { font: 600 1.35rem/1.2 var(--serif); margin: .9rem 0 .4rem; }
+.tf-steps p { font: 400 .98rem/1.6 var(--sans); color: var(--ink-2); margin: 0; }
+.tf-note { max-width: 44rem; }
+@media (max-width: 52rem) {
+  .tf-steps { grid-template-columns: minmax(0, 1fr); }
+}

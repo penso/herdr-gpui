@@ -2,6 +2,9 @@ use super::*;
 use chrono::{DateTime, Utc};
 
 mod actions;
+mod azure;
+mod azure_html;
+mod azure_token;
 mod beads;
 mod beads_only;
 #[cfg(unix)]
@@ -16,6 +19,7 @@ mod gitlab_envrc;
 mod gitlab_hosts;
 mod gitlab_merge_requests;
 mod gitlab_oauth;
+mod gitlab_recent;
 // The private credential file these save to is Unix-only.
 #[cfg(unix)]
 mod gitlab_renewal;

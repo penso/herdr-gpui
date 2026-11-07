@@ -7,7 +7,9 @@ use crate::{
     remote::changes::{Source, Sources},
 };
 use gpui::Context;
-use sheprd_remote_control::control::pull_requests::{MAX_PULL_REQUESTS, WorkspacePullRequest};
+use sheprd_remote_control::control::pull_requests::{
+    MAX_PULL_REQUESTS, UnopenedBranch, WorkspacePullRequest,
+};
 
 impl SheprdWindow {
     pub(crate) fn publish_remote_pull_requests(&self, cx: &mut Context<Self>) {
@@ -50,24 +52,47 @@ impl SheprdWindow {
             ..Sources::default()
         };
         let mut entries = Vec::new();
+        let mut unopened = Vec::new();
         for workspace in &snapshot.workspaces {
-            let found = view
+            let checkout = view
                 .as_ref()
                 .zip(workspace.worktree.as_ref())
                 .zip(workspace.branch.as_ref())
-                .and_then(|((view, tree), branch)| {
-                    let pr = self.menu.pr_cache.peek(view, &tree.key, branch)?;
-                    Some((pr, branch))
-                });
+                .map(|((view, tree), branch)| (view, tree, branch));
+            let found = checkout
+                .and_then(|(view, tree, branch)| self.menu.pr_cache.peek(view, &tree.key, branch));
+            // Every workspace gets a source, past the badge limit and without
+            // a pull request: its changes are still there to ask about.
             sources.workspaces.insert(
                 workspace.workspace_id.clone(),
                 Source::new(
                     workspace.clone(),
-                    found.as_ref().map(|(pr, _)| &**pr),
+                    found.as_ref().map(|pr| &**pr),
                     tokens.as_ref(),
                 ),
             );
-            let Some((pr, branch)) = found else {
+            let Some((view, tree, branch)) = checkout else {
+                continue;
+            };
+            // The same reading the sidebar's row makes of this checkout.
+            if let Some(ahead) = self.git.ahead(&tree.key, branch)
+                && self
+                    .menu
+                    .pr_cache
+                    .unopened(view, &tree.key, branch, &ahead.head)
+            {
+                let badge = UnopenedBranch {
+                    workspace_id: workspace.workspace_id.clone(),
+                    cwd: workspace.new_workspace_cwd.clone(),
+                    branch: branch.clone(),
+                    commits: ahead.commits,
+                };
+                if badge.valid() && unopened.len() < MAX_PULL_REQUESTS {
+                    unopened.push(badge);
+                }
+                continue;
+            }
+            let Some(pr) = found else {
                 continue;
             };
             if entries.len() == MAX_PULL_REQUESTS {
@@ -86,9 +111,11 @@ impl SheprdWindow {
             }
         }
         entries.sort_by(|left, right| left.workspace_id.cmp(&right.workspace_id));
+        unopened.sort_by(|left, right| left.workspace_id.cmp(&right.workspace_id));
         let update = PullRequests {
             boot_id: snapshot.boot_id.clone(),
             entries,
+            unopened,
         };
         let supervisor = cx.global_mut::<Supervisor>();
         supervisor.set_change_sources(sources);

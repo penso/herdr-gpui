@@ -33,6 +33,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// `herdr-gpui` from `penso/tap`, kept for existing installs, and `sheprd` from
+/// `sheprd-labs/tap`. A bundle belongs to whichever cask's Caskroom links to it.
+const TOKENS: &[&str] = &["herdr-gpui", "sheprd"];
+#[cfg(test)]
 const TOKEN: &str = "herdr-gpui";
 #[cfg(test)]
 const BUNDLE: &str = "Herdr.app";
@@ -56,6 +60,7 @@ pub(super) struct Cask {
     /// `bundle` and nothing stands there yet.
     legacy: Option<PathBuf>,
     home: OsString,
+    token: &'static str,
 }
 
 /// Executables and their directories must not be writable by anyone but their
@@ -94,9 +99,11 @@ pub(super) fn recorded(bundle: &Path) -> bool {
 }
 
 fn recorded_in(bundle: &Path, prefixes: impl IntoIterator<Item = PathBuf>) -> bool {
-    prefixes
-        .into_iter()
-        .any(|prefix| owned_bundle(&prefix, bundle).is_some())
+    prefixes.into_iter().any(|prefix| {
+        TOKENS
+            .iter()
+            .any(|token| owned_bundle(&prefix, token, bundle).is_some())
+    })
 }
 
 /// Prefixes and HOME are arguments, not environment reads, so this stays
@@ -111,7 +118,12 @@ fn locate(
         let brew = prefix.join("bin/brew");
         let safe = trusted(&prefix, uid, true).is_ok()
             && trusted(&brew, uid, false).is_ok_and(|meta| meta.mode() & 0o111 != 0);
-        if let Some(owned) = owned_bundle(&prefix, bundle).filter(|_| safe) {
+        let owner = TOKENS
+            .iter()
+            .copied()
+            .filter(|_| safe)
+            .find_map(|token| owned_bundle(&prefix, token, bundle).map(|owned| (token, owned)));
+        if let Some((token, owned)) = owner {
             let legacy = (owned != bundle && fs::symlink_metadata(bundle).is_err())
                 .then(|| bundle.to_owned());
             return Some(Cask {
@@ -120,6 +132,7 @@ fn locate(
                 bundle: owned,
                 legacy,
                 home,
+                token,
             });
         }
     }
@@ -132,8 +145,8 @@ fn locate(
 /// Returns where the bundle is now. An upgrade can move a running `Herdr.app` to
 /// `Sheprd.app` beside it, so that one receipt also counts, but only once no
 /// real bundle remains at the old path: a separate copy there is not the cask's.
-fn owned_bundle(prefix: &Path, bundle: &Path) -> Option<PathBuf> {
-    let receipts: Vec<PathBuf> = fs::read_dir(prefix.join("Caskroom").join(TOKEN))
+fn owned_bundle(prefix: &Path, token: &str, bundle: &Path) -> Option<PathBuf> {
+    let receipts: Vec<PathBuf> = fs::read_dir(prefix.join("Caskroom").join(token))
         .ok()?
         .filter_map(std::result::Result::ok)
         .flat_map(|entry| {
@@ -314,14 +327,14 @@ enum Ended {
 /// The version Homebrew currently records as installed for the cask.
 fn installed(cask: &Cask, timeout: Duration) -> Result<String> {
     let mut command = command(cask);
-    command.args(["list", "--cask", "--versions", TOKEN]);
+    command.args(["list", "--cask", "--versions", cask.token]);
     let lines = run(command, timeout.min(QUERY), None, |_| ())?;
     lines
         .iter()
         .rev()
         .find_map(|line| {
             let (name, version) = line.split_once(char::is_whitespace)?;
-            (name == TOKEN)
+            (name == cask.token)
                 .then(|| version.split_whitespace().next_back())
                 .flatten()
                 .map(str::to_owned)
@@ -364,7 +377,7 @@ pub(super) fn upgrade(
         if refreshed {
             upgrade.env("HOMEBREW_NO_AUTO_UPDATE", "1");
         }
-        upgrade.args(["upgrade", "--cask", TOKEN]);
+        upgrade.args(["upgrade", "--cask", cask.token]);
         run(upgrade, remaining(), None, &mut |line| {
             progress(Progress::Homebrew(line));
         })?;
