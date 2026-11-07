@@ -13,11 +13,20 @@ fn save_split(path: &Path) {
     std::fs::write(path, tabs.to_string()).unwrap();
 }
 
+fn space(id: &str, name: &str, machine: Option<&str>, terminal: &str) -> Value {
+    json!({"id": id, "folder": "/f", "name": name, "machine": machine, "tabs": [
+        {"id": format!("{id}-tab"), "name": "one",
+         "root": {"type": "block", "content": {"terminal": terminal}}}
+    ]})
+}
+
 fn desk(terminal: &str) -> Poller {
+    spaces(vec![space("s", "desk", None, terminal)])
+}
+
+fn spaces(spaces: Vec<Value>) -> Poller {
     let mut poller = Poller::default();
-    let value = json!({"spaces": [{"id": "s", "folder": "/f", "name": "desk", "tabs": [
-        {"id": "a", "name": "one", "root": {"type": "block", "content": {"terminal": terminal}}}
-    ]}]});
+    let value = json!({ "spaces": spaces });
     poller
         .read_spaces("fake-core", Ok(Doc { value, version: 1 }))
         .unwrap();
@@ -91,4 +100,41 @@ fn another_sessions_tabs_leave_the_document_alone() {
         .unwrap();
     assert_eq!(panes(&space.terminals[0]), [id("t2")]);
     assert!(layout.workspace("w1").is_none());
+}
+
+#[test]
+fn a_local_space_keeps_a_saved_pane_another_machine_also_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let tabs = dir.path().join("browser-tabs.json");
+    save_split(&tabs);
+    let records = ["t2", "t3"].map(|address| serde_json::from_value(record(address)).unwrap());
+    let mut poller = spaces(vec![
+        space("s", "desk", None, "t2"),
+        space("far", "far", Some("box"), "t2"),
+    ]);
+
+    let layout = poller.project("fake-core", &records, Some(&tabs), Some(SCOPE));
+
+    assert_eq!(
+        panes(&layout.workspace("w1").unwrap().terminals[0]),
+        [id("t2"), id("t3")]
+    );
+    assert_eq!(layout.working, 2);
+}
+
+#[test]
+fn a_saved_tab_does_not_reveal_a_pane_only_another_machine_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let tabs = dir.path().join("browser-tabs.json");
+    save_split(&tabs);
+    let records = ["t2", "t3"].map(|address| serde_json::from_value(record(address)).unwrap());
+    let mut poller = spaces(vec![space("far", "far", Some("box"), "t2")]);
+
+    let layout = poller.project("fake-core", &records, Some(&tabs), Some(SCOPE));
+
+    assert_eq!(
+        panes(&layout.workspace("w1").unwrap().terminals[0]),
+        [id("t3")]
+    );
+    assert_eq!(layout.working, 1);
 }
