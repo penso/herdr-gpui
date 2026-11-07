@@ -32,6 +32,7 @@ public enum Refusal {
     public static func text(status: Int, body: Data) -> String {
         struct Answer: Decodable { let error: String }
         guard let answer = try? JSONDecoder().decode(Answer.self, from: body), !answer.error.isEmpty else {
+            guard !body.isEmpty else { return "The computer answered \(status)." }
             return "The computer answered \(status): \(String(decoding: body.prefix(limit), as: UTF8.self))"
         }
         return String(answer.error.prefix(limit))

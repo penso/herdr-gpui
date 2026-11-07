@@ -142,6 +142,10 @@ struct RefusalTests {
         #expect(Refusal.text(status: 503, body: body) == String(repeating: "x", count: Refusal.limit))
     }
 
+    @Test func anEmptyAnswerStillSaysTheStatus() {
+        #expect(Refusal.text(status: 503, body: Data()) == "The computer answered 503.")
+    }
+
     @Test func anythingElseKeepsTheStatusAndBody() {
         #expect(Refusal.text(status: 502, body: Data("Bad Gateway".utf8)) == "The computer answered 502: Bad Gateway")
         #expect(Refusal.text(status: 500, body: Data(#"{"error":""}"#.utf8)) == #"The computer answered 500: {"error":""}"#)
