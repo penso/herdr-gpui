@@ -366,6 +366,7 @@ impl SheprdWindow {
         };
         row.child(
             div()
+                .debug_selector(|| "git-menu-not-committed".into())
                 .flex_1()
                 .min_w_0()
                 .child(fl!("git-menu-not-committed", untracked = status.untracked)),

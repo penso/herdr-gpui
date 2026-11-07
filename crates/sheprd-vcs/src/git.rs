@@ -209,6 +209,13 @@ impl Git {
         git
     }
 
+    /// Chrome fixture: the focused checkout's porcelain bit on its own, for a
+    /// change numstat counts no line of (binary, mode-only, pure rename).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed_uncommitted(&mut self, uncommitted: bool) {
+        self.uncommitted = Some(uncommitted);
+    }
+
     /// Chrome fixture: a probe answer for a listed checkout, with no worker
     /// and therefore no scheduled Git work.
     #[cfg(any(test, feature = "test-support"))]

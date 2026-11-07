@@ -226,6 +226,35 @@ fn the_popup_says_when_it_is_waiting_on_github(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_change_with_no_counted_lines_is_not_yet_committed_without_counts(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    let input = crate::pull_request::Input {
+        checkout: None,
+        repo_key: Some(REPO_KEY.into()),
+        branch: "develop".into(),
+    };
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            // Porcelain sees a binary or mode-only change numstat counts no
+            // line of; the pull request puts the summary row in the popup.
+            view.git = crate::git::Git::fixture(input.clone(), status(0, 0, 0));
+            view.git.seed_uncommitted(true);
+            view.menu.github = crate::github::Auth::connected_fixture();
+            let pr = crate::pull_request::fixture().unwrap();
+            view.seed_pr(input, pr, std::time::Instant::now());
+            view.open_git_menu(point(px(900.), px(20.)), window, cx);
+        })
+    });
+    cx.update(|window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+    assert!(cx.debug_bounds("git-menu-not-committed").is_some());
+    assert!(cx.debug_bounds("git-menu-uncommitted-additions").is_none());
+    assert!(cx.debug_bounds("git-menu-uncommitted-deletions").is_none());
+}
+
+#[gpui::test]
 fn the_commit_dialog_ends_in_a_button_row(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     cx.simulate_resize(size(px(900.), px(600.)));
