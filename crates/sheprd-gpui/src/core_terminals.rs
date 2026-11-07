@@ -16,7 +16,6 @@ mod error;
 mod fallback;
 mod hub;
 mod infos;
-pub(crate) mod panes;
 mod screen;
 mod selection;
 mod sidebar;
@@ -31,6 +30,7 @@ mod tests;
 
 pub(crate) use error::Error;
 pub(crate) use hub::{Hub, Start, State};
+pub(crate) use sheprd_session::panes;
 pub(crate) use view::{CoreTerminalView, Look};
 
 use crate::{

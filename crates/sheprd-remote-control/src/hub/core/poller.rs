@@ -7,6 +7,7 @@ use sheprd_core_client::{
     Error,
     wire::{Doc, Terminal},
 };
+use sheprd_session::SavedTabs;
 use std::{path::Path, time::SystemTime};
 
 #[derive(Default)]
@@ -17,7 +18,7 @@ pub(super) struct Poller {
     /// The document's version and its spaces, `None` when it has none.
     doc: Option<(u64, Option<spaces::Spaces>)>,
     names: spaces::Names,
-    saved: Option<(SystemTime, Option<projection::Saved>)>,
+    saved: Option<(SystemTime, Option<SavedTabs>)>,
 }
 
 impl Poller {
@@ -55,20 +56,22 @@ impl Poller {
         tabs: Option<&Path>,
         scope: Option<&str>,
     ) -> Layout {
-        if let Some((_, Some(spaces))) = &self.doc {
-            return spaces.project(boot, terminals, &mut self.names);
+        if let Some(tabs) = tabs {
+            self.refresh_saved(tabs);
         }
-        let saved = tabs.and_then(|tabs| self.saved(tabs));
+        let saved = self.saved.as_ref().and_then(|(_, saved)| saved.as_ref());
+        if let Some((_, Some(spaces))) = &self.doc {
+            return spaces.project(boot, terminals, saved, scope, &mut self.names);
+        }
         projection::project(boot, terminals, saved, scope)
     }
 
-    fn saved(&mut self, path: &Path) -> Option<&projection::Saved> {
+    fn refresh_saved(&mut self, path: &Path) {
         let changed = std::fs::metadata(path).and_then(|file| file.modified());
         match (changed, &self.saved) {
             (Ok(at), Some((read, _))) if at == *read => {}
             (Ok(at), _) => self.saved = Some((at, projection::read(path))),
             (Err(_), _) => self.saved = None,
         }
-        self.saved.as_ref()?.1.as_ref()
     }
 }

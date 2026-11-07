@@ -9171,6 +9171,7 @@ dependencies = [
  "sheprd-orchestrator",
  "sheprd-remote",
  "sheprd-remote-control",
+ "sheprd-session",
  "sheprd-updater",
  "sheprd-usage",
  "sheprd-vcs",
@@ -9359,6 +9360,7 @@ dependencies = [
  "sheprd-client",
  "sheprd-core-client",
  "sheprd-github",
+ "sheprd-session",
  "sheprd-terminal",
  "socket2",
  "sysinfo 0.39.6",
@@ -9378,6 +9380,16 @@ dependencies = [
  "uuid",
  "webpki-roots",
  "x509-parser",
+]
+
+[[package]]
+name = "sheprd-session"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sheprd-backend",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

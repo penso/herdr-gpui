@@ -28,6 +28,7 @@ server = [
     "dep:if-addrs",
     "dep:maud",
     "dep:mdns-sd",
+    "dep:sheprd-session",
     "dep:p256",
     "dep:pulldown-cmark",
     "dep:rcgen",
@@ -91,6 +92,7 @@ rcgen          = { optional = true, workspace = true }
 rustls         = { optional = true, workspace = true }
 sha2           = { optional = true, workspace = true }
 sheprd-core-client.workspace = true
+sheprd-session = { optional = true, workspace = true }
 sheprd-terminal = { optional = true, workspace = true }
 socket2        = { optional = true, workspace = true }
 # This computer's CPU and memory, shown above its workspaces on a phone.

@@ -1,4 +1,4 @@
-use crate::core_terminals::panes::{Axis, Direction, Error, MAX_PANES, Node, Panes, Share};
+use crate::panes::{Axis, Direction, Error, MAX_PANES, Node, Panes, Share};
 use sheprd_backend::TerminalId;
 
 fn id(name: &str) -> TerminalId {
@@ -34,12 +34,12 @@ fn split_refuses_duplicates_missing_panes_and_more_than_the_limit() {
         panes.split(&id("t9"), Axis::Row, id("t4")),
         Err(Error::Missing(id("t9")))
     );
-    for index in panes.len()..MAX_PANES {
+    for index in panes.count()..MAX_PANES {
         panes
             .split(&id("t1"), Axis::Row, id(&format!("n{index}")))
             .unwrap();
     }
-    assert_eq!(panes.len(), MAX_PANES);
+    assert_eq!(panes.count(), MAX_PANES);
     assert_eq!(
         panes.split(&id("t1"), Axis::Row, id("over")),
         Err(Error::Full)
@@ -130,50 +130,4 @@ fn saved_panes_with_a_terminal_twice_are_refused() {
     let saved = serde_json::to_string(&twice).unwrap();
     assert!(serde_json::from_str::<Panes>(&saved).is_err());
     assert_eq!(Panes::try_from(twice), Err(Error::Duplicate(id("t1"))));
-}
-
-#[test]
-fn a_tab_saved_before_splits_reads_back_as_one_pane() {
-    use crate::browser::Location;
-    let saved = r#"{"kind":"core_terminal","terminal":"t4"}"#;
-    let location: Location = serde_json::from_str(saved).unwrap();
-    assert_eq!(
-        location,
-        Location::CoreTerminal {
-            panes: Panes::single(id("t4")),
-            observe: false,
-        }
-    );
-    let again = serde_json::to_string(&location).unwrap();
-    assert_eq!(serde_json::from_str::<Location>(&again).unwrap(), location);
-}
-
-#[test]
-fn every_tab_layout_draws_split_panes() {
-    use crate::{config::TabLayoutMode, tab_layout::layout_for};
-    for &mode in TabLayoutMode::ALL {
-        let chrome = layout_for(mode).panes();
-        assert!(chrome.gutter() >= 1., "{mode:?} needs a gutter to drag");
-        assert!(chrome.veil() > 0, "{mode:?} must mark the panes not in use");
-        let (top, bottom) = chrome.corners();
-        assert!(top >= 0. && bottom >= 0.);
-    }
-}
-
-#[test]
-fn a_mirror_tab_saves_that_it_only_watches() {
-    use crate::browser::Location;
-    let mirror = Location::CoreTerminal {
-        panes: Panes::single(id("t4")),
-        observe: true,
-    };
-    let saved = serde_json::to_string(&mirror).unwrap();
-    assert!(saved.contains("\"observe\":true"), "{saved}");
-    assert_eq!(serde_json::from_str::<Location>(&saved).unwrap(), mirror);
-    // A tab that types saves no flag at all.
-    let typing = Location::CoreTerminal {
-        panes: Panes::single(id("t4")),
-        observe: false,
-    };
-    assert!(!serde_json::to_string(&typing).unwrap().contains("observe"));
 }

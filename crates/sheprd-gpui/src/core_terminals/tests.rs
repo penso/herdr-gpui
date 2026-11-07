@@ -1,8 +1,8 @@
 mod chats;
 mod focus;
 mod keys;
-mod panes;
 mod paste;
+mod saved_tabs;
 mod screen;
 mod selection;
 mod worker;
