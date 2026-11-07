@@ -184,10 +184,13 @@ final class Fleet {
         drafts.set(key, drafted: drafted)
     }
 
-    /// Empties the cache, the drafts kept in it with the rest.
+    /// Empties the cache, the drafts kept in it with the rest. A chat still
+    /// open keeps its mark, as its composer holds its draft and saves it
+    /// again on leaving.
     func clearCache() {
         cache.clear()
-        drafts = DraftMarks()
+        let open = chats
+        drafts.forget { open[$0] == nil }
     }
 
     private func discoverDrafts(on machine: Machine) {
