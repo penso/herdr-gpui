@@ -1,6 +1,7 @@
-//! Workspaces and tabs whose notifications the user muted. A muted workspace
-//! silences every tab in it, including tabs opened later; a tab can also be
-//! muted on its own. While muted, nothing about it asks for the user: no
+//! Devices, workspaces, and tabs whose notifications the user muted. A muted
+//! device silences everything on it, a muted workspace every tab in it,
+//! including tabs opened later, and a tab can also be muted on its own. While
+//! muted, nothing about it asks for the user: no
 //! toast, system notification, or sound, and its agents leave the Dock badge
 //! and the Overview's count. Status dots still show what its agents do.
 //!
@@ -15,6 +16,10 @@
 //! over to a new process only for a workspace or tab the user named, back
 //! under the same ID and name. A mute whose workspace or tab closed is
 //! forgotten.
+//!
+//! A device's mute is kept apart: it names only the endpoint, so it holds
+//! while the device is offline, across its daemon's restarts, and for every
+//! session on it, and it lasts until the user lifts it or removes the device.
 
 mod error;
 
@@ -33,13 +38,17 @@ use std::{
 
 /// Mutes kept; the least recently changed go first beyond this.
 const MAX_MUTES: usize = 512;
+/// Muted devices kept; the least recently muted go first beyond this.
+const MAX_HOSTS: usize = 512;
 /// Bytes in each saved field. A longer ID is not muted, and a longer label
 /// is kept cut to this, so every mute the store accepts fits in its file.
 const MAX_FIELD_BYTES: usize = 1024;
 /// Room for the most mutes the store keeps, each as large as it accepts. No
 /// field holds a control character, so JSON escapes at most double a
 /// string's bytes; plus the field names, the time, and punctuation.
-const MAX_FILE_BYTES: u64 = (MAX_MUTES * (2 * 5 * MAX_FIELD_BYTES + 160) + 64) as u64;
+const MAX_FILE_BYTES: u64 = (MAX_MUTES * (2 * 5 * MAX_FIELD_BYTES + 160)
+    + MAX_HOSTS * (2 * MAX_FIELD_BYTES + 8)
+    + 64) as u64;
 const FILE: &str = "notification-mutes.json";
 /// How long a new mute ignores a snapshot that would forget it: one that does
 /// not show its target, or shows another daemon process. Another window's
@@ -217,17 +226,31 @@ fn verdict<'a>(mute: &Mute, snapshot: &'a ClientShellSnapshot, now: SystemTime) 
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 struct Saved {
     mutes: Vec<Mute>,
+    /// Missing from a file saved before devices could be muted.
+    #[serde(default)]
+    hosts: Vec<String>,
 }
 
-fn parse(bytes: &[u8]) -> Result<Vec<Mute>, Error> {
+/// Whether `endpoint` can be saved as a muted device.
+fn valid_host(endpoint: &str) -> bool {
+    !endpoint.is_empty()
+        && endpoint.len() <= MAX_FIELD_BYTES
+        && !endpoint.chars().any(char::is_control)
+}
+
+fn parse(bytes: &[u8]) -> Result<Saved, Error> {
     let saved: Saved = serde_json::from_slice(bytes)?;
-    if saved.mutes.len() > MAX_MUTES || !saved.mutes.iter().all(Mute::valid) {
+    if saved.mutes.len() > MAX_MUTES
+        || saved.hosts.len() > MAX_HOSTS
+        || !saved.mutes.iter().all(Mute::valid)
+        || !saved.hosts.iter().all(|host| valid_host(host))
+    {
         return Err(Error::Invalid);
     }
-    Ok(saved.mutes)
+    Ok(saved)
 }
 
 /// What one daemon's mutes silence in one of its snapshots: the workspaces
@@ -236,6 +259,8 @@ fn parse(bytes: &[u8]) -> Result<Vec<Mute>, Error> {
 /// changes other state.
 #[derive(Debug, Default)]
 pub(crate) struct Silenced<'a> {
+    /// The whole device is muted, so everything in the snapshot is silent.
+    host: bool,
     workspaces: HashSet<&'a str>,
     /// Tabs muted on their own.
     own_tabs: HashSet<&'a str>,
@@ -245,15 +270,20 @@ pub(crate) struct Silenced<'a> {
 
 impl Silenced<'_> {
     pub(crate) fn is_empty(&self) -> bool {
-        self.workspaces.is_empty() && self.tabs.is_empty()
+        !self.host && self.workspaces.is_empty() && self.tabs.is_empty()
     }
 
-    /// Whether any workspace is muted, rather than only tabs.
+    /// Whether the whole device is muted.
+    pub(crate) fn host(&self) -> bool {
+        self.host
+    }
+
+    /// Whether any workspace is silent as a whole, rather than only tabs.
     pub(crate) fn any_workspace(&self) -> bool {
-        !self.workspaces.is_empty()
+        self.host || !self.workspaces.is_empty()
     }
 
-    /// Whether the workspace is muted.
+    /// Whether the workspace is muted itself, whatever its device is.
     pub(crate) fn workspace(&self, id: &str) -> bool {
         self.workspaces.contains(id)
     }
@@ -263,26 +293,29 @@ impl Silenced<'_> {
         self.own_tabs.contains(id)
     }
 
-    /// Whether the tab is silent: muted itself or with its workspace.
+    /// Whether the tab is silent: muted itself or with its workspace or
+    /// device.
     pub(crate) fn tab(&self, id: &str) -> bool {
-        self.tabs.contains(id)
+        self.host || self.tabs.contains(id)
     }
 
-    /// Whether the pane is silent through its tab or workspace.
+    /// Whether the pane is silent through its tab, workspace, or device.
     pub(crate) fn pane(&self, id: &str) -> bool {
-        self.panes.contains(id)
+        self.host || self.panes.contains(id)
     }
 
     /// Whether a notification naming these places is silenced. Any of them
     /// being silent is enough, so a pane the snapshot does not list yet
-    /// still follows the tab or workspace the notification names.
+    /// still follows the tab or workspace the notification names. A muted
+    /// device silences one that names no place too.
     pub(crate) fn notice(
         &self,
         workspace: Option<&str>,
         tab: Option<&str>,
         pane: Option<&str>,
     ) -> bool {
-        workspace.is_some_and(|id| self.workspace(id))
+        self.host
+            || workspace.is_some_and(|id| self.workspace(id))
             || tab.is_some_and(|id| self.tab(id))
             || pane.is_some_and(|id| self.pane(id))
     }
@@ -292,6 +325,8 @@ impl Silenced<'_> {
 #[derive(Default)]
 pub(crate) struct Mutes {
     mutes: Vec<Mute>,
+    /// The endpoints of the muted devices, least recently muted first.
+    hosts: Vec<String>,
     writer: Option<state_file::Writer<Saved>>,
     quitting: bool,
     /// Counts changes, so a window can tell another one changed a mute.
@@ -312,13 +347,13 @@ impl Mutes {
     }
 
     fn at(path: Option<PathBuf>) -> Self {
-        let mutes = path
+        let saved = path
             .as_deref()
             .map(|path| {
                 state_file::read(path, MAX_FILE_BYTES).and_then(|bytes| {
                     bytes
                         .as_deref()
-                        .map_or(Ok(Vec::new()), |bytes| Ok(parse(bytes)?))
+                        .map_or(Ok(Saved::default()), |bytes| Ok(parse(bytes)?))
                 })
             })
             .transpose()
@@ -338,7 +373,8 @@ impl Mutes {
                 },
             );
         Self {
-            mutes,
+            mutes: saved.mutes,
+            hosts: saved.hosts,
             writer,
             quitting: false,
             revision: 0,
@@ -381,7 +417,47 @@ impl Mutes {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.mutes.is_empty()
+        self.mutes.is_empty() && self.hosts.is_empty()
+    }
+
+    /// Whether the device `endpoint` is muted.
+    pub(crate) fn host(&self, endpoint: &str) -> bool {
+        self.hosts.iter().any(|host| host == endpoint)
+    }
+
+    /// Forgets the mute of the device `endpoint`, which was removed, so it
+    /// starts unmuted if it is added back.
+    pub(crate) fn forget_host(cx: &mut App, endpoint: &str) {
+        if Self::of(cx).is_some_and(|mutes| mutes.host(endpoint)) {
+            Self::update(cx, |mutes| mutes.set_host(endpoint, false));
+        }
+    }
+
+    /// What `endpoint`'s mute silences while it has no snapshot to look in.
+    pub(crate) fn silenced_offline(&self, endpoint: &str) -> Silenced<'static> {
+        Silenced {
+            host: self.host(endpoint),
+            ..Silenced::default()
+        }
+    }
+
+    /// Mutes or unmutes the device `endpoint`, which need not be connected.
+    /// Returns whether anything changed; an ID too long to keep is refused.
+    pub(crate) fn set_host(&mut self, endpoint: &str, muted: bool) -> bool {
+        if muted == self.host(endpoint) || (muted && !valid_host(endpoint)) {
+            return false;
+        }
+        if muted {
+            self.hosts.push(endpoint.to_owned());
+            if self.hosts.len() > MAX_HOSTS {
+                let excess = self.hosts.len() - MAX_HOSTS;
+                self.hosts.drain(..excess);
+            }
+        } else {
+            self.hosts.retain(|host| host != endpoint);
+        }
+        self.changed();
+        true
     }
 
     /// What the app's mutes silence in `endpoint`'s `snapshot`: nothing while
@@ -414,7 +490,10 @@ impl Mutes {
             .filter(|mute| mute.daemon == *daemon)
             .map(|mute| ((mute.scope, mute.id.as_str()), mute))
             .collect();
-        let mut silenced = Silenced::default();
+        let mut silenced = Silenced {
+            host: self.host(&daemon.endpoint),
+            ..Silenced::default()
+        };
         if mine.is_empty() {
             return silenced;
         }
@@ -576,6 +655,7 @@ impl Mutes {
         if let Some(writer) = &self.writer {
             writer.save(Saved {
                 mutes: self.mutes.clone(),
+                hosts: self.hosts.clone(),
             });
         }
     }
@@ -586,6 +666,7 @@ impl Mutes {
     pub(crate) fn reloaded(&self) -> Self {
         Self {
             mutes: self.mutes.clone(),
+            hosts: self.hosts.clone(),
             ..Self::default()
         }
     }

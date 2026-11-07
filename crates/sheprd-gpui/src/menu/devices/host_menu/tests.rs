@@ -10,6 +10,7 @@ mod device_theme;
 mod en_xa;
 mod forwards;
 mod menu_width;
+mod mute;
 mod tags;
 #[cfg(feature = "azure")]
 mod unsynced;
@@ -44,7 +45,9 @@ fn host(view: &crate::SheprdWindow) -> &HostMenu {
 }
 
 #[gpui::test]
-fn right_clicking_a_saved_host_offers_removal_but_local_only_grouping(cx: &mut TestAppContext) {
+fn right_clicking_a_saved_host_offers_removal_but_local_only_grouping_and_mute(
+    cx: &mut TestAppContext,
+) {
     let (view, cx) = cx.add_window_view(|window, cx| {
         crate::bind_keys(cx);
         let mut view = fixture_window(window, cx);
@@ -58,6 +61,7 @@ fn right_clicking_a_saved_host_offers_removal_but_local_only_grouping(cx: &mut T
     cx.simulate_mouse_up(local.center(), MouseButton::Right, Modifiers::default());
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::Host));
+        assert_eq!(host(view).saved, Saved::Local);
         assert_eq!(host(view).actions(), super::LOCAL_ACTIONS);
     });
     view.update_in(cx, |view, window, cx| view.dismiss_menu(window, cx));

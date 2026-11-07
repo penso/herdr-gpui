@@ -5,6 +5,7 @@ use crate::sidebar::layout_tests::{REPO_KEY, fixture_window, snapshot};
 mod dialogs;
 mod identity;
 mod list_budget;
+mod muting;
 
 /// A caller in workspace `workspace` of the fixture window's daemon.
 fn caller(workspace: Option<&str>) -> Caller {

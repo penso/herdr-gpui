@@ -415,6 +415,10 @@ impl SheprdWindow {
         self.dismiss_menu(window, cx);
         cx.spawn(async move |this, cx| {
             let result = background.await;
+            // From the app: the window may have closed by now.
+            if result.is_ok() {
+                cx.update(|cx| crate::notification_mutes::Mutes::forget_host(cx, &id));
+            }
             let _ = this.update(cx, |this, cx| {
                 if let Err(error) = result {
                     // The log's context.

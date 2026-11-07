@@ -1,5 +1,5 @@
-//! Muting the notifications of the workspace or tab a menu targets, on the
-//! selected endpoint. The mutes live in [`crate::notification_mutes`].
+//! Muting the notifications of the device, workspace, or tab a menu targets.
+//! The mutes live in [`crate::notification_mutes`].
 // i18n: migrated
 
 use crate::{
@@ -10,6 +10,19 @@ use gpui::{App, Context};
 use std::time::SystemTime;
 
 impl SheprdWindow {
+    /// Whether the selected endpoint is muted as a whole.
+    pub(crate) fn selected_host_muted(&self, cx: &App) -> bool {
+        let endpoint = &self.endpoints[self.selected_endpoint];
+        Mutes::of(cx).is_some_and(|mutes| mutes.host(&endpoint.id))
+    }
+
+    /// Mutes or unmutes the device `id`, connected or not.
+    pub(crate) fn set_host_muted(&mut self, id: &str, muted: bool, cx: &mut Context<Self>) {
+        if Mutes::update(cx, |mutes| mutes.set_host(id, muted)) {
+            cx.notify();
+        }
+    }
+
     /// Whether the selected endpoint's workspace or tab `id` is muted on its
     /// own: a tab silent only through its workspace is not.
     pub(crate) fn muted_on_selected(&self, scope: Scope, id: &str, cx: &App) -> bool {

@@ -336,10 +336,12 @@ pub(crate) fn tick(
     let mut changed = false;
     for (index, endpoint) in endpoints.iter_mut().enumerate() {
         let snapshot = endpoint.live.latest_snapshot().map(std::sync::Arc::as_ref);
-        let silenced = snapshot
-            .zip(mutes)
-            .map(|(snapshot, mutes)| {
-                mutes.silenced(&crate::notification_mutes::Daemon::of(endpoint), snapshot)
+        let silenced = mutes
+            .map(|mutes| match snapshot {
+                Some(snapshot) => {
+                    mutes.silenced(&crate::notification_mutes::Daemon::of(endpoint), snapshot)
+                }
+                None => mutes.silenced_offline(&endpoint.id),
             })
             .unwrap_or_default();
         endpoint.toasts.entries.retain_mut(|(id, n)| {

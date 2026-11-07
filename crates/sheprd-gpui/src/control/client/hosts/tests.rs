@@ -75,6 +75,7 @@ fn comments_and_hosts_read_one_per_entry() {
             label: "Local".into(),
             status: "online".into(),
             selected: true,
+            muted: false,
             tags: Vec::new(),
         },
         HostInfo {
@@ -82,12 +83,13 @@ fn comments_and_hosts_read_one_per_entry() {
             label: "Devbox".into(),
             status: "offline".into(),
             selected: false,
+            muted: true,
             tags: vec!["work".into(), "lab".into()],
         },
     ];
     assert_eq!(
         text::hosts(&hosts),
-        "> Local (local): online\n  Devbox (ssh:devbox): offline [work, lab]"
+        "> Local (local): online\n  Devbox (ssh:devbox): offline, muted [work, lab]"
     );
 }
 

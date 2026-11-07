@@ -4,6 +4,7 @@
 //! Nothing here starts a lookup, a scan, or a sample of its own; a request
 //! answers from the latest one, and says why when there is none.
 mod automation;
+mod mute;
 mod ports;
 mod pr;
 mod security;
@@ -32,10 +33,13 @@ pub(super) fn serve(
 ) {
     let caller = &call.caller;
     let response = match call.op {
-        HostOp::List => in_window(caller, cx, |view, _, _| Response::Host {
+        HostOp::List => in_window(caller, cx, |view, _, cx| Response::Host {
             reply: Reply::Hosts {
-                hosts: view.control_hosts(),
+                hosts: view.control_hosts(cx),
             },
+        }),
+        HostOp::Mute { host, muted } => in_window(caller, cx, |view, _, cx| {
+            mute::set(view, caller, host.as_deref(), muted, cx)
         }),
         HostOp::Select { id } => in_free_window(caller, cx, |view, _, cx| {
             select(view, &id, |view, id| view.select_endpoint(id, cx))
@@ -140,22 +144,32 @@ impl Place {
     }
 }
 
-/// Replaces the tags of the host named by ID or label.
-fn tag(view: &mut SheprdWindow, name: &str, tags: Vec<String>, cx: &mut App) -> Response {
-    let found = view
-        .endpoints
+/// The host named by ID, else by label.
+fn named<'a>(
+    view: &'a SheprdWindow,
+    name: &str,
+) -> Result<&'a crate::endpoint::Endpoint, Response> {
+    view.endpoints
         .iter()
         .find(|endpoint| endpoint.id == name)
         .or_else(|| {
             view.endpoints
                 .iter()
                 .find(|endpoint| endpoint.label.eq_ignore_ascii_case(name))
-        });
-    let Some(endpoint) = found else {
-        return Response::error(
-            ErrorCode::NotFound,
-            format!("No host is named {name}; `sheprd host list` lists them"),
-        );
+        })
+        .ok_or_else(|| {
+            Response::error(
+                ErrorCode::NotFound,
+                format!("No host is named {name}; `sheprd host list` lists them"),
+            )
+        })
+}
+
+/// Replaces the tags of the host named by ID or label.
+fn tag(view: &mut SheprdWindow, name: &str, tags: Vec<String>, cx: &mut App) -> Response {
+    let endpoint = match named(view, name) {
+        Ok(endpoint) => endpoint,
+        Err(response) => return response,
     };
     let (id, label) = (endpoint.id.clone(), endpoint.label.clone());
     crate::device_tags::DeviceTags::set(cx, &id, tags);
@@ -169,20 +183,9 @@ fn select(
     name: &str,
     choose: impl FnOnce(&mut SheprdWindow, &str) -> bool,
 ) -> Response {
-    let found = view
-        .endpoints
-        .iter()
-        .find(|endpoint| endpoint.id == name)
-        .or_else(|| {
-            view.endpoints
-                .iter()
-                .find(|endpoint| endpoint.label.eq_ignore_ascii_case(name))
-        });
-    let Some(endpoint) = found else {
-        return Response::error(
-            ErrorCode::NotFound,
-            format!("No host is named {name}; `sheprd host list` lists them"),
-        );
+    let endpoint = match named(view, name) {
+        Ok(endpoint) => endpoint,
+        Err(response) => return response,
     };
     let (id, label) = (endpoint.id.clone(), endpoint.label.clone());
     if !endpoint.enabled {

@@ -93,3 +93,11 @@ fn work_replies_round_trip() {
         assert_eq!(serde_json::from_str::<Response>(&text).unwrap(), response);
     }
 }
+
+#[test]
+fn mute_requests_keep_their_wire_names() {
+    let op: WorkOp = serde_json::from_str(r#"{"op":"mute","muted":true}"#).unwrap();
+    assert_eq!(op, WorkOp::Mute { muted: true });
+    let op: WorkOp = serde_json::from_str(r#"{"op":"mute_status"}"#).unwrap();
+    assert_eq!(op, WorkOp::MuteStatus);
+}

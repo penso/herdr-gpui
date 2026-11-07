@@ -14,6 +14,11 @@ pub enum PrCommand {
 pub enum HostCommand {
     List,
     Select(String),
+    /// Mute or unmute a host by ID or label; absent, the caller's.
+    Mute {
+        host: Option<String>,
+        muted: bool,
+    },
     /// Replace a host's tags; none clears them.
     Tag {
         id: String,
@@ -91,6 +96,10 @@ pub(super) fn host(args: &mut Args) -> Result<HostCommand, CliError> {
     Ok(match verb.to_str() {
         Some("list") => HostCommand::List,
         Some("select") => HostCommand::Select(args.required_text("HOST")?),
+        Some(verb @ ("mute" | "unmute")) => HostCommand::Mute {
+            host: args.optional_text()?,
+            muted: verb == "mute",
+        },
         Some("tag") => HostCommand::Tag {
             id: args.required_text("HOST")?,
             tags: std::iter::from_fn(|| args.optional_text().transpose())

@@ -2,7 +2,8 @@
 //! The sidebar host header's context menu. Saved SSH devices and cloud devices
 //! have this one, each with the actions its kind supports; a WSL
 //! distribution's only offers its removal (see `wsl`). Local is always
-//! present, and an explicit socket is not in the catalog.
+//! present, so it offers only its grouping and mute, and an explicit socket is
+//! not in the catalog.
 use super::setup;
 use crate::i18n::fl;
 use crate::{
@@ -12,74 +13,16 @@ use crate::{
     menu::Page,
     search_input::SearchInput,
 };
+#[cfg(feature = "cloud")]
+use actions::CLOUD_ACTIONS;
+use actions::{Action, LOCAL_ACTIONS, SSH_ACTIONS};
 use gpui::{prelude::*, *};
 use sheprd_client::ConnectTarget;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Action {
-    Rename,
-    /// Toggles `[devices.<id>] keybindings` between local and server.
-    ServerKeybindings,
-    /// Forwards one of the host's listening ports to this computer.
-    #[cfg(unix)]
-    ForwardPort,
-    /// Picks `[devices.<id>] theme`, the terminal's colors on this device.
-    Theme,
-    /// Picks the section the device lists under, or the tags it also carries.
-    Tags(tags::Mode),
-    /// Opens Settings > Cloud devices on the device's provider.
-    #[cfg(feature = "cloud")]
-    ProviderSettings,
-    /// Runs the configured setup script on the cloud device again.
-    #[cfg(feature = "cloud")]
-    RunSetup,
-    Remove,
-}
-
-/// Each row's action and the message naming it.
-const SSH_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "host-menu-rename"),
-    (Action::Tags(tags::Mode::MoveTo), "device-tags-move-to"),
-    (
-        Action::Tags(tags::Mode::AlsoTagged),
-        "device-tags-also-tagged",
-    ),
-    (Action::ServerKeybindings, "host-menu-server-keybindings"),
-    // Port forwards need an `ssh` control master, which Windows OpenSSH lacks.
-    #[cfg(unix)]
-    (Action::ForwardPort, "host-menu-forward-port"),
-    (Action::Theme, "host-menu-theme"),
-    (Action::Remove, "host-menu-remove"),
-];
-
-/// Port forwards, server keybindings, and the terminal theme go through the
-/// SSH profile, which a cloud device does not have.
-#[cfg(feature = "cloud")]
-const CLOUD_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "host-menu-rename"),
-    (Action::Tags(tags::Mode::MoveTo), "device-tags-move-to"),
-    (
-        Action::Tags(tags::Mode::AlsoTagged),
-        "device-tags-also-tagged",
-    ),
-    (Action::ProviderSettings, "host-menu-cloud-settings"),
-    (Action::RunSetup, "host-menu-run-setup"),
-    (Action::Remove, "host-menu-remove"),
-];
-
-/// This computer is not saved anywhere, so it can only be grouped.
-const LOCAL_ACTIONS: &[(Action, &str)] = &[
-    (Action::Tags(tags::Mode::MoveTo), "device-tags-move-to"),
-    (
-        Action::Tags(tags::Mode::AlsoTagged),
-        "device-tags-also-tagged",
-    ),
-];
 
 /// The saved entry the menu acts on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Saved {
-    /// This computer, which has no saved entry.
+    /// This computer's daemon, which is not in any catalog.
     Local,
     /// A catalog profile, which the `herdr machine` commands name.
     Ssh { profile: String },
@@ -233,7 +176,7 @@ impl SheprdWindow {
                 tracing::info!(
                     category = "device_remove",
                     id,
-                    "Host menu refused: the device is not a saved SSH or cloud device"
+                    "Host menu refused: the device is not Local or a saved device"
                 );
                 return;
             }
@@ -303,6 +246,13 @@ impl SheprdWindow {
                     host.error = None;
                 }
                 self.menu.page = Some(Page::RenameDevice);
+            }
+            Action::Mute => {
+                if let Some(id) = self.menu.host.as_ref().map(|host| host.id.clone()) {
+                    let muted = crate::notification_mutes::Mutes::of(cx)
+                        .is_some_and(|mutes| mutes.host(&id));
+                    self.set_host_muted(&id, !muted, cx);
+                }
             }
             Action::ServerKeybindings => self.toggle_server_keybindings(cx),
             Action::Theme => self.open_device_theme(window, cx),
@@ -499,8 +449,24 @@ impl SheprdWindow {
         });
         self.menu.removing_devices.insert(id.clone());
         self.dismiss_menu(window, cx);
-        cx.spawn(async move |this, cx| {
+        Self::follow_removal(cx.entity().downgrade(), background, id, label, forget, cx);
+    }
+
+    /// Applies a removal's result. Its mute goes first, from the app: the
+    /// window that started the removal may have closed by the time it ends.
+    fn follow_removal(
+        this: WeakEntity<Self>,
+        background: Task<crate::Result<crate::Result<()>>>,
+        id: String,
+        label: String,
+        forget: bool,
+        cx: &mut App,
+    ) {
+        cx.spawn(async move |cx| {
             let result = background.await;
+            if result.is_ok() {
+                cx.update(|cx| crate::notification_mutes::Mutes::forget_host(cx, &id));
+            }
             let _ = this.update(cx, |this, cx| {
                 this.device_removed(&id, &label, forget, result, cx)
             });
@@ -662,22 +628,28 @@ impl SheprdWindow {
                             .truncate()
                             .child(host.label.clone()),
                     )
-                    .child(
-                        div()
-                            .text_size(px(self.config.ui.size * 0.85))
-                            .text_color(rgb(theme.muted))
-                            .truncate()
-                            // The device's target and session.
-                            .when(!host.target.is_empty(), |line| {
-                                line.child(format!("{} · {}", host.target, host.session)) // i18n: data
-                            }),
-                    ),
+                    .when(!host.target.is_empty(), |header| {
+                        header.child(
+                            div()
+                                .text_size(px(self.config.ui.size * 0.85))
+                                .text_color(rgb(theme.muted))
+                                .truncate()
+                                // The device's target and session.
+                                .child(format!("{} · {}", host.target, host.session)), // i18n: data
+                        )
+                    }),
             );
             let server_keys = self.config.keybinding_source(&host.id) == KeybindingSource::Server;
             let device_theme = self.device_theme_value(&host.id).map(str::to_owned);
+            let muted =
+                crate::notification_mutes::Mutes::of(cx).is_some_and(|mutes| mutes.host(&host.id));
             for (index, &(action, message)) in host.actions().iter().enumerate() {
                 let label = crate::i18n::message(message, &[]);
-                let toggle = action == Action::ServerKeybindings;
+                let toggle = match action {
+                    Action::Mute => Some(muted),
+                    Action::ServerKeybindings => Some(server_keys),
+                    _ => None,
+                };
                 body = body.child(
                     div()
                         .id(("host-menu-action", index))
@@ -688,11 +660,11 @@ impl SheprdWindow {
                         .items_center()
                         .gap(px(8.))
                         .cursor_pointer()
-                        .when(toggle, |row| {
+                        .when_some(toggle, |row, checked| {
                             row.child(crate::toggles::checkbox(
                                 theme,
                                 self.config.ui.size + 2.,
-                                server_keys,
+                                checked,
                             ))
                         })
                         .when(action == Action::Remove, |row| {
@@ -735,7 +707,7 @@ impl SheprdWindow {
                 );
                 // Opting in never silently changes nothing: say why the
                 // device is still on local keys.
-                if let Some(error) = toggle
+                if let Some(error) = (action == Action::ServerKeybindings)
                     .then(|| self.server_keybindings_error(&host.id))
                     .flatten()
                 {
@@ -888,6 +860,7 @@ fn removal_note(host: &HostMenu) -> String {
 mod destroy;
 #[cfg(feature = "cloud")]
 use destroy::remove_label;
+mod actions;
 mod forwards;
 mod rename;
 mod tags;
