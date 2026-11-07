@@ -443,6 +443,11 @@ impl IntoResponse for ApiError {
             }
             Self::Hub(_) | Self::NoPush => StatusCode::SERVICE_UNAVAILABLE,
         };
+        // The request line only has the status. A computer without push
+        // answers every phone that registers, which says nothing new.
+        if status.is_server_error() && !matches!(self, Self::NoPush) {
+            tracing::warn!(status = status.as_u16(), error = %self, "request failed");
+        }
         (status, axum::Json(json!({ "error": self.to_string() }))).into_response()
     }
 }
