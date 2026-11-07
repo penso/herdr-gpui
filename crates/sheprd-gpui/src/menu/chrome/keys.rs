@@ -125,6 +125,10 @@ impl SheprdWindow {
             self.device_theme_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::DeviceTags) {
+            self.device_tags_key(event, window, cx);
+            return;
+        }
         if matches!(
             self.menu.page,
             Some(Page::Host | Page::RenameDevice | Page::ForwardPort | Page::RemoveDevice)

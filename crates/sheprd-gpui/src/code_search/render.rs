@@ -222,7 +222,7 @@ impl SheprdWindow {
                 )
                 .child(badge.flex_none())
                 .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                    let viewer = event.modifiers().secondary();
+                    let viewer = crate::keymap::secondary(&event.modifiers());
                     this.activate_code_search(row, viewer, window, cx);
                 })),
         )

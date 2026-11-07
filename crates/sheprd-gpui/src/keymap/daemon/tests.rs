@@ -10,7 +10,7 @@ fn keys(text: &str) -> DaemonKeys {
 }
 
 fn parsed(text: &str) -> Keystroke {
-    Keystroke::parse(text).unwrap()
+    crate::keymap::parse_keystroke(text).unwrap()
 }
 
 fn prefixed(key: &str) -> Trigger {

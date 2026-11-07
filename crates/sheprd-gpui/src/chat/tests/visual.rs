@@ -159,7 +159,7 @@ fn diagrams_are_drawn_off_thread_and_redrawn_for_a_new_theme(cx: &mut TestAppCon
     };
     assert!(drawn.width > 0. && drawn.height > 0.);
     let pixels = drawn.texture.as_bytes(0).unwrap();
-    assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] > 0));
+    assert!(pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0));
     assert!(matches!(
         visuals.shown(broken),
         Shown::Failed(Error::Diagram(_))

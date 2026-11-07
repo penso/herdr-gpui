@@ -10,6 +10,7 @@ fn upstream() -> Origin {
         repo: "project".into(),
         remote: Remote::Upstream,
         fork_owner: Some("contributor".into()),
+        ..Origin::default()
     }
 }
 

@@ -221,7 +221,7 @@ fn a_panel_header_folds_from_the_keyboard(cx: &mut gpui::TestAppContext) {
     // The first header is the region's first stop; Enter and Space use it,
     // as with the app's own chrome controls.
     for (key, folded) in [("enter", true), ("space", false)] {
-        let keystroke = gpui::Keystroke::parse(key).unwrap();
+        let keystroke = crate::keymap::parse_keystroke(key).unwrap();
         cx.simulate_event(gpui::KeyDownEvent {
             keystroke: keystroke.clone(),
             is_held: false,

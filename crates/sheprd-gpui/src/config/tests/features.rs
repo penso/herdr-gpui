@@ -13,14 +13,16 @@ fn every_listed_feature_reads_its_own_key() -> anyhow::Result<()> {
             crate::i18n::takes(feature.description_message()),
             Some(none)
         );
-        assert!(!Features::default().enabled(feature));
-        let config = Config::parse(&format!("[features]\n{} = true", feature.key()))?;
+        let defaults = Features::default();
+        let value = !defaults.enabled(feature);
+        let config = Config::parse(&format!("[features]\n{} = {value}", feature.key()))?;
         for &other in Feature::ALL {
-            assert_eq!(
-                config.features.enabled(other),
-                other == feature,
-                "{other:?}"
-            );
+            let expected = if other == feature {
+                value
+            } else {
+                defaults.enabled(other)
+            };
+            assert_eq!(config.features.enabled(other), expected, "{other:?}");
         }
     }
     Ok(())

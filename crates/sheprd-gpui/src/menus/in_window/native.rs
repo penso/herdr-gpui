@@ -14,7 +14,7 @@ async fn settle(cx: &mut AsyncApp) {
 fn key(handle: WindowHandle<SheprdWindow>, key: &str, cx: &mut AsyncApp) -> Result<()> {
     AnyWindowHandle::from(handle).update(cx, |_, window, cx| {
         let event = KeyDownEvent {
-            keystroke: Keystroke::parse(key)?,
+            keystroke: crate::keymap::parse_keystroke(key)?,
             is_held: false,
             prefer_character_input: false,
         };

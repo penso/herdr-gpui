@@ -43,7 +43,7 @@ agent-launcher wrote it and check that migration keeps its rows.
 | `model.rs`, `location.rs`, `store.rs` | Records in the database's shapes, its path, and SQLite access. |
 | `repo.rs` | Finding a checkout's repository, main checkout, Beads, and remote on its host. |
 | `github.rs`, `gitlab.rs`, `beads.rs` | The sources: a full listing each. GitHub reads only what changed since the last sync, both listings' first pages in one request, with a full listing again every 30 minutes; a listing larger than 2,000 open items is shown, not stored, and continues from memory the same way, staying capped until a full listing reads it all. GitLab lists its open issues and merge requests in full on every sync. |
-| `review.rs` | Each open pull request's review decision, review requests, and checks, kept in the database, so a restart shows the last ones until the first sync. A GitHub sync reads them again only when an open pull request's head or update time moved, a check is still running, five minutes passed, or the user pressed Refresh. |
+| `review.rs` | Each open pull request's review decision, review requests, checks, and merge state, kept in the database, so a restart shows the last ones until the first sync. A GitHub sync reads them again only when an open pull request's head or update time moved, a check is still running, GitHub answered that it has not worked out the merge state yet, five minutes passed, or the user pressed Refresh. |
 | `service.rs` | The worker thread per open view: sync, reload, and the action queue. Sources sync every minute while the Pull requests or Issues section is shown and every ten minutes otherwise (`service/schedule.rs`); a source failing again waits twice as long each time, up to 30 minutes unless the provider asks for longer. |
 | `actions.rs` | Dispatch, stop, send, remove, delete: each on its own thread. |
 | `prompt.rs` | Prompt profiles, agent-launcher's built-in and review prompts. |
@@ -91,6 +91,9 @@ host, in agent-launcher's GitLab row format: `native_id` is the issue's
 project `iid`. Its open merge requests (`.../merge_requests?state=opened`, read
 the same way, with the same token) join them as pull requests, keyed `pr/<iid>`
 and shown as `!<iid>`, with their source and target branches and draft state.
+`recent_issues` reads one bounded page instead, the 50 most recently updated
+open issues (`order_by=updated_at&sort=desc`), for the new worktree dialog's
+issues tab; it never touches the cache.
 A refused merge request listing fails the sync and preserves the cached
 items. Merge requests are read-only: the status, conversation, checks, merge,
 and `gh` review pages are GitHub's, so a merge request has none of them and

@@ -3,6 +3,8 @@
 //! scripts use (see `sprites::relay` and `opensandbox::relay`): TLS with the
 //! bundled web roots, or plain TCP to a loopback or `ws` endpoint, bounded
 //! messages, and a reader that feeds this process's stdin to the relay.
+//! [`connect`] alone is the same TLS or TCP stream without the WebSocket, for
+//! a relay that speaks HTTP itself (`boxd::relay`).
 
 use std::{
     io::{self, Read, Write},
@@ -111,6 +113,27 @@ pub fn open(url: &Url, headers: &[Header]) -> Result<WebSocket<Stream>, Error> {
             .map_err(Error::HeaderName)?;
         request.headers_mut().insert(name, value);
     }
+    let stream = connect(host, port, encrypted)?;
+    let config = WebSocketConfig::default()
+        .max_message_size(Some(MESSAGE_LIMIT))
+        .max_frame_size(Some(MESSAGE_LIMIT));
+    let (socket, _) = tungstenite::client::client_with_config(request, stream, Some(config))
+        .map_err(|error| match error {
+            tungstenite::HandshakeError::Failure(error) => Error::Stream(error),
+            tungstenite::HandshakeError::Interrupted(_) => Error::Closed,
+        })?;
+    socket
+        .get_ref()
+        .tcp()
+        .set_read_timeout(Some(POLL))
+        .map_err(Error::Connect)?;
+    Ok(socket)
+}
+
+/// A TCP connection to `host` and `port`, inside TLS with the bundled web
+/// roots when `encrypted`. Its reads and writes time out after the handshake
+/// limit until the caller sets its own.
+pub fn connect(host: String, port: u16, encrypted: bool) -> Result<Stream, Error> {
     let address = (host.as_str(), port)
         .to_socket_addrs()
         .map_err(Error::Connect)?
@@ -139,20 +162,7 @@ pub fn open(url: &Url, headers: &[Header]) -> Result<WebSocket<Stream>, Error> {
     } else {
         Stream::Plain(tcp)
     };
-    let config = WebSocketConfig::default()
-        .max_message_size(Some(MESSAGE_LIMIT))
-        .max_frame_size(Some(MESSAGE_LIMIT));
-    let (socket, _) = tungstenite::client::client_with_config(request, stream, Some(config))
-        .map_err(|error| match error {
-            tungstenite::HandshakeError::Failure(error) => Error::Stream(error),
-            tungstenite::HandshakeError::Interrupted(_) => Error::Closed,
-        })?;
-    socket
-        .get_ref()
-        .tcp()
-        .set_read_timeout(Some(POLL))
-        .map_err(Error::Connect)?;
-    Ok(socket)
+    Ok(stream)
 }
 
 /// Read `source` on its own thread, in chunks, then `None` at its end. The

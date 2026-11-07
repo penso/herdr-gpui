@@ -64,7 +64,7 @@ impl HostMenu {
     pub(super) fn deletion(&self) -> Option<Deletion> {
         match &self.saved {
             Saved::Cloud { provider, .. } => crate::cloud::deletion(*provider),
-            Saved::Ssh { .. } => None,
+            Saved::Local | Saved::Ssh { .. } => None,
         }
     }
 
@@ -79,7 +79,7 @@ impl HostMenu {
     fn machine_noun(&self) -> Option<&'static str> {
         match &self.saved {
             Saved::Cloud { id, .. } => Some((self.deletion()?.noun)(id)),
-            Saved::Ssh { .. } => None,
+            Saved::Local | Saved::Ssh { .. } => None,
         }
     }
 }

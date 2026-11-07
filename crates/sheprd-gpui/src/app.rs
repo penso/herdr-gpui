@@ -226,8 +226,15 @@ pub(crate) fn run() -> std::process::ExitCode {
     if let Some(exit) = crate::setup_relay::run_helper(&args) {
         return exit;
     }
+    // The exec relays below read their provider's table, so they need the
+    // loader too; setting it reads nothing yet.
+    sheprd_remote::config::set_loader(Config::load_remote);
     #[cfg(feature = "azure")]
     if let Some(exit) = crate::azure::sandbox::relay::run_helper(&args) {
+        return exit;
+    }
+    #[cfg(feature = "boxd")]
+    if let Some(exit) = crate::boxd::relay::run_helper(&args) {
         return exit;
     }
     #[cfg(feature = "sprites")]
@@ -346,7 +353,6 @@ pub(crate) fn run() -> std::process::ExitCode {
     // SSH children use the login shell's `ssh` and agent, as the daemon does:
     // launchd's would miss keys such as a security key held by another agent.
     sheprd_client::set_command_environment(crate::login_env::apply);
-    sheprd_remote::config::set_loader(Config::load_remote);
     tracing::info!(
         version = APP_VERSION,
         os = std::env::consts::OS,
@@ -490,6 +496,7 @@ pub(crate) fn run() -> std::process::ExitCode {
                 crate::px0::Launcher::install(cx);
                 // Nor do they install or ask the remote control service.
                 crate::remote::Supervisor::install(cx);
+                crate::device_tags::DeviceTags::install(cx);
                 #[cfg(feature = "cloud")]
                 crate::cloud::install_idle_checks(cx);
             }

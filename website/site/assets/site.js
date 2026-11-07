@@ -156,7 +156,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var root = document.getElementById("hero-install");
     if (!root) return;
     var OS = {
-      macOS: { cmd: "brew install penso/tap/herdr-gpui", req: "macOS 14.2 or newer, Apple silicon or Intel." },
+      macOS: { cmd: "brew install sheprd-labs/tap/sheprd", req: "macOS 14.2 or newer, Apple silicon or Intel." },
       Linux: { cmd: "curl -fsSL https://sheprd.org/install.sh | sh", req: "x86_64 and ARM64, with APT, DNF or pacman." },
       Windows: { cmd: "irm https://sheprd.org/install.ps1 | iex", req: "x86_64 and ARM64, in PowerShell. No admin rights needed." }
     };

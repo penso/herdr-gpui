@@ -11,7 +11,7 @@ use crate::{
     sidebar::layout_tests::fixture_window,
     state::ConnectionStatus,
 };
-use gpui::{Keystroke, TestAppContext, VisualTestContext};
+use gpui::{TestAppContext, VisualTestContext};
 use sheprd_client::protocol::ClientShellSnapshot;
 use std::sync::Arc;
 
@@ -86,7 +86,9 @@ fn renames_and_close_open_the_focused_targets_dialogs(cx: &mut TestAppContext) {
 fn resize_mode_claims_keys_until_it_ends(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(connected);
     let press = |key: &str, cx: &mut VisualTestContext| {
-        cx.update(|window, cx| window.dispatch_keystroke(Keystroke::parse(key).unwrap(), cx))
+        cx.update(|window, cx| {
+            window.dispatch_keystroke(crate::keymap::parse_keystroke(key).unwrap(), cx)
+        })
     };
     cx.update(|window, cx| {
         window.focus(&view.read(cx).focus.clone(), cx);

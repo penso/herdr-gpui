@@ -146,7 +146,7 @@ impl CoreTerminalView {
     /// or repeats it as reports for a program reading the wheel.
     pub(super) fn scroll_wheel(
         &mut self,
-        event: &ScrollWheelEvent,
+        event: &ScrollEvent,
         _: &mut Window,
         _: &mut Context<Self>,
     ) {

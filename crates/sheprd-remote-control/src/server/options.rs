@@ -76,6 +76,11 @@ pub enum Invocation {
         state_dir: Option<PathBuf>,
         device: String,
     },
+    /// Reads this computer's tags, offering any given on standard input.
+    Tags {
+        state_dir: Option<PathBuf>,
+        offer: bool,
+    },
     Help,
     Version,
 }
@@ -84,6 +89,7 @@ pub const USAGE: &str = "\
 Usage: sheprd-remote-control serve --state-dir DIR [options]
        sheprd-remote-control enroll [--state-dir DIR] < REQUEST.json
        sheprd-remote-control revoke --device ID [--state-dir DIR]
+       sheprd-remote-control tags [--offer] [--state-dir DIR] [< TAGS.json]
 
 Serves this computer's Herdr chats to paired phones over HTTPS. Sheprd
 starts it when Remote control is on.
@@ -94,7 +100,8 @@ Options:
   --bind all|ADDRESS       Listen on every interface (default) or one address
   --cert FILE --key FILE   Use this certificate chain and key instead of the
                            daemon's own certificate authority
-  --herdr-socket PATH      The Herdr daemon's client socket (default: discovered)
+  --herdr-socket PATH      The Herdr daemon's client socket (default: discovered);
+                           other running Herdr sessions are followed too
   --core-socket PATH --core-session NAME
                            The desktop core endpoint (default: discovered)
   --chat-dir DIR           Where chat sockets live (default: discovered)
@@ -119,6 +126,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     match args.next().as_deref().and_then(|arg| arg.to_str()) {
         Some("serve") => {}
         Some(verb @ ("enroll" | "revoke")) => return parse_host(verb == "enroll", args),
+        Some("tags") => return parse_tags(args),
         Some("-h" | "--help") | None => return Ok(Invocation::Help),
         Some("-V" | "--version") => return Ok(Invocation::Version),
         Some(other) => return Err(ParseError::Unknown(other.to_owned())),
@@ -254,6 +262,25 @@ fn parse_host(
         state_dir,
         device: device.ok_or(ParseError::Missing("--device"))?,
     })
+}
+
+/// `tags [--offer] [--state-dir DIR]`.
+fn parse_tags(mut args: impl Iterator<Item = OsString>) -> Result<Invocation, ParseError> {
+    let (mut state_dir, mut offer) = (None, false);
+    while let Some(arg) = args.next() {
+        let name = arg.to_str().unwrap_or_default().to_owned();
+        match name.as_str() {
+            "--state-dir" => {
+                state_dir = Some(PathBuf::from(
+                    args.next().ok_or(ParseError::Missing("--state-dir"))?,
+                ));
+            }
+            "--offer" => offer = true,
+            "-h" | "--help" => return Ok(Invocation::Help),
+            _ => return Err(ParseError::Unknown(name)),
+        }
+    }
+    Ok(Invocation::Tags { state_dir, offer })
 }
 
 /// The computer's name as its owner knows it.

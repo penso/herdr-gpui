@@ -140,6 +140,10 @@ impl SheprdWindow {
                 crate::cloud::CloudProvider::Boat => {
                     self.config.boat.api_url.is_some() || var("HERDR_BOAT_API_URL").is_some()
                 }
+                #[cfg(feature = "boxd")]
+                crate::cloud::CloudProvider::Boxd => {
+                    self.config.boxd.api_url.is_some() || var("HERDR_BOXD_API_URL").is_some()
+                }
                 #[cfg(feature = "coder")]
                 crate::cloud::CloudProvider::Coder => {
                     self.config.coder.url.is_some() || var("HERDR_CODER_URL").is_some()
@@ -214,7 +218,19 @@ impl SheprdWindow {
     }
 
     pub(crate) fn device_visible(&self, id: &str) -> bool {
-        self.device_filter.shows(id)
+        self.device_filter.shows(id) && self.device_tag_visible(id)
+    }
+
+    /// Whether the tag switch lists `id`. The device on screen is always
+    /// listed, as it is for a device scope.
+    fn device_tag_visible(&self, id: &str) -> bool {
+        self.device_tag_filter
+            .as_deref()
+            .is_none_or(|tag| self.device_tags.has(id, tag))
+            || self
+                .endpoints
+                .get(self.selected_endpoint)
+                .is_some_and(|endpoint| endpoint.id == id)
     }
 
     /// Lists `scope`'s devices in the sidebar, from the top: the rows a scroll

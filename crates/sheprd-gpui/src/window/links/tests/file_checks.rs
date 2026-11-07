@@ -24,7 +24,7 @@ fn a_path_found_missing_is_checked_again_when_looked_at_again(cx: &mut gpui::Tes
     let (view, cx) = printed(&sandbox, "target/built.rs", &peer, cx);
     let link = at(&view, cx, LINK.0, LINK.1);
     let elsewhere = at(&view, cx, LINK.0, LINK.1 + 3);
-    let (none, held) = (Modifiers::default(), Modifiers::secondary_key());
+    let (none, held) = (Modifiers::default(), crate::keymap::secondary_key());
     let shown = |view: &Entity<SheprdWindow>, cx: &mut VisualTestContext| {
         view.read_with(cx, |view, _| view.hovered_local_link().is_some())
     };
@@ -55,7 +55,7 @@ fn a_click_before_the_check_ends_opens_the_file(cx: &mut gpui::TestAppContext) {
     cx.simulate_mouse_move(link, None, Modifiers::default());
 
     // The modifier goes down with the button, so no check has ended yet.
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     cx.run_until_parked();
     assert_eq!(cx.opened_url(), Some(sandbox.opened("src/sample.rs")));
 }
@@ -68,7 +68,7 @@ fn a_click_before_the_check_ends_opens_nothing_missing(cx: &mut gpui::TestAppCon
     let link = at(&view, cx, LINK.0, LINK.1);
     cx.simulate_mouse_move(link, None, Modifiers::default());
 
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     cx.run_until_parked();
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| assert!(view.flash.is_none()));

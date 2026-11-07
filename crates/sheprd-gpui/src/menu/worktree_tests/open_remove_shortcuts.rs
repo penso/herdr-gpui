@@ -66,7 +66,7 @@ fn press(command: Command, cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
         for key in keys {
             assert!(
-                window.dispatch_keystroke(Keystroke::parse(key).unwrap(), cx),
+                window.dispatch_keystroke(crate::keymap::parse_keystroke(key).unwrap(), cx),
                 "{key}"
             );
         }

@@ -123,20 +123,51 @@ fn to_oklab(color: u32) -> [f32; 3] {
     ]
 }
 
-/// Out-of-gamut results are clipped per channel, which keeps the hue close
-/// enough for a mark; the caller measures the packed color it gets back.
-fn from_oklab([lightness, a, b]: [f32; 3]) -> u32 {
+/// Linear sRGB channels, outside 0 to 1 when the color is out of gamut.
+fn linear_from_oklab([lightness, a, b]: [f32; 3]) -> [f32; 3] {
     let l = (lightness + 0.396_337_78 * a + 0.215_803_76 * b).powi(3);
     let m = (lightness - 0.105_561_346 * a - 0.063_854_17 * b).powi(3);
     let s = (lightness - 0.089_484_18 * a - 1.291_485_5 * b).powi(3);
-    pack(
-        [
-            4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s,
-            -1.268_438 * l + 2.609_757_4 * m - 0.341_319_38 * s,
-            -0.004_196_086_3 * l - 0.703_418_6 * m + 1.707_614_7 * s,
-        ]
-        .map(|channel| from_linear(channel.clamp(0., 1.))),
-    )
+    [
+        4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s,
+        -1.268_438 * l + 2.609_757_4 * m - 0.341_319_38 * s,
+        -0.004_196_086_3 * l - 0.703_418_6 * m + 1.707_614_7 * s,
+    ]
+}
+
+/// What rounding to 8 bits hides, so a color on the gamut's edge counts as in.
+const GAMUT_SLACK: f32 = 1e-4;
+
+fn in_gamut(color: [f32; 3]) -> bool {
+    linear_from_oklab(color)
+        .iter()
+        .all(|channel| (-GAMUT_SLACK..=1. + GAMUT_SLACK).contains(channel))
+}
+
+/// Remaining rounding error is clipped per channel; the caller measures the
+/// packed color it gets back.
+fn from_oklab(color: [f32; 3]) -> u32 {
+    pack(linear_from_oklab(color).map(|channel| from_linear(channel.clamp(0., 1.))))
+}
+
+/// `color` with its chroma reduced just enough to fit sRGB, keeping its
+/// lightness and hue. Clipping channels instead keeps a lifted saturated red
+/// at the gamut's pure red, darker than the lightness asked for, so no step
+/// of [`ink`]'s search would pass until white.
+fn fit_gamut(color @ [lightness, a, b]: [f32; 3]) -> [f32; 3] {
+    if in_gamut(color) {
+        return color;
+    }
+    let (mut inside, mut outside) = (0., 1.);
+    for _ in 0..STEPS {
+        let middle = (inside + outside) / 2.;
+        if in_gamut([lightness, a * middle, b * middle]) {
+            inside = middle;
+        } else {
+            outside = middle;
+        }
+    }
+    [lightness, a * inside, b * inside]
 }
 
 /// Pastels moved far from their lightness turn to mud unless they gain some
@@ -168,7 +199,7 @@ pub(crate) fn ink(color: u32, backgrounds: &[u32], target: f32) -> u32 {
     for _ in 0..STEPS {
         let middle = (near + far) / 2.;
         let gain = 1. + CHROMA_GAIN * (middle - lightness).abs() / span;
-        let candidate = from_oklab([middle, a * gain, b * gain]);
+        let candidate = from_oklab(fit_gamut([middle, a * gain, b * gain]));
         if worst(candidate, backgrounds) >= target {
             found = candidate;
             far = middle;
@@ -269,6 +300,25 @@ mod tests {
                 (hue(inked) - hue(color)).abs() < 0.2,
                 "{color:06x} -> {inked:06x}"
             );
+        }
+    }
+
+    #[test]
+    fn ink_keeps_a_saturated_color_lifted_on_dark_chrome_from_turning_white() {
+        // Gruvbox Dark's chrome, and colors no lightness in gamut keeps at
+        // full chroma: Gruvbox red, pure red, and pure blue.
+        let chrome = [0x282828, 0x32312f, 0x3f3d39];
+        for color in [0xcc241d, 0xff0000, 0x0000ff] {
+            for target in [3., 4.5] {
+                let inked = ink(color, &chrome, target);
+                assert!(worst(inked, &chrome) >= target, "{inked:06x}");
+                // The least movement that passes, not the pole.
+                assert!(worst(inked, &chrome) < target + 0.5, "{inked:06x}");
+                assert!(
+                    (hue_degrees(inked) - hue_degrees(color)).abs() < 3.,
+                    "{color:06x} -> {inked:06x}"
+                );
+            }
         }
     }
 

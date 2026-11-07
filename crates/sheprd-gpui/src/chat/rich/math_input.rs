@@ -57,7 +57,7 @@ pub(super) fn protect_display(input: &Normalized) -> DisplayInput {
     let mut markdown = String::with_capacity(text.len());
     let mut sources = HashMap::new();
     let mut cursor = 0;
-    for pair in delimiters.chunks_exact(2) {
+    for pair in delimiters.as_chunks::<2>().0.iter() {
         let (start, end) = (pair[0], pair[1]);
         let source = &text[start + 2..end];
         if !source.contains(['\n', '\r']) || source.trim().is_empty() {

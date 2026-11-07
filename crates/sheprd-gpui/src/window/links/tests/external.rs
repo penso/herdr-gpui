@@ -25,7 +25,7 @@ pub(super) fn linked<'a>(
 #[gpui::test]
 fn any_other_scheme_opens_only_after_the_user_confirms_it(cx: &mut gpui::TestAppContext) {
     let (view, cx, link) = linked("ssh://example.com", cx);
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::OpenLink))
@@ -40,7 +40,7 @@ fn any_other_scheme_opens_only_after_the_user_confirms_it(cx: &mut gpui::TestApp
     view.read_with(cx, |view, _| assert!(view.menu.page.is_none()));
 
     // "Yes" opens the address that was shown.
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
     let yes = cx.debug_bounds("open-link-yes").unwrap().center();
     cx.simulate_click(yes, Modifiers::default());
@@ -51,11 +51,11 @@ fn any_other_scheme_opens_only_after_the_user_confirms_it(cx: &mut gpui::TestApp
 #[gpui::test]
 fn the_question_answers_to_enter_and_escape(cx: &mut gpui::TestAppContext) {
     let (view, cx, link) = linked("ssh://example.com", cx);
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     cx.simulate_keystrokes("escape");
     assert!(cx.opened_url().is_none());
     view.read_with(cx, |view, _| assert!(view.menu.page.is_none()));
-    cx.simulate_click(link, Modifiers::secondary_key());
+    cx.simulate_click(link, crate::keymap::secondary_key());
     cx.simulate_keystrokes("enter");
     assert_eq!(cx.opened_url().as_deref(), Some("ssh://example.com"));
 }

@@ -48,9 +48,9 @@ fn a_pane_name_tells_same_named_agents_apart() {
 
 #[test]
 fn a_device_names_its_connection_and_working_agents() {
-    assert_eq!(device_name("Local", true, None), "Local, connected");
+    assert_eq!(device_name("Local", true, None, false), "Local, connected");
     assert_eq!(
-        device_name("devbox", false, Some("2/5")),
+        device_name("devbox", false, Some("2/5"), false),
         "devbox, disconnected, \u{2068}2/5\u{2069} working"
     );
 }

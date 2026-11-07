@@ -154,10 +154,12 @@ fn math_limits_and_errors_preserve_a_readable_source_path() {
             .is_some_and(|baseline| baseline > 0. && baseline < inline.height)
     );
     let pixels = inline.texture.as_bytes(0).unwrap();
-    assert!(pixels.chunks_exact(4).any(|p| p[3] == 0));
+    assert!(pixels.as_chunks::<4>().0.iter().any(|p| p[3] == 0));
     assert!(
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .any(|p| p[3] > 0 && p[..3] == [0xcc, 0xbb, 0xaa])
     );
 }

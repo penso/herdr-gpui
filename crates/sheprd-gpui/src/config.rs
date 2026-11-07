@@ -16,6 +16,7 @@ mod azure;
 pub(crate) mod backdrop;
 mod bitmap_fonts;
 mod boat;
+mod boxd;
 pub(crate) mod chat;
 mod cjk_fonts;
 mod cloud;
@@ -51,6 +52,7 @@ pub(crate) mod tab_layout;
 #[cfg(any(
     feature = "azure",
     feature = "boat",
+    feature = "boxd",
     feature = "coder",
     feature = "container",
     feature = "daytona",
@@ -107,6 +109,9 @@ pub(crate) use sheprd_remote::config::AzureFields;
 pub use sheprd_remote::config::BoatConfig;
 #[cfg(feature = "boat")]
 pub(crate) use sheprd_remote::config::BoatFields;
+pub use sheprd_remote::config::BoxdConfig;
+#[cfg(feature = "boxd")]
+pub(crate) use sheprd_remote::config::BoxdFields;
 pub use sheprd_remote::config::CoderConfig;
 #[cfg(feature = "coder")]
 pub(crate) use sheprd_remote::config::CoderFields;
@@ -174,6 +179,8 @@ pub struct Config {
     pub backdrop: Backdrop,
     pub bell: BellConfig,
     pub boat: BoatConfig,
+    /// The boxd account whose machines are devices.
+    pub boxd: BoxdConfig,
     /// What chats started from the app run with.
     pub chat: chat::ChatConfig,
     /// Only the keys this GUI's own file sets, so Settings can tell an
@@ -408,6 +415,7 @@ impl Default for Config {
             backdrop: Backdrop::default(),
             bell: BellConfig::default(),
             boat: BoatConfig::default(),
+            boxd: BoxdConfig::default(),
             chat: chat::ChatConfig::default(),
             clipboard_overrides: ClipboardToastSettings::default(),
             clipboard_toast: ClipboardToast::default(),
@@ -499,6 +507,7 @@ struct Settings {
     backdrop: Backdrop,
     bell: BellConfig,
     boat: BoatConfig,
+    boxd: BoxdConfig,
     chat: chat::ChatConfig,
     clipboard_toast: ClipboardToastSettings,
     cloud: CloudConfig,
@@ -596,6 +605,7 @@ impl Config {
         Ok(sheprd_remote::config::Sections {
             azure: config.azure,
             boat: config.boat,
+            boxd: config.boxd,
             coder: config.coder,
             container: config.container,
             daytona: config.daytona,
@@ -836,6 +846,9 @@ impl Config {
         #[cfg(feature = "boat")]
         settings.boat.settings_with(|_| None)?;
         config.boat = settings.boat;
+        #[cfg(feature = "boxd")]
+        settings.boxd.settings_with(|_| None)?;
+        config.boxd = settings.boxd;
         settings.chat.check()?;
         config.chat = settings.chat;
         settings.cloud.check()?;

@@ -144,7 +144,7 @@ fn linux_edit_keys_work_in_the_editor_and_composition_does_not_submit(cx: &mut T
         for key in ["enter", "escape"] {
             assert!(view.shortcut_editor_key(
                 &KeyDownEvent {
-                    keystroke: gpui::Keystroke::parse(key).unwrap(),
+                    keystroke: crate::keymap::parse_keystroke(key).unwrap(),
                     is_held: false,
                     prefer_character_input: false,
                 },

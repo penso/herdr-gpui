@@ -67,6 +67,12 @@ impl Job {
         })
     }
 
+    /// Runs the job out of time, for tests of what a timeout does.
+    #[cfg(test)]
+    pub(super) fn expire(&mut self) {
+        self.deadline = Instant::now();
+    }
+
     pub(crate) fn create_params(&self) -> Value {
         let mut params = json!({"workspace_id": self.workspace, "focus": true});
         if let Some(cwd) = &self.cwd {

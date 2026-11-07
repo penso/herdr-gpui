@@ -20,6 +20,7 @@ pub struct CloudConfig {
     pub agents: Option<Vec<String>>,
     pub azure: CloudSetup,
     pub boat: CloudSetup,
+    pub boxd: CloudSetup,
     pub coder: CloudSetup,
     pub container: CloudSetup,
     pub daytona: CloudSetup,
@@ -63,6 +64,7 @@ impl CloudConfig {
         [
             ("azure", &self.azure),
             ("boat", &self.boat),
+            ("boxd", &self.boxd),
             ("coder", &self.coder),
             ("container", &self.container),
             ("daytona", &self.daytona),
@@ -91,6 +93,7 @@ impl CloudConfig {
         retain("cloud.", &mut self.agents);
         retain("cloud.azure.", &mut self.azure.agents);
         retain("cloud.boat.", &mut self.boat.agents);
+        retain("cloud.boxd.", &mut self.boxd.agents);
         retain("cloud.coder.", &mut self.coder.agents);
         retain("cloud.container.", &mut self.container.agents);
         retain("cloud.daytona.", &mut self.daytona.agents);

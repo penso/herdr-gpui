@@ -1,21 +1,6 @@
 use super::*;
 use gpui::Entity;
 
-const ROWS: [&str; 5] = [
-    "host-menu-0",
-    "host-menu-1",
-    "host-menu-2",
-    "host-menu-3",
-    "host-menu-4",
-];
-const LABELS: [&str; 5] = [
-    "host-menu-label-0",
-    "host-menu-label-1",
-    "host-menu-label-2",
-    "host-menu-label-3",
-    "host-menu-label-4",
-];
-
 /// Opens the saved host's menu in a window `width` wide, with the device
 /// named `name`.
 fn open_menu<'a>(
@@ -45,8 +30,10 @@ fn host_menu_shows_every_label_in_full(cx: &mut TestAppContext) {
     for (index, &(_, message)) in SSH_ACTIONS.iter().enumerate() {
         let label = crate::i18n::message(message, &[]);
         let label = label.as_str();
-        let row = cx.debug_bounds(ROWS[index]).unwrap();
-        let text = cx.debug_bounds(LABELS[index]).unwrap();
+        let row = cx.debug_bounds(menu_row(index)).unwrap();
+        let text = cx
+            .debug_bounds(format!("host-menu-label-{index}").leak())
+            .unwrap();
         let natural = cx.update(|window, _| {
             window
                 .text_system()

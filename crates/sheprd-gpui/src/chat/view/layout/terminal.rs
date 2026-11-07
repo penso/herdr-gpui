@@ -23,6 +23,10 @@ impl ChatLayout for Terminal {
         true
     }
 
+    fn mono_prose(&self) -> bool {
+        true
+    }
+
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         let Some(side) = row.side() else {
             return summary_row(row, look, 6.);
