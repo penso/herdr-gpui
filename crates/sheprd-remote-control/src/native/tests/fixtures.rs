@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    control::pull_requests::{PullRequests, Tone, WorkspacePullRequest},
+    control::pull_requests::{PullRequests, Tone, UnopenedBranch, WorkspacePullRequest},
     hub::Summary,
     load::Load,
 };
@@ -131,6 +131,12 @@ fn home() -> Home {
             number: 870,
             url: "https://github.com/penso/herdr-gpui/pull/870".into(),
             tone: Tone::Waiting,
+        }],
+        unopened: vec![UnopenedBranch {
+            workspace_id: "w3".into(),
+            cwd: "/work-spaces-tab".into(),
+            branch: "worktree/spaces-tab".into(),
+            commits: 3,
         }],
     };
     Home::project(Sources {

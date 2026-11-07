@@ -8,6 +8,8 @@ chat-layout-document = Document
 chat-layout-cards = Cards
 chat-layout-imessage = iMessage
 chat-layout-ia = iA
+chat-layout-opencode = OpenCode
+chat-status-commands = commands
 chat-launcher-plus = On + hover
 chat-launcher-beside = After +
 chat-launcher-leading = Before tabs
@@ -32,6 +34,7 @@ chat-reconnecting = Reconnecting…
 chat-show-chat = Chat
 chat-jump-to-end = Scroll to the latest message
 chat-jump-waiting = New output below
+chat-pinned-prompt = Go to this prompt
 
 # The composer.
 chat-composer-placeholder = Message the agent — / for commands, Shift-Enter for a new line
@@ -217,6 +220,8 @@ chat-running-stopped = Stopped
 
 # The agent's settings menu in the chat header.
 chat-settings-search = Search…
+chat-settings-hint = { $name }: { $value }
+chat-settings-mode = Mode
 chat-settings-auto-accept-on = Auto-accepting
 chat-settings-auto-accept-off = Asks first
 chat-settings-no-match = No match
