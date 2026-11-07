@@ -161,28 +161,52 @@ pub struct RemoteSession {
 /// first and the rest by name. Performs filesystem and socket I/O in the calling
 /// thread's time: call it from a worker, never a rendering thread.
 pub fn list_local_sessions(development: bool) -> Result<Vec<LocalSession>> {
-    list_sessions_in(&config_dir(development))
+    list_with(&config_dir(development), answers)
 }
 
-/// List the sessions of the installation whose configuration directory is
-/// `dir` (such as `~/.config/herdr`), as [`list_local_sessions`] does for this
-/// process's own: for a caller, such as a user service, whose environment may
-/// not resolve the directory the user's shell does. Blocking, like it.
-pub fn list_sessions_in(dir: &Path) -> Result<Vec<LocalSession>> {
-    list_with(dir, |socket| {
-        // A plain connect and drop is the same availability signal upstream's own
-        // session list needs. The daemon logs a client only once it handshakes.
-        Stream::connect(socket).is_ok()
-    })
+/// The running sessions of the installation whose configuration directory is
+/// `dir` (such as `~/.config/herdr`): for a caller, such as a user service,
+/// whose environment may not resolve the directory the user's shell does.
+/// [`LIMIT`] counts only these, so old stopped sessions cannot hide them.
+/// Blocking, like [`list_local_sessions`].
+pub fn list_running_sessions_in(dir: &Path) -> Result<Vec<LocalSession>> {
+    running_with(dir, answers)
+}
+
+/// A plain connect and drop is the same availability signal upstream's own
+/// session list needs. The daemon logs a client only once it handshakes.
+fn answers(socket: &Path) -> bool {
+    Stream::connect(socket).is_ok()
 }
 
 fn list_with(dir: &Path, running: impl Fn(&Path) -> bool) -> Result<Vec<LocalSession>> {
-    let names = names(dir).map_err(|error| {
-        crate::Error::storage(crate::StorageOperation::Read, &session_root(dir), error)
-    })?;
+    let names = listed_names(dir)?;
     if names.len() > LIMIT {
         return Err(Error::Limit.into());
     }
+    probe(dir, names, running)
+}
+
+fn running_with(dir: &Path, running: impl Fn(&Path) -> bool) -> Result<Vec<LocalSession>> {
+    let mut sessions = probe(dir, listed_names(dir)?, running)?;
+    sessions.retain(|session| session.state.running());
+    if sessions.len() > LIMIT {
+        return Err(Error::Limit.into());
+    }
+    Ok(sessions)
+}
+
+fn listed_names(dir: &Path) -> Result<Vec<String>> {
+    names(dir).map_err(|error| {
+        crate::Error::storage(crate::StorageOperation::Read, &session_root(dir), error)
+    })
+}
+
+fn probe(
+    dir: &Path,
+    names: Vec<String>,
+    running: impl Fn(&Path) -> bool,
+) -> Result<Vec<LocalSession>> {
     names
         .into_iter()
         .map(|name| {

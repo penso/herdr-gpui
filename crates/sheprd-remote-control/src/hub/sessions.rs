@@ -9,7 +9,7 @@ use super::{
     Error, Result,
     api::Api,
     daemon::Daemon,
-    layout::{Layout, Workspace},
+    layout::{Layout, MAX_CHATS, Workspace},
 };
 use serde_json::Value;
 use sheprd_client::{ConnectTarget, LocalSession, SessionState};
@@ -178,29 +178,35 @@ async fn rescan(sessions: Weak<Sessions>) {
         };
         let primary = current.primary.clone();
         // Probes each session's socket: blocking, off the runtime's threads.
-        let listed = tokio::task::spawn_blocking(move || {
-            listed(primary.as_deref()).map_err(|error| error.to_string())
-        })
-        .await;
-        let listed = match listed {
-            Ok(listed) => listed,
-            Err(error) => Err(error.to_string()),
-        };
-        match listed {
-            Ok(wanted) => current.update(&wanted),
-            Err(error) => tracing::warn!(%error, "could not list Herdr sessions"),
+        match tokio::task::spawn_blocking(move || listed(primary.as_deref())).await {
+            Ok(Ok(wanted)) => current.update(&wanted),
+            Ok(Err(error)) => tracing::warn!(%error, "could not list Herdr sessions"),
+            Err(error) => tracing::warn!(%error, "the Herdr session listing stopped"),
         }
     }
 }
 
 /// The sessions to follow, listed in the installation the primary's socket
 /// is in: it was resolved in the user's shell, whose `XDG_CONFIG_HOME` this
-/// service's environment may lack. This process's own installation is
-/// listed otherwise. Blocking.
+/// service's environment may lack. Blocking.
 pub(super) fn listed(primary: Option<&Path>) -> sheprd_client::Result<Vec<(String, PathBuf)>> {
-    let listed = match primary.and_then(installation) {
-        Some(dir) => sheprd_client::list_sessions_in(dir)?,
-        None => sheprd_client::list_local_sessions(false)?,
+    listed_with(primary, || sheprd_client::list_local_sessions(false))
+}
+
+/// [`listed`], with `own` listing this process's installation. Only a primary
+/// that could not be resolved falls back to it: a socket outside any
+/// installation, such as a sandbox's or a development daemon's, was chosen to
+/// keep this daemon to that session, so nothing else is followed.
+pub(super) fn listed_with(
+    primary: Option<&Path>,
+    own: impl FnOnce() -> sheprd_client::Result<Vec<LocalSession>>,
+) -> sheprd_client::Result<Vec<(String, PathBuf)>> {
+    let listed = match primary {
+        Some(primary) => match installation(primary) {
+            Some(dir) => sheprd_client::list_running_sessions_in(dir)?,
+            None => return Ok(Vec::new()),
+        },
+        None => own()?,
     };
     Ok(wanted(listed, primary))
 }
@@ -275,12 +281,19 @@ pub(super) async fn merge_sources(
 }
 
 /// `base` followed by each session's workspaces under its prefix. The boot
-/// stays the base's: the desktop's pull request data is keyed on it.
+/// stays the base's: the desktop's pull request data is keyed on it. Sessions
+/// share what [`MAX_CHATS`] leaves after the base, in order; the chats past
+/// that are left out.
 pub(super) fn merge(base: &Layout, sessions: &[(String, Arc<Layout>)]) -> Layout {
     let mut merged = base.clone();
+    let mut room = MAX_CHATS.saturating_sub(base.chats().count());
     for (name, layout) in sessions {
         let mut layout = (**layout).clone();
         prefix_layout(&mut layout, name);
+        for workspace in &mut layout.workspaces {
+            workspace.chats.truncate(room);
+            room -= workspace.chats.len();
+        }
         merged.connected |= layout.connected;
         merged.working += layout.working;
         merged.workspaces.append(&mut layout.workspaces);

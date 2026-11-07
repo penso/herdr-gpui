@@ -25,6 +25,14 @@ pull request data is matched against it. A new workspace goes to that
 session, or to the alphabetically first named session that answers when it
 does not.
 
+A socket outside such an installation (a sandbox's, or a development
+daemon's) keeps the daemon to that one session: no other is followed. Chats
+are bounded across all sessions, the primary's first and then by name.
+
+Pairing a phone gives it this computer, not one session: a paired phone can
+read and type into every session the daemon follows, including one started
+after it was paired.
+
 ## Herdr 2 terminals
 
 The daemon lists terminals from both Herdr 1 and a running herdr-core.

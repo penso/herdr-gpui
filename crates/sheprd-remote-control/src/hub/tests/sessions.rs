@@ -3,8 +3,9 @@
 
 use super::*;
 use crate::hub::{
+    layout::MAX_CHATS,
     layout::project,
-    sessions::{merge, owner, prefix_answer, prefix_layout, wanted},
+    sessions::{listed_with, merge, owner, prefix_answer, prefix_layout, wanted},
 };
 // Only the tests that bind Unix sockets or symlinks use these.
 #[cfg(unix)]
@@ -205,6 +206,59 @@ fn sessions_are_listed_in_the_installation_the_primary_belongs_to() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[test]
+fn a_socket_outside_an_installation_follows_no_other_session() {
+    for primary in [
+        "/tmp/sandbox/herdr-client.sock",
+        "/home/me/.config/herdr-dev/herdr-client.sock",
+        "/home/me/.config/herdr/custom-client.sock",
+    ] {
+        let listed = listed_with(Some(Path::new(primary)), || {
+            panic!("{primary} must not list this process's installation")
+        });
+        assert!(listed.unwrap().is_empty(), "{primary}");
+    }
+}
+
+#[test]
+fn only_an_unresolved_primary_lists_this_process_s_installation() {
+    let names: Vec<_> = listed_with(None, || {
+        Ok(vec![LocalSession {
+            name: "work".into(),
+            state: SessionState::Running,
+            socket: PathBuf::from("/nonexistent/herdr-client.sock"),
+        }])
+    })
+    .unwrap()
+    .into_iter()
+    .map(|(name, _)| name)
+    .collect();
+    assert_eq!(names, ["work"]);
+}
+
+#[test]
+fn chats_are_bounded_across_sessions() {
+    let full = || {
+        let agents: Vec<Value> = (0..MAX_CHATS)
+            .map(|index| agent(&format!("p{index}"), "t1", json!([["acp", ENDPOINT]])))
+            .collect();
+        Arc::new(project(&snapshot(Value::Array(agents))))
+    };
+    let base = project(&snapshot(json!([agent(
+        "p1",
+        "t1",
+        json!([["acp", ENDPOINT]])
+    )])));
+    let merged = merge(&base, &[("a".to_owned(), full()), ("b".to_owned(), full())]);
+    assert_eq!(merged.chats().count(), MAX_CHATS);
+    // The primary's come first, then sessions by name; the last keeps its
+    // workspaces, without the chats that did not fit.
+    assert_eq!(merged.workspaces[0].chats.len(), 1);
+    assert_eq!(merged.workspaces[1].chats.len(), MAX_CHATS - 1);
+    assert_eq!(merged.workspaces[2].id, "herdr:b:w1");
+    assert!(merged.workspaces[2].chats.is_empty());
 }
 
 #[cfg(unix)]
