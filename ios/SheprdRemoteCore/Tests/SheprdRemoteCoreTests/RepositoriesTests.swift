@@ -66,6 +66,19 @@ struct RepositoriesTests {
         #expect(groups.map { $0.repositories.flatMap(\.workspaces).map(\.id) } == [["b"], ["a"], ["c"]])
     }
 
+    @Test func aNewWorktreeStartsInItsCheckoutsSessionUnderNoHeader() {
+        // Only a followed session lists workspaces, so no header names it.
+        let worktree = Home.Worktree(key: "k", label: "repo", linked: false)
+        let home = Self.home([
+            Self.workspace("a", worktree: .init(key: "k", label: "repo", linked: true), session: "work"),
+            Self.workspace("b", worktree: worktree, session: "work"),
+        ])
+        #expect(home.sessionGroups.map(\.name) == [nil])
+        let checkout = home.sessionGroups[0].repositories[0].ownCheckout
+        #expect(checkout?.id == "b")
+        #expect(checkout?.session == "work")
+    }
+
     @Test func listsOneNamedSessionAsBeforeSessionsWereNamed() {
         let home = Self.home([
             Self.workspace("a", session: "default"),

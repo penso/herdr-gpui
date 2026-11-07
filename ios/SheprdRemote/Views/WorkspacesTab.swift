@@ -99,7 +99,7 @@ struct WorkspacesTab: View {
                                 }
                             }
                         } header: {
-                            RepositoryHeader(repository: repository, device: machine.id, session: group.name)
+                            RepositoryHeader(repository: repository, device: machine.id)
                         }
                         // A dot, as repositories repeat across computers: the
                         // letters say where each computer starts.
@@ -277,17 +277,15 @@ private struct RepositoryHeader: View {
     @Environment(AppModel.self) private var model
     var repository: Repository
     var device: String
-    var session: String?
 
     var body: some View {
         HStack(spacing: 8) {
             RepositoryAvatar(label: repository.label)
             Text(repository.label).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
             Spacer()
-            // Its own checkout is where a new worktree branches from.
-            if let own = repository.workspaces.first(where: { $0.worktree?.linked != true }) {
+            if let own = repository.ownCheckout {
                 Button {
-                    model.creating = .workspace(device: device, folder: own.cwd, session: session)
+                    model.creating = .workspace(device: device, folder: own.cwd, session: own.session)
                 } label: {
                     Image(systemName: "plus")
                 }

@@ -20,6 +20,14 @@ public struct SessionGroup: Hashable, Sendable, Identifiable {
     public var id: String { name.map { "session/\($0)" } ?? "none" }
 }
 
+extension Repository {
+    /// Its own checkout, where a new worktree of it branches from, in that
+    /// checkout's Herdr session whether or not a header names it.
+    public var ownCheckout: Home.Workspace? {
+        workspaces.first { $0.worktree?.linked != true }
+    }
+}
+
 extension Home {
     /// Whether `other` differs from this home in its load alone.
     public func sameApartFromLoad(_ other: Home) -> Bool {
