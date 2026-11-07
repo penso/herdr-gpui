@@ -200,16 +200,15 @@ impl Geometry {
 
     /// A disclosure label remains clickable while dragging its text does not
     /// toggle the card. Called on mouse-up before the list releases the gesture.
+    /// The press alone decides: the closest text to a click past a short
+    /// title's end can be the wider source the card just opened.
     pub(crate) fn card_click(&self, entry: EntryId, position: Point<Pixels>) -> bool {
-        let Some(caret) = self.hit(position) else {
-            return false;
-        };
+        self.moved(position);
         self.0.borrow().gesture.as_ref().is_some_and(|gesture| {
             gesture.dragging
                 && gesture.activate
                 && !gesture.moved
-                && gesture.caret.key == caret.key
-                && caret.key.entry() == entry
+                && gesture.caret.key.entry() == entry
         })
     }
 

@@ -14,7 +14,7 @@ use crate::{
 };
 use sheprd_chat_protocol::{
     Author, EntryId, EntryKind, MAX_QUESTION_ANSWERS, MAX_QUESTION_TEXT, QuestionAnswer,
-    ToolContent, Transcript,
+    ToolContent, ToolKind, Transcript,
 };
 use std::{
     borrow::Cow,
@@ -22,6 +22,8 @@ use std::{
     fmt::Write as _,
     rc::Rc,
 };
+
+pub(crate) mod tool;
 
 /// Lines of a tool call's text output shown under it.
 const TOOL_LINES: usize = 6;
@@ -109,27 +111,10 @@ pub(super) fn folded_thought(text: &str) -> String {
     crate::notifications::safe_text(first, FOLDED_THOUGHT)
 }
 
-/// Expanded tool output comes from the retained transcript, not its preview.
-/// Shared by the view and the selection document, like [`tool_header`].
-pub(crate) fn tool_text(content: &ToolContent) -> Option<String> {
-    match content {
-        ToolContent::Text { text } => Some(text.clone()),
-        ToolContent::Diff { old, new, path } => Some(match old {
-            // Each label is a line of its own, between the file's text.
-            Some(old) => format!(
-                "{path}\n{}\n{old}\n{}\n{new}",
-                fl!("chat-diff-before"),
-                fl!("chat-diff-after")
-            ),
-            None => format!("{path}\n{}\n{new}", fl!("chat-diff-new-file")),
-        }),
-        ToolContent::Terminal { id } => Some(fl!("chat-tool-terminal", id = id.to_string())),
-        ToolContent::Image { .. } => None,
-    }
-}
-
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct ToolSummary {
+    /// What each content item shows once the card opens.
+    pub(crate) previews: Vec<tool::Preview>,
     pub(crate) diffs: Vec<DiffSummary>,
     /// The first lines of its text output.
     pub(crate) lines: Vec<String>,
@@ -202,6 +187,15 @@ impl Body {
                     .chain(blocks.iter().flat_map(super::rich::Block::visuals))
             })
             .chain(images.iter().copied())
+            .chain(
+                match self {
+                    Self::Tool(summary) => &summary.previews[..],
+                    _ => &[],
+                }
+                .iter()
+                .flat_map(tool::Preview::codes)
+                .map(|code| code.id),
+            )
     }
 }
 
@@ -307,7 +301,7 @@ impl Prepared {
                     visuals.want(id, Source::Image(image.clone()));
                     Body::Image(id)
                 }
-                EntryKind::Tool(tool) => Body::Tool(summarize(&tool.content, visuals)),
+                EntryKind::Tool(tool) => Body::Tool(summarize(&tool.content, tool.kind, visuals)),
                 _ => {
                     self.bodies.remove(&entry.id);
                     continue;
@@ -316,6 +310,15 @@ impl Prepared {
             self.bodies.insert(entry.id, (*revision, Rc::new(body)));
         }
         self.text.update(transcript, keys, &self.bodies);
+        for id in self.text.expanded() {
+            if let Some((_, body)) = self.bodies.get(id)
+                && let Body::Tool(summary) = &**body
+            {
+                for preview in &summary.previews {
+                    preview.request(&mut self.visuals);
+                }
+            }
+        }
         self.steps.clear();
         for entry in &transcript.entries {
             if let EntryKind::Tool(tool) = &entry.kind
@@ -582,12 +585,19 @@ fn picture(line: &str) -> Option<Part> {
     Some(Part::Picture { alt })
 }
 
-pub(crate) fn summarize(content: &[ToolContent], visuals: &mut Visuals) -> ToolSummary {
+pub(crate) fn summarize(
+    content: &[ToolContent],
+    kind: ToolKind,
+    visuals: &mut Visuals,
+) -> ToolSummary {
     let mut summary = ToolSummary::default();
-    for item in content {
+    for (index, item) in content.iter().enumerate() {
+        let preview = tool::preview(index, item, kind, &mut summary.diffs);
         match item {
             ToolContent::Text { text } => {
-                for line in text.lines().filter(|line| !line.trim().is_empty()) {
+                // Arguments read as what they ask for, not as JSON.
+                let shown = preview.as_ref().map_or(&**text, |item| &*item.code.source);
+                for line in shown.lines().filter(|line| !line.trim().is_empty()) {
                     if summary.lines.len() < TOOL_LINES {
                         summary
                             .lines
@@ -597,14 +607,7 @@ pub(crate) fn summarize(content: &[ToolContent], visuals: &mut Visuals) -> ToolS
                     }
                 }
             }
-            ToolContent::Diff { new, old, path } => {
-                let (added, removed) = diff_counts(old.as_deref().unwrap_or(""), new);
-                summary.diffs.push(DiffSummary {
-                    path: path.clone(),
-                    added,
-                    removed,
-                });
-            }
+            ToolContent::Diff { .. } => {}
             ToolContent::Image { image } => {
                 if summary.images.len() < TOOL_IMAGES {
                     let id = VisualId::of(&image.data);
@@ -614,13 +617,13 @@ pub(crate) fn summarize(content: &[ToolContent], visuals: &mut Visuals) -> ToolS
             }
             ToolContent::Terminal { .. } => summary.terminals += 1,
         }
+        summary.previews.extend(preview);
     }
     summary
 }
 
-/// Lines added and removed between two versions of a file, by counting
-/// each distinct line on both sides: what `+`/`-` totals show, without the
-/// cost of an alignment.
+/// Lines added and removed between two versions of a file too large to
+/// align, by counting each distinct line on both sides.
 pub(crate) fn diff_counts(old: &str, new: &str) -> (usize, usize) {
     if old.len() + new.len() > DIFF_BYTES {
         return (new.lines().count(), old.lines().count());
