@@ -18,6 +18,8 @@ use sheprd_client::ConnectTarget;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Action {
     Rename,
+    /// Toggles the device's mute, which silences everything on it.
+    Mute,
     /// Toggles `[devices.<id>] keybindings` between local and server.
     ServerKeybindings,
     /// Forwards one of the host's listening ports to this computer.
@@ -37,6 +39,7 @@ enum Action {
 /// Each row's action and the message naming it.
 const SSH_ACTIONS: &[(Action, &str)] = &[
     (Action::Rename, "host-menu-rename"),
+    (Action::Mute, "host-menu-mute"),
     (Action::ServerKeybindings, "host-menu-server-keybindings"),
     // Port forwards need an `ssh` control master, which Windows OpenSSH lacks.
     #[cfg(unix)]
@@ -50,6 +53,7 @@ const SSH_ACTIONS: &[(Action, &str)] = &[
 #[cfg(feature = "cloud")]
 const CLOUD_ACTIONS: &[(Action, &str)] = &[
     (Action::Rename, "host-menu-rename"),
+    (Action::Mute, "host-menu-mute"),
     (Action::ProviderSettings, "host-menu-cloud-settings"),
     (Action::RunSetup, "host-menu-run-setup"),
     (Action::Remove, "host-menu-remove"),
@@ -274,6 +278,13 @@ impl SheprdWindow {
                     host.error = None;
                 }
                 self.menu.page = Some(Page::RenameDevice);
+            }
+            Action::Mute => {
+                if let Some(id) = self.menu.host.as_ref().map(|host| host.id.clone()) {
+                    let muted = crate::notification_mutes::Mutes::of(cx)
+                        .is_some_and(|mutes| mutes.host(&id));
+                    self.set_host_muted(&id, !muted, cx);
+                }
             }
             Action::ServerKeybindings => self.toggle_server_keybindings(cx),
             Action::Theme => self.open_device_theme(window, cx),
@@ -527,13 +538,15 @@ impl SheprdWindow {
         cx.notify();
     }
 
-    /// Forget removal marks for devices the catalog no longer lists.
-    pub(crate) fn prune_device_removals(&mut self) {
+    /// Forget removal marks for devices the catalog no longer lists, and
+    /// their mutes, so a device added back later starts unmuted.
+    pub(crate) fn prune_device_removals(&mut self, cx: &mut App) {
         let endpoints = &self.endpoints;
         self.menu.removing_devices.retain(|id| {
             let listed = endpoints.iter().any(|endpoint| &endpoint.id == id);
             if !listed {
                 tracing::info!(category = "device_remove", id, "Catalog dropped the device");
+                crate::notification_mutes::Mutes::update(cx, |mutes| mutes.set_host(id, false));
             }
             listed
         });
@@ -641,9 +654,15 @@ impl SheprdWindow {
             );
             let server_keys = self.config.keybinding_source(&host.id) == KeybindingSource::Server;
             let device_theme = self.device_theme_value(&host.id).map(str::to_owned);
+            let muted =
+                crate::notification_mutes::Mutes::of(cx).is_some_and(|mutes| mutes.host(&host.id));
             for (index, &(action, message)) in host.actions().iter().enumerate() {
                 let label = crate::i18n::message(message, &[]);
-                let toggle = action == Action::ServerKeybindings;
+                let toggle = match action {
+                    Action::Mute => Some(muted),
+                    Action::ServerKeybindings => Some(server_keys),
+                    _ => None,
+                };
                 body = body.child(
                     div()
                         .id(("host-menu-action", index))
@@ -654,11 +673,11 @@ impl SheprdWindow {
                         .items_center()
                         .gap(px(8.))
                         .cursor_pointer()
-                        .when(toggle, |row| {
+                        .when_some(toggle, |row, checked| {
                             row.child(crate::toggles::checkbox(
                                 theme,
                                 self.config.ui.size + 2.,
-                                server_keys,
+                                checked,
                             ))
                         })
                         .when(action == Action::Remove, |row| {
@@ -701,7 +720,7 @@ impl SheprdWindow {
                 );
                 // Opting in never silently changes nothing: say why the
                 // device is still on local keys.
-                if let Some(error) = toggle
+                if let Some(error) = (action == Action::ServerKeybindings)
                     .then(|| self.server_keybindings_error(&host.id))
                     .flatten()
                 {

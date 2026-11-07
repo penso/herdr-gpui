@@ -82,6 +82,7 @@ fn right_clicking_a_cloud_device_offers_rename_settings_setup_and_removal(cx: &m
         "host-menu-3",
         "host-menu-4",
         "host-menu-5",
+        "host-menu-6",
     ];
     let (shown, past) = rows.split_at(CLOUD_ACTIONS.len());
     for row in shown {

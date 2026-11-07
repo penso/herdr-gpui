@@ -92,14 +92,25 @@ pub(super) fn agent_name(
 
 /// A device's header: its name, whether it is connected, and, in the Devices
 /// layout, how many of its agents work.
-pub(super) fn device_name(label: &str, connected: bool, working: Option<&str>) -> String {
+pub(super) fn device_name(
+    label: &str,
+    connected: bool,
+    working: Option<&str>,
+    muted: bool,
+) -> String {
     let working = working.map(|count| fl!("sidebar-spoken-working", count = count));
     let connection = if connected {
         fl!("sidebar-spoken-connected")
     } else {
         fl!("sidebar-spoken-disconnected")
     };
-    join([Some(label), Some(&connection), working.as_deref()])
+    let muted = muted.then(|| fl!("sidebar-spoken-muted"));
+    join([
+        Some(label),
+        Some(&connection),
+        working.as_deref(),
+        muted.as_deref(),
+    ])
 }
 
 /// `Unknown` says nothing a listener could use.

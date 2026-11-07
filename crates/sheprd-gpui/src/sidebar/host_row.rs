@@ -110,10 +110,15 @@ impl SheprdWindow {
         let working_width = working.as_ref().map_or(0., |text| {
             text.chars().count() as f32 * super::metrics::glyph_width(font) + host_gap
         });
-        // The removal pulse, the count, and the gauges take their room from
-        // the label, not from the status.
+        // A muted device keeps its mark while offline, when it has no snapshot.
+        let muted =
+            crate::notification_mutes::Mutes::any(cx).is_some_and(|mutes| mutes.host(&endpoint.id));
+        let muted_size = (line_height(font) * 0.75).round();
+        // The removal pulse, the count, the mute mark, and the gauges take
+        // their room from the label, not from the status.
         let label_width = (host_label_width
             - if removing { dot + host_gap } else { 0. }
+            - if muted { muted_size + host_gap } else { 0. }
             - working_width
             - gauges.as_ref().map_or(0., |(width, ..)| width + host_gap))
         .max(0.);
@@ -153,6 +158,7 @@ impl SheprdWindow {
                         &endpoint_label,
                         connected,
                         working.as_deref(),
+                        muted,
                     ))
                     .aria_selected(selected)
                     .map(|control| {
@@ -319,6 +325,12 @@ impl SheprdWindow {
                             )
                         },
                     )
+                    .when(muted, |row| {
+                        row.child(
+                            crate::icons::muted(theme, muted_size)
+                                .debug_selector(|| format!("{prefix}host-muted-{endpoint_id}")),
+                        )
+                    })
                     .child(
                         div()
                             .debug_selector(|| format!("{prefix}host-status-{endpoint_id}"))

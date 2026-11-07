@@ -10,6 +10,7 @@ mod device_theme;
 mod en_xa;
 mod forwards;
 mod menu_width;
+mod mute;
 #[cfg(feature = "azure")]
 mod unsynced;
 
@@ -97,12 +98,12 @@ fn the_menu_shows_the_server_keybindings_choice(cx: &mut TestAppContext) {
     let row = |cx: &mut VisualTestContext| {
         cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
         (
-            cx.debug_bounds("host-menu-1").is_some(),
+            cx.debug_bounds("host-menu-2").is_some(),
             cx.debug_bounds("host-menu-keybindings-error").is_some(),
         )
     };
     assert_eq!(row(cx), (true, false));
-    assert_eq!(SSH_ACTIONS[1].0, Action::ServerKeybindings);
+    assert_eq!(SSH_ACTIONS[2].0, Action::ServerKeybindings);
     view.update(cx, |view, cx| {
         view.config.devices.insert(
             "0123456789abcdef0123456789abcdef".into(),
@@ -238,10 +239,10 @@ fn a_removal_pulses_the_host_header_until_the_device_leaves(cx: &mut TestAppCont
                     .replace(['\u{2068}', '\u{2069}'], "")
                     .starts_with("Removed m5max-ms, but could not delete its GitHub sign-in")
             );
-            view.prune_device_removals();
+            view.prune_device_removals(cx);
             assert!(view.menu.removing_devices.contains(HOST));
             view.endpoints.truncate(1);
-            view.prune_device_removals();
+            view.prune_device_removals(cx);
             assert!(view.menu.removing_devices.is_empty());
         });
     });

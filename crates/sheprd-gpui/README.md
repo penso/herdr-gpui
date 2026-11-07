@@ -1281,25 +1281,32 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
-To quiet one workspace or tab instead of every notification, right-click it:
-the workspace menu's header has **Mute** (**Unmute** while it is muted), and
-the tab menu has **Mute Notifications**. Muting a workspace silences every tab
-in it, including tabs opened later; a tab can also be muted on its own, and
-while its workspace's mute covers it, its menu offers **Unmute Workspace**
-instead. Nothing from a muted workspace or tab asks for you: no toast, no OS
+To quiet one device, workspace, or tab instead of every notification,
+right-click it: the menu of a saved SSH or cloud device's sidebar header has
+**Mute notifications**, the workspace menu's header has **Mute** (**Unmute**
+while it is muted), and the tab menu has **Mute Notifications**. Muting a
+device silences everything on it, in every session, and muting a workspace
+silences every tab in it, including tabs opened later; a tab can also be muted
+on its own. While a workspace's or device's mute covers a tab, the tab's menu
+offers **Unmute Workspace** or **Unmute Device** instead. Local has no device
+menu, so it cannot be muted as a whole. Nothing from a muted device, workspace,
+or tab asks for you: no toast, no OS
 notification, no notification sound, and its agents leave the Dock badge,
 the Windows taskbar overlay, and the Overview's count in the activity bar.
 Status dots and the Overview's rows still show what its agents do. A struck
-through bell marks the muted workspace's sidebar row and its place in the
-compact rail, each tab it silences, and its agents' Overview rows. Muting
+through bell marks a muted device's sidebar header, the muted workspace's
+sidebar row and its place in the compact rail, each tab it silences, and its
+agents' Overview rows. In the compact rail, a muted device marks each of its
+workspaces and says so in its header's tooltip. Muting
 takes away a toast already showing, and notifications dropped while muted are
 not replayed on unmuting. An OS notification posted before the mute stays, and
-clicking it still opens its pane. Three things a mute does not hold back:
-notifications posted with `herdr notification show` and terminal bells
-(`[bell]`), which Herdr sends without the workspace or pane they came from,
-and the phone notifications of
+clicking it still opens its pane. Three things a workspace or tab mute does
+not hold back: notifications posted with `herdr notification show` and terminal
+bells (`[bell]`), which Herdr sends without the workspace or pane they came
+from, and the phone notifications of
 [remote control](../sheprd-remote-control/README.md), which its own daemon
-sends.
+sends. A device's mute does hold back the first two, since they still arrive
+from that device, but not the phone's.
 
 Mutes stay in this client, in `notification-mutes.json` in its state
 directory, and every window shows the same ones. A mute follows its workspace
@@ -1312,7 +1319,9 @@ the same name under the same ID takes the mute too, and shows the
 struck-through bell. The others are dropped: a daemon started afresh numbers
 its workspaces from the start again and names them after their folder, and
 tabs after their position, so the same ID and name can come back on new
-work.
+work. A device's mute names only the device, so it holds while the device is
+offline and across its daemon's restarts, until you lift it or remove the
+device.
 
 The sidebar button at the left of the titlebar hides or shows the sidebar.
 On Linux and Windows it stays in the same position when the sidebar collapses
