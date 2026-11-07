@@ -2,7 +2,9 @@
 //! the message limit; math rasterization and grammar parsing use Visuals' workers.
 
 mod code;
+pub(crate) mod diff;
 mod fence;
+mod highlight_diff;
 mod math;
 mod math_input;
 mod parse;
@@ -123,6 +125,9 @@ fn formula(
 
 /// Reuse the review's syntax grammar cache and semantic token classes.
 pub(super) fn highlight(language: &str, source: &str) -> Vec<Vec<crate::review::highlight::Span>> {
+    if diff::is_diff(language) {
+        return highlight_diff::highlight(source);
+    }
     let extension = match language {
         "rust" => "rs",
         "python" | "py" => "py",

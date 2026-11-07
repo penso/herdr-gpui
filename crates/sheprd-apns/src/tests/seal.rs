@@ -1,7 +1,10 @@
 //! The sealed format must match what the Swift package opens; the fixture
 //! fixes both one-time values so the bytes are reproducible.
 
-use crate::apns::seal::{INFO, seal_with};
+use crate::{
+    Error,
+    seal::{HANDLE_INFO, INFO, open, seal_with},
+};
 use aes_gcm::{Aes256Gcm, KeyInit as _, aead::Aead as _, aead::Payload};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use hkdf::Hkdf;
@@ -78,4 +81,38 @@ fn the_device_key_opens_it_and_a_changed_byte_does_not() {
     let last = tampered.len() - 1;
     tampered[last] ^= 1;
     assert_eq!(open(&tampered), None);
+}
+
+#[test]
+fn open_reverses_seal_under_the_same_info_only() {
+    let key = SecretKey::from_slice(&[3; 32]).unwrap();
+    let sealed = crate::seal::seal(&key.public_key(), b"a handle", HANDLE_INFO).unwrap();
+    assert_eq!(open(&key, &sealed, HANDLE_INFO).unwrap(), b"a handle");
+
+    assert!(matches!(open(&key, &sealed, INFO), Err(Error::Open)));
+    let other = SecretKey::from_slice(&[4; 32]).unwrap();
+    assert!(matches!(
+        open(&other, &sealed, HANDLE_INFO),
+        Err(Error::Open)
+    ));
+}
+
+#[test]
+fn open_refuses_changed_and_short_input() {
+    let key = SecretKey::from_slice(&[3; 32]).unwrap();
+    let sealed = crate::seal::seal(&key.public_key(), b"a handle", HANDLE_INFO).unwrap();
+    for at in [0, 70, sealed.len() - 1] {
+        let mut changed = sealed.clone();
+        changed[at] ^= 1;
+        assert!(
+            matches!(open(&key, &changed, HANDLE_INFO), Err(Error::Open)),
+            "{at}"
+        );
+    }
+    for len in [0, 10, 65, 76, 77] {
+        assert!(
+            matches!(open(&key, &sealed[..len], HANDLE_INFO), Err(Error::Open)),
+            "{len}"
+        );
+    }
 }

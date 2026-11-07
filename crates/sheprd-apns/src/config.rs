@@ -1,13 +1,13 @@
-//! The user's APNs credentials: an Apple Developer token key (`.p8`, PKCS#8
-//! PEM) and which team, key, and app it belongs to. The daemon never creates
-//! them; without `config.json` Live Activities are off.
+//! APNs credentials: an Apple Developer token key (`.p8`, PKCS#8 PEM) and
+//! which team, key, and app it belongs to. Nothing here creates them; without
+//! `config.json` there is no sender.
 //!
 //! ```json
 //! { "team_id": "ABCDE12345", "key_id": "XYZ9876543",
 //!   "topic": "so.pen.herdr.remote", "sandbox": true }
 //! ```
 
-use super::{Error, Host, Result};
+use crate::{Error, Host, Result};
 use p256::{SecretKey, ecdsa::SigningKey, pkcs8::DecodePrivateKey as _};
 use serde::Deserialize;
 use std::{
@@ -21,15 +21,15 @@ const MAX_FILE: u64 = 16 * 1024;
 const MAX_TOPIC: usize = 155;
 
 /// The directory holding the key and config, inside the state directory.
-pub(crate) fn dir(state_dir: &Path) -> PathBuf {
+pub fn dir(state_dir: &Path) -> PathBuf {
     state_dir.join("apns")
 }
 
-pub(super) fn config_path(state_dir: &Path) -> PathBuf {
+pub(crate) fn config_path(state_dir: &Path) -> PathBuf {
     dir(state_dir).join("config.json")
 }
 
-pub(super) fn key_path(state_dir: &Path) -> PathBuf {
+pub(crate) fn key_path(state_dir: &Path) -> PathBuf {
     dir(state_dir).join("AuthKey.p8")
 }
 
@@ -45,21 +45,21 @@ struct ConfigFile {
 
 /// Loaded and checked APNs credentials.
 #[derive(Debug)]
-pub(crate) struct Config {
-    pub(crate) host: Host,
-    pub(crate) key: SigningKey,
+pub struct Config {
+    pub host: Host,
+    pub key: SigningKey,
     /// The key's ten-character identifier, the JWT's `kid`.
-    pub(crate) key_id: String,
+    pub key_id: String,
     /// The ten-character Apple Developer team, the JWT's `iss`.
-    pub(crate) team_id: String,
+    pub team_id: String,
     /// The app's bundle identifier, such as `so.pen.herdr.remote`.
-    pub(crate) topic: String,
+    pub topic: String,
 }
 
 impl Config {
     /// Reads `STATE_DIR/apns/config.json` and the key beside it: `None`
     /// when there is no config. Blocking file I/O.
-    pub(crate) fn load(state_dir: &Path) -> Result<Option<Self>> {
+    pub fn load(state_dir: &Path) -> Result<Option<Self>> {
         let path = config_path(state_dir);
         let bytes = match read_bounded(&path) {
             Ok(bytes) => bytes,
@@ -70,6 +70,25 @@ impl Config {
             .map_err(|source| Error::ConfigFormat { path, source })?;
         let key = load_key(&key_path(state_dir))?;
         Self::new(file, key).map(Some)
+    }
+
+    /// Credentials from their parts, with the same checks as a config file.
+    pub fn from_parts(
+        team_id: &str,
+        key_id: &str,
+        topic: &str,
+        sandbox: bool,
+        key: SigningKey,
+    ) -> Result<Self> {
+        Self::new(
+            ConfigFile {
+                key_id: key_id.to_owned(),
+                sandbox,
+                team_id: team_id.to_owned(),
+                topic: topic.to_owned(),
+            },
+            key,
+        )
     }
 
     fn new(file: ConfigFile, key: SigningKey) -> Result<Self> {
@@ -96,30 +115,34 @@ impl Config {
     }
 
     /// The `apns-topic` of a Live Activity push for this app.
-    pub(crate) fn live_activity_topic(&self) -> String {
+    pub fn live_activity_topic(&self) -> String {
         format!("{}.push-type.liveactivity", self.topic)
     }
 }
 
 /// Reads a PKCS#8 PEM P-256 key, refusing one other users can read.
-pub(super) fn load_key(path: &Path) -> Result<SigningKey> {
+pub(crate) fn load_key(path: &Path) -> Result<SigningKey> {
+    load_secret_key(path).map(SigningKey::from)
+}
+
+/// Reads a PKCS#8 PEM P-256 key, refusing one other users can read.
+pub fn load_secret_key(path: &Path) -> Result<SecretKey> {
     let read = |source| Error::KeyRead {
         path: path.to_owned(),
         source,
     };
     let metadata = fs::symlink_metadata(path).map_err(read)?;
-    if !crate::push::is_private(&metadata) {
+    if !is_private(&metadata) {
         return Err(Error::KeyNotPrivate {
             path: path.to_owned(),
         });
     }
     let pem = String::from_utf8(read_bounded(path).map_err(read)?)
         .map_err(|_| read(io::Error::from(io::ErrorKind::InvalidData)))?;
-    let secret = SecretKey::from_pkcs8_pem(&pem).map_err(|source| Error::KeyDecode {
+    SecretKey::from_pkcs8_pem(&pem).map_err(|source| Error::KeyDecode {
         path: path.to_owned(),
         source,
-    })?;
-    Ok(SigningKey::from(secret))
+    })
 }
 
 fn read_bounded(path: &Path) -> io::Result<Vec<u8>> {
@@ -135,7 +158,7 @@ fn read_bounded(path: &Path) -> io::Result<Vec<u8>> {
 }
 
 /// Apple's team and key identifiers: ten uppercase letters or digits.
-pub(super) fn apple_id(text: &str) -> bool {
+pub(crate) fn apple_id(text: &str) -> bool {
     text.len() == 10
         && text
             .bytes()
@@ -143,7 +166,7 @@ pub(super) fn apple_id(text: &str) -> bool {
 }
 
 /// A bundle identifier: dot-separated letters, digits, and hyphens.
-pub(super) fn bundle_id(text: &str) -> bool {
+pub(crate) fn bundle_id(text: &str) -> bool {
     (1..=MAX_TOPIC).contains(&text.len())
         && text.split('.').all(|part| {
             !part.is_empty()
@@ -153,21 +176,15 @@ pub(super) fn bundle_id(text: &str) -> bool {
         })
 }
 
-#[cfg(test)]
-pub(super) fn from_parts(
-    team_id: &str,
-    key_id: &str,
-    topic: &str,
-    sandbox: bool,
-    key: SigningKey,
-) -> Result<Config> {
-    Config::new(
-        ConfigFile {
-            key_id: key_id.to_owned(),
-            sandbox,
-            team_id: team_id.to_owned(),
-            topic: topic.to_owned(),
-        },
-        key,
-    )
+/// Whether `metadata` is a regular file only its owner can read.
+#[cfg(unix)]
+pub fn is_private(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    metadata.is_file() && metadata.mode() & 0o077 == 0
+}
+
+/// Whether `metadata` is a regular file; other platforms have no mode bits.
+#[cfg(not(unix))]
+pub fn is_private(metadata: &fs::Metadata) -> bool {
+    metadata.is_file()
 }

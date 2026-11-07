@@ -102,12 +102,12 @@ impl OrchestratorView {
             }
             None => (fl!("orchestrator-issues"), "icons/note.svg", Tab::Issues),
         };
-        let repo = self
-            .snapshot()
-            .repo
-            .as_ref()
-            .and_then(|info| info.remote.as_ref())
-            .map(|remote| remote.source.repository.clone())
+        let repo = super::tasks::task_project(item)
+            .or_else(|| {
+                let info = self.snapshot().repo.as_ref()?;
+                let remote = info.remote.as_ref()?;
+                Some(remote.source.repository.clone())
+            })
             .unwrap_or_else(|| item.key.source.repository.clone());
         let pull_request = item.github_pull_request().is_some();
         div()
@@ -338,6 +338,7 @@ impl OrchestratorView {
             .items_center()
             .gap_1()
             .min_w_0()
+            .overflow_hidden()
             .text_size(look.size())
             .child(
                 look.icon_button(

@@ -3,6 +3,8 @@
 # as the config writes it, quoted, such as "cmd-t". $command is a command's
 # config name, such as new_tab.
 
+# prefix- starts a prefix chord in the config.
+error-keymap-chord-without-key = keybindings.{ $command }: prefix- needs the key typed after the prefix
 # $first and $second are command names.
 error-keymap-duplicate-keystroke = keybindings: { $keystroke } is bound to both { $first } and { $second }
 error-keymap-duplicate-pane-key = pane_keys: { $keystroke } is listed twice

@@ -1,7 +1,8 @@
-//! The least a row can show: its status and its name. Spacing, highlight, and
-//! headings follow the configured density and style, so a narrow sidebar
-//! keeps every workspace on one line. Rows Herdr's sidebar config defines
-//! take as many lines as it names, beside the same status and marks.
+//! The least a row can show: its status, its name, and its pull request's
+//! number. Spacing, highlight, and headings follow the configured density and
+//! style, so a narrow sidebar keeps every workspace on one line. Rows Herdr's
+//! sidebar config defines take as many lines as it names, beside the same
+//! status and marks.
 
 use super::{
     super::{
@@ -93,11 +94,12 @@ impl RowLayout for Minimal {
             } else {
                 density.child_indent() + cx.indicators.width(cx.font) - super::super::STATUS_WIDTH
             };
-        // Pull requests and uncommitted work stay off these rows, but a
-        // teleported checkout is a copy left behind, so it keeps its mark,
-        // as a muted workspace keeps its own.
+        // Uncommitted work stays off these rows, but a teleported checkout is
+        // a copy left behind, so it keeps its mark, as a muted workspace keeps
+        // its own. The pull request's number is all that shows of its badge.
         let teleported = row.badge.as_ref().is_some_and(|badge| badge.teleported);
         let muted = row.badge.as_ref().is_some_and(|badge| badge.muted);
+        let pr = row.badge.as_ref().and_then(|badge| badge.pr.as_ref());
         let mark = (line_height(cx.font) * 0.75).round();
         let worktree = parts::worktree(row.label, &row.icon, mark);
         let status = row.status();
@@ -144,6 +146,19 @@ impl RowLayout for Minimal {
                 line.fixed(
                     mark,
                     parts::first_line(mark, parts::teleported(row.label, mark, theme), cx),
+                )
+            })
+            // Kept, not shrunk: the name fills the line, and a long one must
+            // ellipsize before the number gives way.
+            .when_some(pr, |line, pr| {
+                line.keep(
+                    div()
+                        .debug_selector(|| format!("pr-{}", row.label))
+                        .h(px(line_height(cx.font)))
+                        .text_color(rgb(pr.color)),
+                    pr.number.as_str(),
+                    parts::glyph_at(cx.font, cx.font.size),
+                    0.4,
                 )
             })
             .when_some(row.fold, |line, fold| {

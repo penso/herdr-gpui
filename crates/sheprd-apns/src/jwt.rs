@@ -3,7 +3,7 @@
 //! APNs refuses one older than an hour and throttles one renewed more often
 //! than every twenty minutes, so it is reused for fifty.
 
-use super::{Error, Result};
+use crate::{Error, Result};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::ecdsa::{Signature, SigningKey, signature::Signer as _};
 use serde::Serialize;
@@ -50,7 +50,7 @@ pub(crate) fn sign(key: &SigningKey, team_id: &str, key_id: &str, iat: u64) -> R
 /// The current provider token, signed again when it is fifty minutes old or
 /// APNs called it expired.
 #[derive(Debug)]
-pub(crate) struct ProviderToken {
+pub struct ProviderToken {
     /// The token and when it was issued.
     cached: Mutex<Option<(u64, String)>>,
     key: SigningKey,
@@ -59,7 +59,7 @@ pub(crate) struct ProviderToken {
 }
 
 impl ProviderToken {
-    pub(crate) fn new(key: SigningKey, team_id: String, key_id: String) -> Self {
+    pub fn new(key: SigningKey, team_id: String, key_id: String) -> Self {
         Self {
             cached: Mutex::new(None),
             key,
@@ -69,7 +69,7 @@ impl ProviderToken {
     }
 
     /// The token to send at `now_s`.
-    pub(crate) fn current(&self, now_s: u64) -> Result<String> {
+    pub fn current(&self, now_s: u64) -> Result<String> {
         let mut cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some((issued, token)) = cached.as_ref()
             && now_s >= *issued
@@ -83,7 +83,7 @@ impl ProviderToken {
     }
 
     /// Forgets the token after APNs refused it, so the next push signs anew.
-    pub(crate) fn invalidate(&self) {
+    pub fn invalidate(&self) {
         *self.cached.lock().unwrap_or_else(PoisonError::into_inner) = None;
     }
 }

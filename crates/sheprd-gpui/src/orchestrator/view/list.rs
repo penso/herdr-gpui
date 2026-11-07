@@ -241,6 +241,7 @@ impl OrchestratorView {
             .relative()
             .flex_1()
             .min_w_0()
+            .overflow_hidden()
             .flex()
             .flex_col()
             .child(measure(self.list_width.clone(), self.author_fit()))

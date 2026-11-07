@@ -7,7 +7,7 @@ use crate::orchestrator::{
         Event, RepoSpec,
         repo::Repo,
         rows::Tab,
-        tasks::{Link, Links, TaskFilters, Who, status_label},
+        tasks::{Link, Links, TaskFilters, Who, status_label, task_project},
     },
 };
 use gpui::{Entity, VisualTestContext};
@@ -416,4 +416,13 @@ fn closed_tasks_offer_their_own_priorities_and_assignees() {
         ..TaskFilters::default()
     };
     assert_eq!(offered(&deferred), ["hg-3"]);
+}
+
+#[test]
+fn a_task_page_names_its_own_project_by_folder() {
+    let mut bead = task("hg-1", "open", 1, None);
+    bead.key.source.repository = "/Users/me/src/atlas-api".into();
+    assert_eq!(task_project(&bead).as_deref(), Some("atlas-api"));
+    let issue = item(Provider::Github, "377", "An issue", "2026-10-04T00:00:00Z");
+    assert_eq!(task_project(&issue), None);
 }

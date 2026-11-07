@@ -21,6 +21,24 @@ public struct UnreportedFailures: Equatable, Sendable {
     }
 }
 
+/// What a computer said when it refused a call.
+public enum Refusal {
+    /// The most of a refusal that is kept, in characters.
+    public static let limit = 300
+
+    /// The daemon's `{"error": "..."}` as a sentence for the screen, else
+    /// the status with whatever came back. Takes the whole answer: cut
+    /// first, a long message would no longer parse.
+    public static func text(status: Int, body: Data) -> String {
+        struct Answer: Decodable { let error: String }
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: body), !answer.error.isEmpty else {
+            guard !body.isEmpty else { return "The computer answered \(status)." }
+            return "The computer answered \(status): \(String(decoding: body.prefix(limit), as: UTF8.self))"
+        }
+        return String(answer.error.prefix(limit))
+    }
+}
+
 /// What a failed call says about the address it used, and how logs name it.
 public enum PathFailure {
     /// Path segments followed by an identifier, which logs leave out: a

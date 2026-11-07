@@ -1,24 +1,6 @@
 use super::*;
 use crate::apns::tokens::MAX_ACTIVITIES;
-
-#[test]
-fn tokens_are_bounded_lowercase_hex() {
-    let token = DeviceToken::parse(&"AB".repeat(32)).unwrap();
-    assert_eq!(token.as_str(), "ab".repeat(32));
-    for bad in [
-        "",
-        "abc",
-        &"ab".repeat(8 - 1),
-        &"ab".repeat(257),
-        &"zz".repeat(32),
-        &format!("{}/../x", "ab".repeat(32)),
-    ] {
-        assert!(
-            matches!(DeviceToken::parse(bad), Err(Error::DeviceToken)),
-            "{bad}"
-        );
-    }
-}
+use secrecy::ExposeSecret;
 
 #[test]
 fn parses_the_api_request() {
@@ -29,11 +11,16 @@ fn parses_the_api_request() {
     );
     let registration = Registration::parse(body.as_bytes()).unwrap();
     assert_eq!(
-        registration.push_to_start.as_ref().map(DeviceToken::as_str),
+        registration
+            .push_to_start
+            .as_ref()
+            .map(ExposeSecret::expose_secret),
         Some("aa".repeat(40).as_str())
     );
     assert_eq!(
-        registration.activity("w1-p3").map(DeviceToken::as_str),
+        registration
+            .activity("w1-p3")
+            .map(ExposeSecret::expose_secret),
         Some("bb".repeat(80).as_str())
     );
     assert!(Registration::parse(b"{}").unwrap().is_empty());
@@ -67,6 +54,7 @@ fn merge_keeps_push_to_start_and_replaces_activities() {
             pane: "old".to_owned(),
             token: token(1),
         }],
+        activity_detail: Default::default(),
         alert: None,
         notify_key: None,
         push_to_start: Some(token(2)),
@@ -82,6 +70,7 @@ fn merge_keeps_push_to_start_and_replaces_activities() {
                 token: token(4),
             },
         ],
+        activity_detail: Default::default(),
         alert: None,
         notify_key: None,
         push_to_start: None,
@@ -97,6 +86,7 @@ fn merge_keeps_push_to_start_and_replaces_activities() {
 
     stored.merge(Registration {
         activities: Vec::new(),
+        activity_detail: Default::default(),
         alert: None,
         notify_key: None,
         push_to_start: Some(token(5)),
@@ -117,6 +107,7 @@ fn forgets_invalid_tokens_and_ended_activities() {
                 token: token(2),
             },
         ],
+        activity_detail: Default::default(),
         alert: None,
         notify_key: None,
         push_to_start: Some(token(3)),
@@ -137,6 +128,7 @@ fn round_trips_through_the_device_store_slot() {
             pane: "a".to_owned(),
             token: token(1),
         }],
+        activity_detail: Default::default(),
         alert: None,
         notify_key: None,
         push_to_start: Some(token(2)),
@@ -149,4 +141,48 @@ fn round_trips_through_the_device_store_slot() {
         Registration::from_stored(Some(&junk)),
         Registration::default()
     );
+}
+
+#[test]
+fn a_phone_keeps_its_activities_generic_until_it_says_otherwise() {
+    use crate::app::config::ActivityDetail;
+
+    let generic = Registration::parse(br#"{"activity_detail":"generic"}"#).unwrap();
+    assert_eq!(generic.activity_detail, ActivityDetail::Generic);
+
+    let mut stored = Registration {
+        push_to_start: Some(DeviceToken::parse(&"ab".repeat(32)).unwrap()),
+        ..Registration::default()
+    };
+    stored.merge(generic);
+    let kept = stored.to_stored().unwrap();
+    assert_eq!(
+        Registration::from_stored(kept.as_ref()).activity_detail,
+        ActivityDetail::Generic
+    );
+
+    // The app sends its whole choice each time: no field is the default.
+    stored.merge(Registration::parse(b"{}").unwrap());
+    assert_eq!(stored.activity_detail, ActivityDetail::Detailed);
+    let kept = stored.to_stored().unwrap().unwrap();
+    assert!(kept.get("activity_detail").is_none());
+    assert!(Registration::parse(br#"{"activity_detail":"everything"}"#).is_err());
+}
+
+#[test]
+fn a_detail_choice_alone_registers_nothing() {
+    let registration = Registration::parse(br#"{"activity_detail":"generic"}"#).unwrap();
+    assert!(registration.is_empty());
+}
+
+#[test]
+fn printing_a_registration_shows_no_token() {
+    let hex = "ab".repeat(32);
+    let registration = Registration {
+        alert: Some(DeviceToken::parse(&hex).unwrap()),
+        push_to_start: Some(DeviceToken::parse(&hex).unwrap()),
+        ..Registration::default()
+    };
+    let printed = format!("{registration:?}");
+    assert!(!printed.contains(&hex), "{printed}");
 }

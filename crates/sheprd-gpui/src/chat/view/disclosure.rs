@@ -49,7 +49,15 @@ impl SheprdWindow {
             HeaderText::Label => true,
             HeaderText::Body => !expanded,
         };
-        header
+        let toggle = move |this: &mut Self, _: &mut Window, cx: &mut Context<Self>| {
+            if let Some(pane) = this.chats.pane_mut(&toggle_pane) {
+                pane.toggle_expanded(id);
+            }
+            cx.notify();
+        };
+        let view = cx.entity().downgrade();
+        crate::accessibility::expandable(header, expanded, view, toggle.clone())
+            .role(Role::Button)
             .cursor_pointer()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when(label_toggles, |header| {
@@ -60,12 +68,9 @@ impl SheprdWindow {
                     }),
                 )
             })
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                 cx.stop_propagation();
-                if let Some(pane) = this.chats.pane_mut(&toggle_pane) {
-                    pane.toggle_expanded(id);
-                }
-                cx.notify();
+                toggle(this, window, cx);
             }))
     }
 }

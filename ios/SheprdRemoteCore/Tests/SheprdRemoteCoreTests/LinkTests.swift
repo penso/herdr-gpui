@@ -12,6 +12,7 @@ actor FakeComputer {
     private var sockets: [AsyncThrowingStream<LiveEvent, Error>.Continuation] = []
 
     func setPing(_ origin: String, _ fingerprint: String) { pings[origin] = fingerprint }
+    func stopAnswering(_ origin: String) { pings[origin] = nil }
     func failSessions(_ error: Error?) { sessionError = error }
     func failConnects(_ error: Error?) { connectError = error }
 

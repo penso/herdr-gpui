@@ -1,7 +1,8 @@
 # Phase 0 spikes for the native app (docs/ios-spikes.md): Bluetooth
 # central with state restoration and L2CAP throughput, sealed
-# notifications opened in a Notification Service Extension, and a Live
-# Activity button that runs an intent over pinned TLS. Not shipped.
+# notifications opened in a Notification Service Extension, a Live
+# Activity button that runs an intent over pinned TLS, and a Live Activity
+# whose content only the widget extension can open. Not shipped.
 name: SheprdSpikes
 
 options:

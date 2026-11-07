@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 /// Opens a notification payload the daemon sealed to this device
-/// (`crates/sheprd-remote-control/src/apns/seal.rs`), so APNs only relays
+/// (`crates/sheprd-apns/src/seal.rs`), so APNs only relays
 /// ciphertext: `ephemeral point (65) || nonce (12) || ciphertext || tag`,
 /// AES-256-GCM under `HKDF-SHA256(salt: ephemeral || device, info)` of the
 /// ECDH secret, with `info` as associated data.
