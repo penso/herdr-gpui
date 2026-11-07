@@ -4,10 +4,11 @@
 use super::*;
 use crate::hub::{
     layout::project,
-    sessions::{
-        Sessions, listed as listed_beside, merge, owner, prefix_answer, prefix_layout, wanted,
-    },
+    sessions::{merge, owner, prefix_answer, prefix_layout, wanted},
 };
+// Only the tests that bind Unix sockets or symlinks use these.
+#[cfg(unix)]
+use crate::hub::sessions::{Sessions, listed as listed_beside};
 use sheprd_client::{LocalSession, SessionState};
 
 const ENDPOINT: &str = "0123456789abcdef0123456789abcdef";
