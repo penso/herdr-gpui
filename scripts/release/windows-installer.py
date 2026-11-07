@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build the per-user Windows installer, Herdr-VERSION-TARGET-setup.exe.
+"""Build the per-user Windows installer, Sheprd-VERSION-TARGET-setup.exe.
 
   install-iscc DESTINATION_DIR
       Install the pinned Inno Setup compiler into DESTINATION_DIR after checking its SHA-256, and print the path of ISCC.exe.
   build [--sign] VERSION TARGET ZIP OUTPUT_DIR ISCC
-      Compile herdr-gpui.iss over the tree of the release ZIP that
+      Compile sheprd.iss over the tree of the release ZIP that
       package-windows.py wrote, so the installer holds exactly the zip's files,
       and print the installer's path. With --sign, ISCC Authenticode-signs the
       uninstaller it embeds and Setup.exe through windows-sign-file.ps1, which
@@ -12,7 +12,7 @@
       request builds leave it out and stay unsigned.
   smoke [--signed] INSTALLER
       On Windows: install silently into a scratch directory with the PATH
-      task, check the files, their subsystems, herdr-gpui.exe's output, the
+      task, check the files, their subsystems, sheprd.exe's output, the
       app's name, the Start menu shortcut's AppUserModelID and target (the
       launcher), the user PATH, and the entry Settings lists under Installed
       apps; run it again as the in-app update does and check it starts the
@@ -44,7 +44,7 @@ import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts/release/herdr-gpui.iss"
+SCRIPT = ROOT / "scripts/release/sheprd.iss"
 SIGN_SCRIPT = ROOT / "scripts/release/windows-sign-file.ps1"
 # ISCC replaces $q with a quote and $f with the quoted file to sign. Quotes
 # inside the argument itself would not survive Windows command-line parsing.
@@ -57,6 +57,13 @@ INNO_VERSION = "6.7.3"
 INNO_URL = ("https://github.com/jrsoftware/issrc/releases/download/"
             f"is-{INNO_VERSION.replace('.', '_')}/innosetup-{INNO_VERSION}.exe")
 INNO_SHA256 = "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732"
+
+
+def packaged_executables():
+    spec = importlib.util.spec_from_file_location("package_windows", ROOT / "scripts/release/package-windows.py")
+    package = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(package)
+    return package.EXECUTABLES
 
 
 def install_iscc(destination):
@@ -93,10 +100,10 @@ def build(version, target, archive, output_dir, iscc, sign=False):
     if not archive.is_file() or not output_dir.is_dir():
         raise ValueError("Release zip and existing output directory required")
     output_dir = output_dir.resolve()
-    output = output_dir / f"Herdr-{version}-{target}-setup.exe"
+    output = output_dir / f"Sheprd-{version}-{target}-setup.exe"
     if output.exists() or output.is_symlink():
         raise ValueError(f"Output already exists: {output}")
-    root = f"Herdr-{version}-{target}"
+    root = f"Sheprd-{version}-{target}"
     with tempfile.TemporaryDirectory() as temp:
         with zipfile.ZipFile(archive) as release:
             names = release.namelist()
@@ -104,8 +111,7 @@ def build(version, target, archive, output_dir, iscc, sign=False):
                 raise ValueError("Release zip has entries outside its root")
             release.extractall(temp)
         source = Path(temp) / root
-        for required in ("herdr-gpui.exe", "herdr-gpui-launcher.exe", "herdr-acp.exe",
-                         "herdr-remote-control.exe", "herdr-automate.exe"):
+        for required in packaged_executables():
             if not (source / required).is_file():
                 raise ValueError(f"Release zip has no {required}")
         arguments = iscc_arguments(version, target, source, output_dir, sign)
@@ -155,17 +161,17 @@ def check_uninstall_entry(app):
         raise ValueError("Installer wrote no Uninstall entry")
     # Settings hides entries without a name, system components, and updates
     # of another entry.
-    if entry.get("DisplayName") != "Herdr UI" or entry.get("SystemComponent") or entry.get("ParentKeyName"):
+    if entry.get("DisplayName") != "Sheprd" or entry.get("SystemComponent") or entry.get("ParentKeyName"):
         raise ValueError(f"Settings would not list the Uninstall entry: {entry}")
     if Path(entry.get("UninstallString", "").strip('"')) != app / "unins000.exe":
         raise ValueError(f"Uninstall entry does not run the uninstaller: {entry}")
 
 
-def link_handler():
-    """The command Windows runs for a herdr-gpui:// link, or None when the
+def link_handler(scheme="sheprd"):
+    """The command Windows runs for a supported link, or None when the
     scheme is not registered for this user."""
     import winreg
-    name = r"Software\Classes\herdr-gpui"
+    name = "Software\\Classes\\" + scheme
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, name) as key:
             winreg.QueryValueEx(key, "URL Protocol")
@@ -180,7 +186,7 @@ FOLDER_VERBS = (r"Software\Classes\Directory\shell\HerdrUI",
 
 
 def folder_verbs():
-    """The commands of the "Open in Herdr UI" folder verbs that exist for
+    """The commands of the "Open in Sheprd" folder verbs that exist for
     this user."""
     import winreg
     commands = []
@@ -196,16 +202,17 @@ def folder_verbs():
 # switch, name the app; the installer creates neither and removes both.
 STARTUP_KEYS = (r"Software\Microsoft\Windows\CurrentVersion\Run",
                 r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run")
+STARTUP_NAME = "Herdr UI"
 
 
 def startup_entries():
-    """Which of STARTUP_KEYS have a Herdr UI value."""
+    """Which startup keys have this installation's stable identity."""
     import winreg
     found = []
     for name in STARTUP_KEYS:
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, name) as key:
-                winreg.QueryValueEx(key, "Herdr UI")
+                winreg.QueryValueEx(key, STARTUP_NAME)
             found.append(name)
         except FileNotFoundError:
             pass
@@ -218,9 +225,23 @@ def enable_startup(launcher):
     import winreg
     run, approved = STARTUP_KEYS
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, run) as key:
-        winreg.SetValueEx(key, "Herdr UI", 0, winreg.REG_SZ, f'"{launcher}"')
+        winreg.SetValueEx(key, STARTUP_NAME, 0, winreg.REG_SZ, f'"{launcher}"')
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, approved) as key:
-        winreg.SetValueEx(key, "Herdr UI", 0, winreg.REG_BINARY, bytes([3]) + bytes(11))
+        winreg.SetValueEx(key, STARTUP_NAME, 0, winreg.REG_BINARY, bytes([3]) + bytes(11))
+
+
+def check_startup_preserved(launcher):
+    import winreg
+    expected = ((f'"{launcher}"', winreg.REG_SZ), (bytes([3]) + bytes(11), winreg.REG_BINARY))
+    for name, value in zip(STARTUP_KEYS, expected):
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, name) as key:
+            if winreg.QueryValueEx(key, STARTUP_NAME) != value:
+                raise ValueError("Upgrade changed the saved startup command or disabled state")
+            try:
+                winreg.QueryValueEx(key, "Sheprd")
+            except FileNotFoundError:
+                continue
+            raise ValueError("Upgrade created a second startup identity")
 
 
 def check_signed(paths):
@@ -245,7 +266,7 @@ def shell_identity(app):
         "$ErrorActionPreference = 'Stop';"
         "(Get-Item -LiteralPath $env:HERDR_SMOKE_APP).VersionInfo.FileDescription;"
         "$programs = [Environment]::GetFolderPath('Programs');"
-        "$link = (New-Object -ComObject Shell.Application).Namespace($programs).ParseName('Herdr UI.lnk');"
+        "$link = (New-Object -ComObject Shell.Application).Namespace($programs).ParseName('Sheprd.lnk');"
         "$link.ExtendedProperty('System.AppUserModel.ID');"
         "$link.GetLink.Path"
     )
@@ -273,27 +294,35 @@ def smoke(installer, signed=False):
         try:
             check_installation(app, installer if signed else None)
             daemon = start_automate(app, env)
+            legacy_launcher = app / "herdr-gpui-launcher.exe"
+            enable_startup(legacy_launcher)
             check_update_relaunches(installer, app, env)
             check_automate_restarted(app, daemon)
-            enable_startup(app / "herdr-gpui-launcher.exe")
+            check_startup_preserved(legacy_launcher)
         finally:
+            # The launched app started the bundled herdr-core, as it does
+            # without Herdr 1 installed. Setup and the uninstaller never stop
+            # a core, whose terminals outlive the app; this scratch install's
+            # cores are the test's own, so it ends them before uninstalling.
+            stop_processes_at(app / "herdr-core.exe")
             # With the daemon still running, so the uninstaller has to stop it.
             try:
                 uninstall(app, env)
             finally:
+                stop_processes_at(app / "sheprd-automate.exe")
                 stop_processes_at(app / "herdr-automate.exe")
 
 
 def check_installation(app, signed_installer):
     """`signed_installer` is the installer whose signatures to require along
     with the installed files', or None to skip signature checks."""
-    exe, launcher = app / "herdr-gpui.exe", app / "herdr-gpui-launcher.exe"
-    acp, automate = app / "herdr-acp.exe", app / "herdr-automate.exe"
-    remote_control = app / "herdr-remote-control.exe"
-    for path in (exe, launcher, acp, remote_control, automate, app / "licenses" / "THIRD-PARTY-NOTICES.txt"):
+    exe, launcher = app / "sheprd.exe", app / "sheprd-launcher.exe"
+    acp, automate = app / "sheprd-acp.exe", app / "sheprd-automate.exe"
+    remote_control = app / "sheprd-remote-control.exe"
+    for path in [*(app / name for name in packaged_executables()), app / "licenses" / "THIRD-PARTY-NOTICES.txt"]:
         if not path.is_file():
             raise ValueError(f"Installer did not install {path}")
-    # herdr-gpui.exe is the command line, a console program (3); the launcher
+    # sheprd.exe is the command line, a console program (3); the launcher
     # opens it without a console window, so it is a GUI one (2), as is the
     # remote control daemon, which runs as a scheduled task with no console.
     # The automation daemon is a command line program.
@@ -303,22 +332,23 @@ def check_installation(app, signed_installer):
                           check=True, timeout=60).stdout
     # Printed through a pipe, as an agent's shell reads it.
     if not info.startswith("worktree="):
-        raise ValueError(f"Installed herdr-gpui.exe printed no build info:\n{info}")
+        raise ValueError(f"Installed sheprd.exe printed no build info:\n{info}")
     identity = shell_identity(exe)
-    if identity != ("Herdr UI", app_user_model_id(), str(launcher)):
+    if identity != ("Sheprd", app_user_model_id(), str(launcher)):
         raise ValueError(f"Installed app or shortcut has the wrong identity: {identity}")
     if signed_installer is not None:
-        check_signed([signed_installer.resolve(), exe, launcher, acp, remote_control, automate,
+        check_signed([signed_installer.resolve(), *(app / name for name in packaged_executables()),
                       app / "unins000.exe"])
     if str(app).lower() not in user_path_entries():
         raise ValueError("Installer did not add the app directory to the user PATH")
     check_uninstall_entry(app)
-    handler = link_handler()
-    if handler != f'"{launcher}" "%1"':
-        raise ValueError(f"Installer registered herdr-gpui:// links wrongly: {handler}")
+    for scheme in ("sheprd", "herdr-gpui"):
+        handler = link_handler(scheme)
+        if handler != f'"{launcher}" "%1"':
+            raise ValueError(f"Installer registered {scheme}:// links wrongly: {handler}")
     verbs = folder_verbs()
     if verbs != [f'"{launcher}" open "%V"'] * len(FOLDER_VERBS):
-        raise ValueError(f"Installer registered Open in Herdr UI wrongly: {verbs}")
+        raise ValueError(f"Installer registered Open in Sheprd wrongly: {verbs}")
     # Launch at login is off until the user turns it on.
     if startup_entries():
         raise ValueError(f"Installer wrote a startup entry: {startup_entries()}")
@@ -341,6 +371,7 @@ def stop_processes_at(path):
 def start_automate(app, env):
     """Start the installed automation daemon as the app does, and return its
     process id."""
+    # Exercise the old service entry point during a renamed upgrade too.
     automate = app / "herdr-automate.exe"
     # Not through pipes: the detached daemon inherits this command's output
     # handles, and a pipe it holds would never reach end of file.
@@ -349,15 +380,15 @@ def start_automate(app, env):
     deadline = time.monotonic() + 60
     while not (running := processes_at(automate)):
         if time.monotonic() > deadline:
-            raise ValueError("herdr-automate start did not leave the daemon running")
+            raise ValueError("sheprd-automate start did not leave the daemon running")
         time.sleep(1)
     return running[0]
 
 
 def check_automate_restarted(app, before):
-    """Setup replaced herdr-automate.exe while its daemon ran: it stopped
+    """Setup replaced sheprd-automate.exe while its daemon ran: it stopped
     that daemon and started the new copy."""
-    automate = app / "herdr-automate.exe"
+    automate = app / "sheprd-automate.exe"
     deadline = time.monotonic() + 60
     while not (running := processes_at(automate)) or before in running:
         if time.monotonic() > deadline:
@@ -367,8 +398,8 @@ def check_automate_restarted(app, before):
 
 def check_update_relaunches(installer, app, env):
     """Run Setup over the installation as the app's in-app update does
-    (herdr-updater/src/windows.rs), and require it to start the app again."""
-    gui = app / "herdr-gpui.exe"
+    (sheprd-updater/src/windows.rs), and require it to start the app again."""
+    gui = app / "sheprd.exe"
     if processes_at(gui):
         raise ValueError("A silent install started the app without /RELAUNCH=1")
     subprocess.run([str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
@@ -389,14 +420,14 @@ def uninstall(app, env):
                    check=True, timeout=600, env=env)
     # The uninstaller hands off to a copy of itself and returns early.
     entry = str(app).lower()
-    shortcut = Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs/Herdr UI.lnk"
+    shortcut = Path(os.environ["APPDATA"]) / "Microsoft/Windows/Start Menu/Programs/Sheprd.lnk"
     deadline = time.monotonic() + 120
     while (app.exists() or shortcut.exists() or entry in user_path_entries()
-           or uninstall_entry() is not None or link_handler() is not None
+           or uninstall_entry() is not None or any(link_handler(scheme) is not None for scheme in ("sheprd", "herdr-gpui"))
            or folder_verbs() or startup_entries()):
         if time.monotonic() > deadline:
             raise ValueError("Uninstaller left the app directory, its shortcut, its PATH entry, "
-                             "its Uninstall entry, its link handler, Open in Herdr UI, "
+                             "its Uninstall entry, its link handler, Open in Sheprd, "
                              "or its startup entry behind")
         time.sleep(1)
 

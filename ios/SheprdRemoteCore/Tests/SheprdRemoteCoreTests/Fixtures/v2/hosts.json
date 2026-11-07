@@ -1,0 +1,41 @@
+{
+  "hosts": [
+    {
+      "host": "ssh:devbox",
+      "name": "devbox",
+      "state": "paired",
+      "device": "d-devbox",
+      "computer": "devbox",
+      "fingerprint": "AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89",
+      "origins": [
+        "https://100.64.0.7:7443"
+      ]
+    },
+    {
+      "host": "ssh:gpu",
+      "name": "gpu box",
+      "state": "allowed"
+    },
+    {
+      "host": "coder:ws1",
+      "name": "workspace",
+      "state": "offered"
+    },
+    {
+      "host": "ssh:ci",
+      "name": "ci",
+      "state": "pending"
+    },
+    {
+      "host": "ssh:lab",
+      "name": "lab",
+      "state": "asking"
+    },
+    {
+      "host": "ssh:old",
+      "name": "old box",
+      "state": "failed",
+      "reason": "No build for Linux riscv64 in this app"
+    }
+  ]
+}

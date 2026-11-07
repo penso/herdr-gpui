@@ -1,0 +1,456 @@
+import ActivityKit
+import Foundation
+import os
+import SheprdRemoteCore
+import Network
+import UIKit
+
+/// Where the app should go next: a chat or terminal opened from a Live
+/// Activity, a notification, or a list.
+private let log = Logger(subsystem: "so.pen.herdr.remote", category: "app")
+
+enum Route: Codable, Hashable {
+    case chat(PaneKey, title: String)
+    case term(PaneKey, title: String)
+    case workspace(WorkspaceKey)
+}
+
+/// The app's state: paired computers, their live links, and the tokens
+/// Live Activities need.
+@MainActor
+@Observable
+final class AppModel {
+    private(set) var computers: [Computer] = [] {
+        didSet {
+            tokens.computers = computers
+            fleet.sync(computers)
+            presence.computers = computers
+        }
+    }
+    var message: String?
+    /// Set by a deep link; the root view shows it and clears it.
+    var pendingRoute: Route?
+    /// The workspace a tab on Home asked to go to; the root view shows it
+    /// and clears it.
+    var pendingWorkspace: WorkspaceKey?
+    /// The computer of the workspace or tab last opened, which a new
+    /// workspace starts on. Kept on this phone across launches.
+    @ObservationIgnored var recentDevice = UserDefaults.standard.string(forKey: "recentDevice") {
+        didSet { UserDefaults.standard.set(recentDevice, forKey: "recentDevice") }
+    }
+    /// The agent last started from this phone, offered first for a new
+    /// tab. Kept across launches.
+    var recentAgent = UserDefaults.standard.string(forKey: "recentAgent") {
+        didSet { UserDefaults.standard.set(recentAgent, forKey: "recentAgent") }
+    }
+    /// What new chats start with, by agent name, kept across launches.
+    private(set) var startChoices = AppModel.savedStartChoices() {
+        didSet {
+            guard let saved = try? JSONEncoder().encode(startChoices) else { return }
+            UserDefaults.standard.set(saved, forKey: "startChoices")
+        }
+    }
+    /// Which picks in chats are the latest; see `pickStart`.
+    @ObservationIgnored private var startPicks = StartPicks()
+    /// A new workspace or chat being set up, as a sheet over every tab.
+    var creating: Creating?
+    /// A spoken command under way, shown as a sheet over every tab.
+    var voice: VoiceSession?
+    /// A command asked for while the app was locked; the unlock runs it.
+    struct PendingTalk { var words: String? }
+    @ObservationIgnored var pendingTalk: PendingTalk?
+    /// What the last command was about, so the next can say "it".
+    @ObservationIgnored var voiceContext = VoiceContext()
+    /// What each computer last offered a new workspace, by device, so a
+    /// spoken command need not wait for the computers to answer again.
+    @ObservationIgnored var voiceOptions: [String: NewOptions] = [:]
+    /// A tab to switch to, from a Control or an intent; the root view
+    /// shows it and clears it.
+    var pendingTab: RootTab?
+    /// Something to tell the person once, such as a first prompt that
+    /// did not go; the root view shows it and clears it.
+    var notice: String?
+    /// The alert's title for `notice`, when it is not a send that failed.
+    var noticeTitle: String?
+    /// What each chat's composer held when the person left it, kept
+    /// until they come back, for as long as the app runs.
+    @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]
+
+    private static func savedStartChoices() -> [String: StartChoice] {
+        UserDefaults.standard.data(forKey: "startChoices")
+            .flatMap { try? JSONDecoder().decode([String: StartChoice].self, from: $0) } ?? [:]
+    }
+
+    func startChoice(for agent: String) -> StartChoice {
+        startChoices[agent] ?? StartChoice()
+    }
+
+    /// Changes what new chats with `agent` start with. Agents are few; a
+    /// name past the bound is not kept, so the saved list stays small.
+    func updateStart(for agent: String, _ change: (inout StartChoice) -> Void) {
+        guard !agent.isEmpty, startChoices[agent] != nil || startChoices.count < 32 else { return }
+        var choice = startChoice(for: agent)
+        change(&choice)
+        if choice != startChoices[agent] { startChoices[agent] = choice }
+    }
+
+    /// Notes `command`, sent to a chat with `agent`, as a pick new chats may
+    /// follow, and returns what saves it once the chat took it. Requests
+    /// finish in any order, so a pick the person has since replaced is not
+    /// saved. `nil` when the command is not such a pick.
+    func pickStart(_ command: ChatCommand, agent: String) -> (() -> Void)? {
+        guard let setting = startChoice(for: agent).setting(of: command) else { return nil }
+        let pick = startPicks.begin(agent: agent, setting: setting)
+        return { [weak self] in
+            guard let self, startPicks.isLatest(pick, agent: agent, setting: setting) else { return }
+            updateStart(for: agent) { $0.follow(command) }
+        }
+    }
+
+    /// Changes `setting` for new chats with `agent` directly, as the new tab
+    /// row does. This is a pick too, so a slower one from a chat that is
+    /// still on its way does not replace it.
+    func chooseStart(_ setting: StartPicks.Setting, for agent: String, _ change: (inout StartChoice) -> Void) {
+        _ = startPicks.begin(agent: agent, setting: setting)
+        updateStart(for: agent, change)
+    }
+
+    /// Spotlight follows the app lock as soon as it changes, not at the
+    /// next change to the chats.
+    func appLockChanged() {
+        spotlight.update(WidgetSummary.load())
+    }
+
+    /// The one model, for intents iOS runs in the app's process.
+    static var current: AppModel?
+
+    enum Shortcut { case home, newWorkspace, chat(Route), talk(saying: String? = nil) }
+
+    /// Shows what a Control, an intent, or Spotlight asked for.
+    func show(_ shortcut: Shortcut) {
+        switch shortcut {
+        case .home: pendingTab = .home
+        case .newWorkspace: creating = .workspace(device: nil)
+        case let .chat(route): pendingRoute = route
+        case let .talk(words): talk(saying: words)
+        }
+    }
+
+    /// Opens the voice sheet, listening, or with `words` already said.
+    func talk(saying words: String? = nil) {
+        // A locked app must not start listening behind its cover: this
+        // waits for the unlock, which is why the Action button still works.
+        if LockState.shared.hidesNames {
+            pendingTalk = PendingTalk(words: words)
+            return
+        }
+        guard voice == nil, !fleet.machines.isEmpty else { return }
+        let session = VoiceSession(model: self)
+        voice = session
+        Task { await session.begin(saying: words) }
+    }
+
+    /// Native chats, then agents in terminal tabs that are not also one.
+    private func voiceChats() -> [VoiceCatalog.Chat] {
+        let chats = fleet.chatItems.map { item in
+            VoiceCatalog.Chat(
+                device: item.computer.device,
+                pane: item.chat.pane,
+                title: item.chat.title,
+                computer: displayName(item.computer),
+                question: item.question
+            )
+        }
+        let panes = Set(chats.map(\.id))
+        let terminals = fleet.agentTerminals.compactMap { item -> VoiceCatalog.Chat? in
+            guard let pane = item.terminal.agentPane?.pane, !panes.contains("\(item.computer.device)/\(pane)") else { return nil }
+            // A numbered tab cannot be told apart out loud; its workspace can.
+            let title = Int(item.title) == nil ? item.title : item.workspace.label
+            return VoiceCatalog.Chat(
+                device: item.computer.device,
+                pane: pane,
+                title: title,
+                computer: displayName(item.computer),
+                terminal: true,
+                terminalAgent: item.agent?.name
+            )
+        }
+        return chats + terminals
+    }
+
+    /// What can be named out loud right now.
+    func voiceCatalog() -> VoiceCatalog {
+        VoiceCatalog(
+            computers: fleet.machines.map { machine in
+                let online = if case .online = machine.status { machine.home?.connected != false } else { false }
+                return VoiceCatalog.Computer(
+                    id: machine.id,
+                    name: displayName(machine.computer),
+                    online: online,
+                    home: machine.home,
+                    options: voiceOptions[machine.id]
+                )
+            },
+            chats: voiceChats(),
+            recentDevice: recentDevice,
+            recentAgent: recentAgent
+        )
+    }
+    let sessions: Sessions
+    let tokens: ActivityTokens
+    let fleet: Fleet
+    /// Pairing with the hosts each computer's Sheprd knows.
+    let hostLinks: HostLinks
+    let nearby = NearbyBrowser()
+    let collapsed = CollapsedStore()
+    let tagFilter = TagFilterStore()
+    let shortcuts = ShortcutStore()
+    let termKeys = TermKeyStore()
+    let bluetooth = NearbyBluetooth()
+    /// Bluetooth presence with the computers that have it on.
+    let presence = PresenceCentral()
+    private let spotlight = SpotlightChats()
+    /// Nearby computers the person closed the card for, this launch.
+    var dismissedNearby: Set<String> = []
+    /// Connection notices the person closed, until each computer is online
+    /// again (`LinkNotice`).
+    var dismissedNotices: Set<LinkNotice.Key> = []
+    private let paths = NWPathMonitor()
+
+    init() {
+        let sessions = Sessions()
+        self.sessions = sessions
+        tokens = ActivityTokens(sessions: sessions)
+        fleet = Fleet(sessions: sessions)
+        hostLinks = HostLinks(sessions: sessions)
+        do {
+            computers = try ComputerStore.load()
+        } catch {
+            log.error("Could not read the paired computers: \(error.localizedDescription, privacy: .public)")
+            message = error.localizedDescription
+        }
+        // Property observers do not run during `init`.
+        tokens.computers = computers
+        fleet.sync(computers)
+        presence.onAddresses = { [weak self] fingerprint, origins in self?.update(fingerprint, origins: origins) }
+        // Back in range after iOS relaunched the app: tokens may be stale.
+        presence.onWake = { [weak self] in
+            guard let self else { return }
+            Task { await self.tokens.sync() }
+        }
+        presence.computers = computers
+        hostLinks.computers = { [weak self] in self?.computers ?? [] }
+        hostLinks.onPaired = { [weak self] in self?.add($0) }
+        fleet.onOnline = { [weak self] in self?.hostLinks.check($0) }
+        fleet.onTags = { [weak self] in self?.tagsArrived($0, for: $1) }
+        fleet.onTagsAnswer = { [weak self] in self?.tagsAnswered($0, for: $1) }
+        fleet.onSummary = { [spotlight] in
+            let summary = WidgetSummary.load()
+            spotlight.update(summary)
+            WatchLink.shared.publish(summary)
+        }
+        // At launch too: Spotlight may hold chats from before the lock.
+        spotlight.update(WidgetSummary.load())
+        WatchLink.shared.start()
+        paths.pathUpdateHandler = { [weak self] _ in
+            Task { @MainActor in self?.fleet.networkChanged() }
+        }
+        paths.start(queue: .main)
+    }
+
+    func add(_ computer: Computer) {
+        var computer = computer
+        computer.carryTags(from: computers)
+        // A computer is its CA: pairing the same CA (or the same device id)
+        // again replaces the old record. Names are display only.
+        computers.removeAll { $0.fingerprint == computer.fingerprint || $0.device == computer.device }
+        computers.append(computer)
+        save()
+        Task { await AppDelegate.enableAlerts() }
+        Task { await tokens.sync(only: computer.fingerprint) }
+        hostLinks.check(computer, force: true)
+    }
+
+    /// Turns Bluetooth presence on or off for one computer.
+    func setPresence(_ on: Bool, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        computers[index].presence = on
+        save()
+    }
+
+    /// Replaces one computer's tags.
+    func setTags(_ tags: [String], for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        computers[index].tags = tags
+        computers[index].tagsUpdatedMs = UInt64(Date.now.timeIntervalSince1970 * 1000)
+        save()
+        // An edit made away from the computer goes when its home next arrives.
+        fleet.offerTags(for: computers[index])
+    }
+
+    /// What stands after this phone offered tags, which replaces its copy
+    /// even when older: a fast clock here is why they may be.
+    private func tagsAnswered(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }),
+              computers[index].tagsUpdatedMs == computer.tagsUpdatedMs else { return }
+        computers[index].adopt(remote)
+        save()
+    }
+
+    /// The tags `computer` keeps, as its home or an answer reports them.
+    private func tagsArrived(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        switch ComputerTags.step(for: computers[index], remote: remote) {
+        case .none: break
+        case .adopt:
+            computers[index].adopt(remote)
+            save()
+        case .send: fleet.offerTags(for: computers[index])
+        }
+    }
+
+    /// Addresses a computer sent over Bluetooth, sealed to this phone.
+    private func update(_ fingerprint: Fingerprint, origins: [String]) {
+        guard let index = computers.firstIndex(where: { $0.fingerprint == fingerprint }) else { return }
+        let merged = Presence.merged(known: computers[index].origins, received: origins)
+        guard merged != computers[index].origins else { return }
+        computers[index].origins = merged
+        save()
+        fleet.networkChanged()
+    }
+
+    func forget(_ computer: Computer) {
+        computers.removeAll { $0.device == computer.device }
+        save()
+        try? NotifyKey.forget(computer.fingerprint)
+        hostLinks.forget(computer)
+        collapsed.computers.forget(computer.device)
+        Task { await sessions.forget(computer) }
+    }
+
+    private func save() {
+        do {
+            try ComputerStore.save(computers)
+        } catch {
+            log.error("Could not save the paired computers: \(error.localizedDescription, privacy: .public)")
+            message = error.localizedDescription
+        }
+    }
+
+    /// Opens a Live Activity's or notification's link in the app.
+    func open(_ url: URL) {
+        guard let link = ChatLink(url: url) else { return }
+        guard let fingerprint = link.fingerprint,
+              let computer = computers.first(where: { $0.fingerprint == fingerprint })
+        else {
+            message = "\(link.computer.isEmpty ? "That computer" : link.computer) is not paired with this phone."
+            return
+        }
+        let title = fleet.chatItems.first { $0.computer.device == computer.device && $0.chat.pane == link.pane }?.chat.title
+        pendingRoute = .chat(PaneKey(device: computer.device, pane: link.pane), title: title ?? "Chat")
+    }
+
+    /// The computers nearby whose pairing dialog is open now, by
+    /// fingerprint, as one can be found over both routes. A dismissed offer
+    /// stays dismissed only while it is here: one that closes and opens its
+    /// dialog again offers again.
+    var offeredNearby: Set<String> {
+        Set((nearby.computers + bluetooth.computers).filter(\.pairing).map(\.fingerprintPrefix))
+    }
+
+    /// A computer nearby with its pairing dialog open that this phone has
+    /// not paired, for the proximity card and its banner.
+    var nearbyOffer: NearbyComputer? {
+        // The network first when a computer is found both ways: it is faster.
+        (nearby.computers + bluetooth.computers).first { candidate in
+            candidate.pairing && !dismissedNearby.contains(candidate.fingerprintPrefix)
+                && !computers.contains { candidate.matches($0.fingerprint) }
+        }
+    }
+
+    /// The name to show for `computer`: its own, plus the start of its
+    /// fingerprint when another paired computer has the same name.
+    func displayName(_ computer: Computer) -> String {
+        let twins = computers.filter { $0.name == computer.name }.count
+        guard twins > 1 else { return computer.name }
+        return "\(computer.name) (\(computer.fingerprint.hex.prefix(8)))"
+    }
+
+    /// The paired computer that vouched for `computer`, for one paired
+    /// through another.
+    func vouching(_ computer: Computer) -> Computer? {
+        guard let via = computer.via else { return nil }
+        return computers.first { $0.fingerprint == via }
+    }
+
+    /// The paired computer an activity names by fingerprint, if any.
+    func computer(for facts: ChatActivityFacts) -> Computer? {
+        guard let fingerprint = facts.fingerprint else { return nil }
+        return computers.first { $0.fingerprint == fingerprint }
+    }
+
+    #if DEBUG
+    /// Where the sample activity is, for Settings: iOS shows activities
+    /// only outside the app, so the button says what happened.
+    var sampleStatus: String?
+
+    /// Starts a local activity with sample content and plays it through a
+    /// few steps to done, to check the layouts and updates on a device
+    /// without an APNs key.
+    func startSample() {
+        let facts = ChatActivityFacts(
+            computer: computers.first?.name ?? "studio",
+            computerId: computers.first?.fingerprint.hex ?? String(repeating: "0", count: 64),
+            workspace: "sheprd",
+            chatTitle: "split tests",
+            agent: "Codex",
+            pane: "sample"
+        )
+        let state = ChatActivityState(
+            phase: .working,
+            step: "Writing mockups/index.html",
+            startedAt: Date().addingTimeInterval(-250),
+            planDone: 2,
+            planTotal: 4,
+            working: 2,
+            waiting: 1
+        )
+        let id: String
+        do {
+            id = try Activity.request(
+                attributes: ChatActivityAttributes(facts: facts),
+                content: .init(state: state, staleDate: nil)
+            ).id
+        } catch {
+            sampleStatus = "Could not start: \(error.localizedDescription)"
+            return
+        }
+        sampleStatus = "Started. Go to the Home Screen or lock the phone: it shows in the Dynamic Island and on the Lock Screen, and updates every few seconds."
+        // The app is suspended soon after it leaves the screen, which is
+        // when the activity shows; the updates need the background time.
+        let background = UIApplication.shared.beginBackgroundTask(withName: "Sample activity")
+        Task { [weak self] in
+            await Self.playSample(id, from: state)
+            self?.sampleStatus = "Finished. It leaves the Lock Screen in a minute."
+            UIApplication.shared.endBackgroundTask(background)
+        }
+    }
+
+    /// Steps the sample activity `id` through a few updates, then ends it.
+    private nonisolated static func playSample(_ id: String, from start: ChatActivityState) async {
+        var state = start
+        for (index, step) in ["Running cargo test", "Fixing split_tests.rs", "Running just ci"].enumerated() {
+            try? await Task.sleep(for: .seconds(5))
+            state.step = step
+            state.planDone = min(3 + index, 4)
+            await Activity<ChatActivityAttributes>.activities.first { $0.id == id }?.update(.init(state: state, staleDate: nil))
+        }
+        try? await Task.sleep(for: .seconds(5))
+        state.phase = .finished
+        state.summary = "Split the tests into four files; just ci passes."
+        state.working = 1
+        await Activity<ChatActivityAttributes>.activities.first { $0.id == id }?
+            .end(.init(state: state, staleDate: nil), dismissalPolicy: .after(.now + 60))
+    }
+    #endif
+}

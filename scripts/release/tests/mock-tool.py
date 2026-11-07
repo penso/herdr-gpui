@@ -37,7 +37,8 @@ elif tool == "base64":
     assert args == ["-D"], args
     sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read(), validate=True))
 elif tool == "plutil" and args[0] == "-extract":
-    print("14.2" if args[1] == "LSMinimumSystemVersion" else "20260920.3")
+    print({"LSMinimumSystemVersion": "14.2", "CFBundleExecutable": "sheprd",
+           "CFBundleIdentifier": "so.pen.herdr-gpui"}.get(args[1], "20260920.3"))
 elif tool == "lipo":
     if args[0] == "-archs":
         # A fixture is named for its architecture, or sits in a folder that is.
@@ -65,5 +66,5 @@ elif tool == "hdiutil":
     image = Path(args[args.index("-srcfolder") + 1])
     assert (image / "Applications").is_symlink()
     assert os.readlink(image / "Applications") == "/Applications"
-    assert (image / "Herdr.app").is_dir()
+    assert (image / "Sheprd.app").is_dir()
     Path(args[-1]).write_text("mock dmg")

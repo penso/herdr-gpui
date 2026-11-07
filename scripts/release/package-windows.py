@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Package the Windows executable as Herdr-VERSION-TARGET.zip.
+"""Package the Windows executable as Sheprd-VERSION-TARGET.zip.
 
 Pure standard library so the Windows runner needs no zip tool. The layout
 mirrors package-linux.sh: the executable plus the same license and notice files.
-Beside herdr-gpui.exe, which is a console program because it is also the CLI,
-the zip carries herdr-gpui-launcher.exe, the windowed launcher that starts it without a
-console window from Explorer or the Start menu, herdr-acp.exe, which the app
-starts chats with, herdr-remote-control.exe, the remote control daemon the
-app runs as a scheduled task, and herdr-automate.exe, the automation daemon;
-the build leaves all three beside herdr-gpui.exe.
+Beside sheprd.exe, which is a console program because it is also the CLI,
+the zip carries sheprd-launcher.exe, the windowed launcher that starts it without a
+console window from Explorer or the Start menu, sheprd-acp.exe, which the app
+starts chats with, sheprd-remote-control.exe, the remote control daemon the
+app runs as a scheduled task, sheprd-automate.exe, the automation daemon,
+sheprd-nearby.exe, the Bluetooth helper for nearby pairing and presence, and
+herdr-core.exe, which runs Herdr 2 terminals; the build leaves them all
+beside sheprd.exe (herdr-core.exe fetched pinned).
 """
 import argparse
 from pathlib import Path
@@ -19,9 +21,15 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGETS = ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc")
+HELPERS = ("sheprd-acp.exe", "sheprd-remote-control.exe", "sheprd-automate.exe",
+           "sheprd-nearby.exe", "herdr-core.exe")
+# Existing shortcuts, startup entries and helper services must keep working.
+ALIASES = {"herdr-gpui.exe": "sheprd.exe", "herdr-gpui-launcher.exe": "sheprd-launcher.exe",
+           **{name.replace("sheprd-", "herdr-", 1): name for name in HELPERS if name.startswith("sheprd-")}}
+EXECUTABLES = ("sheprd.exe", "sheprd-launcher.exe", *HELPERS, *ALIASES)
 LICENSES = ("LICENSE", "NOTICE", "assets/icons/LICENSE-octicons",
-            "crates/herdr-protocol/LICENSE-APACHE", "crates/herdr-protocol/NOTICE.md",
-            "crates/herdr-gpui/SOUND-NOTICE.md")
+            "crates/sheprd-protocol/LICENSE-APACHE", "crates/sheprd-protocol/NOTICE.md",
+            "crates/sheprd-gpui/SOUND-NOTICE.md")
 # Zip cannot store dates before 1980; a fixed stamp keeps entries independent
 # of checkout and build times.
 TIMESTAMP = (1980, 1, 1, 0, 0, 0)
@@ -43,14 +51,13 @@ def package(version, target, binary, launcher, output_dir, notices):
         raise ValueError("Binary file and existing output directory required")
     if not launcher.is_file():
         raise ValueError("Launcher file required")
-    companions = [binary.parent / name for name in ("herdr-acp.exe", "herdr-remote-control.exe",
-                                                         "herdr-automate.exe")]
+    companions = [binary.parent / name for name in HELPERS]
     for companion in companions:
         if not companion.is_file():
             raise ValueError(f"A {companion.name} beside the binary required")
     if not notices.is_file() or not notices.stat().st_size:
         raise ValueError("Nonempty third-party notices file required")
-    name = f"Herdr-{version}-{target}"
+    name = f"Sheprd-{version}-{target}"
     output = output_dir.resolve() / f"{name}.zip"
     if output.exists() or output.is_symlink():
         raise ValueError(f"Output already exists: {output}")
@@ -59,13 +66,19 @@ def package(version, target, binary, launcher, output_dir, notices):
         partial = Path(temp.name)
     try:
         with zipfile.ZipFile(partial, "w") as archive:
-            add(archive, f"{name}/herdr-gpui.exe", binary.read_bytes())
-            add(archive, f"{name}/herdr-gpui-launcher.exe", launcher.read_bytes())
+            add(archive, f"{name}/sheprd.exe", binary.read_bytes())
+            add(archive, f"{name}/sheprd-launcher.exe", launcher.read_bytes())
             for companion in companions:
                 add(archive, f"{name}/{companion.name}", companion.read_bytes())
+            sources = {"sheprd.exe": binary, "sheprd-launcher.exe": launcher,
+                       **{companion.name: companion for companion in companions}}
+            for alias, canonical in ALIASES.items():
+                add(archive, f"{name}/{alias}", sources[canonical].read_bytes())
             for source in LICENSES:
                 add(archive, f"{name}/licenses/{Path(source).name}", (ROOT / source).read_bytes())
             add(archive, f"{name}/licenses/THIRD-PARTY-NOTICES.txt", notices.read_bytes())
+            add(archive, f"{name}/licenses/HERDR-CORE-LICENSES.txt",
+                (ROOT / "scripts/release/herdr-core-licenses.txt").read_bytes())
         if output.exists() or output.is_symlink():
             raise ValueError(f"Output already exists: {output}")
         partial.replace(output)

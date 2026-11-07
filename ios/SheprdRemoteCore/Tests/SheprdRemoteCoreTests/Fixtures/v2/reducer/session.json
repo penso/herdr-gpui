@@ -1,0 +1,280 @@
+{
+  "start": {
+    "agent": "Claude",
+    "auto_accept": false,
+    "clients": 0,
+    "commands": [],
+    "entries": [],
+    "modes": null,
+    "options": [],
+    "permissions": [],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "starting"
+    },
+    "truncated": false,
+    "turn": null,
+    "usage": null
+  },
+  "changes": [
+    {
+      "change": "status",
+      "status": {
+        "state": "working"
+      }
+    },
+    {
+      "change": "status",
+      "status": {
+        "state": "failed",
+        "message": "the agent stopped"
+      }
+    },
+    {
+      "change": "plan",
+      "plan": [
+        {
+          "content": "Read",
+          "priority": "high",
+          "status": "completed"
+        },
+        {
+          "content": "Edit",
+          "priority": "medium",
+          "status": "in_progress"
+        },
+        {
+          "content": "Test",
+          "priority": "low",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "change": "modes",
+      "modes": {
+        "available": [
+          {
+            "description": "Ask before edits",
+            "id": "default",
+            "name": "Default"
+          },
+          {
+            "description": null,
+            "id": "bypass",
+            "name": "Bypass permissions"
+          }
+        ],
+        "current": "default"
+      }
+    },
+    {
+      "change": "current_mode",
+      "id": "bypass"
+    },
+    {
+      "change": "options",
+      "options": [
+        {
+          "category": "model",
+          "description": null,
+          "id": "model",
+          "kind": {
+            "type": "select",
+            "choices": [
+              {
+                "description": "Most capable",
+                "group": "Claude",
+                "id": "opus",
+                "name": "Opus 5.5"
+              }
+            ],
+            "current": "opus"
+          },
+          "name": "Model"
+        },
+        {
+          "category": "thought_level",
+          "description": "Think longer",
+          "id": "thinking",
+          "kind": {
+            "type": "toggle",
+            "current": true
+          },
+          "name": "Thinking"
+        }
+      ]
+    },
+    {
+      "change": "turn",
+      "turn": {
+        "started_ms": 1761670000000
+      }
+    },
+    {
+      "change": "queue",
+      "queued": [
+        {
+          "attachments": [
+            {
+              "path": "/tmp/shot.png"
+            }
+          ],
+          "id": "00000000-0000-0000-0000-000000000007",
+          "text": "and the docs"
+        }
+      ]
+    },
+    {
+      "change": "clients",
+      "count": 2
+    },
+    {
+      "change": "session",
+      "session": {
+        "cwd": "/work",
+        "id": "s1",
+        "title": "Equalize"
+      }
+    },
+    {
+      "change": "commands",
+      "commands": [
+        {
+          "description": "Review the branch",
+          "hint": "[focus]",
+          "name": "review"
+        }
+      ]
+    },
+    {
+      "change": "usage",
+      "usage": {
+        "cost": {
+          "currency": "USD",
+          "micros": 840000
+        },
+        "size": 200000,
+        "used": 84000
+      }
+    },
+    {
+      "change": "turn",
+      "turn": null
+    },
+    {
+      "change": "auto_accept",
+      "on": false
+    }
+  ],
+  "end": {
+    "agent": "Claude",
+    "auto_accept": false,
+    "clients": 2,
+    "commands": [
+      {
+        "description": "Review the branch",
+        "hint": "[focus]",
+        "name": "review"
+      }
+    ],
+    "entries": [],
+    "modes": {
+      "available": [
+        {
+          "description": "Ask before edits",
+          "id": "default",
+          "name": "Default"
+        },
+        {
+          "description": null,
+          "id": "bypass",
+          "name": "Bypass permissions"
+        }
+      ],
+      "current": "bypass"
+    },
+    "options": [
+      {
+        "category": "model",
+        "description": null,
+        "id": "model",
+        "kind": {
+          "type": "select",
+          "choices": [
+            {
+              "description": "Most capable",
+              "group": "Claude",
+              "id": "opus",
+              "name": "Opus 5.5"
+            }
+          ],
+          "current": "opus"
+        },
+        "name": "Model"
+      },
+      {
+        "category": "thought_level",
+        "description": "Think longer",
+        "id": "thinking",
+        "kind": {
+          "type": "toggle",
+          "current": true
+        },
+        "name": "Thinking"
+      }
+    ],
+    "permissions": [],
+    "plan": [
+      {
+        "content": "Read",
+        "priority": "high",
+        "status": "completed"
+      },
+      {
+        "content": "Edit",
+        "priority": "medium",
+        "status": "in_progress"
+      },
+      {
+        "content": "Test",
+        "priority": "low",
+        "status": "pending"
+      }
+    ],
+    "queued": [
+      {
+        "attachments": [
+          {
+            "path": "/tmp/shot.png"
+          }
+        ],
+        "id": "00000000-0000-0000-0000-000000000007",
+        "text": "and the docs"
+      }
+    ],
+    "read_only": false,
+    "session": {
+      "cwd": "/work",
+      "id": "s1",
+      "title": "Equalize"
+    },
+    "status": {
+      "state": "failed",
+      "message": "the agent stopped"
+    },
+    "truncated": false,
+    "turn": null,
+    "usage": {
+      "cost": {
+        "currency": "USD",
+        "micros": 840000
+      },
+      "size": 200000,
+      "used": 84000
+    }
+  }
+}

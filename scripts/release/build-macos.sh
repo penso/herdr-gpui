@@ -23,7 +23,10 @@ build_env=(env
 # Public configuration must be supplied before loading any local signing helper.
 "${build_env[@]}" python3 scripts/update-manifest.py validate-public-key
 for target in aarch64-apple-darwin x86_64-apple-darwin; do
-    "${build_env[@]}" cargo build --locked --release --target-dir target -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$target"
+    "${build_env[@]}" cargo build --locked --release --target-dir target -p sheprd-gpui -p sheprd-acp -p sheprd-remote-control -p sheprd-automate --target "$target"
+    "${build_env[@]}" bash scripts/release/build-nearby.sh "$target" >/dev/null
+    # Herdr 2 terminals run in the pinned herdr-core beside it.
+    "${build_env[@]}" python3 scripts/release/fetch-herdr-core.py "$target" "target/$target/release"
 done
 
 # Publish only a complete assembly; failures leave the version available for retry.
@@ -34,15 +37,15 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 "${build_env[@]}" python3 scripts/release/generate-notices.py "$stage/THIRD-PARTY-NOTICES.txt"
 bash scripts/release/package-macos.sh "$version" \
-    target/aarch64-apple-darwin/release/herdr-gpui \
-    target/x86_64-apple-darwin/release/herdr-gpui "$stage" "$stage/THIRD-PARTY-NOTICES.txt" >&2
+    target/aarch64-apple-darwin/release/sheprd \
+    target/x86_64-apple-darwin/release/sheprd "$stage" "$stage/THIRD-PARTY-NOTICES.txt" >&2
 set +x
 (
     source ./.envrc
     declare -F herdr_sign >/dev/null || fail 'Local .envrc must define herdr_sign VERSION APP OUT'
-    herdr_sign "$version" "$stage/Herdr.app" "$stage"
+    herdr_sign "$version" "$stage/Sheprd.app" "$stage"
 ) >&2
-dmg="Herdr-$version-universal-apple-darwin.dmg"
+dmg="Sheprd-$version-universal-apple-darwin.dmg"
 [[ -f $stage/$dmg && -s $stage/$dmg ]] || fail 'Signing did not produce a nonempty DMG'
 new_output "$out"
 mv -n "$stage" "$out"

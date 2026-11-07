@@ -40,13 +40,13 @@ code=$(changed \
   clippy.toml .clippy.toml justfile mise.toml cliff.toml \
   ':(exclude)**/*.md' \
   ':(exclude)assets/social-preview-*' \
-  ':(exclude)assets/icons/herdr-ui-icon-badge.*' \
+  ':(exclude)assets/icons/sheprd-icon-badge.*' \
   ':(exclude).github/workflows/site.yml')
 windows_package=$(changed \
   scripts/release/package-windows.py scripts/release/windows-installer.py \
-  scripts/release/herdr-gpui.iss site/install.ps1 \
-  crates/herdr-gpui-launcher crates/herdr-gpui/src/main.rs \
-  crates/herdr-gpui/build.rs crates/herdr-gpui/windows_resource.rs \
-  assets/icons/Herdr.ico assets/icons/Herdr-worktree.ico assets/icons/windows \
+  scripts/release/sheprd.iss scripts/release/installer site/install.ps1 \
+  crates/sheprd-launcher crates/sheprd-gpui/src/main.rs \
+  crates/sheprd-gpui/build.rs crates/sheprd-gpui/windows_resource.rs \
+  assets/icons/Sheprd.ico assets/icons/Sheprd-worktree.ico assets/icons/windows \
   .github/workflows/ci.yml)
 printf 'code=%s\nwindows_package=%s\n' "$code" "$windows_package"

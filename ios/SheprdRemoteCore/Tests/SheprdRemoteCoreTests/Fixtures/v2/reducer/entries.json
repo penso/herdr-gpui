@@ -1,0 +1,320 @@
+{
+  "start": {
+    "agent": "Claude",
+    "auto_accept": false,
+    "clients": 0,
+    "commands": [],
+    "entries": [],
+    "modes": null,
+    "options": [],
+    "permissions": [],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "starting"
+    },
+    "truncated": false,
+    "turn": null,
+    "usage": null
+  },
+  "changes": [
+    {
+      "change": "push",
+      "entry": {
+        "id": 1,
+        "kind": {
+          "type": "user",
+          "text": "Look at this\n📎 shot.png",
+          "files": 1
+        }
+      }
+    },
+    {
+      "change": "push",
+      "entry": {
+        "id": 2,
+        "kind": {
+          "type": "thought",
+          "text": "Hmm"
+        }
+      }
+    },
+    {
+      "change": "push",
+      "entry": {
+        "id": 3,
+        "kind": {
+          "type": "agent",
+          "text": "Sure"
+        }
+      }
+    },
+    {
+      "change": "append",
+      "id": 3,
+      "text": ", done."
+    },
+    {
+      "change": "push",
+      "entry": {
+        "id": 4,
+        "kind": {
+          "type": "image",
+          "author": "agent",
+          "image": {
+            "data": "R0lGODlhAQABAAAAACw=",
+            "mime_type": "image/gif"
+          }
+        }
+      }
+    },
+    {
+      "change": "push",
+      "entry": {
+        "id": 5,
+        "kind": {
+          "type": "tool",
+          "call_id": "call-1",
+          "content": [
+            {
+              "type": "text",
+              "text": "cargo nextest run"
+            },
+            {
+              "type": "diff",
+              "new": "let share = 1.0;\n",
+              "old": "let share = 0.5;\n",
+              "path": "src/splits.rs"
+            },
+            {
+              "type": "diff",
+              "new": "fn new_file() {}\n",
+              "old": null,
+              "path": "src/new.rs"
+            },
+            {
+              "type": "image",
+              "image": {
+                "data": "iVBORw0KGgo=",
+                "mime_type": "image/png"
+              }
+            },
+            {
+              "type": "terminal",
+              "id": "term-1"
+            }
+          ],
+          "kind": "execute",
+          "locations": [
+            "src/splits.rs"
+          ],
+          "status": "in_progress",
+          "title": "Run just ci"
+        }
+      }
+    },
+    {
+      "change": "replace",
+      "entry": {
+        "id": 5,
+        "kind": {
+          "type": "tool",
+          "call_id": "call-1",
+          "content": [
+            {
+              "type": "text",
+              "text": "cargo nextest run"
+            },
+            {
+              "type": "diff",
+              "new": "let share = 1.0;\n",
+              "old": "let share = 0.5;\n",
+              "path": "src/splits.rs"
+            },
+            {
+              "type": "diff",
+              "new": "fn new_file() {}\n",
+              "old": null,
+              "path": "src/new.rs"
+            },
+            {
+              "type": "image",
+              "image": {
+                "data": "iVBORw0KGgo=",
+                "mime_type": "image/png"
+              }
+            },
+            {
+              "type": "terminal",
+              "id": "term-1"
+            }
+          ],
+          "kind": "execute",
+          "locations": [
+            "src/splits.rs"
+          ],
+          "status": "completed",
+          "title": "Run just ci"
+        }
+      }
+    },
+    {
+      "change": "push",
+      "entry": {
+        "id": 6,
+        "kind": {
+          "type": "turn",
+          "duration_ms": 6000,
+          "end": "done",
+          "tokens": {
+            "cached": 10,
+            "input": 100,
+            "output": 50,
+            "thought": 5,
+            "total": 165
+          }
+        }
+      }
+    },
+    {
+      "change": "push",
+      "entry": {
+        "id": 7,
+        "kind": {
+          "type": "notice",
+          "answers": [
+            {
+              "question": "Which layout?",
+              "answer": "Split"
+            }
+          ],
+          "details": "from the transcript",
+          "level": "warning",
+          "text": "Answered"
+        }
+      }
+    },
+    {
+      "change": "append",
+      "id": 7,
+      "text": " earlier"
+    },
+    {
+      "change": "truncate",
+      "before": 3
+    }
+  ],
+  "end": {
+    "agent": "Claude",
+    "auto_accept": false,
+    "clients": 0,
+    "commands": [],
+    "entries": [
+      {
+        "id": 3,
+        "kind": {
+          "type": "agent",
+          "text": "Sure, done."
+        }
+      },
+      {
+        "id": 4,
+        "kind": {
+          "type": "image",
+          "author": "agent",
+          "image": {
+            "data": "R0lGODlhAQABAAAAACw=",
+            "mime_type": "image/gif"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "kind": {
+          "type": "tool",
+          "call_id": "call-1",
+          "content": [
+            {
+              "type": "text",
+              "text": "cargo nextest run"
+            },
+            {
+              "type": "diff",
+              "new": "let share = 1.0;\n",
+              "old": "let share = 0.5;\n",
+              "path": "src/splits.rs"
+            },
+            {
+              "type": "diff",
+              "new": "fn new_file() {}\n",
+              "old": null,
+              "path": "src/new.rs"
+            },
+            {
+              "type": "image",
+              "image": {
+                "data": "iVBORw0KGgo=",
+                "mime_type": "image/png"
+              }
+            },
+            {
+              "type": "terminal",
+              "id": "term-1"
+            }
+          ],
+          "kind": "execute",
+          "locations": [
+            "src/splits.rs"
+          ],
+          "status": "completed",
+          "title": "Run just ci"
+        }
+      },
+      {
+        "id": 6,
+        "kind": {
+          "type": "turn",
+          "duration_ms": 6000,
+          "end": "done",
+          "tokens": {
+            "cached": 10,
+            "input": 100,
+            "output": 50,
+            "thought": 5,
+            "total": 165
+          }
+        }
+      },
+      {
+        "id": 7,
+        "kind": {
+          "type": "notice",
+          "answers": [
+            {
+              "question": "Which layout?",
+              "answer": "Split"
+            }
+          ],
+          "details": "from the transcript",
+          "level": "warning",
+          "text": "Answered earlier"
+        }
+      }
+    ],
+    "modes": null,
+    "options": [],
+    "permissions": [],
+    "plan": [],
+    "queued": [],
+    "read_only": false,
+    "session": null,
+    "status": {
+      "state": "starting"
+    },
+    "truncated": true,
+    "turn": null,
+    "usage": null
+  }
+}

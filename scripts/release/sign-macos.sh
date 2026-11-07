@@ -17,8 +17,8 @@ for name in MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD APPLE_API_PR
 done
 [[ $MACOS_SIGNING_IDENTITY == 'Developer ID Application: '* ]] || fail 'A Developer ID Application identity is required'
 command -v jq >/dev/null || fail 'jq required'
-out=$(cd -- "$3" && pwd)/Herdr-$1-universal-apple-darwin.dmg
-update=${out%/*}/herdr-gpui-$1-macos-universal.app.tar.gz
+out=$(cd -- "$3" && pwd)/Sheprd-$1-universal-apple-darwin.dmg
+update=${out%/*}/sheprd-$1-macos-universal.app.tar.gz
 new_output "$out"
 new_output "$update"
 umask 077
@@ -75,24 +75,32 @@ security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password
 unset password
 rm "$tmp/certificate.p12"
 mkdir "$tmp/image"
-app=$tmp/image/Herdr.app
+app=$tmp/image/Sheprd.app
 ditto "$2" "$app"
 [[ $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App version mismatch'
 [[ $(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist") == "$1" ]] || fail 'App build version mismatch'
 [[ $(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist") == 14.2 ]] || fail 'App minimum OS mismatch'
-for executable in Herdr herdr-acp herdr-remote-control herdr-automate; do
+[[ $(plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist") == sheprd ]] || fail 'App executable mismatch'
+[[ $(plutil -extract CFBundleIdentifier raw "$app/Contents/Info.plist") == so.pen.herdr-gpui ]] || fail 'App signing identity mismatch'
+helpers=(sheprd-acp sheprd-remote-control sheprd-automate sheprd-nearby herdr-core
+    herdr-acp herdr-remote-control herdr-automate herdr-nearby)
+for executable in sheprd "${helpers[@]}"; do
     for arch in arm64 x86_64; do
         lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
     done
 done
-# Nested code is signed before the app that seals it. herdr-acp, a command
-# line program, herdr-remote-control, the remote control daemon, and
-# herdr-automate, the automation daemon, need none of the app's entitlements.
-for executable in herdr-acp herdr-remote-control herdr-automate; do
+# Nested code is signed before the app that seals it. sheprd-acp, a command
+# line program, sheprd-remote-control, the remote control daemon,
+# sheprd-automate, the automation daemon, sheprd-nearby, the Bluetooth helper
+# (the app is not sandboxed, so Bluetooth needs no entitlement; the app's
+# usage description covers it), and herdr-core, the Herdr 2 daemon (fetched
+# pinned, re-signed here so the bundle notarizes), need none of the app's
+# entitlements.
+for executable in "${helpers[@]}"; do
     codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --timestamp "$app/Contents/MacOS/$executable"
 done
-codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app/Contents/MacOS/Herdr"
-codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Herdr.entitlements" --timestamp "$app"
+codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Sheprd.entitlements" --timestamp "$app/Contents/MacOS/sheprd"
+codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --options runtime --entitlements "$release_root/assets/macos/Sheprd.entitlements" --timestamp "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 # Apple's notary and ticket services drop connections now and then ("The
 # network connection was lost"). Retry those calls; a rejected submission
@@ -113,26 +121,26 @@ notarize() {
     apple notarytool submit "$1" --key "$tmp/AuthKey.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --wait --output-format json > "$tmp/notary.json"
     jq -e -s 'length == 1 and (.[0] | type == "object" and .status == "Accepted")' "$tmp/notary.json" >/dev/null || fail 'Notarization did not return Accepted'
 }
-ditto -c -k --keepParent "$app" "$tmp/Herdr.zip"
-notarize "$tmp/Herdr.zip"
+ditto -c -k --keepParent "$app" "$tmp/Sheprd.zip"
+notarize "$tmp/Sheprd.zip"
 apple stapler staple "$app"
 apple stapler validate "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 spctl --assess --type execute --verbose=2 "$app"
 ln -s /Applications "$tmp/image/Applications"
-hdiutil create -volname Herdr -srcfolder "$tmp/image" -format UDZO -ov "$tmp/Herdr.dmg"
-codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --timestamp "$tmp/Herdr.dmg"
-notarize "$tmp/Herdr.dmg"
-apple stapler staple "$tmp/Herdr.dmg"
-apple stapler validate "$tmp/Herdr.dmg"
-codesign --verify --strict --verbose=2 "$tmp/Herdr.dmg"
-spctl --assess --type open --context context:primary-signature --verbose=2 "$tmp/Herdr.dmg"
+hdiutil create -volname Sheprd -srcfolder "$tmp/image" -format UDZO -ov "$tmp/Sheprd.dmg"
+codesign --force --sign "$MACOS_SIGNING_IDENTITY" --keychain "$keychain" --timestamp "$tmp/Sheprd.dmg"
+notarize "$tmp/Sheprd.dmg"
+apple stapler staple "$tmp/Sheprd.dmg"
+apple stapler validate "$tmp/Sheprd.dmg"
+codesign --verify --strict --verbose=2 "$tmp/Sheprd.dmg"
+spctl --assess --type open --context context:primary-signature --verbose=2 "$tmp/Sheprd.dmg"
 # Package the signed, stapled copy, never the caller's unsigned assembly.
 python3 "$release_root/scripts/update-manifest.py" package-macos "$app" "$tmp/update.tar.gz"
-chmod 644 "$tmp/Herdr.dmg"
+chmod 644 "$tmp/Sheprd.dmg"
 chmod 644 "$tmp/update.tar.gz"
 cleanup_keychain
 search_list_touched=0
-mv "$tmp/Herdr.dmg" "$out"
+mv "$tmp/Sheprd.dmg" "$out"
 mv "$tmp/update.tar.gz" "$update"
 printf '%s\n' "$out"

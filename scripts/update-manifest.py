@@ -19,6 +19,9 @@ MANIFEST_LIMIT = 65536
 LINUX_TARGETS = ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu")
 TARGETS = ("universal-apple-darwin", *LINUX_TARGETS)
 WINDOWS_TARGETS = ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc")
+# Static sheprd-remote-control builds that Sheprd copies onto SSH and cloud
+# machines of another platform (sheprd-updater's release/host.rs).
+HOST_TARGETS = ("x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl")
 ED25519_SPKI = bytes.fromhex("302a300506032b6570032100")
 
 
@@ -52,7 +55,7 @@ def asset_name(release, target):
     if target not in TARGETS:
         raise ValueError("unsupported target")
     suffix = "macos-universal.app" if target == TARGETS[0] else f"{target}-update"
-    return f"herdr-gpui-{release}-{suffix}.tar.gz"
+    return f"sheprd-{release}-{suffix}.tar.gz"
 
 
 def package(entries, destination, linux=False):
@@ -89,7 +92,7 @@ def package(entries, destination, linux=False):
                             member.type = tarfile.SYMTYPE
                             member.linkname = os.readlink(path)
                             if os.path.isabs(member.linkname) or "\\" in member.linkname:
-                                raise ValueError("symlink must stay inside Herdr.app")
+                                raise ValueError("symlink must stay inside Sheprd.app")
                             depth = len(name.split("/")) - 1
                             for part in member.linkname.split("/"):
                                 if part == "..":
@@ -97,7 +100,7 @@ def package(entries, destination, linux=False):
                                 elif part not in ("", "."):
                                     depth += 1
                                 if depth < 1:
-                                    raise ValueError("symlink must stay inside Herdr.app")
+                                    raise ValueError("symlink must stay inside Sheprd.app")
                             archive.addfile(member)
                         else:
                             raise ValueError("archive contains unsupported file type")
@@ -114,16 +117,21 @@ def package(entries, destination, linux=False):
 
 def package_macos(app, destination):
     app = Path(app)
-    if app.name != "Herdr.app" or app.is_symlink() or not app.is_dir():
-        raise ValueError("app must be a real Herdr.app directory")
+    if app.name != "Sheprd.app" or app.is_symlink() or not app.is_dir():
+        raise ValueError("app must be a real Sheprd.app directory")
     if Path(destination).resolve().is_relative_to(app.resolve()):
         raise ValueError("archive destination must be outside the app")
+    executable = app / "Contents/MacOS/sheprd"
+    legacy = app / "Contents/MacOS/Herdr"
+    if (executable.is_symlink() or not executable.is_file()
+            or not executable.stat().st_mode & 0o111 or legacy.exists() or legacy.is_symlink()):
+        raise ValueError("Sheprd.app must have a sole regular executable Contents/MacOS/sheprd")
 
     def entries(directory):
         yield directory, directory.relative_to(app.parent).as_posix()
         for child in sorted(directory.iterdir()):
             if child.is_symlink() and not child.resolve(strict=True).is_relative_to(app.resolve()):
-                raise ValueError("symlink chain must stay inside Herdr.app")
+                raise ValueError("symlink chain must stay inside Sheprd.app")
             if child.is_dir() and not child.is_symlink():
                 yield from entries(child)
             else:
@@ -134,30 +142,36 @@ def package_macos(app, destination):
 
 def package_linux(binary, target, release, destination):
     version(release)
-    name = f"herdr-gpui-{release}-{target}"
+    name = f"sheprd-{release}-{target}"
     if target not in LINUX_TARGETS:
         raise ValueError("package-linux requires a supported Linux target")
     package([(Path(binary), name)], destination, linux=True)
 
 
-def create(directory, release, require_all_targets=False, packages=False, windows=False):
+def create(directory, release, require_all_targets=False, packages=False, windows=False, hosts=False):
     """Schema 1 lists the standalone archives, schema 2 the Linux packages,
-    and schema 3 the Windows installers; each family has its own manifest so
-    a client never meets a target its schema does not know."""
-    if packages and windows:
-        raise ValueError("a manifest lists packages or Windows installers, not both")
+    schema 3 the Windows installers, and schema 4 the host builds; each
+    family has its own manifest so a client never meets a target its schema
+    does not know."""
+    if packages + windows + hosts > 1:
+        raise ValueError("a manifest lists one family: packages, Windows installers, or host builds")
     directory = Path(directory)
     assets = []
     version(release)
     names = [(target, asset_name(release, target)) for target in TARGETS]
     schema, output = 1, "update-manifest.json"
     if packages:
+        # The deployed bridge still requires legacy filenames at preparation.
+        # Publication verifies these aliases match the canonical Sheprd bytes.
         names = [(target, f"Herdr-{release}-{target}.{extension}")
                  for target in LINUX_TARGETS for extension in ("deb", "rpm", "pkg.tar.zst")]
         schema, output = 2, "package-manifest.json"
     if windows:
-        names = [(target, f"Herdr-{release}-{target}-setup.exe") for target in WINDOWS_TARGETS]
+        names = [(target, f"Sheprd-{release}-{target}-setup.exe") for target in WINDOWS_TARGETS]
         schema, output = 3, "windows-manifest.json"
+    if hosts:
+        names = [(target, f"sheprd-remote-control-{release}-{target}") for target in HOST_TARGETS]
+        schema, output = 4, "host-manifest.json"
     for target, name in names:
         path = directory / name
         if schema == 1 and not require_all_targets and not path.exists() and not path.is_symlink() and target != TARGETS[0]:
@@ -198,6 +212,7 @@ def main():
     family = manifest.add_mutually_exclusive_group()
     family.add_argument("--packages", action="store_true", help="write the separate signed Linux package manifest; require all six packages")
     family.add_argument("--windows", action="store_true", help="write the separate signed Windows installer manifest; require both signed installers")
+    family.add_argument("--hosts", action="store_true", help="write the separate signed host build manifest; require both sheprd-remote-control builds")
     commands.add_parser("validate-public-key")
     key = commands.add_parser("check-key")
     key.add_argument("openssl")
@@ -209,7 +224,7 @@ def main():
         elif args.command == "package-linux":
             package_linux(args.binary, args.target, args.version, args.destination)
         elif args.command == "create":
-            create(args.directory, args.version, args.require_all_targets, args.packages, args.windows)
+            create(args.directory, args.version, args.require_all_targets, args.packages, args.windows, args.hosts)
         elif args.command == "validate-public-key":
             public_key(os.environ.get("HERDR_UPDATE_PUBLIC_KEY", ""))
         else:

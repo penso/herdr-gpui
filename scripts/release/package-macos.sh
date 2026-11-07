@@ -6,14 +6,17 @@ version_check "$1"
 [[ $(uname -s) == Darwin ]] || fail 'macOS required'
 [[ -f $2 && -f $3 && -d $4 ]] || fail 'Two binary files and an existing output directory required'
 [[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
-# The app starts chats with the herdr-acp beside its executable, runs the
-# herdr-remote-control beside it as a user service, and runs automations in
-# the herdr-automate there; each build leaves all three beside its herdr-gpui.
-companions=(herdr-acp herdr-remote-control herdr-automate)
+# The app starts chats with the sheprd-acp beside its executable, runs the
+# sheprd-remote-control beside it as a user service, runs automations in the
+# sheprd-automate there, starts sheprd-nearby (nearby pairing over Bluetooth)
+# while its pairing dialog is open, and runs Herdr 2 terminals in the
+# herdr-core there; each build leaves all five beside its sheprd
+# (herdr-core fetched pinned).
+companions=(sheprd-acp sheprd-remote-control sheprd-automate sheprd-nearby herdr-core)
 for companion in "${companions[@]}"; do
     [[ -f $(dirname -- "$2")/$companion && -f $(dirname -- "$3")/$companion ]] || fail "A $companion beside each binary required"
 done
-out=$(cd -- "$4" && pwd)/Herdr.app
+out=$(cd -- "$4" && pwd)/Sheprd.app
 new_output "$out"
 icons=$(python3 "$release_root/scripts/release/build-icon.py" macos "$2" "$3")
 icns=${icons%$'\n'*}
@@ -29,13 +32,13 @@ tmp=$(mktemp -d "${out%/*}/.herdr-assembly.XXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-app=$tmp/Herdr.app
+app=$tmp/Sheprd.app
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-lipo -create "$2" "$3" -output "$app/Contents/MacOS/Herdr"
+lipo -create "$2" "$3" -output "$app/Contents/MacOS/sheprd"
 for companion in "${companions[@]}"; do
     lipo -create "$(dirname -- "$2")/$companion" "$(dirname -- "$3")/$companion" -output "$app/Contents/MacOS/$companion"
 done
-for executable in Herdr "${companions[@]}"; do
+for executable in sheprd "${companions[@]}"; do
     for arch in arm64 x86_64; do
         lipo "$app/Contents/MacOS/$executable" -verify_arch "$arch"
     done
@@ -45,17 +48,30 @@ for executable in Herdr "${companions[@]}"; do
     fi
     chmod 755 "$app/Contents/MacOS/$executable"
 done
+# Saved service definitions still address the legacy helper filenames. Never
+# alias the main executable: the deployed bridge rejects two app executables.
+for companion in "${companions[@]}"; do
+    if [[ $companion == sheprd-* ]]; then
+        cp "$app/Contents/MacOS/$companion" "$app/Contents/MacOS/herdr-${companion#sheprd-}"
+        chmod 755 "$app/Contents/MacOS/herdr-${companion#sheprd-}"
+    fi
+done
 cp "$release_root/assets/macos/Info.plist" "$app/Contents/Info.plist"
+# Each translation's InfoPlist.strings (docs/i18n.md); English is Info.plist itself.
+for lproj in "$release_root"/assets/macos/*.lproj; do
+    if [[ -d "$lproj" ]]; then cp -R "$lproj" "$app/Contents/Resources/"; fi
+done
 plutil -replace CFBundleShortVersionString -string "$1" "$app/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$1" "$app/Contents/Info.plist"
 plutil -insert LSMinimumSystemVersion -string 14.2 "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist"
-cp "$icns" "$app/Contents/Resources/Herdr.icns"
+cp "$icns" "$app/Contents/Resources/Sheprd.icns"
 cp "$catalog" "$app/Contents/Resources/Assets.car"
-cp "$release_root/crates/herdr-protocol/LICENSE-APACHE" "$app/Contents/Resources/"
-cp "$release_root/crates/herdr-protocol/NOTICE.md" "$app/Contents/Resources/"
+cp "$release_root/crates/sheprd-protocol/LICENSE-APACHE" "$app/Contents/Resources/"
+cp "$release_root/crates/sheprd-protocol/NOTICE.md" "$app/Contents/Resources/"
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$app/Contents/Resources/"
 cp "$5" "$app/Contents/Resources/THIRD-PARTY-NOTICES.txt"
-cp "$release_root/crates/herdr-gpui/SOUND-NOTICE.md" "$app/Contents/Resources/"
+cp "$release_root/crates/sheprd-gpui/SOUND-NOTICE.md" "$app/Contents/Resources/"
+cp "$release_root/scripts/release/herdr-core-licenses.txt" "$app/Contents/Resources/HERDR-CORE-LICENSES.txt"
 mv "$app" "$out"
 printf '%s\n' "$out"

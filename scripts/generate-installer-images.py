@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate the Inno Setup installer's page images from the tile artwork.
 
-Renders `herdr-ui-icon-clean.svg`, the artwork `generate-windows-icons.py`
-builds Herdr.ico from, at each size with `rsvg-convert` (`brew install librsvg`)
+Renders `sheprd-icon.svg`, the artwork `generate-windows-icons.py`
+builds Sheprd.ico from, at each size with `rsvg-convert` (`brew install librsvg`)
 or `resvg` (`cargo install resvg`), so the installer matches the app's icon.
 The outputs are checked in, so ordinary builds need no renderer.
 """
@@ -14,7 +14,7 @@ import sys
 import tempfile
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets/icons"
-SOURCE = ASSETS / "herdr-ui-icon-clean.svg"
+SOURCE = ASSETS / "sheprd-icon.svg"
 OUTPUT = ASSETS / "windows"
 # Inno Setup picks the file nearest the DPI scale: the small image is 55px at
 # 100%, and the large one is centered, unstretched, on the welcome page.

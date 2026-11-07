@@ -1,0 +1,10 @@
+[
+{"u":"Crée un worktree sur studio à propos du bug de connexion avec Claude et demande-lui de corriger la boucle de redirection","action":"new_workspace","computer":"studio","agent":"claude","task":"corriger la boucle de redirection"},
+{"u":"Lance Codex sur studio dans moltis pour mettre à jour les dépendances","action":"new_workspace","computer":"studio","project":"moltis","agent":"codex","task":"mettre à jour les dépendances"},
+{"u":"Démarre Gemini sur le macbook et demande-lui d'écrire la documentation","action":"new_workspace","computer":"MacBook Pro","agent":"gemini"},
+{"u":"Qu'est-ce qui m'attend","action":"needs_me"},
+{"u":"Ouvre hero animation","action":"open_chat","chat":"Hero animation"},
+{"u":"Dis à lighthouse pass d'ignorer l'audit mobile","action":"ask_chat","chat":"Lighthouse pass"},
+{"u":"Quel temps fait-il","action":"none"},
+{"u":"Allume la lumière du salon","action":"none"}
+]

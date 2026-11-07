@@ -44,7 +44,7 @@ class ReleaseTargets(unittest.TestCase):
         sections = re.split(r"^  ([a-z-]+):\n", workflow.split("\njobs:\n", 1)[1], flags=re.M)
         jobs = dict(zip(sections[1::2], sections[2::2]))
         for job in jobs.values():
-            self.assertIn("github.repository == 'penso/herdr-gpui'", job)
+            self.assertIn("github.repository == 'sheprd-labs/sheprd'", job)
         # Keeps every main cache inside the repository's 10 GB cache budget.
         self.assertIn("\nenv:\n  CARGO_PROFILE_DEV_DEBUG: '0'\n\njobs:\n", workflow)
         self.assertIn("    needs: [checks, windows, windows-native, windows-package, build-macos, commits]\n",
@@ -72,8 +72,8 @@ class ReleaseTargets(unittest.TestCase):
         self.assertIn("github.event_name == 'pull_request'", macos)
         self.assertNotIn("refs/heads/main", macos)
         self.assertIn("target: [aarch64-apple-darwin, x86_64-apple-darwin]\n", macos)
-        for command in ('cargo build --locked --release -p herdr-gpui --target "$TARGET"',
-                        'cargo test --locked --release -p herdr-gpui --test cli --target "$TARGET"'):
+        for command in ('cargo build --locked --release -p sheprd-gpui --target "$TARGET"',
+                        'cargo test --locked --release -p sheprd-gpui --test cli --target "$TARGET"'):
             self.assertIn(command, macos)
             self.assertIn(command, jobs["build"])
         self.assertIn("MACOS_RELEASE: ${{ needs.build-macos.result }}", jobs["checks-passed"])
@@ -114,7 +114,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertNotIn("secrets.", package)
         # Bash, so "$TARGET" and friends expand on the Windows runner.
         self.assertIn("    defaults:\n      run:\n        shell: bash\n", package)
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"',
+        for command in ('cargo build --locked --release -p sheprd-gpui -p sheprd-launcher -p sheprd-acp -p sheprd-remote-control -p sheprd-automate -p sheprd-nearby --target "$TARGET"',
                         'python scripts/release/package-windows.py "$VERSION" "$TARGET"',
                         'python scripts/release/windows-installer.py install-iscc',
                         'python scripts/release/windows-installer.py build "$VERSION" "$TARGET"',
@@ -129,7 +129,7 @@ class ReleaseTargets(unittest.TestCase):
         self.assertIn("        runner: [windows-2025, windows-11-arm]\n", native)
         self.assertNotIn("secrets.", native)
         for command in ('python scripts/install-herdr-windows.py "$RUNNER_TEMP/herdr"',
-                        "cargo test --locked -p herdr-gpui --features integration-test --test live_gui -- --ignored",
+                        "cargo test --locked -p sheprd-gpui --features integration-test --test live_gui -- --ignored",
                         "--performance-test"):
             self.assertIn(command, native)
         self.assertIn("NATIVE: ${{ needs.windows-native.result }}", jobs["checks-passed"])
@@ -155,11 +155,14 @@ class ReleaseTargets(unittest.TestCase):
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", linux), [
             ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
             ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")])
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"',
-                        'python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"',
-                        '"target/$TARGET/release/herdr-acp" --help',
-                        '"target/$TARGET/release/herdr-remote-control" --version',
-                        '"target/$TARGET/release/herdr-automate" --version',
+        for command in ('cargo build --locked --release -p sheprd-gpui -p sheprd-acp -p sheprd-remote-control -p sheprd-automate -p sheprd-nearby --target "$TARGET"',
+                        'python3 scripts/release/smoke-cli.py "target/$TARGET/release/sheprd"',
+                        '"target/$TARGET/release/sheprd-acp" --help',
+                        '"target/$TARGET/release/sheprd-remote-control" --version',
+                        '"target/$TARGET/release/sheprd-automate" --version',
+                        '"target/$TARGET/release/sheprd-nearby" --version',
+                        'python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"',
+                        '"target/$TARGET/release/herdr-core" --version',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'name: linux-package-${{ matrix.target }}',
                         'bash scripts/release/package-linux.sh "$VERSION" "$TARGET"',
@@ -168,15 +171,17 @@ class ReleaseTargets(unittest.TestCase):
                         'bash scripts/release/smoke-linux-packages.sh "$VERSION" "$TARGET" dist'):
             self.assertIn(command, linux)
         for extension in ("tar.gz", "deb", "rpm", "pkg.tar.zst"):
-            self.assertIn(f"dist/Herdr-${{{{ needs.validate.outputs.version }}}}-${{{{ matrix.target }}}}.{extension}\n", linux)
+            self.assertIn(f"dist/Sheprd-${{{{ needs.validate.outputs.version }}}}-${{{{ matrix.target }}}}.{extension}\n", linux)
         for target in ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"):
             self.assertIn(f"name: linux-package-{target}\n", jobs["attest"])
         windows = jobs["windows"]
         self.assertEqual(re.findall(r"- runner: (\S+)\n            target: (\S+)", windows), [
             ("windows-2025", "x86_64-pc-windows-msvc"),
             ("windows-11-arm", "aarch64-pc-windows-msvc")])
-        for command in ('cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"',
-                        'python scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui.exe"',
+        for command in ('cargo build --locked --release -p sheprd-gpui -p sheprd-launcher -p sheprd-acp -p sheprd-remote-control -p sheprd-automate -p sheprd-nearby --target "$TARGET"',
+                        'python scripts/release/smoke-cli.py "target/$TARGET/release/sheprd.exe"',
+                        'python scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"',
+                        '"target/$TARGET/release/herdr-core.exe" --version',
                         'test "$(rustc -vV | sed -n \'s/^host: //p\')" = "$TARGET"',
                         'python scripts/release/generate-notices.py',
                         'python scripts/release/package-windows.py "$VERSION" "$TARGET"',
@@ -188,11 +193,18 @@ class ReleaseTargets(unittest.TestCase):
         macos = jobs["macos-build"]
         self.assertIn("    runs-on: macos-15\n", macos)
         self.assertNotIn("intel", workflow)
-        self.assertIn('python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"', macos)
-        self.assertIn('"target/$TARGET/release/herdr-automate" --version', macos)
-        self.assertIn("target/${{ matrix.target }}/release/herdr-automate\n", macos)
-        self.assertIn("binaries/arm64/herdr-automate binaries/x86_64/herdr-automate\n", jobs["sign"])
-        self.assertIn('"target/$TARGET/release/herdr-automate.exe" --version', jobs["windows"])
+        self.assertIn('python3 scripts/release/smoke-cli.py "target/$TARGET/release/sheprd"', macos)
+        self.assertIn('"target/$TARGET/release/sheprd-automate" --version', macos)
+        self.assertIn("target/${{ matrix.target }}/release/sheprd-automate\n", macos)
+        self.assertIn('python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"', macos)
+        self.assertIn('"target/$TARGET/release/herdr-core" --version', macos)
+        self.assertIn("target/${{ matrix.target }}/release/herdr-core\n", macos)
+        self.assertIn("binaries/arm64/sheprd-automate binaries/x86_64/sheprd-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core ", jobs["sign"])
+        self.assertIn("binaries/arm64/sheprd-nearby binaries/x86_64/sheprd-nearby\n", jobs["sign"])
+        self.assertIn('"target/$TARGET/release/sheprd-automate.exe" --version', jobs["windows"])
+        self.assertIn('"target/$TARGET/release/sheprd-nearby.exe" --version', jobs["windows"])
+        # The Swift helper ships on macOS; the Rust one only on Linux and Windows.
+        self.assertNotIn("-p sheprd-nearby", macos)
         for name in ("macos-build", "linux", "windows"):
             # `cargo test` rebuilds the binary with dev-dependency features and
             # overwrites the one built for release; the shipped bytes are
@@ -212,8 +224,18 @@ class ReleaseTargets(unittest.TestCase):
         self.assertNotIn("check-ci.py", jobs["validate"])
         self.assertNotIn("actions: read", jobs["validate"])
         self.assertNotIn("check-ci.py", (ROOT / "scripts/release/dispatch.sh").read_text())
-        self.assertIn("    needs: [validate, ci-gate, macos-build, linux, windows, windows-sign]\n", jobs["sign"])
+        self.assertIn("    needs: [validate, ci-gate, nix, macos-build, linux, windows, windows-sign]\n", jobs["sign"])
         self.assertIn("needs.ci-gate.result == 'success'", jobs["sign"])
+        # The Nix flake builds this commit before anything is signed.
+        self.assertIn("needs.nix.result == 'success'", jobs["sign"])
+        self.assertIn("    uses: ./.github/workflows/nix.yml", jobs["nix"])
+        self.assertIn("    needs: validate\n", jobs["nix"])
+        self.assertNotIn("secrets", jobs["nix"])
+        nix = (ROOT / ".github/workflows/nix.yml").read_text()
+        self.assertIn("  workflow_call:\n", nix)
+        self.assertIn("ref: ${{ inputs.ref || github.sha }}\n", nix)
+        self.assertIn("persist-credentials: false\n", nix)
+        self.assertIn("group: nix-${{ github.workflow }}-${{ github.ref }}\n", nix)
         for target in ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"):
             # The Authenticode-signed builds are attested and published once
             # signing is set up; the tested unsigned ones only until then.
@@ -233,8 +255,9 @@ class ReleaseTargets(unittest.TestCase):
             text = (ROOT / "scripts" / script).read_text()
             self.assertIn("while IFS= read -r name; do", text)
             directory = "$directory" if script == "verify-release.sh" else "$output"
+            options = ' ${manifest_options[@]+"${manifest_options[@]}"}' if script == "verify-release.sh" else ""
             self.assertIn(
-                f'done < <(python3 "$scripts/release/artifact-manifest.py" base-names "$version" "{directory}")',
+                f'done < <(python3 "$scripts/release/artifact-manifest.py" base-names "$version" "{directory}"{options})',
                 text,
             )
         self.assertEqual(workflow.count('artifact-manifest.py create "$VERSION" dist'), 1)
@@ -247,9 +270,11 @@ class ReleaseTargets(unittest.TestCase):
         for name, job in jobs.items():
             ref = "github.sha" if name in ("audit", "validate") else "needs.validate.outputs.sha"
             self.assertIn("ref: ${{ " + ref + " }}", job)
-            self.assertIn("persist-credentials: false", job)
-        for name in ("audit", "validate", "ci-gate", "sign", "windows-sign", "attest", "publish", "homebrew", "winget"):
-            for condition in ("github.repository == 'penso/herdr-gpui'", "github.ref == 'refs/heads/main'",
+            # A called workflow checks out in its own file, checked above.
+            if "    uses: ./" not in job:
+                self.assertIn("persist-credentials: false", job)
+        for name in ("audit", "validate", "ci-gate", "nix", "sign", "windows-sign", "attest", "publish", "homebrew", "winget"):
+            for condition in ("github.repository == 'sheprd-labs/sheprd'", "github.ref == 'refs/heads/main'",
                               "github.actor == 'penso'", "github.triggering_actor == 'penso'"):
                 self.assertIn(condition, jobs[name])
         for name in ("sign", "windows-sign", "attest", "publish"):
@@ -304,7 +329,7 @@ class ReleaseTargets(unittest.TestCase):
                          ["workflow_dispatch"])
         self.assertIn("group: manual-release\n", promote)
         for name, job in promotion.items():
-            for condition in ("github.repository == 'penso/herdr-gpui'", "github.ref == 'refs/heads/main'",
+            for condition in ("github.repository == 'sheprd-labs/sheprd'", "github.ref == 'refs/heads/main'",
                               "github.actor == 'penso'", "github.triggering_actor == 'penso'"):
                 self.assertIn(condition, job, name)
             if name not in ("homebrew", "winget"):
@@ -352,6 +377,12 @@ class ReleaseTargets(unittest.TestCase):
         for name in ("update-manifest.json", "update-manifest.sig"):
             self.assertIn(f"            dist/{name}\n", sign)
         self.assertIn('test "$(wc -c < dist/update-manifest.sig | tr -d \' \')" = 64', sign)
+        # Host builds: built static in each Linux job, listed and signed here.
+        self.assertIn('create dist "$VERSION" --hosts', sign)
+        self.assertIn('test "$(wc -c < dist/host-manifest.sig | tr -d \' \')" = 64', sign)
+        for name in ("host-manifest.json", "host-manifest.sig"):
+            self.assertIn(f"            dist/{name}\n", sign)
+        self.assertIn('build-host.sh "$VERSION" "$HOST_TARGET" dist', jobs["linux"])
 
 
 class WindowsTrust(unittest.TestCase):
@@ -370,7 +401,7 @@ class WindowsTrust(unittest.TestCase):
         for setting in ("timestamp-rfc3161: http://timestamp.acs.microsoft.com", "timestamp-digest: SHA256",
                         "file-digest: SHA256", "exclude-environment-credential: true",
                         "cache-dependencies: false", "name: windows-package-${{ matrix.target }}",
-                        "}}\\herdr-gpui.exe\n", "}}\\herdr-gpui-launcher.exe\n", "}}\\herdr-acp.exe\n", "}}\\herdr-remote-control.exe\n", "}}\\herdr-automate.exe\n",
+                        "}}\\sheprd.exe\n", "}}\\sheprd-launcher.exe\n", "}}\\sheprd-acp.exe\n", "}}\\sheprd-remote-control.exe\n", "}}\\sheprd-automate.exe\n", "}}\\sheprd-nearby.exe\n", "}}\\herdr-core.exe\n",
                         "name: windows-signed-${{ matrix.target }}"):
             self.assertIn(setting, sign)
         # Unpack, sign, check and repack, then sign the installer, then verify.
@@ -395,7 +426,7 @@ class WindowsTrust(unittest.TestCase):
         jobs = self.jobs
         smoke = jobs["windows-smoke"]
         self.assertIn("    needs: [validate, windows-sign]\n", smoke)
-        self.assertIn('windows-installer.py smoke --signed "dist/Herdr-$VERSION-$TARGET-setup.exe"', smoke)
+        self.assertIn('windows-installer.py smoke --signed "dist/Sheprd-$VERSION-$TARGET-setup.exe"', smoke)
         runners = r"- runner: (\S+)\n            target: (\S+)"
         self.assertEqual(re.findall(runners, smoke), re.findall(runners, jobs["windows"]))
         self.assertIn("    needs: [validate, sign, linux, windows-sign, windows-smoke, metadata]\n", jobs["attest"])
@@ -504,9 +535,9 @@ class SbomMerge(unittest.TestCase):
                               [dict(component, scope="required", **{field: value})])
 
     def test_a_shipped_root_the_app_links_replaces_its_library_entry(self):
-        # The app links herdr-remote-control as a library; the release ships it
+        # The app links sheprd-remote-control as a library; the release ships it
         # as a program, whose root differs in type, purl, and nested targets.
-        name = "herdr-remote-control"
+        name = "sheprd-remote-control"
         library = {"bom-ref": name, "name": name, "type": "library", "purl": "lib", "scope": "required"}
         root = {"bom-ref": name, "name": name, "type": "application", "purl": "bin", "components": [{"bom-ref": "bin"}]}
         documents = [document for _ in SBOM.TARGETS for document in (
@@ -544,13 +575,15 @@ class ReleaseSecurity(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name)
         for name in MANIFEST.base_names(VERSION):
-            data = b"s" * 64 if name in ("update-manifest.sig", "package-manifest.sig", "windows-manifest.sig") else name.encode()
+            data = b"s" * 64 if name in MANIFEST.UPDATER_SIGNATURES else name.encode()
             (self.path / name).write_bytes(data)
             for algorithm in ("sha256", "sha512"):
                 checksum = hashlib.new(algorithm, data).hexdigest()
                 (self.path / f"{name}.{algorithm}").write_text(f"{checksum}  {name}\n")
             for suffix in ("sig", "crt"):
                 (self.path / f"{name}.{suffix}").write_text("test fixture, not a signature\n")
+        for alias, original in MANIFEST.package_aliases(VERSION).items():
+            shutil.copyfile(self.path / original, self.path / alias)
         self.run_manifest("create")
 
     def run_manifest(self, mode, success=True, directory=None):
@@ -562,21 +595,24 @@ class ReleaseSecurity(unittest.TestCase):
     def test_complete_set_and_homebrew(self):
         self.run_manifest("verify")
         self.assertEqual(set(MANIFEST.base_names(VERSION)), {
-            "Herdr-20260920.1-universal-apple-darwin.dmg", "Herdr-20260920.1.cdx.json",
-            *(f"Herdr-20260920.1-{target}.{extension}"
+            "Sheprd-20260920.1-universal-apple-darwin.dmg", "Sheprd-20260920.1.cdx.json",
+            *(f"Sheprd-20260920.1-{target}.{extension}"
               for target in ("x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu")
               for extension in ("tar.gz", "deb", "rpm", "pkg.tar.zst")),
-            "Herdr-20260920.1-x86_64-pc-windows-msvc.zip",
-            "Herdr-20260920.1-aarch64-pc-windows-msvc.zip",
-            "Herdr-20260920.1-x86_64-pc-windows-msvc-setup.exe",
-            "Herdr-20260920.1-aarch64-pc-windows-msvc-setup.exe",
-            "herdr-gpui-20260920.1-macos-universal.app.tar.gz",
-            "herdr-gpui-20260920.1-x86_64-unknown-linux-gnu-update.tar.gz",
-            "herdr-gpui-20260920.1-aarch64-unknown-linux-gnu-update.tar.gz",
+            "Sheprd-20260920.1-x86_64-pc-windows-msvc.zip",
+            "Sheprd-20260920.1-aarch64-pc-windows-msvc.zip",
+            "Sheprd-20260920.1-x86_64-pc-windows-msvc-setup.exe",
+            "Sheprd-20260920.1-aarch64-pc-windows-msvc-setup.exe",
+            "sheprd-20260920.1-macos-universal.app.tar.gz",
+            "sheprd-20260920.1-x86_64-unknown-linux-gnu-update.tar.gz",
+            "sheprd-20260920.1-aarch64-unknown-linux-gnu-update.tar.gz",
             "update-manifest.json", "update-manifest.sig", "package-manifest.json", "package-manifest.sig",
-            "windows-manifest.json", "windows-manifest.sig"})
+            "windows-manifest.json", "windows-manifest.sig",
+            *(f"sheprd-remote-control-20260920.1-{target}"
+              for target in ("x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl")),
+            "host-manifest.json", "host-manifest.sig"})
         # Five files per base asset; SHA256SUMS lists all but itself.
-        assets = len(MANIFEST.base_names(VERSION)) * 5
+        assets = len(MANIFEST.base_names(VERSION)) * 5 + len(MANIFEST.package_aliases(VERSION))
         self.assertEqual(len((self.path / "SHA256SUMS").read_text().splitlines()), assets)
         self.assertEqual(len(self.run_manifest("names").splitlines()), assets + 1)
         self.assertEqual(self.run_manifest("base-names").splitlines(), MANIFEST.base_names(VERSION))
@@ -601,7 +637,7 @@ class ReleaseSecurity(unittest.TestCase):
         self.run_manifest("verify", False)
 
     def test_raw_updater_signature_length(self):
-        for name in ("update-manifest.sig", "package-manifest.sig", "windows-manifest.sig"):
+        for name in MANIFEST.UPDATER_SIGNATURES:
             path = self.path / name
             for size in (1, 63, 65, 128):
                 path.write_bytes(b"s" * size)
@@ -645,7 +681,7 @@ class ReleaseSecurity(unittest.TestCase):
     def test_sign_action_preserves_raw_updater_signature(self):
         raw = (self.path / "update-manifest.sig").read_bytes()
         for path in self.path.iterdir():
-            if path.name not in MANIFEST.base_names(VERSION):
+            if path.name not in MANIFEST.base_names(VERSION) + list(MANIFEST.package_aliases(VERSION)):
                 path.unlink()
         self.run_manifest("base")
         text = (ROOT / ".github/actions/sign-artifacts/action.yml").read_text()
@@ -681,7 +717,7 @@ elif [[ $1 == attestation && $2 == verify ]]; then
     [[ "$*" == *"--source-ref refs/heads/main"* ]]
     [[ "$*" == *"--source-digest 0000000000000000000000000000000000000001"* ]]
     [[ "$*" == *"--signer-digest 0000000000000000000000000000000000000001"* ]]
-    [[ "$*" == *"--cert-identity https://github.com/penso/herdr-gpui/.github/workflows/release.yml@refs/heads/main"* ]]
+    [[ "$*" == *"--cert-identity https://github.com/sheprd-labs/sheprd/.github/workflows/release.yml@refs/heads/main"* ]]
     if [[ ${FAIL_ARM_ATTEST:-0} == 1 && $3 == *aarch64-unknown-linux-gnu.tar.gz ]]; then exit 1; fi
     exit "${FAIL_ATTEST:-0}"
 else
@@ -692,7 +728,7 @@ fi
 set -eu
 [[ $1 == verify-blob ]]
 printf '%s\\n' "${!#}" >> "$COSIGN_LOG"
-[[ "$*" == *"--certificate-identity https://github.com/penso/herdr-gpui/.github/workflows/release.yml@refs/heads/main"* ]]
+[[ "$*" == *"--certificate-identity https://github.com/sheprd-labs/sheprd/.github/workflows/release.yml@refs/heads/main"* ]]
 [[ "$*" == *"--certificate-oidc-issuer https://token.actions.githubusercontent.com"* ]]
 [[ "$*" == *"--certificate-github-workflow-sha 0000000000000000000000000000000000000001"* ]]
 if [[ ${FAIL_ARM_COSIGN:-0} == 1 && ${!#} == *aarch64-unknown-linux-gnu.tar.gz ]]; then exit 1; fi

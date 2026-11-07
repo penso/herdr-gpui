@@ -1,0 +1,282 @@
+//! Muse Code subscription usage, read with the Muse CLI's own device-code
+//! login (`muse login`): `providers.meta.access_token` in
+//! `$MUSE_AUTH_PATH` (default `~/.config/muse/auth.json`), else the login
+//! keychain item `ai.meta.dev.credentials` / `meta` on a Mac, else the
+//! `token` setting. The CLI guards that item with its own access list, so
+//! macOS asks before `security` reads it: like Zed's sign-in, it is read only
+//! for a listed provider once the user pressed Allow in its panel. The `dca:` token is posted to `muse-code/key`, whose
+//! answer carries the plan, the 5-hour and weekly windows, and a freshly
+//! minted inference key that is ignored and never stored.
+//!
+//! Not ported: CodexBar's keychain access-list preflight, which avoids a
+//! prompt for a CLI-owned item (here the read waits for Allow instead); its `dca:` prefix check, which would need the token revealed;
+//! and the local session-log token history, which scans large directories.
+//! On a remote host the minted inference key comes back with the response
+//! body, as it does to CodexBar, and is dropped by the parser.
+
+use crate::text::Text;
+use crate::{
+    Result,
+    {
+        model::{Account, Kind, Provider, Report, SESSION, Section, WEEK, Window},
+        probe::{HostPath, Probe, Request, Secret},
+        service::{Meta, Service, Setting, Timestamp, json},
+        values::invalid,
+    },
+};
+use serde::Deserialize;
+use std::time::Duration;
+
+const URL: &str = "https://api.meta.ai/muse-code/key";
+const KEYCHAIN: &str = "ai.meta.dev.credentials";
+/// Later reset times than the year 4000 are dropped, as CodexBar does.
+const LATEST: f64 = 64_092_211_200.;
+
+pub(crate) struct Muse;
+
+static META: Meta = Meta::new("muse", "Muse Code")
+    .dashboard("https://dev.meta.ai")
+    .settings(&[Setting::new("token", &[], "usage-muse-setting-token")]);
+
+impl Service for Muse {
+    fn meta(&self) -> &'static Meta {
+        &META
+    }
+
+    fn fetch(&self, probe: &mut Probe) -> Option<Result<Report>> {
+        let file = probe.file(&HostPath::env_or(
+            "MUSE_AUTH_PATH",
+            ".config/muse/auth.json",
+            "",
+        ));
+        let inline = file
+            .as_ref()
+            .and_then(|file| probe.field(file, &["providers", "meta", "access_token"]));
+        let token = inline.or_else(|| token(probe))?;
+        let request = Request::post(URL)
+            .bearer(&token)
+            .header("x-api-version", "1.0.0")
+            .header("User-Agent", "CodexBar")
+            .json("{}");
+        Some(probe.body(request).and_then(|body| parse(&body)))
+    }
+}
+
+/// The keychain sign-in, else the `token` setting.
+pub(crate) fn token(probe: &mut Probe) -> Option<Secret> {
+    probe
+        .is_macos()
+        .then(|| probe.foreign_keychain(KEYCHAIN, Some("meta")))
+        .flatten()
+        .and_then(|payload| probe.field(&payload, &["access_token"]))
+        .or_else(|| probe.setting("token"))
+}
+
+pub(crate) fn parse(body: &str) -> Result<Report> {
+    let key: Key = json(body)?;
+    let plan = key
+        .subs_tier_name
+        .map(|plan| plan.trim().to_owned())
+        .filter(|plan| !plan.is_empty());
+    let email = key
+        .user_email
+        .map(|email| email.trim().to_owned())
+        .filter(|email| !email.is_empty());
+    let account = Account {
+        email: email.map(Text::service),
+        plan: Some(plan.map_or_else(|| Text::message("usage-muse-login"), Text::service)),
+    };
+    let status = if key.require_payment == Some(true) {
+        Some(Text::message("usage-muse-payment-required"))
+    } else if key.is_subs_active != Some(true) {
+        Some(Text::message("usage-muse-no-subscription"))
+    } else if key.subs_usage.is_none() {
+        Some(Text::message("usage-muse-no-quota"))
+    } else {
+        None
+    };
+    if let Some(status) = status {
+        return Ok(
+            Report::new(Provider(&Muse), account, Vec::new()).with_sections([Section::Facts {
+                title: Text::message("usage-muse-subscription"),
+                facts: vec![(Text::message("usage-muse-status"), status)],
+            }]),
+        );
+    }
+    let mut windows = Vec::new();
+    if let Some(usage) = key.subs_usage {
+        let minutes = usage.window.window_duration_mins.round();
+        if !(1. ..1e9).contains(&minutes) {
+            return Err(invalid());
+        }
+        let length = Duration::from_secs(minutes as u64 * 60);
+        let kind = if length == SESSION {
+            Kind::Session
+        } else {
+            Kind::Named(Text::message("usage-muse-hours").arg("hours", minutes / 60.))
+        };
+        windows.push(Window::new(
+            kind,
+            usage.window.used_percent,
+            reset(usage.window.resets_at),
+            Some(length),
+        ));
+        windows.push(Window::new(
+            Kind::Weekly,
+            usage.weekly.used_percent,
+            reset(usage.weekly.resets_at),
+            Some(WEEK),
+        ));
+    }
+    Ok(Report::new(Provider(&Muse), account, windows))
+}
+
+fn reset(seconds: Option<f64>) -> Option<std::time::SystemTime> {
+    seconds
+        .filter(|seconds| *seconds > 0. && *seconds <= LATEST)
+        .and_then(|seconds| Timestamp::Number(seconds).time())
+}
+
+#[derive(Deserialize)]
+struct Key {
+    require_payment: Option<bool>,
+    is_subs_active: Option<bool>,
+    user_email: Option<String>,
+    subs_tier_name: Option<String>,
+    subs_usage: Option<SubsUsage>,
+}
+
+#[derive(Deserialize)]
+struct SubsUsage {
+    window: Limit,
+    weekly: Limit,
+}
+
+#[derive(Deserialize)]
+struct Limit {
+    used_percent: f64,
+    #[serde(default = "no_duration")]
+    window_duration_mins: f64,
+    resets_at: Option<f64>,
+}
+
+/// The weekly window has no duration; a missing one on the rolling window is
+/// refused by the parser.
+fn no_duration() -> f64 {
+    0.
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use super::*;
+    use std::time::SystemTime;
+
+    const ACCOUNT: &str = r#"{
+      "api_key":"LLM|fixture-inference-key", "payment_method":"Visa-0000",
+      "require_payment":false, "is_subs_active":true, "user_email":"ada@example.com",
+      "subs_tier_name":"Muse Code Power Usage",
+      "subs_usage":{
+        "window":{"used_percent":96,"window_duration_mins":300,"resets_at":1788599502},
+        "weekly":{"used_percent":40,"resets_at":1788739200}
+      }
+    }"#;
+
+    #[test]
+    fn reads_both_windows_and_identity() {
+        let report = parse(ACCOUNT).unwrap();
+        assert_eq!(
+            report.account.email.as_ref().map(Text::as_str),
+            Some("ada@example.com")
+        );
+        assert_eq!(
+            report.account.plan.as_ref().map(Text::as_str),
+            Some("Muse Code Power Usage")
+        );
+        assert_eq!(report.windows.len(), 2);
+        assert_eq!(report.windows[0].kind, Kind::Session);
+        assert_eq!(report.windows[0].used, 96.);
+        assert_eq!(
+            report.windows[0].resets_at,
+            Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_788_599_502))
+        );
+        assert_eq!(report.windows[1].kind, Kind::Weekly);
+        assert_eq!(report.windows[1].used, 40.);
+        assert!(report.sections.is_empty());
+    }
+
+    #[test]
+    fn active_login_without_quota_keeps_identity() {
+        for body in [
+            r#"{"is_subs_active":true,"user_email":"ada@example.com","subs_tier_name":"Muse Code Power Usage"}"#,
+            r#"{"is_subs_active":true,"subs_tier_name":"Muse Code Power Usage","subs_usage":null}"#,
+        ] {
+            let report = parse(body).unwrap();
+            assert!(report.windows.is_empty());
+            assert_eq!(
+                report.account.plan.as_ref().map(Text::as_str),
+                Some("Muse Code Power Usage")
+            );
+            assert_eq!(
+                report.sections,
+                vec![Section::Facts {
+                    title: Text::message("usage-muse-subscription"),
+                    facts: vec![(
+                        Text::message("usage-muse-status"),
+                        Text::message("usage-muse-no-quota")
+                    )],
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn another_rolling_window_is_named_by_its_hours() {
+        let body = ACCOUNT.replace(
+            "\"window_duration_mins\":300",
+            "\"window_duration_mins\":120",
+        );
+        let report = parse(&body).unwrap();
+        // Named windows sort after the weekly one.
+        assert_eq!(
+            report.windows[1].kind,
+            Kind::Named(Text::message("usage-muse-hours").arg("hours", 2.))
+        );
+    }
+
+    #[test]
+    fn inactive_or_unpaid_invents_no_quota() {
+        for body in [
+            r#"{"require_payment":true,"is_subs_active":false}"#,
+            r#"{"is_subs_active":false,"subs_usage":null}"#,
+        ] {
+            assert!(parse(body).unwrap().windows.is_empty());
+        }
+        let unpaid = parse(r#"{"require_payment":true,"is_subs_active":false}"#).unwrap();
+        assert_eq!(unpaid.account.plan, Some(Text::message("usage-muse-login")));
+        let Section::Facts { facts, .. } = &unpaid.sections[0] else {
+            panic!("facts expected");
+        };
+        assert_eq!(facts[0].1, Text::message("usage-muse-payment-required"));
+        let inactive = parse(r#"{"is_subs_active":false}"#).unwrap();
+        let Section::Facts { facts, .. } = &inactive.sections[0] else {
+            panic!("facts expected");
+        };
+        assert_eq!(facts[0].1, Text::message("usage-muse-no-subscription"));
+    }
+
+    #[test]
+    fn refuses_malformed_quota() {
+        assert!(parse(r#"{"is_subs_active":true,"subs_usage":"window"}"#).is_err());
+        let zero = ACCOUNT.replace("\"window_duration_mins\":300", "\"window_duration_mins\":0");
+        assert!(parse(&zero).is_err());
+    }
+
+    #[test]
+    fn drops_out_of_range_resets() {
+        let body = ACCOUNT.replace("1788599502", "1e30");
+        let report = parse(&body).unwrap();
+        assert_eq!(report.windows[0].resets_at, None);
+        assert_eq!(report.windows[0].used, 96.);
+    }
+}

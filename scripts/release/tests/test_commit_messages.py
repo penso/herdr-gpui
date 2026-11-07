@@ -43,6 +43,12 @@ class RuleTests(unittest.TestCase):
         self.assertRejected("feat: " + "a" * CHECK.MAX_SUBJECT, "keep it within")
         self.assertAccepted("feat: " + "a" * (CHECK.MAX_SUBJECT - len("feat: ")))
 
+    def test_the_squash_merge_pull_request_number_is_not_counted(self):
+        subject = "feat: " + "a" * (CHECK.MAX_SUBJECT - len("feat: "))
+        self.assertAccepted(subject + " (#1013)")
+        self.assertRejected(subject + "a (#1013)", "is 81 characters")
+        self.assertRejected(subject + " (#1013) more", "keep it within")
+
     def test_the_body_must_stay_below_a_blank_line(self):
         self.assertRejected("feat: add a pinned sidebar section\nRationale follows", "line 2 blank")
         self.assertAccepted("feat: add a pinned sidebar section\n\nRationale follows.")
@@ -79,6 +85,11 @@ class RuleTests(unittest.TestCase):
     KNOWN_VIOLATIONS = {
         # A 94-character subject, merged after the rule and shipped in v20261005.1.
         "2f0347d1b3f078d3e190f4f124ef0c530713753c",
+        # Merged in October 2026 while push CI runs were cancelled as superseded.
+        "0476469fd1e0d622fb02798f614b22bb30d8ff80",
+        "22111c5fbeceb3ec00443f46c9255fac86057279",
+        "484315182790701ccb688f380670e3bac0c1feae",
+        "864800f5f7eb45a627c34b6399303e43cdc53e61",
     }
 
     def test_this_repository_already_obeys_every_rule(self):

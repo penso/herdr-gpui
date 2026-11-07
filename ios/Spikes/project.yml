@@ -1,0 +1,96 @@
+# Phase 0 spikes for the native app (docs/ios-spikes.md): Bluetooth
+# central with state restoration and L2CAP throughput, sealed
+# notifications opened in a Notification Service Extension, a Live
+# Activity button that runs an intent over pinned TLS, and a Live Activity
+# whose content only the widget extension can open. Not shipped.
+name: SheprdSpikes
+
+options:
+  bundleIdPrefix: so.pen
+  deploymentTarget:
+    iOS: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    TARGETED_DEVICE_FAMILY: "1"
+    # Set your team to run on a device; the simulator signs ad hoc.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  SheprdRemoteCore:
+    path: ../SheprdRemoteCore
+
+targets:
+  SheprdSpikes:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    dependencies:
+      - package: SheprdRemoteCore
+      - target: SheprdSpikesNotifications
+      - target: SheprdSpikesWidgets
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Sheprd Spikes
+        UILaunchScreen: {}
+        NSBluetoothAlwaysUsageDescription: The spike finds a Mac running the Sheprd Bluetooth spike.
+        NSSupportsLiveActivities: true
+        UIBackgroundModes: [bluetooth-central, remote-notification]
+    entitlements:
+      path: App/SheprdSpikes.entitlements
+      properties:
+        aps-environment: development
+        com.apple.security.application-groups: [group.so.pen.herdr-spikes]
+        keychain-access-groups: [group.so.pen.herdr-spikes]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-spikes
+
+  SheprdSpikesNotifications:
+    type: app-extension
+    platform: iOS
+    sources: [Notifications, Shared]
+    dependencies:
+      - package: SheprdRemoteCore
+    info:
+      path: Notifications/Info.plist
+      properties:
+        CFBundleDisplayName: Sheprd Spikes Notifications
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: Notifications/SheprdSpikesNotifications.entitlements
+      properties:
+        com.apple.security.application-groups: [group.so.pen.herdr-spikes]
+        keychain-access-groups: [group.so.pen.herdr-spikes]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-spikes.notifications
+
+  SheprdSpikesWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [Widgets, Shared]
+    dependencies:
+      - package: SheprdRemoteCore
+      - sdk: SwiftUI.framework
+      - sdk: WidgetKit.framework
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Sheprd Spikes Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/SheprdSpikesWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.so.pen.herdr-spikes]
+        keychain-access-groups: [group.so.pen.herdr-spikes]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: so.pen.herdr-spikes.widgets

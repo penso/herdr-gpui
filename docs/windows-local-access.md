@@ -1,14 +1,14 @@
 # Windows local access investigation (#357)
 
-Status: **unresolved on the reporting machine**. [Issue #357](https://github.com/penso/herdr-gpui/issues/357)
+Status: **unresolved on the reporting machine**. [Issue #357](https://github.com/sheprd-labs/sheprd/issues/357)
 has no follow-up with the operation-specific errors requested by
-[PR #361](https://github.com/penso/herdr-gpui/pull/361). That merged PR added
+[PR #361](https://github.com/sheprd-labs/sheprd/pull/361). That merged PR added
 diagnostics and a default Windows log directory; it did not establish or fix
 the access denial.
 
 ## What the current code requests
 
-`crates/herdr-client/src/transport/windows.rs` connects through the locked
+`crates/sheprd-client/src/transport/windows.rs` connects through the locked
 `interprocess` 2.4.6 byte-mode local stream. Its Windows implementation calls
 `CreateFileW` with:
 
@@ -25,9 +25,9 @@ It waits with `WaitNamedPipeW` only after `ERROR_PIPE_BUSY`. The byte-mode,
 blocking connector does **not** call `SetNamedPipeHandleState` to change the
 read mode. Current code takes ownership of that handle, duplicates it with
 the same access for the reader, and creates an event per I/O direction.
-[PR #618](https://github.com/penso/herdr-gpui/pull/618) added overlapped I/O
+[PR #618](https://github.com/sheprd-labs/sheprd/pull/618) added overlapped I/O
 deadlines; it retained the library's pipe-open path. The separate app-control
-pipe introduced by [PR #620](https://github.com/penso/herdr-gpui/pull/620) is
+pipe introduced by [PR #620](https://github.com/sheprd-labs/sheprd/pull/620) is
 not the daemon connector.
 
 Herdr 0.9.3's own
@@ -47,11 +47,11 @@ the GUI requests more access. `CanWrite` reports the stream's configured
 direction, not a completed protocol exchange.
 
 The config lock is a separate filesystem operation in
-`crates/herdr-gpui/src/config/files.rs`. With the pinned Rust 1.96.1,
+`crates/sheprd-gpui/src/config/files.rs`. With the pinned Rust 1.99.0,
 `read(true).write(true).create(true).truncate(false)` maps to
 `GENERIC_READ | GENERIC_WRITE`, `OPEN_ALWAYS`, sharing read/write/delete, and
 no custom flags. `File::lock()` then calls `LockFileEx` for an exclusive lock.
-See [Rust's Windows filesystem implementation](https://github.com/rust-lang/rust/blob/1.96.1/library/std/src/sys/fs/windows.rs).
+See [Rust's Windows filesystem implementation](https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/fs/windows.rs).
 Creating a different file in the parent directory does not demonstrate access
 to an existing lock file: that file has its own attributes, ACL, and open
 handles. The two failures are not yet proven to have one cause.
@@ -67,8 +67,8 @@ the daemon's DACL, or bypassing the config lock is not a justified fix.
 The tests use their own temporary paths and pipes, without a desktop or daemon:
 
 ```powershell
-cargo test --locked -p herdr-client transport::tests::access
-cargo test --locked -p herdr-gpui config::tests::lock_access
+cargo test --locked -p sheprd-client transport::tests::access
+cargo test --locked -p sheprd-gpui config::tests::lock_access
 ```
 
 - A protected pipe DACL grants only the current user's generic read/write
@@ -93,7 +93,7 @@ token, daemon security descriptor, file attributes, or security software.
 1. Record the current GUI and daemon versions and reproduce once with normal
    discovery, then with the same explicit binary-client `--socket` path.
    Collect the nearby `operation`, `kind`, and `raw_os_error` log fields.
-   The [GUI logging documentation](../crates/herdr-gpui/README.md#crash-reports)
+   The [GUI logging documentation](../crates/sheprd-gpui/README.md#crash-reports)
    describes the records; no debug build or `RUST_LOG` is required.
 2. For `pipe_connect`, capture the failing open/wait operation and the
    successful .NET open in Process Monitor, including desired access, sharing,

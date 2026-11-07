@@ -1,21 +1,21 @@
-Herdr UI
+Sheprd
 Copyright 2026 Fabien Penso
 
-This product includes software developed as part of the Herdr UI project,
+This product includes software developed as part of the Sheprd project (formerly Herdr UI),
 licensed under the Apache License, Version 2.0. The full license text is in
 LICENSE at the root of this repository.
 
-Portions of crates/herdr-protocol are adapted from Herdr
+Portions of crates/sheprd-protocol are adapted from Herdr
 (https://github.com/herdrdev/herdr), also licensed under Apache-2.0. The
 adapted files, the upstream revision they came from, and the modifications
-made to them are recorded in crates/herdr-protocol/NOTICE.md. No upstream
+made to them are recorded in crates/sheprd-protocol/NOTICE.md. No upstream
 NOTICE file was present at the revision used.
 
 The native GitHub integration's Arbor references and attribution are recorded
-in crates/herdr-gpui/GITHUB-NOTICE.md.
+in crates/sheprd-gpui/GITHUB-NOTICE.md.
 
 The shared settings schema, defaults, theme palettes, and status indicators in
-crates/herdr-gpui/src/herdr_settings.rs, src/herdr_settings/, and src/sidebar/agents.rs
+crates/sheprd-gpui/src/herdr_settings.rs, src/herdr_settings/, and src/sidebar/agents.rs
 are adapted from Herdr (https://github.com/herdrdev/herdr), Apache-2.0,
 revision 8ac9542757292f7a8d42a2d532bc6a8a33c7ffce: src/config/{model,sound,theme}.rs,
 src/app/{state,mod}.rs, and src/client/shell.rs. Adaptations include native RGB
@@ -23,7 +23,7 @@ palette projection, bounded parsing, conflict-aware atomic persistence, and
 GPUI indicator rendering. No upstream NOTICE file was present at that revision.
 
 The notification policy and bundled audio assets adapted or copied from Herdr
-are attributed in crates/herdr-gpui/SOUND-NOTICE.md (Apache-2.0).
+are attributed in crates/sheprd-gpui/SOUND-NOTICE.md (Apache-2.0).
 Specifically, assets/sounds/done.mp3 and assets/sounds/request.mp3 are unmodified
 copies from https://github.com/herdrdev/herdr at revision
 8ac9542757292f7a8d42a2d532bc6a8a33c7ffce. The sound configuration, notification
@@ -31,25 +31,23 @@ validation/timing policy, and system-player selection are adapted from that
 revision, with bounded workers, native focus, and cancellation added. No upstream
 NOTICE or separate audio license was present; the root Apache-2.0 license applies.
 
-The application icons in assets/icons/herdr-ui-icon-clean.svg and
-herdr-icon-square-clean.svg, their PNG exports, Herdr.icns, and Herdr.car use a ram path
-adapted from Herdr's logo:
+The canonical paw in assets/icons/sheprd-avatar.svg and its derived application
+icons, platform catalogs, installer artwork, and social cards are original Sheprd
+artwork, licensed under Apache-2.0. assets/icons/README.md records their sources
+and generation. Worktree variants use a berry-red background to identify
+development builds made from linked Git worktrees.
+
+Historical screenshots and earlier artwork may show the former ram icon,
+adapted from Herdr's Apache-2.0 logo:
 https://github.com/herdrdev/herdr/blob/HEAD/assets/logo.svg
-The upstream artwork is licensed under Apache-2.0. This adaptation places the
-ram and terminal prompt on a simple ivory tile, with modified scaling,
-placement, and flat graphite coloring.
-The derived herdr-worktree-1024.png, herdr-square-worktree-1024.png,
-Herdr-worktree.icns, and Herdr-worktree.car use a red palette to
-identify development builds made from linked Git worktrees.
-The repository social preview images in assets/social-preview-light.svg,
-assets/social-preview-light-ui.svg, and assets/social-preview-dark.svg, and
-their PNG exports, embed the same adapted ram path alongside original layout,
-typography, and interface artwork.
+That adaptation placed the ram and terminal prompt on an ivory tile, with
+modified scaling, placement, and flat graphite coloring. This attribution
+continues to apply to those historical depictions, not to the original paw.
 
 The built-in theme files in assets/themes/ are unmodified copies from
 iTerm2-Color-Schemes (https://github.com/mbadolato/iTerm2-Color-Schemes),
 Copyright (c) 2011 to Present Mark Badolato, MIT License; each theme's
-copyright belongs to its author. crates/herdr-gpui/THEMES-NOTICE.md has the
+copyright belongs to its author. crates/sheprd-gpui/THEMES-NOTICE.md has the
 revision and the full license text.
 
 The icons assets/icons/vscode.svg, error.svg, and pass.svg are Codicons,

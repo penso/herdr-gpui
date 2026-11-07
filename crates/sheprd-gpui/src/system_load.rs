@@ -1,0 +1,425 @@
+//! CPU, memory and GPU of each host the window lists, for the status bar and
+//! the sidebar's host rows. Every host has its own worker thread sampling it every
+//! couple of seconds: this machine through `sysinfo`, a remote host over one
+//! SSH shell, and a WSL distribution over one `wsl.exe` shell, kept open
+//! between samples. The UI thread only starts and stops
+//! workers and takes their samples on later ticks, so a slow or unreachable
+//! host never blocks rendering or delays another host.
+// i18n: migrated
+
+mod error;
+mod gpu;
+mod render;
+mod sample;
+
+#[cfg(test)]
+mod tests;
+
+pub(crate) use error::Error;
+
+use crate::{
+    Result,
+    usage::{Host, Shell},
+};
+pub(crate) use render::{
+    CPU_WARN, DISK_WARN, GPU_WARN, MEMORY_WARN, VRAM_WARN, gauges, gpu_line, line, severity,
+    storage, tooltip, uptime,
+};
+// The control socket reads samples too.
+pub(crate) use sample::Sample;
+// Tests elsewhere build samples with a GPU.
+#[cfg(test)]
+pub(crate) use gpu::Gpu;
+pub(crate) use sample::Memory;
+use sample::{Disk, Os, Ticks};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::{
+        Arc, Condvar, Mutex, PoisonError,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
+    thread,
+    time::{Duration, Instant},
+};
+
+const INTERVAL: Duration = Duration::from_secs(2);
+/// A host that could not be reached is tried again after this long.
+const RETRY: Duration = Duration::from_secs(30);
+/// macOS hosts spend one second of this measuring CPU.
+const STEP_TIMEOUT: Duration = Duration::from_secs(10);
+/// CPU samples kept for the sparklines.
+pub(crate) const HISTORY: usize = 16;
+/// Hosts are few; an unbounded endpoint list still cannot start more workers.
+const HOST_LIMIT: usize = 16;
+
+/// Where samples come from.
+enum Source {
+    Local {
+        /// Boxed: far larger than a remote shell's state.
+        system: Box<sysinfo::System>,
+        /// CPU usage is measured between two refreshes, so the first has none.
+        primed: bool,
+        disk: HomeDisk,
+        gpu: gpu::Local,
+    },
+    Remote {
+        shell: Shell,
+        os: Os,
+        ticks: Option<Ticks>,
+    },
+}
+
+impl Source {
+    fn open(host: &Host) -> Result<Self> {
+        match host {
+            Host::Local => Ok(Self::Local {
+                system: Box::new(sysinfo::System::new()),
+                primed: false,
+                disk: HomeDisk::open(),
+                gpu: gpu::Local::open(),
+            }),
+            Host::Ssh(target) => Self::remote(Shell::connect(target).map_err(crate::Error::from)),
+            // A distribution is sampled as a Linux host, through `wsl.exe`.
+            Host::Wsl(distro) => {
+                Self::remote(Shell::connect_wsl(distro).map_err(crate::Error::from))
+            }
+            #[cfg(all(feature = "azure", unix))]
+            Host::Azure { account, id } => Self::remote(azure_shell(account, id)),
+            // A remote shell needs a Unix client, as an SSH host's does.
+            #[cfg(all(feature = "azure", not(unix)))]
+            Host::Azure { .. } => Err(crate::Error::CloudHostUnsupported),
+        }
+    }
+
+    fn remote(shell: Result<Shell>) -> Result<Self> {
+        let mut shell = shell.map_err(remote)?;
+        let uname = shell.run("uname -s", STEP_TIMEOUT).map_err(remote)?;
+        let os = Os::from_uname(&uname.stdout)
+            .ok_or_else(|| Error::Unsupported(uname.stdout.trim().chars().take(32).collect()))?;
+        Ok(Self::Remote {
+            shell,
+            os,
+            ticks: None,
+        })
+    }
+
+    /// `gpu` probes the host's cards too; without it no GPU tool runs.
+    fn sample(&mut self, gpu: bool) -> Result<Sample> {
+        match self {
+            Self::Local {
+                system,
+                primed,
+                disk,
+                gpu: cards,
+            } => {
+                system.refresh_cpu_usage();
+                system.refresh_memory();
+                let cpu = std::mem::replace(primed, true)
+                    .then(|| system.global_cpu_usage().clamp(0., 100.));
+                let load = sysinfo::System::load_average();
+                Ok(Sample {
+                    cpu,
+                    memory: Some(Memory {
+                        used: system.used_memory(),
+                        total: system.total_memory(),
+                    })
+                    .filter(|memory| memory.total > 0),
+                    cores: u32::try_from(system.cpus().len())
+                        .ok()
+                        .filter(|cores| *cores > 0),
+                    // Windows keeps no load average; sysinfo reports zeros.
+                    load: (!cfg!(windows)).then_some([
+                        load.one as f32,
+                        load.five as f32,
+                        load.fifteen as f32,
+                    ]),
+                    disk: disk.sample(),
+                    uptime: Some(sysinfo::System::uptime()).filter(|seconds| *seconds > 0),
+                    gpu: if gpu { cards.sample() } else { None },
+                })
+            }
+            Self::Remote { shell, os, ticks } => {
+                let output = shell.run(&os.command(gpu), STEP_TIMEOUT).map_err(remote)?;
+                let answer = sample::parse(&output.stdout, *ticks)?;
+                *ticks = answer.ticks;
+                Ok(answer.sample)
+            }
+        }
+    }
+}
+
+/// This machine's volume holding the home directory, found once: listing every
+/// mount on each sample would also touch slow network mounts.
+struct HomeDisk {
+    disks: sysinfo::Disks,
+    index: Option<usize>,
+}
+
+impl HomeDisk {
+    fn open() -> Self {
+        let disks = sysinfo::Disks::new_with_refreshed_list_specifics(
+            sysinfo::DiskRefreshKind::nothing().with_storage(),
+        );
+        let index = crate::config::home().ok().and_then(|home| {
+            home_volume(&home, disks.list().iter().map(sysinfo::Disk::mount_point))
+        });
+        Self { disks, index }
+    }
+
+    fn sample(&mut self) -> Option<Disk> {
+        let disk = self.disks.list_mut().get_mut(self.index?)?;
+        disk.refresh_specifics(sysinfo::DiskRefreshKind::nothing().with_storage());
+        Some(Disk {
+            available: disk.available_space().min(disk.total_space()),
+            total: disk.total_space(),
+        })
+        .filter(|disk| disk.total > 0)
+    }
+}
+
+/// The index of the mount point holding `home`: the longest one it lies under.
+fn home_volume<'a>(
+    home: &std::path::Path,
+    mounts: impl IntoIterator<Item = &'a std::path::Path>,
+) -> Option<usize> {
+    mounts
+        .into_iter()
+        .enumerate()
+        .filter(|(_, mount)| home.starts_with(mount))
+        .max_by_key(|(_, mount)| mount.as_os_str().len())
+        .map(|(index, _)| index)
+}
+
+/// An Azure machine's `sh`, through the command its connection uses; see
+/// `crate::azure::monitor_command`.
+#[cfg(all(feature = "azure", unix))]
+fn azure_shell(account: &str, id: &str) -> Result<Shell> {
+    let mut command = crate::azure::monitor_command(account, id)?;
+    command
+        .arg("exec /bin/sh -s")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    Ok(Shell::start(command)?)
+}
+
+fn remote(error: impl Into<crate::Error>) -> crate::Error {
+    Error::Remote(Box::new(error.into())).into()
+}
+
+/// Tells a worker to stop, waking it from its wait between samples. The
+/// listening-port scanners stop the same way.
+#[derive(Default)]
+pub(crate) struct Stop {
+    stopped: Mutex<bool>,
+    changed: Condvar,
+}
+
+impl Stop {
+    pub(crate) fn stop(&self) {
+        *self.stopped.lock().unwrap_or_else(PoisonError::into_inner) = true;
+        self.changed.notify_all();
+    }
+
+    /// Waits until `due`; false once stopped.
+    pub(crate) fn wait(&self, due: Instant) -> bool {
+        let mut stopped = self.stopped.lock().unwrap_or_else(PoisonError::into_inner);
+        loop {
+            if *stopped {
+                return false;
+            }
+            let now = Instant::now();
+            if now >= due {
+                return true;
+            }
+            stopped = self
+                .changed
+                .wait_timeout(stopped, due - now)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+    }
+}
+
+struct Worker {
+    stop: Arc<Stop>,
+    results: mpsc::Receiver<Result<Sample>>,
+}
+
+impl Drop for Worker {
+    /// The thread ends after its current sample; nothing waits for it here.
+    fn drop(&mut self) {
+        self.stop.stop();
+    }
+}
+
+fn spawn(host: Host, gpu: Arc<AtomicBool>) -> Option<Worker> {
+    let stop = Arc::new(Stop::default());
+    let (sender, results) = mpsc::sync_channel(4);
+    let shared = stop.clone();
+    let spawned = thread::Builder::new()
+        .name("herdr-system-load".into())
+        .spawn(move || run(&host, &gpu, &shared, &sender));
+    match spawned {
+        Ok(_) => Some(Worker { stop, results }),
+        Err(error) => {
+            tracing::warn!(category = "system-load", %error, "could not start a CPU and memory worker");
+            None
+        }
+    }
+}
+
+fn run(host: &Host, gpu: &AtomicBool, stop: &Stop, results: &mpsc::SyncSender<Result<Sample>>) {
+    let mut source: Option<Source> = None;
+    loop {
+        let opened = match source.take() {
+            Some(source) => Ok(source),
+            None => Source::open(host),
+        };
+        let result = opened.and_then(|mut opened| {
+            let sample = opened.sample(gpu.load(Ordering::Relaxed));
+            // A failed remote step leaves the shell unusable; reconnect.
+            if sample.is_ok() || matches!(opened, Source::Local { .. }) {
+                source = Some(opened);
+            }
+            sample
+        });
+        let due = Instant::now() + if result.is_ok() { INTERVAL } else { RETRY };
+        match results.try_send(result) {
+            // The UI is behind; it will take the next one.
+            Ok(()) | Err(mpsc::TrySendError::Full(_)) => {}
+            Err(mpsc::TrySendError::Disconnected(_)) => return,
+        }
+        if !stop.wait(due) {
+            return;
+        }
+    }
+}
+
+/// One host's samples: the latest, and recent CPU and GPU usage for
+/// sparklines.
+#[derive(Default)]
+pub(crate) struct Reading {
+    latest: Option<Sample>,
+    /// Recent CPU usage, oldest first.
+    history: VecDeque<f32>,
+    /// Recent GPU usage, oldest first; empty on a host without one.
+    gpu_history: VecDeque<f32>,
+    /// Why the latest sample failed; the last good one stays shown.
+    error: Option<String>,
+}
+
+impl Reading {
+    pub fn latest(&self) -> Option<&Sample> {
+        self.latest.as_ref()
+    }
+
+    pub fn history(&self) -> impl ExactSizeIterator<Item = f32> + '_ {
+        self.history.iter().copied()
+    }
+
+    pub fn gpu_history(&self) -> impl ExactSizeIterator<Item = f32> + '_ {
+        self.gpu_history.iter().copied()
+    }
+
+    pub fn error(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    fn apply(&mut self, result: Result<Sample>) {
+        match result {
+            Ok(sample) => {
+                push(&mut self.history, sample.cpu);
+                match sample.gpu {
+                    Some(gpu) => push(&mut self.gpu_history, gpu.busy),
+                    // A card that stops answering takes its graph with it.
+                    None => self.gpu_history.clear(),
+                }
+                self.latest = Some(sample);
+                self.error = None;
+            }
+            Err(error) => {
+                // The display boundary: the cause says what went wrong remotely.
+                self.error = Some(crate::i18n::errors::with_causes(&error));
+            }
+        }
+    }
+}
+
+/// Keeps the last [`HISTORY`] values.
+fn push(history: &mut VecDeque<f32>, value: Option<f32>) {
+    let Some(value) = value else {
+        return;
+    };
+    if history.len() == HISTORY {
+        history.pop_front();
+    }
+    history.push_back(value);
+}
+
+#[derive(Default)]
+struct Monitor {
+    /// None once its thread could not start or has ended.
+    worker: Option<Worker>,
+    reading: Reading,
+}
+
+/// Every sampled host's reading, keyed by host.
+#[derive(Default)]
+pub(crate) struct SystemLoad {
+    monitors: HashMap<Host, Monitor>,
+    /// Whether workers probe GPUs, read before each sample, so turning
+    /// `show_gpu_load` on or off needs no new worker.
+    gpu: Arc<AtomicBool>,
+}
+
+impl SystemLoad {
+    pub fn get(&self, host: &Host) -> Option<&Reading> {
+        self.monitors.get(host).map(|monitor| &monitor.reading)
+    }
+
+    /// Records `sample` for `host` as if its worker had answered; no worker
+    /// is started for it.
+    #[cfg(test)]
+    pub fn record(&mut self, host: Host, sample: Sample) {
+        self.monitors
+            .entry(host)
+            .or_default()
+            .reading
+            .apply(Ok(sample));
+    }
+
+    /// Samples exactly `hosts` (at most [`HOST_LIMIT`]): starts workers for
+    /// new ones, stops and forgets the rest, and takes finished samples.
+    /// `gpu` has them probe GPUs from their next sample on. Returns whether
+    /// anything shown changed.
+    pub fn poll(&mut self, hosts: impl IntoIterator<Item = Host>, gpu: bool) -> bool {
+        self.gpu.store(gpu, Ordering::Relaxed);
+        let wanted: Vec<Host> = hosts.into_iter().take(HOST_LIMIT).collect();
+        let before = self.monitors.len();
+        self.monitors.retain(|host, _| wanted.contains(host));
+        let mut changed = self.monitors.len() != before;
+        for host in wanted {
+            self.monitors
+                .entry(host)
+                .or_insert_with_key(|host| Monitor {
+                    worker: spawn(host.clone(), self.gpu.clone()),
+                    reading: Reading::default(),
+                });
+        }
+        for monitor in self.monitors.values_mut() {
+            while let Some(worker) = &monitor.worker {
+                match worker.results.try_recv() {
+                    Ok(result) => {
+                        monitor.reading.apply(result);
+                        changed = true;
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => monitor.worker = None,
+                }
+            }
+        }
+        changed
+    }
+}

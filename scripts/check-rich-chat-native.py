@@ -133,12 +133,12 @@ def capture(args, case, theme, width, root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=Path("target/debug/herdr-gpui"))
+    parser.add_argument("--binary", type=Path, default=Path("target/debug/sheprd"))
     parser.add_argument("--xvfb", type=Path, default=Path("/usr/bin/Xvfb"))
     parser.add_argument("--vulkan-library", type=Path)
     parser.add_argument("--output", type=Path, default=Path("target/rich-chat-native"))
-    parser.add_argument("--case", choices=["math", "code", "diagram", "activity", "activity-open", "attachments", "questions", "selection", "input-resize", "user", "widgets", "widgets-end", "conversation", "existing", "all"])
-    parser.add_argument("--layout", choices=["timeline", "bubbles", "terminal", "document", "cards", "imessage"])
+    parser.add_argument("--case", choices=["math", "code", "diagram", "activity", "activity-open", "attachments", "questions", "selection", "input-resize", "user", "widgets", "widgets-end", "jump", "conversation", "existing", "running", "running-open", "all"])
+    parser.add_argument("--layout", choices=["timeline", "bubbles", "terminal", "document", "cards", "imessage", "opencode"])
     parser.add_argument("--theme", choices=["dark", "light"], default="dark")
     parser.add_argument("--size", choices=["wide", "narrow"], default="wide")
     parser.add_argument("--read-only", action="store_true")

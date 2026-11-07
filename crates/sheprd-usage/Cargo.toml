@@ -1,0 +1,44 @@
+[package]
+edition.workspace      = true
+license.workspace      = true
+name                   = "sheprd-usage"
+publish.workspace      = true
+rust-version.workspace = true
+version.workspace      = true
+
+[lints]
+workspace = true
+
+[dependencies]
+aes.workspace                   = true
+cbc.workspace                   = true
+chrono.workspace                = true
+sheprd-client.workspace          = true
+pbkdf2.workspace                = true
+# Reads the cookie databases of the browsers a provider signs in through.
+rusqlite.workspace              = true
+secrecy.workspace               = true
+serde.workspace                 = true
+serde_json.workspace            = true
+sha1.workspace                  = true
+sha2.workspace                  = true
+thiserror.workspace             = true
+tracing.workspace               = true
+unicode-normalization.workspace = true
+ureq.workspace                  = true
+url.workspace                   = true
+uuid.workspace                  = true
+zeroize.workspace               = true
+
+[dev-dependencies]
+tempfile.workspace = true
+toml.workspace     = true
+
+[features]
+# `Usage::showing`, for the app's status bar and panel tests.
+test-support = []
+# Cloud machines are hosts too; their usage is not read yet. Turned on with
+# the app's `cloud` and `azure` features, which add the matching variants to
+# sheprd-client's connect targets.
+azure = ["cloud", "sheprd-client/azure"]
+cloud = ["sheprd-client/cloud"]

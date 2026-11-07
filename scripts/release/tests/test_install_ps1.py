@@ -12,7 +12,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 INSTALL = ROOT / "site/install.ps1"
-ISS = ROOT / "scripts/release/herdr-gpui.iss"
+ISS = ROOT / "scripts/release/sheprd.iss"
+ISL = ROOT / "scripts/release/installer/en-US.isl"
 SCHEME_KEY = r"HKCU:\Software\Classes\herdr-gpui"
 COMMAND_KEY = r"shell\open\command"
 
@@ -39,7 +40,7 @@ $registered = [ordered]@{
 
 
 def app_id():
-    identity = (ROOT / "crates/herdr-updater/src/lib.rs").read_text(encoding="utf-8")
+    identity = (ROOT / "crates/sheprd-updater/src/lib.rs").read_text(encoding="utf-8")
     return re.search(r'^pub const APP_ID: &str = "([^"]+)";$', identity, re.M).group(1)
 
 
@@ -55,7 +56,7 @@ def install_steps():
     """Everything the script does once the release's files are in place."""
     source = INSTALL.read_text(encoding="utf-8")
     start = source.index("  $hasLauncher = Test-Path")
-    end = source.index("\n  }\n", source.index("Start it from the Start menu (Herdr UI) or with herdr-gpui.", start))
+    end = source.index("\n  }\n", source.index("Start it from the Start menu (Sheprd) or with sheprd.", start))
     return source[start:end + len("\n  }")]
 
 
@@ -69,18 +70,24 @@ def scheme_lines():
     return register, remove
 
 
-def installer_scheme_values(app):
+def installer_scheme_values(app, scheme="sheprd"):
     """What Setup.exe writes under the scheme's key, keyed by (subkey below
     it, value name), with its install directory set to `app`."""
     iss = ISS.read_text(encoding="utf-8")
     exe = re.search(r'^#define AppExe "([^"]+)"$', iss, re.M).group(1)
     launcher = re.search(r'^#define Launcher "([^"]+)"$', iss, re.M).group(1)
-    pattern = (r'^Root: HKCU; Subkey: "Software\\Classes\\herdr-gpui(?:\\([^"]+))?"; ValueType: string; '
+    pattern = (rf'^Root: HKCU; Subkey: "Software\\Classes\\{re.escape(scheme)}(?:\\([^"]+))?"; ValueType: string; '
                r'ValueName: "([^"]*)"; ValueData: "((?:[^"]|"")*)"')
+    app_name = re.search(r'^#define AppName "([^"]+)"$', iss, re.M).group(1)
+    # Setup's own text comes from its English messages, as ISCC fills them in.
+    messages = dict(re.findall(r"^(\w+)=(.*)$", ISL.read_text(encoding="utf-8"), re.M))
     values = {}
     for subkey, name, data in re.findall(pattern, iss, re.M):
         data = data.replace('""', '"').replace("{app}", app)
-        values[(subkey, name)] = data.replace("{#AppExe}", exe).replace("{#Launcher}", launcher)
+        data = data.replace("{#AppExe}", exe).replace("{#Launcher}", launcher).replace("{#AppName}", app_name)
+        data = re.sub(r"\{cm:(\w+)(?:,([^}]*))?\}",
+                      lambda m: messages[m[1]].replace("%1", m[2] or ""), data)
+        values[(subkey, name)] = data
     return values
 
 
@@ -97,13 +104,13 @@ class InstallScriptTests(unittest.TestCase):
             script = Path(temp) / "check.ps1"
             script.write_text(
                 "$ErrorActionPreference = 'Stop'\n"
-                "$shortcut = Join-Path $env:HERDR_TEST_DIR 'Herdr UI.lnk'\n"
+                "$shortcut = Join-Path $env:HERDR_TEST_DIR 'Sheprd.lnk'\n"
                 "$link = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut)\n"
                 "$link.TargetPath = Join-Path $env:SystemRoot 'notepad.exe'\n"
                 "$link.Save()\n"
                 + snippet() + "\n"
                 "(New-Object -ComObject Shell.Application).Namespace($env:HERDR_TEST_DIR)"
-                ".ParseName('Herdr UI.lnk').ExtendedProperty('System.AppUserModel.ID')\n",
+                ".ParseName('Sheprd.lnk').ExtendedProperty('System.AppUserModel.ID')\n",
                 encoding="utf-8")
             result = subprocess.run(
                 ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
@@ -115,27 +122,29 @@ class InstallScriptTests(unittest.TestCase):
 
     def test_links_are_registered_on_install_and_removed_on_uninstall(self):
         install = INSTALL.read_text(encoding="utf-8")
-        self.assertIn(f"  $scheme = '{SCHEME_KEY}'\n", install)
-        self.assertLess(install.index("  $scheme = "), install.index("  if ($Uninstall) {"))
+        self.assertIn("$schemes = @('HKCU:\\Software\\Classes\\sheprd', 'HKCU:\\Software\\Classes\\herdr-gpui')", install)
+        self.assertLess(install.index("  $schemes = "), install.index("  if ($Uninstall) {"))
         register, remove = scheme_lines()
         self.assertEqual(len(register), 6)
         self.assertEqual(len(remove), 2)
         steps = install_steps()
         self.assertTrue(all(line in steps for line in register), register)
-        self.assertLess(install.index(remove[0]), install.index("    Write-Host \"Uninstalled Herdr UI from"))
+        self.assertLess(install.index(remove[0]), install.index("    Write-Host \"Uninstalled Sheprd from"))
         self.assertIn(remove[1], steps)
+        self.assertEqual(installer_scheme_values("C:\\test", "sheprd"),
+                         installer_scheme_values("C:\\test", "herdr-gpui"))
 
     def test_installed_automation_daemon_stops_before_its_files_change(self):
-        # Windows will not overwrite or delete herdr-automate.exe while the
+        # Windows will not overwrite or delete sheprd-automate.exe while the
         # daemon the app started from it still runs.
         install = INSTALL.read_text(encoding="utf-8")
         stop = install.index("  $stopAutomate = {")
-        self.assertIn("$_.Path -eq $automate", install[stop:install.index("\n  }\n", stop)])
+        self.assertIn("$_.Path -eq $installedAutomate", install[stop:install.index("\n  }\n", stop)])
         self.assertLess(stop, install.index("  if ($Uninstall) {"))
         self.assertLess(install.index("    & $stopAutomate | Out-Null"),
                         install.index("    if (Test-Path -LiteralPath $dest) { Remove-Item"))
         self.assertLess(install.index("    $restartAutomate = & $stopAutomate"),
-                        install.index("    Copy-Item -Recurse -Force"))
+                         install.index("    Copy-Item -Recurse -Force"))
         self.assertLess(install.index("    Copy-Item -Recurse -Force"),
                         install.index("    & $automate start"))
         iss = ISS.read_text(encoding="utf-8")
@@ -150,7 +159,7 @@ class InstallScriptTests(unittest.TestCase):
         back and asks Windows which command opens it, then removes it with
         the script's uninstall line."""
         register, remove = scheme_lines()
-        app = r"C:\Program Files Test\Herdr UI"
+        app = r"C:\Program Files Test\Sheprd"
         expected = installer_scheme_values(app)
         self.assertEqual(set(expected), {("", ""), ("", "URL Protocol"), ("DefaultIcon", ""), (COMMAND_KEY, "")})
         scheme = f"herdr-gpui-test-{os.getpid()}"
@@ -158,8 +167,8 @@ class InstallScriptTests(unittest.TestCase):
             script = Path(temp) / "check.ps1"
             script.write_text(
                 "$ErrorActionPreference = 'Stop'\n"
-                "$exe = Join-Path $env:HERDR_TEST_APP 'herdr-gpui.exe'\n"
-                "$launcher = Join-Path $env:HERDR_TEST_APP 'herdr-gpui-launcher.exe'\n"
+                "$exe = Join-Path $env:HERDR_TEST_APP 'sheprd.exe'\n"
+                "$launcher = Join-Path $env:HERDR_TEST_APP 'sheprd-launcher.exe'\n"
                 "$scheme = 'HKCU:\\Software\\Classes\\' + $env:HERDR_TEST_SCHEME\n"
                 "try {\n" + "\n".join(register) + SCHEME_CHECK
                 + "} finally {\n" + remove[0] + "\n}\n"
@@ -177,13 +186,13 @@ class InstallScriptTests(unittest.TestCase):
         self.assertEqual(values["protocol"], expected[("", "URL Protocol")])
         self.assertEqual(values["icon"], expected[("DefaultIcon", "")])
         self.assertEqual(values["command"], expected[(COMMAND_KEY, "")])
-        self.assertEqual(values["command"], f'"{app}\\herdr-gpui-launcher.exe" "%1"')
+        self.assertEqual(values["command"], f'"{app}\\sheprd-launcher.exe" "%1"')
         self.assertEqual(values["associated"], values["command"])
         self.assertTrue(values["removed"])
 
     @unittest.skipUnless(sys.platform == "win32" and shutil.which("powershell.exe"), "needs Windows PowerShell")
     def test_shortcut_explorer_entry_and_links_follow_the_releases_launcher(self):
-        # Releases up to 20261016.1 ship herdr-gpui.exe alone (#632): there
+        # Releases up to 20261016.1 ship sheprd.exe alone (#632): there
         # the shortcut opens it, an existing Explorer entry and link
         # registration go, and the closing message names neither the
         # launcher nor that entry.
@@ -191,10 +200,10 @@ class InstallScriptTests(unittest.TestCase):
             key = rf"Software\HerdrInstallPs1Test-{os.getpid()}-{has_launcher}"
             with self.subTest(has_launcher=has_launcher), \
                     tempfile.TemporaryDirectory(prefix="herdr-install-ps1-") as temp:
-                dest = Path(temp) / "Herdr UI"
+                dest = Path(temp) / "Sheprd"
                 dest.mkdir()
-                launcher = dest / "herdr-gpui-launcher.exe"
-                (dest / "herdr-gpui.exe").write_bytes(b"")
+                launcher = dest / "sheprd-launcher.exe"
+                (dest / "sheprd.exe").write_bytes(b"")
                 if has_launcher:
                     launcher.write_bytes(b"")
                 script = Path(temp) / "check.ps1"
@@ -202,10 +211,12 @@ class InstallScriptTests(unittest.TestCase):
                     "$ErrorActionPreference = 'Stop'",
                     "$version = '20000101.1'",
                     "$dest = $env:HERDR_TEST_DEST",
-                    "$exe = Join-Path $dest 'herdr-gpui.exe'",
-                    "$launcher = Join-Path $dest 'herdr-gpui-launcher.exe'",
+                    "$exe = Join-Path $dest 'sheprd.exe'",
+                    "$launcher = Join-Path $dest 'sheprd-launcher.exe'",
                     rf"$verbs = 'HKCU:\{key}\Directory', 'HKCU:\{key}\Background'",
                     rf"$scheme = 'HKCU:\{key}\Scheme'",
+                    rf"$schemes = @('HKCU:\{key}\Scheme', 'HKCU:\{key}\LegacyScheme')",
+                    "$ownedShortcuts = @()",
                     # An entry and a link registration left from an earlier install.
                     r'foreach ($verb in $verbs) { New-Item -Force -Path "$verb\command" | Out-Null }',
                     r'New-Item -Force -Path "$scheme\shell\open\command" | Out-Null',
@@ -214,7 +225,7 @@ class InstallScriptTests(unittest.TestCase):
                     "foreach ($verb in $verbs) {",
                     r"""  if (Test-Path -LiteralPath $verb) { 'verb=' + (Get-Item -LiteralPath "$verb\command").GetValue('') }""",
                     "}",
-                    r"""if (Test-Path -LiteralPath $scheme) { 'scheme=' + (Get-Item -LiteralPath "$scheme\shell\open\command").GetValue('') }""",
+                    r"""foreach ($scheme in $schemes) { if (Test-Path -LiteralPath $scheme) { 'scheme=' + (Get-Item -LiteralPath "$scheme\shell\open\command").GetValue('') } }""",
                     "",
                 ]), encoding="utf-8")
                 try:
@@ -227,13 +238,13 @@ class InstallScriptTests(unittest.TestCase):
                     subprocess.run(["reg.exe", "delete", rf"HKCU\{key}", "/f"], capture_output=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 lines = result.stdout.splitlines()
-                message = next(line for line in lines if line.startswith("Installed Herdr UI"))
+                message = next(line for line in lines if line.startswith("Installed Sheprd"))
                 target = next(line for line in lines if line.startswith("target="))[len("target="):]
                 verbs = [line[len("verb="):] for line in lines if line.startswith("verb=")]
                 schemes = [line[len("scheme="):] for line in lines if line.startswith("scheme=")]
                 # samefile, since Windows can hand back the temp directory
                 # as an 8.3 short path.
-                self.assertTrue(os.path.samefile(target, launcher if has_launcher else dest / "herdr-gpui.exe"),
+                self.assertTrue(os.path.samefile(target, launcher if has_launcher else dest / "sheprd.exe"),
                                 target)
                 if has_launcher:
                     self.assertEqual(len(verbs), 2, result.stdout)
@@ -241,17 +252,18 @@ class InstallScriptTests(unittest.TestCase):
                         program, rest = verb[1:].split('"', 1)
                         self.assertTrue(os.path.samefile(program, launcher), verb)
                         self.assertEqual(rest, ' open "%V"')
-                    self.assertEqual(len(schemes), 1, result.stdout)
-                    program, rest = schemes[0][1:].split('"', 1)
-                    self.assertTrue(os.path.samefile(program, launcher), schemes[0])
-                    self.assertEqual(rest, ' "%1"')
-                    self.assertIn("herdr-gpui-launcher.exe", message)
-                    self.assertIn("Open in Herdr UI", message)
+                    self.assertEqual(len(schemes), 2, result.stdout)
+                    for command in schemes:
+                        program, rest = command[1:].split('"', 1)
+                        self.assertTrue(os.path.samefile(program, launcher), command)
+                        self.assertEqual(rest, ' "%1"')
+                    self.assertIn("sheprd-launcher.exe", message)
+                    self.assertIn("Open in Sheprd", message)
                 else:
                     self.assertEqual(verbs, [], result.stdout)
                     self.assertEqual(schemes, [], result.stdout)
                     self.assertNotIn("launcher", message)
-                    self.assertNotIn("Open in Herdr UI", message)
+                    self.assertNotIn("Open in Sheprd", message)
 
 
 if __name__ == "__main__":

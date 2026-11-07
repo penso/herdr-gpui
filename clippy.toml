@@ -1,5 +1,5 @@
 disallowed-methods = [
   # On Windows a console child (git, ssh, wsl.exe) can open a window of its own
-  # unless created without one; herdr_client::new_command sets that once.
-  { path = "std::process::Command::new", reason = "use herdr_client::new_command, which opens no console window on Windows" },
+  # unless created without one; sheprd_client::new_command sets that once.
+  { path = "std::process::Command::new", reason = "use sheprd_client::new_command, which opens no console window on Windows" },
 ]
