@@ -23,6 +23,31 @@ struct LinkRetryTests {
     }
 }
 
+/// The usual outage: a live socket drops, and then nothing answers.
+struct LinkDroppedTests {
+    private static func reported(_ updates: [LinkUpdate]) -> Bool {
+        updates.contains { if case .unreachable = $0 { true } else { false } }
+    }
+
+    @Test func aDroppedSocketReportsTheAddressesOnce() async {
+        let computer = FakeComputer()
+        await computer.setPing("https://lan", mac)
+        let link = ComputerLink(fingerprint: mac, origins: ["https://lan"], io: await computer.io())
+        await link.start()
+        _ = await collect(link) { $0.contains(.status(.online(origin: "https://lan"))) }
+        await computer.stopAnswering("https://lan")
+        await computer.drop()
+        _ = await collect(link) { $0.contains { if case .status(.offline) = $0 { true } else { false } } }
+        await link.networkChanged()
+        let race = await collect(link) { $0.contains { if case .status(.offline) = $0 { true } else { false } } }
+        #expect(Self.reported(race))
+        await link.networkChanged()
+        let again = await collect(link) { $0.contains { if case .status(.offline) = $0 { true } else { false } } }
+        #expect(!Self.reported(again))
+        await link.stop()
+    }
+}
+
 /// A daemon too old for this app answers pings but refuses the socket.
 struct LinkOutdatedTests {
     @Test func aDaemonWithoutTheLiveSocketIsOutdatedNeverOnline() async {

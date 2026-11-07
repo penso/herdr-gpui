@@ -173,12 +173,16 @@ public actor ComputerLink {
         // Once offline, a retry stays offline until it gets through, so
         // what the phone shows does not flicker with every attempt.
         var offline = false
+        // Apart from `offline`: a socket that drops is offline before its
+        // first race, and that race's failures are the ones worth reporting.
+        var reported = false
         while !Task.isCancelled {
             if !offline { continuation.yield(.status(.connecting)) }
             do {
                 let race = await race()
                 guard let origin = race.found else {
-                    if !offline { continuation.yield(.unreachable(race.failures)) }
+                    if !reported { continuation.yield(.unreachable(race.failures)) }
+                    reported = true
                     throw Offline(reason: "No address answered (\(origins.count) tried)")
                 }
                 let token = try await io.session(origin)
@@ -189,6 +193,7 @@ public actor ComputerLink {
                 attempt = 0
                 retryNow = false
                 offline = false
+                reported = false
                 continuation.yield(.status(.online(origin: origin)))
                 for (view, since) in watched {
                     try await opened.send(.subscribe(view, since: since, size: sizes[view]))
