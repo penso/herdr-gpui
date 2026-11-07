@@ -239,6 +239,9 @@ private struct LoadGauge: View {
                 }
             Text("\(percent)%").font(.caption2.monospacedDigit())
         }
+        // The row shares its width with the workspace count: without this
+        // the row squeezes these texts until "CPU" breaks across two lines.
+        .fixedSize(horizontal: true, vertical: false)
         .foregroundStyle(.secondary)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label) \(percent) percent")
