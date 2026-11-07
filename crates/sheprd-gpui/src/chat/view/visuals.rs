@@ -1,10 +1,13 @@
 //! Pictures and diagrams in the entry list, drawn from textures the
 //! background prepared, and the agent message that holds diagrams.
 
-use super::super::{
-    prepared::Part,
-    selection::Region,
-    visual::{Shown, VisualId, Visuals},
+use super::{
+    super::{
+        prepared::Part,
+        selection::Region,
+        visual::{Shown, VisualId, Visuals},
+    },
+    layout::Voice,
 };
 use crate::i18n::{Localize, fl};
 use crate::{SheprdWindow, config::corners, release_notes};
@@ -35,7 +38,7 @@ impl SheprdWindow {
         entry: EntryId,
         parts: &[Part],
         visuals: &Visuals,
-        size: f32,
+        voice: Voice,
         cx: &mut Context<Self>,
     ) -> Div {
         div()
@@ -57,7 +60,7 @@ impl SheprdWindow {
                     Part::Rich(blocks) => {
                         match self.chat_text_scope(pane_id, entry, Region::Body(index)) {
                             Some(scope) => self
-                                .render_chat_rich(pane_id, blocks, visuals, &scope, size, cx)
+                                .render_chat_rich(pane_id, blocks, visuals, &scope, voice, cx)
                                 .into_any_element(),
                             None => div().into_any_element(),
                         }

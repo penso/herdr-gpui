@@ -13,7 +13,16 @@ pub(super) struct Cards;
 /// Space between cards.
 const GAP: f32 = 12.;
 
+/// A card's fill.
+fn fill(look: &Look<'_>) -> u32 {
+    mix(look.theme.background, look.theme.foreground, 3)
+}
+
 impl ChatLayout for Cards {
+    fn ground(&self, _side: Side, look: &Look<'_>) -> Option<u32> {
+        Some(fill(look))
+    }
+
     fn row(&self, row: Row<'_>, look: &Look<'_>) -> AnyElement {
         let theme = look.theme;
         let id = row.entry.id.0;
@@ -77,7 +86,7 @@ impl ChatLayout for Cards {
             })
             .child(inner);
         // A page shown in the card lies beneath its background on macOS.
-        let piece = look.ground(piece, mix(theme.background, theme.foreground, 3));
+        let piece = look.ground(piece, fill(look));
         look.column(
             div()
                 .id(("chat-entry", id))
