@@ -136,6 +136,10 @@ Memory by default, so a droplet needs nothing but the image and its secrets. The
 | `sqlite:FILE` | A file on a volume | One host where revocations must survive |
 | `postgres` (feature) | `postgres-url` in the secrets, and `postgres-ca.pem` beside it for a private CA | Several relays sharing state |
 
+Postgres connections always use TLS, unless the URL says `sslmode=disable` for a
+database on the same machine. Revoking has its own tight limit per device, since
+each revocation stays until its credential expires.
+
 What a store holds:
 
 | Table | Holds |

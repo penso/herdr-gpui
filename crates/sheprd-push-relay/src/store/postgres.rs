@@ -2,8 +2,10 @@
 //! that finds it closed opens a new one, and until then the relay answers
 //! that it is unavailable, since a revocation may be in force.
 //!
-//! The address is secret, so it comes from a file, not an argument. A URL
-//! should ask for `sslmode=require`; a private CA goes beside it.
+//! The address is secret, so it comes from a file, not an argument. The
+//! connection is always encrypted, whatever the URL leaves out, unless it
+//! says `sslmode=disable` for a database on this machine. A private CA goes
+//! beside it.
 
 use super::{Error, Result, Revoked, Store};
 use crate::credential::DeviceId;
@@ -13,7 +15,10 @@ use rustls::{
 };
 use std::{path::Path, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
-use tokio_postgres::{Client, Config};
+use tokio_postgres::{
+    Client, Config,
+    config::{Host, SslMode},
+};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
 /// How long reaching the database may take before the push is refused.
@@ -31,6 +36,33 @@ pub struct Postgres {
     client: Arc<Mutex<Option<Arc<Client>>>>,
     config: Config,
     tls: MakeRustlsConnect,
+}
+
+/// Requires encryption in `config`: the driver's own default falls back to
+/// plain text if the server does not offer it, which anyone on the path can
+/// arrange. Plain text stays only when asked for, on this machine.
+fn encrypted(mut config: Config) -> Result<Config> {
+    match config.get_ssl_mode() {
+        SslMode::Disable if config.get_hosts().iter().all(is_local) => {}
+        SslMode::Disable => return Err(Error::PostgresPlainText),
+        _ => {
+            config.ssl_mode(SslMode::Require);
+        }
+    }
+    Ok(config)
+}
+
+fn is_local(host: &Host) -> bool {
+    match host {
+        Host::Tcp(name) => {
+            name == "localhost"
+                || name
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        }
+        #[cfg(unix)]
+        Host::Unix(_) => true,
+    }
 }
 
 /// Web PKI roots, and the private CA in `ca` when there is one.
@@ -61,7 +93,7 @@ impl Postgres {
     /// Connects to `url`, trusting the private CA in `ca` as well as the
     /// usual roots, and creates the table if it is missing.
     pub async fn connect(url: &str, ca: Option<&Path>) -> Result<Self> {
-        let mut config = Config::from_str(url)?;
+        let mut config = encrypted(Config::from_str(url)?)?;
         config.connect_timeout(CONNECT);
         let store = Self {
             client: Arc::default(),
@@ -131,3 +163,7 @@ impl Store for Postgres {
         Ok(usize::try_from(dropped).unwrap_or(usize::MAX))
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests;

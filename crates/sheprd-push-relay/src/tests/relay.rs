@@ -293,6 +293,51 @@ async fn a_handle_is_limited_alone() {
     }
 }
 
+#[tokio::test]
+async fn revoking_has_a_tighter_limit_than_pushing() {
+    let fixture = fixture_with(Rates {
+        revoke: tight(2),
+        ..Rates::default()
+    });
+    for (id, expected) in [
+        (1, Reply::Revoked),
+        (2, Reply::Revoked),
+        (3, Reply::Limited),
+    ] {
+        let handle = handle(PHONE, "alert", id);
+        let request = RevokeRequest { handle };
+        assert_eq!(
+            fixture.relay.revoke(source(), request, NOW_MS).await,
+            expected
+        );
+    }
+    let push = alert(handle(PHONE, "alert", 4));
+    assert_eq!(
+        fixture.relay.push(source(), push, NOW_MS).await,
+        Reply::Delivered
+    );
+}
+
+#[tokio::test]
+async fn revoking_with_an_expired_credential_keeps_nothing() {
+    let fixture = fixture();
+    let handle = handle(PHONE, "alert", 1);
+    let late = NOW_MS + (LIFETIME_S + 1) * 1000;
+    let request = RevokeRequest { handle };
+    assert_eq!(
+        fixture.relay.revoke(source(), request, late).await,
+        Reply::Revoked
+    );
+    assert_eq!(fixture.store.purge(0).await.unwrap(), 0);
+    assert!(
+        !fixture
+            .store
+            .is_revoked(PHONE, &"01".repeat(16))
+            .await
+            .unwrap()
+    );
+}
+
 /// What a restart on the memory store means: a relay with an empty store and
 /// the same keys takes the handles the daemons already hold.
 #[tokio::test]

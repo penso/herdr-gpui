@@ -83,6 +83,7 @@ pub enum Reply {
 struct Limits {
     device: Limiter<DeviceId>,
     handle: Limiter<String>,
+    revoke: Limiter<DeviceId>,
     source: Limiter<IpAddr>,
 }
 
@@ -114,6 +115,7 @@ impl<G: Gateway, S: Store> Relay<G, S> {
             limits: Mutex::new(Limits {
                 device: Limiter::new(rates.device),
                 handle: Limiter::new(rates.handle),
+                revoke: Limiter::new(rates.revoke),
                 source: Limiter::new(rates.source),
             }),
             store,
@@ -203,7 +205,16 @@ impl<G: Gateway, S: Store> Relay<G, S> {
             Ok(opened) => opened,
             Err(reply) => return reply,
         };
-        if !self.limits().device.allow(credential.device, now_ms) {
+        // Nothing to keep: the relay refuses this credential already.
+        if credential.expires_s <= now_ms / 1000 {
+            return Reply::Revoked;
+        }
+        let allowed = {
+            let mut limits = self.limits();
+            limits.device.allow(credential.device, now_ms)
+                && limits.revoke.allow(credential.device, now_ms)
+        };
+        if !allowed {
             return Reply::Limited;
         }
         let what = Revoked::Handle(handle.id);

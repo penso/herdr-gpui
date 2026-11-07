@@ -24,6 +24,10 @@ pub struct Rate {
 pub struct Rates {
     pub device: Rate,
     pub handle: Rate,
+    /// Per device, on top of the rest. Each revocation is kept until its
+    /// credential expires and a device can make any number of handles, so
+    /// this is what bounds how much of a store one device can fill.
+    pub revoke: Rate,
     /// Generous: many computers can share one address.
     pub source: Rate,
 }
@@ -38,6 +42,10 @@ impl Default for Rates {
             handle: Rate {
                 burst: 30,
                 per_minute: 60,
+            },
+            revoke: Rate {
+                burst: 30,
+                per_minute: 1,
             },
             source: Rate {
                 burst: 120,

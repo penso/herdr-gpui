@@ -4,6 +4,9 @@ pub enum Error {
     #[error("the relay holds as many revocations as it can")]
     Full,
     #[cfg(feature = "postgres")]
+    #[error("the Postgres database failed")]
+    Postgres(#[from] tokio_postgres::Error),
+    #[cfg(feature = "postgres")]
     #[error("could not read {}", path.display())]
     PostgresCa {
         path: std::path::PathBuf,
@@ -18,8 +21,8 @@ pub enum Error {
         source: rustls::Error,
     },
     #[cfg(feature = "postgres")]
-    #[error("the Postgres database failed")]
-    Postgres(#[from] tokio_postgres::Error),
+    #[error("Postgres on another machine must use TLS")]
+    PostgresPlainText,
     #[error("the SQLite database failed")]
     Sqlite(#[from] rusqlite::Error),
     #[error("the database task did not finish")]
