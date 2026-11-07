@@ -402,6 +402,17 @@ size = 12
 # the uncommitted-work probe's slow schedule: one checkout at a time, each at
 # most every 30 seconds while the window is active.
 # change_counts = "pr"
+# What ends a coordinator session's name, which turns on coordinator groups.
+# A session named "demo-coord" gets the coordinator mark in place of its agent's
+# and leads the group "demo", whose workers are the sessions named "demo-12",
+# "demo-13", and so on, in any workspace or on any host. The agents header then
+# offers a filter: each click shows the next group, its coordinator first, and
+# then all groups again. A session's name is what `herdr agent start` or `agent
+# rename` gave it, or its pane's Rename label. Groups follow names, so a new
+# session given the coordinator's name takes the group over. Unset leaves the
+# agents list as it was. Agents nested under workspaces get the mark but no
+# filter.
+# coordinator_suffix = "-coord"
 
 # The activity bar: an icon column at the window's left edge. Workspaces is
 # the sidebar beside the terminals; Orchestrator, Pull requests, and Issues

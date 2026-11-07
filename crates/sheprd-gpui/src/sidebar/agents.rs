@@ -16,6 +16,8 @@ use crate::{
 use gpui::{prelude::*, *};
 use sheprd_client::protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot};
 
+pub(crate) mod groups;
+
 pub(super) fn agents_sort(window: &SheprdWindow, cx: &mut Context<SheprdWindow>) -> Stateful<Div> {
     let theme = &window.theme;
     let view = window
@@ -175,6 +177,23 @@ pub(super) fn agent_names(agent: &ClientShellAgent) -> [Option<&str>; 4] {
             .as_deref()
             .and_then(sheprd_client::text::caption),
     ]
+}
+
+/// The mark an agent's row leads with: a coordinator's own, which every row
+/// layout draws where the agent's identity would be, else that identity.
+pub(super) fn agent_icon(
+    agent: &ClientShellAgent,
+    snapshot: &ClientShellSnapshot,
+    style: &crate::config::SidebarStyle,
+) -> crate::icons::AgentIcon {
+    let coordinator = style
+        .coordinator_suffix
+        .as_deref()
+        .is_some_and(|suffix| groups::is_coordinator(agent, snapshot, suffix));
+    if coordinator {
+        return crate::icons::AgentIcon::Coordinator;
+    }
+    crate::icons::AgentIcon::from_identity(agent.agent.as_deref())
 }
 
 /// The name an agent's row shows for its pane: the label set with Rename,

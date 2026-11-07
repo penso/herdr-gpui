@@ -132,6 +132,8 @@ pub(super) fn ui(command: UiCommand, context: &Context) -> crate::Result<Output>
         UiCommand::StatusBar(switch) => UiOp::StatusBar { switch },
         UiCommand::FontSize(size) => UiOp::FontSize { size },
         UiCommand::Panel(panel) => UiOp::Panel { panel },
+        UiCommand::AgentGroups => UiOp::AgentGroups,
+        UiCommand::AgentGroup(name) => UiOp::AgentGroup { name },
     };
     match context.call(Request::Ui, op)? {
         Response::Done { message } => Ok(Output::message(message)),
@@ -141,8 +143,33 @@ pub(super) fn ui(command: UiCommand, context: &Context) -> crate::Result<Output>
             format!("Terminal font size {points}"),
             &serde_json::json!({ "points": points }),
         ),
+        Response::App {
+            reply: Reply::AgentGroups { current, groups },
+        } => Output::data(
+            agent_groups_text(current.as_deref(), &groups),
+            &serde_json::json!({ "current": current, "groups": groups }),
+        ),
         response => Err(unexpected(response)),
     }
+}
+
+/// One group a line, the one shown marked, as `theme list` marks its own.
+fn agent_groups_text(current: Option<&str>, groups: &[String]) -> String {
+    if groups.is_empty() {
+        return "No coordinator sessions are listed".to_owned();
+    }
+    groups
+        .iter()
+        .map(|group| {
+            let mark = if current == Some(group.as_str()) {
+                "*"
+            } else {
+                " "
+            };
+            format!("{mark} {group}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub(super) fn run_command(name: &str, context: &Context) -> crate::Result<Output> {
@@ -163,3 +190,6 @@ pub(super) fn run_command(name: &str, context: &Context) -> crate::Result<Output
         },
     )
 }
+
+#[cfg(test)]
+mod tests;

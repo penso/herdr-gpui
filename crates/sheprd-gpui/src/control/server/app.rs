@@ -306,6 +306,8 @@ pub(super) fn ui(call: Call<UiOp>, cx: &mut App) -> Response {
             view.show_activity_panel(panel, window, cx);
             Response::done(format!("Showing {}", panel.name()))
         }
+        UiOp::AgentGroups => agent_groups(view),
+        UiOp::AgentGroup { name } => pick_agent_group(view, name, cx),
         UiOp::StatusBar { switch } => {
             let visible = switch.apply(view.status_bar_visible);
             if visible != view.status_bar_visible {
@@ -334,6 +336,48 @@ pub(super) fn ui(call: Call<UiOp>, cx: &mut App) -> Response {
             }
         }
     })
+}
+
+/// Groups live in the agents panel, so without it there is nothing to show.
+fn no_agent_groups() -> Response {
+    Response::error(
+        ErrorCode::Unsupported,
+        "No coordinator groups: set [sidebar] coordinator_suffix and show the agents panel",
+    )
+}
+
+fn agent_groups(view: &SheprdWindow) -> Response {
+    let Some(groups) = view.agent_groups() else {
+        return no_agent_groups();
+    };
+    Response::App {
+        reply: Reply::AgentGroups {
+            current: view.agent_group.clone(),
+            groups: groups.names().iter().map(|&name| name.to_owned()).collect(),
+        },
+    }
+}
+
+fn pick_agent_group(
+    view: &mut SheprdWindow,
+    name: Option<String>,
+    cx: &mut gpui::Context<SheprdWindow>,
+) -> Response {
+    let Some(groups) = view.agent_groups() else {
+        return no_agent_groups();
+    };
+    if let Some(name) = &name
+        && !groups.names().contains(&name.as_str())
+    {
+        return super::not_found(format!("No coordinator group is named {name}"));
+    }
+    let message = name.as_ref().map_or_else(
+        || "Showing every agent group".to_owned(),
+        |name| format!("Showing agent group {name}"),
+    );
+    view.agent_group = name;
+    cx.notify();
+    Response::done(message)
 }
 
 pub(super) fn command(call: Call<CommandOp>, cx: &mut App) -> Response {
