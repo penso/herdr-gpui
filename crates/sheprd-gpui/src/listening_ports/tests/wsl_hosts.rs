@@ -43,7 +43,7 @@ fn live_wsl_ports() {
     let distro = std::env::var("HERDR_TEST_WSL_DISTRO").expect("HERDR_TEST_WSL_DISTRO");
     let mut shell = super::super::open(&Host::Wsl(distro)).unwrap();
     let ports = super::super::scan(&mut shell).unwrap();
-    for (owner, ports) in &ports {
+    for (owner, ports) in &ports.ports {
         println!("{owner:?}: {ports:?}");
     }
 }
