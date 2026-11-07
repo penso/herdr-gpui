@@ -348,6 +348,10 @@ The maintainer has to:
    and URLs, and submit. Until that version is merged, the job only prints a
    warning.
 
+Without `WINGET_TOKEN` the job also prints a warning and submits nothing, so a
+release does not fail while winget is not set up. Once winget is live, that
+warning is the only sign a lost token leaves.
+
 ## Updater Signing
 
 These scripts publish the exact Sheprd names accepted by the deployed
