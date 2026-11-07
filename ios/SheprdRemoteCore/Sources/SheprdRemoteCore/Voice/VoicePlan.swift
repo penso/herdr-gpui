@@ -53,6 +53,8 @@ public enum VoicePlan: Hashable, Sendable {
         case computer
         /// A computer was named that is not connected.
         case offline(String)
+        /// A computer was named that is not one of them.
+        case unknownComputer(String)
         /// `name` was asked for by name and is not on the computer.
         case project(on: String, named: String?, choices: [VoiceCatalog.Project])
     }
@@ -174,6 +176,10 @@ public enum VoicePlan: Hashable, Sendable {
     }
 
     private static func chooseComputer(_ plan: inout Workspace, _ draft: VoiceDraft, _ catalog: VoiceCatalog) {
+        if draft.computer == nil, let name = draft.unknownComputer {
+            plan.question = .unknownComputer(name)
+            return
+        }
         if let named = catalog.computers.first(where: { $0.id == draft.computer }) {
             plan.computer = named
             plan.computerSource = .said
@@ -237,6 +243,7 @@ extension VoicePlan.Question {
         case let .agent(on, nil): "Which agent on \(on)?"
         case .computer: "None of your computers is connected."
         case let .offline(name): "\(name) is not connected."
+        case let .unknownComputer(name): "\(name) is not one of your computers. Which one?"
         case let .project(on, named?, _): "\(named) is not on \(on). Which project?"
         case let .project(on, nil, _): "Which project on \(on)?"
         }
@@ -245,7 +252,7 @@ extension VoicePlan.Question {
     /// Whether a spoken reply can settle it.
     public var answerable: Bool {
         switch self {
-        case .agent, .project: true
+        case .agent, .project, .unknownComputer: true
         case .computer, .offline: false
         }
     }

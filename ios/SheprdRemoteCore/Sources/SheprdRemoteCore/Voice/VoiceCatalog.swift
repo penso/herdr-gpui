@@ -55,6 +55,17 @@ public struct VoiceCatalog: Hashable, Sendable {
         }
 
         public var agents: [AgentChoice] { options?.agents ?? [] }
+
+        /// The project that is all of `name`, for a value given on its own
+        /// rather than heard in a sentence.
+        public func project(named name: String) -> Project? {
+            projects.first { VoiceNames.isAll(of: name, $0.name) }
+        }
+
+        /// The agent that is all of `name`, by its id or its name.
+        public func agent(named name: String) -> AgentChoice? {
+            agents.first { VoiceNames.isAll(of: name, $0.id) || VoiceNames.isAll(of: name, $0.name) }
+        }
     }
 
     public struct Project: Hashable, Sendable, Identifiable {

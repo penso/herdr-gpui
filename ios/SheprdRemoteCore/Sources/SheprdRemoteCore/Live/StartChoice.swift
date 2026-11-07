@@ -111,6 +111,15 @@ public struct StartChoice: Codable, Hashable, Sendable {
         }
     }
 
+    /// What a chat started without a screen may start with: the mode picked,
+    /// unless it runs without asking, and never auto-accepting. The person
+    /// chose those for chats they were watching, and a misheard sentence
+    /// must not run tools nobody saw.
+    public var unattendedStart: ChatStart? {
+        guard let picked, !picked.bypasses else { return nil }
+        return ChatStart(mode: picked.id, option: picked.option, autoAccept: false)
+    }
+
     /// What to ask of a new chat, or `nil` when it starts as the agent does.
     public var start: ChatStart? {
         let picked = picked

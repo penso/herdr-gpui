@@ -58,6 +58,11 @@ final class VoiceSession: Identifiable {
     private(set) var waiting: [Waiting] = []
     /// When Start was pressed, while it runs.
     private(set) var runningSince: Date?
+    /// The sheet went away. A start under way carries on, but nothing may
+    /// open the microphone or act on what was heard from here on.
+    private var cancelled = false
+    /// Every computer that was asked what it offers has answered.
+    private var optionsLoaded = false
     private var silence: Task<Void, Never>?
     private var loading: Task<Void, Never>?
     private let speaker = VoiceSpeaker()
@@ -85,7 +90,7 @@ final class VoiceSession: Identifiable {
 
     /// Starts with `text` already said, or by listening.
     func begin(saying text: String? = nil) async {
-        loading = Task { [weak self] in await self?.loadOptions() }
+        startLoadingOptions()
         if let text {
             heard(text)
             await finish()
@@ -102,6 +107,7 @@ final class VoiceSession: Identifiable {
 
     /// Hears a correction or an answer to the plan on the card.
     func listenAgain(forYes: Bool = false) {
+        guard !cancelled else { return }
         speaker.stop()
         awaitingYes = forYes
         // With no plan there is nothing to correct: it starts over.
@@ -111,6 +117,8 @@ final class VoiceSession: Identifiable {
     }
 
     func cancel() {
+        // First: stopping the speaker resumes whatever waited on it.
+        cancelled = true
         silence?.cancel()
         loading?.cancel()
         speaker.stop()
@@ -119,7 +127,14 @@ final class VoiceSession: Identifiable {
 
     // MARK: Changing the plan by hand
 
-    func choose(computer: VoiceCatalog.Computer) { change { $0.computer = computer.id; $0.leastBusy = false } }
+    func choose(computer: VoiceCatalog.Computer) {
+        change {
+            $0.computer = computer.id
+            $0.unknownComputer = nil
+            $0.leastBusy = false
+        }
+    }
+
     func choose(project: VoiceCatalog.Project) { change { $0.project = project.name } }
     func choose(agent: AgentChoice) { change { $0.agent = agent.id } }
     func edit(prompt: String) { change { $0.task = prompt } }
@@ -154,9 +169,14 @@ final class VoiceSession: Identifiable {
     // MARK: Hearing
 
     private func listen() async {
+        guard !cancelled else { return }
         phase = .preparing
         do {
             try await listener.start(names: catalog.vocabulary) { [weak self] text in self?.heard(text) }
+            guard !cancelled else {
+                await listener.stop()
+                return
+            }
             phase = .listening
             waitForWords(Self.patience)
         } catch {
@@ -190,12 +210,15 @@ final class VoiceSession: Identifiable {
         phase = .thinking
         await listener.stop()
         await waitForOptions()
+        guard !cancelled else { return }
         catalog = Self.catalog(of: model)
         if replyingTo == nil, !draft.text.isEmpty, !draft.sure,
            let reading = await VoiceModel.read(draft.text, catalog: catalog) {
             draft = draft.adopting(reading, catalog: catalog)
         }
+        guard !cancelled else { return }
         let answer = reply
+        let replied = replyingTo != nil
         replyingTo = nil
         reply = ""
         replan()
@@ -217,6 +240,12 @@ final class VoiceSession: Identifiable {
                     return
                 }
             }
+        }
+        // Silence to a question leaves the card as it is, rather than asking
+        // again for as long as nobody answers.
+        if replied, answer.isEmpty {
+            phase = .ready
+            return
         }
         await act()
     }
@@ -306,26 +335,36 @@ final class VoiceSession: Identifiable {
         model.fleet.machines.contains { if case .online = $0.status { true } else { false } }
     }
 
+    private func startLoadingOptions() {
+        optionsLoaded = false
+        loading = Task { [weak self] in
+            await self?.loadOptions()
+            self?.optionsLoaded = true
+        }
+    }
+
+    /// Whether a computer that is up has not said what it offers.
+    private var optionsMissing: Bool {
+        model.fleet.machines.contains { machine in
+            if case .online = machine.status { model.voiceOptions[machine.id] == nil } else { false }
+        }
+    }
+
+    /// Waits at most `optionsWait`, by polling: awaiting the load would
+    /// hold the card for as long as the slowest computer takes.
     private func waitForOptions() async {
-        // From the Action button or Siri the app may have only just
-        // launched, and no computer is reachable until a link comes up.
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: Self.optionsWait)
-        while !anyOnline, clock.now < deadline {
+        // From the Action button or Siri the app may have only just
+        // launched, and no computer is reachable until a link comes up.
+        while !anyOnline, clock.now < deadline, !cancelled {
             try? await Task.sleep(for: .milliseconds(100))
         }
         // The links came up while the person spoke, after the first load
         // found nothing online.
-        let missing = model.fleet.machines.contains { machine in
-            if case .online = machine.status { model.voiceOptions[machine.id] == nil } else { false }
-        }
-        if missing { loading = Task { [weak self] in await self?.loadOptions() } }
-        guard let loading else { return }
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await loading.value }
-            group.addTask { try? await Task.sleep(for: Self.optionsWait) }
-            await group.next()
-            group.cancelAll()
+        if optionsMissing, optionsLoaded { startLoadingOptions() }
+        while optionsMissing, !optionsLoaded, clock.now < deadline, !cancelled {
+            try? await Task.sleep(for: .milliseconds(100))
         }
     }
 
@@ -334,7 +373,7 @@ final class VoiceSession: Identifiable {
     /// Runs the plan on the card, once the person has pressed Start. It
     /// goes on if the sheet is closed; `failed` then uses an alert.
     func confirm() async {
-        guard plan.needsConfirmation, phase == .ready else { return }
+        guard plan.needsConfirmation, phase == .ready, !cancelled else { return }
         speaker.stop()
         phase = .running
         runningSince = Date()
@@ -366,10 +405,7 @@ final class VoiceSession: Identifiable {
     }
 
     private func launch(_ plan: VoicePlan.Workspace) async throws -> Launch? {
-        // Auto-accepting stays a choice made on a screen: a misheard
-        // sentence must not run tools nobody saw.
-        var start = plan.agent.flatMap { model.startChoice(for: $0.name).start }
-        start?.autoAccept = false
+        let start = plan.agent.flatMap { model.startChoice(for: $0.name).unattendedStart }
         guard let computer = plan.computer, let agent = plan.agent, let request = plan.request(start: start) else { return nil }
         let created = try await model.fleet.call(computer.id) { client, token in
             try await client.createWorkspace(request, bearer: token)

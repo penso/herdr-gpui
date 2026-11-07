@@ -7,6 +7,10 @@ public enum VoiceParser {
     private static let needsMe = [
         "needs me", "need me", "needs my attention", "need my attention", "waiting on me", "waiting for me",
         "what's waiting", "what is waiting", "anything waiting", "what's blocked", "what is blocked", "anything blocked",
+    ].map { $0.split(separator: " ").map(String.init) }
+    /// Sentences that open like this give a task, whatever it mentions.
+    private static let commanding: Set<String> = [
+        "ask", "create", "fire", "get", "have", "kick", "launch", "make", "new", "send", "spin", "start", "tell", "use", "worktree",
     ]
     private static let stopWords: Set<String> = ["stop", "cancel", "kill", "halt", "abort"]
     private static let openPhrases = ["open", "show me", "show", "go to", "jump to", "switch to", "take me to"]
@@ -50,8 +54,7 @@ public enum VoiceParser {
         }
         if let repeated = repeating(context, saying: text, words: words, catalog: catalog) { return repeated }
         let spoken = words.filter { !fillers.contains($0.text) }
-        let lower = text.lowercased()
-        if needsMe.contains(where: lower.contains) {
+        if asksWhatNeedsMe(spoken) {
             draft.intent = .needsMe
             draft.sure = true
             return draft
@@ -64,6 +67,17 @@ public enum VoiceParser {
         }
         readWorkspace(spoken, into: &draft, catalog: catalog)
         return draft
+    }
+
+    /// Whole words only: "needs memory" is not "needs me".
+    private static func asksWhatNeedsMe(_ words: [VoiceWord]) -> Bool {
+        guard let first = words.first?.text, !commanding.contains(first) else { return false }
+        let said = words.map(\.text)
+        return needsMe.contains { phrase in
+            said.indices.contains { start in
+                start + phrase.count <= said.count && Array(said[start..<(start + phrase.count)]) == phrase
+            }
+        }
     }
 
     private static let fillers: Set<String> = ["um", "uh", "er", "erm", "hmm", "okay", "ok", "so", "please", "hey"]
@@ -82,9 +96,15 @@ public enum VoiceParser {
             return true
         }
         if allowWords.contains(first) || denyWords.contains(first) {
+            // Only a bare "allow" means the one chat waiting: naming a chat
+            // that does not exist must not answer another.
+            let bare = words.count == 1 || (words.count == 2 && ["it", "that", "this"].contains(words[1].text))
             let target = chat(in: words, from: 1, catalog: catalog)
-                ?? onlyWaiting(catalog).map { (chat: $0, end: words.count, range: nil) }
-            guard let target else { return false }
+                ?? (bare ? onlyWaiting(catalog).map { (chat: $0, end: words.count, range: nil) } : nil)
+            guard let target else {
+                draft.sure = true
+                return true
+            }
             draft.answer = allowWords.contains(first) ? .allow : .deny
             apply(target, .answerChat, to: &draft, catalog: catalog)
             return true
@@ -176,6 +196,10 @@ public enum VoiceParser {
         if let id = agent?.id {
             draft.agent = id
             if let range = agent?.range { draft.marks.append(VoiceMark(range: range, slot: .agent)) }
+        } else if let unknown = unknownAgent(in: control) {
+            // Kept as said, so the plan asks instead of using another.
+            draft.agent = unknown.text
+            draft.marks.append(VoiceMark(range: unknown.range, slot: .agent))
         }
         let starts = words.first.map { starters.contains($0.text) } ?? false
         let shaped = words.contains { ["worktree", "workspace", "branch"].contains($0.text) }
@@ -322,6 +346,10 @@ public enum VoiceParser {
         // "About studio lighting" says what it is about, not where.
         let named = computers.filter { !follows(topicWords, $0.1, in: words) }
         let computer = named.max { $0.1.score < $1.1.score }
+        if computer == nil, !draft.leastBusy, everyComputer(in: words) == nil, let unknown = unknownComputer(in: words) {
+            draft.unknownComputer = unknown.text
+            draft.marks.append(VoiceMark(range: unknown.range, slot: .computer))
+        }
         if named.count > 1 { draft.fanOut = .computers(named.sorted { $0.1.range.lowerBound < $1.1.range.lowerBound }.map(\.0.id)) }
         if everyComputer(in: words) != nil { draft.fanOut = .every }
         if let computer {
@@ -345,21 +373,39 @@ public enum VoiceParser {
         readTopic(words, agent: agent, into: &draft)
     }
 
-    /// A word where a project is expected that is no project here: "in
-    /// nowhere about the login".
-    private static func unknownProject(in words: [VoiceWord]) -> VoiceWord? {
-        let ends: Set<String> = ["about", "with", "on", "and", "for", "to", "using"]
-        let notNames: Set<String> = ["new", "worktree", "branch", "workspace", "it", "this", "that", "parallel", "background"]
-        for index in words.indices where projectBefore.contains(words[index].text) {
+    private static let phraseEnds: Set<String> = ["about", "with", "on", "in", "and", "for", "to", "using"]
+    private static let notNames: Set<String> = [
+        "new", "worktree", "branch", "workspace", "it", "this", "that", "parallel", "background", "them", "top",
+    ]
+
+    /// A single word after one of `before` that ends a phrase, which so has
+    /// the shape of a name: "in nowhere about the login", "on zephyr".
+    private static func nameShaped(after before: Set<String>, in words: [VoiceWord], ignoring: Set<String> = []) -> VoiceWord? {
+        for index in words.indices where before.contains(words[index].text) {
             var name = index + 1
             while name < words.count, skipped.contains(words[name].text) { name += 1 }
-            guard name < words.count, !notNames.contains(words[name].text) else { continue }
+            guard name < words.count, !notNames.contains(words[name].text), !ignoring.contains(words[name].text) else { continue }
             let next = name + 1
-            if next == words.count || ends.contains(words[next].text) || projectAfter.contains(words[next].text) {
+            if next == words.count || phraseEnds.contains(words[next].text) || projectAfter.contains(words[next].text) {
                 return words[name]
             }
         }
         return nil
+    }
+
+    private static func unknownProject(in words: [VoiceWord]) -> VoiceWord? {
+        nameShaped(after: projectBefore, in: words)
+    }
+
+    private static func unknownComputer(in words: [VoiceWord]) -> VoiceWord? {
+        nameShaped(after: ["on", "at"], in: words)
+    }
+
+    /// "Start zorro on studio": no agent has that name, so none is chosen
+    /// for it.
+    private static func unknownAgent(in words: [VoiceWord]) -> VoiceWord? {
+        let ordinary: Set<String> = ["working", "work", "up", "over", "fresh", "tests", "it", "chat", "session"]
+        return nameShaped(after: ["start", "launch", "with", "using", "use"], in: words, ignoring: ordinary)
     }
 
     private static let topicWords: Set<String> = ["about", "for", "called", "named", "regarding"]
@@ -412,17 +458,28 @@ public enum VoiceParser {
         var edited = draft
         let words = VoiceNames.words(text)
         let lower = words.map(\.text).joined(separator: " ")
-        if let agent = agentSpot(in: words, catalog: catalog) { edited.agent = agent.id }
+        if let agent = agentSpot(in: words, catalog: catalog) {
+            edited.agent = agent.id
+        } else if let unknown = unknownAgent(in: words) {
+            edited.agent = unknown.text
+        }
         if let spot = catalog.computers.compactMap({ computer in
             VoiceNames.find(computer.name, in: words, partly: true).map { (computer.id, $0.score) }
         }).max(by: { $0.1 < $1.1 }) {
             edited.computer = spot.0
+            edited.unknownComputer = nil
             edited.leastBusy = false
+        } else if let unknown = unknownComputer(in: words) {
+            // The old computer is not what was asked for any more.
+            edited.computer = nil
+            edited.unknownComputer = unknown.text
         }
         if let project = catalog.projectNames.compactMap({ name in
             VoiceNames.find(name, in: words).map { (name, $0.score) }
         }).max(by: { $0.1 < $1.1 }) {
             edited.project = project.0
+        } else if let unknown = unknownProject(in: words) {
+            edited.project = unknown.text
         }
         if lower.contains("no worktree") || lower.contains("without a worktree") {
             edited.worktree = false
@@ -444,10 +501,11 @@ public enum VoiceParser {
 }
 
 extension String {
-    /// A prompt as spoken, without fillers or trailing punctuation.
+    /// A prompt as spoken, without hesitation sounds or trailing
+    /// punctuation. Only sounds: "like" and "I guess" can be meant.
     var trimmedPrompt: String {
         var text = self
-        for filler in [" um ", " uh ", " er ", " I guess ", " like "] {
+        for filler in [" um ", " uh ", " er ", " erm "] {
             text = text.replacingOccurrences(of: filler, with: " ", options: .caseInsensitive)
         }
         return text.trimmingCharacters(in: CharacterSet(charactersIn: " ,.;:\n"))

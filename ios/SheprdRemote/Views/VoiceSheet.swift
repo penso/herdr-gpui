@@ -220,6 +220,10 @@ private struct VoiceWorkspaceCard: View {
         session.firstSentence && !said ? nil : value
     }
 
+    private var asksComputer: Bool {
+        if case .unknownComputer = plan.question { true } else { false }
+    }
+
     private var asksProject: Bool {
         if case .project = plan.question { true } else { false }
     }
@@ -231,7 +235,8 @@ private struct VoiceWorkspaceCard: View {
                 label: "Computer",
                 value: shown(plan.computer?.name, said: session.draft.computer != nil),
                 detail: computerDetail,
-                tint: VoiceSlot.computer.tint
+                tint: VoiceSlot.computer.tint,
+                asking: asksComputer
             ) {
                 ForEach(session.catalog.computers.filter(\.online)) { computer in
                     Button(computer.name) { session.choose(computer: computer) }
@@ -290,6 +295,13 @@ private struct VoiceWorkspaceCard: View {
                 HStack(spacing: 8) {
                     ForEach(choices) { project in
                         Button(project.name) { session.choose(project: project) }.buttonStyle(.glass)
+                    }
+                }
+            }
+            if case .unknownComputer = question {
+                HStack(spacing: 8) {
+                    ForEach(session.catalog.computers.filter(\.online).prefix(4)) { computer in
+                        Button(computer.name) { session.choose(computer: computer) }.buttonStyle(.glass)
                     }
                 }
             }

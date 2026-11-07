@@ -36,16 +36,16 @@ enum VoiceNames {
         while index < text.endIndex {
             let next = text.index(after: index)
             let kept = text[index].isLetter || text[index].isNumber
-                || (text[index] == "'" && start != nil)
+                || ((text[index] == "'" || text[index] == "’") && start != nil)
             if kept {
                 if start == nil { start = index }
             } else if let from = start {
-                plain.append(VoiceWord(text: text[from..<index].lowercased(), range: from..<index))
+                plain.append(VoiceWord(text: folded(text[from..<index]), range: from..<index))
                 start = nil
             }
             index = next
         }
-        if let start { plain.append(VoiceWord(text: text[start...].lowercased(), range: start..<text.endIndex)) }
+        if let start { plain.append(VoiceWord(text: folded(text[start...]), range: start..<text.endIndex)) }
         return mergingCompounds(mergingDigits(plain))
     }
 
@@ -60,6 +60,11 @@ enum VoiceNames {
             }
         }
         return merged
+    }
+
+    /// The transcriber writes a curly apostrophe, typed text a straight one.
+    private static func folded(_ word: Substring) -> String {
+        word.lowercased().replacingOccurrences(of: "’", with: "'")
     }
 
     private static func mergingDigits(_ words: [VoiceWord]) -> [VoiceWord] {
@@ -179,6 +184,12 @@ enum VoiceNames {
             }
         }
         return best
+    }
+
+    /// Whether `text` is `name` and nothing else.
+    static func isAll(of text: String, _ name: String) -> Bool {
+        let words = words(text)
+        return find(name, in: words)?.words == 0..<words.count
     }
 
     /// Words a part of a name cannot be recognized by.

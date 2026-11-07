@@ -76,23 +76,26 @@ struct StartAgentIntent: AppIntent {
         try AppLockError.check()
         try await requestConfirmation(actionName: .go, dialog: "Start \(agent) on \(computer.name) in \(project)?")
         let target = computer
-        let details = "\(agent) \(project)"
+        let wantedProject = project
+        let wantedAgent = agent
         let topic = topic
         let prompt = prompt
         let created = try await BackgroundCommands.createWorkspace(computer: target.id) { options in
-            let catalog = VoiceCatalog(
-                computers: [VoiceCatalog.Computer(id: target.id, name: target.name, online: true, options: options)],
-                chats: []
-            )
-            var draft = VoiceDraft(text: details)
+            let computer = VoiceCatalog.Computer(id: target.id, name: target.name, online: true, options: options)
+            // Each is what was given for it, looked up on its own list.
+            guard let project = computer.project(named: wantedProject), let agent = computer.agent(named: wantedAgent) else {
+                throw StartAgentError.notFound
+            }
+            var draft = VoiceDraft(text: prompt)
             draft.intent = .newWorkspace
             draft.computer = target.id
+            draft.project = project.name
+            draft.agent = agent.id
             draft.task = prompt
             draft.topic = topic
             draft.worktree = topic != nil
-            draft = VoiceParser.edit(draft, saying: details, catalog: catalog)
+            let catalog = VoiceCatalog(computers: [computer], chats: [])
             guard case let .workspace(plan) = VoicePlan.resolve(draft, catalog: catalog),
-                  draft.project != nil, draft.agent != nil,
                   let request = plan.request(start: nil)
             else { throw StartAgentError.notFound }
             return request

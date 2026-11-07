@@ -46,6 +46,9 @@ public struct VoiceDraft: Hashable, Sendable {
     public var sure = false
     /// `VoiceCatalog.Computer.id`.
     public var computer: String?
+    /// A computer asked for by a name no computer has. The plan asks about
+    /// it: using another would run on a computer nobody named.
+    public var unknownComputer: String?
     public var leastBusy = false
     public var fanOut: VoiceFanOut?
     public var project: String?
