@@ -100,7 +100,8 @@ Options:
   --bind all|ADDRESS       Listen on every interface (default) or one address
   --cert FILE --key FILE   Use this certificate chain and key instead of the
                            daemon's own certificate authority
-  --herdr-socket PATH      The Herdr daemon's client socket (default: discovered)
+  --herdr-socket PATH      The Herdr daemon's client socket (default: discovered);
+                           other running Herdr sessions are followed too
   --core-socket PATH --core-session NAME
                            The desktop core endpoint (default: discovered)
   --chat-dir DIR           Where chat sockets live (default: discovered)

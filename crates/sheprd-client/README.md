@@ -48,6 +48,7 @@ ConnectTarget::socket_path(&self) -> Result<PathBuf>
 Stream  // std::os::unix::net::UnixStream, or an overlapped named pipe on Windows
 session_socket(config_dir: &Path, name: &str) -> Result<PathBuf>
 list_local_sessions(development: bool) -> Result<Vec<LocalSession>>
+list_running_sessions_in(dir: &Path) -> Result<Vec<LocalSession>>
 list_remote_sessions(target: &str) -> Result<Vec<RemoteSession>>
 delete_local_session(executable: &Path, name: &str) -> Result<()>
 delete_remote_session(target: &str, name: &str) -> Result<()>

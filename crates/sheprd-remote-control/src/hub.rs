@@ -11,6 +11,7 @@ mod core;
 mod daemon;
 mod layout;
 mod recency;
+mod sessions;
 
 pub(crate) use api::ApiMethod;
 pub(crate) use chat::{Chat, Event, Summary, View};
@@ -84,13 +85,17 @@ pub(crate) struct Hub {
     chats: Mutex<HashMap<String, (EndpointId, Arc<Chat>)>>,
     core: Option<Arc<core::Source>>,
     layout: watch::Receiver<Arc<Layout>>,
+    /// The primary session's own layout, to tell whether it answers.
+    primary: watch::Receiver<Arc<Layout>>,
     program: Option<PathBuf>,
+    sessions: Arc<sessions::Sessions>,
 }
 
 impl Hub {
     /// Connects to the local daemon at `socket` (discovered when `None`)
-    /// and keeps chat connections, found in `chat_dir`, in step with its
-    /// layout. Must run inside a Tokio runtime.
+    /// and every other running Herdr 1 session of this user, and keeps chat
+    /// connections, found in `chat_dir`, in step with their layout. Must run
+    /// inside a Tokio runtime.
     pub(crate) fn start(
         socket: Option<PathBuf>,
         chat_dir: Option<PathBuf>,
@@ -99,12 +104,26 @@ impl Hub {
     ) -> std::io::Result<Arc<Self>> {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));
         let api = api::Api::new(socket.clone());
+        let primary_socket = socket
+            .clone()
+            .or_else(|| ConnectTarget::Local.socket_path().ok());
         let target = socket.map_or(ConnectTarget::Local, ConnectTarget::Socket);
         let (daemon_sender, daemon_layout) = watch::channel(Arc::new(Layout::default()));
         let daemon = daemon::Daemon::start(daemon_sender, target.clone())?;
         let (core_sender, core_layout) = watch::channel(Arc::new(Layout::default()));
         let core = core::Source::start(core_sender, &target, core_endpoint, state_dir)?;
-        tokio::spawn(core::merge_sources(sender, daemon_layout, core_layout));
+        let (base_sender, base_layout) = watch::channel(Arc::new(Layout::default()));
+        tokio::spawn(core::merge_sources(
+            base_sender,
+            daemon_layout.clone(),
+            core_layout,
+        ));
+        let sessions = sessions::Sessions::start(primary_socket);
+        tokio::spawn(sessions::merge_sources(
+            sender,
+            base_layout,
+            sessions.clone(),
+        ));
         let (all, _) = broadcast::channel(ALL_QUEUE);
         let hub = Arc::new(Self {
             _daemon: daemon,
@@ -114,7 +133,9 @@ impl Hub {
             chats: Mutex::new(HashMap::new()),
             core: Some(core),
             layout,
+            primary: daemon_layout,
             program: locate_program(),
+            sessions,
         });
         let follower = hub.clone();
         tokio::spawn(async move { follower.follow().await });
@@ -149,6 +170,25 @@ impl Hub {
         Arc::new(hub)
     }
 
+    /// An offline hub whose primary does not answer, beside one session
+    /// `name` listing `layout` whose API calls go to the socket beside
+    /// `client_socket`.
+    #[cfg(all(test, unix))]
+    pub(crate) fn offline_with_session(
+        layout: Layout,
+        name: &str,
+        client_socket: PathBuf,
+    ) -> Arc<Self> {
+        let merged = sessions::merge(
+            &Layout::default(),
+            &[(name.to_owned(), Arc::new(layout.clone()))],
+        );
+        let mut hub = Self::offline_in(merged, None, None);
+        hub.primary = watch::channel(Arc::new(Layout::default())).1;
+        hub.sessions = sessions::Sessions::offline_with(name, layout, client_socket);
+        Arc::new(hub)
+    }
+
     #[cfg(test)]
     fn offline_in(
         layout: Layout,
@@ -168,8 +208,10 @@ impl Hub {
             chat_dir,
             chats: Mutex::new(HashMap::new()),
             core: None,
+            primary: receiver.clone(),
             layout: receiver,
             program: None,
+            sessions: sessions::Sessions::offline(),
         }
     }
 
@@ -355,12 +397,39 @@ impl Hub {
                 .await
                 .map_err(|_| core::Error::Disconnected)?;
         }
+        if let Some((session, params)) = self.session_for(method, &params)? {
+            let mut answer = session.api.call(method, params).await?;
+            sessions::prefix_answer(&mut answer, &session.name);
+            return Ok(answer);
+        }
         match self.api.call(method, params).await {
             Err(Error::NotConnected) if self.core.as_ref().is_some_and(|core| core.connected()) => {
                 Err(core::Error::Unsupported.into())
             }
             result => result,
         }
+    }
+
+    /// The named session a request is for, with its ids as that session
+    /// knows them; `None` for the primary.
+    fn session_for(
+        &self,
+        method: ApiMethod,
+        params: &Value,
+    ) -> Result<Option<(Arc<sessions::Session>, Value)>> {
+        if let Some((name, params)) = sessions::owner(params)? {
+            let session = self.sessions.get(&name).ok_or(Error::NotConnected)?;
+            return Ok(Some((session, params)));
+        }
+        // A new workspace has no id to route by: it goes to the primary, or
+        // to a session when only sessions answer.
+        if method == ApiMethod::WorkspaceCreate && !self.primary.borrow().connected {
+            return Ok(self
+                .sessions
+                .first_connected()
+                .map(|session| (session, params.clone())));
+        }
+        Ok(None)
     }
 
     /// Starts connections for new chat panes and closes those whose pane
