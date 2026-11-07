@@ -5,6 +5,7 @@
 use super::{
     DEVICE_FOOTER_HEIGHT, HOST_ARROW_WIDTH, STATUS_WIDTH, SidebarDrag,
     agents::Indicators,
+    agents::groups::agents_group,
     agents_sort,
     cell::{Cell, Fold, RowContext, RowData, WorkspaceRow, layout_for},
     label_text, layout, line_height,
@@ -111,8 +112,9 @@ impl SheprdWindow {
         let mut agent_count = 0;
         // The focused agent's row when agents nest under their workspaces.
         let mut nested_focus = None;
-        // A plugin view hid every agent, rather than there being none.
-        let mut filtered = false;
+        // A plugin view or a picked group hid every agent, rather than there
+        // being none.
+        let mut filtered = self.agent_group_filter().is_some();
         // Child positions of the highlighted rows, for the one-time reveal below.
         // Agent rows are counted by `agent_count`, which indexes that list.
         let mut space_rows = 0usize;
@@ -857,13 +859,21 @@ impl SheprdWindow {
                         })
                         .min_h_0()
                         .overflow_hidden()
-                        // A plugin view on any listed host filters the
-                        // rows, so the header stays to say so.
+                        // A plugin view on any listed host, or a picked
+                        // group, filters the rows, so the header stays to
+                        // say so.
                         .when(self.config.show_agents_header || filtered, |section| {
                             section.child(
                                 header("agents", &fl!("sidebar-header-agents"), font, theme, look)
                                     .justify_between()
-                                    .child(agents_sort(self, cx)),
+                                    .child(
+                                        div()
+                                            .row()
+                                            .min_w_0()
+                                            .gap(px(look.density.gap()))
+                                            .children(agents_group(self, cx))
+                                            .child(agents_sort(self, cx)),
+                                    ),
                             )
                         })
                         .child(agents)

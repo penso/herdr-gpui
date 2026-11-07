@@ -1,16 +1,26 @@
 //! Showing native pages to match what the window draws. On macOS a page lies
 //! beneath the window's drawing, so every live page shows, and the window's
-//! menus, tooltips, toasts, and file-transfer card draw over it. On Windows a
-//! page is a child window above the window's drawing, so a page that one of
-//! those reaches is hidden while it shows. Only Windows builds carry that.
+//! menus, tooltips, toasts, notice cards, and file-transfer card draw over it.
+//! On Windows a page is a child window above the window's drawing, so a page
+//! that one of those reaches is hidden while it shows. Only Windows builds
+//! carry that.
 
 use crate::SheprdWindow;
 #[cfg(windows)]
 use crate::browser::TabId;
 use gpui::*;
 
-/// Where the window's toasts and file-transfer card drew. They draw after
-/// the pages are presented, so each frame presents pages around where they
+/// What drew over the pages. Each is told apart so that one that closes is
+/// left out at once, even while another still shows.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Overlay {
+    Toasts,
+    FileTransfer,
+    Notice(crate::window::NoticeCard),
+}
+
+/// Where the window's toasts, notice cards, and file-transfer card drew. They
+/// draw after the pages are presented, so each frame presents pages around where they
 /// drew the frame before, and one that draws anywhere else asks for another
 /// frame. One that no longer shows is left out at once, from the window's
 /// state, so its page comes back without waiting a frame.
@@ -18,7 +28,7 @@ use gpui::*;
 #[derive(Default)]
 pub(in crate::browser) struct Overlays {
     /// Drawn since the pages were last presented.
-    drawn: Vec<Bounds<Pixels>>,
+    drawn: Vec<(Overlay, Bounds<Pixels>)>,
     /// What the pages were last presented around.
     presented: Vec<Bounds<Pixels>>,
 }
@@ -99,8 +109,8 @@ impl SheprdWindow {
             (None, Some(band)) => Some(Cover::Panel(band)),
             (None, None) => None,
         };
-        // Toasts and the file-transfer card show over the groups, and would
-        // be hidden, and unclickable, under a page they reach.
+        // Toasts, notice cards, and the file-transfer card show over the
+        // groups, and would be hidden, and unclickable, under a page they reach.
         let overlays = self.present_overlays();
         let drawn = self.browser.pages.drawn();
         let drawn = drawn.borrow();
@@ -112,7 +122,7 @@ impl SheprdWindow {
     }
 
     /// Whether something the window draws hides pages: an open menu, a
-    /// status bar tooltip, a toast, or the file-transfer card.
+    /// status bar tooltip, a toast, a notice card, or the file-transfer card.
     #[cfg(all(test, windows))]
     pub(in crate::browser) fn pages_covered(&self) -> bool {
         self.menu.page.is_some()
@@ -132,18 +142,18 @@ impl SheprdWindow {
     fn present_overlays(&self) -> Vec<Bounds<Pixels>> {
         let mut overlays = self.browser.overlays.borrow_mut();
         let drawn = std::mem::take(&mut overlays.drawn);
-        overlays.presented = if self.overlays_shown() {
-            drawn
-        } else {
-            Vec::new()
-        };
+        overlays.presented = drawn
+            .into_iter()
+            .filter(|(overlay, _)| self.overlay_shown(*overlay))
+            .map(|(_, bounds)| bounds)
+            .collect();
         overlays.presented.clone()
     }
 
-    /// Records where a stack of toasts or the file-transfer card draws,
-    /// filling it, so the pages it reaches hide while it shows. Only Windows
+    /// Records where a stack of toasts, a notice card, or the file-transfer
+    /// card draws, filling it, so the pages it reaches hide while it shows. Only Windows
     /// records it: elsewhere no page draws above the window.
-    pub(crate) fn overlay_probe(&self) -> Option<impl IntoElement> {
+    pub(crate) fn overlay_probe(&self, overlay: Overlay) -> Option<impl IntoElement> {
         #[cfg(windows)]
         {
             let overlays = self.browser.overlays.clone();
@@ -151,8 +161,8 @@ impl SheprdWindow {
                 canvas(
                     move |bounds, window, _| {
                         let mut overlays = overlays.borrow_mut();
-                        if !overlays.drawn.contains(&bounds) {
-                            overlays.drawn.push(bounds);
+                        if !overlays.drawn.contains(&(overlay, bounds)) {
+                            overlays.drawn.push((overlay, bounds));
                         }
                         // Pages were presented without it there: present
                         // them again now that it is known.
@@ -167,7 +177,10 @@ impl SheprdWindow {
             )
         }
         #[cfg(not(windows))]
-        None::<Div>
+        {
+            let _ = overlay;
+            None::<Div>
+        }
     }
 
     /// Notes whether the pointer is over the status bar, whose tooltips show

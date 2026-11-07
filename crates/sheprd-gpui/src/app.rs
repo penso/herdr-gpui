@@ -459,7 +459,7 @@ pub(crate) fn run() -> std::process::ExitCode {
     };
     // Whether the launcher is installed is read once here, never while a window opens.
     let taskbar = crate::taskbar::Taskbar::load();
-    gpui_platform::application()
+    crate::composition::application(appearance.dark.config.backdrop.translucent())
         .with_assets(icons::Icons)
         .run(move |cx| {
             let window_count = window_state.as_ref().map_or(1, |state| state.count());

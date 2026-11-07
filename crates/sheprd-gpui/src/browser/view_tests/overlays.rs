@@ -1,6 +1,6 @@
 //! On Windows native pages draw above everything the window paints, so a
-//! page that a toast or the file-transfer card reaches hides while it shows,
-//! as for a menu; a page it does not reach keeps showing.
+//! page that a toast, a notice card, or the file-transfer card reaches hides
+//! while it shows, as for a menu; a page it does not reach keeps showing.
 use super::*;
 use crate::{browser::view::present::covered, menu::Cover};
 use gpui::{Bounds, point, px, size};
@@ -64,4 +64,70 @@ fn a_toast_covers_the_pages_it_reaches_while_it_shows(cx: &mut gpui::TestAppCont
         assert!(view.presented_overlays().is_empty());
         assert!(!view.pages_covered());
     });
+}
+
+#[gpui::test]
+fn a_notice_covers_the_pages_it_reaches_until_it_is_dismissed(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.simulate_resize(size(px(1400.), px(800.)));
+    draw(cx);
+    assert!(view.read_with(cx, |view, _| view.presented_overlays().is_empty()));
+
+    view.update(cx, |view, cx| {
+        view.gui_config_diagnostic.sync(Some("a config warning"));
+        cx.notify();
+    });
+    draw(cx);
+    draw(cx);
+    let card = cx.debug_bounds("gui-config-diagnostic").unwrap();
+    let presented = view.read_with(cx, |view, _| view.presented_overlays());
+    assert_eq!(presented.len(), 1, "{presented:?}");
+    // Measured inside the card's border, not across the row it sits in.
+    assert!(
+        card.contains(&presented[0].origin),
+        "{presented:?} {card:?}"
+    );
+    assert!(card.size.width - presented[0].size.width <= px(2.));
+    assert!(card.size.height - presented[0].size.height <= px(2.));
+    assert!(view.read_with(cx, |view, _| view.pages_covered()));
+
+    // Once it is dismissed, pages show again in the very next frame.
+    view.update(cx, |view, cx| {
+        view.gui_config_diagnostic.sync(None);
+        cx.notify();
+    });
+    draw(cx);
+    view.read_with(cx, |view, _| {
+        assert!(view.presented_overlays().is_empty());
+        assert!(!view.pages_covered());
+    });
+}
+
+#[gpui::test]
+fn a_closed_toast_leaves_at_once_while_a_notice_stays(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.simulate_resize(size(px(1400.), px(800.)));
+    view.update(cx, |view, cx| {
+        view.config.notifications.delay_seconds = 3600;
+        view.show_toast_preview(SemanticNotificationKind::Finished, cx);
+        view.gui_config_diagnostic.sync(Some("a config warning"));
+        cx.notify();
+    });
+    draw(cx);
+    draw(cx);
+    let both = view.read_with(cx, |view, _| view.presented_overlays());
+    assert_eq!(both.len(), 2, "{both:?}");
+
+    view.update(cx, |view, _| {
+        for endpoint in &mut view.endpoints {
+            endpoint.toasts.entries.clear();
+        }
+    });
+    // No later frame is asked for, so this one must already leave it out, or
+    // a page only the toast reached would stay hidden.
+    draw(cx);
+    let card = cx.debug_bounds("gui-config-diagnostic").unwrap();
+    let presented = view.read_with(cx, |view, _| view.presented_overlays());
+    assert_eq!(presented.len(), 1, "{presented:?}");
+    assert!(card.contains(&presented[0].origin));
 }

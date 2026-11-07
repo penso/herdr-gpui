@@ -119,11 +119,13 @@ pub(crate) fn install(cx: &mut App) {
     freedesktop::connect(cx);
 }
 
-/// Everything but the Linux session bus, which tests must not reach.
+/// Everything but the Linux session bus and the Windows shell, which tests
+/// must not reach: on a computer with the app installed, knowing the shell
+/// sends a test's notifications to the user as real toasts.
 pub(crate) fn install_registry(cx: &mut App) {
     cx.set_global(Registry::default());
     #[cfg(windows)]
-    {
+    if !cfg!(test) {
         let prepare = cx.background_executor().spawn(async { toast::prepare() });
         cx.spawn(async move |cx| {
             let shell = prepare.await;
@@ -385,6 +387,9 @@ mod tests {
             window.dispatch_action(Box::new(crate::actions::ShowSystemNotificationPreview), cx);
         });
         cx.run_until_parked();
+        // Only GPUI's test platform may take this, never the real shell.
+        #[cfg(windows)]
+        cx.update(|_, cx| assert!(cx.global::<super::Registry>().shell.is_none()));
         // Delivery is off in the fixture: the preview ignores it, but waits.
         assert!(cx.shown_system_notifications().is_empty());
         cx.executor().advance_clock(PREVIEW_DELAY);
