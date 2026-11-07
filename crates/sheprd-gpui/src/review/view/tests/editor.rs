@@ -80,6 +80,8 @@ fn a_clicked_line_opens_while_it_is_in_view(cx: &mut gpui::TestAppContext) {
     view.read_with(cx, |view, _| assert_eq!(opens(view), Some(150)));
 }
 
+// Its message shows the path as Unix joins it.
+#[cfg(unix)]
 #[gpui::test]
 fn e_on_a_clicked_file_in_the_list_opens_that_file(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx, None);
@@ -103,6 +105,8 @@ fn e_on_a_clicked_file_in_the_list_opens_that_file(cx: &mut gpui::TestAppContext
     });
 }
 
+// The button is only drawn where the editor can start; see `SUPPORTED`.
+#[cfg(unix)]
 #[gpui::test]
 fn the_header_button_opens_its_file_but_a_deleted_file_has_none(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx, None);

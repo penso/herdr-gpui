@@ -22,12 +22,17 @@ pub(crate) struct Return {
     /// answer to a split can arrive first, and a pane not yet listed has
     /// not closed.
     pub(super) seen_in: Option<String>,
+    /// Whether that tab was the one in use at the last snapshot with the
+    /// pane open. Quitting a tab's last pane empties the tab, so the snapshot
+    /// after it cannot tell that from the user having left.
+    pub(super) in_use: bool,
 }
 
 /// Follows `returns` through `snapshot` of `endpoint`, forgetting those of
 /// an older boot, and answers with the page to show: the last whose pane
-/// closed while its terminal tab was still the one in use. A pane closed
-/// from elsewhere pulls nobody away from what they moved on to.
+/// closed while its terminal tab was still the one in use, or took that tab
+/// with it. A pane closed from elsewhere pulls nobody away from what they
+/// moved on to.
 pub(super) fn settle(
     returns: &mut Vec<Return>,
     endpoint: &str,
@@ -50,13 +55,15 @@ pub(super) fn settle(
             .iter()
             .find(|pane| pane.pane_id == entry.pane_id);
         if let Some(pane) = open {
+            entry.in_use = focused_tab == Some(pane.tab_id.as_str());
             entry.seen_in = Some(pane.tab_id.clone());
             return true;
         }
         let Some(tab) = entry.seen_in.as_deref() else {
             return true;
         };
-        if focused_tab == Some(tab) {
+        let emptied = !snapshot.panes.iter().any(|pane| pane.tab_id == tab);
+        if focused_tab == Some(tab) || (entry.in_use && emptied) {
             page = Some(entry.page);
         }
         false
@@ -89,6 +96,7 @@ impl SheprdWindow {
             pane_id: pane.to_owned(),
             page,
             seen_in: None,
+            in_use: false,
         });
     }
 

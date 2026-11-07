@@ -34,6 +34,7 @@ fn entry(pane: &str, page: TabId) -> Return {
         pane_id: pane.into(),
         page,
         seen_in: None,
+        in_use: false,
     }
 }
 
@@ -65,6 +66,32 @@ fn a_pane_closing_after_the_user_moved_on_pulls_nobody_back() {
     let elsewhere = shown("boot", &[("other", "u"), ("agent", "t")]);
     assert_eq!(settle(&mut returns, "local", &elsewhere), None);
     assert!(returns.is_empty(), "it does not fire later either");
+}
+
+#[test]
+fn quitting_the_last_pane_of_the_tab_in_use_brings_the_page_back() {
+    let mut returns = vec![entry("editor", page())];
+    settle(
+        &mut returns,
+        "local",
+        &shown("boot", &[("editor", "t"), ("other", "u")]),
+    );
+    let emptied = shown("boot", &[("other", "u")]);
+    assert_eq!(settle(&mut returns, "local", &emptied), Some(page()));
+    assert!(returns.is_empty());
+}
+
+#[test]
+fn a_last_pane_closed_after_the_user_left_its_tab_pulls_nobody_back() {
+    let mut returns = vec![entry("editor", page())];
+    settle(
+        &mut returns,
+        "local",
+        &shown("boot", &[("other", "u"), ("editor", "t")]),
+    );
+    let emptied = shown("boot", &[("other", "u")]);
+    assert_eq!(settle(&mut returns, "local", &emptied), None);
+    assert!(returns.is_empty());
 }
 
 #[test]
