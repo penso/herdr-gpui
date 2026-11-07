@@ -27,7 +27,7 @@
 //! `summary` in the finished one, and `previous` (the steps before `step`)
 //! once there are some; every optional key may be absent.
 
-use super::{Error, Result};
+use super::{Error, Priority, Push, PushType, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sheprd_chat_protocol::PermissionOption;
@@ -37,7 +37,7 @@ pub(crate) const MAX_BUTTONS: usize = 3;
 /// Steps shown above the current one.
 pub(crate) const MAX_PREVIOUS: usize = 2;
 /// The largest payload APNs accepts for a Live Activity.
-pub(crate) const MAX_PAYLOAD: usize = 4096;
+pub(crate) use sheprd_apns::MAX_PAYLOAD;
 /// The Swift type push-to-start names.
 pub(crate) const ATTRIBUTES_TYPE: &str = "ChatActivityAttributes";
 
@@ -159,6 +159,20 @@ impl Live {
     /// convenient moment.
     pub(crate) fn urgent(&self) -> bool {
         self.state.phase == Phase::Question
+    }
+
+    /// The push for this change at `now_s` (seconds since the Unix epoch).
+    pub(crate) fn push(&self, now_s: u64) -> Result<Push> {
+        Ok(Push {
+            body: self.payload(now_s)?,
+            collapse_id: None,
+            priority: if self.urgent() {
+                Priority::High
+            } else {
+                Priority::Low
+            },
+            push_type: PushType::LiveActivity,
+        })
     }
 
     /// The JSON payload, sent at `timestamp_s` (seconds since the Unix

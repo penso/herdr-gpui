@@ -1,5 +1,5 @@
 use super::*;
-use crate::apns::config::{apple_id, bundle_id, config_path, dir, key_path};
+use crate::config::{apple_id, bundle_id, config_path, key_path};
 use p256::pkcs8::{EncodePrivateKey as _, LineEnding};
 use std::fs;
 
@@ -102,11 +102,11 @@ fn unknown_fields_and_bad_identifiers_are_refused() {
     let error = Config::load(state.path()).unwrap_err();
     assert!(matches!(error, Error::ConfigFormat { .. }), "{error:?}");
 
-    let bad = super::super::config::from_parts("abc", KEY_ID, TOPIC, false, key()).unwrap_err();
+    let bad = Config::from_parts("abc", KEY_ID, TOPIC, false, key()).unwrap_err();
     assert!(matches!(bad, Error::ConfigField { field: "team_id" }));
-    let bad = super::super::config::from_parts(TEAM, "KEY", TOPIC, false, key()).unwrap_err();
+    let bad = Config::from_parts(TEAM, "KEY", TOPIC, false, key()).unwrap_err();
     assert!(matches!(bad, Error::ConfigField { field: "key_id" }));
-    let bad = super::super::config::from_parts(TEAM, KEY_ID, "a/b", false, key()).unwrap_err();
+    let bad = Config::from_parts(TEAM, KEY_ID, "a/b", false, key()).unwrap_err();
     assert!(matches!(bad, Error::ConfigField { field: "topic" }));
 }
 

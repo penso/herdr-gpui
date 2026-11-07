@@ -2,6 +2,8 @@
 //! call for is paced per chat, then sent to every device that registered
 //! tokens: the push-to-start token to start an activity, the activity's own
 //! token to update or end it. A token APNs calls invalid is forgotten.
+//! What each device gets is cut to what the computer and that phone allow
+//! just before sending, so a held update follows the phone's latest choice.
 
 use super::notifier::waiting;
 use crate::{
@@ -98,7 +100,10 @@ impl LiveActivities {
             // a start replaces.
             self.held.remove(&key);
             match route(&live, &registration) {
-                Route::Send(token) => send(state, key.0, token.clone(), live.clone()),
+                Route::Send(token) => {
+                    let shown = shown(state, live.clone(), &registration);
+                    send(state, key.0, token.clone(), shown);
+                }
                 Route::Hold => {
                     self.held.insert(
                         key,
@@ -126,20 +131,31 @@ impl LiveActivities {
             if now.saturating_sub(held.since_ms) > HOLD_MS {
                 return false;
             }
-            let token = registrations
+            let found = registrations
                 .iter()
                 .find(|(registered, _)| registered == device)
-                .and_then(|(_, registration)| registration.activity(pane));
-            let Some(token) = token else {
+                .and_then(|(_, registration)| Some((registration, registration.activity(pane)?)));
+            let Some((registration, token)) = found else {
                 return true;
             };
             let mut live = held.live.clone();
             live.state.waiting = waiting;
             live.state.working = working;
-            send(state, device.clone(), token.clone(), live);
+            send(
+                state,
+                device.clone(),
+                token.clone(),
+                shown(state, live, registration),
+            );
             false
         });
     }
+}
+
+/// `live` as the device behind `registration` may see it.
+fn shown(state: &State, live: Live, registration: &Registration) -> Live {
+    let detail = state.live_activities.stricter(registration.activity_detail);
+    live.redacted(state.privacy, detail)
 }
 
 /// What to do with an update for one device.
@@ -208,12 +224,16 @@ fn send(state: &Arc<State>, device: DeviceId, token: DeviceToken, live: Live) {
         let Some(sender) = &state.apns else {
             return;
         };
-        let outcome = sender.send(&token, &live, now_ms() / 1000).await;
+        let now_s = now_ms() / 1000;
+        let outcome = match live.push(now_s) {
+            Ok(push) => sender.post(&token, &push, now_s).await.ok(),
+            Err(_) => None,
+        };
         let ended = matches!(live.event, Event::End { .. });
-        if !matches!(outcome, Ok(Outcome::Gone)) && !ended {
+        let gone = outcome == Some(Outcome::Gone);
+        if !gone && !ended {
             return;
         }
-        let gone = matches!(outcome, Ok(Outcome::Gone));
         let pane = live.pane.clone();
         let _ = tokio::task::spawn_blocking(move || {
             let mut auth = state.auth();

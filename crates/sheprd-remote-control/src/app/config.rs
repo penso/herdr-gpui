@@ -9,6 +9,7 @@
 //! certificate = "own"          # or { cert = "/path/cert.pem", key = "/path/key.pem" }
 //! keep_running = true          # the daemon outlives Sheprd
 //! notifications = "generic"    # or "excerpt": a short excerpt in each push
+//! live_activities = "detailed" # or "generic": no chat names or steps
 //! device_idle_days = 30         # 0 never forgets a device
 //! presence = false             # hold phone alerts while its owner is at this Mac
 //! ```
@@ -17,7 +18,7 @@
 //! private state directory.
 
 use crate::app::Error;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{fmt, net::IpAddr, ops::RangeInclusive, path::PathBuf};
 
 pub const DEFAULT_PORT: u16 = 7443;
@@ -38,6 +39,7 @@ pub struct RemoteConfig {
     pub enabled: bool,
     /// Whether the daemon keeps serving phones after Sheprd quits.
     pub keep_running: bool,
+    pub live_activities: ActivityDetail,
     pub notifications: Privacy,
     pub port: u16,
     /// Whether paired iPhones near this Mac over Bluetooth hold their
@@ -55,6 +57,7 @@ impl Default for RemoteConfig {
             device_idle_days: DEFAULT_IDLE_DAYS,
             enabled: false,
             keep_running: true,
+            live_activities: ActivityDetail::default(),
             notifications: Privacy::default(),
             port: DEFAULT_PORT,
             presence: false,
@@ -158,9 +161,10 @@ impl<'de> Deserialize<'de> for Certificate {
 #[serde(rename_all = "kebab-case")]
 pub enum Privacy {
     /// "Claude needs an answer in herdr-gpui · main", without message text.
-    #[default]
     Generic,
-    /// Also a short excerpt of the message.
+    /// Also a short excerpt of the message, and on a Live Activity the
+    /// question with its answer buttons.
+    #[default]
     Excerpt,
 }
 
@@ -174,6 +178,40 @@ impl Privacy {
     }
 }
 
+/// How much a Live Activity says about its chat. A computer and each phone
+/// choose for themselves, and the more private choice wins.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ActivityDetail {
+    /// The chat's name and current step; [`Privacy`] decides about the rest.
+    #[default]
+    Detailed,
+    /// The agent and what it is doing in general, nothing about the chat.
+    Generic,
+}
+
+impl ActivityDetail {
+    /// As the config file and the daemon's `--live-activities` write it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Detailed => "detailed",
+            Self::Generic => "generic",
+        }
+    }
+
+    pub const fn is_detailed(&self) -> bool {
+        matches!(self, Self::Detailed)
+    }
+
+    /// The more private of two choices.
+    pub const fn stricter(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Detailed, Self::Detailed) => Self::Detailed,
+            _ => Self::Generic,
+        }
+    }
+}
+
 /// One change to the `[remote]` table, from Settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Edit {
@@ -182,6 +220,7 @@ pub enum Edit {
     DeviceIdleDays(u16),
     Enabled(bool),
     KeepRunning(bool),
+    LiveActivities(ActivityDetail),
     Notifications(Privacy),
     Port(u16),
     Presence(bool),
@@ -213,6 +252,7 @@ impl Edit {
             }
             Self::Enabled(enabled) => ("enabled", enabled.into()),
             Self::KeepRunning(keep) => ("keep_running", keep.into()),
+            Self::LiveActivities(detail) => ("live_activities", detail.name().into()),
             Self::Notifications(privacy) => ("notifications", privacy.name().into()),
             Self::Port(0) => return Err(Error::Port),
             Self::Port(port) => ("port", i64::from(port).into()),

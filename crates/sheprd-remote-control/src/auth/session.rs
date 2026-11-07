@@ -6,6 +6,7 @@ use super::{
 };
 use crate::control::DeviceId;
 use p256::ecdsa::{Signature, signature::Verifier};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -37,10 +38,10 @@ pub(crate) struct Challenge {
 }
 
 /// A started session. The token is shown once, to the device.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug)]
 pub(crate) struct Session {
     /// 32 random bytes, base64url: the bearer token.
-    pub(crate) token: String,
+    pub(crate) token: SecretString,
     pub(crate) device: DeviceId,
     pub(crate) expires_ms: u64,
 }
@@ -180,7 +181,7 @@ impl Sessions {
             },
         );
         Ok(Session {
-            token: encode(&token),
+            token: encode(&token).into(),
             device,
             expires_ms,
         })
