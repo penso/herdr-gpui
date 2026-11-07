@@ -143,6 +143,7 @@ impl SheprdWindow {
             activation_deadline: None,
             active: window.is_window_active(),
             activity: Default::default(),
+            agent_group: None,
             agent_sort: preferences::AgentSort::default(),
             agent_sort_modified: false,
             app_update_notes: Default::default(),

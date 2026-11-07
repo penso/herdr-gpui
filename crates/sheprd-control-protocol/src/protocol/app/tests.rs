@@ -23,3 +23,20 @@ fn open_carries_its_folder_and_refuses_extra_fields() {
         );
     }
 }
+
+#[test]
+fn agent_group_ops_keep_their_wire_form() {
+    let pick: UiOp = serde_json::from_str(r#"{"op":"agent_group","name":"demo"}"#).unwrap();
+    assert_eq!(
+        pick,
+        UiOp::AgentGroup {
+            name: Some("demo".to_owned())
+        }
+    );
+    // No name is every group, so a script may leave it out.
+    let all: UiOp = serde_json::from_str(r#"{"op":"agent_group"}"#).unwrap();
+    assert_eq!(all, UiOp::AgentGroup { name: None });
+    let list: UiOp = serde_json::from_str(r#"{"op":"agent_groups"}"#).unwrap();
+    assert_eq!(list, UiOp::AgentGroups);
+    assert!(serde_json::from_str::<UiOp>(r#"{"op":"agent_group","group":"demo"}"#).is_err());
+}

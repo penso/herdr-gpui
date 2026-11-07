@@ -68,6 +68,7 @@ Every command accepts:
 | `window detach\|reconnect` | Detach from, or reconnect to, the selected host |
 | `ui sidebar\|statusbar [on\|off\|toggle]` | For this window and session |
 | `ui font-size +\|-\|reset\|POINTS` | The terminal font size for this session |
+| `ui agent-group [NAME\|all]` | List the agents panel's coordinator groups, marking the one shown, or show one group's sessions with its coordinator first, or `all` of them, for this window and session. Exits 5 for a group no coordinator names and 8 unless `[sidebar] coordinator_suffix` is set and the agents panel is shown |
 | `ui panel workspaces\|overview\|pull-requests\|issues\|tasks\|security\|automations\|ports\|usage` | Show an activity bar section: Workspaces with the sidebar expanded, Overview of what needs you on every host, the focused workspace's pull requests or issues across the window, Beads tasks across the window's projects, the vulnerability reports and Dependabot alerts of your repositories, every host's automation scripts and runs, every port this computer's user listens on, or every host's plan usage |
 | `run COMMAND` | Any app command by its `[keybindings]` name, as the palette runs it |
 | `commands` | The names `run` accepts (no app needed) |

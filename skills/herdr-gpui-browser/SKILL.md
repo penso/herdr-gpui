@@ -249,6 +249,7 @@ for what only Sheprd shows or keeps.
 | Show the user an alert's or a vulnerability report's page in Sheprd | `sheprd security open OWNER/NAME 42` or `... GHSA-xxxx-xxxx-xxxx` |
 | Ask the user to approve an automation script you wrote (the app shows its plan; the user approves) | `sheprd automation approve .herdr/automations/nightly.luau` |
 | Show the Automations section: every host's scripts and runs | `sheprd ui panel automations` |
+| Show the user one coordinator's sessions in the agents panel, or list the groups | `sheprd ui agent-group demo`, `sheprd ui agent-group` |
 | Open a dev server in a tab, forwarded when you run on an SSH host | `sheprd ports open 3000` |
 | See every port this computer listens on, with the process, directory, and workspace behind it | `sheprd ports all --json` |
 | Ask the user to stop (or pause) whatever holds a port you need | `sheprd ports stop 3000`; they confirm in the app |

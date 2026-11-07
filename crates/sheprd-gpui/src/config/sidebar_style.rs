@@ -134,6 +134,9 @@ pub struct SidebarStyle {
     /// and starting each host's `herdr-automate`. On unless turned off.
     pub automations: bool,
     pub change_counts: ChangeCounts,
+    /// `coordinator_suffix`: what ends a coordinator session's name, such as
+    /// `-coord`. Unset leaves the agents list without roles or groups.
+    pub coordinator_suffix: Option<String>,
     pub device_footer: DeviceFooter,
     /// A colour per host, keyed by the host's display name, as `0xRRGGBB`.
     pub hosts: BTreeMap<String, u32>,
@@ -152,6 +155,7 @@ impl Default for SidebarStyle {
             automations: true,
             ports_count: true,
             change_counts: ChangeCounts::default(),
+            coordinator_suffix: None,
             device_footer: DeviceFooter::default(),
             hosts: BTreeMap::new(),
             overrides: SidebarOverrides::default(),
@@ -184,6 +188,7 @@ pub(super) struct SidebarSettings {
     pub(super) select: SelectMode,
     pub(super) device_footer: DeviceFooter,
     pub(super) change_counts: ChangeCounts,
+    pub(super) coordinator_suffix: Option<String>,
     pub(super) hosts: BTreeMap<String, String>,
     pub(super) activity_bar: Option<bool>,
     pub(super) automations: Option<bool>,
@@ -211,6 +216,12 @@ impl SidebarSettings {
             automations: self.automations.unwrap_or(true),
             ports_count: self.ports_count.unwrap_or(true),
             change_counts: self.change_counts,
+            coordinator_suffix: self
+                .coordinator_suffix
+                .as_deref()
+                .map(str::trim)
+                .filter(|suffix| !suffix.is_empty())
+                .map(str::to_owned),
             device_footer: self.device_footer,
             hosts,
             overrides: self.overrides,
@@ -250,6 +261,9 @@ impl<'de> Deserialize<'de> for SidebarSettings {
                         "select" => settings.select = map.next_value()?,
                         "device_footer" => settings.device_footer = map.next_value()?,
                         "change_counts" => settings.change_counts = map.next_value()?,
+                        "coordinator_suffix" => {
+                            settings.coordinator_suffix = Some(map.next_value()?);
+                        }
                         "activity_bar" => settings.activity_bar = Some(map.next_value()?),
                         "automations" => settings.automations = Some(map.next_value()?),
                         "ports_count" => settings.ports_count = Some(map.next_value()?),

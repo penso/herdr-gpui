@@ -114,8 +114,8 @@ mod code_start;
 #[cfg(windows)]
 mod status_tooltip;
 
-/// Pages hide under toasts and the file-transfer card where they draw above
-/// the window, which only Windows does.
+/// Pages hide under toasts, notice cards, and the file-transfer card where
+/// they draw above the window, which only Windows does.
 #[cfg(windows)]
 mod overlays;
 

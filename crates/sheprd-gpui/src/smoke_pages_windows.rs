@@ -18,7 +18,9 @@ use super::*;
 use crate::browser::{Store, TabId};
 use windows::Win32::{
     Foundation::{HWND, LPARAM, WPARAM},
-    UI::WindowsAndMessaging::{PostMessageW, WM_KEYDOWN},
+    UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongW, PostMessageW, WM_KEYDOWN, WS_EX_NOREDIRECTIONBITMAP,
+    },
 };
 use wry::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
@@ -60,6 +62,7 @@ pub(super) fn start_pages(handle: WindowHandle<SheprdWindow>, cx: &mut App) {
                     // the message can reach the previous frame's handlers.
                     window.refresh();
                     window.draw(cx).clear(cx);
+                    pages_can_show(window)?;
                     press_enter(window)
                 })
                 .map_err(|error| anyhow!("{error:#}"))??;
@@ -120,18 +123,35 @@ fn type_address(
     Ok(id)
 }
 
-/// Posts Enter after the address field has drawn, to be handled once this
-/// update has ended.
-fn press_enter(window: &Window) -> Result<()> {
+/// The window's HWND.
+fn hwnd(window: &Window) -> Result<HWND> {
     // Window has an inherent `window_handle` of its own.
     let RawWindowHandle::Win32(handle) = HasWindowHandle::window_handle(window)?.as_raw() else {
         bail!("not a Win32 window");
     };
+    Ok(HWND(handle.hwnd.get() as _))
+}
+
+/// Fails if GPUI draws through DirectComposition, whose topmost target hides
+/// a loaded page: loading alone says nothing of what reaches the screen.
+fn pages_can_show(window: &Window) -> Result<()> {
+    // SAFETY: reading a style of the window, which is open for this update.
+    let style = unsafe { GetWindowLongW(hwnd(window)?, GWL_EXSTYLE) } as u32;
+    if style & WS_EX_NOREDIRECTIONBITMAP.0 != 0 {
+        bail!("GPUI's composition target would cover the page");
+    }
+    Ok(())
+}
+
+/// Posts Enter after the address field has drawn, to be handled once this
+/// update has ended.
+fn press_enter(window: &Window) -> Result<()> {
+    let hwnd = hwnd(window)?;
     // SAFETY: posting copies the message into the queue of the window, which
     // is open for this update; Windows refuses a window that has gone.
     unsafe {
         PostMessageW(
-            Some(HWND(handle.hwnd.get() as _)),
+            Some(hwnd),
             WM_KEYDOWN,
             WPARAM(VK_RETURN),
             LPARAM(RETURN_DOWN),
