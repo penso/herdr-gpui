@@ -55,6 +55,7 @@ async fn an_open_list_hears_when_a_phone_saw_a_finished_agent() {
             label: "work".into(),
             branch: None,
             cwd: "/work".into(),
+            session: None,
             worktree: None,
             chats: vec![crate::hub::ChatRow {
                 pane: "p1".into(),

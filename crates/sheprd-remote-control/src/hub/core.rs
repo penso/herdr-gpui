@@ -27,8 +27,9 @@ use std::{
 use tokio::sync::watch;
 
 const POLL: Duration = Duration::from_millis(500);
-/// The longest between polls while events flow: how late a change to the
-/// desktop's spaces can reach a phone.
+/// The longest between polls while events flow. Terminals and documents
+/// wake the worker sooner; this is what keeps chats linked and alerts
+/// flowing when nothing does.
 const HEARTBEAT: Duration = Duration::from_secs(3);
 /// How long a screen goes unread before a new one may take its place.
 const IDLE_SCREEN: Duration = Duration::from_secs(5);
@@ -276,10 +277,9 @@ fn run(source: Weak<Source>, layout: watch::Sender<Arc<Layout>>) {
     }
 }
 
-/// Waits for a terminal to change, or `limit` for what no event reports,
-/// which is the desktop's document. Polling is what keeps chats linked and
-/// alerts flowing with no phone open, so it slows down but never stops.
-/// Without events the next poll comes right away.
+/// Waits for a terminal or document to change, or `limit`. Polling is what
+/// keeps chats linked and alerts flowing with no phone open, so it slows
+/// down but never stops. Without events the next poll comes right away.
 fn wait(events: &mut Option<Subscription>, limit: Duration) {
     let Some(subscription) = events else {
         return;

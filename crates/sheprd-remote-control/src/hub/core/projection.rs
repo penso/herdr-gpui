@@ -2,55 +2,25 @@
 
 use super::pane_id;
 use crate::hub::{Layout, Terminal, TerminalPane, Workspace, layout::TerminalAgent};
-use serde::Deserialize;
 use sheprd_client::protocol::AgentStatus;
 use sheprd_core_client::wire::{StatusState, Terminal as Record};
+use sheprd_session::SavedTabs;
 use std::{collections::HashSet, io::Read, path::Path};
 
-#[derive(Deserialize)]
-pub(super) struct Saved {
-    tabs: Vec<SavedTab>,
-}
-
-#[derive(Deserialize)]
-struct SavedTab {
-    id: u64,
-    location: Option<serde_json::Value>,
-    scope: String,
-    title: String,
-    workspace_id: String,
-}
-
-pub(super) fn read(path: &Path) -> Option<Saved> {
+pub(super) fn read(path: &Path) -> Option<SavedTabs> {
     let mut bytes = Vec::new();
     std::fs::File::open(path)
         .ok()?
-        .take(1024 * 1024 + 1)
+        .take(sheprd_session::MAX_SAVED_BYTES as u64 + 1)
         .read_to_end(&mut bytes)
         .ok()?;
-    if bytes.len() > 1024 * 1024 {
-        return None;
-    }
-    let saved: Saved = serde_json::from_slice(&bytes).ok()?;
-    (saved.tabs.len() <= 256).then_some(saved)
-}
-
-fn leaves<'a>(node: &'a serde_json::Value, out: &mut Vec<&'a str>, depth: usize) {
-    if depth > 16 || out.len() >= 16 {
-        return;
-    }
-    if let Some(id) = node.as_str() {
-        out.push(id);
-    } else {
-        leaves(&node["first"], out, depth + 1);
-        leaves(&node["second"], out, depth + 1);
-    }
+    SavedTabs::parse(&bytes).ok()
 }
 
 pub(super) fn project(
     boot: &str,
     records: &[Record],
-    saved: Option<&Saved>,
+    saved: Option<&SavedTabs>,
     scope: Option<&str>,
 ) -> Layout {
     let mut layout = Layout {
@@ -60,34 +30,26 @@ pub(super) fn project(
         workspaces: Vec::new(),
     };
     let mut assigned = HashSet::new();
-    for tab in saved.into_iter().flat_map(|saved| &saved.tabs) {
-        if Some(tab.scope.as_str()) != scope || tab.workspace_id.is_empty() {
-            continue;
-        }
-        let Some(location) = &tab.location else {
-            continue;
-        };
-        if location["kind"] != "core_terminal" || location["observe"] == true {
-            continue;
-        }
-        let node = location.get("panes").or_else(|| location.get("terminal"));
-        let mut addresses = Vec::new();
-        if let Some(node) = node {
-            leaves(node, &mut addresses, 0);
-        }
-        let members: Vec<&Record> = addresses
+    let tabs = saved
+        .zip(scope)
+        .into_iter()
+        .flat_map(|(saved, scope)| saved.core_tabs(scope));
+    for tab in tabs {
+        let members: Vec<&Record> = tab
+            .panes
+            .terminals()
             .into_iter()
-            .filter_map(|address| records.iter().find(|record| record.address == address))
+            .filter_map(|id| records.iter().find(|record| record.address == id.as_str()))
             .filter(|record| assigned.insert(record.address.as_str()))
             .collect();
         if let Some(terminal) = terminal(
             boot,
             &format!("core:tab:{}", tab.id),
-            &tab.title,
+            tab.title,
             &members,
             urgency,
         ) {
-            add(&mut layout, &tab.workspace_id, terminal);
+            add(&mut layout, tab.workspace_id, terminal);
         }
     }
     for record in records

@@ -27,8 +27,9 @@ Closing or detaching the GUI must leave the daemons and their terminals running.
 | `crates/sheprd-acp` | `sheprd-acp` binary run inside a Herdr pane: the only ACP client of an agent, its in-pane chat view, the attach socket Sheprd connects to, and Herdr status reports |
 | `crates/sheprd-chat-protocol` | Attach wire between `sheprd-acp` and its clients: transcript model, the shared change reducer, framing, and endpoint discovery; no ACP or GPUI types |
 | `crates/sheprd-client` | Discovery, socket worker, session transitions, ordered commands, and client-local activity projection |
-| `crates/sheprd-backend` | The `Backend` and `Terminal` traits both Herdr generations implement: terminals listed, watched, attached, started, and ended, as `sheprd-protocol` cells and semantic input; no GPUI or transport |
+| `crates/sheprd-backend` | The `Backend` and `Terminal` traits herdr-core implements and Herdr 1 does not yet: terminals listed, watched, attached, started, and ended, as `sheprd-protocol` cells and semantic input; no GPUI or transport |
 | `crates/sheprd-core-client` | herdr-core (`hc`, Herdr 2): endpoint discovery, the framed JSON-RPC connection worker, credit-flowed terminal and event streams, starting a core, and its `sheprd-backend` implementation; no GPUI |
+| `crates/sheprd-session` | What a session keeps that no terminal backend does (`docs/session-model.md`): the pane tree of a herdr-core tab and the reader of the app's saved tabs, shared by the app and the remote control daemon; no GPUI, runtime, or I/O |
 | `crates/sheprd-terminal` | The terminal emulator for herdr-core's raw byte streams (alacritty_terminal): bytes in, `sheprd-protocol` cells and damage out, and semantic input encoded for the program's modes; no GPUI or I/O |
 | `crates/sheprd-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
 | `crates/sheprd-control-protocol` | The control socket between `sheprd <command>` and the running app: request and response types, bounds, and the Unix socket or named pipe; no GPUI |

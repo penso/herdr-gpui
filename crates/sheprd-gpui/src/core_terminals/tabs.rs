@@ -121,7 +121,7 @@ impl SheprdWindow {
                 .core_terminals
                 .tabs
                 .get(&tab)
-                .is_some_and(|shown| shown.panes.len() > 1);
+                .is_some_and(|shown| shown.panes.count() > 1);
             if split && view.read(cx).ended() {
                 ended.push((tab, terminal));
             }

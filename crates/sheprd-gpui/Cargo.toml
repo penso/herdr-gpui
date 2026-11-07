@@ -36,6 +36,7 @@ sheprd-client.workspace         = true
 sheprd-commands.workspace       = true
 sheprd-control-protocol.workspace = true
 sheprd-core-client.workspace    = true
+sheprd-session.workspace        = true
 sheprd-credentials.workspace    = true
 sheprd-diagnostics.workspace    = true
 sheprd-github.workspace         = true

@@ -113,12 +113,15 @@ fn absent_and_malformed_desktop_documents_keep_saved_tabs_and_fallback() {
 }
 
 #[test]
-fn an_existing_empty_document_uses_only_the_unlisted_terminal_fallback() {
+fn an_existing_empty_document_keeps_saved_tabs() {
     let (mut source, fake) = fake_with_doc(false, json!({"spaces": []}), vec![record("t1")]);
     saved_tabs(&mut source, &fake);
     let layout = source.poll().unwrap();
-    assert!(layout.workspace("saved").is_none());
-    assert_eq!(layout.workspaces[0].label, "Herdr 2");
+    assert_eq!(
+        layout.workspace("saved").unwrap().terminals[0].label,
+        "saved tab"
+    );
+    assert!(layout.workspace("core:terminals").is_none());
     drop(source);
     fake.server.join().unwrap();
 }

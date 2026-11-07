@@ -57,9 +57,11 @@ When the Herdr desktop app's `herdr-app` document exists in the core,
 the phone shows its local spaces in document order, with their tabs and
 split panes. Named spaces keep their names. Unnamed spaces use the first
 terminal's current repository or folder, with `~` for home. Spaces from
-other machines are omitted. Unlisted terminals stay in **Herdr 2**.
-The worker reads the document after a terminal changes and at least every
-3 seconds, and parses it only when its version changes. It accepts at most 1 MiB,
+other machines are omitted. A terminal Sheprd's own tabs hold stays in that
+tab and its split, even when a space holds it too. Unlisted terminals stay in
+**Herdr 2**.
+The worker reads the document after a terminal or document changes and at
+least every 3 seconds, and parses it only when its version changes. It accepts at most 1 MiB,
 256 spaces and tabs, and 16 terminal panes per tab within 16 tree levels.
 A malformed or oversized document falls back to Sheprd's saved tabs.
 

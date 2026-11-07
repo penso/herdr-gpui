@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use sheprd_client::protocol::AgentStatus;
 use sheprd_core_client::wire::Terminal;
+use sheprd_session::SavedTabs;
 use std::{
     collections::HashSet,
     io::{self, Write},
@@ -129,14 +130,34 @@ impl Spaces {
         Some(doc)
     }
 
-    pub(super) fn project(&self, boot: &str, records: &[Terminal], names: &mut Names) -> Layout {
+    /// The document's spaces around the app's own tabs: a terminal a saved
+    /// tab holds stays in that tab and its split, even when a space holds it
+    /// too, and spaces list the rest.
+    pub(super) fn project(
+        &self,
+        boot: &str,
+        records: &[Terminal],
+        saved: Option<&SavedTabs>,
+        scope: Option<&str>,
+        names: &mut Names,
+    ) -> Layout {
         let mut layout = Layout {
             boot: format!("core:{boot}"),
             connected: true,
             working: 0,
             workspaces: Vec::new(),
         };
+        let held: HashSet<&str> = saved
+            .zip(scope)
+            .into_iter()
+            .flat_map(|(saved, scope)| saved.core_tabs(scope))
+            .flat_map(|tab| tab.panes.terminals())
+            .map(|terminal| terminal.as_str())
+            .collect();
         let mut assigned = HashSet::new();
+        // A local space's terminals a saved tab holds instead. A local space
+        // vouches for them, so another machine's space cannot omit them.
+        let mut vouched = HashSet::new();
         // Another machine's terminals are omitted, not unlisted: a phone
         // must not reach them through the Herdr 2 group.
         let mut omitted = HashSet::new();
@@ -168,6 +189,10 @@ impl Spaces {
             for (index, tab) in space.tabs.iter().enumerate() {
                 let mut addresses = Vec::new();
                 let _ = tab.root.leaves(&mut addresses, 0);
+                let (saved_here, addresses): (Vec<_>, Vec<_>) = addresses
+                    .into_iter()
+                    .partition(|address| held.contains(address));
+                vouched.extend(saved_here);
                 let members = addresses
                     .into_iter()
                     .filter_map(|address| records.iter().find(|record| record.address == address))
@@ -200,7 +225,9 @@ impl Spaces {
             .iter()
             .filter(|record| {
                 let address = record.address.as_str();
-                assigned.contains(address) || !omitted.contains(address)
+                assigned.contains(address)
+                    || vouched.contains(address)
+                    || !omitted.contains(address)
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -211,7 +238,7 @@ impl Spaces {
             .collect::<Vec<_>>();
         layout
             .workspaces
-            .extend(projection::project(boot, &unlisted, None, None).workspaces);
+            .extend(projection::project(boot, &unlisted, saved, scope).workspaces);
         layout
     }
 }

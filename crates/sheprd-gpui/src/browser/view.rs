@@ -189,8 +189,14 @@ pub(crate) enum PageOpened {
 }
 
 impl SheprdWindow {
+    /// The workspace tabs belong to: the one Herdr 1 focuses or, with no
+    /// Herdr 1 installed, the window's single herdr-core workspace.
     pub(crate) fn browser_key(&self) -> Option<(Scope, String)> {
-        let workspace = self.live.snapshot.as_ref()?.focused_workspace_id.clone()?;
+        let workspace = match &self.live.snapshot {
+            Some(snapshot) => snapshot.focused_workspace_id.clone()?,
+            None if self.live.missing_installation => crate::core_terminals::WORKSPACE.to_owned(),
+            None => return None,
+        };
         Some((scope(&self.endpoints[self.selected_endpoint]), workspace))
     }
 
