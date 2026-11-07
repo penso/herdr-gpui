@@ -6,7 +6,7 @@
 //! one: the core keeps no pane metadata a program could report through, so
 //! the endpoint is chosen here and kept as a label.
 
-use super::{Error, Result, Source, lock, pane_id};
+use super::{Error, Result, Source, lock, pane_id, worktree};
 use crate::hub::Layout;
 use serde_json::{Value, json};
 use sheprd_chat_protocol::{Agent, ENDPOINT_ENV, EndpointId, TOKEN};
@@ -50,6 +50,21 @@ impl Source {
             labels: BTreeMap::from([(TOKEN, endpoint.as_str())]),
             ..Run::default()
         })
+    }
+
+    /// A chat as [`Self::open_chat`], in a new worktree of `cwd` on `branch`
+    /// under `root`.
+    pub(in crate::hub) fn open_worktree_chat(
+        &self,
+        agent: Agent,
+        program: &Path,
+        cwd: &str,
+        branch: &str,
+        root: Option<&Path>,
+    ) -> Result<String> {
+        let root = root.ok_or(worktree::Error::NoHome).map_err(Error::from)?;
+        let checkout = worktree::add(Path::new(cwd), branch, root).map_err(Error::from)?;
+        self.open_chat(agent, program, &checkout.to_string_lossy())
     }
 
     fn run(&self, run: &Run<'_>) -> Result<String> {
