@@ -86,7 +86,7 @@ impl SheprdWindow {
                 }
             }
             Command::Zoom => {
-                if shown.panes.len() > 1 {
+                if shown.panes.count() > 1 {
                     let zoom = (!shown.zoom.is_open()).then_some(terminal);
                     shown.set_zoom(zoom);
                     cx.notify();
@@ -94,7 +94,7 @@ impl SheprdWindow {
             }
             Command::MirrorCorePane => self.mirror_core_pane(tab, terminal, window, cx),
             // The last pane closes as its tab does: the window's own close.
-            Command::ClosePane if shown.panes.len() > 1 => {
+            Command::ClosePane if shown.panes.count() > 1 => {
                 // A mirror's pane stops watching; the terminal runs on.
                 let mirror = shown.observe;
                 if self.remove_core_pane(tab, &terminal, window, cx) && !mirror {

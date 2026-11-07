@@ -15,6 +15,9 @@ impl Localize for Error {
     fn localize(&self) -> String {
         match self {
             // keep-sorted start
+            Self::ChordWithoutKey(command) => {
+                fl!("error-keymap-chord-without-key", command = *command)
+            }
             Self::DuplicateKeystroke {
                 keystroke,
                 first,

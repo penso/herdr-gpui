@@ -15,6 +15,7 @@ error-automations-protocol = sheprd-automate on this host speaks report protocol
 # $error is sheprd-automate's own message, kept as it is.
 error-automations-refused = sheprd-automate: { $error }
 error-automations-run = Could not run sheprd-automate: { $error }
+error-automations-runs-active = Automations are running on this host; update once they finish
 error-automations-unknown-host = No connected host is named { $host }
 error-automations-unknown-version = Could not read the version of the sheprd-automate this app ships, so it cannot be installed
 error-automations-unsupported-host = Automations cannot reach this kind of host

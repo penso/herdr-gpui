@@ -12,6 +12,7 @@ use p256::{
     pkcs8::LineEnding,
 };
 use serde::Serialize;
+use sheprd_apns::is_private;
 use std::{
     fs,
     io::{self, Write as _},
@@ -153,17 +154,6 @@ fn load(path: &Path) -> Result<Vapid> {
         source,
     })?;
     Ok(Vapid::from(secret))
-}
-
-#[cfg(unix)]
-pub(crate) fn is_private(metadata: &fs::Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    metadata.is_file() && metadata.mode() & 0o077 == 0
-}
-
-#[cfg(not(unix))]
-pub(crate) fn is_private(metadata: &fs::Metadata) -> bool {
-    metadata.is_file()
 }
 
 /// Writes `contents` to `path` only if nothing is there yet: into a private

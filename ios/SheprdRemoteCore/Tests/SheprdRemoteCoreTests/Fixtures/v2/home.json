@@ -25,6 +25,7 @@
           "label": "work",
           "is_linked_worktree": false
         },
+        "session": "default",
         "pull_request": {
           "number": 870,
           "url": "https://github.com/penso/herdr-gpui/pull/870",
@@ -102,6 +103,7 @@
         "label": "moltis",
         "branch": null,
         "cwd": "/moltis",
+        "session": "pilots",
         "chats": [],
         "terminals": []
       },
@@ -115,6 +117,7 @@
           "label": "work",
           "is_linked_worktree": true
         },
+        "session": "default",
         "unopened_commits": 3,
         "chats": [],
         "terminals": []

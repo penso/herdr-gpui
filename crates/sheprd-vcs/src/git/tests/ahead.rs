@@ -195,7 +195,11 @@ fn the_focused_checkout_is_asked_after_listed_work_and_kept_when_unlisted() {
     peer.git.poll(now);
     let (requested, job) = peer.request();
     assert!(matches!(job, Job::Status));
-    peer.complete(requested, Completion::Status(Ok(status(0, 0, 0))), now);
+    peer.complete(
+        requested,
+        Completion::Status(Ok(focused(status(0, 0, 0)))),
+        now,
+    );
     peer.git.poll(now);
     let (requested, job) = peer.request();
     assert!(matches!(job, Job::Ahead));
@@ -255,7 +259,11 @@ fn nothing_is_read_until_a_lookup_could_use_it() {
     peer.git.poll(now);
     let (requested, job) = peer.request();
     assert!(matches!(job, Job::Status));
-    peer.complete(requested, Completion::Status(Ok(status(0, 0, 0))), now);
+    peer.complete(
+        requested,
+        Completion::Status(Ok(focused(status(0, 0, 0)))),
+        now,
+    );
     peer.git.poll(now);
     assert!(peer.incoming.try_recv().is_err());
 }

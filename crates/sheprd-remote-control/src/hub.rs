@@ -89,6 +89,8 @@ pub(crate) struct Hub {
     primary: watch::Receiver<Arc<Layout>>,
     program: Option<PathBuf>,
     sessions: Arc<sessions::Sessions>,
+    /// Where new checkouts go for work on a core.
+    worktrees: Option<PathBuf>,
 }
 
 impl Hub {
@@ -109,7 +111,11 @@ impl Hub {
             .or_else(|| ConnectTarget::Local.socket_path().ok());
         let target = socket.map_or(ConnectTarget::Local, ConnectTarget::Socket);
         let (daemon_sender, daemon_layout) = watch::channel(Arc::new(Layout::default()));
-        let daemon = daemon::Daemon::start(daemon_sender, target.clone())?;
+        let daemon = daemon::Daemon::start(
+            daemon_sender,
+            target.clone(),
+            primary_socket.as_deref().and_then(sessions::session_name),
+        )?;
         let (core_sender, core_layout) = watch::channel(Arc::new(Layout::default()));
         let core = core::Source::start(core_sender, &target, core_endpoint, state_dir)?;
         let (base_sender, base_layout) = watch::channel(Arc::new(Layout::default()));
@@ -136,7 +142,14 @@ impl Hub {
             primary: daemon_layout,
             program: locate_program(),
             sessions,
+            worktrees: core::worktree::root(),
         });
+        // A daemon started from a copy of its binary finds no program, and
+        // only a phone creating work would ever find out.
+        match hub.program() {
+            Some(program) => tracing::info!(program = %program.display(), "Chat program found"),
+            None => tracing::warn!("{}", Error::ProgramMissing),
+        }
         let follower = hub.clone();
         tokio::spawn(async move { follower.follow().await });
         Ok(hub)
@@ -212,6 +225,7 @@ impl Hub {
             layout: receiver,
             program: None,
             sessions: sessions::Sessions::offline(),
+            worktrees: None,
         }
     }
 
@@ -285,29 +299,36 @@ impl Hub {
     }
 
     /// A new workspace in `cwd`, on a new worktree when `branch` is given,
-    /// with a chat running `agent` in it. While a core answers the chat
+    /// with a chat running `agent` in it, in the Herdr 1 `session` this
+    /// daemon follows by that name (the primary otherwise). While a core answers the chat
     /// starts there, in its unlisted group: the core has no workspaces or
-    /// worktrees, so a branch is refused rather than sent to Herdr 1.
+    /// worktrees, so a branch's checkout is made here, never by Herdr 1.
     pub(crate) async fn create_workspace(
         &self,
         cwd: &str,
         branch: Option<&str>,
         agent: Agent,
+        session: Option<&str>,
     ) -> Result<CreatedWorkspace> {
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         if let Some(core) = self.active_core() {
-            if branch.is_some() {
-                return Err(core::Error::Unsupported.into());
-            }
             let (cwd, program) = (cwd.to_owned(), program.to_owned());
-            let pane = on_core(move || core.open_chat(agent, &program, &cwd)).await?;
+            let (branch, root) = (branch.map(str::to_owned), self.worktrees.clone());
+            let pane = on_core(move || match branch {
+                Some(branch) => {
+                    core.open_worktree_chat(agent, &program, &cwd, &branch, root.as_deref())
+                }
+                None => core.open_chat(agent, &program, &cwd),
+            })
+            .await?;
             return Ok(CreatedWorkspace {
                 workspace: core::UNLISTED.to_owned(),
                 pane,
             });
         }
         let opened = self
-            .call(
+            .call_in(
+                session,
                 ApiMethod::WorkspaceCreate,
                 json!({"cwd": cwd, "focus": false}),
             )
@@ -408,6 +429,24 @@ impl Hub {
             }
             result => result,
         }
+    }
+
+    /// [`Hub::call`] for a request whose ids do not say where it goes, such
+    /// as a new workspace: to the session this daemon follows by `session`'s
+    /// name, else as `call` sends it. The primary's own name is not among
+    /// those followed, so it goes to the primary.
+    pub(crate) async fn call_in(
+        &self,
+        session: Option<&str>,
+        method: ApiMethod,
+        params: Value,
+    ) -> Result<Value> {
+        let Some(session) = session.and_then(|name| self.sessions.get(name)) else {
+            return self.call(method, params).await;
+        };
+        let mut answer = session.api.call(method, params).await?;
+        sessions::prefix_answer(&mut answer, &session.name);
+        Ok(answer)
     }
 
     /// The named session a request is for, with its ids as that session

@@ -18,6 +18,7 @@ fn with_chat_and_terminal(dir: &std::path::Path) -> Shared {
             branch: None,
             cwd: "/code/app".into(),
             worktree: None,
+            session: None,
             chats: vec![ChatRow {
                 pane: "c1".into(),
                 tab: "t1".into(),

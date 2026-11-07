@@ -29,6 +29,9 @@ import Testing
         let body = try JSONEncoder().encode(NewWorkspaceRequest(cwd: "/a", branch: "fix", agent: "codex", prompt: "go"))
         let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(object == ["cwd": "/a", "branch": "fix", "agent": "codex", "prompt": "go"])
+        let inSession = try JSONEncoder().encode(NewWorkspaceRequest(cwd: "/a", agent: "codex", session: "pilots"))
+        let named = try #require(JSONSerialization.jsonObject(with: inSession) as? [String: String])
+        #expect(named["session"] == "pilots")
     }
 
     /// The values `generated_branches_are_namespaced_and_reproducible`

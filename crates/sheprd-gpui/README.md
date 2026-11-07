@@ -236,13 +236,16 @@ the first device still listed. While filtered, navigation to a device outside
 the list narrows it to that device; a listed device that is removed or disabled
 leaves the list, and if it was on screen the terminal falls back to Local. The
 filter is window-local and starts at All Devices. The adjacent gear
-opens the existing Settings page (also available with `Cmd-,`). Beside it, the
-sessions icon lists this machine's sessions and each saved device's own, grouped
-under the device, with the device this window is on leading (also available with
-`Cmd-Shift-S`). A device's list is asked for over SSH, at most once every 30
-seconds while the popup is open; until it answers, and if it never does, the
-device still offers the session it was saved with. Choosing a session attaches
-this window to it on that device.
+opens the existing Settings page (also available with `Cmd-,`).
+
+Each device row in the picker carries a **Session** chip naming the session it is
+on. Clicking it unfolds that device's sessions beneath it, with **Add
+session…** to create one, and clicking it again folds them away; hovering it says
+so. `Cmd-Shift-S` opens the picker unfolded on the device this window is on. A
+device's list is asked for over SSH, at most once every 30 seconds while the
+popup is open; until it answers, and if it never does, the device still offers
+the session it was saved with. Choosing a session attaches this window to it on
+that device.
 
 Set `device_footer = "auto"` under `[sidebar]` to draw this footer only while
 there are two or more devices (or one is being added), or `"never"` to leave it
@@ -976,6 +979,15 @@ preset, selection marks, **Device footer**, **Show agents**, **Show search**,
 colours. Theme ends with the window backdrop and terminal padding. Custom sound
 paths and per-agent sound policies remain shared-file settings. Configuration
 paths are diagnostic facts rather than editable preference values.
+
+Coordinator groups have no switch here yet: `[sidebar] coordinator_suffix`
+turns them on. With it set to `-coord`, a session named `demo-coord` shows the
+coordinator mark in place of its agent's, and the agents header gains a filter
+whose clicks step through each group and back to all groups. A group shows its
+coordinator first, then the sessions named `demo-12`, `demo-13`, and so on, on
+any host, and the agent shortcuts step through those same rows. Groups follow
+names, so a replacement session given the coordinator's name takes the group
+over. `sheprd ui agent-group` lists and picks groups from a script.
 
 These native edits save automatically through the serial background save path,
 preserving unrelated TOML keys/comments and pending theme/layout selections.
@@ -2876,8 +2888,8 @@ next to the agent that is changing the code.
 - **Open in your editor.** Cmd-click (Ctrl-click elsewhere) a printed path
   such as `src/main.rs:42` to open it at that line in your terminal editor, in
   a new pane split to the right of the pane that printed it. In a
-  [review](#reviewing-an-agents-changes), `e` opens the file at the top of the
-  diff the same way. Quitting the editor closes its pane. When the editor is
+  [review](#reviewing-an-agents-changes), `e` or a file header's pencil opens
+  the file the same way. Quitting the editor closes its pane. When the editor is
   Neovim, later files for the same tab open in that Neovim instead of a new
   split, as [herdr-nvim](https://github.com/ChmaraX/herdr-nvim)'s sidebar
   does.
@@ -3078,7 +3090,8 @@ come back after a restart; closing a workspace in Herdr removes its tabs.
   gets WebView2's own confirmation prompt rather than being refused outright.
 - Pages are native web views (WebKit on macOS, WebView2 on Windows). On
   macOS a page lies beneath the window's own drawing. Menus, popovers,
-  dialogs, tooltips, toasts, and the file-transfer card show over it, and
+  dialogs, tooltips, toasts, notice cards, and the file-transfer card show
+  over it, and
   the page stays live around them. The grip between two groups keeps its
   full width over a page. While a menu or dialog is open, a file dropped on
   the window never reaches a page. A file dropped on a toast or the
@@ -3086,9 +3099,11 @@ come back after a restart; closing a workspace in Herdr removes its tabs.
 - On Windows a page is layered above the window, so it steps aside for a
   menu, popover, or status bar tooltip that would fall over it, and for a
   dialog, which dims the whole window. Its place is empty until the menu
-  closes. A page also steps aside while a toast or the file-transfer card
-  falls over it, as when a page or VS Code fills the right-hand group or the
-  whole editor area, so they stay visible and clickable. A page that none of
+  closes. A page also steps aside while a toast, a notice card, or the
+  file-transfer card falls over it, as when a page or VS Code fills the
+  right-hand group or the whole editor area, so they stay visible and
+  clickable. A config warning or announcement card stays until it is
+  dismissed, and the page comes back then. A page that none of
   these reach keeps showing.
 - Linux has no embedded pages yet: browser tab requests open the system
   browser, and local files and annotations are unavailable.
@@ -3241,6 +3256,13 @@ the titlebar's Git menu where its button would.
   Up/Down a page, `]`/`[` move to the next or previous hunk and `.`/`,` to
   the next or previous file, `x` folds the file at the top and `v` marks it
   viewed.
+- `e` opens the file in your [editor](#code-navigation), beside the agent's
+  pane: at the line you clicked while it is in view, else at the top of the
+  diff. On a file clicked or picked in the list, and from the pencil in each
+  file's header, it opens at the file's first change. Quitting the editor
+  brings the review back, reading your edits as it reads any other change,
+  unless you have moved to another tab by then. A file no longer in the
+  checkout says so.
 - The review reads its changes again when the checkout's change counts
   move, keeping the line it was on, unless a note is being written.
 - A scrollbar along the diff's right edge shows how much of it is in view

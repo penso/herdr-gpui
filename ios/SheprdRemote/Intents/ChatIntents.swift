@@ -100,6 +100,24 @@ struct SheprdShortcuts: AppShortcutsProvider {
             systemImageName: "stop.circle"
         )
         AppShortcut(
+            intent: TalkIntent(),
+            phrases: ["Talk to \(.applicationName)"],
+            shortTitle: "Talk",
+            systemImageName: "waveform"
+        )
+        AppShortcut(
+            intent: TellIntent(),
+            phrases: ["Tell \(.applicationName) something", "Give \(.applicationName) a command"],
+            shortTitle: "Tell Sheprd",
+            systemImageName: "text.bubble"
+        )
+        AppShortcut(
+            intent: StartAgentIntent(),
+            phrases: ["Start an agent in \(.applicationName)", "Start an agent on \(\.$computer) in \(.applicationName)"],
+            shortTitle: "Start an Agent",
+            systemImageName: "sparkles"
+        )
+        AppShortcut(
             intent: OpenBoardIntent(),
             phrases: ["Open the \(.applicationName) chats"],
             shortTitle: "Chats",

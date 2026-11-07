@@ -164,6 +164,35 @@ fn a_clean_checkout_shows_no_counts(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_change_with_no_counted_lines_keeps_the_mark_and_hides_the_counts(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(crate::titlebar::tests::header_window);
+    cx.simulate_resize(size(px(900.), px(600.)));
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            // A binary, mode-only, or pure-rename change: porcelain sees it,
+            // numstat counts no line.
+            view.git = Git::fixture(
+                Input {
+                    checkout: None,
+                    repo_key: Some(REPO_KEY.into()),
+                    branch: "develop".into(),
+                },
+                Status::default(),
+            );
+            view.git.seed_uncommitted(true);
+            cx.notify();
+        })
+    });
+    cx.update(|window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+    assert!(cx.debug_bounds("titlebar-git-dirty").is_some());
+    assert!(cx.debug_bounds("titlebar-git-additions").is_none());
+    assert!(cx.debug_bounds("titlebar-git-deletions").is_none());
+}
+
+#[gpui::test]
 fn a_cached_pull_request_replaces_the_uncommitted_counts(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(crate::titlebar::tests::header_window);
     let input = Input {

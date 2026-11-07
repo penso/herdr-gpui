@@ -3,8 +3,8 @@
 //! counts, the notes queued on it and whether it was viewed. A filter keeps
 //! the files whose path holds it, and viewed files can be hidden. Clicking a
 //! file, or Enter on the one picked with the arrows, brings its header to the
-//! top of the diff; the file at the top of the diff is marked, and kept in
-//! view as the diff scrolls.
+//! top of the diff, and `e` opens the picked file in the editor; the file at
+//! the top of the diff is marked, and kept in view as the diff scrolls.
 use super::{Review, tree::Node};
 use crate::browser::TabId;
 use crate::{
@@ -169,6 +169,20 @@ impl SheprdWindow {
         true
     }
 
+    /// Opens the file picked in the list in the editor, at its first
+    /// change; whether a file was picked.
+    fn open_picked_review_file(&mut self, id: TabId, cx: &mut Context<Self>) -> bool {
+        let file = self
+            .reviews
+            .get(&id)
+            .and_then(|review| review.file_at(review.picked?));
+        let Some(file) = file else {
+            return false;
+        };
+        self.open_review_in_editor(id, RowId::Header(file), cx);
+        true
+    }
+
     /// Picks line `line` of the list, which then takes the arrows.
     fn pick_review_file(
         &mut self,
@@ -248,7 +262,12 @@ impl SheprdWindow {
                 let (composing, filtering) =
                     (filter.is_composing(), filter.focus.is_focused(window));
                 let key = event.keystroke.key.as_str();
-                if !composing && this.review_files_key(id, key, filtering, cx) {
+                // A clicked file keeps the keyboard here, where the diff's
+                // `e` would not hear it; the filter types its own.
+                let edit = key == "e" && !filtering && !event.keystroke.modifiers.modified();
+                if (edit && this.open_picked_review_file(id, cx))
+                    || (!composing && this.review_files_key(id, key, filtering, cx))
+                {
                     cx.stop_propagation();
                 }
             }))

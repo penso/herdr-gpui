@@ -22,6 +22,8 @@ case "$round" in
      ipad="" ;;
   newtab) phone="newtab-A-0 newtab-B-0 newtab-B-1 newtab-C-0 newtab-C-1 newtab-D-0 newtab-D-1"
      ipad="" ;;
+  voice) phone="voice-A-0 voice-A-1 voice-A-2 voice-A-3 voice-B-0 voice-B-1 voice-B-2 voice-B-3 voice-C-0 voice-C-1 voice-C-2 voice-C-3 voice-D-0 voice-D-1 voice-D-2 voice-D-3"
+     ipad="" ;;
   *) echo "unknown round $round" >&2; exit 2 ;;
 esac
 

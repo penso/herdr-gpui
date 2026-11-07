@@ -3,6 +3,7 @@
 
 use crate::{
     Core, Endpoint, Error,
+    event::Notice,
     wire::{Attach, Run},
 };
 use std::{
@@ -148,6 +149,7 @@ fn a_real_core_runs_streams_and_stores() {
         seen.extend(chunk.bytes);
     }
 
+    let mut events = core.subscribe().unwrap();
     let doc = core.doc_get("herdr-ui-live").unwrap();
     assert_eq!(doc.version, 0);
     let version = core
@@ -162,6 +164,22 @@ fn a_real_core_runs_streams_and_stores() {
         Err(Error::Refused { .. })
     ));
     assert!(version > 0);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let changed = loop {
+        assert!(Instant::now() < deadline, "no doc event arrived");
+        let notices = events.next(Duration::from_millis(100)).unwrap();
+        if let Some(notice) = notices
+            .into_iter()
+            .find(|notice| matches!(notice, Notice::Doc { .. }))
+        {
+            break notice;
+        }
+    };
+    assert!(matches!(
+        changed,
+        Notice::Doc { machine: None, name, version: seen, .. }
+            if name == "herdr-ui-live" && seen == version
+    ));
 
     core.kill(&started.address).unwrap();
 }

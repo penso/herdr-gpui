@@ -14,6 +14,7 @@ use super::{
     random_bytes, sha256,
 };
 use crate::control::DeviceId;
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -29,9 +30,9 @@ pub(crate) const HANDOFF_TTL_MS: u64 = 24 * 60 * 60_000;
 const FILE_NAME: &str = "handoffs.json";
 
 /// A token the browser gives its Home Screen app.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub(crate) struct Handoff {
-    pub(crate) token: String,
+    pub(crate) token: SecretString,
     pub(crate) expires_ms: u64,
 }
 
@@ -80,7 +81,10 @@ impl Handoffs {
         self.open
             .insert(device.clone(), (sha256(&[token.as_bytes()]), expires_ms));
         self.save()?;
-        Ok(Handoff { token, expires_ms })
+        Ok(Handoff {
+            token: token.into(),
+            expires_ms,
+        })
     }
 
     /// The device `token` was minted for, using the token up; `None` when it

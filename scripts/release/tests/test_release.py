@@ -77,7 +77,7 @@ class ReleaseTests(unittest.TestCase):
                         "bin/herdr-acp", "bin/herdr-remote-control", "bin/herdr-automate", "bin/herdr-nearby",
                         "bin/sheprd-nearby",
                         "bin/herdr-core",
-                        "share/applications/so.pen.herdr-gpui.desktop",
+                        "share/applications/org.sheprd.Sheprd.desktop",
                         "share/icons/hicolor/scalable/apps/sheprd.svg",
                         "share/licenses/herdr-gpui/LICENSE-APACHE", "share/licenses/herdr-gpui/NOTICE.md",
                         "share/licenses/herdr-gpui/LICENSE", "share/licenses/herdr-gpui/NOTICE",
@@ -357,7 +357,7 @@ class ReleaseTests(unittest.TestCase):
         fixture = self.work / "packaging checkout"
         for path in ["scripts/release/common.sh", "scripts/release/package-macos.sh",
                      "scripts/release/package-linux.sh", "scripts/release/build-icon.py",
-                     "scripts/release/so.pen.herdr-gpui.desktop", "assets/macos/Info.plist",
+                     "scripts/release/org.sheprd.Sheprd.desktop", "assets/macos/Info.plist",
                       "LICENSE", "NOTICE", "assets/icons/LICENSE-octicons",
                       "crates/sheprd-gpui/SOUND-NOTICE.md", "scripts/release/herdr-core-licenses.txt",
                      "crates/sheprd-protocol/LICENSE-APACHE", "crates/sheprd-protocol/NOTICE.md"]:

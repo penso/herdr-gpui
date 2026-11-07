@@ -208,7 +208,7 @@ automations-enable-installing = Copying and starting sheprd-automate…
 automations-enable-copies = Copies sheprd-automate { $version } for { $platform } ({ $size }, sha256 { $hash }…) from this app.
 # $program is the command's name, sheprd-automate.
 automations-enable-into = Into ~/.local/share/herdr-automate/bin/{ $version }/herdr-automate, linked from ~/.local/bin/{ $program }.
-automations-enable-then-update = Then stops the running daemon once its runs finish (`sheprd-automate shutdown`, up to about 40 s) and starts the new one (`sheprd-automate start`).
+automations-enable-then-update = Then, unless automations are running, stops the daemon (`sheprd-automate shutdown`) and starts the new one (`sheprd-automate start`). If any are running, the update stops there: try again once they finish.
 automations-enable-then-install = Then installs a user service with `sheprd-automate install-service` (a systemd user unit on Linux, a launchd agent on macOS) and starts the daemon.
 automations-enable-confirm = Enable on { $host }
 automations-update-confirm = Update on { $host }

@@ -29,6 +29,8 @@ pub enum Error {
     Refused(String),
     #[error("Could not run sheprd-automate: {0}")]
     Run(#[source] sheprd_client::Error),
+    #[error("Automations are running on this host; update once they finish")]
+    RunsActive,
     #[error("No connected host is named {0}")]
     UnknownHost(String),
     #[error(

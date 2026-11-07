@@ -76,14 +76,16 @@ fn cancellation_prevents_start_even_with_a_ready_discovery_record() {
 #[cfg(unix)]
 #[test]
 fn owned_launch_uses_its_published_ephemeral_port_and_is_reaped() {
-    use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir().unwrap();
     let program = temp.path().join("fake-px0");
     // Re-exec the native test executable: Python launchers on macOS may
     // introduce another process, unlike the native px0 binary we supervise.
+    // Write the script from a child shell. `std::fs::write` keeps a writable
+    // descriptor in this process, and Linux then refuses the spawn with
+    // ETXTBSY ("Text file busy") if another test forks first.
     let executable = std::env::current_exe().unwrap();
     let executable = sheprd_client::shell_quote(executable.to_str().unwrap());
-    std::fs::write(
+    crate::test_executable::write(
         &program,
         format!(
             r#"#!/bin/sh
@@ -92,9 +94,9 @@ export HERDR_PX0_TEST_CHILD=1
 exec {executable} --exact px0::worker::tests::fixture::workbench --nocapture
 "#
         ),
+        0o700,
     )
     .unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
     let (_stop, stopped) = mpsc::sync_channel(1);
     let owned = Mutex::new(Owned::default());
     let result = launch(&program, temp.path(), None, &stopped, &owned);

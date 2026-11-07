@@ -9,10 +9,12 @@ use axum::{
     extract::ConnectInfo,
     http::Request as HttpRequest,
 };
+use secrecy::ExposeSecret as _;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tower::ServiceExt;
 
 mod apps;
+mod attention;
 #[cfg(unix)]
 mod echo;
 mod handoff;
@@ -67,10 +69,12 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         fingerprint: authority.fingerprint().to_owned(),
         authority: Some(authority),
         hub,
+        live_activities: crate::app::config::ActivityDetail::default(),
         load: tokio::sync::watch::channel(None).1,
         look: Look::load(dir),
         names: RwLock::new(names),
         near: Mutex::default(),
+        opened: crate::web::attention::Opened::default(),
         port: 7443,
         privacy: Privacy::Generic,
         pull_requests,
@@ -145,7 +149,7 @@ pub(crate) fn signed_in(state: &Shared, seed: u8) -> (DeviceId, String) {
             now,
         )
         .unwrap();
-    (device, session.token)
+    (device, session.token.expose_secret().to_owned())
 }
 
 pub(crate) fn get(path: &str) -> HttpRequest<Body> {

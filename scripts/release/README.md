@@ -377,7 +377,8 @@ The compatibility exceptions are intentional:
   **`Herdr.app`**, so an old running updater can reopen it. The cask exposes
   `sheprd` on PATH. Moving that target or cask token needs a separate migration.
 - Linux packages retain package ownership **`herdr-gpui`**, version `VERSION-1`,
-  desktop ID `so.pen.herdr-gpui`, and a real root-owned `/usr/bin/herdr-gpui`.
+  and a real root-owned `/usr/bin/herdr-gpui`. The desktop ID is
+  `org.sheprd.Sheprd`, matching the app's Wayland app ID and X11 `WM_CLASS`.
   They also install `/usr/bin/sheprd` and both names of each owned helper.
   These are regular copies, not shell shims or symlinks.
   Distro packaging accepts only the standalone tree's exact `bin/herdr-gpui ->

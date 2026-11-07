@@ -49,8 +49,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// The macOS bundle identifier, also the Linux app ID and Windows
-/// AppUserModelID. The Homebrew relaunch reopens the bundle by it.
+/// The macOS bundle identifier, also the Windows AppUserModelID. The Homebrew
+/// relaunch reopens the bundle by it.
 pub const APP_ID: &str = "so.pen.herdr-gpui";
 
 /// Release builds embed the same calendar version (YYYYMMDD.COUNTER) used for

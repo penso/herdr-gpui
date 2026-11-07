@@ -130,7 +130,7 @@ fn open_window_placed(
             window_min_size: Some(size(px(640.), px(400.))),
             titlebar: Some(titlebar::options(WINDOW_TITLE)),
             app_owns_titlebar_drag: cfg!(target_os = "macos"),
-            app_id: Some(crate::constants::APP_ID.into()),
+            app_id: Some(crate::constants::LINUX_APP_ID.into()),
             ..Default::default()
         },
         |window, cx| {
@@ -459,7 +459,7 @@ pub(crate) fn run() -> std::process::ExitCode {
     };
     // Whether the launcher is installed is read once here, never while a window opens.
     let taskbar = crate::taskbar::Taskbar::load();
-    gpui_platform::application()
+    crate::composition::application(appearance.dark.config.backdrop.translucent())
         .with_assets(icons::Icons)
         .run(move |cx| {
             let window_count = window_state.as_ref().map_or(1, |state| state.count());

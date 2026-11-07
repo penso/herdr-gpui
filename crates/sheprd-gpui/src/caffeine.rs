@@ -373,7 +373,7 @@ fn hold(scope: AwakeScope) -> keepawake::Result<keepawake::KeepAwake> {
             AwakeScope::System => "Sheprd keeps the system awake",
         })
         .app_name("Sheprd")
-        .app_reverse_domain(crate::constants::APP_ID)
+        .app_reverse_domain(crate::constants::LINUX_APP_ID)
         .create()
 }
 

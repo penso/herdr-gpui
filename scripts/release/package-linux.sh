@@ -42,7 +42,7 @@ for companion in "${companions[@]}"; do
     fi
 done
 cp "$icon" "$root/$icon_path"
-cp "$release_root/scripts/release/so.pen.herdr-gpui.desktop" "$root/share/applications/"
+cp "$release_root/scripts/release/org.sheprd.Sheprd.desktop" "$root/share/applications/"
 cp "$release_root/crates/sheprd-protocol/LICENSE-APACHE" "$release_root/crates/sheprd-protocol/NOTICE.md" "$root/share/licenses/herdr-gpui/"
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$root/share/licenses/herdr-gpui/"
 cp "$5" "$root/share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt"

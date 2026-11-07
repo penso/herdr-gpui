@@ -9,7 +9,11 @@ fn counting_listed_checkouts_reprobes_dirty_answers_and_keeps_the_backoff() {
     peer.git.track_listed(listed.clone(), true, now);
     peer.git.poll(now);
     let (requested, _) = peer.request();
-    peer.complete(requested, Completion::Status(Ok(status(5, 1, 0))), now);
+    peer.complete(
+        requested,
+        Completion::Status(Ok(focused(status(5, 1, 0)))),
+        now,
+    );
     // The focused checkout's counts come from its own status.
     assert_eq!(
         peer.git.counts("/repo/.git", "feature"),

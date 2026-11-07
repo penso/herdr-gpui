@@ -64,6 +64,14 @@ enum BackgroundCommands {
         }
     }
 
+    /// Starts a workspace from `build`, which reads what the computer
+    /// offers: from Siri or Shortcuts, with the app's links closed.
+    static func createWorkspace(computer fingerprint: String, _ build: @Sendable (NewOptions) throws -> NewWorkspaceRequest) async throws -> Created {
+        let session = try await signIn(fingerprint)
+        let options = try await session.client.newOptions(bearer: session.token)
+        return try await session.client.createWorkspace(build(options), bearer: session.token)
+    }
+
     private static func signIn(_ fingerprint: String) async throws -> (client: RemoteClient, token: String) {
         let computers = try ComputerStore.load()
         guard let wanted = Fingerprint(fingerprint),

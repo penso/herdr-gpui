@@ -44,13 +44,17 @@ public struct NewWorkspaceRequest: Codable, Hashable, Sendable {
     public var prompt: String
     /// What the chat starts with, before the prompt goes.
     public var start: ChatStart?
+    /// The Herdr session to open it in, as the computer's home names it;
+    /// left out, it opens where the computer puts new workspaces.
+    public var session: String?
 
-    public init(cwd: String, branch: String = "", agent: String, prompt: String = "", start: ChatStart? = nil) {
+    public init(cwd: String, branch: String = "", agent: String, prompt: String = "", start: ChatStart? = nil, session: String? = nil) {
         self.cwd = cwd
         self.branch = branch
         self.agent = agent
         self.prompt = prompt
         self.start = start
+        self.session = session
     }
 
     /// The branch proposed for `seed`, the same one the desktop's new

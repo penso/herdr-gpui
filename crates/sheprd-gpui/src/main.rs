@@ -49,6 +49,7 @@ mod cloud_setup;
 mod code_search;
 mod code_server;
 mod code_view;
+mod composition;
 mod config;
 mod config_diagnostic;
 mod connection;

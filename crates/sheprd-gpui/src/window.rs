@@ -42,6 +42,7 @@ pub(crate) mod prefix;
 mod reconnecting;
 mod regions;
 mod render;
+pub(crate) use render::NoticeCard;
 mod report_issue;
 mod select_hint;
 mod selection;
@@ -118,6 +119,9 @@ pub(crate) struct SheprdWindow {
     pub(crate) active: bool,
     /// The activity bar's panel and filter.
     pub(crate) activity: sidebar::Activity,
+    /// The coordinator group the agents panel is narrowed to, by name: a
+    /// group outlives its coordinator's pane. None lists every group.
+    pub(crate) agent_group: Option<String>,
     pub(crate) agent_sort: preferences::AgentSort,
     /// Whether the user chose the sort with the panel toggle, now or in a
     /// stored session. Until then the daemon's `ui.agent_panel_sort` decides,
@@ -202,6 +206,8 @@ pub(crate) struct SheprdWindow {
     pub(crate) editor_open: Option<crate::editor::Job>,
     /// Editor panes whose Neovim later files open in.
     pub(crate) editor_panes: Vec<crate::editor::EditorPane>,
+    /// Pages to bring back when the editor panes opened from them quit.
+    pub(crate) editor_returns: Vec<crate::editor::Return>,
     pub(crate) endpoints: Vec<endpoint::Endpoint>,
     /// A prompt fanned out to several agents; once launched it outlives its
     /// dialog so the lanes can be compared later.
@@ -683,6 +689,7 @@ impl SheprdWindow {
             self.poll_cloud_setup_tab(cx);
         }
         self.poll_editor_open(cx);
+        self.poll_editor_returns(window, cx);
         self.poll_worktree_source(cx);
         self.poll_hover_menu(std::time::Instant::now(), window, cx);
         if self.tick_flash(std::time::Instant::now()) {

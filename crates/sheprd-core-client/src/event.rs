@@ -13,6 +13,14 @@ pub const MAX_LINE: usize = crate::frame::MAX_PAYLOAD;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Notice {
+    /// A document changed. It carries no value: read it with `doc.get`.
+    Doc {
+        /// This core's name for the machine it changed on; `None` here.
+        machine: Option<String>,
+        name: String,
+        seq: u64,
+        version: u64,
+    },
     Event(Event),
     Heartbeat {
         seq: u64,
@@ -91,6 +99,21 @@ struct RawEvent {
     kind: String,
 }
 
+/// A `doc` event: the one kind that names no terminal.
+#[derive(Deserialize)]
+struct RawDoc {
+    data: DocData,
+    #[serde(default)]
+    machine: Option<String>,
+    seq: u64,
+}
+
+#[derive(Deserialize)]
+struct DocData {
+    name: String,
+    version: u64,
+}
+
 #[derive(Deserialize)]
 struct Seq {
     seq: u64,
@@ -147,6 +170,15 @@ struct TitleData {
 pub fn parse(line: &[u8]) -> Result<Option<Notice>> {
     let message: Message = serde_json::from_slice(line)?;
     Ok(Some(match message.method.as_str() {
+        "event" if message.params["type"] == "doc" => {
+            let RawDoc { data, machine, seq } = serde_json::from_value(message.params)?;
+            Notice::Doc {
+                machine,
+                name: data.name,
+                seq,
+                version: data.version,
+            }
+        }
         "event" => Notice::Event(event(serde_json::from_value(message.params)?)?),
         "heartbeat" => {
             let Seq { seq } = serde_json::from_value(message.params)?;

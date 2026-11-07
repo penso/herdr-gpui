@@ -100,8 +100,8 @@ pub(crate) struct Browser {
     /// Where the status bar last drew, which the band sits above.
     #[cfg(windows)]
     pub(super) status_bar: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
-    /// Where the window's toasts and file-transfer card drew. The Windows
-    /// pages they reach hide, as for a menu.
+    /// Where the window's toasts, notice cards, and file-transfer card drew.
+    /// The Windows pages they reach hide, as for a menu.
     #[cfg(windows)]
     pub(super) overlays: std::rc::Rc<std::cell::RefCell<present::Overlays>>,
 }
@@ -189,8 +189,14 @@ pub(crate) enum PageOpened {
 }
 
 impl SheprdWindow {
+    /// The workspace tabs belong to: the one Herdr 1 focuses or, with no
+    /// Herdr 1 installed, the window's single herdr-core workspace.
     pub(crate) fn browser_key(&self) -> Option<(Scope, String)> {
-        let workspace = self.live.snapshot.as_ref()?.focused_workspace_id.clone()?;
+        let workspace = match &self.live.snapshot {
+            Some(snapshot) => snapshot.focused_workspace_id.clone()?,
+            None if self.live.missing_installation => crate::core_terminals::WORKSPACE.to_owned(),
+            None => return None,
+        };
         Some((scope(&self.endpoints[self.selected_endpoint]), workspace))
     }
 

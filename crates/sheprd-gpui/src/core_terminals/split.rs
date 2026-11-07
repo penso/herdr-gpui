@@ -49,7 +49,7 @@ impl SheprdWindow {
         let Some(shown) = self.core_terminals.tabs.get(&tab.id) else {
             return self.core_placeholder();
         };
-        if shown.panes.len() == 1 {
+        if shown.panes.count() == 1 {
             let key = (tab.id, shown.panes.first().clone());
             let Some(view) = self.core_terminals.views.get(&key).cloned() else {
                 return self.core_placeholder();
