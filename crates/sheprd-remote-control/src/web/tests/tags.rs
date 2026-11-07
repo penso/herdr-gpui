@@ -83,3 +83,18 @@ fn offers_at_once_leave_the_latest_in_memory_and_on_disk() {
         latest
     );
 }
+
+#[test]
+fn an_edit_saved_while_the_daemon_started_counts() {
+    let dir = tempfile::tempdir().unwrap();
+    let tags = Tags::load(dir.path());
+    // A `tags --offer` found no socket yet, after the daemon read the file.
+    let file = crate::app::tags::file(dir.path());
+    let newer = ComputerTags::new(["work"], 2_000);
+    crate::app::tags::save(&file, &newer).unwrap();
+
+    let stale = ComputerTags::new(["lab"], 1_000);
+    assert_eq!(tags.offer(stale, 5_000).unwrap(), newer);
+    assert_eq!(tags.current(), newer);
+    assert_eq!(crate::app::tags::load(&file), newer);
+}

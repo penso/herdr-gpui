@@ -41,16 +41,26 @@ impl Tags {
 
     /// Offers `offer` and returns what stands. Blocking: an edit is saved
     /// before anyone hears of it, and an edit that cannot be saved is refused
-    /// so its sender keeps it and tries again.
+    /// so its sender keeps it and tries again. The file counts too, as a
+    /// `tags --offer` that found no socket while this daemon started wrote
+    /// there after it was read.
     pub(crate) fn offer(&self, offer: ComputerTags, now_ms: u64) -> app::Result<ComputerTags> {
         let _offering = self.offering.lock().unwrap_or_else(PoisonError::into_inner);
-        let stored = self.current();
-        let merged = stored.clone().merged(offer, now_ms);
-        if merged != stored {
-            app::tags::locked(&self.file, || app::tags::save(&self.file, &merged))?;
-            self.current.send_replace(merged.clone());
-        }
-        Ok(merged)
+        app::tags::locked(&self.file, || {
+            let saved = app::tags::load(&self.file);
+            let stored = self.current();
+            let merged = stored
+                .clone()
+                .merged(saved.clone(), now_ms)
+                .merged(offer, now_ms);
+            if merged != saved {
+                app::tags::save(&self.file, &merged)?;
+            }
+            if merged != stored {
+                self.current.send_replace(merged.clone());
+            }
+            Ok(merged)
+        })
     }
 }
 
