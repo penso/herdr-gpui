@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The static herdr-remote-control Herdr UI copies onto SSH and cloud machines
+# The static sheprd-remote-control Sheprd copies onto SSH and cloud machines
 # of another platform to pair a phone with them (host-manifest.json, schema
 # 4). musl links everything in, so it starts whatever glibc the machine has.
 set -euo pipefail
@@ -10,7 +10,7 @@ case $2 in x86_64-unknown-linux-musl|aarch64-unknown-linux-musl) ;; *) fail 'Uns
 [[ -d $3 ]] || fail 'Existing output directory required'
 arch=${2%%-*}
 [[ $(uname -m) == "$arch" ]] || fail "Build $2 on a $arch machine"
-out=$(cd -- "$3" && pwd)/herdr-remote-control-$1-$2
+out=$(cd -- "$3" && pwd)/sheprd-remote-control-$1-$2
 new_output "$out"
 if ! command -v musl-gcc >/dev/null; then
     sudo apt-get install -y --no-install-recommends musl-tools
@@ -18,8 +18,8 @@ fi
 rustup target add "$2"
 export "CC_${2//-/_}=musl-gcc"
 cd "$release_root"
-cargo build --locked --release -p herdr-remote-control --target "$2"
-binary=target/$2/release/herdr-remote-control
+cargo build --locked --release -p sheprd-remote-control --target "$2"
+binary=target/$2/release/sheprd-remote-control
 "$binary" --version
 # No interpreter to look for on the machine it lands on.
 if file -L "$binary" | grep -q 'dynamically linked'; then

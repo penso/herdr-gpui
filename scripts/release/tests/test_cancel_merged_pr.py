@@ -12,7 +12,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = (ROOT / ".github/workflows/cancel-merged-pr.yml").read_text()
 SCRIPT = textwrap.dedent(WORKFLOW.split("        run: |\n", 1)[1])
-BASE = "repos/penso/herdr-gpui/actions/runs"
+BASE = "repos/sheprd-labs/sheprd/actions/runs"
 
 
 def run(run_id, number=42, event="pull_request", status="in_progress"):
@@ -43,7 +43,7 @@ class CancelMergedPr(unittest.TestCase):
             self.assertEqual(path, f"{BASE}/1")
             return json.dumps({"status": failure_status})
 
-        with mock.patch.dict(os.environ, GITHUB_REPOSITORY="penso/herdr-gpui", PR_NUMBER="42"), \
+        with mock.patch.dict(os.environ, GITHUB_REPOSITORY="sheprd-labs/sheprd", PR_NUMBER="42"), \
                 mock.patch("subprocess.check_output", side_effect=api), \
                 mock.patch("builtins.print"):
             exec(compile(SCRIPT, "cancel-merged-pr.yml", "exec"), {})
@@ -77,7 +77,7 @@ class CancelMergedPr(unittest.TestCase):
         self.assertIn("  pull_request_target:", WORKFLOW)
         self.assertIn("    types: [closed]", WORKFLOW)
         self.assertIn("github.event.pull_request.merged == true", WORKFLOW)
-        self.assertIn("github.repository == 'penso/herdr-gpui'", WORKFLOW)
+        self.assertIn("github.repository == 'sheprd-labs/sheprd'", WORKFLOW)
         self.assertIn("permissions: {}", WORKFLOW)
         self.assertIn("      actions: write", WORKFLOW)
         self.assertNotIn("uses:", WORKFLOW)

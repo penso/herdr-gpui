@@ -1,0 +1,904 @@
+//! A single-line, native-IME-aware input for searchable pickers.
+use std::ops::Range;
+
+use gpui::{
+    App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, EntityInputHandler,
+    EventEmitter, FocusHandle, Focusable, KeyDownEvent, MouseButton, Pixels, Point, Role,
+    SharedString, TextAlign, TextRun, UTF16Selection, UnderlineStyle, Window, canvas, div, fill,
+    point, prelude::*, px, rgb, size,
+};
+
+use crate::caret::Carets;
+use crate::config::{Config, FontConfig, Theme};
+use crate::fonts::StyledFont;
+#[cfg(test)]
+use crate::text_editing::from_utf16;
+use crate::text_editing::{Editing, Newlines, byte_range, normalize, to_utf16};
+use crate::{actions, input::ViewInputHandler, words};
+
+mod control_keys;
+
+pub struct Changed;
+
+pub struct SearchInput {
+    pub focus: FocusHandle,
+    placeholder: String,
+    /// Formats the placeholder in the current locale, so a field built
+    /// before a language change shows the new language's hint.
+    localized: Option<Box<dyn Fn() -> String>>,
+    _locale: gpui::Subscription,
+    /// What a screen reader calls the field when its placeholder does not
+    /// name it, as when a caption beside the field does.
+    label: Option<SharedString>,
+    edit: Editing,
+    font: FontConfig,
+    theme: Theme,
+    /// Where the last drawn line puts each caret.
+    layout: Option<Carets>,
+    bounds: Option<Bounds<Pixels>>,
+    scroll: Pixels,
+    selecting: bool,
+    /// Draw one `*` per character instead of the text, and keep it off the
+    /// clipboard: for secrets typed into settings.
+    masked: bool,
+    /// Whether it draws its own border, background, and padding. A field
+    /// set inside a frame its owner draws turns this off.
+    framed: bool,
+    /// Text drawn dimmed after the caret, which the owner offers to complete
+    /// what is typed; shown only while the caret ends the text.
+    completion: Option<String>,
+    /// What Ctrl-K last cut, which Ctrl-Y puts back, kept apart from the
+    /// clipboard as in a native macOS field.
+    killed: String,
+}
+
+/// Where byte `offset` of `text` falls in its masked rendering, which draws
+/// one single-byte `*` per character.
+fn masked_offset(text: &str, offset: usize) -> usize {
+    text[..offset].chars().count()
+}
+
+/// The byte offset of `text` shown at `offset` in its masked rendering.
+fn unmasked_offset(text: &str, offset: usize) -> usize {
+    text.char_indices()
+        .nth(offset)
+        .map_or(text.len(), |(byte, _)| byte)
+}
+
+impl SearchInput {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        Self {
+            focus: cx.focus_handle(),
+            placeholder: "Search themes...".into(),
+            localized: None,
+            _locale: cx.observe_global::<crate::i18n::CurrentLocale>(|this, cx| {
+                if let Some(placeholder) = this.localized.as_ref().map(|localized| localized()) {
+                    this.show_placeholder(placeholder, cx);
+                }
+            }),
+            label: None,
+            edit: Editing::default(),
+            font: Config::default().ui,
+            theme: Theme::default(),
+            layout: None,
+            bounds: None,
+            scroll: px(0.),
+            selecting: false,
+            framed: true,
+            masked: false,
+            completion: None,
+            killed: String::new(),
+        }
+    }
+
+    pub(crate) fn set_masked(&mut self, masked: bool, cx: &mut Context<Self>) {
+        self.masked = masked;
+        self.layout = None;
+        cx.notify();
+    }
+
+    /// Draw only the text, inside a frame the owner draws.
+    pub(crate) fn set_frameless(&mut self, cx: &mut Context<Self>) {
+        self.framed = false;
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn framed(&self) -> bool {
+        self.framed
+    }
+
+    /// Byte `offset` of the text in the shaped line's index space.
+    fn shown(&self, offset: usize) -> usize {
+        if self.masked {
+            masked_offset(&self.edit.text, offset)
+        } else {
+            offset
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        &self.edit.text
+    }
+
+    /// Replaces the text with the cursor at byte `cursor`, moved back to a
+    /// character boundary, and nothing selected.
+    pub(crate) fn set_text_at(&mut self, text: &str, cursor: usize, cx: &mut Context<Self>) {
+        let text = normalize(text, Newlines::Strip);
+        let mut cursor = cursor.min(text.len());
+        while !text.is_char_boundary(cursor) {
+            cursor -= 1;
+        }
+        let changed = self.edit.text != text;
+        self.edit = Editing {
+            anchor: cursor,
+            cursor,
+            text,
+            ..Editing::default()
+        };
+        self.selecting = false;
+        self.did_edit(changed, cx);
+    }
+
+    pub(super) fn set_text_selected(&mut self, text: &str, cx: &mut Context<Self>) {
+        let text = normalize(text, Newlines::Strip);
+        let changed = self.edit.text != text;
+        self.edit = Editing {
+            cursor: text.len(),
+            text,
+            ..Editing::default()
+        };
+        self.scroll = px(0.);
+        self.selecting = false;
+        self.did_edit(changed, cx);
+    }
+
+    /// Unchanged is a no-op, so the owner may set it from its own render.
+    /// The text stays as given when the locale changes, as an example path
+    /// or token does.
+    pub fn set_placeholder(&mut self, value: &str, cx: &mut Context<Self>) {
+        self.localized = None;
+        if self.placeholder != value {
+            self.show_placeholder(value.into(), cx);
+        }
+    }
+
+    /// Shows what `placeholder` formats now, laid out again only when its text
+    /// changed (callers set it every poll), and formats it again per locale.
+    pub(crate) fn set_placeholder_with(
+        &mut self,
+        placeholder: impl Fn() -> String + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let shown = placeholder();
+        if self.placeholder != shown {
+            self.show_placeholder(shown, cx);
+        }
+        self.localized = Some(Box::new(placeholder));
+    }
+
+    fn show_placeholder(&mut self, placeholder: String, cx: &mut Context<Self>) {
+        self.placeholder = placeholder;
+        self.layout = None;
+        cx.notify();
+    }
+
+    /// Select the whole text, as a native field does when Tab moves into it.
+    pub(crate) fn select_all(&mut self, cx: &mut Context<Self>) {
+        self.edit.anchor = 0;
+        self.edit.cursor = self.edit.text.len();
+        cx.notify();
+    }
+
+    /// The field's accessible name, which the placeholder otherwise stands
+    /// in for. Unchanged is a no-op, so the owner may set it from its render.
+    pub(crate) fn set_label(&mut self, label: &str, cx: &mut Context<Self>) {
+        if self.label.as_deref() == Some(label) {
+            return;
+        }
+        self.label = Some(label.to_owned().into());
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn label(&self) -> Option<&str> {
+        self.label.as_deref()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn placeholder(&self) -> &str {
+        &self.placeholder
+    }
+
+    pub fn is_composing(&self) -> bool {
+        self.edit.marked.is_some()
+    }
+
+    pub fn clear(&mut self, cx: &mut Context<Self>) {
+        let changed = !self.edit.text.is_empty();
+        self.edit = Editing::default();
+        self.scroll = px(0.);
+        self.selecting = false;
+        self.did_edit(changed, cx);
+    }
+
+    /// Offers `completion` after the typed text. Unchanged is a no-op, so the
+    /// owner may set it from its own render.
+    pub(crate) fn set_completion(&mut self, completion: Option<String>, cx: &mut Context<Self>) {
+        if self.completion != completion {
+            self.completion = completion;
+            self.layout = None;
+            cx.notify();
+        }
+    }
+
+    /// The completion to draw now: never on a secret, during composition,
+    /// or with the caret anywhere but the end of the text.
+    fn shown_completion(&self) -> Option<&str> {
+        let selection = self.edit.selection();
+        (!self.masked
+            && !self.is_composing()
+            && selection.is_empty()
+            && selection.end == self.edit.text.len())
+        .then_some(self.completion.as_deref())
+        .flatten()
+    }
+
+    pub fn set_appearance(&mut self, font: FontConfig, theme: Theme, cx: &mut Context<Self>) {
+        if self.font == font && self.theme == theme {
+            return;
+        }
+        self.font = font;
+        self.theme = theme;
+        self.layout = None;
+        cx.notify();
+    }
+
+    fn did_edit(&mut self, changed: bool, cx: &mut Context<Self>) {
+        self.layout = None;
+        if changed {
+            cx.emit(Changed);
+        }
+        cx.notify();
+    }
+
+    fn mouse_index(&self, position: Point<Pixels>) -> usize {
+        match (&self.layout, self.bounds) {
+            (Some(line), Some(bounds)) if !self.edit.text.is_empty() => {
+                let index = line
+                    .index_at(position.x - bounds.left() + self.scroll)
+                    .min(self.shown(self.edit.text.len()));
+                if self.masked {
+                    unmasked_offset(&self.edit.text, index)
+                } else {
+                    index
+                }
+            }
+            _ => 0,
+        }
+    }
+
+    fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // Let the OS consume composition keys, including picker navigation/accept/dismiss.
+        if self.is_composing() {
+            return;
+        }
+        let key = event.keystroke.key.as_str();
+        let modifiers = event.keystroke.modifiers;
+        if matches!(key, "up" | "down" | "enter" | "escape") {
+            return;
+        }
+        if self.control_key(key, modifiers, window, cx) {
+            cx.stop_propagation();
+            window.prevent_default();
+            cx.notify();
+            return;
+        }
+        let edit = actions::edit_modifiers(modifiers) && matches!(key, "a" | "c" | "v" | "x");
+        if edit || (modifiers.platform && !modifiers.control && !modifiers.alt) {
+            match key {
+                // As in every macOS text field: Cmd-Left and Cmd-Right go to
+                // the line's ends, Cmd-Backspace and Cmd-Delete delete to them.
+                "left" | "right" => {
+                    let offset = if key == "left" {
+                        0
+                    } else {
+                        self.edit.text.len()
+                    };
+                    self.edit.select_to(offset, modifiers.shift);
+                }
+                "backspace" | "delete" if !modifiers.shift => {
+                    if self.edit.selection().is_empty() {
+                        let offset = if key == "backspace" {
+                            0
+                        } else {
+                            self.edit.text.len()
+                        };
+                        self.edit.select_to(offset, true);
+                    }
+                    self.replace_text_in_range(None, "", window, cx);
+                }
+                _ if modifiers.shift && !edit => return,
+                "a" => {
+                    self.edit.anchor = 0;
+                    self.edit.cursor = self.edit.text.len();
+                }
+                // A masked secret never reaches the clipboard.
+                "c" | "x" if self.masked => {}
+                "c" | "x" => {
+                    let selection = self.edit.selection();
+                    if !selection.is_empty() {
+                        cx.write_to_clipboard(ClipboardItem::new_string(
+                            self.edit.text[selection].into(),
+                        ));
+                        if key == "x" {
+                            self.replace_text_in_range(None, "", window, cx);
+                        }
+                    }
+                }
+                "v" => {
+                    if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+                        self.replace_text_in_range(None, &text, window, cx);
+                    }
+                }
+                _ => return,
+            }
+        } else if !modifiers.platform && !modifiers.control && !modifiers.alt {
+            match key {
+                "backspace" | "delete" => {
+                    if self.edit.selection().is_empty() {
+                        let offset = if key == "backspace" {
+                            self.edit.previous()
+                        } else {
+                            self.edit.next()
+                        };
+                        self.edit.select_to(offset, true);
+                    }
+                    self.replace_text_in_range(None, "", window, cx);
+                }
+                "left" | "right" | "home" | "end" => {
+                    let selection = self.edit.selection();
+                    let offset = match key {
+                        "home" => 0,
+                        "end" => self.edit.text.len(),
+                        "left" if !modifiers.shift && !selection.is_empty() => selection.start,
+                        "right" if !modifiers.shift && !selection.is_empty() => selection.end,
+                        "left" => self.edit.previous(),
+                        _ => self.edit.next(),
+                    };
+                    self.edit.select_to(offset, modifiers.shift);
+                }
+                _ => return,
+            }
+        } else if actions::word_modifiers(modifiers)
+            && matches!(key, "backspace" | "delete" | "left" | "right")
+        {
+            // macOS sends these as commands, never text, so the native
+            // handler below would drop them. A masked secret is one word,
+            // as in a native secure field, so its words are not revealed.
+            let selection = self.edit.selection();
+            let backward = matches!(key, "backspace" | "left");
+            let from = match key {
+                "left" if !modifiers.shift && !selection.is_empty() => selection.start,
+                "right" if !modifiers.shift && !selection.is_empty() => selection.end,
+                _ => self.edit.cursor,
+            };
+            let offset = match (backward, self.masked) {
+                (true, true) => 0,
+                (false, true) => self.edit.text.len(),
+                (true, false) => words::previous_start(&self.edit.text, from),
+                (false, false) => words::next_end(&self.edit.text, from),
+            };
+            if matches!(key, "left" | "right") {
+                self.edit.select_to(offset, modifiers.shift);
+            } else {
+                if selection.is_empty() {
+                    self.edit.select_to(offset, true);
+                }
+                self.replace_text_in_range(None, "", window, cx);
+            }
+        } else {
+            // Option/dead-key text also goes through the native input handler.
+            return;
+        }
+        cx.stop_propagation();
+        window.prevent_default();
+        cx.notify();
+    }
+}
+
+impl EventEmitter<Changed> for SearchInput {}
+
+impl Focusable for SearchInput {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
+impl EntityInputHandler for SearchInput {
+    fn text_for_range(
+        &mut self,
+        range: Range<usize>,
+        actual: &mut Option<Range<usize>>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<String> {
+        let range = byte_range(self.text(), range);
+        *actual = Some(to_utf16(self.text(), range.start)..to_utf16(self.text(), range.end));
+        Some(self.edit.text[range].into())
+    }
+
+    fn selected_text_range(
+        &mut self,
+        _: bool,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<UTF16Selection> {
+        let selection = self.edit.selection();
+        Some(UTF16Selection {
+            range: to_utf16(self.text(), selection.start)..to_utf16(self.text(), selection.end),
+            reversed: self.edit.cursor < self.edit.anchor,
+        })
+    }
+
+    fn marked_text_range(&self, _: &mut Window, _: &mut Context<Self>) -> Option<Range<usize>> {
+        self.edit
+            .marked
+            .as_ref()
+            .map(|r| to_utf16(self.text(), r.start)..to_utf16(self.text(), r.end))
+    }
+
+    fn unmark_text(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        self.edit.marked = None;
+        cx.notify();
+    }
+
+    fn replace_text_in_range(
+        &mut self,
+        range: Option<Range<usize>>,
+        text: &str,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let changed = self.edit.replace(range, text, false, None, Newlines::Strip);
+        self.did_edit(changed, cx);
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        range: Option<Range<usize>>,
+        text: &str,
+        selection: Option<Range<usize>>,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let changed = self
+            .edit
+            .replace(range, text, true, selection, Newlines::Strip);
+        self.did_edit(changed, cx);
+    }
+
+    fn bounds_for_range(
+        &mut self,
+        range: Range<usize>,
+        _: Bounds<Pixels>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<Bounds<Pixels>> {
+        let line = self.layout.as_ref()?;
+        let bounds = self.bounds?;
+        // An empty field's layout is the placeholder's, which can read the
+        // other way: the input method's box is the caret where text starts.
+        if self.text().is_empty() {
+            let x = match crate::direction::is_rtl() {
+                false => bounds.left(),
+                true => (bounds.right() - px(1.)).max(bounds.left()),
+            };
+            return Some(Bounds::from_corners(
+                point(x, bounds.top()),
+                point(x, bounds.bottom()),
+            ));
+        }
+        let range = byte_range(self.text(), range);
+        let extent = line.extent(self.shown(range.start)..self.shown(range.end));
+        let x = |x| {
+            (bounds.left() + x - self.scroll)
+                .max(bounds.left())
+                .min(bounds.right())
+        };
+        Some(Bounds::from_corners(
+            point(x(extent.start), bounds.top()),
+            point(x(extent.end), bounds.bottom()),
+        ))
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        position: Point<Pixels>,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<usize> {
+        let bounds = self.bounds?;
+        if position.y < bounds.top() || position.y > bounds.bottom() {
+            return None;
+        }
+        self.layout.as_ref()?;
+        Some(to_utf16(self.text(), self.mouse_index(position)))
+    }
+}
+
+impl Render for SearchInput {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let input = cx.entity();
+        let painter = input.clone();
+        let height = px(self.font.line_height());
+        div()
+            .debug_selector(|| "theme-search".into())
+            .id("search-input")
+            .map(|field| {
+                // A masked field is a secret: its role says so and it reports
+                // no value, so a screen reader never reads it out.
+                let field = if self.masked {
+                    field.role(Role::PasswordInput)
+                } else {
+                    field
+                        .role(Role::TextInput)
+                        .aria_value(SharedString::from(self.edit.text.clone()))
+                };
+                match &self.label {
+                    Some(label) => field.aria_label(label.clone()).when(
+                        !self.placeholder.is_empty(),
+                        |field| {
+                            field.aria_placeholder(SharedString::from(self.placeholder.clone()))
+                        },
+                    ),
+                    None => field.when(!self.placeholder.is_empty(), |field| {
+                        field.aria_label(SharedString::from(self.placeholder.clone()))
+                    }),
+                }
+            })
+            .w_full()
+            .when(self.framed, |field| {
+                field
+                    .px_2()
+                    .py_1()
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .border_1()
+                    .border_color(rgb(self.theme.active))
+                    .bg(rgb(self.theme.background))
+            })
+            .text_color(rgb(self.theme.foreground))
+            .text_font(&self.font)
+            .text_size(px(self.font.size))
+            .line_height(height)
+            .track_focus(&self.focus)
+            .cursor(CursorStyle::IBeam)
+            .on_key_down(cx.listener(Self::key_down))
+            .on_action(cx.listener(|this, _: &actions::Cut, window, cx| {
+                this.key_down(&actions::edit_key("x"), window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &actions::Copy, window, cx| {
+                this.key_down(&actions::edit_key("c"), window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &actions::Paste, window, cx| {
+                this.key_down(&actions::edit_key("v"), window, cx)
+            }))
+            .on_action(cx.listener(|this, _: &actions::SelectAll, window, cx| {
+                this.key_down(&actions::edit_key("a"), window, cx)
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                    window.focus(&this.focus, cx);
+                    cx.stop_propagation();
+                    if !this.is_composing() {
+                        let offset = this.mouse_index(event.position);
+                        this.edit.select_to(offset, event.modifiers.shift);
+                        if event.click_count >= 2 {
+                            this.edit.anchor = 0;
+                            this.edit.cursor = this.edit.text.len();
+                        }
+                        this.selecting = true;
+                    }
+                    cx.notify();
+                }),
+            )
+            .on_mouse_move(cx.listener(|this, event: &gpui::MouseMoveEvent, _, cx| {
+                if this.selecting && !this.is_composing() {
+                    this.edit.select_to(this.mouse_index(event.position), true);
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.selecting {
+                        this.selecting = false;
+                        cx.stop_propagation();
+                    }
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _, _, _| this.selecting = false),
+            )
+            .child(
+                canvas(
+                    move |_, window, cx| {
+                        let input = input.read(cx);
+                        let placeholder = input.text().is_empty();
+                        let completion = input
+                            .shown_completion()
+                            .filter(|_| !placeholder && input.focus.is_focused(window));
+                        let text: SharedString = if placeholder {
+                            input.placeholder.clone().into()
+                        } else if input.masked {
+                            "*".repeat(input.text().chars().count()).into()
+                        } else {
+                            input.text().to_owned().into()
+                        };
+                        let run = TextRun {
+                            len: text.len(),
+                            font: window.text_style().font(),
+                            color: rgb(if placeholder {
+                                input.theme.muted
+                            } else {
+                                input.theme.foreground
+                            })
+                            .into(),
+                            background_color: None,
+                            underline: None,
+                            strikethrough: None,
+                        };
+                        let completion = completion.map(|completion| {
+                            let run = TextRun {
+                                len: completion.len(),
+                                color: rgb(input.theme.muted).into(),
+                                ..run.clone()
+                            };
+                            (completion, run)
+                        });
+                        let marked = input
+                            .edit
+                            .marked
+                            .clone()
+                            .map(|marked| input.shown(marked.start)..input.shown(marked.end));
+                        let runs = if let Some(marked) = &marked {
+                            vec![
+                                TextRun {
+                                    len: marked.start,
+                                    ..run.clone()
+                                },
+                                TextRun {
+                                    len: marked.len(),
+                                    underline: Some(UnderlineStyle {
+                                        color: Some(run.color),
+                                        thickness: px(1.),
+                                        wavy: false,
+                                    }),
+                                    ..run.clone()
+                                },
+                                TextRun {
+                                    len: text.len() - marked.end,
+                                    ..run
+                                },
+                            ]
+                            .into_iter()
+                            .filter(|run| run.len > 0)
+                            .collect()
+                        } else {
+                            vec![run]
+                        };
+                        let (text, runs) = match completion {
+                            Some((completion, ghost)) => {
+                                let mut runs = runs;
+                                runs.push(ghost);
+                                (format!("{text}{completion}").into(), runs)
+                            }
+                            None => (text, runs),
+                        };
+                        window
+                            .text_system()
+                            .shape_line(text, px(input.font.size), &runs, None)
+                    },
+                    move |bounds, line, window, cx| {
+                        painter.update(cx, |input, cx| {
+                            let visible_width = (bounds.size.width - px(1.)).max(px(0.));
+                            let carets = Carets::new(&line.text, &line);
+                            let rtl = crate::direction::is_rtl();
+                            // An empty field's caret waits where text starts.
+                            let caret = match (input.text().is_empty(), rtl) {
+                                (true, false) => px(0.),
+                                (true, true) => line.width,
+                                (false, _) => carets.x(input.shown(input.edit.cursor)),
+                            };
+                            input.scroll = input
+                                .scroll
+                                .min((line.width - visible_width).max(px(0.)))
+                                .min(caret)
+                                .max(caret - visible_width)
+                                .max(px(0.));
+                            if input.text().is_empty() {
+                                input.scroll = px(0.);
+                            }
+                            // Right to left, a line that fits sets against
+                            // the field's right, its start, and so does a
+                            // placeholder however long, so the caret after
+                            // it stays at that edge.
+                            if rtl && (input.text().is_empty() || line.width < visible_width) {
+                                input.scroll = line.width - visible_width;
+                            }
+                            let origin = point(bounds.left() - input.scroll, bounds.top());
+                            window.handle_input(
+                                &input.focus,
+                                ViewInputHandler::new(bounds, cx.entity()),
+                                cx,
+                            );
+                            window.with_content_mask(Some(ContentMask { bounds }), |window| {
+                                let selection = input.edit.selection();
+                                let selection =
+                                    input.shown(selection.start)..input.shown(selection.end);
+                                if input.focus.is_focused(window) && !selection.is_empty() {
+                                    for span in carets.spans(selection) {
+                                        window.paint_quad(fill(
+                                            Bounds::from_corners(
+                                                point(origin.x + span.start, bounds.top()),
+                                                point(origin.x + span.end, bounds.bottom()),
+                                            ),
+                                            rgb(input.theme.active),
+                                        ));
+                                    }
+                                }
+                                let _ =
+                                    line.paint(origin, height, TextAlign::Left, None, window, cx);
+                                if input.focus.is_focused(window) {
+                                    window.paint_quad(fill(
+                                        Bounds::new(
+                                            point(origin.x + caret, bounds.top()),
+                                            size(px(1.), height),
+                                        ),
+                                        rgb(input.theme.cursor),
+                                    ));
+                                }
+                            });
+                            input.bounds = Some(bounds);
+                            input.layout = Some(carets);
+                        });
+                    },
+                )
+                .w_full()
+                .h(height),
+            )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod completion;
+    mod composition;
+    mod control_keys;
+    mod placeholder;
+    mod rtl_caret;
+    mod word_keys;
+
+    #[test]
+    fn masked_offsets_count_characters_both_ways() {
+        let text = "a\u{e9}\u{1f600}z";
+        for (shown, (byte, _)) in text.char_indices().enumerate() {
+            assert_eq!(masked_offset(text, byte), shown);
+            assert_eq!(unmasked_offset(text, shown), byte);
+        }
+        assert_eq!(masked_offset(text, text.len()), 4);
+        assert_eq!(unmasked_offset(text, 4), text.len());
+        assert_eq!(unmasked_offset(text, 99), text.len());
+    }
+
+    #[test]
+    fn utf16_ranges_are_clamped_to_scalar_boundaries() {
+        let text = "a\u{1f600}\u{e9}\u{4e2d}";
+        assert_eq!(byte_range(text, 1..3), 1..5);
+        assert_eq!(byte_range(text, 2..99), 5..text.len());
+        assert_eq!(byte_range(text, Range { start: 99, end: 1 }), 1..text.len());
+        for (byte, _) in text.char_indices() {
+            assert_eq!(from_utf16(text, to_utf16(text, byte)), byte);
+        }
+    }
+
+    #[test]
+    fn replaces_unicode_selection_and_explicit_utf16_range() {
+        let mut edit = Editing::default();
+        assert!(edit.replace(None, "a\u{1f600}\u{e9}z", false, None, Newlines::Strip));
+        edit.anchor = 7;
+        edit.cursor = 1;
+        assert_eq!(edit.selection(), 1..7);
+        assert!(edit.replace(None, "\u{4e2d}", false, None, Newlines::Strip));
+        assert_eq!(edit.text, "a\u{4e2d}z");
+        assert_eq!(edit.cursor, 4);
+        assert!(edit.replace(Some(1..2), "\u{1f600}", false, None, Newlines::Strip));
+        assert_eq!(edit.text, "a\u{1f600}z");
+        assert_eq!(edit.cursor, 5);
+        assert_eq!(edit.previous(), 1);
+        edit.select_to(1, false);
+        assert_eq!(edit.next(), 5);
+    }
+
+    #[test]
+    fn composition_selection_is_relative_to_inserted_text() {
+        let mut edit = Editing::default();
+        edit.replace(None, "\u{1f600}prefix", false, None, Newlines::Strip);
+        let start = edit.cursor;
+        edit.replace(
+            None,
+            "\u{4e2d}\u{1f600}a",
+            true,
+            Some(1..3),
+            Newlines::Strip,
+        );
+        assert_eq!(edit.selection(), start + 3..start + 7);
+        assert_eq!(edit.marked, Some(start..start + 8));
+        edit.replace(None, "\u{e9}", true, Some(0..1), Newlines::Strip);
+        assert_eq!(edit.selection(), start..start + 2);
+        assert_eq!(edit.marked, Some(start..start + 2));
+        assert!(!edit.replace(None, "\u{e9}", false, None, Newlines::Strip));
+        assert_eq!(edit.marked, None);
+        assert_eq!(edit.selection(), start + 2..start + 2);
+        assert_eq!(edit.text, "\u{1f600}prefix\u{e9}");
+    }
+
+    #[test]
+    fn strips_newlines_and_maps_composition_selection() {
+        let mut edit = Editing::default();
+        edit.replace(None, "a\r\n\u{1f600}\nz", true, Some(3..6), Newlines::Strip);
+        assert_eq!(edit.text, "a\u{1f600}z");
+        assert_eq!(edit.selection(), 1..5);
+        edit.replace(None, "", true, None, Newlines::Strip);
+        assert!(edit.text.is_empty());
+        assert_eq!(edit.marked, None);
+        assert_eq!(edit.selection(), 0..0);
+        assert!(!edit.replace(None, "\r\n", false, None, Newlines::Strip));
+    }
+
+    #[gpui::test]
+    fn cmd_arrows_and_cmd_backspace_reach_the_line_ends(cx: &mut gpui::TestAppContext) {
+        let (input, cx) = cx.add_window_view(|_, cx| SearchInput::new(cx));
+        cx.update(|window, cx| {
+            input.update(cx, |input, cx| {
+                input
+                    .edit
+                    .replace(None, "one two", false, None, Newlines::Strip);
+                input.edit.select_to(3, false);
+                window.focus(&input.focus, cx);
+            });
+            window.draw(cx).clear(cx);
+        });
+        let edit = |cx: &mut gpui::VisualTestContext| {
+            input.read_with(cx, |input, _| {
+                (input.edit.text.clone(), input.edit.selection())
+            })
+        };
+        cx.simulate_keystrokes("cmd-shift-right");
+        assert_eq!(edit(cx), ("one two".into(), 3..7));
+        cx.simulate_keystrokes("cmd-left");
+        assert_eq!(edit(cx), ("one two".into(), 0..0));
+        cx.simulate_keystrokes("cmd-right left left cmd-backspace");
+        assert_eq!(edit(cx), ("wo".into(), 0..0));
+        cx.simulate_keystrokes("cmd-delete");
+        assert_eq!(edit(cx), (String::new(), 0..0));
+    }
+
+    #[test]
+    fn extending_selection_can_cross_its_anchor() {
+        let mut edit = Editing::default();
+        edit.replace(None, "a\u{1f600}b", false, None, Newlines::Strip);
+        edit.select_to(1, false);
+        edit.select_to(0, true);
+        assert_eq!(edit.selection(), 0..1);
+        edit.select_to(5, true);
+        assert_eq!(edit.selection(), 1..5);
+        edit.select_to(edit.next(), true);
+        assert_eq!(edit.selection(), 1..6);
+    }
+}

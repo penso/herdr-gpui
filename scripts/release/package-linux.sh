@@ -6,40 +6,47 @@ version_check "$1"
 case $2 in x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu) ;; *) fail 'Unsupported Linux target';; esac
 [[ -f $3 && -d $4 ]] || fail 'Binary file and existing output directory required'
 [[ -f $5 && -s $5 ]] || fail 'Nonempty third-party notices file required'
-# The app starts chats with the herdr-acp beside its executable, runs the
-# herdr-remote-control beside it as a user service, runs automations in the
-# herdr-automate there, starts herdr-nearby for nearby pairing and presence
+# The app starts chats with the sheprd-acp beside its executable, runs the
+# sheprd-remote-control beside it as a user service, runs automations in the
+# sheprd-automate there, starts sheprd-nearby for nearby pairing and presence
 # over Bluetooth, and runs Herdr 2 terminals in the herdr-core there; the
-# build leaves all five beside herdr-gpui (herdr-core fetched pinned).
-companions=(herdr-acp herdr-remote-control herdr-automate herdr-nearby herdr-core)
+# build leaves all five beside sheprd (herdr-core fetched pinned).
+companions=(sheprd-acp sheprd-remote-control sheprd-automate sheprd-nearby herdr-core)
 for companion in "${companions[@]}"; do
     [[ -f $(dirname -- "$3")/$companion ]] || fail "A $companion beside the binary required"
 done
-out=$(cd -- "$4" && pwd)/Herdr-$1-$2.tar.gz
+out=$(cd -- "$4" && pwd)/Sheprd-$1-$2.tar.gz
 new_output "$out"
 selection=$(python3 "$release_root/scripts/release/build-icon.py" linux "$3")
 icon=${selection%$'\n'*}
 icon_path=${selection##*$'\n'}
 [[ -f $icon && $icon_path == share/* ]] || fail 'Could not select the Linux icon'
-tmp=$(mktemp -d "${out%/*}/.herdr-linux.XXXXXX")
+tmp=$(mktemp -d "${out%/*}/.sheprd-linux.XXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-name=Herdr-$1-$2
+name=Sheprd-$1-$2
 root=$tmp/$name
 mkdir -p "$root/bin" "$root/share/applications" "$root/${icon_path%/*}" "$root/share/licenses/herdr-gpui"
-cp "$3" "$root/bin/herdr-gpui"
-chmod 755 "$root/bin/herdr-gpui"
+cp "$3" "$root/bin/sheprd"
+chmod 755 "$root/bin/sheprd"
+# Standalone updates replace the resolved executable, so both commands must
+# follow that same file. Distro packaging materializes its required real copy.
+ln -s sheprd "$root/bin/herdr-gpui"
 for companion in "${companions[@]}"; do
     cp "$(dirname -- "$3")/$companion" "$root/bin/$companion"
     chmod 755 "$root/bin/$companion"
+    if [[ $companion == sheprd-* ]]; then
+        cp "$root/bin/$companion" "$root/bin/herdr-${companion#sheprd-}"
+        chmod 755 "$root/bin/herdr-${companion#sheprd-}"
+    fi
 done
 cp "$icon" "$root/$icon_path"
-cp "$release_root/scripts/release/so.pen.herdr-gpui.desktop" "$root/share/applications/"
-cp "$release_root/crates/herdr-protocol/LICENSE-APACHE" "$release_root/crates/herdr-protocol/NOTICE.md" "$root/share/licenses/herdr-gpui/"
+cp "$release_root/scripts/release/org.sheprd.Sheprd.desktop" "$root/share/applications/"
+cp "$release_root/crates/sheprd-protocol/LICENSE-APACHE" "$release_root/crates/sheprd-protocol/NOTICE.md" "$root/share/licenses/herdr-gpui/"
 cp "$release_root/LICENSE" "$release_root/NOTICE" "$release_root/assets/icons/LICENSE-octicons" "$root/share/licenses/herdr-gpui/"
 cp "$5" "$root/share/licenses/herdr-gpui/THIRD-PARTY-NOTICES.txt"
-cp "$release_root/crates/herdr-gpui/SOUND-NOTICE.md" "$root/share/licenses/herdr-gpui/"
+cp "$release_root/crates/sheprd-gpui/SOUND-NOTICE.md" "$root/share/licenses/herdr-gpui/"
 cp "$release_root/scripts/release/herdr-core-licenses.txt" "$root/share/licenses/herdr-gpui/HERDR-CORE-LICENSES.txt"
 COPYFILE_DISABLE=1 tar -C "$tmp" -czf "$tmp/archive.tar.gz" "$name"
 mv "$tmp/archive.tar.gz" "$out"

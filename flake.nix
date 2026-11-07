@@ -1,5 +1,5 @@
 {
-  description = "Herdr UI: a native GPUI client for an existing local Herdr daemon";
+  description = "Sheprd: a native GPUI client for an existing local Herdr daemon";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -51,7 +51,7 @@
           ];
         in
         rustPlatform.buildRustPackage {
-          pname = "herdr-gpui";
+          pname = "sheprd";
           version = "0-unstable-${lib.substring 0 8 (self.lastModifiedDate or "19700101")}";
           src = lib.fileset.toSource {
             root = ./.;
@@ -63,31 +63,31 @@
               ./assets
               # The agent skill is compiled into the executable.
               ./skills
-              ./scripts/release/so.pen.herdr-gpui.desktop
+              ./scripts/release/org.sheprd.Sheprd.desktop
             ];
           };
           cargoLock.lockFile = ./Cargo.lock;
-          # The app starts chats with the herdr-acp beside its executable,
-          # runs the herdr-remote-control beside it as a user service, runs
-          # automations in the herdr-automate there, and starts herdr-nearby
+          # The app starts chats with the sheprd-acp beside its executable,
+          # runs the sheprd-remote-control beside it as a user service, runs
+          # automations in the sheprd-automate there, and starts sheprd-nearby
           # for nearby pairing and presence over Bluetooth.
           cargoBuildFlags = [
             "-p"
-            "herdr-gpui"
+            "sheprd-gpui"
             "-p"
-            "herdr-acp"
+            "sheprd-acp"
             "-p"
-            "herdr-remote-control"
+            "sheprd-remote-control"
             "-p"
-            "herdr-automate"
+            "sheprd-automate"
             "-p"
-            "herdr-nearby"
+            "sheprd-nearby"
           ];
           # The optimized CLI suite CI's main-branch build runs; the rest of
           # the workspace suite needs a desktop or a live daemon.
           cargoTestFlags = [
             "-p"
-            "herdr-gpui"
+            "sheprd-gpui"
             "--test"
             "cli"
           ];
@@ -107,21 +107,26 @@
           # No updater key is embedded, so this build never replaces itself;
           # Nix owns the store path and upgrades come from the flake.
           postInstall = ''
-            install -Dm644 scripts/release/so.pen.herdr-gpui.desktop \
-              $out/share/applications/so.pen.herdr-gpui.desktop
-            install -Dm644 assets/icons/herdr-linux.svg \
-              $out/share/icons/hicolor/scalable/apps/herdr-gpui.svg
+            install -Dm644 scripts/release/org.sheprd.Sheprd.desktop \
+              $out/share/applications/org.sheprd.Sheprd.desktop
+            install -Dm644 assets/icons/sheprd-linux.svg \
+              $out/share/icons/hicolor/scalable/apps/sheprd.svg
           '';
           postFixup = ''
-            patchelf --add-rpath ${lib.makeLibraryPath runtimeLibraries} $out/bin/herdr-gpui
-            wrapProgram $out/bin/herdr-gpui \
+            patchelf --add-rpath ${lib.makeLibraryPath runtimeLibraries} $out/bin/sheprd
+            wrapProgram $out/bin/sheprd \
               --prefix PATH : ${lib.makeBinPath [ pkgs.wl-clipboard pkgs.xclip ]}
+            # Point at the final wrapper, including its clipboard PATH setup.
+            ln -s sheprd $out/bin/herdr-gpui
+            for helper in acp automate nearby remote-control; do
+              ln -s "sheprd-$helper" "$out/bin/herdr-$helper"
+            done
           '';
           meta = {
             description = "Native GPUI client for an existing local Herdr daemon";
-            homepage = "https://herdrui.dev";
+            homepage = "https://sheprd.org";
             license = lib.licenses.asl20;
-            mainProgram = "herdr-gpui";
+            mainProgram = "sheprd";
             platforms = systems;
           };
         };
@@ -129,9 +134,11 @@
     {
       packages = forAllSystems (pkgs: {
         default = package pkgs;
+        sheprd = package pkgs;
         herdr-gpui = package pkgs;
       });
       overlays.default = final: _prev: {
+        sheprd = self.packages.${final.stdenv.hostPlatform.system}.default;
         herdr-gpui = self.packages.${final.stdenv.hostPlatform.system}.default;
       };
     };

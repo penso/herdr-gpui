@@ -24,9 +24,10 @@ class PackagingTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.app = self.root / "Herdr.app"
+        self.app = self.root / "Sheprd.app"
         self.app.mkdir()
-        self.binary = self.app / "Herdr"
+        self.binary = self.app / "Contents/MacOS/sheprd"
+        self.binary.parent.mkdir(parents=True)
         self.binary.write_bytes(b"synthetic executable")
         self.binary.chmod(0o755)
         self.archive = self.root / "archive.tar.gz"
@@ -44,22 +45,23 @@ class PackagingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             updater.version("20260920.18446744073709551616")
         self.assertEqual(updater.asset_name("20260920.3", updater.TARGETS[0]),
-                         "herdr-gpui-20260920.3-macos-universal.app.tar.gz")
+                         "sheprd-20260920.3-macos-universal.app.tar.gz")
         for target in updater.LINUX_TARGETS:
             self.assertEqual(updater.asset_name("20260920.3", target),
-                             f"herdr-gpui-20260920.3-{target}-update.tar.gz")
+                             f"sheprd-20260920.3-{target}-update.tar.gz")
 
     def test_macos_ustar_permissions_symlinks_and_stable_bytes(self):
-        (self.app / "link").symlink_to("Herdr")
+        (self.app / "link").symlink_to("Contents/MacOS/sheprd")
         updater.package_macos(self.app, self.archive)
         raw = gzip.decompress(self.archive.read_bytes())
         self.assertEqual(raw[257:265], b"ustar\x0000")
         with tarfile.open(self.archive) as archive:
             members = archive.getmembers()
-            self.assertEqual([m.name for m in members], ["Herdr.app", "Herdr.app/Herdr", "Herdr.app/link"])
-            self.assertEqual(members[1].mode, 0o755)
-            self.assertEqual(members[2].linkname, "Herdr")
-            self.assertTrue(members[2].issym())
+            self.assertEqual([m.name for m in members], ["Sheprd.app", "Sheprd.app/Contents",
+                             "Sheprd.app/Contents/MacOS", "Sheprd.app/Contents/MacOS/sheprd", "Sheprd.app/link"])
+            self.assertEqual(archive.getmember("Sheprd.app/Contents/MacOS/sheprd").mode, 0o755)
+            self.assertEqual(archive.getmember("Sheprd.app/link").linkname, "Contents/MacOS/sheprd")
+            self.assertTrue(archive.getmember("Sheprd.app/link").issym())
             for member in members:
                 self.assertEqual((member.uid, member.gid, member.uname, member.gname, member.mtime), (0, 0, "", "", 0))
                 self.assertFalse(member.pax_headers)
@@ -70,7 +72,7 @@ class PackagingTests(unittest.TestCase):
             updater.package_macos(self.app, second)
 
     def test_unsafe_entries_and_destinations(self):
-        for target in ("../escape", "/etc/passwd", "a/../../escape", "bad\\path", "../Herdr.app/Herdr"):
+        for target in ("../escape", "/etc/passwd", "a/../../escape", "bad\\path", "../Sheprd.app/Contents/MacOS/sheprd"):
             link = self.app / "link"
             link.symlink_to(target)
             with self.subTest(target=target), self.assertRaises((ValueError, OSError)):
@@ -85,6 +87,22 @@ class PackagingTests(unittest.TestCase):
         self.binary.chmod(0o755)
         os.mkfifo(self.app / "fifo")
         with self.assertRaises(ValueError):
+            updater.package_macos(self.app, self.archive)
+
+    def test_main_executable_must_match_the_deployed_bridge_contract(self):
+        legacy = self.binary.with_name("Herdr")
+        legacy.write_bytes(self.binary.read_bytes())
+        with self.assertRaisesRegex(ValueError, "sole regular executable"):
+            updater.package_macos(self.app, self.archive)
+        legacy.unlink()
+        self.binary.rename(legacy)
+        self.binary.symlink_to("Herdr")
+        with self.assertRaisesRegex(ValueError, "sole regular executable"):
+            updater.package_macos(self.app, self.archive)
+        self.binary.unlink()
+        legacy.rename(self.binary)
+        self.binary.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, "sole regular executable"):
             updater.package_macos(self.app, self.archive)
 
     def test_ustar_rejects_extensions(self):
@@ -132,7 +150,7 @@ class PackagingTests(unittest.TestCase):
             with tarfile.open(archive_path) as archive:
                 members = archive.getmembers()
                 self.assertEqual(len(members), 1)
-                self.assertEqual(members[0].name, f"herdr-gpui-20260920.3-{target}")
+                self.assertEqual(members[0].name, f"sheprd-20260920.3-{target}")
                 self.assertEqual(members[0].mode, 0o755)
                 self.assertTrue(members[0].isreg())
                 self.assertEqual(archive.extractfile(members[0]).read(), self.binary.read_bytes())
@@ -141,6 +159,15 @@ class PackagingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             updater.package_linux(link, updater.LINUX_TARGETS[0], "20260920.3", self.archive)
 
+    def test_linux_update_rejects_even_the_safe_standalone_alias(self):
+        canonical = self.root / "sheprd"
+        canonical.write_bytes(b"executable")
+        alias = self.root / "herdr-gpui"
+        alias.symlink_to("sheprd")
+        with self.assertRaisesRegex(ValueError, "unsupported file type"):
+            updater.package_linux(alias, updater.LINUX_TARGETS[0], "20260920.3", self.archive)
+        self.assertFalse(self.archive.exists())
+
     def test_manifest_exact_stable_bytes_and_optional_targets(self):
         release = "20260920.3"
         expected = []
@@ -148,7 +175,7 @@ class PackagingTests(unittest.TestCase):
             name = updater.asset_name(release, target)
             (self.root / name).write_bytes(b"abc")
             expected.append(dict(target=target, name=name, size=3, sha256=hashlib.sha256(b"abc").hexdigest()))
-        for name in ("herdr-gpui-20260920.2-macos-universal.app.tar.gz", "herdr-gpui-20260920.3-unknown.tar.gz", "Herdr-20260920.3-x86_64-unknown-linux-gnu.tar.gz", "unrelated.zip"):
+        for name in ("sheprd-20260920.2-macos-universal.app.tar.gz", "sheprd-20260920.3-unknown.tar.gz", "Sheprd-20260920.3-x86_64-unknown-linux-gnu.tar.gz", "unrelated.zip"):
             (self.root / name).write_bytes(b"ignored")
         raw = updater.create(self.root, release)
         self.assertEqual(raw, json.dumps(dict(schema=1, version=release, assets=expected), separators=(",", ":")).encode())
