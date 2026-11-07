@@ -17,7 +17,7 @@ use super::{
     layout::{self, Highlight, SidebarLook},
     line_height, visible_workspace_entries,
     wash::HostMark,
-    workspaces::workspace_label,
+    workspaces::{rail_workspace_status, workspace_label},
 };
 use crate::direction::Logical;
 use crate::i18n::fl;
@@ -276,6 +276,13 @@ impl SheprdWindow {
                 let context_id = id.clone();
                 let focused = selected && workspace.focused;
                 let number = workspace.number.to_string();
+                let status = rail_workspace_status(
+                    &snapshot.workspaces,
+                    &snapshot.agents,
+                    workspace,
+                    collapsed_repos,
+                    &self.config.sidebar_style.status_priority,
+                );
                 let muted = silenced.get(&endpoint_index).is_some_and(|silenced| {
                     silenced.host() || silenced.workspace(&workspace.workspace_id)
                 });
@@ -323,7 +330,7 @@ impl SheprdWindow {
                         format!("rail-dot-{key}"),
                         columns.dot,
                         columns.height,
-                        indicator(workspace.agent_status, font, indicators),
+                        indicator(status, font, indicators),
                     ));
                 spaces = spaces.child(
                     aligned_row(
@@ -345,7 +352,7 @@ impl SheprdWindow {
                         host,
                         workspace_label(workspace, indented),
                         None,
-                        muted_word(status_word(workspace.agent_status), muted).as_deref(),
+                        muted_word(status_word(status), muted).as_deref(),
                     )))
                     .on_mouse_down(
                         MouseButton::Right,

@@ -35,6 +35,7 @@ mod host_mark;
 mod mark_sizes;
 mod pane_names;
 mod row_text;
+mod status_priority;
 mod statuses;
 mod sticky_hosts;
 mod working_marks;

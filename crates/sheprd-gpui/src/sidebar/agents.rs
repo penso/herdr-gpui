@@ -70,15 +70,15 @@ fn sort_label(sort: AgentSort) -> String {
     }
 }
 
-/// Attention first, then the most recent change, as upstream orders it.
-pub(super) fn status_priority(status: AgentStatus) -> u8 {
-    match status {
-        AgentStatus::Blocked => 4,
-        AgentStatus::Done => 3,
-        AgentStatus::Working => 2,
-        AgentStatus::Idle => 1,
-        AgentStatus::Unknown => 0,
+/// The configured status order, then the most recent change within a status.
+pub(super) fn status_priority(status: AgentStatus, priority: &[AgentStatus]) -> u8 {
+    if status == AgentStatus::Unknown {
+        return 0;
     }
+    priority
+        .iter()
+        .position(|candidate| *candidate == status)
+        .map_or(0, |index| (priority.len() - index) as u8)
 }
 
 /// The agents of one endpoint in the order the panel paints them.
@@ -89,10 +89,11 @@ pub(super) fn status_priority(status: AgentStatus) -> u8 {
 /// none match. Upstream's client keys this on the label, not on the order
 /// being non-empty, and drops ids the snapshot has no agent for. Without a
 /// view the local sort applies.
-pub(super) fn sorted_agents(
-    snapshot: &ClientShellSnapshot,
+pub(super) fn sorted_agents<'a>(
+    snapshot: &'a ClientShellSnapshot,
     sort: AgentSort,
-) -> Vec<&ClientShellAgent> {
+    priority: &[AgentStatus],
+) -> Vec<&'a ClientShellAgent> {
     if snapshot.agent_view_label.is_some() {
         return snapshot
             .agent_order
@@ -109,7 +110,7 @@ pub(super) fn sorted_agents(
     if sort == AgentSort::Priority {
         ordered.sort_by_key(|agent| {
             (
-                std::cmp::Reverse(status_priority(agent.agent_status)),
+                std::cmp::Reverse(status_priority(agent.agent_status, priority)),
                 std::cmp::Reverse(agent.state_change_seq),
             )
         });
@@ -128,6 +129,7 @@ pub(super) fn sorted_agents(
 pub(super) fn panel_agents<'a>(
     hosts: impl IntoIterator<Item = (usize, &'a crate::state::LiveState)>,
     sort: AgentSort,
+    priority: &[AgentStatus],
 ) -> Vec<(usize, &'a ClientShellAgent)> {
     let mut merge = sort == AgentSort::Priority;
     let mut listed = 0;
@@ -139,7 +141,7 @@ pub(super) fn panel_agents<'a>(
         listed += 1;
         merge &= snapshot.agent_view_label.is_none();
         rows.extend(
-            sorted_agents(snapshot, sort)
+            sorted_agents(snapshot, sort, priority)
                 .into_iter()
                 .map(|agent| (index, live, agent)),
         );
@@ -149,7 +151,7 @@ pub(super) fn panel_agents<'a>(
         rows.sort_by_key(|(_, live, agent)| {
             (
                 !live.status.is_connected(),
-                std::cmp::Reverse(status_priority(agent.agent_status)),
+                std::cmp::Reverse(status_priority(agent.agent_status, priority)),
                 std::cmp::Reverse(live.agent_recency.of(&agent.pane_id)),
             )
         });
@@ -617,7 +619,7 @@ pub(crate) fn state_label<'a>(
 /// ANSI slots would drift: Xcode Dark paints its cyan purple. Mocha's pastels
 /// vanish on light chrome, so [`Theme::ink`] darkens them there, keeping hue.
 /// The diameter is the default size's, which callers scale to their font.
-pub(super) fn status_style(status: AgentStatus, theme: &Theme) -> (f32, bool, u32) {
+pub(crate) fn status_style(status: AgentStatus, theme: &Theme) -> (f32, bool, u32) {
     let (diameter, filled, color) = match status {
         AgentStatus::Working => (STATUS_WIDTH, true, 0xf9e2af),
         AgentStatus::Blocked => (STATUS_WIDTH, true, 0xf38ba8),

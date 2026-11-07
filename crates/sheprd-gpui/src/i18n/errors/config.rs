@@ -15,6 +15,10 @@ impl Localize for Error {
                 device = device.as_str(),
                 error = source.localize()
             ),
+            Self::DuplicateSidebarStatus(status) => fl!(
+                "error-config-duplicate-sidebar-status",
+                status = format!("{status:?}")
+            ),
             Self::EmptyFontFallback(table) => {
                 fl!("error-config-empty-font-fallback", table = *table)
             }
@@ -46,6 +50,10 @@ impl Localize for Error {
                 "error-config-invalid-sidebar-metric",
                 key = *key,
                 max = max.to_string()
+            ),
+            Self::InvalidSidebarStatus(status) => fl!(
+                "error-config-invalid-sidebar-status",
+                status = format!("{status:?}")
             ),
             Self::InvalidSoundVolume => fl!("error-config-invalid-sound-volume"),
             Self::InvalidTerminalPadding(key) => {

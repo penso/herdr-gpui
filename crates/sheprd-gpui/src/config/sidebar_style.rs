@@ -7,7 +7,49 @@ use super::Error;
 use super::fonts::FontSettings;
 use crate::Result;
 use serde::Deserialize;
+use sheprd_client::protocol::AgentStatus;
 use std::collections::BTreeMap;
+
+pub(crate) const DEFAULT_STATUS_PRIORITY: [AgentStatus; 4] = [
+    AgentStatus::Blocked,
+    AgentStatus::Done,
+    AgentStatus::Working,
+    AgentStatus::Idle,
+];
+
+pub(crate) fn status_name(status: AgentStatus) -> &'static str {
+    match status {
+        AgentStatus::Blocked => "blocked",
+        AgentStatus::Working => "working",
+        AgentStatus::Done => "done",
+        AgentStatus::Idle => "idle",
+        AgentStatus::Unknown => "unknown",
+    }
+}
+
+fn parse_status_priority(values: &[String]) -> Result<Vec<AgentStatus>> {
+    let mut priority = Vec::with_capacity(DEFAULT_STATUS_PRIORITY.len());
+    for value in values {
+        let status = DEFAULT_STATUS_PRIORITY
+            .into_iter()
+            .find(|status| status_name(*status) == value)
+            .ok_or_else(|| Error::InvalidSidebarStatus(value.clone()))?;
+        if priority.contains(&status) {
+            return Err(Error::DuplicateSidebarStatus(value.clone()).into());
+        }
+        priority.push(status);
+    }
+    if priority.is_empty() {
+        priority.extend(DEFAULT_STATUS_PRIORITY);
+    } else {
+        let missing: Vec<_> = DEFAULT_STATUS_PRIORITY
+            .into_iter()
+            .filter(|status| !priority.contains(status))
+            .collect();
+        priority.extend(missing);
+    }
+    Ok(priority)
+}
 
 /// Spacing the config file sets over the active layout's numbers. Unset keys
 /// keep the preset's value, so a layout still looks like itself. The card
@@ -142,6 +184,8 @@ pub struct SidebarStyle {
     pub hosts: BTreeMap<String, u32>,
     pub overrides: SidebarOverrides,
     pub select: SelectMode,
+    /// Highest status first, completed with missing defaults.
+    pub status_priority: Vec<AgentStatus>,
 }
 
 impl Default for SidebarStyle {
@@ -155,6 +199,7 @@ impl Default for SidebarStyle {
             hosts: BTreeMap::new(),
             overrides: SidebarOverrides::default(),
             select: SelectMode::default(),
+            status_priority: DEFAULT_STATUS_PRIORITY.to_vec(),
         }
     }
 }
@@ -183,6 +228,7 @@ pub(super) struct SidebarSettings {
     pub(super) select: SelectMode,
     pub(super) device_footer: DeviceFooter,
     pub(super) change_counts: ChangeCounts,
+    pub(super) status_priority: Vec<String>,
     pub(super) coordinator_suffix: Option<String>,
     pub(super) hosts: BTreeMap<String, String>,
     pub(super) activity_bar: Option<bool>,
@@ -219,6 +265,7 @@ impl SidebarSettings {
             hosts,
             overrides: self.overrides,
             select: self.select,
+            status_priority: parse_status_priority(&self.status_priority)?,
         })
     }
 }
@@ -254,6 +301,7 @@ impl<'de> Deserialize<'de> for SidebarSettings {
                         "select" => settings.select = map.next_value()?,
                         "device_footer" => settings.device_footer = map.next_value()?,
                         "change_counts" => settings.change_counts = map.next_value()?,
+                        "status_priority" => settings.status_priority = map.next_value()?,
                         "coordinator_suffix" => {
                             settings.coordinator_suffix = Some(map.next_value()?);
                         }

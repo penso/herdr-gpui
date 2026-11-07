@@ -61,7 +61,11 @@ impl SheprdWindow {
     /// and stepping both read it, so a shortcut lands on the row below. A
     /// picked coordinator group narrows it for both.
     pub(super) fn panel_agents(&self) -> Vec<(usize, &ClientShellAgent)> {
-        let rows = panel_agents(self.listed_lives(), self.agent_sort);
+        let rows = panel_agents(
+            self.listed_lives(),
+            self.agent_sort,
+            &self.config.sidebar_style.status_priority,
+        );
         let (Some(groups), Some(group)) = (self.agent_groups(), self.agent_group_filter()) else {
             return rows;
         };

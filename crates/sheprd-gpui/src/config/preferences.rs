@@ -76,6 +76,8 @@ pub(crate) enum Preference {
     SidebarDeviceFooter(DeviceFooter),
     /// `[sidebar] change_counts`: whose line counts a worktree row shows.
     SidebarChangeCounts(ChangeCounts),
+    /// `[sidebar] status_priority`: highest agent status first.
+    SidebarStatusPriority(Vec<sheprd_client::protocol::AgentStatus>),
     /// `None` removes the host's colour.
     HostColor {
         host: String,
@@ -263,6 +265,18 @@ impl Config {
                     Some("sidebar"),
                     "change_counts",
                     Some(toml_edit::Value::from(counts.as_str())),
+                ),
+                Preference::SidebarStatusPriority(priority) => (
+                    Some("sidebar"),
+                    "status_priority",
+                    (priority != DEFAULT_STATUS_PRIORITY).then(|| {
+                        toml_edit::Value::Array(
+                            priority
+                                .into_iter()
+                                .map(|status| toml_edit::Value::from(status_name(status)))
+                                .collect(),
+                        )
+                    }),
                 ),
                 Preference::HostColor { host, color } => {
                     if let Some(color) = color.filter(|color| *color > 0xFF_FFFF) {

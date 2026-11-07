@@ -58,6 +58,7 @@ mod status_bar;
 mod status_bar_awake_scope;
 mod status_bar_gpu;
 mod status_icons;
+mod status_priority;
 mod system_themes;
 mod tab_labels;
 mod tab_layout;

@@ -5,6 +5,8 @@
 
 # $device is a saved device's ID.
 error-config-device-theme = devices.{ $device }.theme: { $error }
+# $status is the quoted, untranslated status name from the configuration.
+error-config-duplicate-sidebar-status = sidebar.status_priority contains duplicate status { $status }
 error-config-empty-font-fallback = { $table }.fallback families must not be empty
 error-config-empty-font-family = { $table }.family must not be empty
 error-config-empty-theme = theme must not be empty
@@ -22,6 +24,8 @@ error-config-invalid-line-height = { $table }.line_height must be a finite numbe
 error-config-invalid-sidebar-gap = layout.sidebar_gap must be finite and between 0 and 64 logical pixels
 # $key is a sidebar config key; $max is its largest value.
 error-config-invalid-sidebar-metric = sidebar.{ $key } must be finite and between 0 and { $max } logical pixels
+# Keep sidebar.status_priority and the accepted configuration values untranslated.
+error-config-invalid-sidebar-status = sidebar.status_priority contains unknown status { $status }; use blocked, working, done, or idle
 error-config-invalid-sound-volume = sound.volume must be between 0 and 100
 # $key is a terminal config key, such as padding.
 error-config-invalid-terminal-padding = terminal.{ $key } must be one number or a pair of numbers, each finite and between 0 and 64 logical pixels

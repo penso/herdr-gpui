@@ -116,7 +116,7 @@ fn ordered(
     snapshot: &sheprd_client::protocol::ClientShellSnapshot,
     sort: crate::preferences::AgentSort,
 ) -> Vec<&str> {
-    sorted_agents(snapshot, sort)
+    sorted_agents(snapshot, sort, &crate::config::DEFAULT_STATUS_PRIORITY)
         .into_iter()
         .map(|agent| agent.pane_id.as_str())
         .collect()

@@ -161,6 +161,12 @@ pub(super) const CATALOG: &[Entry] = &[
     ),
     entry(
         Section::Sidebar,
+        "sidebar-status-priority",
+        "settings-sidebar-status-priority",
+        "settings-sidebar-status-priority-description",
+    ),
+    entry(
+        Section::Sidebar,
         "sidebar-show-agents",
         "settings-sidebar-show-agents",
         "settings-sidebar-show-agents-description",

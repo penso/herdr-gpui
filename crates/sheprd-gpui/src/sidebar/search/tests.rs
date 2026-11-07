@@ -29,12 +29,16 @@ fn devices(snapshot: &ClientShellSnapshot) -> [Device<'_>; 2] {
             id: "local",
             label: "MacBook Pro",
             workspaces: &snapshot.workspaces,
+            agents: &snapshot.agents,
+            status_priority: &crate::config::DEFAULT_STATUS_PRIORITY,
             notes: None,
         },
         Device {
             id: "studio",
             label: "studio.lan",
             workspaces: &[],
+            agents: &[],
+            status_priority: &crate::config::DEFAULT_STATUS_PRIORITY,
             notes: None,
         },
     ]

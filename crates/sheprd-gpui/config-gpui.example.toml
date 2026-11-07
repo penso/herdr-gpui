@@ -402,6 +402,9 @@ size = 12
 # the uncommitted-work probe's slow schedule: one checkout at a time, each at
 # most every 30 seconds while the window is active.
 # change_counts = "pr"
+# Status priority, highest first. Missing statuses follow in their default
+# order. The default is ["blocked", "done", "working", "idle"].
+# status_priority = ["blocked", "working", "done", "idle"]
 # What ends a coordinator session's name, which turns on coordinator groups.
 # A session named "demo-coord" gets the coordinator mark in place of its agent's
 # and leads the group "demo", whose workers are the sessions named "demo-12",
