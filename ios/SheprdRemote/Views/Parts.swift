@@ -154,14 +154,36 @@ struct ChatRowLabel: View {
                 }
                 Text(detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityValue(showsWorkspace && item.workspace.merged ? "Pull request merged" : "")
             }
         }
     }
 
-    private var detail: String {
-        let place = [showsComputer ? item.computer.name : nil, showsWorkspace ? item.workspace.label : nil].compactMap { $0 }
+    private var detail: AttributedString {
         let said = item.question?.title ?? item.chat.summary?.lastText
-        return (place + [said].compactMap { $0 }).joined(separator: " · ")
+        return RowPlace.line([
+            showsComputer ? AttributedString(item.computer.name) : nil,
+            showsWorkspace ? RowPlace.name(of: item.workspace) : nil,
+            said.map { AttributedString($0) },
+        ])
+    }
+}
+
+/// Where a row's agent runs, on the line under its title.
+enum RowPlace {
+    /// A workspace's name, in the color its pull request's badge has once
+    /// merged, as the lists show no badge: that is how they say it is done.
+    static func name(of workspace: Home.Workspace) -> AttributedString {
+        var name = AttributedString(workspace.label)
+        if workspace.merged { name.foregroundColor = Home.PullRequest.Tone.merged.color }
+        return name
+    }
+
+    static func line(_ parts: [AttributedString?]) -> AttributedString {
+        parts.compactMap { $0 }.reduce(into: AttributedString()) { line, part in
+            if !line.characters.isEmpty { line.append(AttributedString(" · ")) }
+            line.append(part)
+        }
     }
 }
 
@@ -185,6 +207,7 @@ struct AgentTerminalRowLabel: View {
                 }
                 Text(place)
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    .accessibilityValue(showsWorkspace && item.workspace.merged ? "Pull request merged" : "")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // Centered on the row, beside the chevron.
@@ -192,9 +215,9 @@ struct AgentTerminalRowLabel: View {
         }
     }
 
-    private var place: String {
-        guard showsWorkspace else { return tabName }
-        return showsComputer ? "\(item.computer.name) · \(item.workspace.label)" : item.workspace.label
+    private var place: AttributedString {
+        guard showsWorkspace else { return AttributedString(tabName) }
+        return RowPlace.line([showsComputer ? AttributedString(item.computer.name) : nil, RowPlace.name(of: item.workspace)])
     }
 
     /// The tab's name, unless Sheprd only numbered it or it repeats the
