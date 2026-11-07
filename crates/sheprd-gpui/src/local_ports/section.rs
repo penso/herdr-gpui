@@ -55,9 +55,9 @@ fn report_text(report: Report) -> Option<SharedString> {
 }
 
 impl SheprdWindow {
-    /// The workspace of a daemon on this computer that started the server
-    /// on `number`, as the workspace chips found it.
-    pub(crate) fn local_port_owner(&self, number: u16) -> Option<Owned> {
+    /// The workspace of a daemon on this computer that started the listening
+    /// process `pid`, as the workspace chips found it.
+    pub(crate) fn local_port_owner(&self, pid: u32) -> Option<Owned> {
         self.endpoints
             .iter()
             .enumerate()
@@ -66,7 +66,7 @@ impl SheprdWindow {
             })
             .find_map(|(index, endpoint)| {
                 let daemon = crate::listening_ports::Daemon::of(&endpoint.connection.target)?;
-                let workspace = self.listening_ports.workspace_of(&daemon, number)?;
+                let workspace = self.listening_ports.workspace_of(&daemon, pid)?;
                 let live = if index == self.selected_endpoint {
                     &self.live
                 } else {
@@ -101,7 +101,7 @@ impl SheprdWindow {
         let Some(url) = listener.url() else {
             return;
         };
-        match self.local_port_owner(listener.number) {
+        match self.local_port_owner(listener.identity.pid) {
             Some(owned) => {
                 self.open_port_link(
                     &owned.endpoint,
@@ -252,7 +252,7 @@ impl SheprdWindow {
                             .text_color(rgb(theme.subtext())),
                     )
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.local_ports.refresh();
+                        this.local_ports.retry();
                         cx.notify();
                     })),
                 )

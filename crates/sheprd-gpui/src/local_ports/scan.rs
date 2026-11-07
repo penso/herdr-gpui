@@ -10,21 +10,32 @@ use crate::listening_ports::{Bind, listener};
 /// Socket lines read from one answer; the rest are ignored.
 pub(super) const MAX_SOCKETS: usize = 1024;
 
-/// Prints `ss`, `lsof`, or `none`, then that tool's own listing. `lsof`
-/// exits 1 when nothing listens, so the script ends with `true` for the
-/// answer to count; the tools' own errors are dropped.
+/// Prints `ss`, `lsof`, or `none`, then that tool's own listing, and exits
+/// as that tool did with its errors on stderr, so a scan the tool could not
+/// do fails rather than reading as nothing listening. `lsof` also exits 1
+/// when nothing listens, which it says by printing nothing at all; `-w`
+/// keeps its warnings from looking like an error.
 // i18n: data
 pub(super) const SCRIPT: &str = r#"PATH="$PATH:/usr/sbin:/sbin"
 if command -v ss >/dev/null 2>&1; then
     printf 'ss\n'
-    ss -ltnp 2>/dev/null
+    ss -ltnp
+    exit
 elif command -v lsof >/dev/null 2>&1; then
     printf 'lsof\n'
-    lsof -nP -iTCP -sTCP:LISTEN -Fpcn 2>/dev/null
+    exec 3>&1
+    errors=$(lsof -w -nP -iTCP -sTCP:LISTEN -Fpcn 2>&1 >&3)
+    status=$?
+    if [ "$status" -eq 1 ] && [ -z "$errors" ]; then
+        exit 0
+    fi
+    if [ "$status" -ne 0 ]; then
+        printf '%s\n' "$errors" >&2
+    fi
+    exit "$status"
 else
     printf 'none\n'
 fi
-true
 "#;
 
 /// One listening socket: the process holding it, and where it listens.

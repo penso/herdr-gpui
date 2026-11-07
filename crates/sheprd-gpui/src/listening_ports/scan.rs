@@ -216,8 +216,17 @@ pub(crate) struct Owner {
 /// Each workspace's ports, by owner, lowest port first.
 pub(crate) type Ports = HashMap<Owner, Vec<Port>>;
 
+/// What one scan of a host found.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Scan {
+    pub ports: Ports,
+    /// The pane each listening process was started in. Several processes
+    /// can share a number, so only the process names a listener's owner.
+    pub pids: HashMap<u32, Owner>,
+}
+
 /// Parses what [`COMMAND`] printed.
-pub(crate) fn parse(text: &str) -> Result<Ports> {
+pub(crate) fn parse(text: &str) -> Result<Scan> {
     let mut listeners: Vec<(u32, Port)> = Vec::new();
     let mut owners: HashMap<u32, Owner> = HashMap::new();
     for line in text.lines() {
@@ -262,12 +271,13 @@ pub(crate) fn parse(text: &str) -> Result<Ports> {
             _ => {}
         }
     }
-    let mut ports = Ports::new();
+    let mut scan = Scan::default();
     for (pid, port) in listeners {
         let Some(owner) = owners.get(&pid) else {
             continue;
         };
-        let list = ports.entry(owner.clone()).or_default();
+        scan.pids.insert(pid, owner.clone());
+        let list = scan.ports.entry(owner.clone()).or_default();
         match list.iter_mut().find(|known| known.number == port.number) {
             // IPv4 and IPv6 sockets of one server share its number.
             Some(known) => {
@@ -278,11 +288,11 @@ pub(crate) fn parse(text: &str) -> Result<Ports> {
             None => list.push(port),
         }
     }
-    for list in ports.values_mut() {
+    for list in scan.ports.values_mut() {
         list.sort_by_key(|port| port.number);
         list.truncate(MAX_PORTS);
     }
-    Ok(ports)
+    Ok(scan)
 }
 
 /// `127.0.0.1:3000`, `[::1]:3000`, `*:3000`, `0.0.0.0:3000`.

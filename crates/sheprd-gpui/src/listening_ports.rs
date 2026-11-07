@@ -29,7 +29,7 @@ pub(crate) use scan::Owner;
 // The Ports section's Unix scan reads its addresses the same way.
 #[cfg(unix)]
 pub(crate) use scan::listener;
-pub(crate) use scan::{Bind, Link, Origin, Port, Ports, parse};
+pub(crate) use scan::{Bind, Link, Origin, Port, Scan, parse};
 use sheprd_client::ConnectTarget;
 use std::{
     collections::HashMap,
@@ -153,7 +153,7 @@ fn local_shell() -> Result<Shell> {
     Err(Error::Unsupported.into())
 }
 
-fn scan(shell: &mut Shell) -> Result<Ports> {
+fn scan(shell: &mut Shell) -> Result<Scan> {
     let output = shell.run(scan::COMMAND, STEP_TIMEOUT).map_err(failed)?;
     parse(&output.stdout)
 }
@@ -164,7 +164,7 @@ fn failed(error: impl Into<crate::Error>) -> crate::Error {
 
 struct Worker {
     stop: Arc<Stop>,
-    results: mpsc::Receiver<Result<Ports>>,
+    results: mpsc::Receiver<Result<Scan>>,
 }
 
 impl Drop for Worker {
@@ -190,7 +190,7 @@ fn spawn(host: Host) -> Option<Worker> {
     }
 }
 
-fn run(host: &Host, stop: &Stop, results: &mpsc::SyncSender<Result<Ports>>) {
+fn run(host: &Host, stop: &Stop, results: &mpsc::SyncSender<Result<Scan>>) {
     let mut shell: Option<Shell> = None;
     loop {
         let opened = match shell.take() {
@@ -220,7 +220,7 @@ fn run(host: &Host, stop: &Stop, results: &mpsc::SyncSender<Result<Ports>>) {
 /// One host's latest scan.
 #[derive(Default)]
 struct Reading {
-    ports: Ports,
+    scan: Scan,
     /// Where the host's ports open, which follows from the host alone.
     origin: Origin,
     /// Why the latest scan failed, as last logged; the last good ports stay
@@ -230,14 +230,14 @@ struct Reading {
 
 impl Reading {
     /// Whether anything shown changed.
-    fn apply(&mut self, result: Result<Ports>) -> bool {
+    fn apply(&mut self, result: Result<Scan>) -> bool {
         match result {
-            Ok(ports) => {
+            Ok(scan) => {
                 self.error = None;
-                if ports == self.ports {
+                if scan == self.scan {
                     return false;
                 }
-                self.ports = ports;
+                self.scan = scan;
                 true
             }
             Err(error) => {
@@ -279,7 +279,7 @@ impl ListeningPorts {
     /// they open; None while it listens on none.
     pub fn get(&self, daemon: &Daemon, workspace: &str) -> Option<Listed<'_>> {
         let reading = &self.monitors.get(&daemon.host)?.reading;
-        reading.ports.iter().find_map(|(owner, ports)| {
+        reading.scan.ports.iter().find_map(|(owner, ports)| {
             (owner.workspace == workspace && daemon.owns(&owner.socket) && !ports.is_empty())
                 .then_some(Listed {
                     ports,
@@ -288,14 +288,19 @@ impl ListeningPorts {
         })
     }
 
-    /// The workspace of `daemon` whose pane started the server listening on
-    /// `number`, as the latest scan of its host found it.
-    pub fn workspace_of(&self, daemon: &Daemon, number: u16) -> Option<&str> {
-        let reading = &self.monitors.get(&daemon.host)?.reading;
-        reading.ports.iter().find_map(|(owner, ports)| {
-            (daemon.owns(&owner.socket) && ports.iter().any(|port| port.number == number))
-                .then_some(owner.workspace.as_str())
-        })
+    /// The workspace of `daemon` whose pane started the listening process
+    /// `pid`, as the latest scan of its host found it.
+    pub fn workspace_of(&self, daemon: &Daemon, pid: u32) -> Option<&str> {
+        let owner = self
+            .monitors
+            .get(&daemon.host)?
+            .reading
+            .scan
+            .pids
+            .get(&pid)?;
+        daemon
+            .owns(&owner.socket)
+            .then_some(owner.workspace.as_str())
     }
 
     /// Whether a port listed on `key`'s host still tunnels to exactly `key`.
@@ -308,18 +313,19 @@ impl ListeningPorts {
         };
         let reading = &monitor.reading;
         reading
+            .scan
             .ports
             .values()
             .flatten()
             .any(|port| matches!(port.link(&reading.origin), Some(Link::Tunnel(listed)) if listed == *key))
     }
 
-    /// Shows `ports` for `host` as if a scan had found them, with no worker.
+    /// Shows `scan` for `host` as if a scan had found it, with no worker.
     #[cfg(test)]
-    pub(crate) fn seed(&mut self, host: Host, ports: Ports) {
+    pub(crate) fn seed(&mut self, host: Host, scan: Scan) {
         let reading = Reading {
             origin: Origin::new(&host),
-            ports,
+            scan,
             error: None,
         };
         self.monitors.insert(
@@ -348,7 +354,7 @@ impl ListeningPorts {
         let mut changed = false;
         self.monitors.retain(|host, monitor| {
             let keep = wanted.contains(host);
-            changed |= !keep && !monitor.reading.ports.is_empty();
+            changed |= !keep && !monitor.reading.scan.ports.is_empty();
             keep
         });
         for host in wanted {

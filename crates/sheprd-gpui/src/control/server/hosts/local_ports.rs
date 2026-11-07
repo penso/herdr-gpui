@@ -65,7 +65,7 @@ fn list(view: &SheprdWindow, requested: Instant) -> Option<Response> {
         .iter()
         .map(|listener| {
             let workspace = view
-                .local_port_owner(listener.number)
+                .local_port_owner(listener.identity.pid)
                 .map(|owned| owned.label);
             info(listener, workspace, now, home.as_deref())
         })

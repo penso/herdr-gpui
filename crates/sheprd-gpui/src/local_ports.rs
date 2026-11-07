@@ -268,8 +268,12 @@ pub(crate) struct LocalPorts {
     /// None while nothing asks for ports, or when it could not start.
     worker: Option<Worker>,
     /// Whether starting failed while still wanted; tried again once the
-    /// section is reopened.
+    /// section is reopened or the user presses Refresh.
     start_failed: bool,
+    /// Whether the section was shown at the last poll. The bar's count can
+    /// keep the scan wanted while it is closed, so a reopening is only seen
+    /// here.
+    shown: bool,
     /// The latest listing, kept while closed so reopening shows it at once.
     listing: Option<Vec<Listener>>,
     /// Why the latest scan failed; the last good listing stays shown.
@@ -321,6 +325,10 @@ impl LocalPorts {
     /// Starts or drops the worker as `shown` (or a recent request) wants,
     /// and takes its answers. Whether anything shown changed.
     pub(crate) fn poll(&mut self, shown: bool, now: Instant) -> bool {
+        if shown && !self.shown {
+            self.start_failed = false;
+        }
+        self.shown = shown;
         let demanded = self.demand.is_some_and(|until| now < until);
         let wanted = SUPPORTED && (shown || self.acting || demanded || self.counted);
         if !wanted {
@@ -477,6 +485,15 @@ impl LocalPorts {
         self.worker
             .as_ref()
             .is_some_and(|worker| worker.commands.try_send(Command::Refresh).is_ok())
+    }
+
+    /// The user's Refresh: lists now, or starts a worker that failed or
+    /// stopped again at the next poll. A command's own requests use
+    /// [`Self::refresh`], so they keep answering at once that the scan
+    /// cannot run.
+    pub(crate) fn retry(&mut self) {
+        self.start_failed = false;
+        self.refresh();
     }
 
     /// Asks the worker to signal exactly `victims`, after checking each is

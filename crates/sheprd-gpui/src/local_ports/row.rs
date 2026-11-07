@@ -27,7 +27,7 @@ impl SheprdWindow {
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let small = px(self.config.ui.size - 1.);
-        let owner = self.local_port_owner(listener.number);
+        let owner = self.local_port_owner(listener.identity.pid);
         let pill = |text: SharedString, color: u32| {
             div()
                 .flex_none()

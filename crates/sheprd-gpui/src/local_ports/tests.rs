@@ -9,7 +9,11 @@ mod naming;
 #[cfg(unix)]
 mod process;
 #[cfg(unix)]
+mod retry;
+#[cfg(unix)]
 mod scan;
+#[cfg(unix)]
+mod scan_failures;
 mod section;
 mod sort;
 mod state;
