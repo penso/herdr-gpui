@@ -122,6 +122,15 @@ async fn a_chat_is_refused_in_a_distribution_whatever_else_could_run_it() {
 }
 
 #[tokio::test]
+async fn a_new_workspace_is_refused_in_a_distribution() {
+    let hub = Hub::offline(Layout::default());
+    let refused = hub
+        .create_workspace("/home/me/repo", None, Agent::Codex, Some("default@Ubuntu"))
+        .await;
+    assert!(matches!(refused, Err(Error::WslChat)));
+}
+
+#[tokio::test]
 async fn a_new_tab_in_a_distribution_is_never_the_cores() {
     let hub = Hub::offline(Layout::default());
     assert!(matches!(

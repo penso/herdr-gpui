@@ -22,6 +22,7 @@ use std::{
 use tokio::sync::{Notify, watch};
 
 mod wsl;
+pub(super) use wsl::is_wsl;
 
 #[cfg(test)]
 pub(super) use wsl::{MAX_SESSIONS as MAX_WSL_SESSIONS, wanted as wsl_wanted};
@@ -119,7 +120,7 @@ impl Sessions {
     pub(super) fn first_connected(&self) -> Option<Arc<Session>> {
         lock(&self.list)
             .iter()
-            .find(|session| session.layout.borrow().connected && !wsl::is_wsl(&session.name))
+            .find(|session| session.layout.borrow().connected && !is_wsl(&session.name))
             .cloned()
     }
 
@@ -142,11 +143,11 @@ impl Sessions {
             .filter(|session| !session.ended())
             .map(|session| session.name.clone())
             .collect();
-        let held = known.iter().filter(|name| wsl::is_wsl(name)).count();
+        let held = known.iter().filter(|name| is_wsl(name)).count();
         let mut room = wsl::MAX_SESSIONS.saturating_sub(held);
         let mut added = Vec::new();
         for (name, target) in wanted {
-            let in_wsl = wsl::is_wsl(name);
+            let in_wsl = is_wsl(name);
             if known.contains(name) || (in_wsl && room == 0) {
                 continue;
             }
@@ -382,7 +383,7 @@ pub(super) fn merge(base: &Layout, sessions: &[(String, Arc<Layout>)]) -> Layout
 pub(super) fn in_wsl(id: &str) -> bool {
     id.strip_prefix(PREFIX)
         .and_then(|rest| rest.split_once(':'))
-        .is_some_and(|(name, _)| wsl::is_wsl(name))
+        .is_some_and(|(name, _)| is_wsl(name))
 }
 
 fn tag(name: &str, id: &str) -> String {

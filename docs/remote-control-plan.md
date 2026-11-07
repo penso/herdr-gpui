@@ -396,8 +396,8 @@ phone never disturbs the desktop's layout.
     lists its sessions read-only. Ids read `herdr:SESSION@DISTRO:ID`.
   - **What it cannot do.** A chat's program listens inside the distribution,
     out of this daemon's reach, so a chat there is listed as a terminal tab,
-    and a phone cannot start one there. A herdr-core inside a distribution is
-    not followed.
+    and a phone cannot start one there, nor a new workspace in that session.
+    A herdr-core inside a distribution is not followed.
 - **Other machines.** Allowing a phone on one computer also pairs it with
   the SSH and cloud machines that computer's Sheprd connects to. The phone
   reaches each machine's own daemon directly, so it keeps them while that

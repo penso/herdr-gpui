@@ -307,6 +307,11 @@ impl Hub {
         agent: Agent,
         session: Option<&str>,
     ) -> Result<CreatedWorkspace> {
+        // As in [`Hub::start_chat`]: the program here cannot run in a
+        // distribution, and a core would open the chat on this computer.
+        if session.is_some_and(sessions::is_wsl) {
+            return Err(Error::WslChat);
+        }
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         if let Some(core) = self.active_core() {
             if branch.is_some() {

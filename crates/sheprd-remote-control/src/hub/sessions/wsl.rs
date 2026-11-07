@@ -24,7 +24,7 @@ fn name(distro: &str, session: &str) -> String {
 }
 
 /// Whether `name` is a session inside a distribution.
-pub(super) fn is_wsl(name: &str) -> bool {
+pub(in crate::hub) fn is_wsl(name: &str) -> bool {
     name.contains(SEPARATOR)
 }
 
