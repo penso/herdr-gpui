@@ -77,5 +77,5 @@ jobs:
             test "$(readlink "result/bin/herdr-$helper")" = "sheprd-$helper"
             test -x "result/bin/herdr-$helper"
           done
-          test -f result/share/applications/so.pen.herdr-gpui.desktop
+          test -f result/share/applications/org.sheprd.Sheprd.desktop
           if ldd result/bin/sheprd | grep 'not found'; then exit 1; fi

@@ -236,13 +236,16 @@ the first device still listed. While filtered, navigation to a device outside
 the list narrows it to that device; a listed device that is removed or disabled
 leaves the list, and if it was on screen the terminal falls back to Local. The
 filter is window-local and starts at All Devices. The adjacent gear
-opens the existing Settings page (also available with `Cmd-,`). Beside it, the
-sessions icon lists this machine's sessions and each saved device's own, grouped
-under the device, with the device this window is on leading (also available with
-`Cmd-Shift-S`). A device's list is asked for over SSH, at most once every 30
-seconds while the popup is open; until it answers, and if it never does, the
-device still offers the session it was saved with. Choosing a session attaches
-this window to it on that device.
+opens the existing Settings page (also available with `Cmd-,`).
+
+Each device row in the picker carries a **Session** chip naming the session it is
+on. Clicking it unfolds that device's sessions beneath it, with **Add
+session…** to create one, and clicking it again folds them away; hovering it says
+so. `Cmd-Shift-S` opens the picker unfolded on the device this window is on. A
+device's list is asked for over SSH, at most once every 30 seconds while the
+popup is open; until it answers, and if it never does, the device still offers
+the session it was saved with. Choosing a session attaches this window to it on
+that device.
 
 Set `device_footer = "auto"` under `[sidebar]` to draw this footer only while
 there are two or more devices (or one is being added), or `"never"` to leave it

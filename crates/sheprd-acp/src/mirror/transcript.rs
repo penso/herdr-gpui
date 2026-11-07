@@ -12,7 +12,7 @@ use std::{
 use serde_json::Value;
 use sheprd_chat_protocol::{
     Author, ConfigOption, Entry, EntryId, EntryKind, OptionCategory, OptionKind, SessionInfo, Tool,
-    ToolContent, ToolKind, ToolStatus, Transcript, Usage,
+    ToolContent, ToolStatus, Transcript, Usage,
 };
 
 use super::{Error, Result};
@@ -25,6 +25,7 @@ mod activities;
 mod codex_messages;
 mod notices;
 mod question_replies;
+mod tool_metadata;
 
 use question_replies::QuestionKey;
 
@@ -283,6 +284,7 @@ impl Projection {
         if call.is_empty() || name.is_empty() || call.len() > MAX_ID {
             return;
         }
+        let described = tool_metadata::describe(name, input);
         let input = input
             .as_str()
             .map_or_else(|| input.to_string(), str::to_owned);
@@ -291,12 +293,12 @@ impl Projection {
             content: vec![ToolContent::Text {
                 text: self.clip(&input, TEXT),
             }],
-            kind: ToolKind::Other,
-            locations: Vec::new(),
+            kind: described.kind,
+            locations: described.locations,
             parent: None,
             started_ms: None,
             status: ToolStatus::Pending,
-            title: limited(name, MAX_TITLE),
+            title: described.title,
         };
         self.tools
             .insert(call.to_owned(), self.transcript.entries.len());

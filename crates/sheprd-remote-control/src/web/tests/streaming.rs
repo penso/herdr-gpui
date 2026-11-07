@@ -107,6 +107,7 @@ async fn an_answer_streams_to_the_phone_as_it_is_written() {
             branch: None,
             cwd: "/".into(),
             worktree: None,
+            session: None,
             chats: vec![ChatRow {
                 pane: "p1".into(),
                 tab: "t1".into(),

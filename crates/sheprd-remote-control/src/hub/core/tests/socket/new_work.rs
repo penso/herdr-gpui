@@ -27,6 +27,7 @@ fn workspace(id: &str, cwd: &str) -> Workspace {
         label: id.to_owned(),
         terminals: Vec::new(),
         worktree: None,
+        session: None,
     }
 }
 
@@ -109,7 +110,7 @@ async fn a_core_failure_is_reported_and_not_retried_on_herdr_one() {
     source.poll().unwrap();
     let hub = hub_on(&source, Layout::default());
     let error = hub
-        .create_workspace("/refused", None, Agent::Claude)
+        .create_workspace("/refused", None, Agent::Claude, None)
         .await
         .err()
         .unwrap();
@@ -119,19 +120,102 @@ async fn a_core_failure_is_reported_and_not_retried_on_herdr_one() {
 }
 
 #[tokio::test]
-async fn a_worktree_is_refused_while_a_core_answers() {
+async fn a_worktree_chat_starts_on_the_core_in_its_new_checkout() {
+    let dir = tempfile::tempdir().unwrap();
+    let repository = worktree::tests::committed_repository(dir.path());
+    let root = dir.path().join("worktrees");
+    let (source, fake) = fake_with_chat(&EndpointId::random());
+    source.poll().unwrap();
+    let mut hub = hub_on(&source, Layout::default());
+    hub.worktrees = Some(root.clone());
+    let created = hub
+        .create_workspace(
+            repository.to_str().unwrap(),
+            Some("topic"),
+            Agent::Claude,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.workspace, UNLISTED);
+    let checkout = root.join("project").join("topic");
+    assert!(checkout.join(".git").exists());
+    assert_eq!(request(&fake)["params"]["cwd"], checkout.to_str().unwrap());
+    drop((hub, source));
+    fake.server.join().unwrap();
+}
+
+#[tokio::test]
+async fn a_worktree_whose_chat_fails_leaves_the_branch_free_to_retry() {
+    let dir = tempfile::tempdir().unwrap();
+    let repository = worktree::tests::committed_repository(dir.path());
+    let root = dir.path().join("worktrees");
     let (source, fake) = fake();
     source.poll().unwrap();
-    let hub = hub_on(&source, Layout::default());
+    let mut hub = hub_on(&source, Layout::default());
+    hub.worktrees = Some(root.clone());
+    // The fake core refuses a folder of this name.
     let error = hub
-        .create_workspace("/code", Some("topic"), Agent::Claude)
+        .create_workspace(
+            repository.to_str().unwrap(),
+            Some("refused"),
+            Agent::Claude,
+            None,
+        )
+        .await
+        .err()
+        .unwrap();
+    assert!(matches!(error, HubError::Core(Error::Client(_))), "{error}");
+    assert!(!root.join("project").join("refused").exists());
+    let branches = sheprd_client::new_command("git")
+        .current_dir(&repository)
+        .args(["branch", "--list", "refused"])
+        .output()
+        .unwrap();
+    assert!(branches.stdout.is_empty());
+    drop((hub, source));
+    fake.server.join().unwrap();
+}
+
+#[test]
+fn only_a_start_that_surely_ran_nothing_may_lose_its_checkout() {
+    use super::super::create::ran_nothing;
+    use sheprd_core_client::{Error as CoreError, Method};
+    let client = |error: CoreError| HubError::Core(Error::Client(error));
+    assert!(ran_nothing(&HubError::Core(Error::Disconnected)));
+    assert!(ran_nothing(&client(CoreError::Refused {
+        method: Method::TerminalRun,
+        kind: None,
+        message: "no".to_owned(),
+    })));
+    assert!(!ran_nothing(&client(CoreError::Lost)));
+    assert!(!ran_nothing(&client(CoreError::Timeout(
+        Method::TerminalRun
+    ))));
+}
+
+#[tokio::test]
+async fn a_worktree_git_refuses_starts_no_chat() {
+    let dir = tempfile::tempdir().unwrap();
+    let (source, fake) = fake();
+    source.poll().unwrap();
+    let mut hub = hub_on(&source, Layout::default());
+    hub.worktrees = Some(dir.path().join("worktrees"));
+    let error = hub
+        .create_workspace(
+            dir.path().to_str().unwrap(),
+            Some("topic"),
+            Agent::Claude,
+            None,
+        )
         .await
         .err()
         .unwrap();
     assert!(
-        matches!(error, HubError::Core(Error::Unsupported)),
+        matches!(error, HubError::Core(Error::Worktree(_))),
         "{error}"
     );
+    assert!(fake.inputs.try_recv().is_err());
     drop((hub, source));
     fake.server.join().unwrap();
 }

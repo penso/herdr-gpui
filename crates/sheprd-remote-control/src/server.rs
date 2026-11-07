@@ -89,7 +89,7 @@ pub async fn run(options: Options) -> Result<()> {
         .ok();
     let auth = Auth::load(&options.state_dir, Limits::default())?;
     let apps = auth.apps();
-    let apns = crate::apns::Sender::load(&options.state_dir)?;
+    let apns = crate::apns::Sender::load(&options.state_dir).map_err(crate::apns::Error::from)?;
     // Only origins this computer's own authority serves may be remembered.
     let seen = match &authority {
         Some(authority) => web::Origins::load(&options.state_dir, authority.fingerprint()),
@@ -112,10 +112,12 @@ pub async fn run(options: Options) -> Result<()> {
         connected: Mutex::new(HashMap::new()),
         fingerprint,
         hub,
+        live_activities: options.live_activities,
         load,
         look: web::Look::load(&options.state_dir),
         names: RwLock::new(names),
         near: Mutex::default(),
+        opened: web::attention::Opened::default(),
         port: options.port,
         privacy: options.privacy,
         pull_requests,

@@ -83,6 +83,20 @@ impl TaskFilters {
     }
 }
 
+/// The project a task's page names: its own database's folder, whichever
+/// project is selected. Its source is a whole path, too long for a breadcrumb.
+pub(super) fn task_project(item: &Item) -> Option<String> {
+    let source = &item.key.source;
+    (source.provider == Provider::Beads).then(|| {
+        std::path::Path::new(&source.repository)
+            .file_name()
+            .map_or_else(
+                || source.repository.clone(),
+                |name| name.to_string_lossy().into_owned(),
+            )
+    })
+}
+
 /// What a status reads as. A word this build does not know, such as a
 /// project's own status, is shown as it is.
 pub(super) fn status_label(state: &str) -> String {

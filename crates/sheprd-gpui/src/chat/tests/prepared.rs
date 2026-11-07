@@ -45,6 +45,7 @@ fn a_tool_call_is_summarized() {
             },
             ToolContent::Terminal { id: "t1".into() },
         ],
+        ToolKind::Execute,
         &mut Default::default(),
     );
     assert_eq!(summary.lines.len(), 6);

@@ -19,8 +19,8 @@ devices-hosts = { $count ->
     }
 # The picker's heading.
 devices-heading = DEVICES & SESSIONS
-devices-multi-select-macos = ⌘-click or Space for several
-devices-multi-select = Ctrl-click or Space for several
+devices-multi-select-macos = ⌘-click for several
+devices-multi-select = Ctrl-click for several
 devices-all-detail = { $count ->
         [one] { $count } device · { $connected } connected
        *[other] { $count } devices · { $connected } connected
@@ -29,8 +29,12 @@ devices-this-device = This device
 # A device row's detail: where it is, then its state, such as online.
 devices-row-detail = { $place } · { $state }
 devices-add = Add Device…
-# The chip on a device row that unfolds its sessions. $device is the device's name.
+# The word before the session's name on the chip that unfolds a device's sessions.
+devices-session-chip = Session
+# What the chip is called, and says on hover. $device is the device's name.
 devices-sessions-toggle = Sessions on { $device }
+# The same on the device this window is on, whose sessions $shortcut opens.
+devices-sessions-toggle-shortcut = Sessions on { $device } ({ $shortcut })
 # The heading over cloud machines still being created.
 devices-adding = ADDING
 

@@ -34,6 +34,9 @@ pub(crate) struct Workspace {
     /// The repository checkout it is, which groups a repository's linked
     /// worktrees under it as Sheprd's sidebar does.
     pub(crate) worktree: Option<ClientShellWorktree>,
+    /// The Herdr 1 session it is in, when its name is known; `None` for a
+    /// Herdr 2 workspace.
+    pub(crate) session: Option<String>,
     pub(crate) chats: Vec<Chat>,
     pub(crate) terminals: Vec<Terminal>,
 }
@@ -109,6 +112,13 @@ impl Layout {
 
     pub(crate) fn workspace(&self, id: &str) -> Option<&Workspace> {
         self.workspaces.iter().find(|workspace| workspace.id == id)
+    }
+
+    /// Names `session` as the Herdr 1 session every workspace listed is in.
+    pub(crate) fn name_session(&mut self, session: &str) {
+        for workspace in &mut self.workspaces {
+            workspace.session = Some(session.to_owned());
+        }
     }
 
     /// The terminal tab holding `pane`, with its workspace.
@@ -263,6 +273,7 @@ pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
                 branch: workspace.branch.clone(),
                 cwd: workspace.new_workspace_cwd.clone(),
                 worktree: workspace.worktree.clone(),
+                session: None,
                 chats,
                 terminals,
             }

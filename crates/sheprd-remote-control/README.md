@@ -29,6 +29,13 @@ A socket outside such an installation (a sandbox's, or a development
 daemon's) keeps the daemon to that one session: no other is followed. Chats
 are bounded across all sessions, the primary's first and then by name.
 
+Each workspace names the session it is in (`session` in `/api/v2/home`):
+`default` for the root session, `NAME` for a named one, by where its socket
+is in the installation; Herdr 2 workspaces name none. The phone's Workspaces
+tab lists a computer's repositories under each session's name when more than
+one session has workspaces, and as before otherwise. A new worktree started
+from a repository there names its session, and opens in it.
+
 Pairing a phone gives it this computer, not one session: a paired phone can
 read and type into every session the daemon follows, including one started
 after it was paired.
@@ -219,6 +226,12 @@ fresh desktop pairing code directly, without reinstalling the shortcut.
 HTTPS post to the phone's push service, the triggers that turn chat changes
 into questions, finished turns, and errors, and a per-device throttle. The
 service worker receives `push::Message` as JSON.
+
+The app's badge counts agents that want the user (`web::attention`): those
+with a question, those Herdr reports blocked, and those that finished and
+nobody has opened on a phone or focused in a Herdr client. A background push
+moves it when the count changes, and iOS may delay or drop those, so the
+number is exact only once the app is open.
 
 ## Empty chats
 

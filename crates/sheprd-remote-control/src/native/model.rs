@@ -32,7 +32,7 @@ pub(crate) struct Home {
     pub(crate) fingerprint: String,
     /// Whether the Herdr daemon is reachable now.
     pub(crate) connected: bool,
-    /// Permission requests waiting across every chat: the app's badge.
+    /// Agents that need an answer or finished unseen: the app's badge.
     pub(crate) waiting: usize,
     /// This computer's CPU and memory; absent until first read, and from
     /// older servers.
@@ -61,6 +61,10 @@ pub(crate) struct Workspace {
     /// repository's linked worktrees under it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) worktree: Option<ClientShellWorktree>,
+    /// The Herdr 1 session it is in, which a phone groups a computer's
+    /// workspaces by; older servers leave it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) session: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pull_request: Option<PullRequest>,
     /// Commits on its branch that no pull request carries yet.
@@ -335,6 +339,8 @@ pub(crate) struct Sources<'a> {
     pub(crate) pull_requests: &'a PullRequests,
     pub(crate) tags: ComputerTags,
     pub(crate) version: &'a str,
+    /// The panes wanting the user, from [`crate::web::State::attention`].
+    pub(crate) waiting: usize,
 }
 
 impl Home {
@@ -348,8 +354,8 @@ impl Home {
             pull_requests,
             tags,
             version,
+            waiting,
         } = sources;
-        let waiting = summaries.values().map(|summary| summary.questions).sum();
         let workspaces = layout
             .workspaces
             .iter()
@@ -359,6 +365,7 @@ impl Home {
                 branch: workspace.branch.clone(),
                 cwd: workspace.cwd.clone(),
                 worktree: workspace.worktree.clone(),
+                session: workspace.session.clone(),
                 pull_request: pull_request(pull_requests, &layout.boot, workspace).map(|pr| {
                     PullRequest {
                         number: pr.number,

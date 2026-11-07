@@ -1,12 +1,13 @@
 //! Working-tree status and Git write operations for local checkouts.
 //!
 //! One worker thread owns every child process, so the UI thread only queues a
-//! request and reads the result on a later tick. The focused checkout gets a
-//! counted status; every other listed workspace gets a cheaper dirty probe,
-//! round-robin and rate limited, so the sidebar can mark uncommitted work
-//! without a process per row per frame. When the sidebar shows local change
-//! counts, the probe counts lines instead, on the same schedule. Commit, push and pull request creation
-//! are explicit user actions and are never retried or replayed automatically.
+//! request and reads the result on a later tick. The focused checkout gets line
+//! counts plus a porcelain dirty bit. Every other listed workspace gets a
+//! cheaper dirty probe, round-robin and rate limited, so the sidebar can mark
+//! uncommitted work without a process per row per frame. When the sidebar shows
+//! local change counts, the probe counts lines instead, on the same schedule.
+//! Commit, push, and pull request creation are explicit user actions and are
+//! never retried or replayed automatically.
 mod ahead;
 mod error;
 
@@ -109,8 +110,17 @@ enum Job {
     Run(Action, Option<Tokens>),
 }
 
+/// Line counts for the focused checkout, and whether porcelain has anything to
+/// commit. The bit stays off [`Status`]: a binary, mode-only, empty, or
+/// pure-rename change is dirty without a countable line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Focused {
+    lines: Status,
+    dirty: bool,
+}
+
 enum Completion {
-    Status(crate::Result<Status>),
+    Status(crate::Result<Focused>),
     Dirty(crate::Result<bool>),
     Counts(crate::Result<Counted>),
     Ahead(crate::Result<Option<Ahead>>),
@@ -166,6 +176,7 @@ pub struct Git {
     waiting: Option<(Input, Job)>,
     input: Option<Input>,
     status: Option<Status>,
+    uncommitted: Option<bool>,
     due: Option<Instant>,
     running: Option<Action>,
     error: Option<String>,
@@ -194,7 +205,15 @@ impl Git {
         let mut git = Self::default();
         git.input = Some(input);
         git.status = Some(status);
+        git.uncommitted = Some(status.dirty());
         git
+    }
+
+    /// Chrome fixture: the focused checkout's porcelain bit on its own, for a
+    /// change numstat counts no line of (binary, mode-only, pure rename).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn seed_uncommitted(&mut self, uncommitted: bool) {
+        self.uncommitted = Some(uncommitted);
     }
 
     /// Chrome fixture: a probe answer for a listed checkout, with no worker
@@ -224,6 +243,12 @@ impl Git {
         self.status
     }
 
+    /// Whether the focused checkout has anything to commit. `None` before the
+    /// first successful refresh, so the chrome does not call that tree clean.
+    pub fn uncommitted(&self) -> Option<bool> {
+        self.uncommitted
+    }
+
     pub fn running(&self) -> Option<&Action> {
         self.running.as_ref()
     }
@@ -246,6 +271,7 @@ impl Git {
             // checkout it was started for and is reported against that input.
             self.input = input;
             self.status = None;
+            self.uncommitted = None;
             self.error = None;
             self.outcome = None;
             self.due = Some(now);
@@ -268,9 +294,9 @@ impl Git {
     pub fn dirty(&self, repo_key: &str, branch: &str) -> Option<bool> {
         if self.input.as_ref().is_some_and(|input| {
             input.repo_key.as_deref() == Some(repo_key) && input.branch == branch
-        }) && let Some(status) = self.status
+        }) && let Some(uncommitted) = self.uncommitted
         {
-            return Some(status.dirty());
+            return Some(uncommitted);
         }
         self.probes
             .iter()
@@ -437,13 +463,15 @@ impl Git {
                         // A status of a checkout the chrome no longer shows is
                         // dropped rather than painted over the current one.
                         Completion::Status(_) if self.input.as_ref() != Some(&input) => {}
-                        Completion::Status(Ok(status)) => {
-                            self.status = Some(status);
+                        Completion::Status(Ok(focused)) => {
+                            self.status = Some(focused.lines);
+                            self.uncommitted = Some(focused.dirty);
                             self.error = None;
                             self.due = Some(now + REFRESH);
                         }
                         Completion::Status(Err(error)) => {
                             self.status = None;
+                            self.uncommitted = None;
                             if self.running.is_none() {
                                 self.error = Some(error.to_string());
                             }
@@ -583,9 +611,11 @@ fn status(
     input: &Input,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
-) -> crate::Result<Status> {
+) -> crate::Result<Focused> {
     let checkout = local_checkout(input, deadline, cancelled)?;
-    checkout_status(&checkout, deadline, cancelled)
+    let lines = checkout_status(&checkout, deadline, cancelled)?;
+    let dirty = checkout_dirty(&checkout, deadline, cancelled)?;
+    Ok(Focused { lines, dirty })
 }
 
 /// Porcelain output is machine readable and collapses untracked directories,
@@ -595,10 +625,10 @@ fn dirty(input: &Input, deadline: Instant, cancelled: &impl Fn() -> bool) -> cra
     checkout_dirty(&checkout, deadline, cancelled)
 }
 
-/// The dirty probe plus the line counts: still two processes, as the
-/// focused status is, and the porcelain check keeps the mark on changes
-/// numstat cannot count. A repository without a commit has no HEAD to count
-/// against; it keeps its mark and shows no counts rather than losing both.
+/// The dirty probe plus the line counts. Porcelain keeps the mark on changes
+/// numstat cannot count, as the focused refresh does. A repository without a
+/// commit has no HEAD to count against; it keeps its mark and shows no counts
+/// rather than losing both.
 fn counted(
     input: &Input,
     deadline: Instant,
@@ -625,12 +655,15 @@ fn checkout_dirty(
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<bool> {
-    let status = git(
+    // `-z` names paths as raw bytes. The text reader rejects a non-UTF-8
+    // name, which would hide a real change and refuse the commit.
+    let status = git_bytes(
         checkout,
         &["status", "--porcelain", "--untracked-files=normal", "-z"],
         "read working tree state",
         deadline,
         cancelled,
+        2 * 1024 * 1024,
     )?;
     Ok(!status.is_empty())
 }
@@ -709,7 +742,7 @@ fn commit(
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Outcome> {
-    if !checkout_status(checkout, deadline, cancelled)?.dirty() {
+    if !checkout_dirty(checkout, deadline, cancelled)? {
         return Err(Error::NothingToCommit.into());
     }
     git(

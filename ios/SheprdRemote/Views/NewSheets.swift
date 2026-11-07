@@ -5,15 +5,16 @@ import SwiftUI
 enum Creating: Identifiable, Hashable {
     /// A workspace, on `device` when the person came from that computer,
     /// as a new worktree of the checkout in `folder` when they came from
-    /// its repository.
-    case workspace(device: String?, folder: String? = nil)
+    /// its repository, in that repository's Herdr `session` when its
+    /// computer names one.
+    case workspace(device: String?, folder: String? = nil, session: String? = nil)
     /// A chat in an existing workspace, with `agent` chosen when the
     /// person picked one before asking for the form.
     case chat(device: String, workspace: String, label: String, agent: String? = nil)
 
     var id: String {
         switch self {
-        case let .workspace(device, folder): "workspace/\(device ?? "")/\(folder ?? "")"
+        case let .workspace(device, folder, session): "workspace/\(device ?? "")/\(folder ?? "")/\(session ?? "")"
         case let .chat(device, workspace, _, _): "chat/\(device)/\(workspace)"
         }
     }
@@ -45,11 +46,15 @@ struct NewWorkspaceSheet: View {
     /// The checkout the person came from, chosen once its computer's
     /// folders load, unless they pick another computer.
     private let preset: (device: String, folder: String)?
+    /// The checkout's Herdr session, which the workspace opens in while
+    /// the checkout stays the one chosen.
+    private let session: String?
 
-    init(device: String?, folder: String? = nil) {
+    init(device: String?, folder: String? = nil, session: String? = nil) {
         _device = State(initialValue: device)
         _worktree = State(initialValue: folder != nil)
         preset = device.flatMap { device in folder.map { (device, $0) } }
+        self.session = session
     }
 
     var body: some View {
@@ -213,7 +218,8 @@ struct NewWorkspaceSheet: View {
             branch: worktree ? branch.trimmingCharacters(in: .whitespaces) : "",
             agent: agent,
             prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
-            start: model.startChoice(for: title).start
+            start: model.startChoice(for: title).start,
+            session: preset?.device == device && preset?.folder == folder ? session : nil
         )
         creating = true
         Task {
@@ -400,7 +406,7 @@ extension AppModel {
     func opened(_ created: Created, prompt: String, start: ChatStart?, device: String, title: String) {
         let unsent = !prompt.isEmpty && !created.prompted
         if let pane = created.pane {
-            if unsent { fleet.cache.save(draft: Cache.Draft(text: prompt, pictures: []), device: device, pane: pane) }
+            if unsent { fleet.save(draft: Cache.Draft(text: prompt, pictures: []), for: PaneKey(device: device, pane: pane)) }
             pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title)
         }
         let unset = startProblem(created, start: start, device: device)

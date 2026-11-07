@@ -82,8 +82,8 @@ keeps its terminal view.
 ## Moving a terminal agent into a chat
 
 An agent running in its own CLI can move into a chat without leaving its pane
-or its conversation. With the agent's pane focused, run **Move Agent into
-Chat** from the command palette, or:
+or its conversation. Right-click its tab and choose **Move Agent into Chat**,
+run the same command from the palette with the agent's pane focused, or:
 
 ```sh
 sheprd chat convert [--pane ID]
@@ -105,6 +105,10 @@ and the chat opens with the conversation so far and its context window use.
 Herdr must know the agent's session, which takes its integration: run
 `herdr integration install claude` (or `codex`, `copilot`, `opencode`), then
 restart the agent. Without it the move is refused and the agent keeps running.
+
+The tab's menu offers the row for an agent that can move, on a host chats reach,
+and shows a refusal in the menu. In a tab with several such agents it moves the
+one in the focused pane, else the first; use `--pane` to choose another.
 
 Only an idle agent moves, since stopping one mid-turn would lose the turn, and
 a refusal leaves it running in its terminal. Everything that can refuse is
@@ -226,6 +230,24 @@ stays at the far right, as in `Editing server/purpose.ts… · 42s +1 more 11m 1
 Click the row to list the running steps in full, each with its own time; click
 again to close the list. It keeps the newest 16 and says how many more run. A chat from an older `sheprd-acp` has no step times.
 
+## Tool calls
+
+A folded tool call says what it did: the command, file, search, or sub-agent
+task. Click anywhere on its header to open or fold it. Screen readers hear the
+same expanded state and can use the Expand and Collapse actions.
+
+Opening a call shows each thing it reported as source: a command as shell, known
+arguments as JSON, and edits as a red and green diff with a little context and
+syntax colors. **Copy diff** or **Copy code** copies what is drawn, and
+**Copy original** gives the exact payload when the preview left part of it out.
+Output the app can't read as structure stays as plain text.
+
+A diff compares only the text the agent reported, so its line numbers are not
+the file's. When the agent didn't report a file's earlier text, as with a
+whole-file write, the card shows the written text and counts its lines without
+claiming any were removed. Changes too large to compare show their text before
+and after. A tool the app doesn't know keeps its own name.
+
 ## Sub-agents and background shells
 
 When the agent hands a task to a sub-agent or leaves a command running in the
@@ -323,6 +345,9 @@ The choice belongs to this pane and is bounded when the window shrinks. The
 original editor's cursor remains visible even if it needs more rows than chosen.
 Unusual full-screen dialogs may require the terminal view.
 Leaving the agent returns to the ordinary terminal.
+
+CLI logs keep only a tool's name and arguments, so the reader takes the command,
+file, search term, or task from the arguments of the tools it knows.
 
 If another window owns a larger terminal grid, **Activate to fit agent input**
 and **Fit input** let the normal window geometry update restore the editor and

@@ -5,7 +5,7 @@ use super::*;
 use crate::hub::{
     layout::MAX_CHATS,
     layout::project,
-    sessions::{listed_with, merge, owner, prefix_answer, prefix_layout, wanted},
+    sessions::{listed_with, merge, owner, prefix_answer, prefix_layout, session_name, wanted},
 };
 // Only the tests that bind Unix sockets or symlinks use these.
 #[cfg(unix)]
@@ -158,6 +158,56 @@ fn only_running_sessions_other_than_the_primary_are_followed() {
         session("", SessionState::Running),
     ];
     assert!(wanted(odd, None).is_empty());
+}
+
+#[test]
+fn a_session_is_named_by_where_its_socket_is_in_its_installation() {
+    let name = |socket: &str| session_name(Path::new(socket));
+    assert_eq!(
+        name("/u/.config/herdr/herdr-client.sock").as_deref(),
+        Some("default")
+    );
+    assert_eq!(
+        name("/u/.config/herdr/sessions/safeline-pilots/herdr-client.sock").as_deref(),
+        Some("safeline-pilots")
+    );
+    // A sandbox's or a development daemon's socket names no session.
+    assert_eq!(name("/tmp/sandbox/herdr-client.sock"), None);
+    assert_eq!(name("/u/.config/herdr/h.sock"), None);
+    assert_eq!(
+        name("/u/.config/herdr/sessions/work/extra/herdr-client.sock"),
+        None
+    );
+}
+
+#[test]
+fn each_workspace_names_its_session_through_the_merge() {
+    // The primary is a named session, and `coding` is followed beside it.
+    let mut base = listed();
+    base.name_session("safeline-pilots");
+    let core = Workspace {
+        id: "core:terminals".into(),
+        session: None,
+        ..base.workspaces[0].clone()
+    };
+    base.workspaces.push(core);
+    let mut coding = listed();
+    coding.name_session("coding");
+    let merged = merge(&base, &[("coding".to_owned(), Arc::new(coding))]);
+    let sessions: Vec<_> = merged
+        .workspaces
+        .iter()
+        .map(|row| (row.id.as_str(), row.session.as_deref()))
+        .collect();
+    // A Herdr 2 workspace is in no Herdr 1 session.
+    assert_eq!(
+        sessions,
+        [
+            ("w1", Some("safeline-pilots")),
+            ("core:terminals", None),
+            ("herdr:coding:w1", Some("coding")),
+        ]
+    );
 }
 
 #[cfg(unix)]
@@ -342,4 +392,54 @@ async fn a_session_s_ids_reach_its_own_socket_and_come_back_prefixed() {
     assert_eq!(requests[1]["method"], "workspace.create");
     assert_eq!(requests[2]["method"], "pane.get");
     assert_eq!(requests[2]["params"]["pane_id"], "p1");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_new_workspace_for_a_session_opens_there_while_the_primary_answers() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixListener;
+
+    let dir = tempfile::Builder::new()
+        .prefix("hn")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let listener = UnixListener::bind(dir.path().join("h.sock")).unwrap();
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut line = String::new();
+        BufReader::new(&stream).read_line(&mut line).unwrap();
+        (&stream)
+            .write_all(
+                b"{\"id\":\"remote\",\"result\":{\"type\":\"workspace_created\",\"workspace\":{\"workspace_id\":\"w9\"}}}\n",
+            )
+            .unwrap();
+        serde_json::from_str::<Value>(&line).unwrap()
+    });
+    let mut hub = Hub::offline_with_session(listed(), "work", dir.path().join("h-client.sock"));
+    // The primary answers, so a request naming no session would go there:
+    // to a socket no one listens on, never this computer's own Herdr.
+    let only = Arc::get_mut(&mut hub).unwrap();
+    only.primary = watch::channel(Arc::new(listed())).1;
+    only.api = api::Api::new(Some(dir.path().join("primary-client.sock")));
+    let opened = hub
+        .call_in(
+            Some("work"),
+            ApiMethod::WorkspaceCreate,
+            json!({"cwd": "/code", "focus": false}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(opened["workspace"]["workspace_id"], "herdr:work:w9");
+    assert_eq!(server.join().unwrap()["method"], "workspace.create");
+    // The primary's own name is not a session this daemon follows: such a
+    // request goes to the primary, whose socket no one listens on here.
+    let primary = hub
+        .call_in(
+            Some("default"),
+            ApiMethod::WorkspaceCreate,
+            json!({"cwd": "/code", "focus": false}),
+        )
+        .await;
+    assert!(primary.is_err());
 }

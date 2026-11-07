@@ -1,5 +1,5 @@
 [workspace]
-members  = ["crates/embed-resource", "crates/sheprd-acp", "crates/sheprd-automate", "crates/sheprd-automation", "crates/sheprd-backend", "crates/sheprd-chat-protocol", "crates/sheprd-client", "crates/sheprd-commands", "crates/sheprd-control-protocol", "crates/sheprd-core-client", "crates/sheprd-credentials", "crates/sheprd-diagnostics", "crates/sheprd-github", "crates/sheprd-gpui", "crates/sheprd-launcher", "crates/sheprd-i18n", "crates/sheprd-luau", "crates/sheprd-mods", "crates/sheprd-nearby", "crates/sheprd-orchestrator", "crates/sheprd-protocol", "crates/sheprd-remote", "crates/sheprd-remote-control", "crates/sheprd-terminal", "crates/sheprd-updater", "crates/sheprd-usage", "crates/sheprd-vcs"]
+members  = ["crates/embed-resource", "crates/sheprd-acp", "crates/sheprd-apns", "crates/sheprd-automate", "crates/sheprd-automation", "crates/sheprd-backend", "crates/sheprd-chat-protocol", "crates/sheprd-client", "crates/sheprd-commands", "crates/sheprd-control-protocol", "crates/sheprd-core-client", "crates/sheprd-credentials", "crates/sheprd-diagnostics", "crates/sheprd-github", "crates/sheprd-gpui", "crates/sheprd-launcher", "crates/sheprd-i18n", "crates/sheprd-luau", "crates/sheprd-mods", "crates/sheprd-nearby", "crates/sheprd-orchestrator", "crates/sheprd-protocol", "crates/sheprd-push-relay", "crates/sheprd-remote", "crates/sheprd-remote-control", "crates/sheprd-terminal", "crates/sheprd-updater", "crates/sheprd-usage", "crates/sheprd-vcs"]
 resolver = "2"
 
 [workspace.package]
@@ -85,6 +85,7 @@ wry                  = { package = "lb-wry", version = "=0.53.3" }
 # Reports only by default; the daemon turns on the Luau engine.
 sheprd-automation     = { default-features = false, path = "crates/sheprd-automation" }
 sheprd-backend        = { path = "crates/sheprd-backend" }
+sheprd-apns           = { path = "crates/sheprd-apns" }
 sheprd-chat-protocol  = { path = "crates/sheprd-chat-protocol" }
 sheprd-client         = { path = "crates/sheprd-client" }
 sheprd-commands       = { path = "crates/sheprd-commands" }
@@ -167,6 +168,7 @@ sha1                 = "0.11.0"
 # fixed key RFC 8291's test vector uses.
 aes-gcm              = { default-features = false, features = ["aes", "alloc"], version = "0.11" }
 hkdf                 = "0.13"
+hmac                 = "0.13"
 p256                 = { default-features = false, features = ["ecdh", "ecdsa", "pem", "std"], version = "0.14" }
 sha2                 = "0.11.0"
 # Reads embedded bitmap strikes to spot fonts GPUI's Linux rasterizer panics on.
@@ -221,6 +223,9 @@ unicode-segmentation = "1"
 unicode-width        = "0.2.2"
 ureq                 = "3"
 webpki-roots         = "1"
+# The push relay's optional shared store; TLS comes from `rustls` above.
+tokio-postgres       = { default-features = false, features = ["runtime"], version = "0.7" }
+tokio-postgres-rustls = "0.13"
 uuid                 = { features = ["serde", "v4", "v5"], version = "1" }
 # Window shell properties behind the taskbar relaunch identity; the version
 # GPUI's Windows platform already links.
