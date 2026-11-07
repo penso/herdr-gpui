@@ -54,6 +54,11 @@ final class AppModel {
     @ObservationIgnored private var startPicks = StartPicks()
     /// A new workspace or chat being set up, as a sheet over every tab.
     var creating: Creating?
+    /// A spoken command under way, shown as a sheet over every tab.
+    var voice: VoiceSession?
+    /// What each computer last offered a new workspace, by device, so a
+    /// spoken command need not wait for the computers to answer again.
+    @ObservationIgnored var voiceOptions: [String: NewOptions] = [:]
     /// A tab to switch to, from a Control or an intent; the root view
     /// shows it and clears it.
     var pendingTab: RootTab?
@@ -114,7 +119,7 @@ final class AppModel {
     /// The one model, for intents iOS runs in the app's process.
     static var current: AppModel?
 
-    enum Shortcut { case home, newWorkspace, chat(Route) }
+    enum Shortcut { case home, newWorkspace, chat(Route), talk(saying: String? = nil) }
 
     /// Shows what a Control, an intent, or Spotlight asked for.
     func show(_ shortcut: Shortcut) {
@@ -122,7 +127,44 @@ final class AppModel {
         case .home: pendingTab = .home
         case .newWorkspace: creating = .workspace(device: nil)
         case let .chat(route): pendingRoute = route
+        case let .talk(words): talk(saying: words)
         }
+    }
+
+    /// Opens the voice sheet, listening, or with `words` already said.
+    func talk(saying words: String? = nil) {
+        // A locked app must not start listening behind its cover.
+        guard voice == nil, !fleet.machines.isEmpty, !LockState.shared.hidesNames else { return }
+        let session = VoiceSession(model: self)
+        voice = session
+        Task { await session.begin(saying: words) }
+    }
+
+    /// What can be named out loud right now.
+    func voiceCatalog() -> VoiceCatalog {
+        VoiceCatalog(
+            computers: fleet.machines.map { machine in
+                let online = if case .online = machine.status { machine.home?.connected != false } else { false }
+                return VoiceCatalog.Computer(
+                    id: machine.id,
+                    name: displayName(machine.computer),
+                    online: online,
+                    home: machine.home,
+                    options: voiceOptions[machine.id]
+                )
+            },
+            chats: fleet.chatItems.map { item in
+                VoiceCatalog.Chat(
+                    device: item.computer.device,
+                    pane: item.chat.pane,
+                    title: item.chat.title,
+                    computer: displayName(item.computer),
+                    question: item.question
+                )
+            },
+            recentDevice: recentDevice,
+            recentAgent: recentAgent
+        )
     }
     let sessions: Sessions
     let tokens: ActivityTokens

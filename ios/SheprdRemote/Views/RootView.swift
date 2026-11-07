@@ -62,6 +62,9 @@ struct RootView: View {
             case let .chat(device, workspace, label, agent): NewChatSheet(device: device, workspace: workspace, label: label, agent: agent)
             }
         }
+        .sheet(item: Bindable(model).voice, onDismiss: nil) { session in
+            VoiceSheet(session: session)
+        }
         // A panel's sheet draws it instead, as here it would be behind it.
         .nearbyCard(window, when: !window.panelOpen)
         // A first computer gets the card at once; later ones, the banner.
@@ -165,7 +168,8 @@ extension RootView {
     /// `-openComputer YES` opens the first computer's page from Workspaces,
     /// and `-editComputers YES` puts Settings' computers in Edit. In a
     /// chat, `-session YES` opens its session sheet and `-draft TEXT`
-    /// types into the composer.
+    /// types into the composer. `-voiceSay TEXT` runs a spoken command as
+    /// if it were heard, as the simulator has no microphone.
     func followLaunchArguments() async {
         let defaults = UserDefaults.standard
         if let link = defaults.string(forKey: "pairLink"),
@@ -185,6 +189,15 @@ extension RootView {
         }
         if let tags = defaults.string(forKey: "computerTags"), let computer = model.computers.first {
             model.setTags(tags.split(separator: ",").map(String.init), for: computer)
+        }
+        if let words = defaults.string(forKey: "voiceSay") {
+            try? await Task.sleep(for: .seconds(3))
+            model.talk(saying: words)
+            // `-voiceConfirm YES` presses Start.
+            if defaults.bool(forKey: "voiceConfirm") {
+                try? await Task.sleep(for: .seconds(5))
+                await model.voice?.confirm()
+            }
         }
         if defaults.bool(forKey: "newWorkspace") {
             try? await Task.sleep(for: .seconds(2))

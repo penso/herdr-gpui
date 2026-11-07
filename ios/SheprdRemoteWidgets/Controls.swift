@@ -28,3 +28,16 @@ struct NewWorkspaceControl: ControlWidget {
         .description("Starts a workspace with an agent.")
     }
 }
+
+/// Opens the app listening, for the Action button most of all.
+struct TalkControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "so.pen.herdr.remote.talk") {
+            ControlWidgetButton(action: TalkIntent()) {
+                Label("Talk to Sheprd", systemImage: "waveform")
+            }
+        }
+        .displayName("Talk to Sheprd")
+        .description("Listens for a command.")
+    }
+}

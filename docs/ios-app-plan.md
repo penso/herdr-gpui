@@ -814,6 +814,10 @@ Workspaces round (2026-10-29) replaces the Computers tab with a
     computer.
   - Controls (Control Center, Lock Screen, Action button): open the board,
     new chat on the last computer, and dictate a prompt.
+- **Voice commands.** Speaking controls the app, not just the composer: the
+  pipeline and its rules are in `ios/README.md`. Nothing that reaches an agent
+  runs without a tap, and auto-accept is never turned on
+  by voice.
 - **App Intents, Siri, Shortcuts, Spotlight.**
   - `AppEntity` types for computers, workspaces, and chats.
   - Intents: "Ask Claude in sheprd to …", "What needs me?", "Stop the

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var editMode = EditMode.inactive
     @AppStorage(AppLock.setting, store: AppLock.store) private var requireFaceID = false
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
+    @AppStorage(VoiceSpeaker.setting) private var voiceSpeaks = true
 
     var body: some View {
         List {
@@ -61,6 +62,9 @@ struct SettingsView: View {
                 } label: {
                     LabeledContent("Text Shortcuts", value: "\(model.shortcuts.shortcuts.count)")
                 }
+            }
+            Section("Voice") {
+                Toggle("Speak Results", isOn: $voiceSpeaks)
             }
             Section("Terminal") {
                 NavigationLink {

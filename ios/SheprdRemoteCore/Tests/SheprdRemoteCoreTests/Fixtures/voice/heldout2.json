@@ -1,0 +1,22 @@
+[
+{"u":"Ask Claude to refactor the cache layer in moltis on studio","action":"new_workspace","computer":"studio","project":"moltis","agent":"claude","task":"refactor the cache layer"},
+{"u":"Tell Codex to add retries, on the macbook","action":"new_workspace","computer":"MacBook Pro","agent":"codex","task":"add retries"},
+{"u":"On studio start Gemini and ask it to deploy to the cloud","action":"new_workspace","computer":"studio","agent":"gemini","task":"deploy to the cloud"},
+{"u":"Create a worktree about studio lighting in site with Claude","action":"new_workspace","project":"site","agent":"claude"},
+{"u":"Make a worktree on build oh one called hotfix","action":"new_workspace","computer":"build-01"},
+{"u":"Start Claude","action":"new_workspace","agent":"claude"},
+{"u":"Start a new chat with Codex in sheprd asking it to explain the reducer","action":"new_workspace","project":"sheprd","agent":"codex","task":"explain the reducer"},
+{"u":"Use Gemini on the macbook pro in moltis and have it write docs","action":"new_workspace","computer":"MacBook Pro","project":"moltis","agent":"gemini","task":"write docs"},
+{"u":"Tell hero animation to stop using video","action":"ask_chat","chat":"Hero animation","task":"stop using video"},
+{"u":"Stop","action":"none"},
+{"u":"Open the pod bay doors","action":"none"},
+{"u":"Show me the weather","action":"none"},
+{"u":"Push the branch on studio","action":"none"},
+{"u":"Delete the worktree about login","action":"none"},
+{"u":"What's the status of lighthouse pass","action":"none"},
+{"u":"Is anything blocked","action":"needs_me"},
+{"u":"Cancel the windows installer on build 01","action":"stop_chat","chat":"Windows installer"},
+{"u":"Approve the hero animation chat","action":"answer_chat","chat":"Hero animation"},
+{"u":"Claude fix the failing test in sheprd on studio","action":"new_workspace","computer":"studio","project":"sheprd","agent":"claude","task":"fix the failing test"},
+{"u":"I want Codex on studio working on the sidebar","action":"new_workspace","computer":"studio","agent":"codex"}
+]
