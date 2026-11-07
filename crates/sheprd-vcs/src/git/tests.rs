@@ -107,6 +107,7 @@ fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
         deletions,
         untracked,
         staged: 0,
+        index: 0,
     }
 }
 

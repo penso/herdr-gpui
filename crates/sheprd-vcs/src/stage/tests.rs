@@ -21,6 +21,24 @@ fn git(root: &Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+mod unseen;
+
+/// The one hunk of the untracked file `path`, holding `lines`.
+fn whole(path: &str, lines: &[&str]) -> Hunk {
+    let last = u32::try_from(lines.len()).unwrap() + 1;
+    Hunk {
+        path: path.into(),
+        span: Span {
+            start: 1,
+            end: last,
+        },
+        lines: (1..)
+            .zip(lines.iter().map(|line| (*line).to_owned()))
+            .collect(),
+        removed: Vec::new(),
+    }
+}
+
 /// A checkout holding `a.txt` of twenty numbered lines.
 fn checkout() -> (tempfile::TempDir, String) {
     let dir = tempfile::tempdir().unwrap();
@@ -55,6 +73,7 @@ fn hunk(line: u32, text: &str) -> Hunk {
             end: line + 1,
         },
         lines: HashMap::from([(line, text.to_owned())]),
+        removed: vec![format!("line {line}")],
     }
 }
 
@@ -135,7 +154,9 @@ fn a_hunk_after_one_left_out_still_applies_when_lines_were_added() {
     text.push_str(&numbered(&[(18, "eighteen")]));
     std::fs::write(root.join("a.txt"), &text).unwrap();
 
-    stage_hunk(&checkout, &hunk(21, "eighteen"), same).unwrap();
+    let mut shown = hunk(21, "eighteen");
+    shown.removed = vec!["line 18".into()];
+    stage_hunk(&checkout, &shown, same).unwrap();
 
     assert_eq!(
         git(root, &["show", ":a.txt"]),
@@ -157,6 +178,7 @@ fn a_hunk_of_removed_lines_stages_by_its_place() {
         path: "a.txt".into(),
         span: Span { start: 10, end: 10 },
         lines: HashMap::new(),
+        removed: vec!["line 10".into()],
     };
 
     stage_hunk(&checkout, &hunk, same).unwrap();
@@ -238,7 +260,7 @@ fn a_name_with_pathspec_characters_stages_only_itself() {
     std::fs::write(root.join("[a]*.txt"), "new\n").unwrap();
     std::fs::write(root.join("a.log"), "other\n").unwrap();
 
-    stage_file(&checkout, "[a]*.txt").unwrap();
+    stage_file(&checkout, &whole("[a]*.txt", &["new"]), same).unwrap();
 
     assert_eq!(
         git(root, &["diff", "--cached", "--name-only"]).trim(),

@@ -258,8 +258,7 @@ impl SheprdWindow {
             Row::Commit => {
                 self.menu.page = Some(Page::GitCommit);
                 self.menu.input = Some(DialogInput::default());
-                // Hunks staged on purpose stay what the commit is about.
-                self.menu.git_commit_staged = self.git_staged() > 0;
+                self.menu.git_commit_staged = None;
             }
             Row::Push => self.start_git(Action::Push),
             Row::PullRequest => {
@@ -280,6 +279,14 @@ impl SheprdWindow {
     /// Files staged in the focused checkout.
     fn git_staged(&self) -> u64 {
         self.git.status().map_or(0, |status| status.staged)
+    }
+
+    /// Whether the commit takes only what is staged. Hunks staged on purpose
+    /// stay what the commit is about, so until the user chooses this follows
+    /// the status, which can land after the dialog opens.
+    pub(super) fn git_commits_staged(&self) -> bool {
+        let staged = self.git_staged() > 0;
+        staged && self.menu.git_commit_staged.unwrap_or(staged)
     }
 
     fn start_git(&mut self, action: Action) {
@@ -305,7 +312,7 @@ impl SheprdWindow {
             .as_ref()
             .map(|input| input.text.trim().to_owned())
             .unwrap_or_default();
-        self.start_git(if self.menu.git_commit_staged {
+        self.start_git(if self.git_commits_staged() {
             Action::CommitStaged(message)
         } else {
             Action::Commit(message)
@@ -664,12 +671,12 @@ impl SheprdWindow {
             .child(crate::toggles::checkbox(
                 &self.theme,
                 14.,
-                self.menu.git_commit_staged,
+                self.git_commits_staged(),
             ))
             .child(fl!("git-commit-only-staged", count = self.git_staged()))
             .on_click(cx.listener(|this, _, _, cx| {
                 cx.stop_propagation();
-                this.menu.git_commit_staged = !this.menu.git_commit_staged;
+                this.menu.git_commit_staged = Some(!this.git_commits_staged());
                 cx.notify();
             }))
     }
@@ -695,7 +702,7 @@ impl SheprdWindow {
                 div()
                     .debug_selector(|| "git-commit-note".into())
                     .text_color(rgb(theme.subtext()))
-                    .child(if self.menu.git_commit_staged {
+                    .child(if self.git_commits_staged() {
                         fl!("git-commit-note-staged")
                     } else {
                         fl!("git-commit-note")

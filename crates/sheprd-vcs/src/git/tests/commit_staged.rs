@@ -33,7 +33,7 @@ fn repository() -> (tempfile::TempDir, String) {
 }
 
 fn run_commit(checkout: &str, message: &str) -> crate::Result<Outcome> {
-    commit_staged(
+    commit::only_staged(
         checkout,
         message,
         Instant::now() + Duration::from_secs(30),
@@ -88,6 +88,62 @@ fn the_status_counts_staged_files() {
     let status = read();
     assert_eq!(status.staged, 1);
     assert_eq!(status.untracked, 1);
+}
+
+#[test]
+fn the_status_sees_the_index_move_with_the_same_files_staged() {
+    let (directory, checkout) = repository();
+    let read = || {
+        checkout_status(&checkout, Instant::now() + Duration::from_secs(30), &|| {
+            false
+        })
+        .unwrap()
+    };
+    std::fs::write(directory.path().join("tracked"), "one\n").unwrap();
+    git_in(&checkout, &["add", "tracked"]);
+    let first = read();
+    std::fs::write(directory.path().join("tracked"), "two\n").unwrap();
+    git_in(&checkout, &["add", "tracked"]);
+    let second = read();
+
+    assert_eq!((first.staged, second.staged), (1, 1));
+    assert_ne!(first.index, second.index);
+    assert!(first.same_changes(&second));
+}
+
+#[test]
+fn something_just_staged_shows_before_the_status_is_read() {
+    let now = Instant::now();
+    let mut git = Git::fixture(
+        Input {
+            checkout: Some("/work".into()),
+            repo_key: None,
+            branch: "main".into(),
+        },
+        Status::default(),
+    );
+    git.refresh_staged(now);
+    assert_eq!(git.status().unwrap().staged, 1);
+}
+
+#[test]
+fn a_status_read_begun_before_staging_is_followed_by_another() {
+    let mut peer = Peer::new();
+    let now = Instant::now();
+    peer.git.track(Some(input("feature")), true, now);
+    peer.git.poll(now);
+    let (requested, _) = peer.request();
+    peer.complete(requested, Completion::Status(Ok(status(0, 0, 0))), now);
+    let later = now + REFRESH;
+    peer.git.track(Some(input("feature")), true, later);
+    peer.git.poll(later);
+    let (requested, _) = peer.request();
+
+    peer.git.refresh_staged(later);
+    peer.complete(requested, Completion::Status(Ok(status(0, 0, 0))), later);
+
+    assert_eq!(peer.git.status().unwrap().staged, 1, "it missed the write");
+    assert_eq!(peer.git.due, Some(later), "so another follows at once");
 }
 
 #[test]

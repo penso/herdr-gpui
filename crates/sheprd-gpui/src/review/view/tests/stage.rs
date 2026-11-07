@@ -46,7 +46,7 @@ fn numbered(edits: &[(u32, &str)]) -> String {
 fn checkout() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    git(root, &["init", "-q"]);
+    git(root, &["init", "-q", "-b", "main"]);
     std::fs::write(root.join("a.txt"), numbered(&[])).unwrap();
     git(root, &["add", "-A"]);
     git(root, &["commit", "-qm", "first"]);
@@ -196,7 +196,7 @@ fn a_file_changed_since_it_was_read_stages_nothing_and_says_why(cx: &mut gpui::T
 fn an_untracked_file_stages_whole(cx: &mut gpui::TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    git(root, &["init", "-q"]);
+    git(root, &["init", "-q", "-b", "main"]);
     std::fs::write(root.join("a.txt"), "old\n").unwrap();
     git(root, &["add", "-A"]);
     git(root, &["commit", "-qm", "first"]);
@@ -210,6 +210,64 @@ fn an_untracked_file_stages_whole(cx: &mut gpui::TestAppContext) {
     assert_eq!(git(root, &["show", ":b.txt"]), "new\nlines\n");
     let hunks = headers(&view, cx);
     assert_eq!(staged(&view, cx, hunks[0]), Some(true));
+}
+
+#[gpui::test]
+fn a_new_file_grown_since_the_review_stages_nothing(cx: &mut gpui::TestAppContext) {
+    let dir = checkout();
+    let root = dir.path();
+    git(root, &["checkout", "-q", "a.txt"]);
+    std::fs::write(root.join("b.txt"), "seen\n").unwrap();
+    let (view, cx) = window(cx, None);
+    open(&view, cx, root);
+    let hunks = headers(&view, cx);
+    std::fs::write(root.join("b.txt"), "seen\nunseen\n").unwrap();
+
+    stage(&view, cx, hunks[0]);
+
+    assert_eq!(git(root, &["diff", "--cached", "--name-only"]), "");
+    assert_eq!(staged(&view, cx, hunks[0]), Some(false));
+}
+
+#[gpui::test]
+fn a_hunk_unstaged_elsewhere_is_offered_again_with_the_same_file_staged(
+    cx: &mut gpui::TestAppContext,
+) {
+    let dir = checkout();
+    let root = dir.path();
+    let (view, cx) = window(cx, None);
+    open(&view, cx, root);
+    let hunks = headers(&view, cx);
+    stage(&view, cx, hunks[0]);
+    stage(&view, cx, hunks[1]);
+    assert_eq!(staged(&view, cx, hunks[1]), Some(true));
+    let tracked = view.read_with(cx, |view, _| view.git.tracked().cloned().unwrap());
+    let seen = Status {
+        staged: 1,
+        index: 1,
+        ..Status::default()
+    };
+    view.update_in(cx, |view, _, cx| {
+        view.git = Git::fixture(tracked.clone(), seen);
+        view.follow_review_changes(cx);
+    });
+    cx.run_until_parked();
+
+    // The file stays staged, with one of its two hunks taken back out.
+    git(root, &["restore", "--staged", "a.txt"]);
+    std::fs::write(root.join("kept"), numbered(&[(3, "\tthree")])).unwrap();
+    let blob = git(root, &["hash-object", "-w", "kept"]);
+    std::fs::remove_file(root.join("kept")).unwrap();
+    let entry = format!("100644,{},a.txt", blob.trim());
+    git(root, &["update-index", "--cacheinfo", &entry]);
+    view.update_in(cx, |view, _, cx| {
+        view.git = Git::fixture(tracked, Status { index: 2, ..seen });
+        view.follow_review_changes(cx);
+    });
+    cx.run_until_parked();
+
+    assert_eq!(staged(&view, cx, hunks[0]), Some(true));
+    assert_eq!(staged(&view, cx, hunks[1]), Some(false));
 }
 
 #[gpui::test]

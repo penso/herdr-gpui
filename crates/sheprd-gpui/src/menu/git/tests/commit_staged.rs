@@ -59,8 +59,48 @@ fn the_choice_can_stage_everything_after_all(cx: &mut TestAppContext) {
     draw(cx);
     let choice = cx.debug_bounds("git-commit-staged").unwrap().center();
     cx.simulate_click(choice, gpui::Modifiers::none());
-    view.read_with(cx, |view, _| assert!(!view.menu.git_commit_staged));
+    view.read_with(cx, |view, _| assert!(!view.git_commits_staged()));
     cx.update(|_, cx| view.update(cx, |view, cx| view.submit_git_commit(cx)));
+    view.read_with(cx, |view, _| {
+        assert_eq!(
+            view.git.running(),
+            Some(&Action::Commit("A message".into()))
+        );
+    });
+}
+
+#[gpui::test]
+fn a_status_landing_after_the_dialog_opened_keeps_the_commit_to_what_is_staged(
+    cx: &mut TestAppContext,
+) {
+    let (view, cx) = commit_dialog(status(3, 1, 2), cx);
+    view.read_with(cx, |view, _| assert!(!view.git_commits_staged()));
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.git = Git::fixture(input(), staged(1));
+            view.submit_git_commit(cx);
+        })
+    });
+    view.read_with(cx, |view, _| {
+        assert_eq!(
+            view.git.running(),
+            Some(&Action::CommitStaged("A message".into()))
+        );
+    });
+}
+
+#[gpui::test]
+fn the_users_choice_outlives_a_new_status(cx: &mut TestAppContext) {
+    let (view, cx) = commit_dialog(staged(1), cx);
+    draw(cx);
+    let choice = cx.debug_bounds("git-commit-staged").unwrap().center();
+    cx.simulate_click(choice, gpui::Modifiers::none());
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.git = Git::fixture(input(), staged(2));
+            view.submit_git_commit(cx);
+        })
+    });
     view.read_with(cx, |view, _| {
         assert_eq!(
             view.git.running(),

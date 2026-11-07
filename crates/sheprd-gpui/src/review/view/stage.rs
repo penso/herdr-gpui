@@ -58,10 +58,18 @@ impl Review {
             .take_while(|line| line.kind != Kind::Hunk)
             .filter_map(|line| Some((line.new?, lines.text_of(line).to_owned())))
             .collect::<HashMap<_, _>>();
+        let removed = lines
+            .iter()
+            .skip(header + 1)
+            .take_while(|line| line.kind != Kind::Hunk)
+            .filter(|line| line.kind == Kind::Removed)
+            .map(|line| lines.text_of(line).to_owned())
+            .collect();
         Some(Hunk {
             path: entry.git_path().to_owned(),
             span,
             lines: shown,
+            removed,
         })
     }
 }
@@ -137,7 +145,7 @@ impl SheprdWindow {
         review.staging = true;
         let staging = cx.background_executor().spawn(async move {
             if untracked {
-                stage::stage_file(&checkout, &hunk.path)
+                stage::stage_file(&checkout, &hunk, clean)
             } else {
                 stage::stage_hunk(&checkout, &hunk, clean)
             }
@@ -162,10 +170,13 @@ impl SheprdWindow {
         if let Some(review) = self.reviews.get_mut(&id) {
             review.staging = false;
         }
-        if let Err(error) = staged {
-            self.show_flash(Flash::warning(error.localize()), cx);
+        match staged {
+            Ok(()) => self.git.refresh_staged(Instant::now()),
+            Err(error) => {
+                self.git.refresh(Instant::now());
+                self.show_flash(Flash::warning(error.localize()), cx);
+            }
         }
-        self.git.refresh(Instant::now());
         // A file just added is listed differently from then on.
         if untracked {
             self.reload_review(id, cx);

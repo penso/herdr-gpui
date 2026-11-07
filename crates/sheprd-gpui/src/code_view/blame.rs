@@ -1,5 +1,6 @@
 //! Blame in a code tab: who last changed each line and in which commit,
-//! read on the background executor with the file, so the two match. A
+//! read on the background executor from the text the tab read, so the two
+//! always match. A
 //! column beside the line numbers names each run of lines' commit, and a bar
 //! under the code gives the whole of the marked line's.
 
@@ -89,12 +90,20 @@ impl SheprdWindow {
         cx.notify();
     }
 
-    /// Reads `path`'s blame for read `load`, stopping any older one.
+    /// Whether tab `id` wants its lines' commits.
+    pub(super) fn code_blame_wanted(&self, id: TabId) -> bool {
+        self.code_views
+            .get(&id)
+            .is_some_and(|view| view.blame.wanted())
+    }
+
+    /// Blames `contents`, read `load` of `path`, stopping any older read.
     pub(super) fn read_code_blame(
         &mut self,
         id: TabId,
         load: u64,
         path: PathBuf,
+        contents: String,
         cx: &mut Context<Self>,
     ) {
         let Some(view) = self.code_views.get_mut(&id) else {
@@ -105,7 +114,7 @@ impl SheprdWindow {
         view.blame_cancelled = cancelled.clone();
         let reading = cx
             .background_executor()
-            .spawn(async move { Blame::read(&path, &cancelled).map(Arc::new) });
+            .spawn(async move { Blame::read(&path, &contents, &cancelled).map(Arc::new) });
         cx.spawn(async move |this, cx| {
             let read = reading.await;
             let _ = this.update(cx, |this, cx| this.code_blame_read(id, load, read, cx));

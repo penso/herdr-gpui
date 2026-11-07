@@ -415,14 +415,7 @@ impl SheprdWindow {
             match review.seen {
                 None => review.seen = Some(status),
                 // The diff compares with HEAD, so staging moves no line.
-                Some(seen)
-                    if seen != status
-                        && crate::git::Status { staged: 0, ..seen }
-                            == crate::git::Status {
-                                staged: 0,
-                                ..status
-                            } =>
-                {
+                Some(seen) if seen != status && seen.same_changes(&status) => {
                     review.seen = Some(status);
                     staged.push(*id);
                 }

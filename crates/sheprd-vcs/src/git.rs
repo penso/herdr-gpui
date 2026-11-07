@@ -8,6 +8,7 @@
 //! counts, the probe counts lines instead, on the same schedule. Commit, push and pull request creation
 //! are explicit user actions and are never retried or replayed automatically.
 mod ahead;
+mod commit;
 mod error;
 
 pub use ahead::Ahead;
@@ -67,11 +68,21 @@ pub struct Status {
     /// Files staged for the next commit, which a commit of only what is
     /// staged takes. They are already counted in the lines above.
     pub staged: u64,
+    /// A digest of what is staged, which moves when the index does even if
+    /// the same files stay staged.
+    pub index: u64,
 }
 
 impl Status {
     pub fn dirty(&self) -> bool {
         self.additions > 0 || self.deletions > 0 || self.untracked > 0
+    }
+
+    /// Whether only the index differs from `other`: the working tree's
+    /// changes against HEAD are the same.
+    pub fn same_changes(&self, other: &Self) -> bool {
+        let changes = |status: &Self| (status.additions, status.deletions, status.untracked);
+        changes(self) == changes(other)
     }
 }
 
@@ -170,6 +181,8 @@ pub struct Git {
     generation: Arc<AtomicU64>,
     busy: bool,
     waiting: Option<(Input, Job)>,
+    /// A write outside this worker came after the running status read began.
+    outdated: bool,
     input: Option<Input>,
     status: Option<Status>,
     due: Option<Instant>,
@@ -404,6 +417,17 @@ impl Git {
     pub fn refresh(&mut self, now: Instant) {
         if self.input.is_some() {
             self.due = Some(now);
+            self.outdated = self.busy || self.waiting.is_some();
+        }
+    }
+
+    /// [`Self::refresh`] after something was staged, which the status says
+    /// at once: a commit dialog opened before the read lands must not take
+    /// the checkout for having nothing staged.
+    pub fn refresh_staged(&mut self, now: Instant) {
+        self.refresh(now);
+        if let Some(status) = &mut self.status {
+            status.staged = status.staged.max(1);
         }
     }
 
@@ -451,10 +475,16 @@ impl Git {
                         // A status of a checkout the chrome no longer shows is
                         // dropped rather than painted over the current one.
                         Completion::Status(_) if self.input.as_ref() != Some(&input) => {}
-                        Completion::Status(Ok(status)) => {
+                        Completion::Status(Ok(mut status)) => {
+                            // A read begun before the write may have missed
+                            // it, so it says no less and another follows.
+                            let outdated = std::mem::take(&mut self.outdated);
+                            if outdated && let Some(known) = self.status {
+                                status.staged = status.staged.max(known.staged);
+                            }
                             self.status = Some(status);
                             self.error = None;
-                            self.due = Some(now + REFRESH);
+                            self.due = Some(if outdated { now } else { now + REFRESH });
                         }
                         Completion::Status(Err(error)) => {
                             self.status = None;
@@ -677,29 +707,13 @@ fn checkout_status(
         deadline,
         cancelled,
     )?;
-    let staged = staged_files(checkout, deadline, cancelled)?;
     let mut status = parse_numstat(&numstat);
-    status.staged = staged.split('\0').filter(|name| !name.is_empty()).count() as u64;
+    (status.staged, status.index) = commit::staged(checkout, deadline, cancelled)?;
     status.untracked = untracked
         .split('\0')
         .filter(|entry| !entry.is_empty())
         .count() as u64;
     Ok(status)
-}
-
-/// The NUL-separated names of what the next commit would take.
-fn staged_files(
-    checkout: &str,
-    deadline: Instant,
-    cancelled: &impl Fn() -> bool,
-) -> crate::Result<String> {
-    git(
-        checkout,
-        &["diff", "--cached", "--name-only", "-z"],
-        "read staged changes",
-        deadline,
-        cancelled,
-    )
 }
 
 /// `--numstat` is machine readable in any locale; binary files report `-` and
@@ -725,73 +739,16 @@ fn perform(
     let deadline = Instant::now() + OPERATION_TIMEOUT;
     let checkout = local_checkout(input, deadline, cancelled)?;
     match action {
-        Action::Commit(message) => commit(&checkout, &message, deadline, cancelled),
-        Action::CommitStaged(message) => commit_staged(&checkout, &message, deadline, cancelled),
+        Action::Commit(message) => commit::all(&checkout, &message, deadline, cancelled),
+        Action::CommitStaged(message) => {
+            commit::only_staged(&checkout, &message, deadline, cancelled)
+        }
         Action::Push => push(&checkout, &input.branch, deadline, cancelled),
         Action::CreatePullRequest => {
             let token = token.ok_or(sheprd_github::Error::Authentication)?;
             create_pull_request(&checkout, &input.branch, &token, deadline, cancelled)
         }
     }
-}
-
-fn commit(
-    checkout: &str,
-    message: &str,
-    deadline: Instant,
-    cancelled: &impl Fn() -> bool,
-) -> crate::Result<Outcome> {
-    if !checkout_status(checkout, deadline, cancelled)?.dirty() {
-        return Err(Error::NothingToCommit.into());
-    }
-    git(
-        checkout,
-        &["add", "-A"],
-        "stage changes",
-        deadline,
-        cancelled,
-    )?;
-    commit_index(checkout, message, deadline, cancelled)
-}
-
-/// Commits the index as it stands, so a hunk staged from a review goes in
-/// without the changes around it.
-fn commit_staged(
-    checkout: &str,
-    message: &str,
-    deadline: Instant,
-    cancelled: &impl Fn() -> bool,
-) -> crate::Result<Outcome> {
-    if staged_files(checkout, deadline, cancelled)?.is_empty() {
-        return Err(Error::NothingStaged.into());
-    }
-    commit_index(checkout, message, deadline, cancelled)
-}
-
-fn commit_index(
-    checkout: &str,
-    message: &str,
-    deadline: Instant,
-    cancelled: &impl Fn() -> bool,
-) -> crate::Result<Outcome> {
-    git(
-        checkout,
-        &["commit", "-m", message],
-        "commit",
-        deadline,
-        cancelled,
-    )?;
-    let head = git(
-        checkout,
-        &["log", "-1", "--pretty=format:%h %s"],
-        "read the new commit",
-        deadline,
-        cancelled,
-    )?;
-    Ok(Outcome {
-        message: format!("Committed {}", clean(&head)),
-        url: None,
-    })
 }
 
 fn push(

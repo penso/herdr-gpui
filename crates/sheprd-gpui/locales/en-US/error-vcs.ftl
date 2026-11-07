@@ -73,6 +73,7 @@ error-vcs-git-worker = Git worker stopped. Retry the operation.
 
 ## Who changed each line of a file, in a code tab.
 
+error-vcs-blame-contents = Could not write the file's text for Git to read.
 error-vcs-blame-path = This file is not in a folder Git can read.
 error-vcs-blame-untracked = Git does not track this file, so it has no history to show.
 

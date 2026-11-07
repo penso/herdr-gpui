@@ -42,6 +42,8 @@ use std::{
 
 /// How long finding the checkout may take before the listing's own limits.
 const LOCATE_TIMEOUT: Duration = Duration::from_secs(30);
+/// How often a listing is read again with no change in the status to say so.
+const REREAD: Duration = Duration::from_secs(15);
 
 /// A listing, and what drawing it needs, worked out in the background.
 struct Prepared {
@@ -160,6 +162,8 @@ pub(crate) struct FileTree {
     cancelled: Arc<AtomicBool>,
     /// The checkout's status when last read, to see its changes move.
     seen: Option<Status>,
+    /// When it was last read, for what the status does not count.
+    read_at: Option<Instant>,
     _subscription: Subscription,
 }
 
@@ -365,6 +369,7 @@ impl SheprdWindow {
                 scroll: UniformListScrollHandle::new(),
                 load: 0,
                 reading: false,
+                read_at: None,
                 cancelled: Arc::default(),
                 seen: None,
                 _subscription: subscription,
@@ -383,6 +388,7 @@ impl SheprdWindow {
         view.load += 1;
         view.reading = true;
         view.seen = status;
+        view.read_at = Some(Instant::now());
         view.cancelled.store(true, Ordering::Release);
         view.cancelled = Arc::default();
         let (load, input, cancelled) = (view.load, view.checkout.clone(), view.cancelled.clone());
@@ -470,7 +476,8 @@ impl SheprdWindow {
     /// Runs every window tick: file tree tabs of the focused workspace with
     /// no view yet, such as ones restored from the last run, get one, the
     /// views of closed tabs go, and a checkout whose changes moved is read
-    /// again.
+    /// again. So is one left alone for a while: the status counts a new
+    /// folder once, however many files then arrive in it.
     pub(crate) fn poll_file_trees(&mut self, cx: &mut Context<Self>) {
         let Some(store) = cx.try_global::<Store>() else {
             self.file_trees.clear();
@@ -496,11 +503,15 @@ impl SheprdWindow {
         let (Some(tracked), Some(status)) = (self.git.tracked(), self.git.status()) else {
             return;
         };
+        let now = Instant::now();
         let moved: Vec<TabId> = self
             .file_trees
             .iter()
             .filter(|(_, view)| {
-                view.checkout == *tracked && !view.reading && view.seen != Some(status)
+                let stale = view
+                    .read_at
+                    .is_none_or(|read| now.duration_since(read) >= REREAD);
+                view.checkout == *tracked && !view.reading && (stale || view.seen != Some(status))
             })
             .map(|(id, _)| *id)
             .collect();

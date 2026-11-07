@@ -27,6 +27,7 @@ impl Localize for blame::Error {
     fn localize(&self) -> String {
         match self {
             // keep-sorted start
+            Self::Contents(_) => fl!("error-vcs-blame-contents"),
             Self::Path => fl!("error-vcs-blame-path"),
             Self::Untracked => fl!("error-vcs-blame-untracked"),
             // keep-sorted end

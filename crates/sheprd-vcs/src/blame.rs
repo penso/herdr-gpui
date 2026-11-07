@@ -1,6 +1,7 @@
 //! Who last changed each line of a file, and in which commit, for a code
-//! tab. It blames the file as it is on disk, so line numbers match what the
-//! tab read and a line not committed yet says so. Git runs bounded and
+//! tab. It blames the text the tab read, not the file as it is by then, so
+//! line numbers always match what is shown and a line not committed yet says
+//! so. Git runs bounded and
 //! cancellable; authors and summaries are untrusted text, cleaned here.
 //! Blocking, for a background executor.
 
@@ -11,6 +12,7 @@ pub use error::Error;
 use crate::git::{git, git_bytes};
 use std::{
     collections::HashMap,
+    io::Write as _,
     path::Path,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
@@ -51,8 +53,8 @@ pub struct Blame {
 }
 
 impl Blame {
-    /// Blames the file at `path`. Blocking.
-    pub fn read(path: &Path, cancelled: &AtomicBool) -> crate::Result<Self> {
+    /// Blames `contents`, as read from the file at `path`. Blocking.
+    pub fn read(path: &Path, contents: &str, cancelled: &AtomicBool) -> crate::Result<Self> {
         let folder = path.parent().and_then(Path::to_str).ok_or(Error::Path)?;
         let name = path
             .file_name()
@@ -72,9 +74,16 @@ impl Blame {
         if tracked.is_empty() {
             return Err(Error::Untracked.into());
         }
+        // Git takes the text from a file: the process runner closes stdin.
+        // Private to this user, as it holds the file's lines.
+        let mut file = tempfile::NamedTempFile::new().map_err(Error::Contents)?;
+        file.write_all(contents.as_bytes())
+            .map_err(Error::Contents)?;
+        file.flush().map_err(Error::Contents)?;
+        let text = file.path().to_string_lossy();
         let output = git_bytes(
             folder,
-            &["blame", "--porcelain", "--", name],
+            &["blame", "--porcelain", "--contents", &text, "--", name],
             "read who changed each line",
             deadline,
             &stop,

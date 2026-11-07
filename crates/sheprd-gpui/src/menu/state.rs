@@ -123,7 +123,7 @@ pub(crate) struct MenuState {
     pub(super) selected: Option<usize>,
     pub(super) workspace_selected: Option<WorkspaceMenuAction>,
     /// The commit dialog takes only what is staged.
-    pub(super) git_commit_staged: bool,
+    pub(super) git_commit_staged: Option<bool>,
     pub(super) git_selected: Option<git::Row>,
     /// The merge dialog's method, and the pull request (with its head) it
     /// was opened for: a branch that moved since must be reviewed again.
@@ -389,7 +389,7 @@ impl MenuState {
             focus: cx.focus_handle(),
             selected: None,
             workspace_selected: None,
-            git_commit_staged: false,
+            git_commit_staged: None,
             git_selected: None,
             merge_method: None,
             merge_target: None,

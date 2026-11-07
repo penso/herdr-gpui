@@ -106,7 +106,8 @@ fn a_real_file_blames_committed_and_edited_lines() {
     git(root, &["commit", "-qm", "First"]);
     std::fs::write(&path, "one\nchanged\nthree\n").unwrap();
 
-    let blame = Blame::read(&path, &AtomicBool::new(false)).unwrap();
+    let contents = std::fs::read_to_string(&path).unwrap();
+    let blame = Blame::read(&path, &contents, &AtomicBool::new(false)).unwrap();
 
     assert_eq!(blame.len(), 3);
     assert_eq!(blame.line(0).unwrap().author, "Ada");
@@ -121,7 +122,7 @@ fn an_untracked_file_says_so() {
     let root = dir.path();
     git(root, &["init", "-q"]);
     std::fs::write(root.join("a.rs"), "one\n").unwrap();
-    let error = Blame::read(&root.join("a.rs"), &AtomicBool::new(false)).unwrap_err();
+    let error = Blame::read(&root.join("a.rs"), "one\n", &AtomicBool::new(false)).unwrap_err();
     assert!(matches!(error, crate::Error::Blame(Error::Untracked)));
 }
 
@@ -129,5 +130,24 @@ fn an_untracked_file_says_so() {
 fn a_cancelled_read_stops() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("a.rs");
-    assert!(Blame::read(&path, &AtomicBool::new(true)).is_err());
+    assert!(Blame::read(&path, "", &AtomicBool::new(true)).is_err());
+}
+
+#[test]
+fn the_text_read_is_blamed_though_the_file_moved_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let path = root.join("a.rs");
+    git(root, &["init", "-q"]);
+    std::fs::write(&path, "one\ntwo\n").unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "First"]);
+    // Another line arrived at the top after the tab read the file.
+    std::fs::write(&path, "zero\none\ntwo\n").unwrap();
+
+    let blame = Blame::read(&path, "one\ntwo\n", &AtomicBool::new(false)).unwrap();
+
+    assert_eq!(blame.len(), 2);
+    assert_eq!(blame.line(0).unwrap().summary, "First");
+    assert_eq!(blame.line(1).unwrap().summary, "First");
 }

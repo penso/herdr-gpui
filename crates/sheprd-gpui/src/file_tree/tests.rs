@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 // Not a glob: the parent's `gpui::*` would shadow the `#[test]` that
 // `gpui::test` expands to.
-use super::{Change, Entry, FileTree, Listing, Node, Prepared, matches};
+use super::{Change, Entry, FileTree, Listing, Node, Prepared, REREAD, matches};
 use crate::{
     SheprdWindow,
     browser::{Location, Store, TabId, scope},
@@ -9,7 +9,7 @@ use crate::{
     pull_request::Input,
 };
 use gpui::{Entity, TestAppContext, VisualTestContext};
-use std::{path::Path, process::Command, sync::Arc};
+use std::{path::Path, process::Command, sync::Arc, time::Instant};
 
 mod en_xa;
 
@@ -56,7 +56,7 @@ fn git(root: &Path, args: &[&str]) {
 fn checkout() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    git(root, &["init", "-q"]);
+    git(root, &["init", "-q", "-b", "main"]);
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::create_dir_all(root.join("docs")).unwrap();
     std::fs::create_dir_all(root.join("notes")).unwrap();
@@ -340,6 +340,33 @@ fn a_checkout_whose_changes_moved_is_read_again(cx: &mut TestAppContext) {
     cx.run_until_parked();
     read(&view, cx, |tree| {
         assert!(rows(tree).contains(&"added.txt".to_owned()));
+    });
+}
+
+#[gpui::test]
+fn a_listing_left_alone_is_read_again_though_the_status_stands(cx: &mut TestAppContext) {
+    let dir = checkout();
+    let (view, cx) = window(cx);
+    let id = open(&view, cx, dir.path());
+    // A second file in an untracked folder the status already counts.
+    std::fs::write(dir.path().join("notes/more.txt"), "x\n").unwrap();
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let tree = view.file_trees.get_mut(&id).unwrap();
+            tree.read_at = Instant::now().checked_sub(REREAD);
+            view.poll_file_trees(cx);
+        })
+    });
+    cx.run_until_parked();
+    read(&view, cx, |tree| {
+        let prepared = tree.prepared.as_ref().unwrap();
+        assert!(
+            prepared
+                .listing
+                .entries()
+                .iter()
+                .any(|entry| entry.path == "notes/more.txt")
+        );
     });
 }
 

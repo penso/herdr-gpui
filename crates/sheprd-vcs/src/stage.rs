@@ -6,7 +6,8 @@
 //! everything unstaged there goes to the index. The patch is cut from Git's
 //! own bytes rather than the text the review shows, which is cleaned for
 //! display. A review can be out of date when the file has moved on, so every
-//! line about to be staged is first compared with what the user saw.
+//! line about to be staged is first compared with what the user saw, lines
+//! going as well as lines arriving, and the file itself with the lines shown.
 //!
 //! Writes run to their deadline and are never cancelled, as `git.rs`'s are
 //! not. Blocking, for a background executor.
@@ -18,7 +19,8 @@ pub use error::Error;
 use crate::git::{git, git_bytes, literal};
 use std::{
     collections::HashMap,
-    io::Write as _,
+    io::{self, Read as _, Write as _},
+    path::Path,
     time::{Duration, Instant},
 };
 
@@ -100,6 +102,9 @@ pub struct Hunk {
     /// The working tree's lines shown in the hunk, by line number, cleaned
     /// for display.
     pub lines: HashMap<u32, String>,
+    /// The lines shown as removed, cleaned the same way. Earlier hunks
+    /// staged move these lines' numbers, so they go by their text.
+    pub removed: Vec<String>,
 }
 
 /// Stages the part of `checkout`'s unstaged changes that `hunk` covers.
@@ -133,7 +138,10 @@ pub fn stage_hunk(
         &|| false,
         MAX_DIFF,
     )?;
-    let patch = patch(&diff, hunk, clean)?;
+    let patch = patch(&diff, hunk, &clean)?;
+    // After the diff: the patch is what was read, and what it leaves out of
+    // a changed file only the file can show.
+    check_file(checkout, hunk, &clean, false)?;
     // Git takes the patch from a file: the process runner closes stdin.
     // Private to this user, as the patch holds the file's lines.
     let mut file = tempfile::NamedTempFile::new().map_err(Error::Patch)?;
@@ -150,17 +158,72 @@ pub fn stage_hunk(
     Ok(())
 }
 
-/// Stages all of `path`, for a file Git does not track yet, which is one
-/// hunk of added lines. Blocking.
-pub fn stage_file(checkout: &str, path: &str) -> crate::Result<()> {
+/// Stages all of `hunk`'s file, one Git does not track yet, which is one
+/// hunk of added lines, if it still holds those lines and no others.
+/// Blocking.
+pub fn stage_file(
+    checkout: &str,
+    hunk: &Hunk,
+    clean: impl Fn(&str) -> String,
+) -> crate::Result<()> {
+    check_file(checkout, hunk, &clean, true)?;
     git(
         checkout,
-        &["add", "--", &literal(path)],
+        &["add", "--", &literal(&hunk.path)],
         "stage the file",
         Instant::now() + DEADLINE,
         &|| false,
     )?;
     Ok(())
+}
+
+/// Refuses a file that no longer reads as `hunk` showed it, or with `whole`,
+/// that holds more than was shown. A hunk with no lines shown was all
+/// removals, which leave nothing to compare.
+fn check_file(
+    checkout: &str,
+    hunk: &Hunk,
+    clean: impl Fn(&str) -> String,
+    whole: bool,
+) -> Result<(), Error> {
+    if hunk.lines.is_empty() {
+        return Ok(());
+    }
+    let contents = contents(&Path::new(checkout).join(&hunk.path)).map_err(|_| Error::Changed)?;
+    let text = String::from_utf8_lossy(&contents);
+    let mut rows: Vec<&str> = text.split('\n').collect();
+    if rows.last() == Some(&"") {
+        rows.pop();
+    }
+    let same = hunk.lines.iter().all(|(number, shown)| {
+        let row = number
+            .checked_sub(1)
+            .and_then(|row| rows.get(usize::try_from(row).ok()?));
+        row.is_some_and(|row| clean(row) == *shown)
+    });
+    if same && (!whole || rows.len() == hunk.lines.len()) {
+        Ok(())
+    } else {
+        Err(Error::Changed)
+    }
+}
+
+/// What Git would read at `path`: a link's target, or a bounded regular
+/// file. Anything else, such as a FIFO, is never opened.
+fn contents(path: &Path) -> io::Result<Vec<u8>> {
+    let metadata = std::fs::symlink_metadata(path)?;
+    if metadata.is_symlink() {
+        let target = std::fs::read_link(path)?;
+        return Ok(target.to_string_lossy().into_owned().into_bytes());
+    }
+    if !metadata.is_file() || metadata.len() > MAX_DIFF as u64 {
+        return Err(io::ErrorKind::InvalidData.into());
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(MAX_DIFF as u64)
+        .read_to_end(&mut bytes)?;
+    Ok(bytes)
 }
 
 /// The patch taking `hunk`'s part of `diff`, one file's diff with its
@@ -171,6 +234,10 @@ fn patch(diff: &[u8], hunk: &Hunk, clean: impl Fn(&str) -> String) -> Result<Vec
     let (header, parts) = split(diff);
     let mut patch = header.to_vec();
     let mut staged = false;
+    let mut removed: HashMap<&str, usize> = HashMap::new();
+    for line in &hunk.removed {
+        *removed.entry(line).or_default() += 1;
+    }
     for part in parts {
         let Some(walked) = read_hunk(part) else {
             continue;
@@ -185,6 +252,11 @@ fn patch(diff: &[u8], hunk: &Hunk, clean: impl Fn(&str) -> String) -> Result<Vec
                 LineKind::Added => shown == Some(&text),
                 // A context line can lie beyond the lines shown.
                 LineKind::Context => shown.is_none_or(|shown| *shown == text),
+                LineKind::Removed => removed.get_mut(text.as_str()).is_some_and(|left| {
+                    let some = *left > 0;
+                    *left = left.saturating_sub(1);
+                    some
+                }),
             };
             if !same {
                 return Err(Error::Changed);
@@ -223,9 +295,10 @@ fn split(diff: &[u8]) -> (&[u8], Vec<&[u8]>) {
 enum LineKind {
     Added,
     Context,
+    Removed,
 }
 
-/// A hunk's span, and its working tree lines by number.
+/// A hunk's span, and its lines; a removed line's number is where it was.
 struct Walked<'a> {
     span: Span,
     lines: Vec<(u32, LineKind, &'a [u8])>,
@@ -248,7 +321,10 @@ fn read_hunk(hunk: &[u8]) -> Option<Walked<'_>> {
                 lines.push((walk.next(), LineKind::Added, text));
                 walk.added();
             }
-            b'-' => walk.removed(),
+            b'-' => {
+                lines.push((walk.next(), LineKind::Removed, text));
+                walk.removed();
+            }
             _ => {}
         }
     }

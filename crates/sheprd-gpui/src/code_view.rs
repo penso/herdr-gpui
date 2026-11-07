@@ -96,13 +96,23 @@ struct Text {
     widest: usize,
 }
 
+/// The file at `path` as it is on disk.
+fn raw_source(path: &Path) -> crate::Result<String> {
+    code_index::read_source(path).ok_or(crate::Error::CodeFileUnreadable)
+}
+
 impl Text {
     /// Reads the file at `path`. Its text is untrusted: as in a review,
     /// tabs become spaces and control and direction-override characters go
     /// before anything is shown, coloured, or outlined, so what is drawn is
     /// what was read.
+    #[cfg(test)]
     fn read(path: &Path) -> crate::Result<Self> {
-        let raw = code_index::read_source(path).ok_or(crate::Error::CodeFileUnreadable)?;
+        Ok(Self::of(path, &raw_source(path)?))
+    }
+
+    /// The file at `path`, holding `raw`.
+    fn of(path: &Path, raw: &str) -> Self {
         let mut source = String::with_capacity(raw.len());
         let mut lines = Vec::new();
         for line in raw.lines() {
@@ -128,12 +138,12 @@ impl Text {
                 line: found.line,
             })
             .collect();
-        Ok(Self {
+        Self {
             source,
             lines,
             outline,
             widest,
-        })
+        }
     }
 
     fn line(&self, index: usize) -> &str {
@@ -336,20 +346,30 @@ impl SheprdWindow {
         };
         view.load += 1;
         let load = view.load;
-        let blamed = view.blame.wanted();
         let path = std::path::PathBuf::from(&file.path);
-        if blamed {
-            self.read_code_blame(id, load, path.clone(), cx);
-        }
-        let read = cx
-            .background_executor()
-            .spawn(async move { Text::read(&path).map(Arc::new) });
+        let read = cx.background_executor().spawn({
+            let path = path.clone();
+            async move {
+                let raw = raw_source(&path)?;
+                crate::Result::Ok((Arc::new(Text::of(&path, &raw)), raw))
+            }
+        });
         let executor = cx.background_executor().clone();
         cx.spawn(async move |this, cx| {
-            let text = read.await;
+            let (text, raw) = match read.await {
+                Ok((text, raw)) => (Ok(text), Some(raw)),
+                Err(error) => (Err(error), None),
+            };
             let coloured = text.as_ref().ok().cloned();
             let current = this
-                .update(cx, |this, cx| this.code_view_read(id, load, text, cx))
+                .update(cx, |this, cx| {
+                    let current = this.code_view_read(id, load, text, cx);
+                    // Blame reads what was read, so its lines are these.
+                    if let Some(raw) = raw.filter(|_| current && this.code_blame_wanted(id)) {
+                        this.read_code_blame(id, load, path, raw, cx);
+                    }
+                    current
+                })
                 .unwrap_or(false);
             let Some(text) = coloured.filter(|_| current) else {
                 return;
