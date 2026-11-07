@@ -65,11 +65,7 @@ impl SheprdWindow {
             // a pull request: its changes are still there to ask about.
             sources.workspaces.insert(
                 workspace.workspace_id.clone(),
-                Source::new(
-                    workspace.clone(),
-                    found.as_ref().map(|pr| &**pr),
-                    tokens.as_ref(),
-                ),
+                Source::new(workspace.clone(), found.as_deref(), tokens.as_ref()),
             );
             let Some((view, tree, branch)) = checkout else {
                 continue;
