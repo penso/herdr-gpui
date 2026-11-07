@@ -41,11 +41,16 @@ impl SheprdWindow {
         {
             return;
         }
-        let keys = self
-            .keymap()
-            .entries(info.command)
-            .collect::<Vec<_>>()
-            .join(" ");
+        // A saved list comes back as written: the keymap leaves out a chord this
+        // device's prefix cannot reach, and saving would delete it for every device.
+        let keys = match self.config.keybinding_overrides.get(info.name) {
+            Some(binding) => binding.keystrokes().collect::<Vec<_>>().join(" "),
+            None => self
+                .keymap()
+                .entries(info.command)
+                .collect::<Vec<_>>()
+                .join(" "),
+        };
         let input = cx.new(SearchInput::new);
         input.update(cx, |input, cx| {
             input.set_placeholder_with(

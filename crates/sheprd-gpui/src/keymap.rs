@@ -96,7 +96,7 @@ pub(crate) enum Binding {
 }
 
 impl Binding {
-    fn keystrokes(&self) -> impl Iterator<Item = &str> {
+    pub(crate) fn keystrokes(&self) -> impl Iterator<Item = &str> {
         let keystrokes = match self {
             Self::One(keystroke) => std::slice::from_ref(keystroke),
             Self::Many(keystrokes) => keystrokes.as_slice(),

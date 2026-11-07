@@ -44,6 +44,31 @@ fn removing_the_keystroke_from_the_field_keeps_the_chord(cx: &mut TestAppContext
     );
 }
 
+/// A chord can be out of this device's reach and still work on another, so the
+/// field must offer it back rather than let a save delete it.
+#[gpui::test]
+fn the_field_keeps_a_saved_chord_this_prefix_cannot_reach(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    view.update_in(cx, |view, window, cx| {
+        let saved = Binding::Many(vec!["cmd-w".into(), "prefix-ctrl-b".into()]);
+        let overrides = [("close_pane".to_owned(), saved)].into_iter().collect();
+        view.config.keybindings =
+            Keymap::with_overrides(&overrides, &Default::default(), &DaemonKeys::default())
+                .unwrap();
+        view.config.keybinding_overrides = overrides;
+        assert_eq!(
+            view.keymap()
+                .shortcuts(Command::ClosePane)
+                .collect::<Vec<_>>(),
+            ["cmd-w"]
+        );
+        view.open_keybinds(window, cx);
+        view.edit_shortcut(info(Command::ClosePane), window, cx);
+        let editor = view.menu.shortcut_editor.as_ref().unwrap();
+        assert_eq!(editor.input.read(cx).text(), "cmd-w prefix-ctrl-b");
+    });
+}
+
 /// Unbind still removes every shortcut the command has.
 #[gpui::test]
 fn unbind_removes_the_chord_too(cx: &mut TestAppContext) {
