@@ -12,7 +12,7 @@ mod error;
 
 pub use error::Error;
 
-use crate::{ConnectTarget, protocol::*, transport::Stream};
+use crate::{ConnectTarget, protocol::*, ssh::ChildGuard, transport::Stream, wsl};
 use std::{
     collections::VecDeque,
     io::{self, Read},
@@ -52,6 +52,8 @@ const MAX_SCROLL_LINES: u16 = 1000;
 pub struct TerminalAttach {
     shared: Arc<Shared>,
     worker: Option<JoinHandle<()>>,
+    /// The `wsl.exe` bridge an attach inside a distribution runs over.
+    _bridge: Option<ChildGuard>,
 }
 
 /// What the caller tells the worker, and whether the worker still runs.
@@ -74,15 +76,34 @@ struct Pending {
 }
 
 impl TerminalAttach {
-    /// Attaches to `terminal_id` on the local daemon `target` names, at
-    /// `cols` by `rows`, without taking it from another direct client.
-    /// Blocking: run it off any UI or async thread.
+    /// Attaches to `terminal_id` on the daemon `target` names, on this
+    /// machine or in a WSL distribution, at `cols` by `rows`, without taking
+    /// it from another direct client. Blocking: run it off any UI or async
+    /// thread.
     pub fn open(
         target: &ConnectTarget,
         terminal_id: &str,
         cols: u16,
         rows: u16,
     ) -> crate::Result<Self> {
+        if let ConnectTarget::Wsl { distro, session } = target {
+            let stop = AtomicBool::new(false);
+            // Each hello has its own bridge; the last one holds the attach.
+            let mut bridge = None;
+            let mut attach = Self::open_with(
+                || {
+                    let (stream, child) = wsl::connect_quiet(distro, session, &stop)
+                        .map_err(|error| io::Error::new(error.kind(), error))?;
+                    bridge = Some(child);
+                    Ok(stream)
+                },
+                terminal_id,
+                cols,
+                rows,
+            )?;
+            attach._bridge = bridge;
+            return Ok(attach);
+        }
         let path = target.socket_path()?;
         Ok(Self::open_with(
             || Stream::connect(&path),
@@ -153,6 +174,7 @@ impl TerminalAttach {
         Ok(Self {
             shared,
             worker: Some(worker),
+            _bridge: None,
         })
     }
 

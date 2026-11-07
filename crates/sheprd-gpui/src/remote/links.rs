@@ -92,8 +92,8 @@ pub(crate) struct Known {
 
 /// The machines a phone may be paired with: every enabled SSH and cloud
 /// endpoint, once per machine however many sessions reach it, in the
-/// window's order. This computer, WSL, and custom sockets are not hosts of
-/// their own.
+/// window's order. This computer and custom sockets are not hosts of their
+/// own, nor is WSL: this computer's daemon follows its sessions itself.
 pub(crate) fn known<'a>(
     endpoints: impl IntoIterator<Item = (&'a str, &'a str, &'a ConnectTarget, bool)>,
 ) -> Vec<Known> {

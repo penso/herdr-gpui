@@ -381,6 +381,23 @@ phone never disturbs the desktop's layout.
     SSH: at once after an edit, else every two minutes. A machine without
     the program is not given one for this: no phone is paired with it, so
     the copy is all there is.
+- **WSL distributions.** A distribution saved as a device on a Windows
+  computer is part of that computer, not another machine: it sleeps with it,
+  and a phone usually cannot reach its network. So the Windows daemon follows
+  its sessions itself, beside the named ones, and the phone needs no pairing.
+  - **What it follows.** Every 30 seconds it lists the running sessions of
+    the saved distributions that are already running. It boots nothing and
+    starts no server, and a connection that ends is not retried until the
+    session is listed again. A device disabled in Sheprd is still followed
+    while it runs: the daemon reads the saved list, not the window's state.
+  - **How.** The layout comes over `herdr remote-client-bridge` in `wsl.exe`,
+    requests over `herdr remote-api-bridge` (one `wsl.exe` each, so typing is
+    slower than on a native session), and a Herdr without the API bridge
+    lists its sessions read-only. Ids read `herdr:SESSION@DISTRO:ID`.
+  - **What it cannot do.** A chat's program listens inside the distribution,
+    out of this daemon's reach, so a chat there is listed as a terminal tab,
+    and a phone cannot start one there. A herdr-core inside a distribution is
+    not followed.
 - **Other machines.** Allowing a phone on one computer also pairs it with
   the SSH and cloud machines that computer's Sheprd connects to. The phone
   reaches each machine's own daemon directly, so it keeps them while that

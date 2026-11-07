@@ -3,7 +3,8 @@
 //! computer that runs `herdr --session NAME` shows phones every session, not
 //! only the one Sheprd enrolled. A session's workspace, tab, and pane ids carry
 //! `herdr:NAME:`, as a core's carry `core:`; session names cannot hold `:`.
-//! The primary keeps its ids, its boot, and everything else it had.
+//! The primary keeps its ids, its boot, and everything else it had. Sessions
+//! inside WSL distributions are followed the same way ([`wsl`]).
 
 use super::{
     Error, Result,
@@ -19,6 +20,11 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{Notify, watch};
+
+mod wsl;
+
+#[cfg(test)]
+pub(super) use wsl::wanted as wsl_wanted;
 
 const PREFIX: &str = "herdr:";
 /// The request and answer fields that name a workspace, tab, or pane.
@@ -87,11 +93,13 @@ impl Sessions {
             .cloned()
     }
 
-    /// The first session that answers, for work no id routes.
+    /// The first session on this computer that answers, for work no id
+    /// routes. Such work names this computer's paths and programs, which a
+    /// WSL distribution does not have.
     pub(super) fn first_connected(&self) -> Option<Arc<Session>> {
         lock(&self.list)
             .iter()
-            .find(|session| session.layout.borrow().connected)
+            .find(|session| session.layout.borrow().connected && !wsl::is_wsl(&session.name))
             .cloned()
     }
 
@@ -106,17 +114,18 @@ impl Sessions {
     /// still answer: one probe that missed is no reason to drop a session.
     /// Workers start and stop outside the lock phones' requests wait on.
     /// Only the rescan task calls it, so the list cannot change in between.
-    pub(super) fn update(self: &Arc<Self>, wanted: &[(String, PathBuf)]) {
+    pub(super) fn update(self: &Arc<Self>, wanted: &[(String, ConnectTarget)]) {
         let known: Vec<String> = lock(&self.list)
             .iter()
+            .filter(|session| !session.ended())
             .map(|session| session.name.clone())
             .collect();
         let mut added = Vec::new();
-        for (name, socket) in wanted {
+        for (name, target) in wanted {
             if known.contains(name) {
                 continue;
             }
-            match self.follow(name, socket.clone()) {
+            match self.follow(name, target.clone()) {
                 Ok(session) => added.push(Arc::new(session)),
                 Err(error) => {
                     tracing::warn!(session = %name, %error, "could not follow a Herdr session")
@@ -127,8 +136,9 @@ impl Sessions {
         let gone = {
             let mut list = lock(&self.list);
             let (kept, gone): (Vec<_>, Vec<_>) = list.drain(..).partition(|session| {
-                wanted.iter().any(|(name, _)| *name == session.name)
-                    || session.layout.borrow().connected
+                !session.ended()
+                    && (wanted.iter().any(|(name, _)| *name == session.name)
+                        || session.layout.borrow().connected)
             });
             *list = kept;
             list.extend(added);
@@ -141,13 +151,9 @@ impl Sessions {
         drop(gone);
     }
 
-    fn follow(self: &Arc<Self>, name: &str, socket: PathBuf) -> std::io::Result<Session> {
+    fn follow(self: &Arc<Self>, name: &str, target: ConnectTarget) -> std::io::Result<Session> {
         let (sender, layout) = watch::channel(Arc::new(Layout::default()));
-        let daemon = Daemon::start(
-            sender,
-            ConnectTarget::Socket(socket.clone()),
-            Some(name.to_owned()),
-        )?;
+        let daemon = Daemon::start(sender, target.clone(), Some(name.to_owned()))?;
         let mut changes = layout.clone();
         let sessions = Arc::downgrade(self);
         tokio::spawn(async move {
@@ -161,10 +167,17 @@ impl Sessions {
         });
         Ok(Session {
             name: name.to_owned(),
-            api: Api::new(Some(socket)),
+            api: Api::at(target),
             layout,
             _daemon: Some(daemon),
         })
+    }
+}
+
+impl Session {
+    /// Its worker stopped, which only a WSL session's does on its own.
+    pub(super) fn ended(&self) -> bool {
+        self._daemon.as_ref().is_some_and(Daemon::ended)
     }
 }
 
@@ -182,12 +195,32 @@ async fn rescan(sessions: Weak<Sessions>) {
         };
         let primary = current.primary.clone();
         // Probes each session's socket: blocking, off the runtime's threads.
-        match tokio::task::spawn_blocking(move || listed(primary.as_deref())).await {
-            Ok(Ok(wanted)) => current.update(&wanted),
-            Ok(Err(error)) => tracing::warn!(%error, "could not list Herdr sessions"),
+        match tokio::task::spawn_blocking(move || every_session(primary.as_deref())).await {
+            Ok(wanted) => current.update(&wanted),
             Err(error) => tracing::warn!(%error, "the Herdr session listing stopped"),
         }
     }
+}
+
+/// The sessions to follow on this computer and in its WSL distributions. One
+/// side failing leaves the other listed; what it held stays while it answers.
+/// A primary outside any installation keeps this daemon to that session, so
+/// no distribution is followed either. Blocking.
+fn every_session(primary: Option<&Path>) -> Vec<(String, ConnectTarget)> {
+    let mut sessions: Vec<(String, ConnectTarget)> = match listed(primary) {
+        Ok(wanted) => wanted
+            .into_iter()
+            .map(|(name, socket)| (name, ConnectTarget::Socket(socket)))
+            .collect(),
+        Err(error) => {
+            tracing::warn!(%error, "could not list Herdr sessions");
+            Vec::new()
+        }
+    };
+    if primary.is_none_or(|primary| installation(primary).is_some()) {
+        sessions.extend(wsl::listed());
+    }
+    sessions
 }
 
 /// The sessions to follow, listed in the installation the primary's socket
@@ -315,6 +348,13 @@ pub(super) fn merge(base: &Layout, sessions: &[(String, Arc<Layout>)]) -> Layout
         merged.workspaces.append(&mut layout.workspaces);
     }
     merged
+}
+
+/// Whether `id` is of a session inside a WSL distribution.
+pub(super) fn in_wsl(id: &str) -> bool {
+    id.strip_prefix(PREFIX)
+        .and_then(|rest| rest.split_once(':'))
+        .is_some_and(|(name, _)| wsl::is_wsl(name))
 }
 
 fn tag(name: &str, id: &str) -> String {

@@ -182,13 +182,31 @@ fn agent_title(agent: &ClientShellAgent) -> Option<&str> {
         .find_map(|title| sheprd_client::text::caption(title))
 }
 
-/// The workspaces of `snapshot` in its order, each with its chat panes (one
-/// per pane, at most [`MAX_CHATS`] in all) and the tabs that hold none.
+/// How a daemon's chat panes are listed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Chats {
+    /// As chats: their programs' endpoints can be reached from here.
+    Linked,
+    /// As the terminal tabs they also are: their programs listen inside a
+    /// WSL distribution, where nothing here can connect.
+    Terminals,
+}
+
+/// [`project_with`] for a daemon whose chats can be reached.
+#[cfg(test)]
 pub(crate) fn project(snapshot: &ClientShellSnapshot) -> Layout {
+    project_with(snapshot, Chats::Linked)
+}
+
+/// The workspaces of `snapshot` in its order, each with its chat panes (one
+/// per pane, at most [`MAX_CHATS`] in all, listed as `listed` says) and the
+/// tabs that hold none.
+pub(crate) fn project_with(snapshot: &ClientShellSnapshot, listed: Chats) -> Layout {
     let mut seen = HashSet::new();
     let chats: Vec<(String, Chat)> = snapshot
         .agents
         .iter()
+        .filter(|_| listed == Chats::Linked)
         .filter_map(|agent| {
             let endpoint = endpoint(&agent.tokens)?;
             seen.insert(agent.pane_id.clone()).then(|| {

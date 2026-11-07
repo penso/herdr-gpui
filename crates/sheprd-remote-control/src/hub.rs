@@ -64,6 +64,8 @@ pub enum Error {
     UnknownChat,
     #[error("no such workspace")]
     UnknownWorkspace,
+    #[error("chats cannot start inside WSL from here; open a terminal tab and start it there")]
+    WslChat,
     // keep-sorted end
 }
 
@@ -254,6 +256,11 @@ impl Hub {
         agent: Agent,
         cwd: Option<&str>,
     ) -> Result<String> {
+        // The program here is this computer's: it cannot run in a
+        // distribution, and its endpoint could not be reached there.
+        if sessions::in_wsl(workspace) {
+            return Err(Error::WslChat);
+        }
         let program = self.program.as_deref().ok_or(Error::ProgramMissing)?;
         let layout = self.layout();
         let folder = layout
@@ -376,8 +383,12 @@ impl Hub {
 
     /// A new tab on the core for `workspace`'s folder, answered as Herdr
     /// answers one, once listed so a phone can open it. `None` when no
-    /// core answers and the tab is Herdr 1's to make.
+    /// core answers, or `workspace` is in WSL, and the tab is Herdr 1's to make.
     pub(crate) async fn new_core_tab(&self, workspace: &str) -> Result<Option<Value>> {
+        // A core on this computer knows neither a distribution nor its paths.
+        if sessions::in_wsl(workspace) {
+            return Ok(None);
+        }
         let Some(core) = self.active_core() else {
             return Ok(None);
         };
