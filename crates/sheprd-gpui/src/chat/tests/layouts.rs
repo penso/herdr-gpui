@@ -11,6 +11,7 @@ use gpui::{Entity, TestAppContext, VisualTestContext};
 use sheprd_client::ConnectTarget;
 
 mod prompt_width;
+mod setting_icons;
 mod terminal_footer;
 
 fn switch(view: &Entity<SheprdWindow>, mode: ChatLayoutMode, cx: &mut VisualTestContext) {
