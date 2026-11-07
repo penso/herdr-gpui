@@ -13,20 +13,30 @@ use std::{
 
 #[derive(Debug, thiserror::Error)]
 #[error("scripted failure")]
-struct Failure;
+pub(super) struct Failure;
 
 #[derive(Clone, Default)]
-struct Scripted {
+pub(super) struct Scripted {
     /// What the terminal received, in order.
-    received: Arc<Mutex<Vec<Command>>>,
+    pub(super) received: Arc<Mutex<Vec<Command>>>,
     /// Updates for the terminal to hand out, one batch per `next`.
     updates: Arc<Mutex<Vec<Vec<SurfaceUpdate>>>>,
     fail_attach: bool,
 }
 
-struct ScriptedTerminal(Scripted);
+impl Scripted {
+    /// A backend whose terminals never attach.
+    pub(super) fn failing_attach() -> Self {
+        Self {
+            fail_attach: true,
+            ..Self::default()
+        }
+    }
+}
 
-struct NoChanges;
+pub(super) struct ScriptedTerminal(Scripted);
+
+pub(super) struct NoChanges;
 
 impl Changes for NoChanges {
     type Error = Failure;
@@ -105,7 +115,7 @@ impl Terminal for ScriptedTerminal {
     }
 }
 
-fn until<T>(mut ready: impl FnMut() -> Option<T>) -> T {
+pub(super) fn until<T>(mut ready: impl FnMut() -> Option<T>) -> T {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         if let Some(value) = ready() {
@@ -116,7 +126,7 @@ fn until<T>(mut ready: impl FnMut() -> Option<T>) -> T {
     }
 }
 
-fn size(cols: u16, rows: u16) -> Size {
+pub(super) fn size(cols: u16, rows: u16) -> Size {
     Size::new(cols, rows).unwrap()
 }
 
@@ -169,12 +179,8 @@ fn commands_reach_the_terminal_in_order_and_screens_come_back() {
 
 #[test]
 fn a_terminal_that_cannot_attach_says_why() {
-    let backend = Scripted {
-        fail_attach: true,
-        ..Scripted::default()
-    };
     let link = worker::spawn(
-        backend,
+        Scripted::failing_attach(),
         TerminalId::new("t1").unwrap(),
         size(80, 24),
         Role::Active,

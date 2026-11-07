@@ -9203,6 +9203,7 @@ dependencies = [
 name = "sheprd-gpui"
 version = "0.1.0"
 dependencies = [
+ "accesskit_macos",
  "ammonia",
  "anyhow",
  "base64 0.23.1",

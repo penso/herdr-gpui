@@ -25,6 +25,8 @@ unwrap_used = "deny"
 # Zed's fork, the revision Arbor runs.
 alacritty_terminal   = "0.26.0"
 url = "2"
+# The adapter GPUI's macOS backend links; its window focus forwarder.
+accesskit_macos      = "=0.26.3"
 # ACP wire types for sheprd-acp; its own transport, so no async runtime.
 acp                  = { default-features = false, package = "agent-client-protocol-schema", version = "1.12" }
 anyhow               = "1"

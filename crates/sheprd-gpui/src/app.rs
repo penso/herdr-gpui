@@ -509,6 +509,8 @@ pub(crate) fn run() -> std::process::ExitCode {
             let language = cx.global::<InitialAppearance>().config.language.clone();
             crate::i18n::install(&language, cx);
             app_icon::install();
+            #[cfg(target_os = "macos")]
+            crate::accessibility::window_focus::install();
             crate::caffeine::install(cx);
             crate::endpoint::watch_network();
             #[cfg(any(target_os = "macos", windows))]

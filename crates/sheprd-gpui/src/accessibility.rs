@@ -6,6 +6,9 @@ use gpui::{
     accesskit::ActionData,
 };
 
+#[cfg(target_os = "macos")]
+pub(crate) mod window_focus;
+
 /// Marks an element unavailable, so a screen reader says so and offers none
 /// of its actions. GPUI has no setter for it, so the node is changed directly
 /// once built.

@@ -193,6 +193,7 @@ nix.workspace          = true
 oo7.workspace          = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
+accesskit_macos.workspace       = true
 font-kit.workspace              = true
 block2.workspace                = true
 dispatch2.workspace             = true

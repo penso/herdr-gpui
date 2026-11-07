@@ -2,6 +2,7 @@
 //! text, painted with the window's terminal painter. One per tab showing it;
 //! any number may show the same terminal, as observers.
 
+mod accessibility;
 pub(super) mod keys;
 pub(super) mod paste;
 mod pointer;
@@ -376,6 +377,7 @@ impl Render for CoreTerminalView {
             .id(SharedString::from(format!("core-terminal-{}", self.id)))
             .key_context("CoreTerminal")
             .track_focus(&self.focus)
+            .map(|root| self.accessible(root, window, cx))
             .flex()
             .flex_1()
             .min_h_0()
