@@ -97,6 +97,8 @@ and nothing goes through your phone.
    - With `-openWorkspace`, `-openChanges YES` opens its changes; then
      `-openDiff PATH` opens a file's diff, and `-sendLog YES` opens the
      confirmation for the first failing check's log.
+   - `-renameWorkspace YES` opens a workspace's rename alert. It lists the
+     local Herdr daemon's real workspaces, so pressing Rename changes one.
    - `-newWorkspace YES` opens the new workspace form.
    - `-syncBar waiting|failed` shows the sync bar as if a change were on
      its way or had failed.
