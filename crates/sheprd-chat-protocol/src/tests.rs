@@ -79,6 +79,30 @@ fn a_prompts_files_are_kept_until_its_entry_is_dropped() {
 }
 
 #[test]
+fn dropping_entries_counts_the_prompts_among_them() {
+    let entry = |id, kind| Entry {
+        id: EntryId(id),
+        kind,
+    };
+    let prompt = || EntryKind::User {
+        text: "go".into(),
+        files: 0,
+    };
+    let mut transcript = Transcript::new("Claude");
+    transcript.dropped_prompts = 2;
+    transcript.entries = vec![
+        entry(1, prompt()),
+        entry(2, EntryKind::Agent { text: "ok".into() }),
+        entry(3, prompt()),
+    ];
+    let before = EntryId(3);
+    transcript.apply(&Change::Truncate { before }).unwrap();
+    assert_eq!(transcript.dropped_prompts, 3);
+    transcript.apply(&Change::Truncate { before }).unwrap();
+    assert_eq!(transcript.dropped_prompts, 3, "nothing more went");
+}
+
+#[test]
 fn a_transcript_from_before_rewinds_reads_as_unable() {
     let session: SessionInfo = serde_json::from_str(r#"{"id": "s"}"#).unwrap();
     assert!(!session.rewind);

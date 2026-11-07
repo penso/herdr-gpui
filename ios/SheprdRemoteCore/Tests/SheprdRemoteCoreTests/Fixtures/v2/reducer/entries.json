@@ -307,6 +307,7 @@
     "options": [],
     "permissions": [],
     "plan": [],
+    "dropped_prompts": 1,
     "queued": [],
     "read_only": false,
     "session": null,

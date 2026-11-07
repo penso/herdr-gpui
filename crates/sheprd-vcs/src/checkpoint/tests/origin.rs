@@ -81,6 +81,22 @@ fn a_restore_by_id_is_reported_like_the_dialogs() {
 }
 
 #[test]
+fn a_chats_restore_comes_back_with_its_ticket() {
+    let mut checkpoints = Checkpoints::default();
+    let first = checkpoints.restore_id(feature(), "7".into()).unwrap();
+    let second = checkpoints.restore_id(feature(), "7".into()).unwrap();
+    assert_ne!(first, second, "the same checkpoint, two restores");
+    let mut restored = Vec::new();
+    let job = Job {
+        checkout: feature(),
+        request: Request::Restore { id: "7".into() },
+        ticket: Some(second),
+    };
+    checkpoints.apply(job, Answer::Restored(Ok(())), &mut restored);
+    assert_eq!(restored[0].ticket, Some(second));
+}
+
+#[test]
 fn too_many_hosts_is_an_answer_and_not_silence() {
     let mut checkpoints = Checkpoints::default();
     for index in 0..HOST_LIMIT {

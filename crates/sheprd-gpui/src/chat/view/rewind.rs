@@ -11,8 +11,8 @@ use sheprd_chat_protocol::EntryId;
 
 impl SheprdWindow {
     /// A prompt's "Edit from here", which is only a pencil: the tooltip names
-    /// it, or says this agent has none. It sits inside the Copy button, so
-    /// its clicks stop here.
+    /// it, or says why it can't be used now. It sits inside the Copy button,
+    /// so its clicks stop here.
     pub(super) fn render_chat_rewind_button(
         &self,
         chat: &ChatPane,
@@ -21,9 +21,12 @@ impl SheprdWindow {
     ) -> Stateful<Div> {
         let theme = &self.theme;
         let session = chat.session.transcript().session.as_ref();
-        let available = session.is_some_and(|session| session.rewind);
+        let supported = session.is_some_and(|session| session.rewind);
+        let available = supported && !chat.rewind_submitted();
         let label = SharedString::from(if available {
             fl!("chat-rewind-edit")
+        } else if supported {
+            fl!("chat-rewind-busy")
         } else {
             fl!("chat-rewind-unavailable")
         });

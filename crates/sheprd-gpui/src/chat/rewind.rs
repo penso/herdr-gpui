@@ -49,6 +49,8 @@ pub(crate) enum Stage {
     Restoring {
         attachments: Vec<Attachment>,
         text: String,
+        /// Names this restore among the checkout's.
+        ticket: u64,
     },
     /// The program has the command and has not answered.
     Sending,
@@ -79,11 +81,17 @@ fn fnv(text: &str) -> u64 {
     })
 }
 
-/// The name a checkpoint of the prompt `id` goes by: its place among the
-/// chat's prompts and what it says. Entry ids are no use, as a reopened chat
-/// numbers its log afresh, and a chat's session id changes as it goes back.
+/// The name a checkpoint of the prompt `id` goes by: its place among all the
+/// chat's prompts, those dropped from the transcript included, and what it
+/// says. Entry ids are no use, as a reopened chat numbers its log afresh, and
+/// a chat's session id changes as it goes back. A log read only in part has
+/// no places to give: an unnamed prompt can't be restored, while a misnumbered
+/// one could restore the wrong files.
 pub(crate) fn origin(pane: &str, transcript: &Transcript, id: EntryId) -> Option<Origin> {
-    let mut place = 0;
+    if transcript.prompts_uncounted {
+        return None;
+    }
+    let mut place = transcript.dropped_prompts;
     for entry in &transcript.entries {
         let EntryKind::User { text, files } = &entry.kind else {
             continue;
@@ -166,6 +174,7 @@ impl SheprdWindow {
             .as_ref()
             .is_some_and(|session| session.rewind)
             || pane.input() != ChatInput::Composer
+            || pane.rewind_submitted()
         {
             return;
         }
@@ -205,8 +214,9 @@ impl SheprdWindow {
         pane.attachments = carried;
         pane.error = None;
         let checkpoint = match (&checkout, &origin) {
+            (None, _) => Checkpoint::Unreachable,
+            (Some(_), None) => Checkpoint::Missing,
             (Some(_), Some(_)) => Checkpoint::Looking,
-            _ => Checkpoint::Unreachable,
         };
         pane.rewind = Some(Rewind {
             before,
@@ -316,6 +326,11 @@ impl SheprdWindow {
 
     /// Sends the edit, after its files when they go back too.
     pub(super) fn submit_chat_rewind(&mut self, pane_id: &str, text: String) {
+        let restoring = self
+            .chats
+            .pane(pane_id)
+            .and_then(|pane| pane.rewind.as_ref()?.checkout.as_ref())
+            .is_some_and(|checkout| self.chat_restoring(pane_id, checkout));
         let Some(pane) = self.chats.pane_mut(pane_id) else {
             return;
         };
@@ -338,13 +353,34 @@ impl SheprdWindow {
             pane.error = Some(fl!("chat-rewind-checkpoint-missing"));
             return;
         };
+        if restoring {
+            pane.error = Some(fl!("chat-rewind-restore-busy"));
+            return;
+        }
         match self.checkpoints.restore_id(checkout.clone(), id.clone()) {
-            Ok(()) => {
-                rewind.stage = Stage::Restoring { attachments, text };
+            Ok(ticket) => {
+                rewind.stage = Stage::Restoring {
+                    attachments,
+                    text,
+                    ticket,
+                };
                 pane.error = None;
             }
             Err(error) => pane.error = Some(error.localize()),
         }
+    }
+
+    /// Whether a chat other than `pane_id` is putting back `checkout`'s files.
+    /// Its agent starts as that restore ends, so a second one would change
+    /// the files under it.
+    pub(crate) fn chat_restoring(&self, pane_id: &str, checkout: &Checkout) -> bool {
+        self.chats.panes().any(|pane| {
+            pane.target.pane_id != pane_id
+                && pane.rewind.as_ref().is_some_and(|rewind| {
+                    matches!(rewind.stage, Stage::Restoring { .. })
+                        && rewind.checkout.as_ref() == Some(checkout)
+                })
+        })
     }
 
     /// A checkpoint search finished: the edit it is for learns what it found.
@@ -373,24 +409,26 @@ impl SheprdWindow {
         }
     }
 
-    /// A restore finished: the edit waiting for it goes out, or stays in
-    /// the composer with the conversation untouched.
-    pub(crate) fn chat_rewind_restored(&mut self, checkout: &Checkout, failure: Option<String>) {
+    /// The restore `ticket` finished: the edit waiting for it goes out, or
+    /// stays in the composer with the conversation untouched.
+    pub(crate) fn chat_rewind_restored(&mut self, ticket: u64, failure: Option<String>) {
         for pane in self.chats.panes_mut() {
-            let Some(rewind) = pane.rewind.as_mut() else {
+            let Some(rewind) = pane.rewind.as_mut().filter(|rewind| {
+                matches!(rewind.stage, Stage::Restoring { ticket: waiting, .. } if waiting == ticket)
+            }) else {
                 continue;
             };
-            if rewind.checkout.as_ref() != Some(checkout) {
-                continue;
-            }
             let stage = std::mem::replace(&mut rewind.stage, Stage::Editing);
-            match (stage, &failure) {
-                (Stage::Restoring { attachments, text }, None) => {
-                    send(pane, text, attachments);
+            if let Stage::Restoring {
+                attachments, text, ..
+            } = stage
+            {
+                match failure {
+                    None => send(pane, text, attachments),
+                    Some(failure) => pane.error = Some(failure),
                 }
-                (Stage::Restoring { .. }, Some(failure)) => pane.error = Some(failure.clone()),
-                (stage, _) => rewind.stage = stage,
             }
+            return;
         }
     }
 
@@ -430,6 +468,16 @@ impl SheprdWindow {
             self.redraw_terminal(cx);
             cx.notify();
         }
+    }
+}
+
+impl ChatPane {
+    /// Whether the edit has gone out, or its files are going back first. Its
+    /// answer is on the way, so nothing may take its place.
+    pub(super) fn rewind_submitted(&self) -> bool {
+        self.rewind
+            .as_ref()
+            .is_some_and(|rewind| rewind.stage != Stage::Editing)
     }
 }
 

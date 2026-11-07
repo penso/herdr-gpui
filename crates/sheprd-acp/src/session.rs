@@ -177,7 +177,9 @@ impl<R: FnMut(Update)> Session<R> {
     pub(crate) fn new(mut config: Config, outbox: rpc::Outbox, report: R) -> Self {
         let mut transcript = Transcript::new(config.agent.clone());
         if let Some(history) = config.history.take() {
+            transcript.dropped_prompts = history.dropped_prompts;
             transcript.entries = history.entries;
+            transcript.prompts_uncounted = history.prompts_uncounted;
             transcript.truncated = history.truncated;
             transcript.usage = history.usage;
         }

@@ -7,15 +7,16 @@ use super::{
 };
 use crate::{
     chat::rewind::{Checkpoint, Files, Stage, origin, running_origin},
-    checkpoint::{Checkout, Checkpoint as Saved, Diff, Found, Request},
     window::chrome_focus::Region,
 };
-use gpui::{Entity, Focusable, Modifiers, TestAppContext, VisualTestContext};
+use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext};
 use sheprd_chat_protocol::{
     Attachment, Command, CommandId, PromptFiles, Rejection, SessionInfo, Turn,
 };
-use sheprd_client::{ConnectTarget, protocol::AgentStatus};
-use sheprd_usage::Host;
+use sheprd_client::ConnectTarget;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod checkout;
 
 const EDITED: EntryId = EntryId(3);
 
@@ -111,74 +112,6 @@ fn tick(view: &Entity<crate::SheprdWindow>, program: &Program, cx: &mut VisualTe
     poll(view, program, cx);
     cx.update(|_, cx| view.update(cx, |view, cx| view.poll_chat_rewinds(cx)));
     poll(view, program, cx);
-}
-
-/// A chat whose workspace shows a checkout checkpoints can reach.
-fn open_in_checkout(
-    cx: &mut TestAppContext,
-    message: ServerMessage,
-) -> (
-    Entity<crate::SheprdWindow>,
-    Program,
-    Peer,
-    &mut VisualTestContext,
-) {
-    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
-    let program = Program::new();
-    let stream = attach_with(&view, &program, message, cx);
-    let pane = pane_id(&view, cx);
-    cx.update(|_, cx| {
-        view.update(cx, |view, _| {
-            let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
-            let agent = snapshot
-                .agents
-                .iter_mut()
-                .find(|agent| agent.pane_id == pane)
-                .unwrap();
-            agent.agent_status = AgentStatus::Idle;
-            let id = agent.workspace_id.clone();
-            let workspace = snapshot
-                .workspaces
-                .iter_mut()
-                .find(|workspace| workspace.workspace_id == id)
-                .unwrap();
-            workspace.branch = Some("feature".into());
-            workspace.worktree = Some(sheprd_client::protocol::ClientShellWorktree {
-                key: "/repo/.git".into(),
-                label: "repo".into(),
-                is_linked_worktree: false,
-            });
-        });
-    });
-    (view, program, stream, cx)
-}
-
-fn checkout() -> Checkout {
-    Checkout::new(Host::Local, "/repo/.git", Some("feature")).unwrap()
-}
-
-/// Answers the chat's checkpoint search with a checkpoint on `branch`.
-fn found(view: &Entity<crate::SheprdWindow>, cx: &mut VisualTestContext, branch: &str) {
-    let saved = Saved {
-        id: "42".into(),
-        created: 0,
-        label: "Before Claude's turn".into(),
-        branch: Some(branch.into()),
-        diff: Diff::default(),
-        origin: None,
-    };
-    let pane = pane_id(view, cx);
-    cx.update(|_, cx| {
-        view.update(cx, |view, _| {
-            let transcript = view.chats.pane(&pane).unwrap().session.transcript();
-            let origin = origin(&pane, transcript, EDITED).unwrap();
-            view.chat_rewind_found(Found {
-                checkout: checkout(),
-                origin,
-                result: Ok(Some(saved)),
-            });
-        });
-    });
 }
 
 #[gpui::test]
@@ -335,86 +268,6 @@ fn a_prompt_from_an_earlier_run_says_its_files_are_lost(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn restore_files_goes_first_then_the_rewind(cx: &mut TestAppContext) {
-    let (view, program, mut stream, cx) = open_in_checkout(cx, snapshot_of(transcript(true)));
-    begin(&view, cx);
-    let queued = view.read_with(cx, |view, _| view.checkpoints.queued());
-    assert!(matches!(queued[0].1, Request::Find { .. }), "{queued:?}");
-    assert_eq!(
-        with_rewind(&view, cx, |rewind| rewind.checkpoint.clone()),
-        Checkpoint::Looking
-    );
-    found(&view, cx, "feature");
-    poll(&view, &program, cx);
-    let restore = cx.debug_bounds("chat-rewind-restore").unwrap();
-    cx.simulate_click(restore.center(), Modifiers::default());
-    poll(&view, &program, cx);
-    assert_eq!(
-        with_rewind(&view, cx, |rewind| rewind.files),
-        Files::Restore
-    );
-
-    cx.simulate_keystrokes("enter");
-    let queued = view.read_with(cx, |view, _| view.checkpoints.queued());
-    assert_eq!(queued[0].0, checkout());
-    assert_eq!(queued[0].1, Request::Restore { id: "42".into() });
-    assert!(matches!(
-        with_rewind(&view, cx, |rewind| rewind.stage.clone()),
-        Stage::Restoring { .. }
-    ));
-
-    cx.update(|_, cx| {
-        view.update(cx, |view, _| view.chat_rewind_restored(&checkout(), None));
-    });
-    let (command, _) = next_command(&mut stream);
-    assert!(matches!(command, Command::Rewind { before: EDITED, .. }));
-}
-
-#[gpui::test]
-fn a_failed_restore_leaves_the_conversation_alone(cx: &mut TestAppContext) {
-    let (view, program, _stream, cx) = open_in_checkout(cx, snapshot_of(transcript(true)));
-    begin(&view, cx);
-    found(&view, cx, "feature");
-    poll(&view, &program, cx);
-    let restore = cx.debug_bounds("chat-rewind-restore").unwrap();
-    cx.simulate_click(restore.center(), Modifiers::default());
-    poll(&view, &program, cx);
-    cx.simulate_keystrokes("enter");
-    cx.update(|_, cx| {
-        view.update(cx, |view, _| {
-            view.chat_rewind_restored(&checkout(), Some("the checkout is busy".into()));
-        });
-    });
-    poll(&view, &program, cx);
-    assert!(cx.debug_bounds("chat-problem").is_some());
-    assert_eq!(
-        with_rewind(&view, cx, |rewind| rewind.stage.clone()),
-        Stage::Editing
-    );
-    let pending = view.read_with(cx, |view, _| {
-        view.chats.panes().next().unwrap().session.since()
-    });
-    assert!(pending.is_some());
-    assert_eq!(draft(&view, cx), "second");
-}
-
-#[gpui::test]
-fn a_prompt_with_no_checkpoint_on_this_branch_cannot_restore(cx: &mut TestAppContext) {
-    let (view, program, _stream, cx) = open_in_checkout(cx, snapshot_of(transcript(true)));
-    begin(&view, cx);
-    found(&view, cx, "another-branch");
-    poll(&view, &program, cx);
-    assert_eq!(
-        with_rewind(&view, cx, |rewind| rewind.checkpoint.clone()),
-        Checkpoint::Missing
-    );
-    let restore = cx.debug_bounds("chat-rewind-restore").unwrap();
-    cx.simulate_click(restore.center(), Modifiers::default());
-    poll(&view, &program, cx);
-    assert_eq!(with_rewind(&view, cx, |rewind| rewind.files), Files::Keep);
-}
-
-#[gpui::test]
 fn a_chat_with_no_reachable_checkout_cannot_restore(cx: &mut TestAppContext) {
     let (view, _peer, cx) = open(cx, ConnectTarget::Local);
     let program = Program::new();
@@ -427,25 +280,29 @@ fn a_chat_with_no_reachable_checkout_cannot_restore(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_working_agent_in_the_workspace_is_warned_of(cx: &mut TestAppContext) {
-    let (view, program, _stream, cx) = open_in_checkout(cx, snapshot_of(transcript(true)));
+fn an_edit_on_its_way_keeps_its_place(cx: &mut TestAppContext) {
+    let (view, _peer, cx) = open(cx, ConnectTarget::Local);
+    let program = Program::new();
+    let mut stream = attach_with(&view, &program, snapshot_of(transcript(true)), cx);
     begin(&view, cx);
     poll(&view, &program, cx);
-    assert!(cx.debug_bounds("chat-rewind-agent-working").is_none());
+    cx.simulate_keystrokes("enter");
+    assert!(matches!(
+        next_command(&mut stream).0,
+        Command::Rewind { .. }
+    ));
+    assert_eq!(
+        with_rewind(&view, cx, |rewind| rewind.stage.clone()),
+        Stage::Sending
+    );
     let pane = pane_id(&view, cx);
-    cx.update(|_, cx| {
-        view.update(cx, |view, _| {
-            let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
-            let agent = snapshot
-                .agents
-                .iter_mut()
-                .find(|agent| agent.pane_id == pane)
-                .unwrap();
-            agent.agent_status = AgentStatus::Working;
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.begin_chat_rewind(&pane, EntryId(1), window, cx);
         });
     });
-    poll(&view, &program, cx);
-    assert!(cx.debug_bounds("chat-rewind-agent-working").is_some());
+    assert_eq!(with_rewind(&view, cx, |rewind| rewind.before), EDITED);
+    assert_eq!(draft(&view, cx), "second");
 }
 
 #[gpui::test]
@@ -474,44 +331,6 @@ fn a_running_turn_must_stop_first(cx: &mut TestAppContext) {
     );
 }
 
-#[gpui::test]
-fn the_choice_works_from_the_keyboard(cx: &mut TestAppContext) {
-    let (view, program, _stream, cx) = open_in_checkout(cx, snapshot_of(transcript(true)));
-    begin(&view, cx);
-    found(&view, cx, "feature");
-    poll(&view, &program, cx);
-    cx.simulate_keystrokes("tab");
-    poll(&view, &program, cx);
-    let keep = with_rewind(&view, cx, |rewind| rewind.focus[0].clone());
-    assert!(cx.update(|window, _| keep.is_focused(window)));
-    assert_eq!(
-        view.read_with(cx, |view, _| view.chrome_region),
-        Some(Region::Chat)
-    );
-    cx.simulate_keystrokes("tab");
-    poll(&view, &program, cx);
-    let restore = with_rewind(&view, cx, |rewind| rewind.focus[1].clone());
-    assert!(cx.update(|window, _| restore.is_focused(window)));
-    // A focused control is used on the key's release.
-    cx.simulate_keystrokes("space");
-    cx.simulate_event(gpui::KeyUpEvent {
-        keystroke: gpui::Keystroke::parse("space").unwrap(),
-    });
-    poll(&view, &program, cx);
-    assert_eq!(
-        with_rewind(&view, cx, |rewind| rewind.files),
-        Files::Restore
-    );
-    let composer = view.read_with(cx, |view, _| {
-        view.chats.panes().next().unwrap().composer.clone().unwrap()
-    });
-    let focus = cx.update(|_, cx| composer.read(cx).focus_handle(cx));
-    assert!(
-        cx.update(|window, _| focus.is_focused(window)),
-        "typing goes back to the draft"
-    );
-}
-
 #[test]
 fn a_prompts_name_survives_a_reopened_chats_new_ids() {
     let mut live = transcript(true);
@@ -523,6 +342,22 @@ fn a_prompts_name_survives_a_reopened_chats_new_ids() {
     assert_eq!(origin("p1", &live, EntryId(20)), Some(name.clone()));
     live.entries = vec![prompt(10, "first", 0), prompt(20, "edited", 0)];
     assert_ne!(origin("p1", &live, EntryId(20)), Some(name));
+}
+
+#[test]
+fn a_prompts_name_survives_older_entries_going() {
+    let mut live = transcript(true);
+    let name = origin("p1", &live, EDITED).unwrap();
+    live.apply(&Change::Truncate { before: EDITED }).unwrap();
+    assert_eq!(live.entries[0].id, EDITED);
+    assert_eq!(origin("p1", &live, EDITED), Some(name));
+}
+
+#[test]
+fn a_log_read_in_part_names_no_prompt() {
+    let mut reopened = transcript(true);
+    reopened.prompts_uncounted = true;
+    assert_eq!(origin("p1", &reopened, EDITED), None);
 }
 
 #[test]

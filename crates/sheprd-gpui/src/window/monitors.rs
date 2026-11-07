@@ -134,7 +134,9 @@ impl SheprdWindow {
         }
         for restored in restored {
             let failure = restored.result.as_ref().err().map(not_restored);
-            self.chat_rewind_restored(&restored.checkout, failure);
+            if let Some(ticket) = restored.ticket {
+                self.chat_rewind_restored(ticket, failure);
+            }
             let flash = match restored.result {
                 Ok(()) => Flash::success(fl!(
                     "window-notices-checkpoint-restored",

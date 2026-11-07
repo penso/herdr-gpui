@@ -275,8 +275,10 @@ Choose what happens to the files above the composer:
 
 A prompt only has a checkpoint when Sheprd was watching as its turn started,
 with **Checkpoint agent turns** on, and the checkpoint is still among the
-checkout's newest. Without one, **Restore files** is unavailable and the bar
-says why. If an agent is working in the workspace the bar repeats the
+checkout's newest. A chat reopened from a log too long to read whole can't tell
+its prompts' places, so its prompts have none either. Without one, **Restore
+files** is unavailable and the bar says why. Only one chat can restore a
+checkout at a time, and an edit on its way can't be replaced. If an agent is working in the workspace the bar repeats the
 Checkpoints dialog's warning, and a turn running in this chat must be stopped
 before the edit can go out. Files attached in an earlier run of the chat aren't
 known any more, so the bar asks you to attach them again.

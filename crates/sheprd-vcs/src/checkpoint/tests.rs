@@ -182,6 +182,7 @@ fn answer(checkpoints: &mut Checkpoints, request: Request, answer: Answer) -> Ve
     let job = Job {
         checkout: feature(),
         request,
+        ticket: None,
     };
     checkpoints.apply(job, answer, &mut restored);
     restored

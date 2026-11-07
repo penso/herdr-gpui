@@ -154,6 +154,8 @@ impl Request {
 struct Job {
     checkout: Checkout,
     request: Request,
+    /// Who is waiting for this restore, when a chat asked for it.
+    ticket: Option<u64>,
 }
 
 enum Answer {
@@ -327,6 +329,8 @@ pub struct Found {
 pub struct Restored {
     pub checkout: Checkout,
     pub result: Result<()>,
+    /// What [`Checkpoints::restore_id`] returned, for a chat's restore.
+    pub ticket: Option<u64>,
 }
 
 #[derive(Default)]
@@ -338,6 +342,8 @@ pub struct Checkpoints {
     pub view: Option<View>,
     /// Last stamp handed out, so two checkpoints never share a name.
     last_stamp: u128,
+    /// Last restore ticket handed out.
+    last_ticket: u64,
 }
 
 /// The name an agent goes by in a checkpoint label.
@@ -460,6 +466,7 @@ impl Checkpoints {
         lane.queue.push_back(Job {
             checkout,
             request: Request::Capture { label, origin },
+            ticket: None,
         });
     }
 
@@ -472,6 +479,7 @@ impl Checkpoints {
         let job = Job {
             checkout,
             request: Request::List,
+            ticket: None,
         };
         if !lane.queue.contains(&job) {
             lane.queue.push_front(job);
@@ -487,6 +495,7 @@ impl Checkpoints {
             request: Request::Find {
                 origin: origin.clone(),
             },
+            ticket: None,
         };
         match self.lane(&checkout.host) {
             Some(lane) if lane.queue.contains(&job) => {}
@@ -507,15 +516,19 @@ impl Checkpoints {
     /// Restore checkpoint `id` of `checkout`, as a chat going back to a
     /// prompt asks; the dialog's own restore takes its confirmation first.
     /// The current state is saved first, and the outcome comes through
-    /// [`Checkpoints::poll`] like any other restore.
-    pub fn restore_id(&mut self, checkout: Checkout, id: String) -> Result<()> {
+    /// [`Checkpoints::poll`] like any other restore, with the ticket returned
+    /// here: another restore of the checkout is not this one finishing.
+    pub fn restore_id(&mut self, checkout: Checkout, id: String) -> Result<u64> {
         let host = checkout.host.clone();
+        self.last_ticket += 1;
+        let ticket = self.last_ticket;
         let job = Job {
             checkout,
             request: Request::Restore { id },
+            ticket: Some(ticket),
         };
         self.lane(&host).ok_or(Error::Hosts)?.queue.push_front(job);
-        Ok(())
+        Ok(ticket)
     }
 
     /// Open the dialog on `checkout` and load its list.
@@ -567,6 +580,7 @@ impl Checkpoints {
         let job = Job {
             checkout: view.checkout.clone(),
             request: Request::Restore { id },
+            ticket: None,
         };
         match self.lane(&job.checkout.host) {
             Some(lane) => lane.queue.push_front(job),
@@ -730,6 +744,7 @@ impl Checkpoints {
                 restored.push(Restored {
                     checkout: job.checkout,
                     result,
+                    ticket: job.ticket,
                 });
                 true
             }

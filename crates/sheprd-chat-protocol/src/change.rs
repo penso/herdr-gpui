@@ -120,6 +120,10 @@ impl Transcript {
             Change::Truncate { before } => {
                 let keep = self.entries.partition_point(|entry| entry.id < *before);
                 if keep > 0 {
+                    self.dropped_prompts += self.entries[..keep]
+                        .iter()
+                        .filter(|entry| matches!(entry.kind, EntryKind::User { .. }))
+                        .count();
                     self.entries.drain(..keep);
                     self.truncated = true;
                 }
