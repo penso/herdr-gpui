@@ -53,6 +53,15 @@ public struct TermComposition: Equatable, Sendable {
         return NSRange(location: location, length: min(max(range.length, 0), length - location))
     }
 
+    /// The whole character next to `offset` in the marked text, before or
+    /// after it; nil at either end.
+    public func characterRange(from offset: Int, backward: Bool) -> NSRange? {
+        let text = marked as NSString
+        let offset = clamped(NSRange(location: offset, length: 0)).location
+        if backward { return offset > 0 ? text.rangeOfComposedCharacterSequence(at: offset - 1) : nil }
+        return offset < text.length ? text.rangeOfComposedCharacterSequence(at: offset) : nil
+    }
+
     /// Whether the pane should get a backspace: while composing, it
     /// deletes the selection, or the character before the caret, from the
     /// marked text instead.

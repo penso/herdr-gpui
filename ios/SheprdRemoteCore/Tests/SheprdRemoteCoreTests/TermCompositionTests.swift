@@ -88,6 +88,22 @@ import Testing
         #expect(composition.selection == NSRange(location: 1, length: 0))
     }
 
+    @Test func theCharacterBesideAPositionIsOneWholeCharacter() {
+        var composition = TermComposition()
+        composition.mark("nihao")
+        // Left of the caret after `nihao` is `o`, not the whole prefix.
+        #expect(composition.characterRange(from: 5, backward: true) == NSRange(location: 4, length: 1))
+        #expect(composition.characterRange(from: 2, backward: false) == NSRange(location: 2, length: 1))
+        // Nothing lies past either end of the marked text.
+        #expect(composition.characterRange(from: 0, backward: true) == nil)
+        #expect(composition.characterRange(from: 5, backward: false) == nil)
+
+        // A whole character, not half of a surrogate pair.
+        composition.mark("a👍")
+        #expect(composition.characterRange(from: 3, backward: true) == NSRange(location: 1, length: 2))
+        #expect(composition.characterRange(from: 1, backward: false) == NSRange(location: 1, length: 2))
+    }
+
     @Test func replacingPartOfTheCompositionKeepsItComposing() {
         var composition = TermComposition()
         composition.mark("nihao")

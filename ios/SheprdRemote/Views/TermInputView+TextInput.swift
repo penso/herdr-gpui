@@ -96,10 +96,9 @@ extension TermInputView: UITextInput {
     }
 
     func characterRange(byExtending position: UITextPosition, in direction: UITextLayoutDirection) -> UITextRange? {
-        switch direction {
-        case .left, .up: textRange(from: beginningOfDocument, to: position)
-        default: textRange(from: position, to: endOfDocument)
-        }
+        guard let position = position as? TermTextPosition else { return nil }
+        let backward = direction == .left || direction == .up
+        return composition.characterRange(from: position.offset, backward: backward).map(TermTextRange.init)
     }
 
     func baseWritingDirection(for position: UITextPosition, in direction: UITextStorageDirection) -> NSWritingDirection {
