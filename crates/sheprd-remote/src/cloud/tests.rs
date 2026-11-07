@@ -7,6 +7,9 @@ use std::sync::atomic::AtomicBool;
 mod discard;
 #[cfg(any(feature = "boat", feature = "coder", feature = "daytona"))]
 pub mod server;
+// What every exec relay command shares.
+#[cfg(any(feature = "azure", feature = "opensandbox", feature = "sprites"))]
+pub(crate) mod relay;
 
 #[test]
 fn every_provider_names_itself_and_its_machines() {

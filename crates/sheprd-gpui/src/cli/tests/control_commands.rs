@@ -257,6 +257,13 @@ fn the_orchestrator_repository_may_come_before_the_verb() {
             items: control::Items::PullRequests,
         })
     );
+    assert_eq!(
+        command(&["orchestrator", "tasks"]),
+        ControlCommand::Orchestrator(control::OrchestratorCommand::Items {
+            repo: None,
+            items: control::Items::Tasks,
+        })
+    );
 }
 
 #[test]

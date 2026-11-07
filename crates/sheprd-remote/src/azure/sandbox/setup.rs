@@ -60,13 +60,9 @@ pub fn sizes(
 }
 
 /// This executable as the relay, for the remote command a caller appends.
-fn relay_command(settings: &Settings, sandbox: &str) -> Result<Command> {
-    let executable = std::env::current_exe().map_err(Error::Executable)?;
-    let mut command = sheprd_client::new_command(executable);
-    command
-        .arg(relay::HELPER)
-        .arg(settings.sandbox_account())
-        .arg(sandbox);
+pub(super) fn relay_command(settings: &Settings, sandbox: &str) -> Result<Command> {
+    let mut command = cloud::relay::command(relay::HELPER).map_err(Error::Executable)?;
+    command.arg(settings.sandbox_account()).arg(sandbox);
     Ok(command)
 }
 

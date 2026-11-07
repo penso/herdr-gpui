@@ -32,6 +32,8 @@ pub(crate) struct Repo {
     pub(super) stand_ins: Vec<Item>,
     pub(super) issue_rows: Vec<ItemRow>,
     pub(super) pull_request_rows: Vec<ItemRow>,
+    /// Filled only while the Tasks list shows.
+    pub(super) task_rows: Vec<ItemRow>,
     /// The signed-in GitHub login on its host, for "Mine".
     pub(super) login: Option<String>,
 }
@@ -55,6 +57,7 @@ impl Repo {
             stand_ins: Vec::new(),
             issue_rows: Vec::new(),
             pull_request_rows: Vec::new(),
+            task_rows: Vec::new(),
             login: None,
         }
     }
@@ -94,6 +97,11 @@ impl Repo {
             (Some(tokens), Some(owner)) => Some(tokens.login_for(owner)),
             _ => self.login.as_deref(),
         }
+    }
+
+    /// Whether it has a Beads database.
+    pub(crate) fn has_beads(&self) -> bool {
+        self.snapshot.repo.as_ref().is_some_and(|info| info.beads)
     }
 
     /// Whether its folder turned out not to be in a Git repository: a

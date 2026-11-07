@@ -9,6 +9,8 @@ use std::{
 };
 
 mod agent_name;
+#[cfg(unix)]
+mod bead_dispatch;
 mod parent;
 mod remove;
 mod startup;

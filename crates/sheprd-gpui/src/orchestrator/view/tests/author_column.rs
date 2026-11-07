@@ -142,6 +142,7 @@ fn check_cutoff(cx: &mut gpui::TestAppContext, tab: Tab, optional: bool) {
             item(Provider::Beads, "hg-1", "Store", "2026-10-03T00:00:00Z"),
         ),
         Tab::PullRequests => (pull_request(), pull_request_from(Provider::Gitlab)),
+        Tab::Tasks => unreachable!("a task's row shows no author"),
     };
     let key = listed.key.canonical();
     let fit = cx.update(|_, cx| {

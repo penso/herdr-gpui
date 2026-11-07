@@ -112,9 +112,7 @@ impl SheprdWindow {
                     .tabs
                     .iter()
                     .find(|tab| tab.tab_id == *id)
-                    .map(|tab| {
-                        SharedString::from(sheprd_client::text::tab_label(snapshot, tab).to_owned())
-                    })
+                    .map(|tab| self.strip_label(snapshot, tab))
             }
             Pick::Page(_) => self
                 .browser_tab_labels(cx)

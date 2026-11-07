@@ -51,6 +51,7 @@ pub enum Items {
     All,
     Issues,
     PullRequests,
+    Tasks,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -122,6 +123,10 @@ pub(super) fn orchestrator(args: &mut Args) -> Result<OrchestratorCommand, CliEr
         Some("prs") => OrchestratorCommand::Items {
             repo,
             items: Items::PullRequests,
+        },
+        Some("tasks") => OrchestratorCommand::Items {
+            repo,
+            items: Items::Tasks,
         },
         _ => return Err(unknown("orchestrator", verb.unwrap_or_default())),
     })
