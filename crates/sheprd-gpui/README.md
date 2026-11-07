@@ -1961,8 +1961,8 @@ terminal popup; it does not replace terminal output or the selected cells.
 Insertion is unavailable while a dialog, another field, copy mode, or an IME
 composition owns input. The terminal's screen-reader role and selection text
 remain the same. A Herdr 2 terminal reads as a terminal and accepts insertion
-the same way while it has keyboard focus, except in a mirror or after its
-program ends.
+the same way while it has keyboard focus, except in a mirror, after its
+program ends, or after the terminal fails.
 
 On macOS, a window reports the field or terminal with keyboard focus as its
 focused accessibility element, so dictation tools such as Typeless type there
