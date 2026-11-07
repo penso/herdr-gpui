@@ -48,6 +48,10 @@ import Testing
         // A long press must not answer an agent twice.
         #expect(!TermKey(keys: ["enter"]).repeats)
         #expect(!TermKey(keys: ["tab", "enter"]).repeats)
+        // Legacy input sends these as the same carriage return.
+        #expect(!TermKey(keys: ["ctrl+enter"]).repeats)
+        #expect(!TermKey(keys: ["shift+enter"]).repeats)
+        #expect(TermKey(keys: ["ctrl+left"]).repeats)
     }
 
     @Test func savedRowsRoundTripWithTheirSpareKeys() throws {

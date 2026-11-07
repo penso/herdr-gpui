@@ -145,9 +145,10 @@ public struct TermKey: Codable, Hashable, Identifiable, Sendable {
         return trimmed.isEmpty ? keys.map { Self.choice($0)?.name ?? Special(rawValue: $0)?.name ?? Self.face($0).name }.joined(separator: ", ") : trimmed
     }
 
-    /// Held down, one key repeats as a keyboard's does. Enter and a run of
-    /// keys do not, so a long press cannot answer an agent twice.
-    public var repeats: Bool { keys.count == 1 && keys != ["enter"] && special == nil }
+    /// Held down, one key repeats as a keyboard's does. Enter, with any
+    /// modifiers, and a run of keys do not, so a long press cannot answer an
+    /// agent twice.
+    public var repeats: Bool { keys.count == 1 && keys[0].split(separator: "+").last != "enter" && special == nil }
 
     /// One of the keys the editor always offers, as it offers it, rather
     /// than one the person made with a label or several presses.
