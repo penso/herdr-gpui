@@ -138,3 +138,43 @@ fn text_after_a_wide_symbol_in_a_narrow_cell_stays_in_the_path() {
     assert_eq!(link.target, bare("/tmp/\u{26a0}\u{fe0f}a.md", None));
     assert_eq!(link.columns, 0..10);
 }
+
+/// An emoji presentation sequence: wide as a whole, narrow as its base.
+const WARNING: &str = "\u{26a0}\u{fe0f}";
+
+#[test]
+fn a_real_space_after_a_wide_symbol_in_a_narrow_cell_ends_the_link() {
+    let mut narrow = frame("/tmp/! next", 60, 1);
+    narrow.cells[5].symbol = WARNING.into();
+    let link = read(&narrow, 2, 0).unwrap();
+    assert_eq!(link.target, bare(&format!("/tmp/{WARNING}"), None));
+    assert_eq!(link.columns, 0..6);
+    assert_eq!(read(&narrow, 6, 0), None);
+    assert_eq!(read(&narrow, 7, 0).unwrap().target, bare("next", None));
+
+    let mut web = frame("https://example.com/! next", 60, 1);
+    web.cells[20].symbol = WARNING.into();
+    assert_eq!(read(&web, 2, 0).unwrap().columns, 0..21);
+}
+
+#[test]
+fn an_empty_cell_still_continues_a_wide_symbol_of_two_columns() {
+    let mut wide = frame("/tmp/!!a.md", 60, 1);
+    wide.cells[5].symbol = WARNING.into();
+    wide.cells[6].symbol.clear();
+    let link = read(&wide, 6, 0).unwrap();
+    assert_eq!(link.target, bare(&format!("/tmp/{WARNING}a.md"), None));
+    assert_eq!(link.columns, 0..11);
+}
+
+#[test]
+fn a_long_grapheme_keeps_its_width_from_its_first_bytes() {
+    // Far more combining marks than a width is read from.
+    let symbol = format!("界{}", "\u{301}".repeat(200));
+    let mut long = frame("/tmp/! a.md", 60, 1);
+    long.cells[5].symbol = symbol.clone();
+    assert_eq!(
+        read(&long, 6, 0).unwrap().target,
+        bare(&format!("/tmp/{symbol}a.md"), None)
+    );
+}

@@ -25,9 +25,11 @@ fn blank(cell: &CellData) -> bool {
     !cell.skip && shown(cell).chars().all(char::is_whitespace)
 }
 
-/// Whether text reaches the last of `cells`, a whole row of the area.
+/// Whether text reaches the last of `cells`, a whole row of the area. A
+/// continuation there follows its glyph, so the last two cells are enough.
 fn fills(cells: &[CellData]) -> bool {
-    cells.last().is_some_and(|cell| !blank(cell)) || continuations(cells).last() == Some(&true)
+    let end = cells.get(cells.len().saturating_sub(2)..).unwrap_or(cells);
+    cells.last().is_some_and(|cell| !blank(cell)) || continuations(end).last() == Some(&true)
 }
 
 /// Whether `cells` start with a drive, as in `C:\`, in whose word a

@@ -31,3 +31,10 @@ fn text_after_a_wide_symbol_in_a_narrow_cell_is_copied() {
     s.frame.cells[0].symbol = "\u{26a0}\u{fe0f}".into();
     assert_eq!(pick(&s, 1., 3), "\u{26a0}\u{fe0f}a b");
 }
+
+#[test]
+fn a_real_space_after_a_wide_symbol_in_a_narrow_cell_is_copied() {
+    let mut s = row("! a");
+    s.frame.cells[0].symbol = "\u{26a0}\u{fe0f}".into();
+    assert_eq!(pick(&s, 1., 3), "\u{26a0}\u{fe0f} a");
+}
