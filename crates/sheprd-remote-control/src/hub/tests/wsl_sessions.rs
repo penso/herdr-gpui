@@ -4,7 +4,7 @@
 use super::*;
 use crate::hub::{
     layout::{Chats, project_with},
-    sessions::{Sessions, in_wsl, owner, wsl_wanted},
+    sessions::{MAX_WSL_SESSIONS, Sessions, in_wsl, owner, wsl_wanted},
 };
 use sheprd_client::{ConnectTarget, RemoteSession, WslHost};
 
@@ -57,6 +57,31 @@ fn the_sessions_followed_are_bounded() {
             .collect()
     });
     assert!(wanted.len() < 64);
+}
+
+/// A session sorting first pushes one out of the scan, which stays followed
+/// because it still answers, so the scan's own bound does not hold here.
+#[tokio::test]
+async fn a_session_listed_later_waits_while_the_followed_ones_fill_the_limit() {
+    let followed: Vec<_> = (0..MAX_WSL_SESSIONS)
+        .map(|index| format!("s{index}@Ubuntu"))
+        .collect();
+    let sessions = Sessions::offline_named(followed.clone());
+    let newcomer = "a@Ubuntu";
+    let target = |session: &str| ConnectTarget::Wsl {
+        distro: "Ubuntu".to_owned(),
+        session: session.to_owned(),
+    };
+    let wanted: Vec<_> = std::iter::once(newcomer)
+        .chain(followed.iter().map(String::as_str))
+        .take(MAX_WSL_SESSIONS)
+        .map(|name| (name.to_owned(), target(name)))
+        .collect();
+
+    sessions.update(&wanted);
+
+    assert!(sessions.get(newcomer).is_none());
+    assert!(followed.iter().all(|name| sessions.get(name).is_some()));
 }
 
 #[test]

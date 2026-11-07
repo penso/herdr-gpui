@@ -14,7 +14,9 @@ use sheprd_client::{ConnectTarget, RemoteSession, WslHost};
 /// can hold it, so no session on this computer can be mistaken for one.
 const SEPARATOR: char = '@';
 /// The most sessions followed across distributions: each holds a `wsl.exe`.
-const MAX_SESSIONS: usize = 32;
+/// A scan lists no more, and [`super::Sessions::update`] holds no more, as
+/// sessions it already follows can fall out of a scan and stay.
+pub(in crate::hub) const MAX_SESSIONS: usize = 32;
 
 /// `SESSION@DISTRO`, as the session's ids carry it.
 fn name(distro: &str, session: &str) -> String {

@@ -24,7 +24,7 @@ use tokio::sync::{Notify, watch};
 mod wsl;
 
 #[cfg(test)]
-pub(super) use wsl::wanted as wsl_wanted;
+pub(super) use wsl::{MAX_SESSIONS as MAX_WSL_SESSIONS, wanted as wsl_wanted};
 
 const PREFIX: &str = "herdr:";
 /// The request and answer fields that name a workspace, tab, or pane.
@@ -86,6 +86,26 @@ impl Sessions {
         Arc::new(sessions)
     }
 
+    /// A connected session for each of `names`, each without a worker.
+    #[cfg(test)]
+    pub(super) fn offline_named(names: impl IntoIterator<Item = String>) -> Arc<Self> {
+        let sessions = Self::new(None);
+        let layout = Arc::new(Layout {
+            connected: true,
+            ..Layout::default()
+        });
+        lock(&sessions.list).extend(names.into_iter().map(|name| {
+            let (_, receiver) = watch::channel(layout.clone());
+            Arc::new(Session {
+                name,
+                api: Api::new(None),
+                layout: receiver,
+                _daemon: None,
+            })
+        }));
+        Arc::new(sessions)
+    }
+
     pub(super) fn get(&self, name: &str) -> Option<Arc<Session>> {
         lock(&self.list)
             .iter()
@@ -114,19 +134,27 @@ impl Sessions {
     /// still answer: one probe that missed is no reason to drop a session.
     /// Workers start and stop outside the lock phones' requests wait on.
     /// Only the rescan task calls it, so the list cannot change in between.
+    /// WSL sessions kept count against [`wsl::MAX_SESSIONS`], so one that
+    /// still answers holds its place against one listed since.
     pub(super) fn update(self: &Arc<Self>, wanted: &[(String, ConnectTarget)]) {
         let known: Vec<String> = lock(&self.list)
             .iter()
             .filter(|session| !session.ended())
             .map(|session| session.name.clone())
             .collect();
+        let held = known.iter().filter(|name| wsl::is_wsl(name)).count();
+        let mut room = wsl::MAX_SESSIONS.saturating_sub(held);
         let mut added = Vec::new();
         for (name, target) in wanted {
-            if known.contains(name) {
+            let in_wsl = wsl::is_wsl(name);
+            if known.contains(name) || (in_wsl && room == 0) {
                 continue;
             }
             match self.follow(name, target.clone()) {
-                Ok(session) => added.push(Arc::new(session)),
+                Ok(session) => {
+                    room -= usize::from(in_wsl);
+                    added.push(Arc::new(session));
+                }
                 Err(error) => {
                     tracing::warn!(session = %name, %error, "could not follow a Herdr session")
                 }
