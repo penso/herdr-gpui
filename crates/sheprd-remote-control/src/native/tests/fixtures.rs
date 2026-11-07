@@ -151,6 +151,7 @@ fn home() -> Home {
         }),
         summaries: [("p1".to_owned(), summary)].into(),
         pull_requests: &pull_requests,
+        version: "20261106.1",
     })
 }
 

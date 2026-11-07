@@ -14,6 +14,7 @@ use crate::{
     pull_request::{MergeState, Tone, tone_color},
 };
 use gpui::{prelude::*, *};
+use std::{cell::Cell, rc::Rc};
 
 /// Row heights at the usual text size; [`Look::row`] grows them with it.
 /// A list's headings take its rows' height, as the list is uniform.
@@ -25,6 +26,14 @@ const PROJECT_WIDTH: f32 = 130.;
 const SOURCE_WIDTH: f32 = 22.;
 /// The column holding a row's action, such as Start agent.
 const ACTION_WIDTH: f32 = 96.;
+/// The author column of each list.
+const ISSUE_AUTHOR_WIDTH: f32 = 110.;
+const PULL_REQUEST_AUTHOR_WIDTH: f32 = 100.;
+/// What a title keeps before an author joins it beside an open item.
+pub(super) const AUTHOR_TITLE_MIN: f32 = 280.;
+/// The gap between a row's cells, and its padding on either side.
+const CELL_GAP: f32 = 8.;
+const ROW_PADDING: f32 = 16.;
 /// The columns saying where a pull request stands, at the usual text size:
 /// see [`Look::column`].
 const STATUS_WIDTH: f32 = 72.;
@@ -47,8 +56,49 @@ impl OrchestratorView {
         self.detail.is_some()
     }
 
+    /// Whether rows name their author: always, unless an open item leaves
+    /// the title too little room for it.
+    fn shows_author(&self) -> bool {
+        !self.compact() || self.list_width.get() >= self.author_fit()
+    }
+
+    /// The list width at which a row beside an open item fits its author.
+    pub(super) fn author_fit(&self) -> f32 {
+        let (cells, fixed) = match self.tab {
+            // Age, run, title, author, and action.
+            Tab::Issues => (5., 32. + 30. + ISSUE_AUTHOR_WIDTH + ACTION_WIDTH),
+            // Number, title, author, two dots, and age.
+            Tab::PullRequests => (6., 48. + PULL_REQUEST_AUTHOR_WIDTH + 12. + 12. + 32.),
+        };
+        let (source_cells, source) = if self.mixed_sources {
+            (1., SOURCE_WIDTH)
+        } else {
+            (0., 0.)
+        };
+        let (project_cells, project) = if self.listing_projects() {
+            (1., PROJECT_WIDTH)
+        } else {
+            (0., 0.)
+        };
+        let gaps = cells + source_cells + project_cells - 1.;
+        fixed + source + project + AUTHOR_TITLE_MIN + gaps * CELL_GAP + 2. * ROW_PADDING
+    }
+
+    /// A row's author, in a column `width` wide.
+    fn author_cell(&self, item: &Item, width: f32) -> Div {
+        let look = &self.look;
+        div()
+            .debug_selector(|| "orchestrator-row-author".into())
+            .flex_none()
+            .w(px(width))
+            .truncate()
+            .text_size(look.small())
+            .text_color(rgb(look.theme.subtext()))
+            .child(item.author.clone().unwrap_or_default())
+    }
+
     /// Whether rows of several projects are listed, so each names its own.
-    fn listing_projects(&self) -> bool {
+    pub(super) fn listing_projects(&self) -> bool {
         self.projects_named().count() > 1 && self.projects.len() != 1
     }
 
@@ -100,6 +150,7 @@ impl OrchestratorView {
     pub(super) fn render_list(&self, cx: &mut Context<Self>) -> AnyElement {
         let look = &self.look;
         let compact = self.compact();
+        let author = self.shows_author();
         let sources = self.mixed_sources;
         let projects = self.listing_projects();
         let mut head: Vec<(String, Option<f32>)> = Vec::new();
@@ -114,11 +165,11 @@ impl OrchestratorView {
                     head.push((fl!("orchestrator-column-project"), Some(PROJECT_WIDTH)));
                 }
                 head.push((fl!("orchestrator-column-title"), None));
+                if author {
+                    head.push((fl!("orchestrator-column-author"), Some(ISSUE_AUTHOR_WIDTH)));
+                }
                 if !compact {
-                    head.extend([
-                        (fl!("orchestrator-column-author"), Some(110.)),
-                        ("\u{1f4ac}".into(), Some(34.)),
-                    ]);
+                    head.push(("\u{1f4ac}".into(), Some(34.)));
                 }
                 head.push((String::new(), Some(ACTION_WIDTH)));
             }
@@ -131,11 +182,16 @@ impl OrchestratorView {
                     head.push((fl!("orchestrator-column-project"), Some(PROJECT_WIDTH)));
                 }
                 head.push((fl!("orchestrator-column-title-branch"), None));
+                if author {
+                    head.push((
+                        fl!("orchestrator-column-author"),
+                        Some(PULL_REQUEST_AUTHOR_WIDTH),
+                    ));
+                }
                 if compact {
                     head.extend([(String::new(), Some(12.)), (String::new(), Some(12.))]);
                 } else {
                     head.extend([
-                        (fl!("orchestrator-column-author"), Some(100.)),
                         (
                             fl!("orchestrator-column-status"),
                             Some(look.column(STATUS_WIDTH)),
@@ -170,10 +226,12 @@ impl OrchestratorView {
         };
         div()
             .debug_selector(|| "orchestrator-list".into())
+            .relative()
             .flex_1()
             .min_w_0()
             .flex()
             .flex_col()
+            .child(measure(self.list_width.clone(), self.author_fit()))
             // Column heads over nothing to line up are clutter.
             .when(count > 0, |el| el.child(column_head(look, &head)))
             .child(list)
@@ -440,6 +498,7 @@ impl OrchestratorView {
             .children(self.project_cell(&row))
             .child(
                 div()
+                    .debug_selector(|| "orchestrator-row-title".into())
                     .flex_1()
                     .min_w_0()
                     .flex()
@@ -465,17 +524,11 @@ impl OrchestratorView {
                         el.child(look.icon("icons/lock.svg", 11., look.hue(YELLOW)))
                     }),
             )
+            .when(self.shows_author(), |el| {
+                el.child(self.author_cell(item, ISSUE_AUTHOR_WIDTH))
+            })
             .when(!compact, |el| {
                 el.child(
-                    div()
-                        .flex_none()
-                        .w(px(110.))
-                        .truncate()
-                        .text_size(look.small())
-                        .text_color(rgb(theme.subtext()))
-                        .child(item.author.clone().unwrap_or_default()),
-                )
-                .child(
                     div()
                         .flex_none()
                         .w(px(34.))
@@ -544,6 +597,7 @@ impl OrchestratorView {
             .children(self.project_cell(&row))
             .child(
                 div()
+                    .debug_selector(|| "orchestrator-row-title".into())
                     .flex_1()
                     .min_w_0()
                     .flex()
@@ -578,6 +632,9 @@ impl OrchestratorView {
                             }),
                     ),
             )
+            .when(self.shows_author(), |el| {
+                el.child(self.author_cell(item, PULL_REQUEST_AUTHOR_WIDTH))
+            })
             .map(|el| {
                 if compact {
                     el.child(
@@ -594,15 +651,6 @@ impl OrchestratorView {
                     )
                 } else {
                     el.child(
-                        div()
-                            .flex_none()
-                            .w(px(100.))
-                            .truncate()
-                            .text_size(look.small())
-                            .text_color(rgb(theme.subtext()))
-                            .child(item.author.clone().unwrap_or_default()),
-                    )
-                    .child(
                         div()
                             .flex_none()
                             .w(px(look.column(STATUS_WIDTH)))
@@ -655,6 +703,23 @@ impl OrchestratorView {
                     .child(look.dot(look.status_hue(run.status), 7.))
             })
     }
+}
+
+/// Records the list's width as it lays out, and draws again when that moves
+/// it across `fit`, so rows gain or lose their author on the next frame.
+fn measure(width: Rc<Cell<f32>>, fit: f32) -> impl IntoElement {
+    canvas(
+        move |bounds, window, _| {
+            let now = f32::from(bounds.size.width);
+            let before = width.replace(now);
+            if (before >= fit) != (now >= fit) {
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0()
 }
 
 /// A backend's muted mark in a row.

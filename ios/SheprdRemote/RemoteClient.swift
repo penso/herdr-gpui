@@ -2,6 +2,9 @@ import CryptoKit
 import Foundation
 import SheprdRemoteCore
 import Security
+import os
+
+private let log = Logger(subsystem: "so.pen.herdr.remote", category: "network")
 
 /// What the terminal's action sheet asks of Sheprd.
 enum TermAction: String, Encodable, CaseIterable {
@@ -42,6 +45,26 @@ final class PinnedTrust: NSObject, URLSessionTaskDelegate, Sendable {
         newRequest request: URLRequest
     ) async -> URLRequest? {
         nil
+    }
+
+    /// One line per request, failed or not: which addresses it used, and
+    /// whether it rode a connection already open, tell a dead path from a
+    /// daemon that is slow. `didCompleteWithError` is no use for this, as
+    /// `URLSession` does not call it for async requests.
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        let last = metrics.transactionMetrics.last
+        let request = task.originalRequest
+        let route = PathFailure.route(request?.url)
+        let took = PathFailure.seconds(.seconds(metrics.taskInterval.duration))
+        let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        let path = "\(last?.localAddress ?? "?") to \(last?.remoteAddress ?? "?") reused=\(last?.isReusedConnection ?? false)"
+        let sent = last?.countOfRequestBodyBytesSent ?? 0
+        if let error = task.error {
+            let code = error as NSError
+            log.error("\(request?.httpMethod ?? "?", privacy: .public) \(route, privacy: .public) at \(request?.url?.host() ?? "?", privacy: .public) failed \(code.code) in \(took, privacy: .public): \(path, privacy: .public) sent=\(sent)")
+        } else {
+            log.notice("\(request?.httpMethod ?? "?", privacy: .public) \(route, privacy: .public) at \(request?.url?.host() ?? "?", privacy: .public) answered \(status) in \(took, privacy: .public): \(path, privacy: .public) sent=\(sent)")
+        }
     }
 
     static func isEncrypted(_ url: URL?) -> Bool {
@@ -183,6 +206,18 @@ final class RemoteClient: Sendable {
         try await send("POST", "/api/v2/workspaces/\(Self.segment(workspace))/chats", body: request, bearer: bearer, timeout: 30)
     }
 
+    // MARK: Updates
+
+    /// Where Sheprd's updater stands there. An older computer answers 404.
+    func computerUpdate(bearer: String) async throws -> ComputerUpdate {
+        try await send("GET", "/api/v2/update", bearer: bearer)
+    }
+
+    /// Asks Sheprd there to update and restart.
+    func askToUpdate(bearer: String) async throws -> ComputerUpdate {
+        try await send("POST", "/api/v2/update", bearer: bearer)
+    }
+
     // MARK: Hosts
 
     /// The other hosts this computer may pair the phone with.
@@ -242,6 +277,12 @@ final class RemoteClient: Sendable {
         let _: EmptyAnswer = try await send("POST", "/api/term/\(Self.segment(pane))/rename", body: Body(label: label), bearer: bearer)
     }
 
+    /// Names a workspace; it always has a name.
+    func renameWorkspace(_ workspace: String, to label: String, bearer: String) async throws {
+        struct Body: Encodable { let label: String }
+        let _: EmptyAnswer = try await send("POST", "/api/v2/workspaces/\(Self.segment(workspace))/rename", body: Body(label: label), bearer: bearer)
+    }
+
     /// What was said in this computer's chats; nil from a daemon that
     /// cannot search, so the phone's index answers instead.
     func search(_ query: String, bearer: String) async throws -> SearchAnswer? {
@@ -290,6 +331,26 @@ final class RemoteClient: Sendable {
 
     func registerAPNs(_ registration: API.APNsRegistration, bearer: String) async throws {
         let _: EmptyAnswer = try await send("POST", "/api/apns", body: registration, bearer: bearer)
+    }
+
+    /// Writes what only this phone saw to the computer's `daemon.log`. The
+    /// route is open and rate limited, as pairing fails before any session.
+    func report(context: String, message: String) async throws {
+        struct Body: Encodable {
+            let context: String
+            let message: String
+        }
+        guard let url = URL(string: origin + "/api/log") else { throw RemoteError.unreachable }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONEncoder().encode(Body(context: context, message: message))
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Answers 204, which has no body to decode.
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw RemoteError.notHTTP }
+        guard (200..<300).contains(http.statusCode) else {
+            throw RemoteError.status(http.statusCode, String(decoding: data.prefix(300), as: UTF8.self))
+        }
     }
 
     private struct EmptyAnswer: Decodable {}

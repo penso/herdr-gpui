@@ -14,9 +14,10 @@ pub(crate) mod background;
 mod bridge;
 mod permission;
 mod settings;
+mod tasks;
 mod tools;
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 
 use acp::v1 as wire;
 use serde_json::{Value, json};
@@ -25,6 +26,8 @@ use crate::harness::{Reach, Translated, out};
 
 /// The program this module starts.
 pub(crate) const PROGRAM: &str = "claude";
+/// Offers Claude Code's task tools, which the plan is made from.
+pub(crate) const TODO_TOOLS: &str = "CLAUDE_CODE_ENABLE_TODO_TOOLS";
 
 /// The arguments that start `claude` for one session: a new one under
 /// `session`, or the earlier one of that id when `resume` is set.
@@ -49,6 +52,17 @@ pub(crate) fn args(session: &str, resume: bool) -> Vec<OsString> {
     args.push(if resume { "--resume" } else { "--session-id" }.into());
     args.push(session.into());
     args
+}
+
+/// What `claude` is started with in its environment, given what the user
+/// has `set` for [`TODO_TOOLS`]. Run this way it offers no task tools unless
+/// asked, and the plan would stay empty; a value the user chose stands.
+pub(crate) fn env(set: Option<&OsStr>) -> Vec<(&'static str, &'static str)> {
+    if set.is_some() {
+        Vec::new()
+    } else {
+        vec![(TODO_TOOLS, "1")]
+    }
 }
 
 /// How the session reaches `claude` running `session`.

@@ -15,6 +15,10 @@ struct WorkspaceScreen: View {
     @State private var showsOthers = false
     /// A tab just started, shown as soon as it exists.
     @State private var opened: Route?
+    @State private var renaming = false
+    @State private var newName = ""
+    /// Why the last rename failed, shown apart from a tab that did not start.
+    @State private var renameProblem: String?
 
     private static let terminal = "terminal"
 
@@ -66,11 +70,31 @@ struct WorkspaceScreen: View {
         .navigationTitle(workspace.label)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Button {
+                    newName = workspace.label
+                    renaming = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(workspace.label).font(.headline).lineLimit(1)
+                        Image(systemName: "pencil.circle.fill").font(.caption).foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Renames the workspace")
+            }
+        }
         .onAppear {
             model.recentDevice = key.device
             #if DEBUG
-            // The simulator loop's `-otherAgents YES` unfolds the agents.
+            // The simulator loop's `-otherAgents YES` unfolds the agents,
+            // and `-renameWorkspace YES` opens the rename alert.
             if UserDefaults.standard.bool(forKey: "otherAgents") { showsOthers = true }
+            if UserDefaults.standard.bool(forKey: "renameWorkspace") {
+                newName = workspace.label
+                renaming = true
+            }
             #endif
         }
         // This screen is right behind what it opens, so Back is the way here.
@@ -91,6 +115,29 @@ struct WorkspaceScreen: View {
         .alert("The tab did not start", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
         } message: {
             Text(problem ?? "")
+        }
+        .alert("Rename Workspace", isPresented: $renaming) {
+            TextField("Name", text: $newName)
+                .textInputAutocapitalization(.never)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") { rename(to: newName) }
+                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+        } message: {
+            Text("The name shows in Sheprd and in your lists.")
+        }
+        .alert("The workspace was not renamed", isPresented: Binding(get: { renameProblem != nil }, set: { if !$0 { renameProblem = nil } })) {
+        } message: {
+            Text(renameProblem ?? "")
+        }
+    }
+
+    private func rename(to label: String) {
+        Task {
+            do {
+                try await model.fleet.renameWorkspace(key, to: label)
+            } catch {
+                renameProblem = error.localizedDescription
+            }
         }
     }
 
@@ -210,7 +257,7 @@ struct WorkspaceScreen: View {
                     try await client.startChat(NewChatRequest(agent: agent.id, start: start), workspace: id, bearer: token)
                 }
                 model.recentAgent = agent.id
-                if start != nil, !created.started { model.notice = AppModel.startMissed }
+                if let problem = model.startProblem(created, start: start, device: device) { model.notice = problem }
                 if let pane = created.pane { opened = .chat(PaneKey(device: device, pane: pane), title: agent.name) }
             } catch {
                 problem = error.localizedDescription
