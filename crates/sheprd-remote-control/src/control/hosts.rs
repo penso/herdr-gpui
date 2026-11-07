@@ -89,6 +89,10 @@ pub struct HostPairing {
     /// The phone's earlier device on that host, which the new one replaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replace: Option<DeviceId>,
+    /// The origin of the web app holding the key, for the host's CORS to
+    /// admit. None for the iOS app, which CORS does not apply to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
 }
 
 /// Asks a host's daemon to add a phone the user allowed on another
@@ -103,6 +107,9 @@ pub struct Enroll {
     /// A device this one replaces: the same phone's earlier key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replace: Option<DeviceId>,
+    /// The web app's origin, admitted by CORS while the device stays.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
 }
 
 /// A host's answer to [`Enroll`]: what the phone needs to reach it.
@@ -116,6 +123,11 @@ pub struct Enrolled {
     pub fingerprint: String,
     /// Every `https://` origin the host answers at, Tailscale first.
     pub origins: Vec<String>,
+    /// The web app origin the host now admits. A daemon from before this
+    /// field drops the [`Enroll::app`] it was sent, so its answer shows it
+    /// would refuse that app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
 }
 
 impl Enrolled {

@@ -25,7 +25,7 @@ mod terminal;
 mod update;
 mod uploads;
 
-pub(crate) use api::{NEW_CHAT_WAIT, check_new_workspace, parse_agent};
+pub(crate) use api::{NEW_CHAT_WAIT, app_origin, check_new_workspace, parse_agent};
 pub(crate) use fragments::folders;
 pub(crate) use indicators::{Indicators, Look};
 pub(crate) use log::report_limit;

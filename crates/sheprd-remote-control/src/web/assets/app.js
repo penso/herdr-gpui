@@ -7,7 +7,9 @@
 // Every computer this app paired with, the one shown first. A computer is
 // known by its certificate's fingerprint; its device key is kept under
 // `device:ID` in IndexedDB.
-const HOSTS = "herdr.hosts"; // [{ id, origins, fingerprint, computer }]
+// One paired through another computer also names that computer's
+// fingerprint (`via`) and its id for the machine there (`link`).
+const HOSTS = "herdr.hosts"; // [{ id, origins, fingerprint, computer, via, link }]
 /// The one computer paired before this app held several; `migrate` moves it.
 const DEVICE = "herdr.device";
 /// The most computers, and addresses per computer, a phone keeps.
@@ -141,7 +143,17 @@ function fromB64url(text) {
   return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
 }
 
+/// A certificate fingerprint to compare: a code carries it bare, a computer
+/// reports it colon-separated.
+const bare = (text) => String(text || "").replace(/:/g, "").toUpperCase();
+
 // ---- the device key, kept in IndexedDB and never extractable ----
+
+/// A new device key, and its public half as a computer takes it.
+async function newDeviceKey() {
+  const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  return { pair, publicKey: b64url(await crypto.subtle.exportKey("raw", pair.publicKey)) };
+}
 
 function keyStore(mode, action) {
   return new Promise((resolve, reject) => {
@@ -657,10 +669,9 @@ async function redeemHandoff(token) {
   show("t-loading");
   history.replaceState(null, "", "/");
   try {
-    const pairKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
-    const publicKey = await crypto.subtle.exportKey("raw", pairKey.publicKey);
+    const { pair: pairKey, publicKey } = await newDeviceKey();
     const answer = await (
-      await call("/api/handoff/redeem", { method: "POST", auth: false, body: { token, public_key: b64url(publicKey) } })
+      await call("/api/handoff/redeem", { method: "POST", auth: false, body: { token, public_key: publicKey } })
     ).json();
     // Redeemed on the page of the computer that made the handoff, so its
     // own answer names it.
@@ -679,8 +690,6 @@ async function redeemHandoff(token) {
 async function adopt(pairKey, answer, fingerprint) {
   // The code scanned off the desktop names the computer; one answering with
   // another fingerprint must not take, or replace, a pairing as that one.
-  // The code carries it bare; the computer reports it colon-separated.
-  const bare = (text) => String(text || "").replace(/:/g, "").toUpperCase();
   if (!fingerprint || bare(answer.fingerprint) !== bare(fingerprint)) {
     throw new Error("This code belongs to another computer.");
   }
@@ -754,6 +763,12 @@ document.addEventListener("click", async (event) => {
   if (own("[data-retry]")) start(true);
   const host = own("[data-host]");
   if (host) switchHost(host.dataset.host);
+  const trust = own("[data-trust-host]");
+  if (trust) showHostTrust(trust.dataset.trustHost);
+  const check = own("[data-trust-check]");
+  if (check) checkHostTrust(check);
+  const pairing = own("[data-link-pair]");
+  if (pairing) pairLink(pairing.dataset.linkPair);
   if (own("[data-add-computer]")) startScan();
   if (own("[data-scan-cancel]")) navigate("/computers");
   terminalClick(event);
@@ -1249,10 +1264,19 @@ document.addEventListener("keydown", (event) => {
 
 // ---- computers: the list, switching, and adding one by its code ----
 
-/// Lists the paired computers, each with the address it answers at now.
+/// Shows the paired computers, then the machines the one shown can pair.
 function showComputers() {
   show("t-computers");
+  drawHosts();
+  drawLinks();
+  followLinks();
+}
+
+/// Lists the paired computers, each with the address it answers at now.
+function drawHosts() {
   const list = view().querySelector("[data-hosts]");
+  if (!list) return;
+  list.replaceChildren();
   for (const host of hosts()) {
     const row = template("t-host").content.firstElementChild.cloneNode(true);
     row.dataset.host = host.fingerprint;
@@ -1268,6 +1292,12 @@ function showComputers() {
       () => {
         address.textContent = "Not answering";
         dot.classList.replace("bg-raised", "bg-faint");
+        // Most often a certificate this phone does not trust yet, and a
+        // browser cannot say so: tapping one explains what to do.
+        if (!host.via) return;
+        address.textContent = "Not answering. Tap to set it up.";
+        delete row.dataset.host;
+        row.dataset.trustHost = host.fingerprint;
       },
     );
     list.append(row);
@@ -1282,6 +1312,238 @@ function switchHost(fingerprint) {
   app.origin = null;
   history.pushState(null, "", "/");
   start();
+}
+
+// ---- other machines: the SSH and cloud hosts a computer's Sheprd connects to ----
+
+// The phone pairs with each one directly, so it keeps them while that
+// computer sleeps (`docs/remote-control-plan.md`, Other machines). The
+// computer shown lists them, and takes a new key for each to enroll over
+// SSH; the phone then keeps the machine as a computer of its own.
+
+/// The machines `vouch` listed last, and the runs following them: a newer
+/// run ends an older one. `posting` names the keys being handed over.
+const links = { vouch: null, rows: [], run: 0, posting: new Set() };
+/// How often a key waiting to be enrolled is checked, and how many failed
+/// lists in a row end the checking.
+const LINK_POLL_MS = 2000;
+const LINK_RETRIES = 15;
+/// What each state says, and the button it offers.
+const LINK_STATES = {
+  allowed: { text: "Pairing…" },
+  asking: { text: "Allow it in Sheprd on your computer." },
+  failed: { action: "Try again" },
+  offered: { text: "Not paired", action: "Pair" },
+  paired: { text: "Paired, but not in this app", action: "Pair again" },
+  pending: { text: "Pairing… Sheprd may be setting it up." },
+};
+
+const waitingName = (vouch, host) => `link:${bare(vouch)}:${host}`;
+const waitingKey = (vouch, host) => keyStore("readonly", (store) => store.get(waitingName(vouch, host)));
+const dropWaiting = (vouch, host) => keyStore("readwrite", (store) => store.delete(waitingName(vouch, host)));
+
+/// Whether this phone already keeps the machine `link` is paired with.
+function holdsLink(link) {
+  return link.state === "paired" && hosts().some((host) => bare(host.fingerprint) === bare(link.fingerprint));
+}
+
+/// Makes a key for `link`'s machine alone and hands its public half to the
+/// computer shown. It is saved only once the computer took it: a refused
+/// key must not replace one still being enrolled.
+async function postLink(vouch, link) {
+  const name = waitingName(vouch, link.host);
+  if (links.posting.has(name)) return;
+  links.posting.add(name);
+  try {
+    const { pair, publicKey } = await newDeviceKey();
+    const path = `/api/v2/hosts/${encodeURIComponent(link.host)}/pair`;
+    const answer = await (await api(path, { method: "POST", body: { public_key: publicKey } })).json();
+    const waiting = { pair, replaces: link.device || null, since: Date.now() };
+    await keyStore("readwrite", (store) => store.put(waiting, name));
+    link.state = answer.state;
+  } catch (error) {
+    link.state = "failed";
+    link.reason =
+      error.status === 429
+        ? "Already being paired. Try again in a minute."
+        : error.status === 404
+          ? "Your computer no longer knows this machine."
+          : error.message;
+  } finally {
+    links.posting.delete(name);
+  }
+}
+
+/// Keeps the machine `link` names as a computer, with the key it holds. A
+/// pairing made another way stays as it is. True when the phone keeps it.
+async function keepLink(vouch, link, pair) {
+  const list = hosts();
+  const same = list.find((host) => bare(host.fingerprint) === bare(link.fingerprint));
+  if (same && same.via !== vouch) return false;
+  if (!same && list.length >= MAX_HOSTS) {
+    link.state = "failed";
+    link.reason = `This app keeps at most ${MAX_HOSTS} computers. Forget one, then try again.`;
+    return false;
+  }
+  const origins = Array.isArray(link.origins) ? link.origins : [];
+  const host = {
+    id: link.device,
+    origins: origins.filter((origin) => origin.startsWith("https://")).slice(0, MAX_ORIGINS),
+    fingerprint: link.fingerprint,
+    computer: link.computer,
+    via: vouch,
+    link: link.host,
+  };
+  await saveKey(host, pair);
+  if (same && same.id !== host.id) await dropKey(same).catch(() => {});
+  if (same) keepHost(host);
+  else saveHosts([...list, host]);
+  return true;
+}
+
+/// Follows the key waiting for `link`, read from a list asked for at
+/// `asked`. Answers whether it still waits, and `kept` when it is done.
+async function settleLink(vouch, link, asked) {
+  if (links.posting.has(waitingName(vouch, link.host))) return { waits: true };
+  const waiting = await waitingKey(vouch, link.host);
+  if (!waiting) return { waits: false };
+  // A list older than the key says nothing about it. While the computer
+  // keeps the request the machine reads `asking` or `pending`; any other
+  // state ended it, and `paired` then names the key it enrolled, unless
+  // that is still the device this key was to replace.
+  if (waiting.since >= asked || link.state === "asking" || link.state === "pending") return { waits: true };
+  await dropWaiting(vouch, link.host);
+  const enrolled = link.state === "paired" && link.device !== waiting.replaces;
+  return { waits: false, kept: enrolled && (await keepLink(vouch, link, waiting.pair)) };
+}
+
+/// Lists the machines of the computer shown and pairs the ones the desktop
+/// allowed, then follows the keys waiting until each machine holds its key
+/// or fails. A machine paired through another computer lists none, so
+/// pairings do not chain.
+async function followLinks() {
+  const run = ++links.run;
+  const vouch = app.device?.fingerprint;
+  if (links.vouch !== vouch) links.rows = [];
+  links.vouch = vouch;
+  if (!vouch || app.device.via || !app.origin) return drawLinks();
+  const current = () => run === links.run && app.device?.fingerprint === vouch;
+  let failures = 0;
+  let first = true;
+  while (failures < LINK_RETRIES) {
+    const asked = Date.now();
+    let rows;
+    try {
+      rows = (await (await api("/api/v2/hosts")).json()).hosts;
+    } catch {
+      // A daemon from before host pairing answers 404 here.
+      if (first) return;
+      failures += 1;
+    }
+    if (!current()) return;
+    if (rows) {
+      failures = 0;
+      links.rows = rows;
+      const settled = await Promise.all(rows.map((link) => settleLink(vouch, link, asked)));
+      if (!current()) return;
+      if (first) {
+        const allowed = rows.filter((link, index) => link.state === "allowed" && !settled[index].waits);
+        await Promise.all(allowed.map((link) => postLink(vouch, link)));
+        if (!current()) return;
+      }
+      first = false;
+      const kept = rows.filter((_, index) => settled[index].kept);
+      if (kept.length) drawHosts();
+      if (kept.length && location.pathname !== "/computers") {
+        flash(`${kept[0].name} is paired. Open Computers to finish.`);
+      }
+      drawLinks();
+      const waits = await Promise.all(rows.map((link) => waitingKey(vouch, link.host)));
+      if (!waits.some(Boolean)) return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, LINK_POLL_MS));
+    if (!current() || document.visibilityState === "hidden") return;
+  }
+}
+
+/// Draws the machines this app does not keep yet: being paired, or ones
+/// the person may pair. The ones it keeps are in the computers list.
+function drawLinks() {
+  const box = view().querySelector("[data-links]");
+  if (!box) return;
+  const rows = links.rows.filter((link) => !holdsLink(link));
+  box.hidden = !rows.length;
+  const computer = app.device?.computer || "your computer";
+  for (const name of box.querySelectorAll("[data-links-computer]")) name.textContent = computer;
+  box.querySelector("[data-link-list]").replaceChildren(
+    ...rows.map((link) => {
+      const row = template("t-link").content.firstElementChild.cloneNode(true);
+      const shows = LINK_STATES[link.state] || {};
+      row.querySelector("[data-name]").textContent = link.name;
+      row.querySelector("[data-state]").textContent = link.state === "failed" ? link.reason : shows.text || "";
+      const button = row.querySelector("[data-link-pair]");
+      button.hidden = !shows.action;
+      button.textContent = shows.action || "";
+      button.dataset.linkPair = link.host;
+      return row;
+    }),
+  );
+}
+
+/// Pairs one machine by hand: an offered one asks the desktop first, a
+/// failed one retries, and a paired one gets a new key.
+async function pairLink(host) {
+  const link = links.rows.find((row) => row.host === host);
+  if (!link || links.vouch !== app.device?.fingerprint) return;
+  await postLink(links.vouch, link);
+  drawLinks();
+  // Another list now would replace why the computer refused the key.
+  if (link.state !== "failed") followLinks();
+}
+
+/// Explains how to trust the machine with `fingerprint`. Unlike the iOS
+/// app, a page cannot be told which certificate to expect, so this phone
+/// must trust each machine's authority before the browser connects at all.
+function showHostTrust(fingerprint) {
+  const host = hosts().find((other) => other.fingerprint === fingerprint);
+  if (!host) return;
+  show("t-host-trust");
+  const page = view();
+  page.querySelector("[data-name]").textContent = host.computer || "this machine";
+  page.querySelector("[data-fingerprint]").textContent = host.fingerprint;
+  page.querySelector("[data-trust-check]").dataset.trustCheck = fingerprint;
+  const origins = host.origins || [];
+  page.querySelector("[data-trust-none]").hidden = origins.length > 0;
+  page.querySelector("[data-trust-steps]").hidden = !origins.length;
+  page.querySelector("[data-trust-addresses]").replaceChildren(
+    ...origins.map((origin) => {
+      const row = template("t-trust-address").content.firstElementChild.cloneNode(true);
+      row.querySelector("[data-address]").textContent = new URL(origin).host;
+      for (const link of row.querySelectorAll("a[data-computer]")) link.href = origin + link.getAttribute("href");
+      return row;
+    }),
+  );
+}
+
+/// Shows the machine when it answers now; otherwise says what that may
+/// mean, as a browser gives one error for all of it.
+async function checkHostTrust(button) {
+  const fingerprint = button.dataset.trustCheck;
+  const host = hosts().find((other) => other.fingerprint === fingerprint);
+  if (!host) return;
+  const shown = app.views;
+  const state = view().querySelector("[data-trust-state]");
+  state.textContent = "Checking…";
+  button.disabled = true;
+  try {
+    await reach(host);
+    if (app.views === shown) switchHost(fingerprint);
+  } catch {
+    if (app.views !== shown) return;
+    button.disabled = false;
+    state.textContent =
+      "Still no answer. The certificate may not be trusted yet, the machine may be off, or this phone may not reach its network. A browser cannot tell these apart.";
+  }
 }
 
 // `attempt` counts scans started and stopped, so one cancelled while the
@@ -1394,14 +1656,13 @@ async function pair(link, scanned = false) {
   view().querySelector("[data-approve-back]").hidden = !scanned;
   showTrust(origin, params.get("fp") || "", here);
   try {
-    const pairKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
-    const publicKey = await crypto.subtle.exportKey("raw", pairKey.publicKey);
+    const { pair: pairKey, publicKey } = await newDeviceKey();
     const claim = await (
       await call("/api/pair/claim", {
         method: "POST",
         auth: false,
         origin,
-        body: { token: params.get("t"), name: deviceName(), public_key: b64url(publicKey) },
+        body: { token: params.get("t"), name: deviceName(), public_key: publicKey },
       })
     ).json();
     if (left()) return;
@@ -1832,6 +2093,8 @@ async function start(anyHost = false) {
     await signIn();
     route();
     refreshOrigins();
+    // The computers list follows them itself.
+    if (location.pathname !== "/computers") followLinks();
   } catch (error) {
     report("start", error);
     if (error.status === 403 || error.status === 404) return forget();
@@ -1848,8 +2111,10 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") return stopStream();
   if (!app.device || app.stream) return;
   const target = app.path === location.pathname && routeOf(location.pathname, location.search);
-  if (target?.stream && app.session?.expires > Date.now() + 60_000) startStream(target.stream);
-  else start();
+  if (target?.stream && app.session?.expires > Date.now() + 60_000) {
+    startStream(target.stream);
+    followLinks();
+  } else start();
 });
 navigator.serviceWorker?.addEventListener("message", (event) => {
   if (event.data?.navigate) navigate(event.data.navigate);

@@ -71,6 +71,7 @@ fn a_host_job_without_a_host_fails_without_running_anything() {
             public_key: "KEY".into(),
             confirm: false,
             replace: None,
+            app: None,
         },
         target: None,
         via: "MacBook Pro".into(),

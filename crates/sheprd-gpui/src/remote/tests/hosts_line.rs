@@ -33,6 +33,7 @@ fn a_phones_machines_read_by_where_they_stand() {
                 computer: "devbox".into(),
                 fingerprint: "AB".into(),
                 origins: Vec::new(),
+                app: None,
             }),
         ),
         link("gpu", HostState::Allowed),

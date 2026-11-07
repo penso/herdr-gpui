@@ -32,6 +32,7 @@ fn host_fixtures_match() {
                         computer: "devbox".into(),
                         fingerprint: "AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89".into(),
                         origins: vec!["https://100.64.0.7:7443".into()],
+                        app: None,
                     }),
                 ),
                 link("ssh:gpu", "gpu box", HostState::Allowed),

@@ -608,16 +608,18 @@ impl Auth {
         Ok(self.links.view(record, now_ms))
     }
 
-    /// The phone asks to be paired with `host` with a key it made for it.
+    /// The phone asks to be paired with `host` with a key it made for it;
+    /// `app` is the origin of the web app holding that key.
     pub(crate) fn ask_host(
         &mut self,
         device: &DeviceId,
         host: &HostId,
         public_key: &str,
+        app: Option<String>,
         now_ms: u64,
     ) -> Result<HostState> {
         let record = self.devices.get(device).ok_or(Error::UnknownDevice)?;
-        self.links.ask(record, host, public_key, now_ms)
+        self.links.ask(record, host, public_key, app, now_ms)
     }
 
     pub(crate) fn take_host_pairings(&mut self, now_ms: u64) -> Vec<HostPairing> {
@@ -651,6 +653,11 @@ impl Auth {
         let public_key = PublicKey::parse(&enroll.public_key)?;
         let name = device_name(&enroll.name)?;
         let via = device_name(&enroll.via)?;
+        let app = enroll
+            .app
+            .as_deref()
+            .map(|origin| crate::web::app_origin(origin).ok_or(links::Error::InvalidApp))
+            .transpose()?;
         if let Some(old) = &enroll.replace
             && self
                 .devices
@@ -662,7 +669,7 @@ impl Auth {
         let id = DeviceId(random_id()?);
         self.devices.add_with(
             NewDevice {
-                app: None,
+                app,
                 id: id.clone(),
                 name,
                 public_key,
@@ -671,6 +678,7 @@ impl Auth {
             Some(via),
             Vec::new(),
         )?;
+        self.sync_apps();
         Ok(id)
     }
 

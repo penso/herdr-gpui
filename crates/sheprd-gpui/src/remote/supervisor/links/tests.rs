@@ -29,6 +29,7 @@ fn pairing(host: &str, confirm: bool) -> HostPairing {
         public_key: "KEY".into(),
         confirm,
         replace: None,
+        app: None,
     }
 }
 

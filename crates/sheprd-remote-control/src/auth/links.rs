@@ -36,6 +36,8 @@ pub enum Error {
     // keep-sorted start
     #[error("this host is already being paired")]
     Busy,
+    #[error("the web app's origin is not valid")]
+    InvalidApp,
     #[error("a host name or id is not valid")]
     InvalidHost,
     #[error("the host's answer is not valid")]
@@ -66,6 +68,7 @@ struct Ask {
     public_key: PublicKey,
     confirm: bool,
     replace: Option<DeviceId>,
+    app: Option<String>,
     stage: Stage,
     since_ms: u64,
 }
@@ -175,6 +178,7 @@ impl Links {
         device: &DeviceRecord,
         host: &HostId,
         public_key: &str,
+        app: Option<String>,
         now_ms: u64,
     ) -> Result<HostState> {
         self.refresh(now_ms);
@@ -202,6 +206,7 @@ impl Links {
                 replace: link
                     .and_then(|link| link.paired.as_ref())
                     .map(|paired| paired.device.clone()),
+                app,
                 stage: Stage::Queued,
                 since_ms: now_ms,
             },
@@ -225,6 +230,7 @@ impl Links {
                     public_key: String::from(ask.public_key.clone()),
                     confirm: ask.confirm,
                     replace: ask.replace.clone(),
+                    app: ask.app.clone(),
                 }
             })
             .collect()

@@ -1,5 +1,5 @@
 use super::*;
-use crate::control::hosts::Enrolled;
+use crate::control::hosts::{Enroll, Enrolled};
 
 fn enrolled() -> Enrolled {
     Enrolled {
@@ -7,6 +7,7 @@ fn enrolled() -> Enrolled {
         computer: "host".into(),
         fingerprint: "F".into(),
         origins: Vec::new(),
+        app: None,
     }
 }
 
@@ -151,5 +152,41 @@ fn overrides_behind_a_link_are_changed_where_they_live() {
     assert_eq!(
         fs::read_to_string(&target).unwrap(),
         "theme = \"dark\"\n\n[remote]\nenabled = true\n"
+    );
+}
+
+#[test]
+fn a_daemon_that_drops_a_web_app_fails_the_pairing() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = |app: Option<&str>| Input {
+        enroll: Enroll {
+            name: "iPhone".into(),
+            public_key: "KEY".into(),
+            via: "MacBook Pro".into(),
+            replace: None,
+            app: app.map(str::to_owned),
+        },
+        apns: None,
+    };
+    let web = input(Some("https://mac.tail1234.ts.net:7443"));
+    // Older daemons answer without `app`, which reads as none.
+    let older = Ok(Response::Enrolled(enrolled()));
+    assert!(matches!(
+        read_answer(&web, dir.path(), older),
+        Err(crate::app::Error::Enroll(Error::Outdated))
+    ));
+    let current = Enrolled {
+        app: web.enroll.app.clone(),
+        ..enrolled()
+    };
+    assert_eq!(
+        read_answer(&web, dir.path(), Ok(Response::Enrolled(current.clone()))).unwrap(),
+        current
+    );
+    // The iOS app sends none, so an older daemon still serves it.
+    let native = Ok(Response::Enrolled(enrolled()));
+    assert_eq!(
+        read_answer(&input(None), dir.path(), native).unwrap(),
+        enrolled()
     );
 }
