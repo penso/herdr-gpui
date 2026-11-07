@@ -146,20 +146,24 @@ impl Progress {
             wire::ToolCallStatus::Completed
         };
         let media = sheprd_chat_protocol::MAX_IMAGE_DATA;
-        let output = content::result(result, PARTIAL_TEXT, media)
-            .or(self.latest)
-            .unwrap_or_default();
-        let room = MAX_ENTRY_TEXT.saturating_sub(content::size(&self.full));
+        let room = |input| MAX_ENTRY_TEXT.saturating_sub(content::size(input));
+        let (whole, short) = (room(&self.full), room(&self.base));
+        let output = content::result(result, MAX_ENTRY_TEXT, media);
+        let fits = output
+            .as_ref()
+            .or(self.latest.as_ref())
+            .is_none_or(|output| content::size(output) <= whole);
         // Both fit, or the input is what the card is for, or the output is:
         // a failure's reason must not give way to the command that caused it.
-        let content: Vec<_> = if content::size(&output) <= room {
-            self.full.into_iter().chain(output).collect()
-        } else if shows_input(name, failed) {
-            let output = content::result(result, room, media).unwrap_or_default();
-            self.full.into_iter().chain(output).collect()
+        let (input, limit) = if fits || shows_input(name, failed) {
+            (self.full, whole)
         } else {
-            self.base.into_iter().chain(output).collect()
+            (self.base, short)
         };
+        let output = content::result(result, limit, media)
+            .or(self.latest.filter(|latest| content::size(latest) <= limit))
+            .unwrap_or_default();
+        let content: Vec<_> = input.into_iter().chain(output).collect();
         wire::ToolCallUpdateFields::new()
             .status(Some(status))
             .content(Some(content))

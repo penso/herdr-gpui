@@ -151,3 +151,15 @@ fn a_huge_command_keeps_its_preview_when_the_final_result_has_none() {
         "toolName":"bash","result":{},"isError":false}));
     assert_eq!(texts(&done[0]).last().copied(), Some("latest"));
 }
+
+#[test]
+fn a_final_result_uses_all_the_room_its_input_leaves() {
+    let limit = crate::project::MAX_ENTRY_TEXT;
+    let output = "o".repeat(limit - 16);
+    let mut bridge = opened();
+    prompt(&mut bridge, 2);
+    start(&mut bridge, "c", "bash", json!({"command": "one line"}));
+    partial(&mut bridge, "c", "bash", "working");
+    let done = end(&mut bridge, "c", "bash", &output, false);
+    assert_eq!(texts(&done[0]), [output.as_str()]);
+}
