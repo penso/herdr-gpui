@@ -116,6 +116,8 @@ impl WorkItemNode {
             labels,
             parent_id: fields.parent.map(|parent| parent.to_string()),
             blocked_by: Vec::new(),
+            assignee: None,
+            acceptance: None,
             priority: None,
             created_at: fields.created,
             updated_at: fields.changed.or(fields.created),

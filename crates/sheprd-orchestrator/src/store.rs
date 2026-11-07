@@ -5,7 +5,7 @@
 //! orchestrator's worker thread, never on the UI thread.
 
 use super::{
-    Checkpoint, Error, HerdrSession, Item, ItemKey, Owner, Result, Run, SourceKey,
+    Checkpoint, Error, HerdrSession, Item, ItemKey, Owner, Provider, Result, Run, SourceKey,
     model::{Activity, PullRequest, Workspace},
     review::PrStatus,
 };
@@ -20,7 +20,7 @@ use std::{
 };
 
 /// The newest schema this build reads and writes.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 /// How long a write waits for the other application's transaction.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -133,7 +133,7 @@ const PULL_REQUEST_STATUS_V2: &str = "CREATE TABLE IF NOT EXISTS pull_request_st
 
 const ITEM_COLUMNS: &str = "provider, host, repository, native_id, identifier, title, \
      description, state, url, author, labels_json, parent_id, blocked_by_json, priority, \
-     created_at, updated_at, pull_request_json, activity_json";
+     created_at, updated_at, pull_request_json, activity_json, assignee, acceptance";
 
 const RUN_COLUMNS: &str = "id, issue_key, workspace_json, agent, model, state_json, message, \
      session_id, started_at, updated_at, owner";
@@ -259,6 +259,34 @@ impl Store {
         Ok(())
     }
 
+    /// Leaves `current` the only Beads source on disk: forgets what any other
+    /// listed, and moves this app's runs to it, so a task keeps its runs when
+    /// its source moves. A `.beads/redirect` moves one, as does this build's
+    /// keying of a redirected project by its database. Another application's
+    /// runs stay as it wrote them. With no `current`, the project has no
+    /// Beads, and runs stay too.
+    pub fn settle_beads(&mut self, current: Option<&SourceKey>) -> Result<()> {
+        self.writable()?;
+        let kept = current.map(SourceKey::canonical).unwrap_or_default();
+        let provider = Provider::Beads.as_str();
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute(
+            "DELETE FROM issues WHERE provider = ?1 AND source <> ?2",
+            params![provider, kept],
+        )?;
+        transaction.execute(
+            "DELETE FROM source_checkpoints WHERE source LIKE ?1 AND source <> ?2",
+            params![format!("{provider}:%"), kept],
+        )?;
+        if let Some(current) = current {
+            move_runs(&transaction, current)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
     /// Every non-confidential run, of either owner.
     /// The last read review and checks of every open pull request, by
     /// repository and number.
@@ -372,10 +400,13 @@ impl Store {
             .as_ref()
             .map(|workspace| encode("workspace_json", workspace))
             .transpose()?;
+        // A run's task is set once: `issue_key` stays out of the update, so
+        // an action that read the run before `settle_beads` moved it cannot
+        // write the old key back.
         transaction.execute(
             &format!(
                 "INSERT INTO runs ({RUN_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
-                 ON CONFLICT(id) DO UPDATE SET issue_key = excluded.issue_key, \
+                 ON CONFLICT(id) DO UPDATE SET \
                  workspace_json = excluded.workspace_json, agent = excluded.agent, \
                  model = excluded.model, state_json = excluded.state_json, \
                  message = excluded.message, session_id = excluded.session_id, \
@@ -441,6 +472,38 @@ impl Store {
     }
 }
 
+/// Points this app's runs of any other Beads source at the same bead of
+/// `current`. A key that does not parse is not a bead's.
+fn move_runs(transaction: &Transaction<'_>, current: &SourceKey) -> Result<()> {
+    let moved: Vec<(String, String)> = {
+        let mut statement =
+            transaction.prepare("SELECT id, issue_key FROM runs WHERE owner = ?1")?;
+        let rows = statement.query_map([Owner::Sheprd.as_str()], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .filter_map(|(id, key)| {
+                let key = key.parse::<ItemKey>().ok()?;
+                (key.source.provider == Provider::Beads && key.source != *current).then(|| {
+                    let moved = ItemKey {
+                        source: current.clone(),
+                        native_id: key.native_id,
+                    };
+                    (id, moved.canonical())
+                })
+            })
+            .collect()
+    };
+    for (id, key) in moved {
+        transaction.execute(
+            "UPDATE runs SET issue_key = ?1 WHERE id = ?2",
+            params![key, id],
+        )?;
+    }
+    Ok(())
+}
+
 /// Fails when a run with `id` exists and another application owns it.
 fn refuse_foreign(transaction: &Transaction<'_>, id: &str) -> Result<()> {
     let owner = transaction
@@ -499,6 +562,16 @@ fn migrate(connection: &mut Connection) -> Result<Access> {
     }
     if version < 2 {
         transaction.execute(PULL_REQUEST_STATUS_V2, [])?;
+    }
+    if version < 3 {
+        // Empty until each bead's next sync fills them in.
+        for column in ["assignee", "acceptance"] {
+            if !has_column(&transaction, "issues", column)? {
+                transaction.execute(&format!("ALTER TABLE issues ADD COLUMN {column} TEXT"), [])?;
+            }
+        }
+    }
+    if version < SCHEMA_VERSION {
         transaction.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
     }
     transaction.commit()?;
@@ -525,7 +598,8 @@ fn insert_item(transaction: &Transaction<'_>, source: &str, item: &Item) -> Resu
     transaction.execute(
         &format!(
             "INSERT INTO issues (canonical_key, source, {ITEM_COLUMNS}) VALUES (?1, ?2, ?3, ?4, \
-             ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20) \
+             ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, \
+             ?22) \
              ON CONFLICT(canonical_key) DO UPDATE SET source = excluded.source, \
              provider = excluded.provider, host = excluded.host, \
              repository = excluded.repository, native_id = excluded.native_id, \
@@ -535,7 +609,8 @@ fn insert_item(transaction: &Transaction<'_>, source: &str, item: &Item) -> Resu
              parent_id = excluded.parent_id, blocked_by_json = excluded.blocked_by_json, \
              priority = excluded.priority, created_at = excluded.created_at, \
              updated_at = excluded.updated_at, pull_request_json = excluded.pull_request_json, \
-             activity_json = excluded.activity_json"
+             activity_json = excluded.activity_json, assignee = excluded.assignee, \
+             acceptance = excluded.acceptance"
         ),
         params![
             key.canonical(),
@@ -564,6 +639,8 @@ fn insert_item(transaction: &Transaction<'_>, source: &str, item: &Item) -> Resu
                 .as_ref()
                 .map(|activity| encode("activity_json", activity))
                 .transpose()?,
+            item.assignee,
+            item.acceptance,
         ],
     )?;
     Ok(())
@@ -583,9 +660,11 @@ fn item_from_row(row: &Row<'_>) -> Result<Item> {
         identifier: row.get("identifier")?,
         title: row.get("title")?,
         description: row.get("description")?,
+        acceptance: row.get("acceptance")?,
         state: row.get("state")?,
         url: row.get("url")?,
         author: row.get("author")?,
+        assignee: row.get("assignee")?,
         labels: decode("labels_json", &row.get::<_, String>("labels_json")?)?,
         parent_id: row.get("parent_id")?,
         blocked_by: decode("blocked_by_json", &row.get::<_, String>("blocked_by_json")?)?,

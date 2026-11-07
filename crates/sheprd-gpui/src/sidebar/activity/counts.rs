@@ -1,13 +1,16 @@
 //! The bar's count bubbles: what needs the user, as the Overview counted it
 //! on the last tick, and from the orchestrator views the window holds, open
-//! pull requests and open issues, the open critical and high Dependabot
+//! pull requests, open issues, and open beads, the open critical and high Dependabot
 //! alerts, and the automation scripts waiting for approval or after a
 //! failed run. An item two views list, such as one repository open in two
 //! workspaces, counts once. Each count keeps when its newest item last
 //! changed, which the bar compares with when the section was last open.
 
 use super::ActivityPanel;
-use crate::{SheprdWindow, orchestrator::Item};
+use crate::{
+    SheprdWindow,
+    orchestrator::{Item, Provider},
+};
 use chrono::{DateTime, Utc};
 use gpui::App;
 use std::collections::HashSet;
@@ -17,6 +20,7 @@ pub(super) struct Counts {
     needs: Count,
     pull_requests: Count,
     issues: Count,
+    tasks: Count,
     security: Count,
     automations: Count,
 }
@@ -42,10 +46,14 @@ impl Counts {
             } else {
                 &mut self.issues
             };
-            if seen.insert(item.key.canonical()) {
-                count.items += 1;
+            let new = seen.insert(item.key.canonical());
+            let changed = item.updated_at.or(item.created_at);
+            count.items += usize::from(new);
+            count.latest = count.latest.max(changed);
+            if item.key.source.provider == Provider::Beads {
+                self.tasks.items += usize::from(new);
+                self.tasks.latest = self.tasks.latest.max(changed);
             }
-            count.latest = count.latest.max(item.updated_at.or(item.created_at));
         }
     }
 
@@ -55,6 +63,7 @@ impl Counts {
             ActivityPanel::Workspaces | ActivityPanel::Usage => None,
             ActivityPanel::PullRequests => Some(self.pull_requests),
             ActivityPanel::Issues => Some(self.issues),
+            ActivityPanel::Tasks => Some(self.tasks),
             ActivityPanel::Security => Some(self.security),
             ActivityPanel::Automations => Some(self.automations),
         }

@@ -448,7 +448,7 @@ impl Worker {
             self.notice(Err(Arc::new(Error::Busy)));
             return;
         }
-        let resync = matches!(action, Action::DeleteBead { .. });
+        let resync = action.changes_items();
         let (notices, commands, actions) = (
             self.notices.clone(),
             self.commands.clone(),
@@ -591,6 +591,7 @@ impl Worker {
                 tracing::debug!(%error, "Cannot cache the repository");
             }
         }
+        self.settle_beads(&info)?;
         if let Some(branches) = extras.branches {
             self.snapshot.branches = Arc::new(branches);
             self.branches_fresh = true;
@@ -690,6 +691,7 @@ impl Worker {
         };
         self.data_version = Some(store.data_version()?);
         let mut items = store.items()?;
+        sources::keep_current_beads(&mut items, self.snapshot.repo.as_ref());
         if !self.uncached.is_empty() {
             let replaced = replaced_by(&self.uncached);
             items.retain(|item| !replaced.contains(&item.key.source));

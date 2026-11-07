@@ -6,7 +6,9 @@ mod azure;
 mod azure_html;
 mod azure_token;
 mod beads;
+mod beads_claim;
 mod beads_only;
+mod beads_redirect;
 #[cfg(unix)]
 mod beads_script;
 mod combined_changes;
@@ -42,6 +44,7 @@ mod retry;
 mod service;
 mod ssh_slots;
 mod store;
+mod store_beads;
 
 fn at(value: &str) -> DateTime<Utc> {
     DateTime::parse_from_rfc3339(value)
@@ -82,6 +85,8 @@ fn item(source: &SourceKey, native_id: &str, title: &str) -> Item {
         labels: vec!["bug".into()],
         parent_id: None,
         blocked_by: Vec::new(),
+        assignee: None,
+        acceptance: None,
         priority: None,
         created_at: Some(at("2026-10-08T23:23:37+00:00")),
         updated_at: Some(at("2026-10-09T01:00:00.5+00:00")),
