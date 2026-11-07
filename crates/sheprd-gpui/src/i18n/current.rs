@@ -17,6 +17,14 @@ fn load(locale: &Locale) -> Option<Catalog> {
         .ok()
 }
 
+/// Bumped whenever the shown catalog changes, so text formatted for the old
+/// locale is not served again. [`super::text`] keeps its answers against this.
+static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub(super) fn generation() -> u64 {
+    GENERATION.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[cfg(not(test))]
 static CURRENT: std::sync::RwLock<Option<Arc<Catalog>>> = std::sync::RwLock::new(None);
 
@@ -55,6 +63,7 @@ pub(super) fn replace(locale: &Locale) {
     if let Ok(mut current) = CURRENT.write() {
         *current = Some(Arc::new(catalog));
     }
+    GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
 #[cfg(test)]
@@ -79,4 +88,5 @@ pub(super) fn replace(locale: &Locale) {
     if let Some(catalog) = load(locale) {
         CURRENT.set(Some(Arc::new(catalog)));
     }
+    GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
