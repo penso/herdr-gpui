@@ -26,6 +26,8 @@ const REFRESH: Duration = Duration::from_secs(2);
 const SETTLED: Duration = Duration::from_secs(30);
 /// One unreachable probe keeps the overlays; this many in a row drop them.
 const MAX_FAILURES: u8 = 2;
+mod batch;
+mod codex;
 mod error;
 pub(crate) use error::Error;
 
@@ -75,6 +77,10 @@ pub(crate) struct Existing {
     activity: u64,
     bindings: Vec<Binding>,
     candidates: Vec<String>,
+    /// Panes a probe has answered for, which no longer show as loading.
+    checked: BTreeSet<String>,
+    /// Panes the user turned to their terminal before a binding was found.
+    dismissed: BTreeSet<String>,
     due: Option<Instant>,
     error: Option<Error>,
     failures: u8,
@@ -90,6 +96,27 @@ impl Existing {
 
     pub(crate) fn error(&self) -> Option<&Error> {
         self.error.as_ref()
+    }
+
+    /// Only the first discovery attempt covers the old terminal history.
+    /// Refreshing a failed or unmatched pane must not repeatedly hide it.
+    pub(crate) fn loading(&self, pane: &str) -> bool {
+        self.scope.is_some()
+            && self.candidates.iter().any(|candidate| candidate == pane)
+            && !self.checked.contains(pane)
+            && !self.dismissed.contains(pane)
+            && !self.bindings.iter().any(|binding| binding.pane_id == pane)
+    }
+
+    pub(crate) fn dismiss(&mut self, pane: &str) {
+        if self.loading(pane) {
+            self.dismissed.insert(pane.to_owned());
+        }
+    }
+
+    /// Hands a pending terminal choice to the discovered chat, once.
+    pub(crate) fn take_dismissed(&mut self, pane: &str) -> bool {
+        self.dismissed.remove(pane)
     }
 
     /// Nonblocking. Call with only panes currently reported as Codex/Claude.
@@ -112,11 +139,15 @@ impl Existing {
             changed = true;
             if self.scope != scope {
                 self.bindings.clear();
+                self.checked.clear();
+                self.dismissed.clear();
             }
             self.scope = scope;
             self.candidates = candidates;
             self.bindings
                 .retain(|binding| self.candidates.contains(&binding.pane_id));
+            self.checked.retain(|pane| self.candidates.contains(pane));
+            self.dismissed.retain(|pane| self.candidates.contains(pane));
             self.error = None;
             self.failures = 0;
             self.interval = REFRESH;
@@ -142,6 +173,8 @@ impl Existing {
                 Err(mpsc::TryRecvError::Disconnected) => Some(Err(Error::Stopped)),
             });
         if let Some(result) = result {
+            changed |= self.candidates.iter().any(|pane| self.loading(pane));
+            self.checked.extend(self.candidates.iter().cloned());
             self.probe = None;
             match result {
                 Ok(bindings) => {
@@ -164,6 +197,7 @@ impl Existing {
             match start(scope.clone(), self.candidates.clone()) {
                 Ok(probe) => self.probe = Some(probe),
                 Err(error) => {
+                    self.checked.extend(self.candidates.iter().cloned());
                     self.fail(error);
                     self.due = Some(now + self.interval);
                     changed = true;
@@ -241,7 +275,24 @@ fn inspect_host(
     candidates: &[String],
     cancelled: &AtomicBool,
 ) -> Result<Vec<Binding>, Error> {
-    let first = snapshot(host, cancelled)?;
+    batch::check_names(candidates)?;
+    let mut script = String::new();
+    batch::snapshot(&mut script);
+    for pane in candidates {
+        batch::section(&mut script, pane);
+        // Shell input sent to the remote daemon, not displayed UI text.
+        script.push_str(&format!(
+            // i18n: data
+            "herdr_cli pane process-info --pane {} 2>/dev/null || :\n",
+            shell_quote(pane),
+        ));
+    }
+    batch::finish(&mut script);
+    let mut names = vec!["snapshot".to_owned()];
+    names.extend(candidates.iter().cloned());
+    let bytes = batch::query(host, &script, cancelled)?;
+    let frames = batch::frames(&bytes, &names)?;
+    let first = batch::decode_snapshot(frames[0])?;
     let mut selected = Vec::new();
     for pane in &first.snapshot.panes {
         if !candidates.contains(&pane.pane_id) {
@@ -268,16 +319,12 @@ fn inspect_host(
     if selected.is_empty() {
         return Ok(Vec::new());
     }
-    let process_script = selected.iter().map(|selected| {
-        let pane = shell_quote(&selected.pane.pane_id);
-        // i18n: data
-        format!("printf '\\036%s\\n' {pane}\nherdr_cli pane process-info --pane {pane} 2>/dev/null || :\n")
-    }).collect::<String>();
-    let bytes = query(host, &process_script, cancelled)?;
-    let infos: HashMap<_, _> = sections(&bytes)
+    let infos: HashMap<_, _> = candidates
+        .iter()
+        .zip(frames.iter().skip(1))
         .filter_map(|(pane, json)| {
             let info = serde_json::from_str::<Envelope<ProcessInfoResult>>(json).ok()?;
-            Some((pane, info.result.process_info))
+            Some((pane.as_str(), info.result.process_info))
         })
         .collect();
     let pids: BTreeSet<_> = selected
@@ -295,11 +342,23 @@ fn inspect_host(
     // globbing stays disabled because a process name may contain metacharacters.
     // i18n: data
     let mut script = String::from("set -f\n[ \"$(uname -s)\" = Linux ] || exit 1\n");
+    let mut names = Vec::with_capacity(pids.len() + 1);
     for pid in pids {
+        names.push(pid.to_string());
         script.push_str(&STAT_SCRIPT.replace("{pid}", &pid.to_string()));
     }
-    let bytes = query(host, &script, cancelled)?;
-    let processes: HashMap<_, _> = sections(&bytes)
+    // After the process reads: this snapshot fences what they saw.
+    batch::snapshot(&mut script);
+    names.push("snapshot".to_owned());
+    batch::finish(&mut script);
+    let bytes = batch::query(host, &script, cancelled)?;
+    let frames = batch::frames(&bytes, &names)?;
+    let Some((after, stats)) = frames.split_last() else {
+        return Err(Error::Framing);
+    };
+    let processes: HashMap<_, _> = names
+        .iter()
+        .zip(stats)
         .filter_map(|(pid, fields)| {
             let mut fields = fields.split_whitespace();
             let process = ProcessIdentity {
@@ -313,7 +372,7 @@ fn inspect_host(
             Some((pid.parse::<u32>().ok()?, process))
         })
         .collect();
-    let last = snapshot(host, cancelled)?;
+    let last = batch::decode_snapshot(after)?;
     let herdr_session = match &scope.target {
         ConnectTarget::Session { name, .. } => Some(name.clone()),
         ConnectTarget::Ssh { session, .. } => Some(session.clone()),
@@ -329,6 +388,15 @@ fn inspect_host(
             } = selected;
             let info = infos.get(pane.pane_id.as_str())?;
             let pid = agent_pid(agent, info, &processes)?;
+            let process = info
+                .foreground_processes
+                .iter()
+                .find(|process| process.pid == pid)?;
+            if agent == Agent::Codex
+                && !codex::session_matches(agent_args(agent, &process.argv)?, &session.value)
+            {
+                return None;
+            }
             let unchanged = last.snapshot.pane(&pane.pane_id).is_some_and(|after| {
                 pane.agent_session == after.agent_session && pane.agent == after.agent
             });
@@ -443,13 +511,6 @@ fn agent_pid(
     Some(pid)
 }
 
-fn sections(bytes: &[u8]) -> impl Iterator<Item = (&str, &str)> {
-    std::str::from_utf8(bytes)
-        .unwrap_or_default()
-        .split('\u{1e}')
-        .filter_map(|part| part.split_once('\n'))
-}
-
 /// A pane whose reported session names an agent that may be observed.
 struct Selected<'a> {
     pane: &'a teleport::snapshot::Pane,
@@ -478,16 +539,20 @@ fn program(argv: &[String]) -> Option<&str> {
 }
 
 fn is_agent(agent: Agent, argv: &[String]) -> bool {
-    let Some(program) = program(argv) else {
-        return false;
-    };
+    agent_args(agent, argv).is_some()
+}
+
+/// Arguments of a native CLI or one of the launchers process selection knows.
+fn agent_args(agent: Agent, argv: &[String]) -> Option<&[String]> {
+    let program = program(argv)?;
     if program == agent.name() {
-        return true;
+        return Some(&argv[1..]);
     }
     if !matches!(program, "node" | "nodejs" | "bun") {
-        return false;
+        return None;
     }
-    argv.get(1).is_some_and(|script| match agent {
+    let script = argv.get(1)?;
+    let matches = match agent {
         Agent::Claude => {
             script.ends_with("/@anthropic-ai/claude-code/cli.js") || script.ends_with("/claude")
         }
@@ -495,7 +560,8 @@ fn is_agent(agent: Agent, argv: &[String]) -> bool {
             script.ends_with("/@openai/codex/bin/codex.js") || script.ends_with("/codex")
         }
         _ => false,
-    })
+    };
+    matches.then_some(&argv[2..])
 }
 
 #[cfg(test)]

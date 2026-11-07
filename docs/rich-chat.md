@@ -346,6 +346,12 @@ original editor's cursor remains visible even if it needs more rows than chosen.
 Unusual full-screen dialogs may require the terminal view.
 Leaving the agent returns to the ordinary terminal.
 
+Until the first transcript arrives, a loading view covers the old terminal
+output and leaves the original editor below it usable. **Use terminal** dismisses
+it and keeps the terminal once the conversation is ready; **Show chat** then
+brings the conversation back. A question or approval is never covered, and a
+session that cannot be found or read leaves the ordinary terminal in place.
+
 CLI logs keep only a tool's name and arguments, so the reader takes the command,
 file, search term, or task from the arguments of the tools it knows.
 

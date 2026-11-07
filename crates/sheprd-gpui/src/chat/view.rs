@@ -11,6 +11,7 @@ mod embeds;
 mod entries;
 mod jump;
 mod layout;
+mod loading;
 mod panels;
 mod pinned;
 mod rail;
@@ -188,6 +189,9 @@ impl SheprdWindow {
             .panes
             .iter()
             .flat_map(|pane| {
+                if let Some(loading) = self.render_chat_loading(pane, surface, cx) {
+                    return vec![loading];
+                }
                 let Some(chat) = self.chats.pane(&pane.pane_id) else {
                     return Vec::new();
                 };

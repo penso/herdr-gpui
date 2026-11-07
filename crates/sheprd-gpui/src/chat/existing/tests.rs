@@ -1,6 +1,9 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod attribution;
+mod batching;
+mod loading;
 mod scripts;
 
 fn scope() -> Scope {
@@ -273,7 +276,7 @@ mod host {
     use super::*;
     use std::{fs, os::unix::fs::PermissionsExt};
 
-    fn fixture(session_changes: bool, shell: bool) -> (tempfile::TempDir, Host) {
+    pub(super) fn fixture(session_changes: bool, shell: bool) -> (tempfile::TempDir, Host) {
         let temp = tempfile::tempdir().unwrap();
         let bin = temp.path().join(".local/bin");
         fs::create_dir_all(&bin).unwrap();
@@ -326,7 +329,7 @@ esac
             .unwrap();
         fs::write(temp.path().join("process.json"), serde_json::json!({"result":{"process_info":{
             "shell_pid": if shell {pid} else {pid - 1}, "foreground_process_group_id":group,
-            "foreground_processes":[{"pid":pid,"argv":if shell {vec!["bash"]} else {vec!["codex","resume"]}}]
+            "foreground_processes":[{"pid":pid,"argv":if shell {vec!["bash".to_owned()]} else {vec!["codex".into(),"resume".into(),binding().session_id]}}]
         }}}).to_string()).unwrap();
         let mut host = Host::new(&ConnectTarget::Local).unwrap();
         host.env = vec![("HOME".into(), temp.path().to_string_lossy().into_owned())];
