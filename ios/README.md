@@ -246,7 +246,10 @@ Detailed, the default, shows the chat and its current step. Generic shows the
 agent and what it is doing in general. A computer chooses in Sheprd's Settings >
 Remote control (`live_activities` in `[remote]`), and a phone chooses with Keep
 Generic in its Settings. The stricter choice wins. Turning on Keep Generic ends
-the activities showing, since a title set when one starts cannot change. Choosing
+the activities naming a chat, since a title set when one starts cannot change, and
+the app ends any that a computer starts before it hears. A computer that is away
+hears at the next sync, and while the app is closed such an activity can show
+until the app next runs. Choosing
 Generic on the computer applies from the next activity, so one already showing
 keeps its title until it ends.
 

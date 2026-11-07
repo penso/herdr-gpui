@@ -163,6 +163,10 @@ public struct ChatActivityFacts: Codable, Hashable, Sendable {
     public var agent: String
     public var pane: String
 
+    /// Whether this activity says which chat it is: a generic one has no
+    /// title, whichever side asked for it.
+    public var namesChat: Bool { !chatTitle.isEmpty }
+
     public init(
         computer: String,
         computerId: String,

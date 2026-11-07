@@ -71,6 +71,10 @@ final class ActivityTokens {
 
     private func watch(_ activity: Activity<ChatActivityAttributes>) {
         guard running[activity.id] == nil else { return }
+        if activity.attributes.facts.namesChat, UserDefaults.standard.bool(forKey: Self.genericSetting) {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            return
+        }
         running[activity.id] = Running(
             id: activity.id,
             attributes: activity.attributes.facts,
@@ -101,16 +105,18 @@ final class ActivityTokens {
         }
     }
 
-    /// Tells the computers about Keep Generic. Turned on, it also ends what
-    /// is showing: an activity's title and workspace are fixed when it
-    /// starts, so no later push could take them off the lock screen.
-    /// Computers hear first, so what they start next is already generic.
+    /// Tells the computers about Keep Generic. Turned on, it first ends what
+    /// names a chat: an activity's title and workspace are fixed when it
+    /// starts, so no later push could take them off the lock screen. That
+    /// needs no network, so it does not wait on a computer that is away;
+    /// `watch` ends what such a computer starts before it hears.
     func genericChanged(to generic: Bool) async {
-        await sync()
-        guard generic else { return }
-        for activity in Activity<ChatActivityAttributes>.activities {
-            await activity.end(nil, dismissalPolicy: .immediate)
+        if generic {
+            for activity in Activity<ChatActivityAttributes>.activities where activity.attributes.facts.namesChat {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
         }
+        await sync()
     }
 
     /// Sends each paired computer (or only the one with CA `only`) its
