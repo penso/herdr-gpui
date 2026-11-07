@@ -43,9 +43,7 @@ impl SheprdWindow {
         }
         let keys = self
             .keymap()
-            .bindings()
-            .filter(|(command, _)| *command == info.command)
-            .map(|(_, key)| key)
+            .entries(info.command)
             .collect::<Vec<_>>()
             .join(" ");
         let input = cx.new(SearchInput::new);

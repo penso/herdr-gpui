@@ -37,6 +37,10 @@ const MAX_PANE_KEYS: usize = 64;
 /// A pane key types a few characters; it is not a way to paste a file.
 const MAX_PANE_TEXT: usize = 1024;
 
+/// Marks a `[keybindings]` value as a prefix chord: this, then the key typed
+/// after the prefix. It names no particular prefix, so it follows the daemon's.
+const CHORD_PREFIX: &str = "prefix-";
+
 /// Marks a `[pane_keys]` value as text, as in Ghostty's `text:` binds.
 const TEXT_PREFIX: &str = "text:";
 
@@ -82,8 +86,8 @@ fn identity(keystroke: &Keystroke) -> (Modifiers, String) {
     (keystroke.modifiers, keystroke.key.clone())
 }
 
-/// One entry of the config's `[keybindings]` table: a keystroke, or a list of
-/// them. An empty string or list leaves the command unbound.
+/// One entry of the config's `[keybindings]` table: a keystroke or prefix
+/// chord, or a list of them. An empty string or list leaves the command unbound.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum Binding {
@@ -126,6 +130,14 @@ impl Shortcut {
             catalog_default: false,
         }
     }
+
+    fn chord(prefix: &Keystroke, keystroke: &Keystroke) -> Self {
+        Self {
+            label: format!("{} {}", prefix.unparse(HOST_OS), keystroke.unparse(HOST_OS)),
+            chord: Some(keystroke.clone()),
+            catalog_default: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -165,10 +177,10 @@ impl Keymap {
     /// Layers the daemon's `keys` and then `overrides` over the defaults. A
     /// keystroke the GUI config assigns moves to that command, so rebinding
     /// one key never requires unbinding its default or daemon owner too; two
-    /// configured commands claiming it is an error. A command the GUI config
-    /// names keeps exactly the keystrokes listed there. `pane_keys` take
-    /// their keystrokes from every default and daemon command, but not from
-    /// one the GUI config names.
+    /// configured commands claiming it, or the same prefix chord, is an error.
+    /// A command the GUI config names keeps exactly the keystrokes and chords
+    /// listed there. `pane_keys` take their keystrokes from every default and
+    /// daemon command, but not from one the GUI config names.
     pub(crate) fn with_overrides(
         overrides: &BTreeMap<String, Binding>,
         pane_keys: &PaneKeys,
@@ -188,20 +200,33 @@ impl Keymap {
             configured[index] = Some(keystrokes);
         }
         let mut claimed = Claimed::new();
-        for (info, keystrokes) in COMMANDS.iter().zip(&configured) {
-            for keystroke in keystrokes.iter().flatten() {
-                let parsed = parse(info.name, keystroke)?;
-                if let Some(first) = claimed.insert(identity(&parsed), info.name)
+        let mut claimed_chords = Claimed::new();
+        let mut entries = Vec::with_capacity(COMMANDS.len());
+        for (info, keystrokes) in COMMANDS.iter().zip(configured) {
+            let Some(keystrokes) = keystrokes else {
+                entries.push(None);
+                continue;
+            };
+            let mut parsed = Vec::with_capacity(keystrokes.len());
+            for keystroke in keystrokes {
+                let trigger = parse_entry(info.name, &keystroke)?;
+                let (table, bound) = match &trigger {
+                    Trigger::Direct(bound) => (&mut claimed, bound),
+                    Trigger::Prefixed(bound) => (&mut claimed_chords, bound),
+                };
+                if let Some(first) = table.insert(identity(bound), info.name)
                     && first != info.name
                 {
                     return Err(Error::DuplicateKeystroke {
-                        keystroke: keystroke.clone(),
+                        keystroke,
                         first,
                         second: info.name,
                     }
                     .into());
                 }
+                parsed.push((keystroke, trigger));
             }
+            entries.push(Some(parsed));
         }
         let pane_keys = resolve_pane_keys(pane_keys, default_pane_keys())?;
         for (typed, _) in &pane_keys {
@@ -213,15 +238,17 @@ impl Keymap {
                 .into());
             }
         }
-        Ok(Self::layer(configured, &claimed, keys, pane_keys))
+        Ok(Self::layer(entries, &claimed, keys, pane_keys))
     }
 
     /// Herdr owns and validates its own file, so a daemon binding this client
     /// cannot honor, or that collides with one already placed, is skipped
     /// rather than reported: the first daemon binding for a keystroke wins,
-    /// as does any GUI-configured keystroke over the daemon's.
+    /// as does any GUI-configured keystroke or chord over the daemon's. A
+    /// configured chord the prefix cannot reach is skipped too, as the prefix
+    /// can differ per device.
     fn layer(
-        configured: Vec<Option<Vec<String>>>,
+        configured: Vec<Option<Vec<(String, Trigger)>>>,
         claimed: &Claimed,
         keys: &DaemonKeys,
         pane_keys: Vec<(Keystroke, PaneKey)>,
@@ -234,7 +261,20 @@ impl Keymap {
             .filter(|prefix| taken.insert(identity(prefix)))
             .cloned()
             .collect();
-        let mut chords = HashSet::new();
+        let mut chords: HashSet<_> = configured
+            .iter()
+            .flatten()
+            .flatten()
+            .filter_map(|(_, trigger)| match trigger {
+                Trigger::Prefixed(keystroke) => Some(identity(keystroke)),
+                Trigger::Direct(_) => None,
+            })
+            .collect();
+        let is_prefix = |keystroke: &Keystroke| {
+            prefixes
+                .iter()
+                .any(|prefix| identity(keystroke) == identity(prefix))
+        };
         let mut from_daemon = vec![Vec::new(); COMMANDS.len()];
         for (command, trigger) in &keys.bindings {
             let Some(index) = COMMANDS.iter().position(|info| info.command == *command) else {
@@ -256,22 +296,10 @@ impl Keymap {
                     let Some(prefix) = prefixes.first() else {
                         continue;
                     };
-                    if prefixes
-                        .iter()
-                        .any(|prefix| identity(keystroke) == identity(prefix))
-                        || !chords.insert(identity(keystroke))
-                    {
+                    if is_prefix(keystroke) || !chords.insert(identity(keystroke)) {
                         continue;
                     }
-                    Shortcut {
-                        label: format!(
-                            "{} {}",
-                            prefix.unparse(HOST_OS),
-                            keystroke.unparse(HOST_OS)
-                        ),
-                        chord: Some(keystroke.clone()),
-                        catalog_default: false,
-                    }
+                    Shortcut::chord(prefix, keystroke)
                 }
             };
             from_daemon[index].push(shortcut);
@@ -281,7 +309,16 @@ impl Keymap {
             .zip(configured)
             .zip(from_daemon)
             .map(|((info, configured), from_daemon)| match configured {
-                Some(keystrokes) => keystrokes.into_iter().map(Shortcut::direct).collect(),
+                Some(entries) => entries
+                    .into_iter()
+                    .filter_map(|(text, trigger)| match trigger {
+                        Trigger::Direct(_) => Some(Shortcut::direct(text)),
+                        Trigger::Prefixed(keystroke) => {
+                            let prefix = prefixes.first()?;
+                            (!is_prefix(&keystroke)).then(|| Shortcut::chord(prefix, &keystroke))
+                        }
+                    })
+                    .collect(),
                 None => info
                     .default_shortcuts()
                     .iter()
@@ -324,6 +361,21 @@ impl Keymap {
             .into_iter()
             .flatten()
             .map(|shortcut| shortcut.label.as_str())
+    }
+
+    /// `command`'s shortcuts as a `[keybindings]` value spells them, primary
+    /// first. Unlike a chord's label, each is one word that names no prefix.
+    pub(crate) fn entries(&self, command: Command) -> impl Iterator<Item = String> {
+        COMMANDS
+            .iter()
+            .position(|info| info.command == command)
+            .and_then(|index| self.shortcuts.get(index))
+            .into_iter()
+            .flatten()
+            .map(|shortcut| match &shortcut.chord {
+                Some(chord) => format!("{CHORD_PREFIX}{}", chord.unparse(HOST_OS)),
+                None => shortcut.label.clone(),
+            })
     }
 
     /// The shortcut shown beside `command`, or `""` when it is unbound.
@@ -504,6 +556,23 @@ fn resolve_pane_keys(
         resolved.push((parsed, PaneKey::Key(sent_parsed)));
     }
     Ok(resolved)
+}
+
+/// One `[keybindings]` value. A chord's key needs no modifier: it is only read
+/// after the prefix, so it cannot swallow typing.
+fn parse_entry(command: &'static str, entry: &str) -> Result<Trigger> {
+    let Some(key) = entry.strip_prefix(CHORD_PREFIX) else {
+        return parse(command, entry).map(Trigger::Direct);
+    };
+    if key.is_empty() {
+        return Err(Error::ChordWithoutKey(command).into());
+    }
+    let parsed = parse_keystroke(key).map_err(|source| Error::InvalidKeystroke {
+        command,
+        keystroke: entry.to_owned(),
+        source,
+    })?;
+    Ok(Trigger::Prefixed(parsed))
 }
 
 fn parse(command: &'static str, keystroke: &str) -> Result<Keystroke> {
