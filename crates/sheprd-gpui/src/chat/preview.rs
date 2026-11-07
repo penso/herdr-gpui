@@ -25,6 +25,7 @@ use super::{
 use crate::{SheprdWindow, config::ChatLayoutMode};
 
 mod input_resize;
+mod rewind;
 mod running;
 mod selection;
 mod steps;
@@ -125,12 +126,18 @@ impl Options {
                 | "turns"
                 | "running"
                 | "running-open"
+                | "rewind"
+                | "rewind-keep"
+                | "rewind-missing"
+                | "rewind-restore"
+                | "rewind-unavailable"
+                | "rewind-working"
                 | "steps"
                 | "steps-open"
                 | "all"
         ) {
             bail!(
-                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, jump, conversation, existing, input-resize, tools, turns, running, running-open, steps, steps-open, or all"
+                "HERDR_TEST_RICH_CHAT expects math, code, diagram, activity, activity-open, attachments, questions, selection, user, widgets, widgets-end, jump, conversation, existing, input-resize, tools, turns, running, running-open, rewind, rewind-keep, rewind-missing, rewind-restore, rewind-unavailable, rewind-working, steps, steps-open, or all"
             );
         }
         let hold = std::env::var("HERDR_TEST_RICH_CHAT_HOLD_MS")
@@ -212,6 +219,7 @@ async fn run(
         timer.timer(Duration::from_millis(100)).await;
         let ready = handle.update(cx, |view, window, cx| -> Result<bool> {
             fit_surface(view);
+            rewind::hold_region(view, &options.case);
             // The window's chat poll does not run here; apply its rule for
             // the composer's button so the fixture draws what the app would.
             if let Some(pane) = view.chats.pane_mut(PANE) {
@@ -443,6 +451,10 @@ fn install(
         transcript.entries = running::entries();
         transcript.activities = running::activities(super::now_ms());
     }
+    if options.case.starts_with("rewind") {
+        transcript.entries = rewind::entries();
+        transcript.session = Some(rewind::session(&options.case));
+    }
     if options.case == "turns" {
         transcript.entries = earlier_turns();
         transcript
@@ -552,6 +564,9 @@ fn install(
             pane.composer = Some(input);
             pane.attachments = options.attach.clone();
         }
+    }
+    if options.case.starts_with("rewind") {
+        rewind::enter(view, &options.case, window, cx);
     }
     window.set_window_title("Sheprd · Rich chat preview"); // i18n: data
     window.resize(size(
