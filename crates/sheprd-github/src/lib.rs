@@ -8,6 +8,7 @@
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
 mod auth;
+pub mod check_log;
 pub mod checkout;
 pub mod cli;
 pub mod config;

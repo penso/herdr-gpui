@@ -94,6 +94,9 @@ and nothing goes through your phone.
    - `-tab workspaces|settings` opens that tab, and `-openWorkspace ID`
      opens that workspace's screen in it.
    - `-otherAgents YES` unfolds a workspace's other agents.
+   - With `-openWorkspace`, `-openChanges YES` opens its changes; then
+     `-openDiff PATH` opens a file's diff, and `-sendLog YES` opens the
+     confirmation for the first failing check's log.
    - `-renameWorkspace YES` opens a workspace's rename alert. It lists the
      local Herdr daemon's real workspaces, so pressing Rename changes one.
    - `-newWorkspace YES` opens the new workspace form.

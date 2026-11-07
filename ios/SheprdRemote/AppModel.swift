@@ -13,6 +13,7 @@ enum Route: Codable, Hashable {
     case chat(PaneKey, title: String)
     case term(PaneKey, title: String)
     case workspace(WorkspaceKey)
+    case changes(WorkspaceKey)
 }
 
 /// The app's state: paired computers, their live links, and the tokens

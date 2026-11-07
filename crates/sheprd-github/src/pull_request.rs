@@ -20,8 +20,8 @@ pub use {
     fetch::{local_checkout, run, run_bytes},
     lookup::Lookup,
     model::{
-        Input, MergeMethod, Origin, Outcome, PullRequest, ReviewDecision, State, Tone, clean,
-        fork_branch_number, repository_input, workspace_input,
+        CheckDetail, Input, MergeMethod, Origin, Outcome, PullRequest, ReviewDecision, State, Tone,
+        clean, fork_branch_number, repository_input, workspace_input,
     },
     remote::{Base, Remote, base_repository, remote_repository},
     store::{Store, View},

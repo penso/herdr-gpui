@@ -7,7 +7,7 @@
 use super::Localize;
 use crate::i18n::fl;
 use chrono::{DateTime, DurationRound, Local, TimeDelta, Utc};
-use sheprd_github::{AccountsError, Error, cli, pr_actions, pull_request};
+use sheprd_github::{AccountsError, Error, check_log, cli, pr_actions, pull_request};
 
 impl Localize for Error {
     fn localize(&self) -> String {
@@ -16,6 +16,7 @@ impl Localize for Error {
             Self::Accounts(error) => error.localize(),
             Self::Authentication => fl!("error-github-authentication"),
             Self::Authorization => fl!("error-github-authorization"),
+            Self::CheckLog(error) => error.localize(),
             Self::Cli(error) => error.localize(),
             Self::Client(error) => error.localize(),
             Self::ClientIdEncoding => fl!("error-github-client-id-encoding"),
@@ -148,6 +149,17 @@ fn lookup_step(operation: &str) -> &'static str {
         "read process output" => "read-output",           // i18n: data
         "wait for process" => "wait",                     // i18n: data
         _ => "other",
+    }
+}
+
+impl Localize for check_log::Error {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::Location => fl!("error-github-check-log-location"),
+            Self::Read(_) => fl!("error-github-check-log-read"),
+            // keep-sorted end
+        }
     }
 }
 

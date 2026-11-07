@@ -193,3 +193,33 @@ fn checks_add_up_to_their_worst_outcome() {
     pr.status_check_rollup = None;
     assert_eq!(pr.checks_outcome(), None);
 }
+
+#[test]
+fn check_details_name_the_actions_job_and_only_safe_links() {
+    let pr = parse(
+        r#"[{"number":1,"url":"https://github.com/o/r/pull/1","title":"t","state":"OPEN","isDraft":false,
+        "headRefName":"b","baseRefName":"main","additions":0,"deletions":0,"changedFiles":0,
+        "updatedAt":"2026-01-01T00:00:00Z","mergeStateStatus":"CLEAN",
+        "headRepositoryOwner":{"login":"o"},
+        "statusCheckRollup":[
+          {"__typename":"CheckRun","name":"test","status":"COMPLETED","conclusion":"FAILURE",
+           "databaseId":77,"detailsUrl":"https://github.com/o/r/actions/runs/5/job/77"},
+          {"__typename":"CheckRun","name":"other app","status":"COMPLETED","conclusion":"FAILURE",
+           "databaseId":78,"detailsUrl":"https://ci.example/78"},
+          {"__typename":"StatusContext","context":"ci/lint","state":"PENDING",
+           "targetUrl":"http://ci.example/plain"}
+        ]}]"#,
+        "o",
+        "r",
+        "b",
+    )
+    .unwrap()
+    .unwrap();
+    let details: Vec<_> = pr.check_details().collect();
+    assert_eq!(details[0].job, Some(77));
+    assert_eq!(details[0].outcome, Outcome::Failed);
+    assert_eq!(details[1].job, None);
+    assert_eq!(details[1].url, Some("https://ci.example/78"));
+    assert_eq!(details[2].url, None);
+    assert_eq!(details[2].job, None);
+}

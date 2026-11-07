@@ -10,6 +10,8 @@ error-github-denied = GitHub authorization denied.
 error-github-device = Invalid GitHub device authorization response.
 error-github-encoding = Invalid GitHub credential encoding.
 error-github-expired = GitHub code expired. Sign in again.
+error-github-check-log-location = GitHub did not say where the job's log is.
+error-github-check-log-read = The job's log could not be read.
 error-github-forbidden = GitHub denied access: check token permissions or SSO authorization.
 error-github-header = Invalid GitHub authorization header.
 # $key is the config key or environment variable that holds the client ID,

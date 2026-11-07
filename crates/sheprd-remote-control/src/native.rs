@@ -3,6 +3,7 @@
 //! follows the views it subscribes to. Commands keep the web app's `POST`
 //! routes, so one rate limit and `Origin` policy covers every write.
 
+pub(crate) mod changes;
 mod create;
 mod live;
 mod model;

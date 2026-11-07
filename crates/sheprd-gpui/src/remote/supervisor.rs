@@ -11,6 +11,7 @@ use gpui::{App, BackgroundExecutor, Global, Task};
 use sheprd_remote_control::control::pull_requests::PullRequests;
 use sheprd_remote_control::control::{self, Device, DeviceId, Request, Response, Status};
 
+mod changes;
 mod links;
 mod pull_requests;
 mod update;
@@ -87,6 +88,8 @@ pub(crate) struct Supervisor {
     // keep-sorted start
     /// Where the daemon listens; `None` without a state directory.
     address: Option<PathBuf>,
+    /// Answering phones' questions about workspaces.
+    changes: changes::Changes,
     /// The `[remote]` settings as last loaded.
     config: RemoteConfig,
     devices: Option<Vec<Device>>,
@@ -128,6 +131,7 @@ impl Default for Supervisor {
         Self {
             // keep-sorted start
             address: super::state_dir().ok().map(|dir| control::address(&dir)),
+            changes: changes::Changes::default(),
             config: RemoteConfig::default(),
             devices: None,
             failure: None,
@@ -288,6 +292,8 @@ impl Supervisor {
         if supervisor.health == Health::Off {
             supervisor.health = Health::Unknown;
         }
+        Self::poll_changes(cx);
+        let supervisor = cx.global_mut::<Self>();
         let watched = supervisor.watchers.get() > 0;
         let interval = if watched { WATCHED } else { UNWATCHED };
         let due = supervisor.poke

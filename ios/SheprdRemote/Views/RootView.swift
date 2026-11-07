@@ -224,6 +224,7 @@ extension Route {
         case let .chat(key, title): ChatScreen(key: key, title: title)
         case let .term(key, title): TerminalScreen(key: key, title: title)
         case let .workspace(key): WorkspaceScreen(key: key)
+        case let .changes(key): ChangesScreen(key: key)
         }
     }
 }

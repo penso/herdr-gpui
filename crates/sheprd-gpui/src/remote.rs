@@ -10,6 +10,7 @@
 //! [`dialog`], [`revoke`], and [`indicator`] put them in the window.
 // i18n: migrated
 
+pub(crate) mod changes;
 mod dialog;
 mod indicator;
 pub(crate) use indicator::MENU_WIDTH;
