@@ -54,12 +54,24 @@ final class AppModel {
     @ObservationIgnored private var startPicks = StartPicks()
     /// A new workspace or chat being set up, as a sheet over every tab.
     var creating: Creating?
+    /// A spoken command under way, shown as a sheet over every tab.
+    var voice: VoiceSession?
+    /// A command asked for while the app was locked; the unlock runs it.
+    struct PendingTalk { var words: String? }
+    @ObservationIgnored var pendingTalk: PendingTalk?
+    /// What the last command was about, so the next can say "it".
+    @ObservationIgnored var voiceContext = VoiceContext()
+    /// What each computer last offered a new workspace, by device, so a
+    /// spoken command need not wait for the computers to answer again.
+    @ObservationIgnored var voiceOptions: [String: NewOptions] = [:]
     /// A tab to switch to, from a Control or an intent; the root view
     /// shows it and clears it.
     var pendingTab: RootTab?
     /// Something to tell the person once, such as a first prompt that
     /// did not go; the root view shows it and clears it.
     var notice: String?
+    /// The alert's title for `notice`, when it is not a send that failed.
+    var noticeTitle: String?
     /// What each chat's composer held when the person left it, kept
     /// until they come back, for as long as the app runs.
     @ObservationIgnored var drafts: [PaneKey: ComposerDraft] = [:]
@@ -112,7 +124,7 @@ final class AppModel {
     /// The one model, for intents iOS runs in the app's process.
     static var current: AppModel?
 
-    enum Shortcut { case home, newWorkspace, chat(Route) }
+    enum Shortcut { case home, newWorkspace, chat(Route), talk(saying: String? = nil) }
 
     /// Shows what a Control, an intent, or Spotlight asked for.
     func show(_ shortcut: Shortcut) {
@@ -120,7 +132,69 @@ final class AppModel {
         case .home: pendingTab = .home
         case .newWorkspace: creating = .workspace(device: nil)
         case let .chat(route): pendingRoute = route
+        case let .talk(words): talk(saying: words)
         }
+    }
+
+    /// Opens the voice sheet, listening, or with `words` already said.
+    func talk(saying words: String? = nil) {
+        // A locked app must not start listening behind its cover: this
+        // waits for the unlock, which is why the Action button still works.
+        if LockState.shared.hidesNames {
+            pendingTalk = PendingTalk(words: words)
+            return
+        }
+        guard voice == nil, !fleet.machines.isEmpty else { return }
+        let session = VoiceSession(model: self)
+        voice = session
+        Task { await session.begin(saying: words) }
+    }
+
+    /// Native chats, then agents in terminal tabs that are not also one.
+    private func voiceChats() -> [VoiceCatalog.Chat] {
+        let chats = fleet.chatItems.map { item in
+            VoiceCatalog.Chat(
+                device: item.computer.device,
+                pane: item.chat.pane,
+                title: item.chat.title,
+                computer: displayName(item.computer),
+                question: item.question
+            )
+        }
+        let panes = Set(chats.map(\.id))
+        let terminals = fleet.agentTerminals.compactMap { item -> VoiceCatalog.Chat? in
+            guard let pane = item.terminal.agentPane?.pane, !panes.contains("\(item.computer.device)/\(pane)") else { return nil }
+            // A numbered tab cannot be told apart out loud; its workspace can.
+            let title = Int(item.title) == nil ? item.title : item.workspace.label
+            return VoiceCatalog.Chat(
+                device: item.computer.device,
+                pane: pane,
+                title: title,
+                computer: displayName(item.computer),
+                terminal: true,
+                terminalAgent: item.agent?.name
+            )
+        }
+        return chats + terminals
+    }
+
+    /// What can be named out loud right now.
+    func voiceCatalog() -> VoiceCatalog {
+        VoiceCatalog(
+            computers: fleet.machines.map { machine in
+                let online = if case .online = machine.status { machine.home?.connected != false } else { false }
+                return VoiceCatalog.Computer(
+                    id: machine.id,
+                    name: displayName(machine.computer),
+                    online: online,
+                    home: machine.home,
+                    options: voiceOptions[machine.id]
+                )
+            },
+            chats: voiceChats(),
+            recentDevice: recentDevice,
+            recentAgent: recentAgent
+        )
     }
     let sessions: Sessions
     let tokens: ActivityTokens
@@ -129,7 +203,9 @@ final class AppModel {
     let hostLinks: HostLinks
     let nearby = NearbyBrowser()
     let collapsed = CollapsedStore()
+    let tagFilter = TagFilterStore()
     let shortcuts = ShortcutStore()
+    let termKeys = TermKeyStore()
     let bluetooth = NearbyBluetooth()
     /// Bluetooth presence with the computers that have it on.
     let presence = PresenceCentral()
@@ -166,6 +242,8 @@ final class AppModel {
         hostLinks.computers = { [weak self] in self?.computers ?? [] }
         hostLinks.onPaired = { [weak self] in self?.add($0) }
         fleet.onOnline = { [weak self] in self?.hostLinks.check($0) }
+        fleet.onTags = { [weak self] in self?.tagsArrived($0, for: $1) }
+        fleet.onTagsAnswer = { [weak self] in self?.tagsAnswered($0, for: $1) }
         fleet.onSummary = { [spotlight] in
             let summary = WidgetSummary.load()
             spotlight.update(summary)
@@ -181,6 +259,8 @@ final class AppModel {
     }
 
     func add(_ computer: Computer) {
+        var computer = computer
+        computer.carryTags(from: computers)
         // A computer is its CA: pairing the same CA (or the same device id)
         // again replaces the old record. Names are display only.
         computers.removeAll { $0.fingerprint == computer.fingerprint || $0.device == computer.device }
@@ -196,6 +276,37 @@ final class AppModel {
         guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
         computers[index].presence = on
         save()
+    }
+
+    /// Replaces one computer's tags.
+    func setTags(_ tags: [String], for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        computers[index].tags = tags
+        computers[index].tagsUpdatedMs = UInt64(Date.now.timeIntervalSince1970 * 1000)
+        save()
+        // An edit made away from the computer goes when its home next arrives.
+        fleet.offerTags(for: computers[index])
+    }
+
+    /// What stands after this phone offered tags, which replaces its copy
+    /// even when older: a fast clock here is why they may be.
+    private func tagsAnswered(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }),
+              computers[index].tagsUpdatedMs == computer.tagsUpdatedMs else { return }
+        computers[index].adopt(remote)
+        save()
+    }
+
+    /// The tags `computer` keeps, as its home or an answer reports them.
+    private func tagsArrived(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        switch ComputerTags.step(for: computers[index], remote: remote) {
+        case .none: break
+        case .adopt:
+            computers[index].adopt(remote)
+            save()
+        case .send: fleet.offerTags(for: computers[index])
+        }
     }
 
     /// Addresses a computer sent over Bluetooth, sealed to this phone.

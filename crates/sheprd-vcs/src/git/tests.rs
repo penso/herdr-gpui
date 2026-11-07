@@ -1,7 +1,9 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod ahead;
 mod counted_probes;
+mod focused_status;
 
 #[test]
 fn close_probe_detects_untracked_staged_unstaged_and_unpublished_work() {
@@ -107,6 +109,14 @@ fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
     }
 }
 
+/// Existing injections are dirty exactly when their line counts are.
+fn focused(lines: Status) -> Focused {
+    Focused {
+        lines,
+        dirty: lines.dirty(),
+    }
+}
+
 #[test]
 fn numstat_sums_text_changes_and_ignores_binary_rows() {
     assert_eq!(
@@ -127,7 +137,11 @@ fn status_refreshes_on_a_ttl_and_only_while_the_window_is_active() {
     let (requested, job) = peer.request();
     assert_eq!(requested, input("feature"));
     assert!(matches!(job, Job::Status));
-    peer.complete(requested, Completion::Status(Ok(status(9, 2, 1))), now);
+    peer.complete(
+        requested,
+        Completion::Status(Ok(focused(status(9, 2, 1)))),
+        now,
+    );
     assert_eq!(peer.git.status(), Some(status(9, 2, 1)));
     let early = now + REFRESH - Duration::from_secs(1);
     peer.git.track(Some(input("feature")), true, early);
@@ -162,20 +176,32 @@ fn a_changed_checkout_drops_its_predecessors_status() {
     let (requested, _) = peer.request();
     assert!(peer.git.track(Some(input("other")), true, now));
     assert_eq!(peer.git.status(), None);
-    peer.complete(requested, Completion::Status(Ok(status(9, 2, 0))), now);
+    assert_eq!(peer.git.uncommitted(), None);
+    peer.complete(
+        requested,
+        Completion::Status(Ok(focused(status(9, 2, 0)))),
+        now,
+    );
     assert_eq!(
         peer.git.status(),
         None,
         "a stale checkout cannot paint over the new one"
     );
+    assert_eq!(peer.git.uncommitted(), None);
     peer.git.track(Some(input("other")), true, now);
     peer.git.poll(now);
     let (requested, _) = peer.request();
     assert_eq!(requested, input("other"));
-    peer.complete(requested, Completion::Status(Ok(status(1, 1, 0))), now);
+    peer.complete(
+        requested,
+        Completion::Status(Ok(focused(status(1, 1, 0)))),
+        now,
+    );
     assert_eq!(peer.git.status(), Some(status(1, 1, 0)));
+    assert_eq!(peer.git.uncommitted(), Some(true));
     assert!(peer.git.track(None, true, now));
     assert_eq!(peer.git.status(), None);
+    assert_eq!(peer.git.uncommitted(), None);
 }
 
 #[test]
@@ -248,7 +274,11 @@ fn listed_checkouts_are_probed_round_robin_and_forgotten_when_they_go() {
     let (requested, job) = peer.request();
     assert_eq!(requested, input("feature"));
     assert!(matches!(job, Job::Status));
-    peer.complete(requested, Completion::Status(Ok(status(1, 0, 0))), now);
+    peer.complete(
+        requested,
+        Completion::Status(Ok(focused(status(1, 0, 0)))),
+        now,
+    );
     assert_eq!(peer.git.dirty("/repo/.git", "feature"), Some(true));
     peer.git.poll(now);
     let (requested, job) = peer.request();

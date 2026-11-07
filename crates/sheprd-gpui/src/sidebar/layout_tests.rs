@@ -39,6 +39,8 @@ mod device_removing;
 #[cfg(test)]
 mod device_sessions_unfold;
 #[cfg(test)]
+mod device_tag_groups;
+#[cfg(test)]
 mod devices_layout;
 #[cfg(test)]
 mod gpu_line;
@@ -60,6 +62,8 @@ mod listening_ports;
 mod local_counts_chip;
 #[cfg(test)]
 mod mark_sizes;
+#[cfg(test)]
+mod minimal_pull_requests;
 #[cfg(test)]
 mod mod_places;
 #[cfg(test)]
@@ -612,6 +616,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         wsl_paste: None,
         editor_open: None,
         editor_panes: Vec::new(),
+        editor_returns: Vec::new(),
         teleport: None,
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,
@@ -689,6 +694,9 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         status_bar_visible: true,
         zen: Default::default(),
         device_filter: Default::default(),
+        device_tag_filter: None,
+        device_tag_folds: Default::default(),
+        device_tags: Default::default(),
         endpoints: vec![crate::endpoint::Endpoint::new(
             crate::endpoint::LOCAL.into(),
             "Local".into(),
@@ -808,6 +816,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<SheprdWindow>
         _notification_mutes: SheprdWindow::observe_notification_mutes(cx),
         browser: crate::browser::Browser::new(cx),
         _browser_tabs: cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify()),
+        _device_tags: cx.observe_global::<crate::device_tags::DeviceTags>(|_, cx| cx.notify()),
         _worktree_notes: SheprdWindow::observe_worktree_notes(window, cx),
         prefix_armed: false,
         resize_mode: false,

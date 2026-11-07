@@ -1,9 +1,9 @@
 # Sandboxes
 
 How Sheprd gives agents isolated machines: containers on this computer,
-Fly Sprites, a self-hosted OpenSandbox server, and the existing cloud
+Fly Sprites, boxd, a self-hosted OpenSandbox server, and the existing cloud
 providers. User-facing behavior is in the
-crate README's "Containers (Docker or Podman)", "OpenSandbox", "Fly Sprites",
+crate README's "Containers (Docker or Podman)", "OpenSandbox", "Fly Sprites", "boxd",
 and "Smart Dispatch" sections; this page records the design and is for working on it.
 
 ## Decision: a sandbox is a device
@@ -33,7 +33,7 @@ Paths are in `crates/sheprd-remote/src/`, which has no GPUI, unless they name
 | --- | --- |
 | Provider registry, `SandboxProvider` | `cloud/providers.rs`: one `providers!` row per provider generates the name, logo, connector, background command, deletion, on-demand provisioning, and `cloud::ProviderError`. No async trait: everything blocks on workers. |
 | Session manager (PTY, reconnect) | The sandbox's own Herdr daemon, through `sheprd_client::connect_command`. |
-| Exec / attach | The provider's command: `docker exec -i`, `ssh`, or this app as a relay (`azure/sandbox/relay.rs`, `sprites/relay.rs`, `opensandbox/relay.rs`, sharing `cloud/socket.rs`). |
+| Exec / attach | The provider's command: `docker exec -i`, `ssh`, or this app as a relay (`azure/sandbox/relay.rs`, `sprites/relay.rs`, `opensandbox/relay.rs`, `boxd/relay.rs`, sharing `cloud/socket.rs`). |
 | Git sync | `teleport/`: `fresh.rs` (new worktree from a base commit, cloned or bundled), `carry.rs`, and Teleport itself, untracked files included. |
 | Workspace lifecycle | `crates/sheprd-gpui/src/cloud/jobs.rs` (create with progress), `cloud/catalog.rs` (saved devices), provider `setup.rs` (create, delete, roll back a failed create). |
 | Dirty-state warning before delete | `cloud/unsynced.rs`, shown by the sidebar's Remove dialog. |
@@ -76,8 +76,10 @@ stream to an arbitrary command exists.
 | E2B | Only through envd's Connect RPC (base64 JSON, one POST per stdin chunk); its CLI decodes output as text, which breaks binary data | Not built: costlier than Sprites for the same result. |
 | OpenSandbox | Yes: execd's PTY session runs a command, and its WebSocket in pipe mode carries stdin, stdout, and stderr unchanged; it has no stdin EOF, so the relay frames input for a wrapper that ends it | Shipped as experimental. Live-tested against `opensandbox-server` (execd v1.1.0) on Docker: binary input with EOF, exit codes, install, entrypoint server, delete. |
 | Azure Container Apps sandboxes | Exec WebSocket on a terminal only | Already shipped, with a relay that works around the terminal. |
+| boxd | Yes: the `Exec` gRPC stream, which boxd also serves as grpc-web over HTTP/1.1 full duplex (a chunked request body for stdin, ended for EOF; stdout and stderr apart; the exit code last) | Shipped as experimental. Live-tested against boxd: binary input with EOF, exit codes, install, bridge, wake from standby and hibernation, start after stop, delete. |
 
-Sources: [OpenSandbox execd PTY sessions](https://github.com/opensandbox-group/OpenSandbox/blob/main/components/execd/PTY.md),
+Sources: [boxd API reference](https://docs.boxd.sh/llms-full.txt?ref=sheprd),
+[OpenSandbox execd PTY sessions](https://github.com/opensandbox-group/OpenSandbox/blob/main/components/execd/PTY.md),
 [Sprites exec WebSocket](https://docs.fly.io/sprites/api/websockets/execute-command.md),
 [Sprites lifecycle](https://docs.fly.io/sprites/concepts/lifecycle.md),
 [E2B process API](https://github.com/e2b-dev/infra/blob/main/packages/envd/spec/process/process.proto),
@@ -114,7 +116,7 @@ with until its recipe changes or it is reset.
   apart (no host files, no engine socket, no host network, an unprivileged
   user, `no-new-privileges`, CPU, memory, and process limits) but are not a
   boundary against hostile code. The card and README say so.
-- **VMs and microVMs** (Azure VMs, sprites) isolate the kernel. They do not
+- **VMs and microVMs** (Azure VMs, sprites, boxd machines) isolate the kernel. They do not
   stop a credential deliberately given to them from leaving.
 - **Credentials**: a provider's API token stays on this computer; relays read
   it from the credential store and send it only to the configured API root.

@@ -120,7 +120,15 @@ pub(super) fn workspace_badge(
         return RowBadge::new(None, None, false, false, false, muted);
     };
     let ((marks, endpoint), (git, counts)) = (marks, git);
-    let pr = pr.and_then(|(cache, view)| cache.peek(view, key, branch));
+    let ahead = git.and_then(|git| git.ahead(key, branch));
+    // Commits past a merged pull request need a new one, so its number and
+    // counts give way rather than read as covering them.
+    let unopened = pr
+        .zip(ahead)
+        .is_some_and(|((cache, view), ahead)| cache.unopened(view, key, branch, &ahead.head));
+    let pr = pr
+        .filter(|_| !unopened)
+        .and_then(|(cache, view)| cache.peek(view, key, branch));
     let counts = match counts {
         ChangeCounts::PullRequest => pr
             .as_ref()
@@ -132,7 +140,8 @@ pub(super) fn workspace_badge(
             .map(|status| Counts::local(status.additions, status.deletions)),
     };
     RowBadge::new(
-        pr.map(|pr| PrBadge::new(&pr, theme)),
+        pr.map(|pr| PrBadge::new(&pr, theme))
+            .or_else(|| unopened.then(|| PrBadge::unopened(theme))),
         counts,
         git.and_then(|git| git.dirty(key, branch)).unwrap_or(false),
         marks.find(endpoint, key, branch).is_some(),

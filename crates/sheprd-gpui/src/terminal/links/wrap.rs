@@ -166,7 +166,7 @@ impl<'a> Area<'a> {
                 .is_some_and(|cell| !blank(cell))
         };
         let mut first = row;
-        while row - first < MAX_WRAPPED_ROWS && first.checked_sub(1).is_some_and(&filled) {
+        while row - first < MAX_WRAPPED_ROWS && first.checked_sub(1).is_some_and(filled) {
             first -= 1;
         }
         let top = self.cells(first)?;

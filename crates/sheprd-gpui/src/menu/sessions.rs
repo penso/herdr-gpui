@@ -299,7 +299,7 @@ impl SheprdWindow {
             .sessions
             .mutation_target
             .as_ref()
-            .is_some_and(&matches_target);
+            .is_some_and(matches_target);
         let remaining = self
             .sessions
             .departure

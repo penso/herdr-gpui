@@ -3,6 +3,8 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // keep-sorted start
+    #[error("keybindings.{0}: prefix- needs the key typed after the prefix")]
+    ChordWithoutKey(&'static str),
     #[error("keybindings: {keystroke:?} is bound to both {first} and {second}")]
     DuplicateKeystroke {
         keystroke: String,

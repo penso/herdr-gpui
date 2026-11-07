@@ -6,6 +6,7 @@ use crate::orchestrator::{
 use chrono::{DateTime, Utc};
 use sheprd_client::protocol::AgentStatus;
 
+mod author_column;
 mod clicks;
 mod conversation;
 mod conversation_list;
@@ -21,6 +22,7 @@ mod non_projects;
 mod outside_git;
 mod pills;
 mod pr_empty;
+mod pr_standing;
 mod refresh;
 mod repo_name;
 mod review_requested;
@@ -30,6 +32,7 @@ mod sessions;
 mod sign_in;
 mod source_chip;
 mod status;
+mod tasks;
 mod twin_text;
 mod twins;
 
@@ -67,6 +70,8 @@ fn item(provider: Provider, id: &str, title: &str, updated: &str) -> Item {
         labels: Vec::new(),
         parent_id: None,
         blocked_by: Vec::new(),
+        assignee: None,
+        acceptance: None,
         priority: None,
         created_at: Some(at(updated)),
         updated_at: Some(at(updated)),

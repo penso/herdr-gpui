@@ -80,7 +80,7 @@ pub(crate) fn bind(keymap: &Keymap) {
     let keys = keymap
         .bindings()
         .filter(|(command, _)| leaves_page(*command))
-        .filter_map(|(_, label)| Keystroke::parse(label).ok())
+        .filter_map(|(_, label)| crate::keymap::parse_keystroke(label).ok())
         .map(KeybindingKeystroke::from_keystroke)
         .collect();
     LEAVING.with(|leaving| *leaving.borrow_mut() = keys);

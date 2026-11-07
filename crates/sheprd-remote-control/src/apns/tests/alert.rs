@@ -2,10 +2,10 @@
 //! 4 KB bound, and the fixture the Swift package opens.
 
 use crate::apns::{
+    Priority, PushType,
     alert::{MAX_OPTIONS, Sealed, push},
     payload::MAX_PAYLOAD,
     seal::{INFO, seal_with},
-    send::{Priority, PushType},
 };
 use crate::push::{Kind, Notification, Urgency};
 use aes_gcm::{Aes256Gcm, KeyInit as _, aead::Aead as _, aead::Payload};
@@ -25,13 +25,13 @@ fn device() -> SecretKey {
 
 /// Seals as production does, with fixed one-time values.
 fn fixed_seal(plaintext: &[u8]) -> crate::apns::Result<Vec<u8>> {
-    seal_with(
+    Ok(seal_with(
         &device().public_key(),
         plaintext,
         INFO,
         &SecretKey::from_slice(&[9; 32]).unwrap(),
         &[1; 12],
-    )
+    )?)
 }
 
 /// Opens `sealed` (base64url) with the device key, as the app does.

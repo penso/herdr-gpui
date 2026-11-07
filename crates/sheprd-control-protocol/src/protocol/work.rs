@@ -13,6 +13,10 @@ pub enum WorkOp {
     Note,
     /// Replace the caller's checkout's note; empty text clears it.
     SetNote { text: String },
+    /// Whether the caller's workspace is muted.
+    MuteStatus,
+    /// Mute or unmute the caller's workspace.
+    Mute { muted: bool },
     /// Open the checkpoints of the caller's checkout, with `id` chosen to
     /// restore once the user confirms.
     Restore {
@@ -52,6 +56,17 @@ pub struct NoteInfo {
     pub text: String,
 }
 
+/// The caller's workspace's mute.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MuteInfo {
+    pub host: String,
+    pub workspace: String,
+    /// The workspace itself is muted.
+    pub muted: bool,
+    /// Its whole host is muted, which silences it either way.
+    pub host_muted: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Reply {
@@ -63,6 +78,9 @@ pub enum Reply {
     },
     Note {
         note: Option<NoteInfo>,
+    },
+    Mute {
+        mute: MuteInfo,
     },
 }
 

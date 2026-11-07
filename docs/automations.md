@@ -229,10 +229,19 @@ unit (Linux) or a logon task (Windows), printing what it writes. No admin
 rights are needed. The service runs the executable that installed it, with
 that command's `PATH` and state and config directories, so a
 `HERDR_AUTOMATE_HOME` or XDG directory set only in your shell still applies;
-run `install-service` again after moving either. The daemon restarts after a crash; `shutdown` stops it
-after its runs and it stays stopped. On a headless Linux host, a user unit
+run `install-service` again after moving either. The daemon restarts after a crash; `shutdown` stops its
+runs, then the daemon, and it stays stopped. On a headless Linux host, a user unit
 only runs while the user is logged in unless lingering is on
 (`loginctl enable-linger`); `install-service` does not change that for you.
+
+Updating the app does not update a running daemon. When a daemon runs another
+version than the app ships, its host's card under Automations offers
+**Update to VERSION**, on this computer as on a remote host: it copies the
+app's build into `~/.local/share/herdr-automate/bin/VERSION/`, relinks
+`~/.local/bin`, stops the daemon, and starts the new one through a service that
+names the copy. `shutdown` stops every run, so the update refuses while any is
+going: try again once they finish. On Windows, this computer's card offers
+no update, because the copy needs a shell.
 
 State lives in `~/.local/state/herdr-automate` (`%LOCALAPPDATA%` on
 Windows): the database, the daemon's log, and each run's step output.

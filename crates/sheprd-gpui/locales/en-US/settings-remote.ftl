@@ -45,6 +45,10 @@ settings-remote-section-notifications = Notifications
 settings-remote-notifications-note = Generic says which chat needs you without its text; Excerpt adds a short excerpt of the message.
 settings-remote-privacy-generic = Generic
 settings-remote-privacy-excerpt = Excerpt
+settings-remote-live-activities = Live Activities
+settings-remote-live-activities-note = Detailed shows the chat and its current step on a paired iPhone's lock screen; questions and their answer buttons also need Excerpt. Generic shows only the agent and what it is doing in general. A phone can ask for less in its own settings.
+settings-remote-live-activities-detailed = Detailed
+settings-remote-live-activities-generic = Generic
 
 settings-remote-section-devices = Devices
 settings-remote-idle-note = A device that has not connected for this long is forgotten and must pair again.

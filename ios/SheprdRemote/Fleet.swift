@@ -16,6 +16,8 @@ struct ChatItem: Identifiable, Hashable {
     /// When the agent last answered: the computer's time, else when this
     /// phone saw it.
     var lastAnswer: Date?
+    /// The composer holds something not sent yet.
+    var drafted = false
 
     var id: String { "\(computer.device)/\(chat.pane)" }
     var key: PaneKey { PaneKey(device: computer.device, pane: chat.pane) }
@@ -78,9 +80,13 @@ final class Fleet {
         /// changed in between as it happened.
         var watching = false
         var id: String { computer.device }
+        /// The computer answered and runs a Sheprd too old for this app. A
+        /// cached `home` may predate an update, so only a fresh one counts.
+        var needsUpdate: Bool { !stale && home?.needsUpdate == true }
     }
 
     private(set) var machines: [Machine] = []
+    private var drafts = DraftMarks<PaneKey>()
     private var links: [String: ComputerLink] = [:]
     private var readers: [String: Task<Void, Never>] = [:]
     private var chats: [PaneKey: ChatStore] = [:]
@@ -91,6 +97,12 @@ final class Fleet {
     @ObservationIgnored private var termViewers: [PaneKey: Int] = [:]
     /// One client per computer, kept while its address and CA stay.
     @ObservationIgnored private var clients: [String: RemoteClient] = [:]
+    /// Calls that got no answer, for the computer's log once it is back.
+    @ObservationIgnored private var unreported: [String: UnreportedFailures] = [:]
+    /// Addresses named in a report, which the daemon cuts at 600 characters.
+    private static let failuresReported = 6
+    /// Computers a report is on its way to, so only one task sends them.
+    @ObservationIgnored private var reporting: Set<String> = []
     /// Commands sent to chats that have not come back yet.
     let pending = PendingCommands()
     private var active = false
@@ -108,6 +120,8 @@ final class Fleet {
         for machine in machines where !wanted.contains(machine.id) {
             stopLink(machine.id)
             cache.clear(machine.id)
+            unreported[machine.id] = nil
+            drafts.forget { $0.device == machine.id }
         }
         machines = computers.map { computer in
             if var known = machines.first(where: { $0.id == computer.device }) {
@@ -130,6 +144,7 @@ final class Fleet {
                 answers: cache.answers(computer.device)
             )
         }
+        machines.forEach(discoverDrafts)
         if active { machines.forEach { startLink($0.computer) } }
         // From the cached homes at launch, and without forgotten ones.
         publishSummary()
@@ -156,6 +171,44 @@ final class Fleet {
         for link in links.values { Task { await link.networkChanged() } }
     }
 
+    // MARK: Drafts
+
+    /// Keeps what a chat's composer holds across launches; `nil` removes it,
+    /// unless another window's composer still holds a draft of that chat.
+    func save(draft: Cache.Draft?, for key: PaneKey, by composer: UUID? = nil) {
+        let emptied = drafts.set(key, drafted: draft != nil, by: composer)
+        guard draft != nil || emptied else { return }
+        cache.save(draft: draft, device: key.device, pane: key.pane)
+    }
+
+    /// The composer changed, for a list beside it on iPad.
+    func composer(_ composer: UUID, in key: PaneKey, drafted: Bool) {
+        drafts.set(key, drafted: drafted, by: composer)
+    }
+
+    func composerOpened(_ composer: UUID, in key: PaneKey) {
+        drafts.open(key, composer: composer)
+    }
+
+    func composerClosed(_ composer: UUID, in key: PaneKey) {
+        drafts.close(key, composer: composer)
+    }
+
+    /// Empties the cache, the drafts kept in it with the rest. A chat still
+    /// open keeps its mark, as its composer holds its draft and saves it
+    /// again on leaving.
+    func clearCache() {
+        cache.clear()
+        let open = chats
+        drafts.forget { open[$0] == nil }
+    }
+
+    private func discoverDrafts(on machine: Machine) {
+        let device = machine.id
+        let panes = (machine.home?.workspaces ?? []).flatMap(\.chats).map { PaneKey(device: device, pane: $0.pane) }
+        drafts.discover(panes) { cache.hasDraft($0.device, pane: $0.pane) }
+    }
+
     // MARK: Lists
 
     var chatItems: [ChatItem] {
@@ -170,7 +223,8 @@ final class Fleet {
                         workspace: workspace,
                         chat: chat,
                         answered: answered,
-                        lastAnswer: ended ?? machine.answers[chat.pane]
+                        lastAnswer: ended ?? machine.answers[chat.pane],
+                        drafted: drafts.marked.contains(key)
                     )
                 }
             }
@@ -238,6 +292,13 @@ final class Fleet {
     @ObservationIgnored var onSummary: (() -> Void)?
     /// Called when a computer's link comes online, for host pairing.
     @ObservationIgnored var onOnline: ((Computer) -> Void)?
+    /// The tags a computer's home reports.
+    @ObservationIgnored var onTags: ((Home.Tags, Computer) -> Void)?
+    /// What stood after this phone offered `Computer`'s tags.
+    @ObservationIgnored var onTagsAnswer: ((Home.Tags, Computer) -> Void)?
+    /// Devices with an offer of tags on its way, so a home arriving
+    /// meanwhile does not send it again.
+    @ObservationIgnored private var tagOffers = TagOffers<Computer>()
 
     // MARK: Views
 
@@ -340,15 +401,79 @@ final class Fleet {
         guard let machine = machines.first(where: { $0.id == device }),
               case let .online(origin) = machine.status
         else { throw FleetError.offline(machines.first { $0.id == device }?.computer.name ?? "The computer") }
-        let token = try await sessions.token(for: machine.computer, at: origin)
-        let client: RemoteClient
-        if let known = clients[device], known.origin == origin, known.fingerprint == machine.computer.fingerprint {
-            client = known
-        } else {
-            client = RemoteClient(origin: origin, fingerprint: machine.computer.fingerprint)
-            clients[device] = client
+        let started = ContinuousClock.now
+        do {
+            let token = try await sessions.token(for: machine.computer, at: origin)
+            let client: RemoteClient
+            if let known = clients[device], known.origin == origin, known.fingerprint == machine.computer.fingerprint {
+                client = known
+            } else {
+                client = RemoteClient(origin: origin, fingerprint: machine.computer.fingerprint)
+                clients[device] = client
+            }
+            return try await body(client, token)
+        } catch where PathFailure.isDead(error) {
+            pathFailed(error, device: device, origin: origin, started: started)
+            throw error
         }
-        return try await body(client, token)
+    }
+
+    /// A call got no answer: the link looks for an address that gives one,
+    /// and the client goes, as its open connections use the dead path. The
+    /// call is not sent again, as it may have reached the computer.
+    private func pathFailed(_ error: Error, device: String, origin: String, started: ContinuousClock.Instant) {
+        let summary = PathFailure.summary(error, after: ContinuousClock.now - started)
+        let line = "\(PathFailure.route((error as? URLError)?.failingURL)) at \(origin): \(summary)"
+        log.error("no answer from \(device, privacy: .public): \(line, privacy: .public)")
+        clients[device] = nil
+        unreported[device, default: UnreportedFailures()].add(line)
+        Task { await links[device]?.pathFailed(origin, started: started) }
+        // The link may already be back elsewhere, with no update to come.
+        reportFailures(of: device)
+    }
+
+    /// Tells the computer, while it answers, what this phone saw while it
+    /// did not: the daemon's log otherwise shows only silence. What it does
+    /// not take waits for the next failure or the next time it comes online.
+    private func reportFailures(of device: String) {
+        guard !reporting.contains(device) else { return }
+        reporting.insert(device)
+        Task {
+            defer { reporting.remove(device) }
+            var client: RemoteClient?
+            var refused: String?
+            while let line = unreported[device]?.lines.first,
+                  let computer = machines.first(where: { $0.id == device })?.computer,
+                  case let .online(origin)? = machines.first(where: { $0.id == device })?.status,
+                  origin != refused {
+                let reporter = client?.origin == origin ? client : RemoteClient(origin: origin, fingerprint: computer.fingerprint)
+                client = reporter
+                do {
+                    try await reporter?.report(context: "ios network", message: "\(line); back at \(origin)")
+                    unreported[device]?.accepted(line)
+                } catch {
+                    refused = origin
+                    log.error("could not report to \(computer.name, privacy: .public): \(String(describing: error), privacy: .public)")
+                }
+            }
+        }
+    }
+
+    /// Offers `computer` this phone's copy of its tags. A computer that is
+    /// away or too old to keep tags refuses; the copy stays, and its next
+    /// home brings this back.
+    func offerTags(for computer: Computer) {
+        guard tagOffers.begin(computer.device, computer, edit: computer.tagsUpdatedMs) else { return }
+        let offer = Home.Tags(tags: computer.tags, updatedMs: computer.tagsUpdatedMs)
+        Task {
+            defer {
+                if let next = tagOffers.finish(computer.device) { offerTags(for: next) }
+            }
+            guard let answer = try? await call(computer.device, { client, token in
+                try await client.offerTags(offer, bearer: token)
+            }) else { return }
+            onTagsAnswer?(answer, computer)
+        }
     }
 
     /// Closes the pane a chat runs in, which stops its agent in Sheprd.
@@ -365,6 +490,15 @@ final class Fleet {
         let pane = key.pane
         try await call(key.device) { client, token in
             try await client.rename(label, pane: pane, bearer: token)
+        }
+    }
+
+    /// Names a workspace; the next `home` from the computer carries the
+    /// name to every list.
+    func renameWorkspace(_ key: WorkspaceKey, to label: String) async throws {
+        let workspace = key.workspace
+        try await call(key.device) { client, token in
+            try await client.renameWorkspace(workspace, to: label, bearer: token)
         }
     }
 
@@ -402,11 +536,22 @@ final class Fleet {
         guard let index = machines.firstIndex(where: { $0.id == device }) else { return }
         switch update {
         case let .status(status):
+            log.notice("\(self.machines[index].computer.name, privacy: .public) is \(String(describing: status), privacy: .public)")
             machines[index].status = status
             if case .online = status {} else { machines[index].watching = false }
             if case .revoked = status { stopLink(device) }
-            if case .online = status { onOnline?(machines[index].computer) }
+            if case .online = status {
+                onOnline?(machines[index].computer)
+                reportFailures(of: device)
+            }
+        case let .unreachable(failures):
+            // Kept for the computer's log, which shows only silence for
+            // this: nothing here reached it.
+            let line = "offline from \(Date.now.ISO8601Format()): " + failures.prefix(Self.failuresReported).joined(separator: "; ")
+            log.error("\(self.machines[index].computer.name, privacy: .public) \(line, privacy: .public)")
+            unreported[device, default: UnreportedFailures()].add(line)
         case let .event(.home(home)):
+            if let tags = home.tags { onTags?(tags, machines[index].computer) }
             // The computer's load moves every few seconds; only the header
             // shows it, so the cache, widgets, and Spotlight wait for a
             // change to the workspaces.
@@ -425,6 +570,7 @@ final class Fleet {
             machines[index].stale = false
             machines[index].watching = true
             machines[index].updated = .now
+            discoverDrafts(on: machines[index])
             cache.save(home: home, device: device)
             for key in Set(pending.items.filter { $0.key.device == device }.map(\.key)) {
                 pending.settle(key) { shown($0) }

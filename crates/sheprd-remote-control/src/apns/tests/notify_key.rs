@@ -4,6 +4,7 @@
 use super::*;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::SecretKey;
+use secrecy::ExposeSecret as _;
 
 fn notify_key() -> String {
     URL_SAFE_NO_PAD.encode(
@@ -23,7 +24,7 @@ fn an_alert_token_and_notify_key_register_for_sealed_alerts() {
     );
     let registration = Registration::parse(body.as_bytes()).unwrap();
     let (token, key) = registration.alerts().unwrap();
-    assert_eq!(token.as_str(), "9f".repeat(32));
+    assert_eq!(token.expose_secret(), "9f".repeat(32));
     assert_eq!(*key, SecretKey::from_slice(&[5; 32]).unwrap().public_key());
     // Stored and read back as the app sent it.
     let stored = registration.to_stored().unwrap().unwrap();

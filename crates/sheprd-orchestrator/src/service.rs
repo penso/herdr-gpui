@@ -7,7 +7,7 @@ use super::{
     Access, CheckState, Error, HerdrSession, Item, PrStatus, Provider, Result, Run, SourceKey,
     Store,
     actions::{Action, Site},
-    beads, database_path, github, gitlab,
+    azure, beads, database_path, github, gitlab,
     location::{database_path_in, legacy_path, legacy_path_in},
     naming,
     prompt::{self, Profile},
@@ -19,7 +19,7 @@ use chrono::{DateTime, Utc};
 use sheprd_client::ConnectTarget;
 use sheprd_github::Tokens;
 use sheprd_remote::teleport::{AgentKind, Host};
-use sources::{recognize, statuses};
+use sources::{recognize, replaced_by, statuses};
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
@@ -31,6 +31,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod azure_source;
 mod github_source;
 mod gitlab_source;
 mod schedule;
@@ -75,6 +76,8 @@ pub fn retry_wait(error: &Error, cooldown: Option<Duration>) -> Duration {
             sheprd_github::Error::RepositoryHidden { .. } => HIDDEN_BACKOFF,
             _ => BACKOFF,
         },
+        Error::Azure(source) if source.needs_user() => HIDDEN_BACKOFF,
+        Error::Azure(_) => BACKOFF,
         Error::Gitlab(source) if source.needs_user() => HIDDEN_BACKOFF,
         Error::Gitlab(_) => BACKOFF,
         _ => return BACKOFF,
@@ -237,6 +240,7 @@ impl Service {
             retry: Vec::new(),
             uncached: HashMap::new(),
             resume: HashMap::new(),
+            azure_token: None,
             gitlab_token: None,
             cooldown: None,
             visible: visible.clone(),
@@ -333,6 +337,9 @@ struct Worker {
     /// and a refusal look again, so a new `glab auth login` or a renewed
     /// connected account is picked up without reopening the view.
     gitlab_token: Option<(String, Option<gitlab::account::Found>)>,
+    /// The Azure DevOps token, once looked up; Refresh and a refusal look
+    /// again, so a new `az login` is picked up without reopening the view.
+    azure_token: Option<Option<azure::token::Token>>,
     cooldown: Option<Duration>,
     /// Whether the view is on screen, as the UI last said.
     visible: Arc<AtomicBool>,
@@ -414,6 +421,7 @@ impl Worker {
     fn refreshed(&mut self, token: Option<Tokens>) {
         self.request.token = token;
         self.gitlab_token = None;
+        self.azure_token = None;
         self.retry.clear();
         self.checks.clear();
     }
@@ -440,7 +448,7 @@ impl Worker {
             self.notice(Err(Arc::new(Error::Busy)));
             return;
         }
-        let resync = matches!(action, Action::DeleteBead { .. });
+        let resync = action.changes_items();
         let (notices, commands, actions) = (
             self.notices.clone(),
             self.commands.clone(),
@@ -583,6 +591,7 @@ impl Worker {
                 tracing::debug!(%error, "Cannot cache the repository");
             }
         }
+        self.settle_beads(&info)?;
         if let Some(branches) = extras.branches {
             self.snapshot.branches = Arc::new(branches);
             self.branches_fresh = true;
@@ -682,8 +691,10 @@ impl Worker {
         };
         self.data_version = Some(store.data_version()?);
         let mut items = store.items()?;
+        sources::keep_current_beads(&mut items, self.snapshot.repo.as_ref());
         if !self.uncached.is_empty() {
-            items.retain(|item| !self.uncached.contains_key(&item.key.source));
+            let replaced = replaced_by(&self.uncached);
+            items.retain(|item| !replaced.contains(&item.key.source));
             items.extend(self.uncached.values().flatten().cloned());
         }
         self.snapshot.items = Arc::new(items);
@@ -827,6 +838,7 @@ impl Worker {
                 Some(tokens) => self.github_listing(key, tokens),
                 None => Ok(SyncState::SignIn),
             },
+            Provider::Azure => self.sync_azure(key, writable),
             Provider::Gitlab => {
                 let previous = store.checkpoint(key)?;
                 let listing = self.gitlab_listing(key, previous.as_ref())?;

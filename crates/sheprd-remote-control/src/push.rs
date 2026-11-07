@@ -31,7 +31,7 @@ pub(crate) use subscription::Subscription;
 pub(crate) use throttle::Throttle;
 pub use triggers::Privacy;
 pub(crate) use triggers::{Chat, Kind, Notification, decide, excerpt};
-pub(crate) use vapid::{Vapid, is_private};
+pub(crate) use vapid::Vapid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

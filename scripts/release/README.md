@@ -348,6 +348,10 @@ The maintainer has to:
    and URLs, and submit. Until that version is merged, the job only prints a
    warning.
 
+Without `WINGET_TOKEN` the job also prints a warning and submits nothing, so a
+release does not fail while winget is not set up. Once winget is live, that
+warning is the only sign a lost token leaves.
+
 ## Updater Signing
 
 These scripts publish the exact Sheprd names accepted by the deployed
@@ -373,7 +377,8 @@ The compatibility exceptions are intentional:
   **`Herdr.app`**, so an old running updater can reopen it. The cask exposes
   `sheprd` on PATH. Moving that target or cask token needs a separate migration.
 - Linux packages retain package ownership **`herdr-gpui`**, version `VERSION-1`,
-  desktop ID `so.pen.herdr-gpui`, and a real root-owned `/usr/bin/herdr-gpui`.
+  and a real root-owned `/usr/bin/herdr-gpui`. The desktop ID is
+  `org.sheprd.Sheprd`, matching the app's Wayland app ID and X11 `WM_CLASS`.
   They also install `/usr/bin/sheprd` and both names of each owned helper.
   These are regular copies, not shell shims or symlinks.
   Distro packaging accepts only the standalone tree's exact `bin/herdr-gpui ->

@@ -96,6 +96,8 @@ impl SheprdWindow {
         let browser = crate::browser::Browser::new(cx);
         // Another window, or an agent, may open or close a tab.
         let browser_tabs = cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify());
+        let device_tags = crate::device_tags::DeviceTags::current(cx);
+        let device_tags_changed = Self::observe_device_tags(cx);
         let worktree_notes = Self::observe_worktree_notes(window, cx);
         let notification_mutes = Self::observe_notification_mutes(cx);
         let prefix_interceptor = Self::intercept_prefix(window, cx);
@@ -129,6 +131,7 @@ impl SheprdWindow {
             _activation: activation,
             _appearance: appearance_change,
             _browser_tabs: browser_tabs,
+            _device_tags: device_tags_changed,
             _host_theme: host_theme,
             _notification_mutes: notification_mutes,
             _poll: poll,
@@ -175,12 +178,16 @@ impl SheprdWindow {
             device_drag: None,
             device_filter: Default::default(),
             device_order: Vec::new(),
+            device_tag_filter: None,
+            device_tag_folds: Default::default(),
+            device_tags,
             device_themes: Default::default(),
             devices_overview: Default::default(),
             dispatch_job: None,
             dispatch_setups: Default::default(),
             editor_open: None,
             editor_panes: Vec::new(),
+            editor_returns: Vec::new(),
             endpoints: vec![endpoint::Endpoint::new(
                 endpoint::LOCAL.into(),
                 // i18n: data

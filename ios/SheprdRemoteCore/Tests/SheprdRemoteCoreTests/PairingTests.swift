@@ -144,5 +144,13 @@ final class PairingTests: XCTestCase {
             with: JSONEncoder().encode(API.APNsRegistration(pushToStart: nil, activities: []))
         ) as? [String: Any]
         XCTAssertNil(none?["push_to_start"])
+        // Older daemons refuse keys they do not know, so the default stays
+        // off the wire.
+        XCTAssertNil(none?["activity_detail"])
+
+        let generic = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(API.APNsRegistration(pushToStart: nil, activities: [], genericActivities: true))
+        ) as? [String: Any]
+        XCTAssertEqual(generic?["activity_detail"] as? String, "generic")
     }
 }

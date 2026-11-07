@@ -113,7 +113,7 @@ impl sheprd_backend::Changes for CoreChanges {
         let mut changes = Vec::new();
         for notice in self.subscription.next(timeout)? {
             match notice {
-                Notice::Heartbeat { .. } => {}
+                Notice::Doc { .. } | Notice::Heartbeat { .. } => {}
                 Notice::Missed { seq, terminals } => {
                     self.seq = seq;
                     self.records = terminals

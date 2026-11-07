@@ -9,17 +9,15 @@ struct AgentIcon: View {
     var size: CGFloat = 28
 
     private var look: (mark: String, tile: AnyShapeStyle, ink: Color) {
-        let name = (agent ?? "").lowercased()
-        let plain = AnyShapeStyle(.fill.secondary)
-        // Copilot before Pi: "copilot" holds "pi".
-        if name.contains("claude") { return ("claude", AnyShapeStyle(Color(red: 0xD9 / 255, green: 0x64 / 255, blue: 0x3A / 255)), .white) }
-        if name.contains("codex") { return ("codex", AnyShapeStyle(Color(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255)), .white) }
-        if name.contains("gemini") { return ("gemini", AnyShapeStyle(Color(red: 0x3B / 255, green: 0x7C / 255, blue: 0xF0 / 255)), .white) }
-        if name.contains("copilot") { return ("copilot", AnyShapeStyle(Color(red: 0x6E / 255, green: 0x40 / 255, blue: 0xC9 / 255)), .white) }
-        if name.contains("opencode") { return ("opencode", plain, .primary) }
-        if name.contains("amp") { return ("amp", plain, .primary) }
-        if name.contains("pi") { return ("pi", plain, .primary) }
-        return ("generic", plain, .primary)
+        let mark = AgentMark.named(agent)
+        let brand: [String: Color] = [
+            "claude": Color(red: 0xD9 / 255, green: 0x64 / 255, blue: 0x3A / 255),
+            "codex": Color(red: 0x11 / 255, green: 0x11 / 255, blue: 0x11 / 255),
+            "gemini": Color(red: 0x3B / 255, green: 0x7C / 255, blue: 0xF0 / 255),
+            "copilot": Color(red: 0x6E / 255, green: 0x40 / 255, blue: 0xC9 / 255),
+        ]
+        guard let tile = brand[mark] else { return (mark, AnyShapeStyle(.fill.secondary), .primary) }
+        return (mark, AnyShapeStyle(tile), .white)
     }
 
     var body: some View {
@@ -140,6 +138,11 @@ struct ChatRowLabel: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(item.chat.title).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    if item.drafted {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.body).foregroundStyle(.tint)
+                            .accessibilityLabel("Draft not sent")
+                    }
                     if item.working, let started = item.chat.summary?.turnStartedMs {
                         Text(timerInterval: Date(timeIntervalSince1970: Double(started) / 1000)...Date.distantFuture, countsDown: false)
                             .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
@@ -151,14 +154,36 @@ struct ChatRowLabel: View {
                 }
                 Text(detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityValue(showsWorkspace && item.workspace.merged ? "Pull request merged" : "")
             }
         }
     }
 
-    private var detail: String {
-        let place = [showsComputer ? item.computer.name : nil, showsWorkspace ? item.workspace.label : nil].compactMap { $0 }
+    private var detail: AttributedString {
         let said = item.question?.title ?? item.chat.summary?.lastText
-        return (place + [said].compactMap { $0 }).joined(separator: " · ")
+        return RowPlace.line([
+            showsComputer ? AttributedString(item.computer.name) : nil,
+            showsWorkspace ? RowPlace.name(of: item.workspace) : nil,
+            said.map { AttributedString($0) },
+        ])
+    }
+}
+
+/// Where a row's agent runs, on the line under its title.
+enum RowPlace {
+    /// A workspace's name, in the color its pull request's badge has once
+    /// merged, as the lists show no badge: that is how they say it is done.
+    static func name(of workspace: Home.Workspace) -> AttributedString {
+        var name = AttributedString(workspace.label)
+        if workspace.merged { name.foregroundColor = Home.PullRequest.Tone.merged.color }
+        return name
+    }
+
+    static func line(_ parts: [AttributedString?]) -> AttributedString {
+        parts.compactMap { $0 }.reduce(into: AttributedString()) { line, part in
+            if !line.characters.isEmpty { line.append(AttributedString(" · ")) }
+            line.append(part)
+        }
     }
 }
 
@@ -182,6 +207,7 @@ struct AgentTerminalRowLabel: View {
                 }
                 Text(place)
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    .accessibilityValue(showsWorkspace && item.workspace.merged ? "Pull request merged" : "")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // Centered on the row, beside the chevron.
@@ -189,9 +215,9 @@ struct AgentTerminalRowLabel: View {
         }
     }
 
-    private var place: String {
-        guard showsWorkspace else { return tabName }
-        return showsComputer ? "\(item.computer.name) · \(item.workspace.label)" : item.workspace.label
+    private var place: AttributedString {
+        guard showsWorkspace else { return AttributedString(tabName) }
+        return RowPlace.line([showsComputer ? AttributedString(item.computer.name) : nil, RowPlace.name(of: item.workspace)])
     }
 
     /// The tab's name, unless Sheprd only numbered it or it repeats the

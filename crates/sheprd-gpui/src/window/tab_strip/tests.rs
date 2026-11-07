@@ -240,7 +240,7 @@ fn the_wheel_scrolls_a_crowded_strip_sideways(cx: &mut TestAppContext) {
     assert!(last.left() > right, "{last:?} starts out of view");
     let first = cx.debug_bounds("tab-w1:t1").unwrap();
     for _ in 0..40 {
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: first.center(),
             delta: ScrollDelta::Pixels(point(px(0.), px(-200.))),
             ..Default::default()
@@ -266,7 +266,7 @@ fn the_chosen_tab_is_scrolled_into_view(cx: &mut TestAppContext) {
 
     // Scrolled away by hand, the strip stays put while the choice holds.
     let first = cx.debug_bounds("tab-x28").unwrap();
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: first.center(),
         delta: ScrollDelta::Pixels(point(px(0.), px(300.))),
         ..Default::default()
@@ -663,6 +663,9 @@ mod mutes;
 
 /// The curved layout's sliding body and the card it flows into.
 mod curved;
+
+/// What an unnamed tab shows with `[tab_labels] agent_title` on.
+mod agent_title;
 
 /// Where the agent buttons draw, and what a click on one starts.
 mod launcher;

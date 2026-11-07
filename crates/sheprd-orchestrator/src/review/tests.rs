@@ -8,6 +8,7 @@ fn response(next: Option<&str>) -> Value {
             {
                 "number": 601,
                 "reviewDecision": "CHANGES_REQUESTED",
+                "mergeStateStatus": "DIRTY",
                 "reviewRequests": { "nodes": [
                     { "requestedReviewer": { "__typename": "User", "login": "penso" } },
                     { "requestedReviewer": { "__typename": "Team", "slug": "core" } },
@@ -58,6 +59,86 @@ fn a_page_reads_reviews_reviewers_and_checks() {
     assert_eq!(second.review, None);
     assert_eq!(second.checks_state(), None);
     assert!(parse(response(None)).unwrap().next.is_none());
+}
+
+#[test]
+fn a_page_reads_the_merge_state_and_a_missing_or_new_one_is_unknown() {
+    let page = parse(response(None)).unwrap();
+    assert_eq!(page.statuses[&601].merge, MergeState::Dirty);
+    assert_eq!(page.statuses[&602].merge, MergeState::Unknown);
+    let mut future = response(None);
+    future["data"]["repository"]["pullRequests"]["nodes"][1]["mergeStateStatus"] = json!("NEW");
+    assert_eq!(
+        parse(future).unwrap().statuses[&602].merge,
+        MergeState::Unknown
+    );
+}
+
+#[test]
+fn a_kept_status_round_trips_and_one_kept_before_the_merge_state_decodes() {
+    let status = PrStatus {
+        merge: MergeState::HasHooks,
+        ..PrStatus::default()
+    };
+    let json = serde_json::to_string(&status).unwrap();
+    assert_eq!(serde_json::from_str::<PrStatus>(&json).unwrap(), status);
+    let old = r#"{"review":null,"requested":[],"checks":[]}"#;
+    let old: PrStatus = serde_json::from_str(old).unwrap();
+    assert_eq!(old.merge, MergeState::Unknown);
+}
+
+fn standing(review: Option<Review>, merge: MergeState, checks: &[CheckState]) -> PrStatus {
+    PrStatus {
+        review,
+        merge,
+        checks: checks
+            .iter()
+            .map(|state| Check {
+                name: "ci".into(),
+                state: *state,
+            })
+            .collect(),
+        ..PrStatus::default()
+    }
+}
+
+#[test]
+fn a_status_takes_the_tone_of_the_badge_rule() {
+    use CheckState::{Failed, Passed, Pending, Skipped};
+    let tone = |review, merge, checks| standing(review, merge, checks).tone();
+    assert_eq!(
+        tone(None, MergeState::Clean, &[Passed, Skipped]),
+        Tone::Ready
+    );
+    assert_eq!(
+        tone(Some(Review::Approved), MergeState::Clean, &[Passed]),
+        Tone::Ready
+    );
+    assert_eq!(tone(None, MergeState::Clean, &[Pending]), Tone::Waiting);
+    assert_eq!(
+        tone(Some(Review::Required), MergeState::Clean, &[Passed]),
+        Tone::Waiting
+    );
+    // GitHub has not decided: never ready on that alone.
+    assert_eq!(tone(None, MergeState::Unknown, &[Passed]), Tone::Waiting);
+    assert_eq!(tone(None, MergeState::Behind, &[Passed]), Tone::Held);
+    assert_eq!(tone(None, MergeState::Blocked, &[Passed]), Tone::Held);
+    assert_eq!(tone(None, MergeState::Dirty, &[Passed]), Tone::Attention);
+    assert_eq!(tone(None, MergeState::Clean, &[Failed]), Tone::Attention);
+    assert_eq!(
+        tone(Some(Review::ChangesRequested), MergeState::Clean, &[Passed]),
+        Tone::Attention
+    );
+    // UNSTABLE while checks run is only checks running.
+    assert_eq!(tone(None, MergeState::Unstable, &[Pending]), Tone::Waiting);
+    assert_eq!(tone(None, MergeState::Unstable, &[Passed]), Tone::Attention);
+}
+
+#[test]
+fn skipped_checks_count_as_fine_and_running_or_failed_ones_do_not() {
+    use CheckState::{Failed, Passed, Pending, Skipped};
+    let status = standing(None, MergeState::Clean, &[Passed, Skipped, Pending, Failed]);
+    assert_eq!(status.checks_ok(), 2);
 }
 
 #[test]

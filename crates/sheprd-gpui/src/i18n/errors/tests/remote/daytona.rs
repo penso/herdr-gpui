@@ -64,6 +64,8 @@ fn every_refused_value_has_both_messages() {
         Value::BoatSandboxId,
         Value::BoatSshPrivateKey,
         Value::BoatSshPublicKey,
+        Value::BoxdApiKey,
+        Value::BoxdMachine,
         Value::CoderIdentifier,
         Value::CoderWorkspace,
         Value::ContainerEngine,
@@ -100,6 +102,8 @@ fn every_refused_value_has_both_messages() {
             | Value::BoatSandboxId
             | Value::BoatSshPrivateKey
             | Value::BoatSshPublicKey
+            | Value::BoxdApiKey
+            | Value::BoxdMachine
             | Value::CoderIdentifier
             | Value::CoderWorkspace
             | Value::ContainerEngine

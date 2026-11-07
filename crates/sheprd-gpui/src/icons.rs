@@ -275,9 +275,11 @@ embedded_icons! {
     "arrow-right.svg",
     "arrow-up.svg",
     "automations.svg",
+    "azure-devops.svg",
     "beads.svg",
     "bell-off.svg",
     "bell.svg",
+    "brain.svg",
     "chart.svg",
     "check.svg",
     "chevron-down.svg",
@@ -286,6 +288,7 @@ embedded_icons! {
     "chevron-up.svg",
     "close.svg",
     "cloud/azure.svg",
+    "cloud/boxd.svg",
     "cloud/coder.svg",
     "cloud/container.svg",
     "cloud/daytona.svg",
@@ -297,6 +300,7 @@ embedded_icons! {
     "coffee.svg",
     "computer.svg",
     "copy.svg",
+    "cpu.svg",
     "devices.svg",
     "diff-split.svg",
     "diff-unified.svg",
@@ -405,8 +409,8 @@ mod tests {
             assert_eq!(rendered.width, rendered.height, "{path}");
             assert!(rendered.width >= DevicePixels(16), "{path}");
             let pixels = image.as_bytes(0).unwrap();
-            assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] > 0));
-            assert!(pixels.chunks_exact(4).any(|pixel| pixel[3] == 0));
+            assert!(pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0));
+            assert!(pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] == 0));
         }
         assert!(Icons.load("unknown.svg").unwrap().is_none());
         // Every asset is listed once, whichever table declares it.

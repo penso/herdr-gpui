@@ -29,6 +29,7 @@ pub(crate) mod image_source;
 mod images;
 mod input;
 mod layout_save;
+pub(crate) use layout_save::LayoutSaves;
 mod lifecycle;
 pub(crate) use lifecycle::reasserts;
 mod links;
@@ -100,6 +101,7 @@ pub(crate) struct SheprdWindow {
     pub(crate) _activation: Subscription,
     pub(crate) _appearance: Subscription,
     pub(crate) _browser_tabs: Subscription,
+    pub(crate) _device_tags: Subscription,
     pub(crate) _host_theme: Subscription,
     /// Another window may mute or unmute what this one shows.
     pub(crate) _notification_mutes: Subscription,
@@ -181,6 +183,13 @@ pub(crate) struct SheprdWindow {
     /// The device IDs in the order the user dragged them into; see
     /// `endpoint::order`.
     pub(crate) device_order: Vec<String>,
+    /// The tag the sidebar's switch narrows the list to.
+    pub(crate) device_tag_filter: Option<String>,
+    /// The sections folded in the sidebar, for this run like a host's fold;
+    /// see `sidebar::tag_groups`.
+    pub(crate) device_tag_folds: std::collections::HashSet<Option<String>>,
+    /// This app's copy of every device's tags.
+    pub(crate) device_tags: std::sync::Arc<crate::device_tags::Tags>,
     /// Each saved device's terminal theme, read off the UI thread.
     pub(crate) device_themes: device_themes::DeviceThemes,
     /// The Devices overview's activity history and open tabs.
@@ -193,6 +202,8 @@ pub(crate) struct SheprdWindow {
     pub(crate) editor_open: Option<crate::editor::Job>,
     /// Editor panes whose Neovim later files open in.
     pub(crate) editor_panes: Vec<crate::editor::EditorPane>,
+    /// Pages to bring back when the editor panes opened from them quit.
+    pub(crate) editor_returns: Vec<crate::editor::Return>,
     pub(crate) endpoints: Vec<endpoint::Endpoint>,
     /// A prompt fanned out to several agents; once launched it outlives its
     /// dialog so the lanes can be compared later.
@@ -560,6 +571,7 @@ impl SheprdWindow {
             }
             cx.notify();
         }
+        crate::remote::Supervisor::follow_updater(&mut self.updater, cx);
         if self
             .avatars
             .as_mut()
@@ -670,6 +682,7 @@ impl SheprdWindow {
             self.poll_cloud_setup_tab(cx);
         }
         self.poll_editor_open(cx);
+        self.poll_editor_returns(window, cx);
         self.poll_worktree_source(cx);
         self.poll_hover_menu(std::time::Instant::now(), window, cx);
         if self.tick_flash(std::time::Instant::now()) {
@@ -696,6 +709,7 @@ impl SheprdWindow {
         }
         self.publish_remote_pull_requests(cx);
         self.sync_remote_hosts(window, cx);
+        self.reach_device_tags(cx);
         self.update_merged_cleanup(window, cx);
         if self.update_git() {
             cx.notify();

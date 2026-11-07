@@ -110,6 +110,24 @@ impl SheprdWindow {
         );
     }
 
+    /// The layout after the one showing now, not the one the last frame
+    /// drew: a second click can land before the next frame.
+    pub(crate) fn step_chat_layout(&mut self, cx: &mut Context<Self>) {
+        self.step_chat_layout_with(
+            |mode| Config::save_preference(Preference::ChatLayout(mode)),
+            cx,
+        );
+    }
+
+    /// `save` persists the choice, as in [`Self::set_chat_layout_with`].
+    pub(crate) fn step_chat_layout_with(
+        &mut self,
+        save: impl FnOnce(ChatLayoutMode) -> crate::Result<()> + Send + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_chat_layout_with(self.config.chat.layout.next(), save, cx);
+    }
+
     /// `save` persists the choice; tests pass one that leaves the real
     /// config alone.
     pub(crate) fn set_chat_layout_with(
@@ -126,6 +144,7 @@ impl SheprdWindow {
             cx.global_mut::<InitialAppearance>().config.chat.layout = mode;
         }
         self.chats.relayout(mode);
+        crate::menus::install(cx);
         cx.notify();
         let saves = cx.default_global::<LayoutSaves>().chat.clone();
         saves.want(mode);
@@ -203,6 +222,7 @@ impl SheprdWindow {
         if !self.input_ready() {
             return false;
         }
+        self.note_editor_navigation(target.as_deref());
         let queued = self.request_focus_change(
             &fl!("window-notices-navigate"),
             Some((&target).into()),

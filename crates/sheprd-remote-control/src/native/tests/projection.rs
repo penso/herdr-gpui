@@ -2,7 +2,7 @@
 //! requests of the same boot.
 
 use super::*;
-use crate::control::pull_requests::{PullRequests, Tone, WorkspacePullRequest};
+use crate::control::pull_requests::{PullRequests, Tone, UnopenedBranch, WorkspacePullRequest};
 use model::{Home, Run, Sources};
 use sheprd_chat_protocol::Status;
 
@@ -27,6 +27,7 @@ fn pull_requests(boot: &str, branch: &str) -> PullRequests {
             url: "https://github.com/o/r/pull/7".into(),
             tone: Tone::Ready,
         }],
+        unopened: Vec::new(),
     }
 }
 
@@ -38,6 +39,9 @@ fn project(summaries: HashMap<String, Summary>, pull_requests: &PullRequests) ->
         load: None,
         summaries,
         pull_requests,
+        tags: Default::default(),
+        version: "20261106.1",
+        waiting: 0,
     })
 }
 
@@ -49,7 +53,6 @@ fn home_lists_chats_and_terminals_with_their_summaries() {
     );
     assert_eq!(home.computer, "Studio");
     assert!(home.connected);
-    assert_eq!(home.waiting, 2);
     let workspace = &home.workspaces[0];
     assert_eq!(workspace.branch.as_deref(), Some("main"));
     let chat = &workspace.chats[0];
@@ -70,7 +73,6 @@ fn home_lists_chats_and_terminals_with_their_summaries() {
 #[test]
 fn a_chat_not_linked_yet_has_no_summary() {
     let home = project(HashMap::new(), &PullRequests::default());
-    assert_eq!(home.waiting, 0);
     assert!(home.workspaces[0].chats[0].summary.is_none());
     let json = serde_json::to_value(&home).unwrap();
     assert!(json["workspaces"][0]["chats"][0].get("summary").is_none());
@@ -90,6 +92,26 @@ fn a_pull_request_shows_only_for_the_same_boot_and_branch() {
         let json = serde_json::to_value(&home).unwrap();
         assert!(json["workspaces"][0].get("pull_request").is_none());
     }
+}
+
+#[test]
+fn commits_without_a_pull_request_show_only_for_the_same_boot_and_branch() {
+    let waiting = |boot: &str, branch: &str| PullRequests {
+        boot_id: boot.into(),
+        entries: Vec::new(),
+        unopened: vec![UnopenedBranch {
+            workspace_id: "w1".into(),
+            cwd: "/work".into(),
+            branch: branch.into(),
+            commits: 4,
+        }],
+    };
+    let commits =
+        |update: &PullRequests| project(HashMap::new(), update).workspaces[0].unopened_commits;
+    let boot = layout(EndpointId::random()).boot;
+    assert_eq!(commits(&waiting(&boot, "main")), Some(4));
+    assert_eq!(commits(&waiting("other", "main")), None);
+    assert_eq!(commits(&waiting(&boot, "other")), None);
 }
 
 #[test]

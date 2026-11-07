@@ -108,18 +108,18 @@ fn check_layouts(modes: &[crate::config::LayoutMode], cx: &mut gpui::TestAppCont
                         "{context}: {name}"
                     );
                 }
-                // Minimal rows show no pull request or uncommitted work.
+                let row = cx.debug_bounds("row-sidebar-child").unwrap();
+                let badge = cx.debug_bounds("pr-sidebar-child").unwrap();
+                assert!(
+                    badge.right() <= row.right(),
+                    "{context}: badge {badge:?} {row:?}"
+                );
+                assert!(
+                    badge.bottom() <= row.bottom(),
+                    "{context}: badge {badge:?} {row:?}"
+                );
+                // Minimal rows show no uncommitted work.
                 if mode != LayoutMode::Minimal {
-                    let row = cx.debug_bounds("row-sidebar-child").unwrap();
-                    let badge = cx.debug_bounds("pr-sidebar-child").unwrap();
-                    assert!(
-                        badge.right() <= row.right(),
-                        "{context}: badge {badge:?} {row:?}"
-                    );
-                    assert!(
-                        badge.bottom() <= row.bottom(),
-                        "{context}: badge {badge:?} {row:?}"
-                    );
                     assert!(cx.debug_bounds("dirty-sidebar-child").is_some());
                 }
                 // Every layout reads the note on a line under its row.

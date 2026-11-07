@@ -5,6 +5,7 @@
 orchestrator-label = Orchestrator
 orchestrator-pull-requests = Pull requests
 orchestrator-issues = Issues
+orchestrator-tasks = Tasks
 orchestrator-no-workspace = Open a workspace first
 orchestrator-activity-bar-off = Pull requests and issues show in the activity bar, which is turned off
 orchestrator-needs-host = Pull requests and issues need a local or SSH host
@@ -37,6 +38,9 @@ orchestrator-clear-search = Clear search
 orchestrator-showing-only = Showing only
 orchestrator-facets-state = STATE
 orchestrator-facets-labels = LABELS
+orchestrator-facets-status = STATUS
+orchestrator-facets-priority = PRIORITY
+orchestrator-facets-assignee = ASSIGNEE
 orchestrator-sort-updated = Recently updated
 orchestrator-sort-newest = Newest
 orchestrator-sort-oldest = Oldest
@@ -60,8 +64,10 @@ orchestrator-column-run = RUN
 orchestrator-column-project = PROJECT
 orchestrator-column-title = TITLE
 orchestrator-column-author = AUTHOR
+orchestrator-column-assignee = ASSIGNEE
 orchestrator-column-pull-request = PR
 orchestrator-column-title-branch = TITLE · BRANCH
+orchestrator-column-status = STATUS
 orchestrator-column-review = REVIEW
 orchestrator-column-checks = CHECKS
 orchestrator-column-size = SIZE
@@ -80,7 +86,32 @@ orchestrator-no-issues = No open issues
 orchestrator-no-issues-about = This lists the open issues of every repository your workspaces hold, from GitHub, GitLab, and Beads. Pick one to read it or to start an agent on it.
 orchestrator-no-pull-requests = No pull requests
 orchestrator-no-pull-requests-about = This lists the pull requests of every repository your workspaces hold, with their reviews and checks. Pick one to read it or to start an agent on it.
+orchestrator-no-tasks-match = No tasks match “{ $query }”
+orchestrator-no-tasks-filtered = No tasks match the filters
+orchestrator-no-tasks = No open tasks
+orchestrator-no-tasks-about = This lists the Beads tasks of every project your workspaces hold. Pick one to read it or to start an agent on it.
 orchestrator-clear-filter = Clear filter
+
+# A task's page. Beads tasks have these statuses; a project's own show as they are.
+orchestrator-task-status-blocked = Blocked
+orchestrator-task-status-closed = Closed
+orchestrator-task-status-deferred = Deferred
+orchestrator-task-status-in-progress = In progress
+orchestrator-task-status-open = Open
+orchestrator-task-unassigned = Unassigned
+# $name is who the task is assigned to, as Beads names them.
+orchestrator-task-assigned = Assigned to { $name }
+# Goes to the workspace holding the task's project.
+orchestrator-task-project = Open project
+orchestrator-task-acceptance = Acceptance criteria
+orchestrator-task-parent = Parent
+orchestrator-task-blocked-by = Blocked by
+orchestrator-task-blocks = Blocks
+orchestrator-task-children = Children
+# $count tasks are not listed under a heading.
+orchestrator-task-more = { $count } more
+# In the dialog that starts an agent on a task. bd is the Beads program.
+orchestrator-claims-task = Claims this task with bd first. If someone else holds it, nothing starts.
 
 # The list's group headings.
 orchestrator-next-review = Review requested
@@ -105,6 +136,13 @@ orchestrator-start-agent = Start agent
 orchestrator-badge-blocked = blocked
 orchestrator-badge-draft = draft
 orchestrator-badge-fork = fork
+orchestrator-standing-attention = attention
+orchestrator-standing-behind = behind
+orchestrator-standing-closed = closed
+orchestrator-standing-conflicts = conflicts
+orchestrator-standing-merged = merged
+orchestrator-standing-ready = ready
+orchestrator-standing-waiting = waiting
 orchestrator-review-yours = your review
 orchestrator-review-approved = approved
 orchestrator-review-changes = changes requested
@@ -267,6 +305,8 @@ orchestrator-section-branch = BRANCH
 orchestrator-section-extra = EXTRA INSTRUCTIONS
 # The prompt that ships with the app, beside the repository's own profiles.
 orchestrator-profile-built-in = built-in
+# A profile that a review sends instead of the built-in prompt and its safeguards.
+orchestrator-profile-replaces = { $name } (replaces built-in)
 orchestrator-agents-failed = Could not discover agents. Select the host to retry.
 orchestrator-agents-looking = Looking for installed agents…
 orchestrator-agents-none = No supported agent is installed on this host.

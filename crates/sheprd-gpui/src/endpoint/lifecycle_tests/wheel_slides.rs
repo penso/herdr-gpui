@@ -1,5 +1,5 @@
 use super::*;
-use gpui::{ScrollDelta, ScrollWheelEvent, TouchPhase};
+use gpui::{ScrollDelta, ScrollEvent, TouchPhase};
 use sheprd_client::protocol::{
     PaneSurfaceScrollMetrics, SurfaceGraphicsAssetKey, SurfaceGraphicsFormat,
     SurfaceGraphicsPlacement, SurfaceGraphicsSource, SurfaceGraphicsTarget,
@@ -35,7 +35,7 @@ fn wheel_deltas_accumulate_into_lines_while_panes_cannot_slide(cx: &mut gpui::Te
                 view.presentation.frame(&view.live);
                 let quarter = view.config.terminal.line_height() / 4.;
                 view.scroll_wheel(
-                    &ScrollWheelEvent {
+                    &ScrollEvent {
                         position: mouse_position(view, 3.5, 4.5),
                         delta: ScrollDelta::Pixels(point(px(0.), px(quarter))),
                         touch_phase: TouchPhase::Moved,
@@ -127,7 +127,7 @@ fn the_uncovered_edge_of_a_resting_pane_resolves_no_link(cx: &mut gpui::TestAppC
             view.presentation.frame(&view.live);
             let quarter = view.config.terminal.line_height() / 4.;
             view.scroll_wheel(
-                &ScrollWheelEvent {
+                &ScrollEvent {
                     position: mouse_position(view, 3.5, 4.5),
                     delta: ScrollDelta::Pixels(point(px(0.), px(quarter))),
                     touch_phase: TouchPhase::Moved,

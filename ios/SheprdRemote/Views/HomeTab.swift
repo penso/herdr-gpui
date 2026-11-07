@@ -34,6 +34,10 @@ struct HomeTab: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { AgentSortMenu(sort: $sort) }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button("Talk to Sheprd", systemImage: "waveform") { model.talk() }
+                        .disabled(model.fleet.machines.isEmpty)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("New Workspace", systemImage: "plus") { model.creating = .workspace(device: nil) }
                         .disabled(model.fleet.machines.isEmpty)
                 }

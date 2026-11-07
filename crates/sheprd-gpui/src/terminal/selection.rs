@@ -611,7 +611,7 @@ impl Selection {
         let columns = region.columns.clone();
         let bottom = region.content_row(region.rows.end.saturating_sub(1));
         let last = end.row.min(bottom);
-        let mut next = Some(start.row.max(region.top)).filter(|_| !region.rows.is_empty());
+        let mut next = (!region.rows.is_empty()).then(|| start.row.max(region.top));
         std::iter::from_fn(move || {
             while let Some(row) = next.filter(|row| *row <= last) {
                 next = row.checked_add(1);

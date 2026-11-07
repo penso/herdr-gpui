@@ -17,6 +17,18 @@ use std::time::Duration;
 /// How often a running batch is looked at, to report how it ended.
 const FOLLOW: Duration = Duration::from_millis(500);
 
+/// Forgets the mutes of the devices `batch` removed.
+fn forget_mutes(batch: &BatchInfo, cx: &mut App) {
+    for device in &batch.devices {
+        if matches!(
+            device.state,
+            DeviceState::Destroyed | DeviceState::Forgotten
+        ) {
+            crate::notification_mutes::Mutes::forget_host(cx, &device.endpoint);
+        }
+    }
+}
+
 impl SheprdWindow {
     /// Whether a cloud batch question (create or destroy) is open, for the
     /// menu's layout.
@@ -82,6 +94,8 @@ impl SheprdWindow {
                 if !batch.phase.settled() {
                     continue;
                 }
+                // From the app: the window may have closed by now.
+                cx.update(|cx| forget_mutes(&batch, cx));
                 let _ = this.update(cx, |this, cx| this.cloud_destroyed(&batch, cx));
                 return;
             }

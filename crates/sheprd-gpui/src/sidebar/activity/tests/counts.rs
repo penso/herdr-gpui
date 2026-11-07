@@ -1,6 +1,22 @@
 use super::*;
-use crate::sidebar::activity::counts::Counts;
+use crate::{orchestrator::Provider, sidebar::activity::counts::Counts};
 use std::collections::HashSet;
+
+#[test]
+fn beads_count_as_tasks_as_well_as_issues_once() {
+    let mut bead = item("hg-1", "A task");
+    bead.key.source.provider = Provider::Beads;
+    let mut done = item("hg-2", "Finished");
+    done.key.source.provider = Provider::Beads;
+    done.state = "closed".into();
+    let items = [bead, done, item("1", "An issue")];
+    let mut counts = Counts::default();
+    let mut seen = HashSet::new();
+    counts.add(&mut seen, &items);
+    counts.add(&mut seen, &items);
+    assert_eq!(counts.of(ActivityPanel::Tasks), Some(1));
+    assert_eq!(counts.of(ActivityPanel::Issues), Some(2));
+}
 
 #[test]
 fn counts_open_pull_requests_and_open_issues_once() {

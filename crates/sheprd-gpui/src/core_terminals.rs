@@ -16,7 +16,6 @@ mod error;
 mod fallback;
 mod hub;
 mod infos;
-pub(crate) mod panes;
 mod screen;
 mod selection;
 mod sidebar;
@@ -31,6 +30,7 @@ mod tests;
 
 pub(crate) use error::Error;
 pub(crate) use hub::{Hub, Start, State};
+pub(crate) use sheprd_session::panes;
 pub(crate) use view::{CoreTerminalView, Look};
 
 use crate::{
@@ -43,6 +43,10 @@ use gpui::{prelude::*, *};
 use panes::{Axis, Panes};
 use sheprd_backend::{Backend as _, Spawn, TerminalId, TerminalInfo};
 use std::collections::HashMap;
+
+/// The workspace of a window with no Herdr 1 installed. herdr-core has no
+/// workspaces of its own, so its tabs gather here until the app keeps them.
+pub(crate) const WORKSPACE: &str = "herdr-2";
 
 type Started = std::sync::mpsc::Receiver<Result<TerminalInfo, sheprd_core_client::Error>>;
 

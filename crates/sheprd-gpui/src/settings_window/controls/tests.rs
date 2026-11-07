@@ -501,7 +501,7 @@ fn numeric_invalid_and_composition_do_not_enqueue_writes(cx: &mut TestAppContext
             for key in ["enter", "escape"] {
                 view.settings_key(
                     &KeyDownEvent {
-                        keystroke: Keystroke::parse(key).unwrap(),
+                        keystroke: crate::keymap::parse_keystroke(key).unwrap(),
                         is_held: false,
                         prefer_character_input: false,
                     },

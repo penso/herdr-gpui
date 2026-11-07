@@ -7,5 +7,7 @@ pub enum Error {
     Disconnected,
     #[error("This action is unavailable for Herdr 2 terminals")]
     Unsupported,
+    #[error(transparent)]
+    Worktree(#[from] super::worktree::Error),
     // keep-sorted end
 }

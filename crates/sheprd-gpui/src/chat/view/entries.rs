@@ -5,7 +5,7 @@
 use super::{
     super::{
         chats::ChatPane,
-        prepared::{Body, Part, ToolSummary, folded_thought, notice_label, tool_header, tool_text},
+        prepared::{Body, Part, ToolSummary, folded_thought, notice_label, tool_header},
         rich::{Block, Inline},
         selection::{Cell, Region},
         visual::Visuals,
@@ -13,7 +13,7 @@ use super::{
     Hues,
     copy::CopyPlacement,
     disclosure::{HeaderText, chevron},
-    layout::{Row, layout_for, side},
+    layout::{Row, ToolFold, layout_for, side},
     visuals::Frame,
 };
 use crate::{SheprdWindow, config::corners, fonts::StyledFont, i18n::fl, notifications::safe_text};
@@ -22,6 +22,7 @@ use sheprd_chat_protocol::{
     ActivityState, Entry, EntryKind, NoticeLevel, Tool, ToolKind, ToolStatus,
 };
 
+mod previews;
 mod questions;
 mod steps;
 use steps::steps_label;
@@ -46,7 +47,7 @@ fn tool_kind(kind: ToolKind) -> String {
 
 /// Where a tool call's card says it stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ToolState {
+pub(super) enum ToolState {
     Done,
     Failed,
     Pending,
@@ -243,6 +244,16 @@ impl SheprdWindow {
             live: index + 1 == entries.len()
                 && transcript.status == sheprd_chat_protocol::Status::Working,
             current,
+            expanded: chat.expanded.contains(&entry.id),
+            tool: match &entry.kind {
+                EntryKind::Tool(tool) => Some(tool_state(
+                    transcript
+                        .activity(&tool.call_id)
+                        .map(|activity| activity.state),
+                    tool.status,
+                )),
+                _ => None,
+            },
             content,
         };
         layout_for(self.config.chat.layout).row(row, &self.chat_look())
@@ -321,10 +332,37 @@ impl SheprdWindow {
             .chats
             .pane(pane_id)
             .is_some_and(|chat| chat.expanded.contains(&entry));
+        let fold = layout_for(self.config.chat.layout).tool_fold(status);
+        // On one line, the files' changes join the title as totals.
+        let totals = summary
+            .filter(|summary| fold == ToolFold::Line && !expanded && !summary.diffs.is_empty())
+            .map(|summary| {
+                let (added, removed) =
+                    summary.diffs.iter().fold((0, 0), |(added, removed), diff| {
+                        (added + diff.added, removed + diff.removed)
+                    });
+                div()
+                    .debug_selector(move || format!("chat-tool-totals-{}", entry.0))
+                    .flex_none()
+                    .flex()
+                    .gap(px(6.))
+                    .text_size(small)
+                    .child(div().text_color(rgb(hues.green)).child(format!("+{added}")))
+                    .child(
+                        div()
+                            .text_color(rgb(hues.red))
+                            .child(format!("\u{2212}{removed}")),
+                    )
+            });
         // The gutter's dot carries the state's color; the row stays plain.
         let header = div()
             .id(("chat-tool", entry.0))
             .debug_selector(move || format!("chat-tool-{}", entry.0))
+            .aria_label(fl!(
+                "rich-tools-details",
+                kind = tool_kind(tool.kind),
+                label = tool_header(&tool.title)
+            ))
             .flex()
             .items_center()
             .gap(px(6.))
@@ -353,6 +391,7 @@ impl SheprdWindow {
                         cx,
                     )),
             )
+            .children(totals)
             .when(!steps.is_empty(), |header| {
                 header.child(
                     div()
@@ -383,9 +422,9 @@ impl SheprdWindow {
             .children(
                 page_written(tool).map(|path| self.render_chat_file_page(pane_id, entry, path, cx)),
             )
-            .children(
-                self.render_chat_tool_glance(pane_id, entry, tool, summary, expanded, visuals, cx),
-            )
+            .children(self.render_chat_tool_glance(
+                pane_id, entry, tool, summary, expanded, fold, visuals, cx,
+            ))
             .when(expanded, |card| {
                 card.child(
                     div()
@@ -414,34 +453,17 @@ impl SheprdWindow {
                                 location.clone(),
                                 cx,
                             )
-                        }))
-                        .children(tool.content.iter().enumerate().filter_map(|(index, item)| {
-                            tool_text(item).map(|text| {
-                                // Keep the full retained output; long unbroken lines
-                                // scroll horizontally instead of disappearing.
-                                div()
-                                    .id(SharedString::from(format!(
-                                        "chat-tool-content-{}-{index}",
-                                        entry.0
-                                    )))
-                                    .debug_selector(move || {
-                                        format!("chat-tool-content-{}-{index}", entry.0)
-                                    })
-                                    .w_full()
-                                    .overflow_x_scroll()
-                                    .py(px(3.))
-                                    .child(self.render_chat_text(
-                                        pane_id,
-                                        entry,
-                                        Region::ToolContent,
-                                        Cell::block(index),
-                                        text,
-                                        cx,
-                                    ))
-                            })
                         })),
                 )
-            });
+            })
+            .children(
+                summary
+                    .filter(|_| expanded)
+                    .into_iter()
+                    .flat_map(|summary| {
+                        self.render_chat_tool_previews(pane_id, entry, summary, visuals, cx)
+                    }),
+            );
         let mut row = div().flex().flex_col().gap(px(2.));
         if let Some(indent) = indent {
             row = row.pl(px(indent.header));
@@ -461,6 +483,7 @@ impl SheprdWindow {
         tool: &Tool,
         summary: Option<&ToolSummary>,
         expanded: bool,
+        fold: ToolFold,
         visuals: &Visuals,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
@@ -478,7 +501,13 @@ impl SheprdWindow {
         let Some(summary) = summary else {
             return glance;
         };
-        glance.extend(summary.diffs.iter().enumerate().map(|(index, diff)| {
+        // A call on one line totals these beside its title.
+        let diffs = if fold == ToolFold::Line && !expanded {
+            &[][..]
+        } else {
+            &summary.diffs[..]
+        };
+        glance.extend(diffs.iter().enumerate().map(|(index, diff)| {
             div()
                 .debug_selector(move || format!("chat-tool-diff-{}-{index}", entry.0))
                 .flex()
@@ -515,7 +544,7 @@ impl SheprdWindow {
         }
         // Opened, the details show it all; some layouts keep a folded call
         // to its one line.
-        if expanded || !layout_for(self.config.chat.layout).tool_preview() {
+        if expanded || fold != ToolFold::Preview {
             return glance;
         }
         glance.extend(tool.locations.iter().take(LOCATIONS).map(|location| {

@@ -90,6 +90,7 @@ pub(super) async fn fragment(
     known(&state.hub.layout(), &pane)?;
     let text = read_screen(&state, &pane).await?;
     let layout = state.hub.layout();
+    state.mark_opened(&layout, &pane);
     let (workspace, terminal) = layout.terminal(&pane).ok_or(ApiError::NotFound)?;
     let row = terminal
         .panes
@@ -354,16 +355,18 @@ pub(super) struct RenameRequest {
 }
 
 /// What the phone renames: a chat by its pane, whose label the chat's
-/// title reads first, or a terminal by its tab, whose label its row shows.
+/// title reads first, a terminal by its tab, whose label its row shows, or
+/// a workspace by its id.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RenameTarget<'a> {
     Chat { pane: &'a str },
     Tab { tab: &'a str },
+    Workspace { workspace: &'a str },
 }
 
 /// The Herdr method and parameters that give `target` the name `label`.
 /// An empty name clears a chat's label, so its title is the agent's again;
-/// a tab always has a name.
+/// a tab or a workspace always has a name.
 pub(crate) fn rename_call(
     target: RenameTarget<'_>,
     label: &str,
@@ -387,6 +390,13 @@ pub(crate) fn rename_call(
             ApiMethod::TabRename,
             json!({ "tab_id": tab, "label": label }),
         )),
+        RenameTarget::Workspace { .. } if label.is_empty() => {
+            Err(ApiError::Invalid("a workspace needs a name"))
+        }
+        RenameTarget::Workspace { workspace } => Ok((
+            ApiMethod::WorkspaceRename,
+            json!({ "workspace_id": workspace, "label": label }),
+        )),
     }
 }
 
@@ -407,6 +417,24 @@ pub(super) async fn rename(
         };
         rename_call(target, &request.label)?
     };
+    state.hub.call(method, params).await?;
+    Ok(Json(json!({})))
+}
+
+/// Names a workspace, which every client of the computer then shows.
+pub(super) async fn rename_workspace(
+    State(state): State<Shared>,
+    _device: Device,
+    Path(workspace): Path<String>,
+    Json(request): Json<RenameRequest>,
+) -> Result<Json<Value>, ApiError> {
+    if state.hub.layout().workspace(&workspace).is_none() {
+        return Err(ApiError::NotFound);
+    }
+    let target = RenameTarget::Workspace {
+        workspace: &workspace,
+    };
+    let (method, params) = rename_call(target, &request.label)?;
     state.hub.call(method, params).await?;
     Ok(Json(json!({})))
 }

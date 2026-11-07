@@ -3,7 +3,7 @@
 use super::{Caret, Cell, Key, Position, Region};
 use crate::{
     chat::{
-        prepared::{Body, MESSAGE, Part, folded_thought, notice_label, tool_header, tool_text},
+        prepared::{Body, MESSAGE, Part, folded_thought, notice_label, tool_header},
         rich::{Block, CodeText, Inline, Kind, MAX_CODE_LINES, remote_content},
     },
     release_notes::Line,
@@ -202,6 +202,10 @@ impl Document {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
+    pub(in crate::chat) fn expanded(&self) -> &HashSet<EntryId> {
+        &self.expanded
+    }
+
     pub(in crate::chat) fn set_expanded(&mut self, expanded: &HashSet<EntryId>) {
         self.expanded.clone_from(expanded);
     }
@@ -276,7 +280,7 @@ fn project(
                 builder.plain(Region::Body(0), Cell::default(), summary.gist.clone());
             }
         }
-        Some(Body::Tool(_)) => {
+        Some(Body::Tool(summary)) => {
             if let EntryKind::Tool(tool) = &entry.kind {
                 builder.plain(Region::Label, Cell::default(), tool_header(&tool.title));
                 if expanded {
@@ -284,10 +288,16 @@ fn project(
                     for (row, location) in tool.locations.iter().enumerate() {
                         builder.plain(Region::ToolLocations, Cell::row(row), location.clone());
                     }
-                    for (block, content) in tool.content.iter().enumerate() {
-                        if let Some(text) = tool_text(content) {
-                            builder.plain(Region::ToolContent, Cell::block(block), text);
+                    for (index, preview) in summary.previews.iter().enumerate() {
+                        builder.plain(
+                            Region::ToolPreviewLabel(index),
+                            Cell::default(),
+                            preview.label.clone(),
+                        );
+                        if let Some(before) = &preview.before {
+                            builder.code(Region::ToolBefore(index), 0, &before.source);
                         }
+                        builder.code(Region::ToolPreview(index), 0, &preview.code.source);
                     }
                 }
             }
@@ -430,37 +440,7 @@ impl Builder {
                     std::iter::once(0..source.len()).collect(),
                     "\n\n",
                 ),
-                Block::Code { source, .. } => {
-                    let mut offset = 0;
-                    for (row, raw) in source
-                        .split_inclusive('\n')
-                        .take(MAX_CODE_LINES)
-                        .enumerate()
-                    {
-                        let line = raw
-                            .strip_suffix('\n')
-                            .map(|line| line.strip_suffix('\r').unwrap_or(line))
-                            .unwrap_or(raw);
-                        self.push(
-                            Position {
-                                cell: Cell {
-                                    block,
-                                    row,
-                                    column: 0,
-                                },
-                                ..position
-                            },
-                            Text::Code {
-                                line: CodeText::expand(line),
-                                source: source.clone(),
-                                start: offset,
-                            },
-                            Vec::new(),
-                            if row == 0 { "\n\n" } else { "\n" },
-                        );
-                        offset += raw.len();
-                    }
-                }
+                Block::Code { source, .. } => self.code(region, block, source),
                 Block::Table { rows, .. } => {
                     for (row, cells) in rows.iter().enumerate() {
                         for (column, content) in cells.iter().enumerate() {
@@ -482,6 +462,38 @@ impl Builder {
                     }
                 }
             }
+        }
+    }
+
+    fn code(&mut self, region: Region, block: usize, source: &Arc<str>) {
+        let mut offset = 0;
+        for (row, raw) in source
+            .split_inclusive('\n')
+            .take(MAX_CODE_LINES)
+            .enumerate()
+        {
+            let line = raw
+                .strip_suffix('\n')
+                .map(|line| line.strip_suffix('\r').unwrap_or(line))
+                .unwrap_or(raw);
+            self.push(
+                Position {
+                    region,
+                    cell: Cell {
+                        block,
+                        row,
+                        column: 0,
+                    },
+                },
+                Text::Code {
+                    line: CodeText::expand(line),
+                    source: source.clone(),
+                    start: offset,
+                },
+                Vec::new(),
+                if row == 0 { "\n\n" } else { "\n" },
+            );
+            offset += raw.len();
         }
     }
 

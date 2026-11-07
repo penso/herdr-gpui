@@ -30,6 +30,22 @@ pub(super) struct Entry {
     pub(super) urgent: bool,
 }
 
+impl Entry {
+    /// Whether a branch ending at `head` has work no pull request carries.
+    /// Only a settled answer says so: no entry yet, or a failed lookup (which
+    /// is every checkout not on GitHub), must not suggest opening one. A
+    /// merged or closed pull request carries its own head, and a branch that
+    /// moved past it needs a new one; an open one receives what is pushed.
+    pub(super) fn unopened(&self, head: &str) -> bool {
+        self.message.is_none()
+            && self.value.as_ref().is_none_or(|pr| {
+                pr.state != super::State::Open
+                    && !pr.head_ref_oid.is_empty()
+                    && pr.head_ref_oid != head
+            })
+    }
+}
+
 /// A repository GitHub would not show this credential, paused as a whole so
 /// its branches do not each ask on their own backoff.
 pub(super) struct HiddenRepository {

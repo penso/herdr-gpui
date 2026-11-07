@@ -1,5 +1,6 @@
 use super::*;
 use crate::apns::{ContentState, Phase};
+use secrecy::ExposeSecret as _;
 
 fn live(event: Event) -> Live {
     Live {
@@ -43,8 +44,41 @@ fn an_end_waits_for_the_activity_token_on_a_device_that_starts_activities() {
     let Route::Send(token) = route(&end, &with_activity) else {
         panic!("expected a send");
     };
-    assert_eq!(token.as_str(), "cd".repeat(40));
+    assert_eq!(token.expose_secret(), "cd".repeat(40));
 
     // A device that cannot start activities shows none to update.
     assert_eq!(route(&end, &Registration::default()), Route::Skip);
+}
+
+mod detail {
+    use super::*;
+    use crate::app::config::ActivityDetail;
+
+    const STEP: &str = "Editing secret.rs";
+
+    fn question() -> Live {
+        let mut live = live(Event::Update { alert: None });
+        live.state.phase = Phase::Question;
+        live.state.step = STEP.to_owned();
+        live
+    }
+
+    #[test]
+    fn a_phone_can_ask_for_less_than_its_computer_allows() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = crate::web::tests::state(dir.path());
+        let generic = registration(r#"{"activity_detail":"generic"}"#);
+        assert_ne!(shown(&state, question(), &generic).state.step, STEP);
+        let detailed = Registration::default();
+        assert_eq!(shown(&state, question(), &detailed).state.step, STEP);
+    }
+
+    #[test]
+    fn a_phone_cannot_ask_for_more_than_its_computer_allows() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = crate::web::tests::state(dir.path());
+        Arc::get_mut(&mut state).unwrap().live_activities = ActivityDetail::Generic;
+        let detailed = Registration::default();
+        assert_ne!(shown(&state, question(), &detailed).state.step, STEP);
+    }
 }

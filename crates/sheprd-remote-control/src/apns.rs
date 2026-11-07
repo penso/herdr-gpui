@@ -4,18 +4,18 @@
 //! which the daemon starts, updates, and ends with `liveactivity` pushes,
 //! and chat notifications sealed to the device.
 //!
-//! - [`Config`]: the user's own APNs key (`STATE_DIR/apns/AuthKey.p8`) and
-//!   `config.json`. Without them the feature is off.
-//! - [`ProviderToken`]: the ES256 JWT APNs authenticates the daemon by,
-//!   refreshed every fifty minutes.
+//! The credentials, the HTTP/2 sender, and the sealing live in `sheprd_apns`.
+//! The daemon's sender uses the user's own key (`STATE_DIR/apns/AuthKey.p8`)
+//! and `config.json`; without them the feature is off.
+//!
 //! - [`decide`]: pure, from the same inputs as [`crate::push::decide`],
 //!   whether a chat change starts, updates, or ends the chat's activity.
+//! - `redact`: what one device's activity may say, from the computer's and
+//!   the phone's choices, applied just before sending.
 //! - [`Pacer`]: holds back step updates so a busy turn does not spend the
 //!   phone's Live Activity budget.
 //! - [`Registration`]: the push tokens one device sent, kept in the device
 //!   store's opaque slot as JSON.
-//! - [`Sender`]: the HTTP/2 request to `api.push.apple.com` (or the
-//!   sandbox), on the daemon's Tokio runtime.
 //! - [`alert`]: chat notifications for the native app, sealed to the
 //!   device with [`seal`] so APNs relays only ciphertext.
 //!
@@ -24,92 +24,35 @@
 //! post anywhere else.
 
 pub(crate) mod alert;
-mod config;
 mod decide;
-mod jwt;
 mod pacer;
 mod payload;
-pub(crate) mod seal;
-mod send;
+mod redact;
 mod tokens;
 
-use std::{io, path::PathBuf};
-
-pub(crate) use config::Config;
 pub(crate) use decide::{computer_id, decide};
-pub(crate) use jwt::ProviderToken;
 pub(crate) use pacer::Pacer;
 #[cfg(test)]
 pub(crate) use payload::ATTRIBUTES_TYPE;
 pub(crate) use payload::{Alert, Attributes, ContentState, Event, Live, Phase};
-pub(crate) use send::{Host, Outcome, Sender};
-#[cfg(test)]
-pub(crate) use send::{Priority, outcome};
+pub(crate) use sheprd_apns::{DeviceToken, Outcome, Priority, Push, PushType, Sender, seal};
 #[cfg(test)]
 pub(crate) use tokens::ActivityToken;
-pub(crate) use tokens::{DeviceToken, Registration};
+pub(crate) use tokens::Registration;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // keep-sorted start
-    #[error("could not read the APNs response")]
-    Body(#[source] Box<dyn std::error::Error + Send + Sync>),
-    #[error("{field} in the APNs config is not valid")]
-    ConfigField { field: &'static str },
-    #[error("{} is not a valid APNs config", path.display())]
-    ConfigFormat {
-        path: PathBuf,
-        #[source]
-        source: serde_json::Error,
-    },
-    #[error("could not read the APNs config {}", path.display())]
-    ConfigRead {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-    #[error("could not connect to APNs")]
-    Connect(#[source] io::Error),
-    #[error("an APNs device token must be 16 to 256 bytes of hex")]
-    DeviceToken,
-    #[error("APNs host {host} is not one of Apple's push hosts")]
-    Host { host: String },
-    #[error("the APNs request failed")]
-    Http(#[from] hyper::Error),
+    #[error(transparent)]
+    Apns(#[from] sheprd_apns::Error),
     #[error("could not encode the APNs payload")]
     Json(#[from] serde_json::Error),
-    #[error("could not read the APNs key {}", path.display())]
-    KeyDecode {
-        path: PathBuf,
-        #[source]
-        source: p256::pkcs8::Error,
-    },
-    #[error("the APNs key {} is open to other users", path.display())]
-    KeyNotPrivate { path: PathBuf },
-    #[error("could not read the APNs key {}", path.display())]
-    KeyRead {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
     #[error("the notification key is not a P-256 point in base64url")]
     NotifyKey,
     #[error("a Live Activity's pane must be 1 to 128 characters with no control characters")]
     Pane,
     #[error("the APNs payload is {len} bytes, more than {max}", max = payload::MAX_PAYLOAD)]
     PayloadTooLarge { len: usize },
-    #[error("could not get random bytes to seal a notification")]
-    Random(#[source] getrandom::Error),
-    #[error("could not build the APNs request")]
-    Request(#[from] hyper::http::Error),
-    #[error("could not seal the notification")]
-    Seal,
-    #[error("could not sign the APNs provider token")]
-    Sign(#[source] p256::ecdsa::Error),
-    #[error("APNs did not answer in time")]
-    Timeout,
-    #[error("could not set up TLS for APNs")]
-    Tls(#[source] rustls::Error),
     #[error("{len} Live Activity tokens, more than {max}", max = tokens::MAX_ACTIVITIES)]
     TooManyActivities { len: usize },
     // keep-sorted end
@@ -125,8 +68,14 @@ pub(crate) fn sender_for_tests() -> Sender {
     let key = p256::ecdsa::SigningKey::from(
         p256::SecretKey::from_slice(&[7; 32]).expect("a valid scalar"),
     );
-    let config = config::from_parts("ABCDE12345", "XYZ9876543", "so.pen.herdr.remote", true, key)
-        .expect("a valid config");
+    let config = sheprd_apns::Config::from_parts(
+        "ABCDE12345",
+        "XYZ9876543",
+        "so.pen.herdr.remote",
+        true,
+        key,
+    )
+    .expect("a valid config");
     Sender::new(config).expect("a sender")
 }
 

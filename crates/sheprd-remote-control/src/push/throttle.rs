@@ -1,11 +1,15 @@
 //! One device's push budget: at most one push per chat every five seconds,
-//! keeping the newest held back, and at most thirty an hour. Questions and
-//! clears skip the per-chat wait, since a late question costs the user time,
-//! but count toward the hourly cap like everything else.
+//! keeping the newest held back, and at most thirty alerts an hour. Questions
+//! and clears skip the per-chat wait, since a late question costs the user
+//! time, but count toward an hourly cap like everything else.
+//!
+//! Clears and badge moves have a cap of their own, so however often the
+//! badge moves, a question still gets through. One dropped leaves the badge
+//! stale until the next, or until the app opens.
 //!
 //! Times are explicit milliseconds, so tests need no clock. Memory is
 //! bounded: a chat is remembered only for five seconds after a push, so no
-//! more chats than the hourly cap are ever kept.
+//! more chats than the hourly caps allow are ever kept.
 
 use super::{Notification, triggers::Kind};
 use std::collections::{HashMap, VecDeque};
@@ -15,12 +19,16 @@ pub(super) const CHAT_INTERVAL_MS: u64 = 5_000;
 /// The window and size of the per-device cap.
 pub(super) const HOUR_MS: u64 = 60 * 60 * 1000;
 pub(super) const MAX_PER_HOUR: usize = 30;
+/// The same for clears and badge moves, which show nothing.
+pub(super) const MAX_CLEARS_PER_HOUR: usize = 60;
 
 #[derive(Debug, Default)]
 pub(crate) struct Throttle {
     /// Chats pushed to within the last interval, by notification tag.
     chats: HashMap<String, Recent>,
-    /// When each push of the last hour went out, oldest first.
+    /// When each clear of the last hour went out, oldest first.
+    cleared: VecDeque<u64>,
+    /// When each alert of the last hour went out, oldest first.
     sent: VecDeque<u64>,
 }
 
@@ -72,10 +80,15 @@ impl Throttle {
     /// Records `notification` as sent at `now_ms` unless the hourly cap is
     /// reached. A push replaces whatever its chat held back, being newer.
     fn admit(&mut self, notification: Notification, now_ms: u64) -> Option<Notification> {
-        if self.sent.len() >= MAX_PER_HOUR {
+        let (sent, cap) = if notification.clear {
+            (&mut self.cleared, MAX_CLEARS_PER_HOUR)
+        } else {
+            (&mut self.sent, MAX_PER_HOUR)
+        };
+        if sent.len() >= cap {
             return None;
         }
-        self.sent.push_back(now_ms);
+        sent.push_back(now_ms);
         self.chats.insert(
             notification.tag.clone(),
             Recent {
@@ -86,15 +99,16 @@ impl Throttle {
         Some(notification)
     }
 
-    /// Drops pushes older than an hour from the cap and chats with nothing
+    /// Drops pushes older than an hour from the caps and chats with nothing
     /// held whose interval has ended.
     fn forget(&mut self, now_ms: u64) {
-        while self
-            .sent
-            .front()
-            .is_some_and(|sent| now_ms.saturating_sub(*sent) >= HOUR_MS)
-        {
-            self.sent.pop_front();
+        for sent in [&mut self.sent, &mut self.cleared] {
+            while sent
+                .front()
+                .is_some_and(|at| now_ms.saturating_sub(*at) >= HOUR_MS)
+            {
+                sent.pop_front();
+            }
         }
         self.prune(now_ms);
     }

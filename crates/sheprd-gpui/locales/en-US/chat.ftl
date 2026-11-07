@@ -8,6 +8,8 @@ chat-layout-document = Document
 chat-layout-cards = Cards
 chat-layout-imessage = iMessage
 chat-layout-ia = iA
+chat-layout-opencode = OpenCode
+chat-status-commands = commands
 chat-launcher-plus = On + hover
 chat-launcher-beside = After +
 chat-launcher-leading = Before tabs
@@ -32,6 +34,7 @@ chat-reconnecting = Reconnecting…
 chat-show-chat = Chat
 chat-jump-to-end = Scroll to the latest message
 chat-jump-waiting = New output below
+chat-pinned-prompt = Go to this prompt
 
 # The composer.
 chat-composer-placeholder = Message the agent — / for commands, Shift-Enter for a new line
@@ -101,6 +104,10 @@ chat-copy-answers-label = Copy answers
 chat-copy-answers-done = Copied the answers
 chat-copy-code-label = Copy code
 chat-copy-code-done = Copied the code
+chat-copy-diff-label = Copy diff
+chat-copy-diff-done = Copied the diff
+chat-copy-original-label = Copy original
+chat-copy-original-done = Copied the original source
 chat-copy-latex-label = Copy LaTeX
 chat-copy-latex-done = Copied the LaTeX
 
@@ -138,7 +145,7 @@ chat-tool-terminal = Terminal { $id }: output is available in the program's term
 # Labels on their own lines around a file's text before and after a change.
 chat-diff-before = Before:
 chat-diff-after = After:
-chat-diff-new-file = New file:
+chat-diff-written-content = Written content (previous content unavailable):
 # Items past the ones listed.
 chat-more = and { $count } more
 
@@ -175,6 +182,7 @@ chat-visual-not-drawn = Not drawn: { $error }
 chat-visual-image-failed = [image] { $error }
 # A code block with no language named.
 chat-code = Code
+chat-diff = Diff
 # $lines and $characters are the limits, already formatted.
 chat-code-truncated = Preview limited to { $lines } lines and { $characters } characters per line; Copy code includes the full block.
 chat-math-unavailable = Equation preview unavailable; original LaTeX is shown below.
@@ -217,6 +225,8 @@ chat-running-stopped = Stopped
 
 # The agent's settings menu in the chat header.
 chat-settings-search = Search…
+chat-settings-hint = { $name }: { $value }
+chat-settings-mode = Mode
 chat-settings-auto-accept-on = Auto-accepting
 chat-settings-auto-accept-off = Asks first
 chat-settings-no-match = No match

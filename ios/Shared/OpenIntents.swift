@@ -32,3 +32,19 @@ struct NewWorkspaceIntent: AppIntent {
         return .result()
     }
 }
+
+/// Opens the app listening for a spoken command, from a Control, the
+/// Action button, or Siri.
+struct TalkIntent: AppIntent {
+    static let title: LocalizedStringResource = "Talk to Sheprd"
+    static let description = IntentDescription("Listens for a command: start an agent, or ask, stop, or open a chat.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if !WIDGET_EXTENSION
+        AppModel.current?.show(.talk())
+        #endif
+        return .result()
+    }
+}

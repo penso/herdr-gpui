@@ -141,8 +141,8 @@ mod process {
         NonZeroU16::new(port).unwrap()
     }
 
-    /// Whether `pid` has ended. One whose parent ended is reaped by the
-    /// system, so it may stay a zombie for a moment.
+    /// Whether `pid` has ended. A missing process is gone; `is_dead` treats
+    /// that as an answer instead of a failed `ps` wait.
     fn gone(pid: &str) -> bool {
         crate::test_process::is_dead(pid.trim().parse().unwrap()).unwrap()
     }

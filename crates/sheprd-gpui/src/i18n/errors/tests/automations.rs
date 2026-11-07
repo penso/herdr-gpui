@@ -29,6 +29,7 @@ fn every_automations_variant_has_a_message() {
         },
         Error::Refused("script is not approved".into()),
         Error::Run(sheprd_client::Error::Full),
+        Error::RunsActive,
         Error::UnknownHost(host()),
         Error::UnknownVersion,
         Error::UnsupportedHost,

@@ -260,6 +260,19 @@ fn numstat_reads_counts_binaries_and_renames() {
 }
 
 #[test]
+fn numstat_consumes_a_rename_whose_path_is_not_utf8() {
+    // An undecodable old path still takes its record: the new path keeps its
+    // counts.
+    let counts = changes::numstat(b"0\t0\t\0\xff-old.rs\0renamed.rs\0");
+    assert_eq!(counts.len(), 1);
+    assert_eq!(counts["renamed.rs"], Some((0, 0)));
+    // An undecodable new path drops that rename alone, not the next record.
+    let counts = changes::numstat(b"0\t0\t\0old.rs\0\xff-new.rs\x004\t2\tvalid.rs\0");
+    assert_eq!(counts.len(), 1);
+    assert_eq!(counts["valid.rs"], Some((4, 2)));
+}
+
+#[test]
 fn uncommitted_changes_are_listed_newest_first() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();

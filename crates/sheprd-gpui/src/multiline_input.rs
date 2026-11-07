@@ -9,8 +9,8 @@ use std::ops::Range;
 
 use gpui::{
     Bounds, ContentMask, Context, CursorStyle, FocusHandle, MouseButton, Pixels, Point, Role,
-    ScrollDelta, ScrollWheelEvent, SharedString, TextAlign, TextRun, UnderlineStyle, Window,
-    canvas, div, fill, point, prelude::*, px, rgb, size,
+    ScrollDelta, ScrollEvent, SharedString, TextAlign, TextRun, UnderlineStyle, Window, canvas,
+    div, fill, point, prelude::*, px, rgb, size,
 };
 
 use crate::{
@@ -592,7 +592,7 @@ impl Render for MultilineInput {
                     this.selecting = false;
                 }),
             )
-            .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|this, event: &ScrollEvent, _, cx| {
                 let delta = match event.delta {
                     ScrollDelta::Pixels(point) => point.y,
                     ScrollDelta::Lines(point) => px(point.y * this.font.line_height()),

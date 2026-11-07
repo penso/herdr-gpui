@@ -62,7 +62,7 @@ fn family(name: &str) -> &'static str {
             "sheprd window [list]\n    The app's windows, with IDs for --window.\nsheprd window new [--session NAME]\n    Open another window: of the caller's own Herdr session, of a named\n    local session, or outside Herdr of the frontmost window's host.\nsheprd window focus ID\nsheprd window fullscreen [on|off|toggle]\nsheprd window size [WIDTHxHEIGHT]\n    Print the window's size, or resize it. Windows cannot be moved.\nsheprd window detach|reconnect\n    Detach from, or reconnect to, the window's selected host."
         }
         "ui" => {
-            "sheprd ui sidebar [on|off|toggle]\nsheprd ui statusbar [on|off|toggle]\nsheprd ui font-size +|-|reset|POINTS\nsheprd ui panel workspaces|overview|pull-requests|issues|security|automations|usage\n    For this window and session; settings are changed with `config`."
+            "sheprd ui sidebar [on|off|toggle]\nsheprd ui statusbar [on|off|toggle]\nsheprd ui font-size +|-|reset|POINTS\nsheprd ui panel workspaces|overview|pull-requests|issues|tasks|security|automations|usage\n    For this window and session; settings are changed with `config`."
         }
         "tab" => {
             "sheprd tab [list]\n    The app's own tabs: pages, code, reviews, Devices.\n    Terminal tabs belong to Herdr: use `herdr tab`.\nsheprd tab focus|close ID\n    Show a tab, switching to its workspace, or close it."
@@ -74,7 +74,7 @@ fn family(name: &str) -> &'static str {
             "sheprd devices [open]\n    Open the Devices overview tab in the caller's workspace."
         }
         "orchestrator" => {
-            "sheprd orchestrator [open] [--repo PATH]\n    Show the Issues section narrowed to the caller's project, or PATH's.\nsheprd orchestrator items|issues|prs [--repo PATH]\n    List what it last synced, from its local database (no network).\n    Runs here; Sheprd need not run. Exits 4 before its first sync."
+            "sheprd orchestrator [open] [--repo PATH]\n    Show the Issues section narrowed to the caller's project, or PATH's.\nsheprd orchestrator items|issues|prs|tasks [--repo PATH]\n    List what it last synced, from its local database (no network).\n    Runs here; Sheprd need not run. Exits 4 before its first sync."
         }
         "review" => {
             "sheprd review [open]\n    Open the review of the caller's workspace's uncommitted changes."
@@ -87,6 +87,9 @@ fn family(name: &str) -> &'static str {
         }
         "notes" => {
             "sheprd notes [list]\n    Every worktree note, most recently edited first.\nsheprd notes get|clear\nsheprd notes set TEXT...\n    The note on the caller's checkout (its repository and branch), or the\n    focused workspace's outside a Herdr pane. Notes are one line of at most\n    500 characters. `list` and `get` exit 4 when there is none."
+        }
+        "worktree" => {
+            "sheprd worktree [status]\n    Whether the caller's worktree is muted.\nsheprd worktree mute|unmute\n    Silence its notifications, or let them through again. Mutes stay in\n    this app; nothing reaches the daemon."
         }
         "feedback" => {
             "sheprd feedback [--wait SECONDS]\n    Notes the user sent this pane: page, review, and terminal notes that\n    were not typed into it. Exits 4 when there are none."
@@ -107,7 +110,7 @@ fn family(name: &str) -> &'static str {
             "sheprd pr [status]|checks\n    The pull request of the caller's workspace's branch, as Sheprd last\n    looked it up (selected host only; sign in to GitHub first). Exits 4\n    when there is none.\nsheprd pr comments\n    Its review comments (the workspace must be the focused one).\nsheprd pr open\n    Open it in a browser tab.\nsheprd pr quota\n    Last reported GraphQL points and rate-limit retry delays for this\n    window's GitHub accounts. Reads cached state without a network request."
         }
         "host" => {
-            "sheprd host [list]\n    The window's hosts and their status. Herdr's `machine` command\n    manages saved hosts.\nsheprd host select ID\n    Show that host in the window, as choosing it in the sidebar does."
+            "sheprd host [list]\n    The window's hosts and their status. Herdr's `machine` command\n    manages saved hosts.\nsheprd host mute|unmute [HOST]\n    Silence a host's notifications as a whole, or let them through again,\n    by ID or label; absent, the caller's host. Works while it is offline.\nsheprd host select ID\n    Show that host in the window, as choosing it in the sidebar does.\nsheprd host tag ID [TAG...]\n    Replace the tags that group that host in the sidebar and on paired\n    phones; with no tags, clear them."
         }
         "cloud" => {
             "sheprd cloud [list]\n    Saved cloud machines (Sheprd need not run).\nsheprd cloud add\n    Open the settings that add a machine.\nsheprd cloud setup ID\n    Run the setup script from [cloud] in config-gpui.toml again on a saved\n    machine, named by its ID or label, in a new tab once it is shown.\nsheprd cloud images [list]\n    Sandbox images built from projects' .herdr/sandbox/Dockerfile or dev\n    container (Sheprd need not run). Exits 4 when there are none.\nsheprd cloud images build [PROVIDER]\n    Build the caller's repository's images ahead of a dispatch, for\n    PROVIDER (container, daytona) or every provider that holds them.\n    Settings > Cloud devices shows progress, logs, and Reset.\nsheprd cloud create PROVIDER [--count N] [--template T] [--preset P]\n                        [--sandbox] [--no-install] [--no-setup]\n    Ask in Sheprd to create N machines (at most 16). The user confirms\n    there, once for all of them; prints the batch to follow. Each is ready\n    once saved, with Herdr installed and the [cloud] setup script run.\n    --template and --preset are Coder's, by name; --sandbox is Azure's.\nsheprd cloud exec ID [--timeout S] [--cwd DIR] -- COMMAND...\n    Run COMMAND on a saved machine through the app's own connection to\n    it, with no input, for at most S seconds in all (default 120, at most\n    600). Its stdout and stderr come back as they are, each cut to its\n    end; exits 0 when it did, 1 otherwise. --cwd ~/x is under its home.\nsheprd cloud destroy ID... | --batch BATCH\n    Ask in Sheprd to delete saved machines at their providers and forget\n    them (a provider that cannot delete one only forgets it). The user\n    confirms there, once for all of them; prints the batch to follow.\nsheprd cloud wait BATCH [--timeout S]\n    Each machine of the batch once all are settled, or after S seconds\n    (default 60, at most 600), with its ID once made. Exits 0 when all went\n    as asked, 1 when one failed or the user said no, 4 while it is still\n    going.\nsheprd cloud batches\n    The batches Sheprd keeps."

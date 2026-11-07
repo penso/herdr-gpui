@@ -23,6 +23,7 @@ mod row;
 mod search;
 pub(crate) mod slide;
 mod sticky;
+mod tag_groups;
 mod tokens;
 mod view;
 mod wash;

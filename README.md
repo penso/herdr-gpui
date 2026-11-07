@@ -299,7 +299,7 @@ too.
 ### From source
 
 Install Rust/rustup and, on macOS, the Xcode command-line tools. The repository
-pins Rust 1.96.1 and GPUI 0.3.6 (the `gpui-pre` snapshot crate); the Rust version
+pins Rust 1.99.0 and GPUI 0.3.10 (the `gpui-pre` snapshot crate); the Rust version
 is declared in `rust-toolchain.toml` and mirrored in `mise.toml`, so `mise install`
 also provisions it.
 

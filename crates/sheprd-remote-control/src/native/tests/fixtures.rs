@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    control::pull_requests::{PullRequests, Tone, WorkspacePullRequest},
+    control::pull_requests::{PullRequests, Tone, UnopenedBranch, WorkspacePullRequest},
     hub::Summary,
     load::Load,
 };
@@ -79,12 +79,15 @@ fn transcript() -> Transcript {
 
 fn home() -> Home {
     let mut layout = layout(EndpointId::random());
+    layout.name_session("default");
+    // A named session the daemon follows beside the default one.
     layout.workspaces.push(Workspace {
         id: "w2".into(),
         label: "moltis".into(),
         branch: None,
         cwd: "/moltis".into(),
         worktree: None,
+        session: Some("pilots".into()),
         chats: Vec::new(),
         terminals: Vec::new(),
     });
@@ -100,6 +103,7 @@ fn home() -> Home {
         branch: Some("worktree/spaces-tab".into()),
         cwd: "/work-spaces-tab".into(),
         worktree: Some(worktree(true)),
+        session: Some("default".into()),
         chats: Vec::new(),
         terminals: Vec::new(),
     });
@@ -132,6 +136,12 @@ fn home() -> Home {
             url: "https://github.com/penso/herdr-gpui/pull/870".into(),
             tone: Tone::Waiting,
         }],
+        unopened: vec![UnopenedBranch {
+            workspace_id: "w3".into(),
+            cwd: "/work-spaces-tab".into(),
+            branch: "worktree/spaces-tab".into(),
+            commits: 3,
+        }],
     };
     Home::project(Sources {
         computer: "MacBook Pro",
@@ -145,6 +155,9 @@ fn home() -> Home {
         }),
         summaries: [("p1".to_owned(), summary)].into(),
         pull_requests: &pull_requests,
+        tags: crate::control::tags::ComputerTags::new(["work"], 1_770_000_000_000),
+        version: "20261106.1",
+        waiting: 1,
     })
 }
 

@@ -1,11 +1,20 @@
 use super::*;
 use crate::chat::{
-    rich::{CodeText, MAX_CODE_LINE_CHARS, MAX_CODE_LINES},
+    prepared::tool::Code,
+    rich::{
+        CodeText, MAX_CODE_LINE_CHARS, MAX_CODE_LINES,
+        diff::{self, Kind as DiffKind},
+    },
     selection::{Cell, Segment},
+    view::{Hues, text_ink},
 };
+use crate::config::Theme;
 use crate::i18n::fl;
 use crate::review::highlight::{Contrast, Span};
 use std::sync::Arc;
+
+/// How much of a change's hue tints its row, in percent.
+const DIFF_TINT: u32 = 17;
 
 impl SheprdWindow {
     pub(super) fn rich_code(
@@ -16,7 +25,48 @@ impl SheprdWindow {
         block: usize,
         context: &mut RichContext<'_, '_, '_>,
     ) -> Div {
-        let spans = context.visuals.code(id);
+        let code = CodeView {
+            id,
+            language,
+            source,
+            block,
+        };
+        self.render_code_block(code, context.visuals, Some(context.selection), context.cx)
+    }
+
+    /// A tool card's source, drawn like a message's code block.
+    pub(in crate::chat::view) fn render_chat_tool_code(
+        &self,
+        code: &Code,
+        selection: Option<&Scope<'_>>,
+        visuals: &Visuals,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let view = CodeView {
+            id: code.id,
+            language: &code.language,
+            source: &code.source,
+            block: 0,
+        };
+        self.render_code_block(view, visuals, selection, cx)
+    }
+
+    fn render_code_block(
+        &self,
+        code: CodeView<'_>,
+        visuals: &Visuals,
+        selection: Option<&Scope<'_>>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let CodeView {
+            id,
+            language,
+            source,
+            block,
+        } = code;
+        let is_diff = diff::is_diff(language);
+        let diff_rows = is_diff.then(|| diff::rows(source, MAX_CODE_LINES));
+        let spans = visuals.code(id);
         // One pass: the lines past the limit are only checked for, not counted.
         let mut raw = source.lines();
         let lines: Vec<_> = raw
@@ -27,13 +77,13 @@ impl SheprdWindow {
                 let spans = spans
                     .and_then(|spans| spans.get(index))
                     .map_or(&[][..], Vec::as_slice);
-                match context
-                    .selection
-                    .segment(Cell {
-                        block,
-                        row: index,
-                        column: 0,
-                    })
+                let cell = Cell {
+                    block,
+                    row: index,
+                    column: 0,
+                };
+                match selection
+                    .and_then(|selection| selection.segment(cell))
                     .and_then(Segment::code)
                 {
                     Some(code) => highlighted(code, raw, spans),
@@ -62,15 +112,18 @@ impl SheprdWindow {
                     .border_color(rgb(self.theme.active))
                     .text_size(px(self.chat_text_size() - 2.))
                     .text_color(rgb(self.theme.muted))
-                    .child(
-                        if language.is_empty() {
-                            fl!("chat-code")
-                        } else {
-                            language.to_owned()
-                        }
-                        .to_owned(),
-                    )
-                    .child(self.rich_copy(copy::CODE, Arc::clone(source), context.cx)),
+                    .child(if is_diff {
+                        fl!("chat-diff")
+                    } else if language.is_empty() {
+                        fl!("chat-code")
+                    } else {
+                        language.to_owned()
+                    })
+                    .child(self.rich_copy(
+                        if is_diff { copy::DIFF } else { copy::CODE },
+                        Arc::clone(source),
+                        cx,
+                    )),
             )
             .child(
                 div()
@@ -86,34 +139,52 @@ impl SheprdWindow {
                     .line_height(relative(1.5))
                     .text_font(&self.config.terminal)
                     .children(lines.into_iter().enumerate().map(|(index, line)| {
-                        let marks = line.spans.into_iter().map(|span| {
+                        let kind = diff_rows
+                            .as_ref()
+                            .and_then(|rows| rows.get(index))
+                            .map(|row| row.kind);
+                        let (background, ink) = diff_colors(&self.theme, kind);
+                        let sign = diff_sign(&self.theme, kind, background).map(|color| {
+                            let style = HighlightStyle {
+                                color: Some(rgb(color).into()),
+                                ..Default::default()
+                            };
+                            (0..1, style)
+                        });
+                        let marks = sign.into_iter().chain(line.spans.into_iter().map(|span| {
                             (
                                 span.start..span.end,
                                 HighlightStyle {
                                     color: Some(
                                         rgb(span
                                             .token
-                                            .colour(&self.theme, Contrast::On(self.theme.surface)))
+                                            .colour(&self.theme, Contrast::On(background)))
                                         .into(),
                                     ),
                                     ..Default::default()
                                 },
                             )
-                        });
-                        let fragment = context.selection.fragment(Cell {
-                            block,
-                            row: index,
-                            column: 0,
+                        }));
+                        let fragment = selection.and_then(|selection| {
+                            selection.fragment(Cell {
+                                block,
+                                row: index,
+                                column: 0,
+                            })
                         });
                         let styled = styled_text(fragment.as_ref(), line.text, marks, &self.theme);
                         let layout = styled.layout().clone();
                         let view = div()
                             .debug_selector(move || format!("chat-code-line-{index}"))
                             .flex_none()
+                            .min_w_full()
                             .whitespace_nowrap()
                             .min_h(px(self.config.terminal.size * 1.5))
+                            .bg(rgb(background))
+                            .text_color(rgb(ink))
+                            .when(is_diff, |row| row.px(px(6.)))
                             .child(styled);
-                        selectable(fragment.as_ref(), view, layout, context.cx)
+                        selectable(fragment.as_ref(), view, layout, cx)
                     })),
             )
             .when(truncated, |view| {
@@ -150,6 +221,42 @@ fn grouped(number: usize) -> String {
         text.push(digit);
     }
     text
+}
+
+/// A row's fill and ink: tinted for a changed line, muted for a patch's
+/// own headers, and the block's own otherwise.
+fn diff_colors(theme: &Theme, kind: Option<DiffKind>) -> (u32, u32) {
+    let hues = Hues::of(theme);
+    let background = match kind {
+        Some(DiffKind::Added) => crate::config::mix(theme.surface, hues.green, DIFF_TINT),
+        Some(DiffKind::Removed) => crate::config::mix(theme.surface, hues.red, DIFF_TINT),
+        _ => theme.surface,
+    };
+    let ink = if kind == Some(DiffKind::Meta) {
+        theme.muted
+    } else {
+        theme.foreground
+    };
+    (background, text_ink(ink, background))
+}
+
+/// The ink of a changed line's leading sign, so the change does not rest on
+/// its row's tint alone.
+fn diff_sign(theme: &Theme, kind: Option<DiffKind>, background: u32) -> Option<u32> {
+    let hues = Hues::of(theme);
+    let color = match kind? {
+        DiffKind::Added => hues.green,
+        DiffKind::Removed => hues.red,
+        DiffKind::Context | DiffKind::Meta => return None,
+    };
+    Some(text_ink(color, background))
+}
+
+struct CodeView<'a> {
+    id: VisualId,
+    language: &'a str,
+    source: &'a Arc<str>,
+    block: usize,
 }
 
 struct CodeLine {

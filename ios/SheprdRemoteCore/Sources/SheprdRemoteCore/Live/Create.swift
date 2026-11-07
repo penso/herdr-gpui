@@ -44,13 +44,17 @@ public struct NewWorkspaceRequest: Codable, Hashable, Sendable {
     public var prompt: String
     /// What the chat starts with, before the prompt goes.
     public var start: ChatStart?
+    /// The Herdr session to open it in, as the computer's home names it;
+    /// left out, it opens where the computer puts new workspaces.
+    public var session: String?
 
-    public init(cwd: String, branch: String = "", agent: String, prompt: String = "", start: ChatStart? = nil) {
+    public init(cwd: String, branch: String = "", agent: String, prompt: String = "", start: ChatStart? = nil, session: String? = nil) {
         self.cwd = cwd
         self.branch = branch
         self.agent = agent
         self.prompt = prompt
         self.start = start
+        self.session = session
     }
 
     /// The branch proposed for `seed`, the same one the desktop's new
@@ -92,9 +96,9 @@ public struct Created: Codable, Hashable, Sendable {
     public var pane: String?
     /// Whether the first prompt went to the chat.
     public var prompted: Bool
-    /// Whether the chat took what it was asked to start with. A daemon too
-    /// old to know the request's `start` does not say.
-    public var started: Bool
+    /// Whether the chat took what it was asked to start with; `nil` from a
+    /// daemon too old to know the request's `start`, which ignored it.
+    public var started: Bool?
 
     enum CodingKeys: String, CodingKey { case workspace, pane, prompted, started }
 
@@ -103,6 +107,6 @@ public struct Created: Codable, Hashable, Sendable {
         workspace = try c.decodeIfPresent(String.self, forKey: .workspace)
         pane = try c.decodeIfPresent(String.self, forKey: .pane)
         prompted = try c.decodeIfPresent(Bool.self, forKey: .prompted) ?? false
-        started = try c.decodeIfPresent(Bool.self, forKey: .started) ?? false
+        started = try c.decodeIfPresent(Bool.self, forKey: .started)
     }
 }

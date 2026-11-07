@@ -683,12 +683,9 @@ impl SheprdWindow {
     /// owner of each tab that has none, gives a group whose tab closed
     /// another of its own, and closes a group whose last tab closed.
     pub(crate) fn settle_groups(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (Some(key), Some(snapshot)) = (self.browser_key(), self.live.snapshot.clone()) else {
+        let Some(key) = self.browser_key() else {
             return;
         };
-        if snapshot.focused_workspace_id.as_ref() != Some(&key.1) {
-            return;
-        }
         let open = self.open_workspace_tabs(cx);
         self.browser.hidden.retain_open(&key, &open);
         let tabs = self.workspace_tabs(cx);

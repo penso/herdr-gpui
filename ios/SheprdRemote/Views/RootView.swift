@@ -52,15 +52,18 @@ struct RootView: View {
         }
         // The split view presents it itself, over whichever sheet is open.
         .sheet(isPresented: Binding(get: { window.pairing && !wide }, set: { window.pairing = $0 })) { PairView() }
-        .alert("Not sent", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
+        .alert(model.noticeTitle ?? "Not sent", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil; model.noticeTitle = nil } })) {
         } message: {
             Text(model.notice ?? "")
         }
         .sheet(item: Bindable(model).creating) { creating in
             switch creating {
-            case let .workspace(device, folder): NewWorkspaceSheet(device: device, folder: folder)
+            case let .workspace(device, folder, session): NewWorkspaceSheet(device: device, folder: folder, session: session)
             case let .chat(device, workspace, label, agent): NewChatSheet(device: device, workspace: workspace, label: label, agent: agent)
             }
+        }
+        .sheet(item: Bindable(model).voice, onDismiss: nil) { session in
+            VoiceSheet(session: session)
         }
         // A panel's sheet draws it instead, as here it would be behind it.
         .nearbyCard(window, when: !window.panelOpen)
@@ -87,6 +90,15 @@ struct RootView: View {
         #if DEBUG
         .task { await followLaunchArguments() }
         #endif
+        // The microphone never stays open behind the app, or its lock.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { model.voice = nil }
+        }
+        .onChange(of: LockState.shared.locked) { _, locked in
+            guard !locked, let talk = model.pendingTalk else { return }
+            model.pendingTalk = nil
+            model.talk(saying: talk.words)
+        }
         .onChange(of: model.pendingTab) { _, wanted in
             guard let wanted else { return }
             tab = wanted
@@ -165,7 +177,9 @@ extension RootView {
     /// `-openComputer YES` opens the first computer's page from Workspaces,
     /// and `-editComputers YES` puts Settings' computers in Edit. In a
     /// chat, `-session YES` opens its session sheet and `-draft TEXT`
-    /// types into the composer.
+    /// types into the composer. `-voiceSay TEXT` runs a spoken command as
+    /// if it were heard, as the simulator has no microphone, and
+    /// `-voiceThen TEXT` follows it with another.
     func followLaunchArguments() async {
         let defaults = UserDefaults.standard
         if let link = defaults.string(forKey: "pairLink"),
@@ -182,6 +196,25 @@ extension RootView {
         case "workspaces": tab = .workspaces
         case "settings": tab = .settings
         default: break
+        }
+        if let tags = defaults.string(forKey: "computerTags"), let computer = model.computers.first {
+            model.setTags(tags.split(separator: ",").map(String.init), for: computer)
+        }
+        if let words = defaults.string(forKey: "voiceSay") {
+            try? await Task.sleep(for: .seconds(3))
+            model.talk(saying: words)
+            // `-voiceConfirm YES` presses Start.
+            if defaults.bool(forKey: "voiceConfirm") {
+                try? await Task.sleep(for: .seconds(5))
+                await model.voice?.confirm()
+            }
+            // `-voiceThen TEXT` says something next, as a follow-up.
+            if let next = defaults.string(forKey: "voiceThen") {
+                try? await Task.sleep(for: .seconds(8))
+                model.voice = nil
+                try? await Task.sleep(for: .seconds(1))
+                model.talk(saying: next)
+            }
         }
         if defaults.bool(forKey: "newWorkspace") {
             try? await Task.sleep(for: .seconds(2))

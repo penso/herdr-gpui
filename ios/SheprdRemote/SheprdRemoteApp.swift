@@ -29,6 +29,9 @@ struct SheprdRemoteApp: App {
                     case .active:
                         model.fleet.activate()
                         model.nearby.start()
+                        // Registering is idempotent: a computer that lost
+                        // or never got this phone's tokens has them again.
+                        Task { await model.tokens.sync() }
                     case .background:
                         model.fleet.deactivate()
                         model.nearby.stop()

@@ -33,6 +33,14 @@ pub(super) fn clear_layout_draft(cx: &mut App) {
     draft.revision = draft.revision.wrapping_add(1);
 }
 
+/// Leaves `mode` as a draft being edited, as a click in Settings does.
+#[cfg(test)]
+pub(super) fn draft_layout(mode: LayoutMode, cx: &mut App) {
+    let draft = cx.default_global::<LayoutDraft>();
+    draft.active = true;
+    draft.mode = Some(mode);
+}
+
 #[cfg(test)]
 #[derive(Clone)]
 pub(super) struct LayoutIo {

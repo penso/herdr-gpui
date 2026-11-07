@@ -6,6 +6,7 @@ mod api_socket;
 mod chat_link;
 mod new_chat;
 mod projection;
+mod sessions;
 mod summary;
 mod titles;
 

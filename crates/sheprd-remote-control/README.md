@@ -9,6 +9,37 @@ The daemon is a user service that Sheprd installs when Remote control is
 turned on, and it keeps running when the app quits. It never starts, stops,
 or upgrades a Herdr daemon.
 
+## Herdr 1 sessions
+
+The daemon follows the Herdr 1 session at `--herdr-socket` (discovered when
+absent) and every other running session of this user's installation
+(`herdr --session NAME`, under `sessions/` in Herdr's configuration
+directory), so a computer that runs only named sessions still shows phones
+all of them. The installation is the one that socket is in, as the desktop
+resolved it, since the service's environment may lack the shell's
+`XDG_CONFIG_HOME`. Sessions are listed again every 30 seconds: one started or
+stopped later is followed or let go without a restart. A named session's
+workspace, tab, and pane ids carry `herdr:NAME:`, and its requests go to its
+own API socket. The session at `--herdr-socket` keeps its ids, and desktop
+pull request data is matched against it. A new workspace goes to that
+session, or to the alphabetically first named session that answers when it
+does not.
+
+A socket outside such an installation (a sandbox's, or a development
+daemon's) keeps the daemon to that one session: no other is followed. Chats
+are bounded across all sessions, the primary's first and then by name.
+
+Each workspace names the session it is in (`session` in `/api/v2/home`):
+`default` for the root session, `NAME` for a named one, by where its socket
+is in the installation; Herdr 2 workspaces name none. The phone's Workspaces
+tab lists a computer's repositories under each session's name when more than
+one session has workspaces, and as before otherwise. A new worktree started
+from a repository there names its session, and opens in it.
+
+Pairing a phone gives it this computer, not one session: a paired phone can
+read and type into every session the daemon follows, including one started
+after it was paired.
+
 ## Herdr 2 terminals
 
 The daemon lists terminals from both Herdr 1 and a running herdr-core.
@@ -26,9 +57,11 @@ When the Herdr desktop app's `herdr-app` document exists in the core,
 the phone shows its local spaces in document order, with their tabs and
 split panes. Named spaces keep their names. Unnamed spaces use the first
 terminal's current repository or folder, with `~` for home. Spaces from
-other machines are omitted. Unlisted terminals stay in **Herdr 2**.
-The worker reads the document after a terminal changes and at least every
-3 seconds, and parses it only when its version changes. It accepts at most 1 MiB,
+other machines are omitted. A terminal Sheprd's own tabs hold stays in that
+tab and its split, even when a space holds it too. Unlisted terminals stay in
+**Herdr 2**.
+The worker reads the document after a terminal or document changes and at
+least every 3 seconds, and parses it only when its version changes. It accepts at most 1 MiB,
 256 spaces and tabs, and 16 terminal panes per tab within 16 tree levels.
 A malformed or oversized document falls back to Sheprd's saved tabs.
 
@@ -83,6 +116,17 @@ devices in `devices.json` (0600, replaced atomically), challenge-signed
 sessions, and per-address rate limits. It is synchronous and takes every time
 as milliseconds since the Unix epoch, so the server calls it under a mutex and
 tests pass explicit times.
+
+### Updating from a phone
+
+`POST /api/v2/update` asks Sheprd to update, and this daemon only relays
+(`control::app_update`). Sheprd sends `AppUpdate` with each poll while a window
+runs its updater, and the answer hands it a phone's request, which its updater
+carries out up to the restart. Each report names the app's process, and a
+request goes only to the run a phone saw, so it cannot update unseen an app
+reopened later, however soon. Without a report for 15 seconds the app counts as
+closed and a request is refused. A machine with no app open
+cannot update from a phone.
 
 ### Other machines
 
@@ -184,6 +228,12 @@ fresh desktop pairing code directly, without reinstalling the shortcut.
 HTTPS post to the phone's push service, the triggers that turn chat changes
 into questions, finished turns, and errors, and a per-device throttle. The
 service worker receives `push::Message` as JSON.
+
+The app's badge counts agents that want the user (`web::attention`): those
+with a question, those Herdr reports blocked, and those that finished and
+nobody has opened on a phone or focused in a Herdr client. A background push
+moves it when the count changes, and iOS may delay or drop those, so the
+number is exact only once the app is open.
 
 ## Empty chats
 

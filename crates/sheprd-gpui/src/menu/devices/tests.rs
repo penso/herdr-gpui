@@ -23,6 +23,7 @@ mod local_network;
 mod rail;
 mod scope;
 mod selection;
+mod session_chip;
 #[cfg(unix)]
 mod setup_activation;
 #[cfg(unix)]

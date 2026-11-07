@@ -157,7 +157,7 @@ fn a_wheel_event_consumed_by_a_toast_still_cancels_shift_taps(cx: &mut gpui::Tes
         change(&mut view.shift_taps, false, 40, now);
         assert!(view.shift_taps.first.is_some());
     });
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
         position: bounds.center(),
         delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-20.))),
         ..Default::default()

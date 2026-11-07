@@ -39,6 +39,12 @@ const MIN_STEP: f32 = 0.5;
 /// a long burst of output does not take seconds to scroll past.
 const MAX_BEHIND: f32 = 0.5;
 
+/// Whether the list's top moved to another row, or to or from a row's start.
+fn crossed(before: ListOffset, after: ListOffset) -> bool {
+    before.item_ix != after.item_ix
+        || (before.offset_in_item > px(0.)) != (after.offset_in_item > px(0.))
+}
+
 #[derive(Debug)]
 pub(crate) struct Glide {
     /// Shared with the frame's [`Self::watch`], which reads it after layout.
@@ -55,6 +61,10 @@ pub(crate) struct Glide {
     away: Rc<Cell<motion::Toggle>>,
     /// Whether output landed below since the button last closed.
     waiting: Rc<Cell<bool>>,
+    /// Where the last layout left the list's top. Render cannot ask the
+    /// list: until layout it answers with where it was told to go, which
+    /// while following is past the end, however short the conversation.
+    top: Rc<Cell<ListOffset>>,
 }
 
 impl Glide {
@@ -72,6 +82,7 @@ impl Glide {
             speed: 0.,
             away: Rc::default(),
             waiting: Rc::default(),
+            top: Rc::default(),
         }
     }
 
@@ -99,6 +110,11 @@ impl Glide {
         self.scrolled.get() || !self.following.get()
     }
 
+    /// Where the last layout left the list's top.
+    pub(crate) fn top(&self) -> ListOffset {
+        self.top.get()
+    }
+
     /// New output landed at the end of the list.
     pub(crate) fn note_output(&self) {
         self.waiting.set(true);
@@ -121,9 +137,16 @@ impl Glide {
         let scrolled = self.scrolled.clone();
         let away = self.away.clone();
         let waiting = self.waiting.clone();
+        let top = self.top.clone();
         let list = list.clone();
         canvas(
             move |_, window, _| {
+                let settled = list.logical_scroll_top();
+                // What reads the top only cares which row it is in, and
+                // whether that row starts there.
+                if crossed(top.replace(settled), settled) {
+                    window.request_animation_frame();
+                }
                 let left = behind(&list);
                 if !held {
                     settle(&following, &scrolled, left);

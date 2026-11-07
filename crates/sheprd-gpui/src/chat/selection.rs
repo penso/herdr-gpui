@@ -18,10 +18,14 @@ pub(crate) enum Region {
     Details,
     /// The header above historical Q&A or a tool call.
     Label,
-    /// An expanded tool call's output, one block per content item.
-    ToolContent,
+    /// The earlier text above a change too large to compare.
+    ToolBefore(usize),
     /// An expanded tool call's locations, one row each.
     ToolLocations,
+    /// One content item's source in an expanded tool call.
+    ToolPreview(usize),
+    /// The label above one content item's source.
+    ToolPreviewLabel(usize),
     /// An expanded tool call's full title.
     ToolTitle,
 }

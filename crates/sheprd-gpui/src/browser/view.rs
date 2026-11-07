@@ -166,14 +166,9 @@ pub(crate) fn scope(endpoint: &crate::endpoint::Endpoint) -> Scope {
     }
 }
 
-/// Page titles run long; a tab shows the start of one, like a web browser.
-/// The budget is in columns, so a CJK title is cut about as wide.
+/// Page titles run long; a tab shows the start of one.
 pub(super) fn tab_label(title: &str) -> SharedString {
-    const MAX_COLUMNS: usize = 28;
-    match crate::truncate::cut_width(title, MAX_COLUMNS) {
-        Some(kept) => format!("{}{}", kept.trim_end(), crate::truncate::ELLIPSIS).into(),
-        None => title.to_owned().into(),
-    }
+    crate::truncate::tab_title(title).into()
 }
 
 pub(super) fn store(cx: &App) -> Option<&Store> {
@@ -194,8 +189,14 @@ pub(crate) enum PageOpened {
 }
 
 impl SheprdWindow {
+    /// The workspace tabs belong to: the one Herdr 1 focuses or, with no
+    /// Herdr 1 installed, the window's single herdr-core workspace.
     pub(crate) fn browser_key(&self) -> Option<(Scope, String)> {
-        let workspace = self.live.snapshot.as_ref()?.focused_workspace_id.clone()?;
+        let workspace = match &self.live.snapshot {
+            Some(snapshot) => snapshot.focused_workspace_id.clone()?,
+            None if self.live.missing_installation => crate::core_terminals::WORKSPACE.to_owned(),
+            None => return None,
+        };
         Some((scope(&self.endpoints[self.selected_endpoint]), workspace))
     }
 

@@ -3,14 +3,14 @@
 //! caches only.
 
 use super::{
-    DEVICE_FOOTER_HEIGHT, STATUS_WIDTH, SidebarDrag,
+    DEVICE_FOOTER_HEIGHT, HOST_ARROW_WIDTH, STATUS_WIDTH, SidebarDrag,
     agents::Indicators,
     agents_sort,
     cell::{Cell, Fold, RowContext, RowData, WorkspaceRow, layout_for},
     label_text, layout, line_height,
     reorder::{self, Plan},
     row::{RowIcon, RowLift, RowTree},
-    sidebar_width, sticky,
+    scaled, sidebar_width, sticky,
     tokens::{self, SpaceContext},
     visible_workspace_entries, wash,
     workspaces::{
@@ -132,11 +132,39 @@ impl SheprdWindow {
         let device_plan = headed.then(|| self.device_plan(devices, &query)).flatten();
         let mut sliding = device_plan.as_ref().is_some_and(|plan| plan.sliding);
         let worktree_glyph = self.config.worktrees.glyph(theme);
+        // A lifted device folds the list to headers alone, and search results
+        // are not arranged by group.
+        let grouped = headed && device_plan.is_none() && query.is_empty() && self.device_tags.any();
+        let tag_filter = self.device_tag_filter.as_deref();
+        let mut section = None;
+        // Sections are headings, so what lists under them steps in, with
+        // each host's arrow below its section's dot.
+        let heading_look = look;
+        let look = layout::SidebarLook {
+            group_indent: if grouped {
+                scaled(font, HOST_ARROW_WIDTH) + look.density.host_gap()
+            } else {
+                0.
+            },
+            ..look
+        };
         for (endpoint_index, endpoint) in self.displayed_devices() {
             if !self.device_visible(&endpoint.id)
                 || (devices && !self.device_listed(endpoint_index, &query))
             {
                 continue;
+            }
+            if grouped {
+                let own = self.device_tags.section(&endpoint.id, tag_filter);
+                if !section.is_some_and(|last| super::tag_groups::same_section(last, own)) {
+                    section = Some(own);
+                    let count = self.tag_section_count(own);
+                    spaces = spaces.child(self.tag_section(own, count, heading_look, cx));
+                    space_rows += 1;
+                }
+                if self.device_tag_folded(&endpoint.id) {
+                    continue;
+                }
             }
             let selected = endpoint_index == self.selected_endpoint;
             let endpoint_id = endpoint.id.clone();
@@ -760,6 +788,7 @@ impl SheprdWindow {
                                 header(key, &label, font, theme, look)
                             }),
                     )
+                    .children(headed.then(|| self.tag_switch(cx)).flatten())
                     // The wrapper clips the pinned header as the next host's
                     // pushes it up, so it never paints over the title above.
                     .child(
