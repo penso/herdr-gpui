@@ -87,6 +87,9 @@ struct Composer: View {
             // The simulator loop's `-draft TEXT` types into the composer.
             if let text = UserDefaults.standard.string(forKey: "draft") { draft = text }
             #endif
+            // Said here too: the camera hides this composer without ending
+            // it, and coming back with the same words changes nothing.
+            model.fleet.composer(id, in: key, drafted: !draft.isEmpty || !pictures.isEmpty)
         }
         .onDisappear {
             if !draft.isEmpty || !pictures.isEmpty {

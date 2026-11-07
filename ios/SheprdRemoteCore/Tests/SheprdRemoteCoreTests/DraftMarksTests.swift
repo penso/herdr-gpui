@@ -99,6 +99,20 @@ struct DraftMarksWindowsTests {
         #expect(removes4)
     }
 
+    /// The camera hides a composer without ending it: it closes and opens
+    /// again, says what it still holds, and can then clear it.
+    @Test func aComposerBackFromTheCameraCanStillClearItsDraft() {
+        var marks = DraftMarks<String>()
+        marks.open("a", composer: one)
+        marks.set("a", drafted: true, by: one)
+        marks.close("a", composer: one)
+        marks.open("a", composer: one)
+        marks.set("a", drafted: true, by: one)
+        let removes = marks.set("a", drafted: false, by: one)
+        #expect(removes)
+        #expect(marks.marked.isEmpty)
+    }
+
     /// A failed send comes back after its composer closed: it stays marked,
     /// and a later composer can clear it.
     @Test func aSaveAfterClosingLeavesNoHolderBehind() {
