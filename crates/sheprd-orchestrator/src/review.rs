@@ -45,19 +45,26 @@ const MAX_REVIEWERS: usize = 20;
 const MAX_NAME: usize = 100;
 const TIMEOUT: Duration = Duration::from_secs(30);
 
-/// GitHub's verdict on a pull request's reviews.
+/// A forge's verdict on a pull request's reviews. GitHub gives the first
+/// three; Azure DevOps's reviewer votes also give the others, which are
+/// only ever held in memory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Review {
     Approved,
     ChangesRequested,
     Required,
+    ApprovedWithSuggestions,
+    WaitingForAuthor,
+    Rejected,
 }
 
 impl From<Review> for ReviewDecision {
     fn from(review: Review) -> Self {
         match review {
-            Review::Approved => Self::Approved,
-            Review::ChangesRequested => Self::ChangesRequested,
+            Review::Approved | Review::ApprovedWithSuggestions => Self::Approved,
+            Review::ChangesRequested | Review::Rejected | Review::WaitingForAuthor => {
+                Self::ChangesRequested
+            }
             Review::Required => Self::ReviewRequired,
         }
     }

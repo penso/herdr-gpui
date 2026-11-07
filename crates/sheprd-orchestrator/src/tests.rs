@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 mod actions;
 mod azure;
 mod azure_html;
+mod azure_organization;
 mod azure_token;
 mod beads;
 mod beads_claim;

@@ -40,20 +40,24 @@ impl OrchestratorView {
 
     /// Lists the projects in `specs`: a repository no longer asked for stops
     /// its worker, a new candidate starts its own. The active one stays active.
+    /// Repositories read without a checkout follow the checkouts, kept.
     pub(crate) fn set_repos(&mut self, mut specs: Vec<RepoSpec>, cx: &mut Context<Self>) {
         self.skipped_repos
             .retain(|key| specs.iter().any(|spec| spec.key == *key));
         specs.retain(|spec| !self.skipped_repos.contains(&spec.key));
-        let same = specs.len() == self.repos.len()
+        let checkouts = self.repos.iter().filter(|repo| repo.remote.is_none());
+        let same = specs.len() == checkouts.clone().count()
             && specs
                 .iter()
-                .zip(&self.repos)
+                .zip(checkouts)
                 .all(|(spec, repo)| spec.key == repo.key);
         if same {
             return;
         }
         let active = self.repo().map(|repo| repo.key.clone());
-        let mut kept: Vec<Repo> = std::mem::take(&mut self.repos);
+        let (remote, mut kept): (Vec<Repo>, Vec<Repo>) = std::mem::take(&mut self.repos)
+            .into_iter()
+            .partition(|repo| repo.remote.is_some());
         self.repos = specs
             .into_iter()
             .map(
@@ -62,12 +66,15 @@ impl OrchestratorView {
                     None => Repo::start(spec),
                 },
             )
+            .chain(remote)
             .collect();
         self.active = active
             .and_then(|key| self.repos.iter().position(|repo| repo.key == key))
             .unwrap_or(0);
-        self.projects
-            .retain(|key| self.repos.iter().any(|repo| repo.key == *key));
+        // An Azure DevOps project stays picked while any repository lists it.
+        self.projects.retain(|key| {
+            super::projects::is_azure_project(key) || self.repos.iter().any(|repo| repo.key == *key)
+        });
         self.refresh_rows();
         cx.notify();
     }
@@ -97,10 +104,10 @@ impl OrchestratorView {
     /// Lists only the project `key` names, as a menu opening one workspace's
     /// issues asks.
     pub(crate) fn only_project(&mut self, key: String, cx: &mut Context<Self>) {
-        if !self.repos.iter().any(|repo| repo.key == key) {
+        let Some(pick) = self.pick_of(&key) else {
             return;
-        }
-        self.projects = HashSet::from([key]);
+        };
+        self.projects = HashSet::from([pick]);
         self.refresh_rows();
         cx.notify();
     }
@@ -171,15 +178,32 @@ impl OrchestratorView {
                 self.sort,
                 &self.collapsed,
             );
+            // Azure DevOps names two people alike as easily as not: its
+            // Mine matches by the identity id the worker read, not by name.
+            let by_identity = repo.reads_azure();
             let mut pulls = rows::pull_request_rows(
                 items,
                 &runs,
                 &self.query,
                 self.filters,
                 (repo.reading_login(), &repo.snapshot.pr_status),
-                self.yours,
+                if by_identity {
+                    rows::Yours::default()
+                } else {
+                    self.yours
+                },
                 self.sort,
             );
+            if by_identity {
+                let (login, statuses) = (repo.reading_login(), &repo.snapshot.pr_status);
+                let authored = &repo.snapshot.authored;
+                pulls.retain(|row| {
+                    let item = &items[row.item];
+                    let opened = authored.contains(&item.key.canonical());
+                    self.yours
+                        .holds(opened, rows::status_of(item, statuses), login)
+                });
+            }
             let mut tasks = if self.tab == Tab::Tasks {
                 rows::task_rows(
                     items,
@@ -212,7 +236,7 @@ impl OrchestratorView {
         }
         // The backends and projects picked narrow what every repository
         // lists, then all of it is one list.
-        let shown = |repo: &Repo| self.projects.is_empty() || self.projects.contains(&repo.key);
+
         let backend = |row: &ItemRow| {
             self.tab == Tab::Tasks
                 || self.backends.is_empty()
@@ -223,7 +247,6 @@ impl OrchestratorView {
         let lists: Vec<Vec<ItemRow>> = self
             .repos
             .iter()
-            .filter(|repo| shown(repo))
             .map(|repo| {
                 let rows = match self.tab {
                     Tab::Issues => &repo.issue_rows,
@@ -235,7 +258,9 @@ impl OrchestratorView {
                 let mut parent_kept = false;
                 for row in rows {
                     if row.depth == 0 {
-                        parent_kept = backend(row);
+                        // Projects narrow by the item's own project on
+                        // Azure DevOps, whoever listed it.
+                        parent_kept = backend(row) && self.picked(repo, self.row_item(row));
                     }
                     if parent_kept {
                         kept.push(*row);

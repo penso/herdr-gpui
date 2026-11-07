@@ -5,14 +5,15 @@
 use super::{
     OrchestratorView,
     look::{BLUE, CYAN, GREEN, Look, MAGENTA, RED, YELLOW, age, agent_icon},
+    pr_cells::{checks_count, checks_dot, review_dot, review_text, row_tone, standing_word},
     rows::{Heading, ItemRow, Line, Next, Tab},
     tasks::status_label,
 };
 use crate::{
     fonts::StyledFont,
     i18n::fl,
-    orchestrator::{Access, CheckState, Item, PrStatus, Provider, Review, SyncState},
-    pull_request::{MergeState, Tone, tone_color},
+    orchestrator::{Access, Item, Provider, SyncState},
+    pull_request::tone_color,
 };
 use gpui::{prelude::*, *};
 use std::{cell::Cell, rc::Rc};
@@ -37,10 +38,17 @@ pub(super) const AUTHOR_TITLE_MIN: f32 = 280.;
 /// The gap between a row's cells, and its padding on either side.
 const CELL_GAP: f32 = 8.;
 const ROW_PADDING: f32 = 16.;
+/// The list width below which the search field takes its own line, at the
+/// usual text size: the Pull requests list's controls fill the row.
+const SEARCH_BESIDE_WIDTH: f32 = 960.;
+/// What that line adds above a dropdown.
+const SEARCH_LINE: f32 = 40.;
 /// The columns saying where a pull request stands, at the usual text size:
 /// see [`Look::column`].
-const STATUS_WIDTH: f32 = 72.;
+const STATUS_WIDTH: f32 = 80.;
 const CHECKS_WIDTH: f32 = 70.;
+/// The review column, wide enough for "approved with suggestions".
+const REVIEW_WIDTH: f32 = 168.;
 
 /// Why the list is empty.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +65,24 @@ impl OrchestratorView {
     /// Whether rows keep only the columns that fit beside an open item.
     fn compact(&self) -> bool {
         self.detail.is_some()
+    }
+
+    /// Whether the search field sits above its controls, not beside them.
+    pub(super) fn search_stacked(&self) -> bool {
+        self.tab == Tab::PullRequests && self.list_width.get() < self.search_fit()
+    }
+
+    fn search_fit(&self) -> f32 {
+        self.look.column(SEARCH_BESIDE_WIDTH)
+    }
+
+    /// How far a dropdown moves down for the search field's own line.
+    pub(super) fn search_line(&self) -> f32 {
+        if self.search_stacked() {
+            SEARCH_LINE
+        } else {
+            0.
+        }
     }
 
     /// Whether rows name their author: always, unless an open item leaves
@@ -124,6 +150,14 @@ impl OrchestratorView {
     /// Beads database are different projects, not one on several hosts.
     fn row_project(&self, row: &ItemRow) -> String {
         let repo = &self.repos[row.repo];
+        // An organization's list mixes repositories: each row names its own.
+        if matches!(
+            repo.remote,
+            Some(crate::orchestrator::RemoteScope::Mine { .. })
+        ) {
+            let source = &self.row_item(row).key.source.repository;
+            return source.rsplit('/').next().unwrap_or(source).to_owned();
+        }
         let item = self.row_item(row);
         match self.twins(&item.key.canonical()) {
             _ if item.key.source.provider == Provider::Beads => self.project_label(repo),
@@ -208,7 +242,10 @@ impl OrchestratorView {
                             fl!("orchestrator-column-status"),
                             Some(look.column(STATUS_WIDTH)),
                         ),
-                        (fl!("orchestrator-column-review"), Some(124.)),
+                        (
+                            fl!("orchestrator-column-review"),
+                            Some(look.column(REVIEW_WIDTH)),
+                        ),
                         (
                             fl!("orchestrator-column-checks"),
                             Some(look.column(CHECKS_WIDTH)),
@@ -244,7 +281,10 @@ impl OrchestratorView {
             .overflow_hidden()
             .flex()
             .flex_col()
-            .child(measure(self.list_width.clone(), self.author_fit()))
+            .child(measure(
+                self.list_width.clone(),
+                [self.author_fit(), self.search_fit()],
+            ))
             // Column heads over nothing to line up are clutter.
             .when(count > 0, |el| el.child(column_head(look, &head)))
             .child(list)
@@ -712,11 +752,21 @@ impl OrchestratorView {
                                     .map(|word| look.badge_in(word, tone_color(tone, theme))),
                             ),
                     )
-                    .child(div().flex_none().w(px(124.)).flex().children(review_badge(
-                        look,
-                        status,
-                        self.repos[row.repo].reading_login(),
-                    )))
+                    .child(
+                        div()
+                            .debug_selector({
+                                let key = item.key.canonical();
+                                move || format!("orchestrator-review-{key}")
+                            })
+                            .flex_none()
+                            .w(px(look.column(REVIEW_WIDTH)))
+                            .flex()
+                            .overflow_hidden()
+                            .children(
+                                review_text(status, self.repos[row.repo].reading_login())
+                                    .map(|(word, hue)| look.badge(word, hue)),
+                            ),
+                    )
                     .child(
                         div()
                             .flex_none()
@@ -757,13 +807,14 @@ impl OrchestratorView {
 }
 
 /// Records the list's width as it lays out, and draws again when that moves
-/// it across `fit`, so rows gain or lose their author on the next frame.
-fn measure(width: Rc<Cell<f32>>, fit: f32) -> impl IntoElement {
+/// it across a width in `fits`, so rows gain or lose their author and the
+/// search field its line on the next frame.
+fn measure(width: Rc<Cell<f32>>, fits: [f32; 2]) -> impl IntoElement {
     canvas(
         move |bounds, window, _| {
             let now = f32::from(bounds.size.width);
             let before = width.replace(now);
-            if (before >= fit) != (now >= fit) {
+            if fits.iter().any(|fit| (before >= *fit) != (now >= *fit)) {
                 window.refresh();
             }
         },
@@ -843,94 +894,4 @@ pub(super) fn diff_squares(look: &Look, additions: Option<u64>, deletions: Optio
 /// A priority's heading: `P1 · high`.
 pub(super) fn priority_name(priority: i64) -> String {
     fl!("orchestrator-priority", priority = priority)
-}
-
-fn check_hue(look: &Look, state: CheckState) -> u32 {
-    match state {
-        CheckState::Failed => look.hue(RED),
-        CheckState::Pending => look.hue(YELLOW),
-        CheckState::Passed => look.hue(GREEN),
-        CheckState::Skipped => look.theme.muted,
-    }
-}
-
-/// The review state's word, or that the user is asked to review.
-fn review_badge(look: &Look, status: Option<&PrStatus>, login: Option<&str>) -> Option<Div> {
-    let status = status?;
-    if login.is_some_and(|login| status.requests(login)) {
-        return Some(look.badge(fl!("orchestrator-review-yours"), MAGENTA));
-    }
-    Some(match status.review? {
-        Review::Approved => look.badge(fl!("orchestrator-review-approved"), GREEN),
-        Review::ChangesRequested => look.badge(fl!("orchestrator-review-changes"), RED),
-        Review::Required => look.badge(fl!("orchestrator-review-required"), BLUE),
-    })
-}
-
-fn review_dot(look: &Look, status: Option<&PrStatus>) -> Option<Div> {
-    let hue = match status?.review? {
-        Review::Approved => GREEN,
-        Review::ChangesRequested => RED,
-        Review::Required => BLUE,
-    };
-    Some(look.dot(look.hue(hue), 7.))
-}
-
-fn checks_dot(look: &Look, status: Option<&PrStatus>) -> Option<Div> {
-    let state = status?.checks_state()?;
-    Some(look.dot(check_hue(look, state), 7.))
-}
-
-/// The tone of a row's pull request, the one its sidebar badge takes. One
-/// with no status yet, or a merge request, says nothing rather than ready.
-pub(super) fn row_tone(item: &Item, status: Option<&PrStatus>) -> Tone {
-    match item.state.as_str() {
-        "merged" => Tone::Merged,
-        "closed" => Tone::Attention,
-        "draft" => Tone::Muted,
-        _ => status.map_or(Tone::Muted, PrStatus::tone),
-    }
-}
-
-/// The word beside the tone's color, naming what no other column shows:
-/// conflicts and a branch behind its base. A draft's badge is by its title.
-pub(super) fn standing_word(tone: Tone, item: &Item, status: Option<&PrStatus>) -> Option<String> {
-    let merge = status.map_or(MergeState::Unknown, |status| status.merge);
-    Some(match tone {
-        Tone::Attention if item.state == "closed" => fl!("orchestrator-standing-closed"),
-        Tone::Attention if merge == MergeState::Dirty => fl!("orchestrator-standing-conflicts"),
-        Tone::Attention => fl!("orchestrator-standing-attention"),
-        Tone::Held if merge == MergeState::Behind => fl!("orchestrator-standing-behind"),
-        Tone::Held => fl!("orchestrator-badge-blocked"),
-        Tone::Merged => fl!("orchestrator-standing-merged"),
-        Tone::Muted => return None,
-        Tone::Ready => fl!("orchestrator-standing-ready"),
-        Tone::Waiting => fl!("orchestrator-standing-waiting"),
-    })
-}
-
-/// How many checks are fine out of how many reported, in the color and mark
-/// of what they add up to.
-fn checks_count(look: &Look, status: Option<&PrStatus>) -> Option<Div> {
-    let status = status.filter(|status| !status.checks.is_empty())?;
-    let state = status.checks_state().unwrap_or(CheckState::Skipped);
-    let icon = match state {
-        CheckState::Failed => "icons/error.svg",
-        CheckState::Pending => "icons/refresh.svg",
-        CheckState::Passed => "icons/check.svg",
-        CheckState::Skipped => "icons/pass.svg",
-    };
-    let hue = check_hue(look, state);
-    Some(
-        div()
-            .flex()
-            .items_center()
-            .gap_1()
-            .child(look.icon(icon, 11., hue))
-            .child(
-                look.mono(format!("{}/{}", status.checks_ok(), status.checks.len()))
-                    .text_size(look.small())
-                    .text_color(rgb(hue)),
-            ),
-    )
 }

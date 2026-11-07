@@ -21,6 +21,25 @@ impl Worker {
             return Ok(SyncState::Unsupported);
         };
         let count = listing.items.len();
+        if listing.viewer.is_some() {
+            self.snapshot.viewer.clone_from(&listing.viewer);
+        }
+        // This source's own pull requests, as the listing matched them.
+        let prefix = format!("{}:", key.canonical());
+        let mut authored = (*self.snapshot.authored).clone();
+        authored.retain(|item| !item.starts_with(&prefix));
+        authored.extend(listing.authored.iter().cloned());
+        self.snapshot.authored = std::sync::Arc::new(authored);
+        // Its review verdicts, beside other sources' statuses.
+        let mut statuses = (*self.snapshot.pr_status).clone();
+        statuses.retain(|(repository, _), _| *repository != key.repository);
+        statuses.extend(
+            listing
+                .statuses
+                .iter()
+                .map(|(at, status)| (at.clone(), status.clone())),
+        );
+        self.snapshot.pr_status = std::sync::Arc::new(statuses);
         if !listing.complete || !writable {
             self.uncached.insert(key.clone(), listing.items);
             return Ok(if listing.complete {

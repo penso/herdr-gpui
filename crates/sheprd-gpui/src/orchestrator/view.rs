@@ -7,6 +7,7 @@
 //! It never blocks: the [`Service`] worker does the I/O, and the host pushes
 //! the theme, live agent statuses, and the GitHub account from its tick.
 
+mod browse;
 mod conversation;
 mod detail;
 mod dispatch;
@@ -18,7 +19,10 @@ mod look;
 mod markdown;
 pub(crate) mod pane;
 mod pills;
+mod pr_cells;
+mod projects;
 mod pull;
+mod remote;
 mod repo;
 mod rows;
 mod status;
@@ -91,6 +95,17 @@ impl EventEmitter<Event> for OrchestratorView {}
 
 /// How long Refresh spins before the workers' own sync states take over.
 const REFRESH_GRACE: Duration = Duration::from_millis(1500);
+
+/// A dropdown under the search row; one is open at a time.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Menu {
+    Sort,
+    State,
+    /// Browsing Azure DevOps organizations.
+    Projects,
+    /// Which listed projects the list shows.
+    Repos,
+}
 
 /// The detail page of one item.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -172,7 +187,8 @@ pub(crate) struct OrchestratorView {
     live_branches: Arc<Vec<super::LiveBranch>>,
     tab: Tab,
     sort: Sort,
-    sort_open: bool,
+    /// The dropdown open under the search row, if any.
+    menu: Option<Menu>,
     filters: Filters,
     /// The Pull requests tab's Mine and Review requested toggles.
     yours: rows::Yours,
@@ -262,7 +278,7 @@ impl OrchestratorView {
             live_branches: Arc::default(),
             tab: Tab::default(),
             sort: Sort::default(),
-            sort_open: false,
+            menu: None,
             filters: Filters::default(),
             yours: rows::Yours::default(),
             filters_open: false,
@@ -363,6 +379,7 @@ impl OrchestratorView {
         }
         if read {
             self.discard_non_projects();
+            self.sync_remotes();
             self.reconcile_agents();
             self.refresh_rows();
             self.follow_pull_request();
@@ -412,7 +429,8 @@ impl OrchestratorView {
     /// The hosts the listed repositories are on, once each.
     pub(crate) fn targets(&self) -> Vec<sheprd_client::ConnectTarget> {
         let mut targets: Vec<sheprd_client::ConnectTarget> = Vec::new();
-        for repo in &self.repos {
+        // A repository read without a checkout is on no host.
+        for repo in self.repos.iter().filter(|repo| repo.remote.is_none()) {
             if !targets.contains(&repo.request.target) {
                 targets.push(repo.request.target.clone());
             }
@@ -525,7 +543,7 @@ impl OrchestratorView {
         for repo in self
             .repos
             .iter_mut()
-            .filter(|repo| repo.request.target == *target)
+            .filter(|repo| repo.remote.is_none() && repo.request.target == *target)
         {
             repo.login = login.clone();
             let same = match (&token, &repo.request.token) {
@@ -648,7 +666,7 @@ impl OrchestratorView {
         // The open item belongs to the list left behind.
         self.detail = None;
         self.merge_open = false;
-        self.sort_open = false;
+        self.menu = None;
         self.refresh_rows();
         self.follow_pull_request();
         cx.notify();
@@ -793,8 +811,8 @@ impl OrchestratorView {
                 cx.notify();
                 true
             }
-            ("escape", None) if self.sort_open => {
-                self.sort_open = false;
+            ("escape", None) if self.menu.is_some() => {
+                self.menu = None;
                 cx.notify();
                 true
             }
