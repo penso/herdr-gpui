@@ -105,14 +105,15 @@ final class ActivityTokens {
         }
     }
 
-    /// Tells the computers about Keep Generic. Turned on, it first ends what
-    /// names a chat: an activity's title and workspace are fixed when it
-    /// starts, so no later push could take them off the lock screen. That
-    /// needs no network, so it does not wait on a computer that is away;
-    /// `watch` ends what such a computer starts before it hears.
+    /// Tells the computers about Keep Generic. Turned on, it first ends
+    /// every activity: a title and workspace are fixed when one starts, so
+    /// no later push could take them off the lock screen, and what one last
+    /// said may name the chat too. That needs no network, so it does not
+    /// wait on a computer that is away; `watch` ends what such a computer
+    /// starts before it hears.
     func genericChanged(to generic: Bool) async {
         if generic {
-            for activity in Activity<ChatActivityAttributes>.activities where activity.attributes.facts.namesChat {
+            for activity in Activity<ChatActivityAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
