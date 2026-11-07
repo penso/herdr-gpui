@@ -20,6 +20,7 @@ mod process;
 mod project;
 mod relay;
 mod restore;
+mod rewind;
 mod rpc;
 mod session;
 mod tui;

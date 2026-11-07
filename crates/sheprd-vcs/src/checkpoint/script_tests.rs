@@ -61,7 +61,7 @@ fn labels_are_one_bounded_line() {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod live {
     use crate::checkpoint::Error;
-    use crate::checkpoint::{Checkout, KEEP, script};
+    use crate::checkpoint::{Checkout, KEEP, Origin, script};
     use sheprd_client::{ScriptHost, ScriptLimits, run_script};
     use sheprd_usage::Host;
     use std::{
@@ -135,8 +135,15 @@ mod live {
         }
 
         fn capture_keeping(&self, label: &str, stamp: &str, keep: usize) -> Option<String> {
-            script::parse_capture(&sh(&script::capture(&self.target, label, stamp, keep)).unwrap())
-                .unwrap()
+            script::parse_capture(
+                &sh(&script::capture(&self.target, label, None, stamp, keep)).unwrap(),
+            )
+            .unwrap()
+        }
+
+        fn capture_for(&self, origin: &Origin, stamp: &str) -> Option<String> {
+            let body = script::capture(&self.target, "turn", Some(origin), stamp, KEEP);
+            script::parse_capture(&sh(&body).unwrap()).unwrap()
         }
 
         fn list(&self) -> Vec<crate::checkpoint::Checkpoint> {
@@ -256,6 +263,28 @@ mod live {
         assert_eq!(list[0].id, "0000000000000003");
         assert_eq!(list[0].diff.files, 1, "diffed against the previous one");
         assert_eq!(list[0].diff.additions, 1);
+    }
+
+    #[test]
+    fn a_prompts_checkpoint_keeps_its_origin_even_when_nothing_changed() {
+        let repo = repo();
+        repo.capture("idle", "0000000000000001");
+        let origin = Origin {
+            chat: "p_1".into(),
+            prompt: "2-$(touch pwned)\nHerdr-Branch: main".into(),
+        };
+        assert!(
+            repo.capture_for(&origin, "0000000000000002").is_some(),
+            "the prompt needs a checkpoint of its own to be found by"
+        );
+        assert!(!repo.checkout.join("pwned").exists());
+        let list = repo.list();
+        assert_eq!(list.len(), 2);
+        let found = list[0].origin.as_ref().unwrap();
+        assert_eq!(found.chat, "p_1");
+        assert_eq!(found.prompt, "2-$(touch pwned) Herdr-Branch: main");
+        assert_eq!(list[0].branch.as_deref(), Some("feature"));
+        assert_eq!(list[1].origin, None);
     }
 
     #[test]
@@ -395,7 +424,13 @@ mod live {
         let key = git(empty.path(), &["rev-parse", "--absolute-git-dir"]);
         let unborn = Checkout::new(Host::Local, key.trim(), Some("main")).unwrap();
         assert!(matches!(
-            sh(&script::capture(&unborn, "x", "0000000000000001", KEEP)),
+            sh(&script::capture(
+                &unborn,
+                "x",
+                None,
+                "0000000000000001",
+                KEEP
+            )),
             Err(crate::Error::Checkpoint(Error::Unborn))
         ));
     }

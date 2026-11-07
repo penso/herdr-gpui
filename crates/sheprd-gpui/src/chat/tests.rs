@@ -48,6 +48,7 @@ mod questions;
 mod recall;
 mod relocale;
 mod restore;
+mod rewind;
 mod running;
 mod selection;
 mod session;

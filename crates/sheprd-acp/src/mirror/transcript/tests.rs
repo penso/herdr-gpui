@@ -166,6 +166,30 @@ fn a_large_files_tail_keeps_complete_records_and_absolute_entry_ids() {
 }
 
 #[test]
+fn prompts_dropped_from_a_whole_log_are_counted_and_a_tail_says_it_cannot() {
+    let prompt = |text: &str| {
+        json!({"type": "user", "uuid": text, "timestamp": "2026-01-01T00:00:00Z",
+            "message": {"role": "user", "content": text}})
+    };
+    let big = "x".repeat(100 * 1024);
+    let prompts: Vec<_> = (0..MAX_TRANSCRIPT_TEXT / big.len() + 3)
+        .map(|index| prompt(&format!("{index} {big}")))
+        .collect();
+    let whole = parse(TranscriptAgent::Claude, &lines(&prompts), 0);
+    assert!(whole.dropped_prompts > 0);
+    assert!(!whole.prompts_uncounted);
+    let tail = parse(TranscriptAgent::Claude, &lines(&prompts[..1]), 10);
+    assert!(tail.prompts_uncounted);
+}
+
+#[test]
+fn a_skipped_record_may_have_been_a_prompt() {
+    let huge = format!("{}\n", "x".repeat(RECORD + 1));
+    let parsed = parse(TranscriptAgent::Claude, huge.as_bytes(), 0);
+    assert!(parsed.prompts_uncounted);
+}
+
+#[test]
 fn directories_are_rejected_before_reading() {
     let directory = tempfile::tempdir().unwrap();
     let mut source = Source::new(directory.path().to_owned(), TranscriptAgent::Claude);

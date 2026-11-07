@@ -20,6 +20,7 @@ fn checkpoint(id: &str) -> Checkpoint {
             additions: 7,
             deletions: 1,
         },
+        origin: None,
     }
 }
 

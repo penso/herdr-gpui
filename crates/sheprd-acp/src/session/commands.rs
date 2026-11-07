@@ -3,7 +3,7 @@
 use acp::v1 as wire;
 use sheprd_chat_protocol::{
     Attachment, Author, Change, Command, CommandId, MAX_ATTACHMENTS, MAX_PROMPT_SIZE, OptionValue,
-    PermissionId, Queued, Rejection, Status, Turn,
+    PermissionId, PromptFiles, Queued, Rejection, Status, Turn,
 };
 
 use super::{ConnId, Pending, Session, Update};
@@ -24,6 +24,16 @@ impl<R: FnMut(Update)> Session<R> {
         }
         let rejected = match command {
             Command::Prompt { text, attachments } => self.prompt(id, text, attachments),
+            Command::Rewind {
+                before,
+                text,
+                attachments,
+            } => match self.rewind(conn, id, before, text, attachments) {
+                // Acknowledged when it ends, as the client keeps the draft
+                // until then.
+                Ok(()) => return,
+                Err(rejection) => Err(rejection),
+            },
             Command::Cancel => self.cancel(),
             Command::Answer { option, permission } => self.answer(permission, &option),
             Command::SetMode { id } => self.set_mode(id),
@@ -38,11 +48,11 @@ impl<R: FnMut(Update)> Session<R> {
         self.ack(conn, id, rejected);
     }
 
-    fn prompt(
-        &mut self,
-        id: CommandId,
-        text: String,
-        attachments: Vec<Attachment>,
+    /// Whether a prompt of `text` and `attachments` can go out.
+    pub(super) fn check_prompt(
+        &self,
+        text: &str,
+        attachments: &[Attachment],
     ) -> Result<(), Rejection> {
         if text.trim().is_empty() && attachments.is_empty() {
             return Err(Rejection::EmptyPrompt);
@@ -59,6 +69,16 @@ impl<R: FnMut(Update)> Session<R> {
         if !self.transcript.status.accepts_prompts() {
             return Err(Rejection::NotReady);
         }
+        Ok(())
+    }
+
+    fn prompt(
+        &mut self,
+        id: CommandId,
+        text: String,
+        attachments: Vec<Attachment>,
+    ) -> Result<(), Rejection> {
+        self.check_prompt(&text, &attachments)?;
         if self.turn.is_some() || !self.ready {
             let waiting = &self.transcript.queued;
             let text_size: usize = waiting.iter().map(|queued| queued.text.len()).sum();
@@ -80,7 +100,7 @@ impl<R: FnMut(Update)> Session<R> {
 
     /// Sends a prompt with its files, read now, and shows it in the
     /// transcript: the text with a line per file, then the pictures.
-    fn send_prompt(&mut self, text: &str, attachments: &[Attachment]) {
+    pub(super) fn send_prompt(&mut self, text: &str, attachments: &[Attachment]) {
         let Some(session) = self.acp_session.clone() else {
             return;
         };
@@ -97,7 +117,19 @@ impl<R: FnMut(Update)> Session<R> {
             shown.push_str(attachment.name());
         }
         let prompt = self.projector.prompt(&shown, attachments.len());
+        let entry = match &prompt {
+            Change::Push { entry } => Some(entry.id),
+            _ => None,
+        };
         self.emit(prompt);
+        if let Some(id) = entry.filter(|_| !attachments.is_empty()) {
+            self.emit(Change::PromptFiles {
+                files: PromptFiles {
+                    attachments: attachments.to_vec(),
+                    id,
+                },
+            });
+        }
         let mut blocks = Vec::with_capacity(prepared.len() + 1);
         if !text.trim().is_empty() {
             blocks.push(wire::ContentBlock::Text(wire::TextContent::new(text)));

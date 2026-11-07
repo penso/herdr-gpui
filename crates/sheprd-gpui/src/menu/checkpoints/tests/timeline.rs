@@ -74,6 +74,7 @@ fn a_day_break_starts_each_earlier_day(cx: &mut gpui::TestAppContext) {
             additions: files * 3,
             deletions: files,
         },
+        origin: None,
     };
     let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
     cx.update(|window, cx| {

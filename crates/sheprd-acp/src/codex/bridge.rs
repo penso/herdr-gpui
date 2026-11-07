@@ -15,7 +15,7 @@ use crate::{
 
 /// What a request to Codex is waiting for.
 #[derive(Debug)]
-enum Pending {
+pub(super) enum Pending {
     Initialize,
     Models,
     /// `thread/start` or `thread/resume`, answering `session/new` or `load`.
@@ -23,6 +23,13 @@ enum Pending {
     /// `turn/start`, answering nothing itself: the turn ends the prompt.
     Turn,
     Interrupt,
+    /// The turns to find the prompt of the session's [`out::REWIND`] in.
+    RewindTurns {
+        acp: wire::RequestId,
+        rewind: out::Rewind,
+    },
+    /// The thread that goes on from before that prompt.
+    Rewound(wire::RequestId),
 }
 
 /// The session's request to open a thread, waiting for the handshake.
@@ -37,6 +44,8 @@ struct Opening {
 pub(super) struct Bridge {
     asks: HashMap<i64, approval::Ask>,
     background: Background,
+    /// The session's folder, from when it opened.
+    pub(super) cwd: String,
     /// Codex's `model/list`, kept until the thread opens.
     models: Option<Value>,
     next_id: i64,
@@ -52,7 +61,7 @@ pub(super) struct Bridge {
     /// Items whose text came in pieces, so their whole text is not shown
     /// again.
     streamed: HashSet<String>,
-    thread: Option<String>,
+    pub(super) thread: Option<String>,
     /// The turn's tokens, from the last usage update.
     tokens: Option<Value>,
     turn: Option<String>,
@@ -104,7 +113,7 @@ impl Translator for Bridge {
 }
 
 impl Bridge {
-    fn call(&mut self, method: &str, params: Value, pending: Pending) -> Out {
+    pub(super) fn call(&mut self, method: &str, params: Value, pending: Pending) -> Out {
         self.next_id += 1;
         self.pending.insert(self.next_id, pending);
         Out::Harness(json!({"id": self.next_id, "method": method, "params": params}))
@@ -118,10 +127,12 @@ impl Bridge {
         let field = |key: &str| params.get(key).and_then(Value::as_str).map(str::to_owned);
         match method {
             "initialize" => vec![out::reply(id, out::initialized())],
+            out::REWIND => self.rewind(id, params),
             "session/new" | "session/load" => {
+                self.cwd = field("cwd").unwrap_or_default();
                 self.opening = Some(Opening {
                     acp: id,
-                    cwd: field("cwd").unwrap_or_default(),
+                    cwd: self.cwd.clone(),
                     resume: (method == "session/load")
                         .then(|| field("sessionId"))
                         .flatten(),
@@ -274,6 +285,8 @@ impl Bridge {
                     .collect(),
             },
             Pending::Interrupt => Vec::new(),
+            Pending::RewindTurns { acp, rewind } => self.rewind_turns(acp, &rewind, result),
+            Pending::Rewound(acp) => vec![self.rewound(acp, result)],
         }
     }
 

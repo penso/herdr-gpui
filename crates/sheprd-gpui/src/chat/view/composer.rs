@@ -288,6 +288,7 @@ impl SheprdWindow {
                     .text_color(rgb(hues.red))
                     .child(problem)
             }))
+            .children(self.render_chat_rewind(chat, cx))
             .child(card)
             .children(
                 chat.menu

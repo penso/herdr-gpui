@@ -2,7 +2,12 @@
 //! text and confirm in a flash.
 
 use super::layout::layout_for;
-use crate::{SheprdWindow, config::corners, i18n::fl, window::Flash};
+use crate::{
+    SheprdWindow,
+    config::corners,
+    i18n::fl,
+    window::{Flash, chrome_focus::Region},
+};
 use gpui::{prelude::*, *};
 
 /// Where a message's copy button may sit, by what the message shows.
@@ -53,12 +58,16 @@ pub(super) const ORIGINAL: RichCopy = RichCopy {
 // keep-sorted end
 
 impl SheprdWindow {
-    /// A copy button by a message, positioned by the selected layout.
+    /// A copy button by a message, positioned by the selected layout, with
+    /// the message's `other` action inside it, so a short prompt's bubble
+    /// stays narrow. It shows with the pointer over the message, or all the
+    /// time while the keyboard is in the chat.
     pub(super) fn render_chat_copy(
         &self,
         id: u64,
         text: &str,
         placement: CopyPlacement,
+        other: Option<Stateful<Div>>,
         cx: &mut Context<Self>,
     ) -> Div {
         let theme = &self.theme;
@@ -70,8 +79,11 @@ impl SheprdWindow {
                 fl!("chat-copy-message-done"),
                 cx,
             )
-            .invisible()
-            .group_hover("chat-agent-message", |button| button.visible())
+            .when(self.chrome_region != Some(Region::Chat), |button| {
+                button
+                    .invisible()
+                    .group_hover("chat-agent-message", |button| button.visible())
+            })
             .flex()
             .items_center()
             .gap(px(4.))
@@ -84,7 +96,8 @@ impl SheprdWindow {
                     .size(px(11.))
                     .text_color(rgb(theme.muted)),
             )
-            .child(fl!("chat-copy"));
+            .child(fl!("chat-copy"))
+            .children(other);
         layout_for(self.config.chat.layout)
             .copy(button, placement, &self.chat_look())
             .when(placement == CopyPlacement::Footer, |copy| {

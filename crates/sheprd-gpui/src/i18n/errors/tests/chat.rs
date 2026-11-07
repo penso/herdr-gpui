@@ -132,6 +132,10 @@ fn every_chat_rejection_has_a_message() {
         Rejection::TooManyAttachments,
         Rejection::QueueFull,
         Rejection::UnknownFile,
+        Rejection::CannotRewind,
+        Rejection::UnknownPrompt,
+        Rejection::TurnRunning,
+        Rejection::RewindFailed,
         Rejection::Unsupported,
         Rejection::Other,
     ]);

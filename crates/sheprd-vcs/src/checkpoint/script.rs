@@ -9,7 +9,7 @@
 //! Per-worktree `refs/worktree/` would be tidier, but `git gc` run from
 //! another worktree does not keep their objects, so it could delete them.
 
-use super::{Checkout, Checkpoint, Diff, Error};
+use super::{Checkout, Checkpoint, Diff, Error, Origin};
 use crate::Result;
 use sheprd_client::shell_quote;
 
@@ -19,6 +19,9 @@ pub(super) const NAMESPACE: &str = "refs/herdr-gpui/checkpoints/";
 /// Trailer naming the branch a checkpoint was taken on; restore refuses to
 /// move any other branch to its commit.
 const BRANCH_TRAILER: &str = "Herdr-Branch: ";
+/// Trailers naming the chat and prompt a checkpoint was taken for.
+const CHAT_TRAILER: &str = "Herdr-Chat: ";
+const PROMPT_TRAILER: &str = "Herdr-Prompt: ";
 const RECORD: char = '\u{1e}';
 /// Longest label kept in a commit message.
 const LABEL_LIMIT: usize = 200;
@@ -59,8 +62,11 @@ cd -- "$checkout"
     )
 }
 
-/// Defines `capture LABEL STAMP KEEP`: snapshots the working tree, skips a
-/// snapshot identical to the latest one, then keeps only the newest `KEEP`.
+/// Defines `capture LABEL STAMP KEEP TRAILERS`: snapshots the working tree,
+/// then keeps only the newest `KEEP`. A snapshot identical to the latest one
+/// is skipped, unless it has trailers: an idle checkout's files are often the
+/// same when a prompt's turn starts as when the last one ended, and the
+/// prompt still needs a checkpoint of its own to be found by.
 /// Leaves `$tree` (the working tree's tree) and `$tmp` (an index of it) set.
 /// `66` is [`EXIT_UNBORN`]: a checkout with no commit has nothing to anchor to.
 const CAPTURE: &str = r#"
@@ -75,12 +81,12 @@ capture() {
     GIT_INDEX_FILE="$tmp" git -c core.fsmonitor=false add -A
     tree=$(GIT_INDEX_FILE="$tmp" git -c core.fsmonitor=false write-tree)
     latest=$(g for-each-ref --count=1 --sort=-refname --format='%(objectname)' "$namespace")
-    if [ -n "$latest" ] \
+    if [ -z "$4" ] && [ -n "$latest" ] \
         && [ "$(g rev-parse "$latest^{tree}")" = "$tree" ] \
         && [ "$(g rev-parse "$latest^")" = "$head" ]; then
         printf 'unchanged\n'
     else
-        commit=$(printf '%s\n\nHerdr-Branch: %s\n' "$1" "$branch" \
+        commit=$(printf '%s\n\nHerdr-Branch: %s\n%s' "$1" "$branch" "$4" \
             | GIT_AUTHOR_NAME='Sheprd' GIT_AUTHOR_EMAIL='herdr-gpui@localhost' \
               GIT_COMMITTER_NAME='Sheprd' GIT_COMMITTER_EMAIL='herdr-gpui@localhost' \
               git -c core.fsmonitor=false commit-tree --no-gpg-sign -p "$head" "$tree")
@@ -94,12 +100,28 @@ capture() {
 "#;
 
 /// Snapshot the checkout as a new checkpoint named `stamp`, keeping `keep`.
-pub(super) fn capture(checkout: &Checkout, label: &str, stamp: &str, keep: usize) -> String {
+pub(super) fn capture(
+    checkout: &Checkout,
+    label: &str,
+    origin: Option<&Origin>,
+    stamp: &str,
+    keep: usize,
+) -> String {
     format!(
-        "{}{CAPTURE}capture {} {} {keep}\n",
+        "{}{CAPTURE}capture {} {} {keep} {}\n",
         prelude(checkout),
         shell_quote(&clean_label(label)),
         shell_quote(stamp),
+        shell_quote(&origin.map_or_else(String::new, trailers)),
+    )
+}
+
+/// The trailers that record `origin`, each on its own line.
+fn trailers(origin: &Origin) -> String {
+    format!(
+        "{CHAT_TRAILER}{}\n{PROMPT_TRAILER}{}\n",
+        clean_label(&origin.chat),
+        clean_label(&origin.prompt),
     )
 }
 
@@ -140,7 +162,7 @@ recorded=$(g log -1 --format=%B "$target" | sed -n 's/^{BRANCH_TRAILER}//p' | he
 for state in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply; do
     [ ! -e "$(g rev-parse --git-path "$state")" ] || exit {EXIT_BUSY}
 done
-{CAPTURE}capture {label} {stamp} {keep}
+{CAPTURE}capture {label} {stamp} {keep} ''
 # The temporary index matches the working tree exactly, so a two-tree merge
 # moves every file to the checkpoint's and deletes those it did not have.
 GIT_INDEX_FILE="$tmp" git -c core.fsmonitor=false read-tree -m -u "$tree" "$target^{{tree}}"
@@ -224,14 +246,22 @@ pub(super) fn parse_list(output: &str) -> Result<Vec<Checkpoint>> {
             return Err(Error::Output.into());
         };
         let label = lines.next().unwrap_or_default().to_owned();
-        let branch = lines
-            .find_map(|line| line.strip_prefix(BRANCH_TRAILER))
-            .map(str::to_owned);
+        let trailers: Vec<&str> = lines.collect();
+        let trailer = |name: &str| {
+            trailers
+                .iter()
+                .find_map(|line| line.strip_prefix(name))
+                .map(str::to_owned)
+        };
+        let origin = trailer(CHAT_TRAILER)
+            .zip(trailer(PROMPT_TRAILER))
+            .map(|(chat, prompt)| Origin { chat, prompt });
         checkpoints.push(Checkpoint {
             id: id.to_owned(),
             created,
             label,
-            branch,
+            branch: trailer(BRANCH_TRAILER),
+            origin,
             diff: Diff {
                 files: *files,
                 additions: *additions,

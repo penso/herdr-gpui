@@ -405,6 +405,7 @@ impl Projection {
         }
         self.transcript.session = Some(SessionInfo {
             id: limited(id, MAX_ID),
+            rewind: false,
             cwd: (!cwd.is_empty()).then(|| limited(cwd, MAX_CWD)),
             title: None,
         });
@@ -515,6 +516,7 @@ fn parse(agent: TranscriptAgent, bytes: &[u8], mut offset: u64) -> Transcript {
     let mut projection = Projection {
         transcript: Transcript {
             agent: Agent::from(agent).display_name().to_owned(),
+            prompts_uncounted: offset > 0,
             read_only: true,
             truncated: offset > 0,
             ..Transcript::default()
@@ -534,14 +536,17 @@ fn parse(agent: TranscriptAgent, bytes: &[u8], mut offset: u64) -> Transcript {
             TranscriptAgent::Claude => RECORD,
         };
         if line.len() > record_limit {
+            projection.transcript.prompts_uncounted = true;
             projection.transcript.truncated = true;
             continue;
         }
         let Ok(record) = serde_json::from_slice::<Value>(line) else {
+            projection.transcript.prompts_uncounted |= line.len() > RECORD;
             projection.transcript.truncated |= line.len() > RECORD;
             continue;
         };
         if line.len() > RECORD && !codex_messages::image_record(&record) {
+            projection.transcript.prompts_uncounted = true;
             projection.transcript.truncated = true;
             continue;
         }
@@ -564,6 +569,10 @@ fn parse(agent: TranscriptAgent, bytes: &[u8], mut offset: u64) -> Transcript {
     let transcript = &mut projection.transcript;
     let keep = keep_from(&transcript.entries);
     if keep > 0 {
+        transcript.dropped_prompts = transcript.entries[..keep]
+            .iter()
+            .filter(|entry| matches!(entry.kind, EntryKind::User { .. }))
+            .count();
         transcript.entries.drain(..keep);
         transcript.truncated = true;
     }

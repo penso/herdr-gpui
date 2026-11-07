@@ -100,6 +100,15 @@ pub struct Diff {
     pub deletions: u64,
 }
 
+/// The prompt whose turn a checkpoint was taken at the start of, so a chat
+/// can find its own among the checkout's. Both are the app's own opaque names,
+/// kept as they are on one line each.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Origin {
+    pub chat: String,
+    pub prompt: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Checkpoint {
     pub id: String,
@@ -109,13 +118,24 @@ pub struct Checkpoint {
     /// The branch it was taken on; only that branch can be restored to it.
     pub branch: Option<String>,
     pub diff: Diff,
+    /// The prompt it was taken for, when the app knew it.
+    pub origin: Option<Origin>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
-    Capture { label: String },
+    Capture {
+        label: String,
+        origin: Option<Origin>,
+    },
+    /// The newest checkpoint taken for an origin.
+    Find {
+        origin: Origin,
+    },
     List,
-    Restore { id: String },
+    Restore {
+        id: String,
+    },
 }
 
 impl Request {
@@ -123,6 +143,7 @@ impl Request {
     fn failed(&self, error: crate::Error) -> Answer {
         match self {
             Self::Capture { .. } => Answer::Captured(Err(error)),
+            Self::Find { .. } => Answer::Found(Err(error)),
             Self::List => Answer::Listed(Err(error)),
             Self::Restore { .. } => Answer::Restored(Err(error)),
         }
@@ -133,10 +154,13 @@ impl Request {
 struct Job {
     checkout: Checkout,
     request: Request,
+    /// Who is waiting for this restore, when a chat asked for it.
+    ticket: Option<u64>,
 }
 
 enum Answer {
     Captured(Result<Option<String>>),
+    Found(Result<Option<Checkpoint>>),
     Listed(Result<Vec<Checkpoint>>),
     Restored(Result<()>),
 }
@@ -144,9 +168,20 @@ enum Answer {
 fn execute(job: &Job, stamp: &str) -> Answer {
     let checkout = &job.checkout;
     match &job.request {
-        Request::Capture { label } => Answer::Captured(
-            run(checkout, &script::capture(checkout, label, stamp, KEEP))
-                .and_then(|output| script::parse_capture(&output)),
+        Request::Capture { label, origin } => Answer::Captured(
+            run(
+                checkout,
+                &script::capture(checkout, label, origin.as_ref(), stamp, KEEP),
+            )
+            .and_then(|output| script::parse_capture(&output)),
+        ),
+        Request::Find { origin } => Answer::Found(
+            run(checkout, &script::list(checkout))
+                .and_then(|output| script::parse_list(&output))
+                .map(|list| {
+                    list.into_iter()
+                        .find(|checkpoint| checkpoint.origin.as_ref() == Some(origin))
+                }),
         ),
         Request::List => Answer::Listed(
             run(checkout, &script::list(checkout)).and_then(|output| script::parse_list(&output)),
@@ -279,21 +314,36 @@ impl View {
     }
 }
 
+/// What a search for a prompt's checkpoint found, for the chat that asked.
+#[derive(Debug)]
+pub struct Found {
+    pub checkout: Checkout,
+    pub origin: Origin,
+    /// `Ok(None)` when no checkpoint of the checkout has that origin.
+    pub result: Result<Option<Checkpoint>>,
+}
+
 /// A restore that finished, for the window to report even after its dialog
 /// closed.
 #[derive(Debug)]
 pub struct Restored {
     pub checkout: Checkout,
     pub result: Result<()>,
+    /// What [`Checkpoints::restore_id`] returned, for a chat's restore.
+    pub ticket: Option<u64>,
 }
 
 #[derive(Default)]
 pub struct Checkpoints {
+    /// Finished searches, until [`Checkpoints::take_found`].
+    found: Vec<Found>,
     watches: HashMap<String, Watch>,
     lanes: HashMap<Host, Lane>,
     pub view: Option<View>,
     /// Last stamp handed out, so two checkpoints never share a name.
     last_stamp: u128,
+    /// Last restore ticket handed out.
+    last_ticket: u64,
 }
 
 /// The name an agent goes by in a checkpoint label.
@@ -310,8 +360,15 @@ impl Checkpoints {
     /// Look at `endpoint`'s latest snapshot and queue a checkpoint of each
     /// checkout whose agent just started or finished a turn. A snapshot
     /// already looked at, the first one, and one from a restarted daemon
-    /// only record statuses: no turn is seen across a gap.
-    pub fn observe(&mut self, endpoint: &str, host: &Host, snapshot: &Arc<ClientShellSnapshot>) {
+    /// only record statuses: no turn is seen across a gap. `origin` names the
+    /// prompt a pane's agent just started working on, when the caller knows.
+    pub fn observe(
+        &mut self,
+        endpoint: &str,
+        host: &Host,
+        snapshot: &Arc<ClientShellSnapshot>,
+        origin: impl Fn(&str) -> Option<Origin>,
+    ) {
         let watch = self.watches.entry(endpoint.to_owned()).or_default();
         if std::ptr::eq(watch.snapshot.as_ptr(), Arc::as_ptr(snapshot)) {
             return;
@@ -329,11 +386,14 @@ impl Checkpoints {
                 continue;
             };
             use AgentStatus::*;
-            let label = match (before, agent.agent_status) {
+            let (label, origin) = match (before, agent.agent_status) {
                 // A turn resuming after a permission prompt is the same turn.
-                (Idle | Done, Working) => format!("Before {}'s turn", agent_name(agent)),
+                (Idle | Done, Working) => (
+                    format!("Before {}'s turn", agent_name(agent)),
+                    origin(&agent.pane_id),
+                ),
                 (Working | Blocked, Idle | Done) => {
-                    format!("{} finished a turn", agent_name(agent))
+                    (format!("{} finished a turn", agent_name(agent)), None)
                 }
                 _ => continue,
             };
@@ -349,11 +409,11 @@ impl Checkpoints {
                     )
                 });
             if let Some(checkout) = checkout {
-                captures.push((checkout, label));
+                captures.push((checkout, label, origin));
             }
         }
-        for (checkout, label) in captures {
-            self.capture(checkout, label);
+        for (checkout, label, origin) in captures {
+            self.capture(checkout, label, origin);
         }
     }
 
@@ -384,8 +444,10 @@ impl Checkpoints {
     }
 
     /// Queue a checkpoint of `checkout`. One still waiting for the same
-    /// checkout takes the newer label instead: it will snapshot the same files.
-    fn capture(&mut self, checkout: Checkout, label: String) {
+    /// checkout takes the newer label and origin instead: it will snapshot
+    /// the same files, as they are then, which is no longer an earlier
+    /// prompt's start.
+    fn capture(&mut self, checkout: Checkout, label: String, origin: Option<Origin>) {
         let Some(lane) = self.lane(&checkout.host) else {
             return;
         };
@@ -394,7 +456,7 @@ impl Checkpoints {
             .iter_mut()
             .find(|job| job.checkout == checkout && matches!(job.request, Request::Capture { .. }))
         {
-            job.request = Request::Capture { label };
+            job.request = Request::Capture { label, origin };
             return;
         }
         if lane.queue.len() >= QUEUE_LIMIT {
@@ -403,7 +465,8 @@ impl Checkpoints {
         }
         lane.queue.push_back(Job {
             checkout,
-            request: Request::Capture { label },
+            request: Request::Capture { label, origin },
+            ticket: None,
         });
     }
 
@@ -416,10 +479,56 @@ impl Checkpoints {
         let job = Job {
             checkout,
             request: Request::List,
+            ticket: None,
         };
         if !lane.queue.contains(&job) {
             lane.queue.push_front(job);
         }
+    }
+
+    /// Look for `checkout`'s newest checkpoint of `origin`, ahead of any
+    /// waiting checkpoints: the user is waiting. The answer comes through
+    /// [`Checkpoints::take_found`]; it fails when the host is out of reach.
+    pub fn find(&mut self, checkout: Checkout, origin: Origin) {
+        let job = Job {
+            checkout: checkout.clone(),
+            request: Request::Find {
+                origin: origin.clone(),
+            },
+            ticket: None,
+        };
+        match self.lane(&checkout.host) {
+            Some(lane) if lane.queue.contains(&job) => {}
+            Some(lane) => lane.queue.push_front(job),
+            None => self.found.push(Found {
+                checkout,
+                origin,
+                result: Err(Error::Hosts.into()),
+            }),
+        }
+    }
+
+    /// The searches that finished since the last call.
+    pub fn take_found(&mut self) -> Vec<Found> {
+        std::mem::take(&mut self.found)
+    }
+
+    /// Restore checkpoint `id` of `checkout`, as a chat going back to a
+    /// prompt asks; the dialog's own restore takes its confirmation first.
+    /// The current state is saved first, and the outcome comes through
+    /// [`Checkpoints::poll`] like any other restore, with the ticket returned
+    /// here: another restore of the checkout is not this one finishing.
+    pub fn restore_id(&mut self, checkout: Checkout, id: String) -> Result<u64> {
+        let host = checkout.host.clone();
+        self.last_ticket += 1;
+        let ticket = self.last_ticket;
+        let job = Job {
+            checkout,
+            request: Request::Restore { id },
+            ticket: Some(ticket),
+        };
+        self.lane(&host).ok_or(Error::Hosts)?.queue.push_front(job);
+        Ok(ticket)
     }
 
     /// Open the dialog on `checkout` and load its list.
@@ -471,6 +580,7 @@ impl Checkpoints {
         let job = Job {
             checkout: view.checkout.clone(),
             request: Request::Restore { id },
+            ticket: None,
         };
         match self.lane(&job.checkout.host) {
             Some(lane) => lane.queue.push_front(job),
@@ -569,6 +679,16 @@ impl Checkpoints {
             .as_ref()
             .is_some_and(|view| view.checkout == job.checkout);
         match answer {
+            Answer::Found(result) => {
+                if let Request::Find { origin } = job.request {
+                    self.found.push(Found {
+                        checkout: job.checkout,
+                        origin,
+                        result,
+                    });
+                }
+                true
+            }
             Answer::Captured(result) => match result {
                 Ok(Some(_)) if viewed => {
                     self.list(job.checkout);
@@ -624,6 +744,7 @@ impl Checkpoints {
                 restored.push(Restored {
                     checkout: job.checkout,
                     result,
+                    ticket: job.ticket,
                 });
                 true
             }

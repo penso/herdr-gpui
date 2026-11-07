@@ -7,6 +7,9 @@
 mod agent;
 mod commands;
 mod pictures;
+mod rewind;
+
+pub(crate) use rewind::{Restart, Restarted};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -114,6 +117,9 @@ pub(crate) struct Config {
     /// Fail rather than start a new session when the agent cannot continue
     /// `load`.
     pub require_load: bool,
+    /// How to go back to an earlier prompt when that takes a new process;
+    /// `None` when the agent does it itself, or cannot.
+    pub restart: Option<Restart>,
 }
 
 #[derive(Debug)]
@@ -122,6 +128,7 @@ enum Pending {
     NewSession,
     LoadSession,
     Prompt,
+    Rewind,
     SetMode(String),
     SetOption,
 }
@@ -157,6 +164,9 @@ pub(crate) struct Session<R: FnMut(Update)> {
     projector: Projector,
     ready: bool,
     report: R,
+    rewinding: Option<rewind::Rewinding>,
+    /// The agent can go back to an earlier prompt, by its handshake.
+    rewinds: bool,
     seq: u64,
     subscribers: Vec<Subscriber>,
     transcript: Transcript,
@@ -167,7 +177,9 @@ impl<R: FnMut(Update)> Session<R> {
     pub(crate) fn new(mut config: Config, outbox: rpc::Outbox, report: R) -> Self {
         let mut transcript = Transcript::new(config.agent.clone());
         if let Some(history) = config.history.take() {
+            transcript.dropped_prompts = history.dropped_prompts;
             transcript.entries = history.entries;
+            transcript.prompts_uncounted = history.prompts_uncounted;
             transcript.truncated = history.truncated;
             transcript.usage = history.usage;
         }
@@ -193,6 +205,8 @@ impl<R: FnMut(Update)> Session<R> {
             projector,
             ready: false,
             report,
+            rewinding: None,
+            rewinds: false,
             seq: 0,
             subscribers: Vec::new(),
             transcript,
@@ -460,6 +474,7 @@ impl<R: FnMut(Update)> Session<R> {
             message: message.to_owned(),
         });
         self.clear_queue();
+        self.abandon_rewind();
     }
 
     fn clear_queue(&mut self) {

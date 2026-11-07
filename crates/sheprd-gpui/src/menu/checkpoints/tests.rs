@@ -73,6 +73,7 @@ mod dialog {
                 additions: 7,
                 deletions: 1,
             },
+            origin: None,
         }
     }
 

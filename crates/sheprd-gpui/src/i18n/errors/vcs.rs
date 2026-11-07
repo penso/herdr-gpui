@@ -28,6 +28,7 @@ impl Localize for checkpoint::Error {
             Self::Branch => fl!("error-vcs-checkpoint-branch"),
             Self::Busy => fl!("error-vcs-checkpoint-busy"),
             Self::Checkout => fl!("error-vcs-checkpoint-checkout"),
+            Self::Hosts => fl!("error-vcs-checkpoint-hosts"),
             Self::Missing => fl!("error-vcs-checkpoint-missing"),
             Self::Output => fl!("error-vcs-checkpoint-output"),
             Self::Script(_) => fl!("error-vcs-checkpoint-script"),

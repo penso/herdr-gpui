@@ -130,6 +130,7 @@ impl Observer {
         identity.check()?;
         let session = SessionInfo {
             id: options.session,
+            rewind: false,
             cwd: identity.cwd.clone(),
             title: None,
         };

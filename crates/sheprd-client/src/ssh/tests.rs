@@ -295,9 +295,21 @@ fn marker_consumes_banners_not_protocol_bytes() {
 }
 #[test]
 fn child_guard_reaps_on_drop() {
-    let child = Command::new("sleep").arg("60").spawn().unwrap();
+    let mut child = Command::new("sleep")
+        .arg("60")
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdout = child.stdout.take().unwrap();
     let id = child.id();
+    let dropped = Instant::now();
     drop(ChildGuard(child));
+    // The pipe ends with the process, however its id is reused: Windows gives
+    // an id out again at once, so asking after it can find another process.
+    assert_eq!(stdout.read(&mut [0; 1]).unwrap(), 0);
+    assert!(dropped.elapsed() < Duration::from_secs(30));
+    // A zombie still answers to its id, so here the id shows it was reaped.
+    #[cfg(unix)]
     assert!(
         !Command::new("kill")
             .args(["-0", &id.to_string()])
@@ -306,6 +318,8 @@ fn child_guard_reaps_on_drop() {
             .unwrap()
             .success()
     );
+    #[cfg(not(unix))]
+    let _ = id;
 }
 #[test]
 fn discovery_checks_binary_capabilities_before_starting_bridge() {

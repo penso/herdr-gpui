@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Activity, ConfigOption, Entry, EntryId, EntryKind, Error, MAX_ACTIVITIES, Modes, Permission,
-    PermissionId, PlanEntry, Queued, Result, SessionInfo, SlashCommand, Status, Transcript, Turn,
-    Usage, valid_question_answers,
+    PermissionId, PlanEntry, PromptFiles, Queued, Result, SessionInfo, SlashCommand, Status,
+    Transcript, Turn, Usage, valid_question_answers,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -78,6 +78,10 @@ pub enum Change {
     Activity {
         activity: Activity,
     },
+    /// The files a prompt just sent carried.
+    PromptFiles {
+        files: PromptFiles,
+    },
 }
 
 impl Transcript {
@@ -116,9 +120,14 @@ impl Transcript {
             Change::Truncate { before } => {
                 let keep = self.entries.partition_point(|entry| entry.id < *before);
                 if keep > 0 {
+                    self.dropped_prompts += self.entries[..keep]
+                        .iter()
+                        .filter(|entry| matches!(entry.kind, EntryKind::User { .. }))
+                        .count();
                     self.entries.drain(..keep);
                     self.truncated = true;
                 }
+                self.prompt_files.retain(|files| files.id >= *before);
             }
             Change::Status { status } => self.status = status.clone(),
             Change::PermissionAsked { permission } => {
@@ -157,6 +166,7 @@ impl Transcript {
             Change::Usage { usage } => self.usage.clone_from(usage),
             Change::AutoAccept { on } => self.auto_accept = *on,
             Change::Activity { activity } => self.record(activity)?,
+            Change::PromptFiles { files } => self.prompt_files.push(files.clone()),
         }
         Ok(())
     }

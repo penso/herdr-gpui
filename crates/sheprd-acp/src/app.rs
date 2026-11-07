@@ -10,9 +10,9 @@ use sheprd_chat_protocol::{EndpointId, NoticeLevel};
 use crate::{
     agents::Launch,
     cli::{AgentChoice, Options},
-    harness::{Acp, Pipes, Reach},
+    harness::{Acp, Reach},
     herdr::{Reporter, Target},
-    process,
+    rewind::Launcher,
     session::{Config, Flow, Input, Session, Update},
 };
 
@@ -27,6 +27,10 @@ struct Agent {
     display: String,
     /// Added to what the agent inherits.
     env: Vec<(&'static str, &'static str)>,
+    /// Arguments the user gave for the agent, after `args`.
+    extra: Vec<std::ffi::OsString>,
+    /// Going back to an earlier prompt takes a new process: Claude's.
+    forks: bool,
     /// What the agent's own log says of a session it will not replay.
     history: Option<crate::history::Result<sheprd_chat_protocol::Transcript>>,
     login_hint: Option<String>,
@@ -45,8 +49,9 @@ fn agent(options: &Options, cwd: &std::path::Path) -> Agent {
             );
             let adapter = adapter(options);
             let mut env = Vec::new();
+            let mut forks = false;
             let mut history = None;
-            let (program, mut args, reach): (_, _, Box<dyn Reach>) =
+            let (program, args, reach): (_, _, Box<dyn Reach>) =
                 match crate::agents::launch(agent, Some(&path), adapter) {
                     Launch::Native(program) => {
                         let (args, reach) = native(agent, options.load.as_deref());
@@ -54,17 +59,19 @@ fn agent(options: &Options, cwd: &std::path::Path) -> Agent {
                         if matches!(agent, crate::agents::Agent::Claude) {
                             let set = std::env::var_os(crate::claude::TODO_TOOLS);
                             env = crate::claude::env(set.as_deref());
+                            forks = true;
                         }
                         (program.into_os_string(), args, reach)
                     }
                     // An ACP agent replays its own history on `session/load`.
                     Launch::Acp(program, args) => (program, args, Box::new(Acp)),
                 };
-            args.extend(extra.iter().cloned());
             Agent {
                 args,
                 display: name.unwrap_or_else(|| agent.display_name().to_owned()),
                 env,
+                extra: extra.clone(),
+                forks,
                 history,
                 login_hint: Some(agent.login_hint().to_owned()),
                 program,
@@ -79,6 +86,8 @@ fn agent(options: &Options, cwd: &std::path::Path) -> Agent {
             }),
             args: args.clone(),
             env: Vec::new(),
+            extra: Vec::new(),
+            forks: false,
             history: None,
             login_hint: None,
             program: program.clone(),
@@ -133,27 +142,15 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         .canonicalize()
         .with_context(|| format!("no directory {}", cwd.display()))?;
     let agent = agent(&options, &cwd);
-    let spawned = process::spawn(&agent.program, &agent.args, &agent.env, &cwd)?;
-    let agent_process = spawned.process.clone();
     let (inputs, receiver) = bounded::<Input>(INPUTS);
-
-    let to_session = inputs.clone();
-    let outbox = agent.reach.connect(
-        Pipes {
-            input: Box::new(spawned.input),
-            output: Box::new(spawned.output),
-        },
-        Box::new(move |inbound| to_session.send(Input::Agent(inbound)).is_ok()),
-    )?;
-    let waiter = inputs.clone();
-    let watched = agent_process.clone();
-    thread::Builder::new()
-        .name("acp-wait".to_owned())
-        .spawn(move || {
-            let code = watched.wait().ok().and_then(|status| status.code());
-            let stderr = watched.stderr_tail();
-            let _ = waiter.send(Input::AgentExited { code, stderr });
-        })?;
+    let launcher = Launcher::new(agent.program, agent.env, agent.extra, &cwd, inputs.clone());
+    let outbox = launcher.start(agent.args, agent.reach)?;
+    let restart = agent.forks.then(|| {
+        let launcher = launcher.clone();
+        let restart: crate::session::Restart =
+            Box::new(move |rewind| launcher.rewind_claude(rewind));
+        restart
+    });
 
     let mut notices = Vec::new();
     let history = agent.history.and_then(|history| match history {
@@ -202,6 +199,7 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
         login_hint: agent.login_hint,
         pane: target.map(|target| target.pane),
         require_load: options.require_load,
+        restart,
     };
     let session_thread = thread::Builder::new()
         .name("acp-session".to_owned())
@@ -247,7 +245,7 @@ pub(crate) fn run(options: Options) -> anyhow::Result<()> {
     if let Some(keeper) = &keeper {
         keeper.ended();
     }
-    agent_process.stop();
+    launcher.stop();
     if let Some(reporter) = reporter {
         reporter.close();
     }

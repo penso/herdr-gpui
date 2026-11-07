@@ -41,7 +41,7 @@ pub fn create(
     label: &str,
     run: impl FnOnce(&Checkout, &str, ScriptLimits) -> Result<String>,
 ) -> Result<Option<String>> {
-    let body = script::capture(checkout, label, &stamp(), KEEP);
+    let body = script::capture(checkout, label, None, &stamp(), KEEP);
     script::parse_capture(&run(checkout, &body, LIMITS)?)
 }
 

@@ -14,6 +14,7 @@ mod layout;
 mod panels;
 mod pinned;
 mod rail;
+mod rewind;
 mod rich;
 pub(crate) mod running;
 pub(crate) mod selection;

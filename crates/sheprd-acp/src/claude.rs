@@ -32,7 +32,37 @@ pub(crate) const TODO_TOOLS: &str = "CLAUDE_CODE_ENABLE_TODO_TOOLS";
 /// The arguments that start `claude` for one session: a new one under
 /// `session`, or the earlier one of that id when `resume` is set.
 pub(crate) fn args(session: &str, resume: bool) -> Vec<OsString> {
-    let mut args: Vec<OsString> = [
+    let mut args = base_args();
+    args.push(if resume { "--resume" } else { "--session-id" }.into());
+    args.push(session.into());
+    args
+}
+
+/// The arguments that start `claude` on a new session `new` holding `from`
+/// up to and including its assistant message `anchor`, the way Anthropic's
+/// Agent SDKs fork one. `from` stays as it was; with no `anchor` the new
+/// session starts empty.
+pub(crate) fn fork_args(from: &str, anchor: Option<&str>, new: &str) -> Vec<OsString> {
+    let mut args = base_args();
+    if let Some(anchor) = anchor {
+        args.extend(
+            [
+                "--resume",
+                from,
+                "--resume-session-at",
+                anchor,
+                "--fork-session",
+            ]
+            .map(OsString::from),
+        );
+    }
+    args.push("--session-id".into());
+    args.push(new.into());
+    args
+}
+
+fn base_args() -> Vec<OsString> {
+    [
         "-p",
         "--input-format",
         "stream-json",
@@ -48,10 +78,7 @@ pub(crate) fn args(session: &str, resume: bool) -> Vec<OsString> {
     ]
     .into_iter()
     .map(OsString::from)
-    .collect();
-    args.push(if resume { "--resume" } else { "--session-id" }.into());
-    args.push(session.into());
-    args
+    .collect()
 }
 
 /// What `claude` is started with in its environment, given what the user

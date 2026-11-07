@@ -153,6 +153,8 @@ pub(crate) struct ChatPane {
     /// A read-only overlay owns the keyboard without installing an input handler.
     pub(crate) read_only_focus: Option<FocusHandle>,
     retry_at: Option<Instant>,
+    /// The earlier prompt the composer is editing, while it is.
+    pub(crate) rewind: Option<super::rewind::Rewind>,
     /// Whether the table of running sub-agents and shells is open.
     pub(crate) running: crate::motion::Toggle,
     pub(crate) selection: super::selection::Selection,
@@ -183,6 +185,9 @@ impl ChatPane {
     pub(crate) fn send_button(&self, text: &str) -> SendButton {
         let drafted = !text.trim().is_empty() || !self.attachments.is_empty() || self.uploading > 0;
         let status = &self.session.transcript().status;
+        // An edit waits for the turn to stop, so it can't be queued behind it.
+        let drafted =
+            drafted && !(self.rewind.is_some() && self.session.transcript().turn.is_some());
         match (drafted, status) {
             (false, sheprd_chat_protocol::Status::Working) => SendButton::Stop,
             (true, status) if status.accepts_prompts() => SendButton::Send,
@@ -262,6 +267,7 @@ impl ChatPane {
             rail: true,
             read_only_focus: None,
             retry_at: None,
+            rewind: None,
             running: Default::default(),
             selection: Default::default(),
             send: SendButton::Off,

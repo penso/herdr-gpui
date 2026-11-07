@@ -25,6 +25,12 @@ struct Pending {
     sends: u8,
 }
 
+impl Pending {
+    fn rewinds(&self) -> bool {
+        matches!(self.command, Command::Rewind { .. })
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Session {
     /// The agent the program greeted with, until a transcript names one.
@@ -35,6 +41,9 @@ pub(crate) struct Session {
     pending: Vec<Pending>,
     /// The last command the program refused, shown until the next one.
     rejection: Option<Rejection>,
+    /// How the last rewind ended, until taken: refused for this reason, or
+    /// not.
+    rewind_answer: Option<Option<Rejection>>,
     /// The revision each entry last changed at, so the view redraws only
     /// the entries that did.
     revisions: HashMap<EntryId, u64>,
@@ -105,6 +114,11 @@ impl Session {
         self.rejection
     }
 
+    /// How the last rewind ended, once it has.
+    pub(crate) fn take_rewind_answer(&mut self) -> Option<Option<Rejection>> {
+        self.rewind_answer.take()
+    }
+
     pub(crate) fn snapshots(&self) -> u64 {
         self.snapshots
     }
@@ -151,7 +165,15 @@ impl Session {
     /// without an answer, is given up and shown as refused.
     pub(crate) fn resend(&mut self) -> Vec<ClientMessage> {
         let before = self.pending.len();
-        self.pending.retain(|pending| pending.sends < SENDS);
+        let gave_up = |pending: &Pending| pending.sends >= SENDS;
+        if self
+            .pending
+            .iter()
+            .any(|pending| gave_up(pending) && pending.rewinds())
+        {
+            self.rewind_answer = Some(Some(Rejection::Unsupported));
+        }
+        self.pending.retain(|pending| !gave_up(pending));
         if self.pending.len() < before {
             self.rejection = Some(Rejection::Unsupported);
         }
@@ -224,6 +246,13 @@ impl Session {
                 Ok(true)
             }
             ServerMessage::Ack { id, rejected } => {
+                if self
+                    .pending
+                    .iter()
+                    .any(|pending| pending.id == id && pending.rewinds())
+                {
+                    self.rewind_answer = Some(rejected);
+                }
                 self.pending.retain(|pending| pending.id != id);
                 // Another client answering first is how a race ends, not
                 // a failure worth showing.
