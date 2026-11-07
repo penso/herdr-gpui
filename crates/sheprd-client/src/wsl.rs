@@ -362,7 +362,8 @@ mod catalog;
 mod error;
 mod paths;
 pub use catalog::{
-    WslHost, WslHosts, add_wsl_host, load_wsl_hosts, remove_wsl_host, store_wsl_selection,
+    WslHost, WslHosts, add_wsl_host, load_wsl_hosts, load_wsl_hosts_at, remove_wsl_host,
+    store_wsl_selection, wsl_hosts_path,
 };
 pub use error::Error;
 pub use paths::wsl_paths;

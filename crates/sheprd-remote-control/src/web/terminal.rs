@@ -188,8 +188,9 @@ pub(super) async fn paste(
 
 /// A picture pasted into a terminal: stored like a chat's upload, then its
 /// path typed into the pane as a terminal file drop would, so a program such
-/// as Claude Code attaches it. The phone never names the path; this computer
-/// chooses it.
+/// as Claude Code attaches it, as the pane's WSL distribution reads the path
+/// when it is in one. The phone never names the path; this computer chooses
+/// it.
 pub(super) async fn upload(
     State(state): State<Shared>,
     _device: Device,
@@ -206,11 +207,15 @@ pub(super) async fn upload(
     })
     .await
     .map_err(|_| ApiError::Invalid("the upload was interrupted"))??;
+    let text = match state.hub.wsl_path(&pane, &path).await? {
+        Some(path) => dropped_unix_path(&path),
+        None => dropped_path(&path),
+    };
     state
         .hub
         .call(
             ApiMethod::PaneSendText,
-            json!({"pane_id": pane, "text": dropped_path(&path)}),
+            json!({"pane_id": pane, "text": text}),
         )
         .await?;
     state.typed.typed(&pane);
@@ -224,6 +229,11 @@ pub(crate) fn dropped_path(path: &std::path::Path) -> String {
     if cfg!(windows) {
         return format!("\"{path}\" ");
     }
+    dropped_unix_path(&path)
+}
+
+/// [`dropped_path`] for a Unix shell, whichever computer this is.
+pub(crate) fn dropped_unix_path(path: &str) -> String {
     let mut text = String::with_capacity(path.len() + 8);
     for character in path.chars() {
         if !(character.is_alphanumeric()

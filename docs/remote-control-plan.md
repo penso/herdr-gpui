@@ -393,7 +393,9 @@ phone never disturbs the desktop's layout.
   - **How.** The layout comes over `herdr remote-client-bridge` in `wsl.exe`,
     requests over `herdr remote-api-bridge` (one `wsl.exe` each, so typing is
     slower than on a native session), and a Herdr without the API bridge
-    lists its sessions read-only. Ids read `herdr:SESSION@DISTRO:ID`.
+    lists its sessions read-only. Ids read `herdr:SESSION@DISTRO:ID`. A
+    picture stays on Windows and is typed as the path the distribution reads
+    it at, from its `wslpath`.
   - **What it cannot do.** A chat's program listens inside the distribution,
     out of this daemon's reach, so a chat there is listed as a terminal tab,
     and a phone cannot start one there, nor a new workspace in that session.

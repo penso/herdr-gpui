@@ -131,6 +131,22 @@ async fn a_new_workspace_is_refused_in_a_distribution() {
 }
 
 #[tokio::test]
+async fn only_a_pane_in_a_distribution_has_a_path_mapped() {
+    let hub = Hub::offline(Layout::default());
+    let path = Path::new("picture.png");
+    assert!(matches!(hub.wsl_path("p1", path).await, Ok(None)));
+    assert!(matches!(
+        hub.wsl_path("herdr:work:p1", path).await,
+        Ok(None)
+    ));
+    // Never the path unchanged: a distribution could not open it.
+    assert!(matches!(
+        hub.wsl_path("herdr:default@Ubuntu:p1", path).await,
+        Err(Error::NotConnected)
+    ));
+}
+
+#[tokio::test]
 async fn a_new_tab_in_a_distribution_is_never_the_cores() {
     let hub = Hub::offline(Layout::default());
     assert!(matches!(

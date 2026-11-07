@@ -25,7 +25,7 @@ use sheprd_client::ConnectTarget;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{Arc, Mutex, PoisonError, atomic::AtomicBool},
     time::Duration,
 };
 use tokio::sync::{broadcast, watch};
@@ -96,11 +96,12 @@ pub(crate) struct Hub {
 impl Hub {
     /// Connects to the local daemon at `socket` (discovered when `None`)
     /// and every other running Herdr 1 session of this user, and keeps chat
-    /// connections, found in `chat_dir`, in step with their layout. Must run
-    /// inside a Tokio runtime.
+    /// connections, found in `chat_dir`, in step with their layout, and the
+    /// distributions saved in `wsl_catalog`. Must run inside a Tokio runtime.
     pub(crate) fn start(
         socket: Option<PathBuf>,
         chat_dir: Option<PathBuf>,
+        wsl_catalog: Option<PathBuf>,
         core_endpoint: crate::core_target::CoreTarget,
         state_dir: &Path,
     ) -> std::io::Result<Arc<Self>> {
@@ -124,7 +125,7 @@ impl Hub {
             daemon_layout.clone(),
             core_layout,
         ));
-        let sessions = sessions::Sessions::start(primary_socket);
+        let sessions = sessions::Sessions::start(primary_socket, wsl_catalog);
         tokio::spawn(sessions::merge_sources(
             sender,
             base_layout,
@@ -449,6 +450,27 @@ impl Hub {
         let mut answer = session.api.call(method, params).await?;
         sessions::prefix_answer(&mut answer, &session.name);
         Ok(answer)
+    }
+
+    /// Where `path`, a file on this computer, is for the program in `pane`
+    /// when that pane is in a WSL distribution; `None` when it is not, and
+    /// the path reads the same there.
+    pub(crate) async fn wsl_path(&self, pane: &str, path: &Path) -> Result<Option<String>> {
+        if !sessions::in_wsl(pane) {
+            return Ok(None);
+        }
+        let (name, _) = sessions::owner(&json!({"pane_id": pane}))?.ok_or(Error::Response)?;
+        let session = self.sessions.get(&name).ok_or(Error::NotConnected)?;
+        let ConnectTarget::Wsl { distro, .. } = session.api.target() else {
+            return Ok(None);
+        };
+        let path = path.to_owned();
+        let mut paths = tokio::task::spawn_blocking(move || {
+            sheprd_client::wsl_paths(&distro, &[path], &AtomicBool::new(false))
+        })
+        .await
+        .map_err(|_| Error::NotConnected)??;
+        paths.pop().map(Some).ok_or(Error::Response)
     }
 
     /// The named session a request is for, with its ids as that session

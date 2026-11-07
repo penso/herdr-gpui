@@ -98,6 +98,7 @@ pub async fn run(options: Options) -> Result<()> {
     let hub = Hub::start(
         options.herdr_socket.clone(),
         options.chat_dir.clone(),
+        options.wsl_catalog.clone(),
         options.core_endpoint.clone(),
         &options.state_dir,
     )?;

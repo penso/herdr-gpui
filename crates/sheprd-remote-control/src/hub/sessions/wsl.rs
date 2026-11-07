@@ -9,6 +9,7 @@
 //! are listed as terminals (`layout::Chats`).
 
 use sheprd_client::{ConnectTarget, RemoteSession, WslHost};
+use std::path::Path;
 
 /// Between a session and its distribution in a followed name. Neither name
 /// can hold it, so no session on this computer can be mistaken for one.
@@ -28,13 +29,17 @@ pub(in crate::hub) fn is_wsl(name: &str) -> bool {
     name.contains(SEPARATOR)
 }
 
-/// The sessions to follow now. Blocking; asks nothing of a computer with no
-/// distribution saved.
-pub(super) fn listed() -> Vec<(String, ConnectTarget)> {
+/// The sessions to follow now, of the distributions saved in `catalog` (found
+/// from this process's environment when `None`). Blocking; asks nothing of a
+/// computer with no distribution saved.
+pub(super) fn listed(catalog: Option<&Path>) -> Vec<(String, ConnectTarget)> {
     if !cfg!(windows) {
         return Vec::new();
     }
-    let saved = match sheprd_client::load_wsl_hosts(false) {
+    let saved = match catalog.map_or_else(
+        || sheprd_client::load_wsl_hosts(false),
+        sheprd_client::load_wsl_hosts_at,
+    ) {
         Ok(saved) => saved.hosts,
         Err(error) => {
             tracing::warn!(%error, "could not read the saved WSL distributions");

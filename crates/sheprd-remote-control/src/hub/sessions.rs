@@ -37,6 +37,8 @@ const RESCAN: Duration = Duration::from_secs(30);
 pub(super) struct Sessions {
     /// The primary's client socket, which is never followed twice.
     primary: Option<PathBuf>,
+    /// The saved WSL distributions; `None` finds them from this process.
+    wsl_catalog: Option<PathBuf>,
     list: Mutex<Vec<Arc<Session>>>,
     /// Wakes the merge when a session's layout changes or the list does.
     changed: Notify,
@@ -53,8 +55,11 @@ pub(super) struct Session {
 impl Sessions {
     /// Follows the running sessions now and every [`RESCAN`]. Must run
     /// inside a Tokio runtime.
-    pub(super) fn start(primary: Option<PathBuf>) -> Arc<Self> {
-        let sessions = Arc::new(Self::new(primary));
+    pub(super) fn start(primary: Option<PathBuf>, wsl_catalog: Option<PathBuf>) -> Arc<Self> {
+        let sessions = Arc::new(Self {
+            wsl_catalog,
+            ..Self::new(primary)
+        });
         tokio::spawn(rescan(Arc::downgrade(&sessions)));
         sessions
     }
@@ -62,6 +67,7 @@ impl Sessions {
     fn new(primary: Option<PathBuf>) -> Self {
         Self {
             primary,
+            wsl_catalog: None,
             list: Mutex::new(Vec::new()),
             changed: Notify::new(),
         }
@@ -222,9 +228,12 @@ async fn rescan(sessions: Weak<Sessions>) {
         let Some(current) = sessions.upgrade() else {
             return;
         };
-        let primary = current.primary.clone();
+        let (primary, catalog) = (current.primary.clone(), current.wsl_catalog.clone());
         // Probes each session's socket: blocking, off the runtime's threads.
-        match tokio::task::spawn_blocking(move || every_session(primary.as_deref())).await {
+        let listing = tokio::task::spawn_blocking(move || {
+            every_session(primary.as_deref(), catalog.as_deref())
+        });
+        match listing.await {
             Ok(wanted) => current.update(&wanted),
             Err(error) => tracing::warn!(%error, "the Herdr session listing stopped"),
         }
@@ -235,7 +244,7 @@ async fn rescan(sessions: Weak<Sessions>) {
 /// side failing leaves the other listed; what it held stays while it answers.
 /// A primary outside any installation keeps this daemon to that session, so
 /// no distribution is followed either. Blocking.
-fn every_session(primary: Option<&Path>) -> Vec<(String, ConnectTarget)> {
+fn every_session(primary: Option<&Path>, catalog: Option<&Path>) -> Vec<(String, ConnectTarget)> {
     let mut sessions: Vec<(String, ConnectTarget)> = match listed(primary) {
         Ok(wanted) => wanted
             .into_iter()
@@ -247,7 +256,7 @@ fn every_session(primary: Option<&Path>) -> Vec<(String, ConnectTarget)> {
         }
     };
     if primary.is_none_or(|primary| installation(primary).is_some()) {
-        sessions.extend(wsl::listed());
+        sessions.extend(wsl::listed(catalog));
     }
     sessions
 }

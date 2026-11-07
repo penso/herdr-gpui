@@ -95,6 +95,17 @@ pub fn load_wsl_hosts(development: bool) -> Result<WslHosts> {
     read(&path(development))
 }
 
+/// Where the saved distributions live in this process's environment, for a
+/// service whose own environment may differ.
+pub fn wsl_hosts_path(development: bool) -> PathBuf {
+    path(development)
+}
+
+/// [`load_wsl_hosts`], from the file at `path`.
+pub fn load_wsl_hosts_at(path: &Path) -> Result<WslHosts> {
+    read(path)
+}
+
 /// Save `distro` as a device attached to `session`. A distribution is saved
 /// once; pick another of its sessions from the sessions list instead.
 pub fn add_wsl_host(development: bool, distro: &str, session: &str) -> Result<()> {

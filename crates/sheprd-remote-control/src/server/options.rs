@@ -42,6 +42,9 @@ pub struct Options {
     pub port: u16,
     pub privacy: Privacy,
     pub state_dir: PathBuf,
+    /// The saved WSL distributions, as Sheprd resolved them; `None` resolves
+    /// them from this process's environment.
+    pub wsl_catalog: Option<PathBuf>,
 }
 
 #[derive(Debug, thiserror::Error, Eq, PartialEq)]
@@ -65,7 +68,7 @@ pub enum ParseError {
 /// What the command line asks for.
 #[derive(Debug, Eq, PartialEq)]
 pub enum Invocation {
-    Serve(Options),
+    Serve(Box<Options>),
     /// Adds a phone another computer's Sheprd allowed, read as JSON from
     /// standard input (`app::enroll`).
     Enroll {
@@ -105,6 +108,7 @@ Options:
   --core-socket PATH --core-session NAME
                            The desktop core endpoint (default: discovered)
   --chat-dir DIR           Where chat sockets live (default: discovered)
+  --wsl-catalog FILE       The saved WSL distributions (default: discovered)
   --privacy generic|excerpt
                            Whether notifications may quote the chat (default generic)
   --device-idle-days N     Forget devices unseen this long, 0 for never
@@ -137,7 +141,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
     let (mut cert, mut key) = (None, None);
     let mut privacy = Privacy::Generic;
     let mut idle_days = DEFAULT_IDLE_DAYS;
-    let (mut herdr_socket, mut chat_dir) = (None, None);
+    let (mut herdr_socket, mut chat_dir, mut wsl_catalog) = (None, None, None);
     let (mut core_socket, mut core_session) = (None, None);
     let mut bonjour = true;
     while let Some(arg) = args.next() {
@@ -173,6 +177,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
                 core_session = Some(text(value("--core-session")?, "--core-session")?)
             }
             "--chat-dir" => chat_dir = Some(PathBuf::from(value("--chat-dir")?)),
+            "--wsl-catalog" => wsl_catalog = Some(PathBuf::from(value("--wsl-catalog")?)),
             "--privacy" => {
                 privacy = match text(value("--privacy")?, "--privacy")?.as_str() {
                     "generic" => Privacy::Generic,
@@ -213,7 +218,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         }
         _ => return Err(ParseError::CorePair),
     };
-    Ok(Invocation::Serve(Options {
+    Ok(Invocation::Serve(Box::new(Options {
         bind,
         bonjour,
         certificate,
@@ -224,7 +229,8 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Invocation, Par
         port,
         privacy,
         state_dir: state_dir.ok_or(ParseError::NoStateDir)?,
-    }))
+        wsl_catalog,
+    })))
 }
 
 /// `enroll [--state-dir DIR]` and `revoke --device ID [--state-dir DIR]`.

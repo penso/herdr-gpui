@@ -16,7 +16,7 @@ const MAX_INPUT: u64 = 64 * 1024;
 
 fn main() -> ExitCode {
     let options = match server::parse(std::env::args_os()) {
-        Ok(Invocation::Serve(options)) => options,
+        Ok(Invocation::Serve(options)) => *options,
         Ok(Invocation::Enroll { state_dir }) => return host(state_dir, run_enroll),
         Ok(Invocation::Revoke { state_dir, device }) => {
             return host(state_dir, |state_dir| {
