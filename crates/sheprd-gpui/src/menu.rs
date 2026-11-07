@@ -4,6 +4,7 @@
 //! it was started under.
 
 mod appear;
+pub(crate) mod azure;
 mod checkpoints;
 mod chrome;
 #[cfg(feature = "cloud")]

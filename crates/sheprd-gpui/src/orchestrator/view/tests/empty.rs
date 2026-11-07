@@ -27,6 +27,7 @@ pub(super) fn open(
         workspace_id: "app".into(),
         token: None,
         data_root: Some(dir.path().join("data")),
+        azure_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

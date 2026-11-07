@@ -33,6 +33,7 @@ mod current_beads;
 mod extras;
 mod glab_mapping;
 mod refresh;
+mod stores;
 mod syncing_count;
 mod unreached;
 
@@ -64,6 +65,7 @@ pub(super) fn opened(dir: &std::path::Path) -> (Service, Worker, Host) {
         workspace_id: "w1".into(),
         token: None,
         data_root: Some(dir.join("data")),
+        azure_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing {
             reload: Duration::from_millis(20),

@@ -187,6 +187,7 @@ fn two_projects(
         workspace_id: "other".into(),
         token: None,
         data_root: Some(dir.join("other-data")),
+        azure_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     };

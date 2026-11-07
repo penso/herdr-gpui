@@ -11,6 +11,7 @@ fn refresh_forgets_when_checks_were_last_read() {
         workspace_id: "w1".into(),
         token: None,
         data_root: None,
+        azure_store: Default::default(),
         gitlab_store: Default::default(),
         timing: Timing::default(),
     });

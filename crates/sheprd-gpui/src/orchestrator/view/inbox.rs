@@ -673,21 +673,39 @@ impl OrchestratorView {
             };
             let snapshot = &repo.snapshot;
             if let Some(Access::ReadOnly { found }) = snapshot.access {
-                banners.push(banner(
-                    look,
-                    RED,
-                    "icons/lock.svg",
-                    of(fl!(
-                        "orchestrator-newer-schema",
-                        found = found,
-                        known = crate::orchestrator::SCHEMA_VERSION
-                    )),
+                banners.push((
+                    banner(
+                        look,
+                        RED,
+                        "icons/lock.svg",
+                        of(fl!(
+                            "orchestrator-newer-schema",
+                            found = found,
+                            known = crate::orchestrator::SCHEMA_VERSION
+                        )),
+                    ),
+                    None,
                 ));
             }
             if let Some(error) = &snapshot.error {
-                banners.push(banner(look, RED, "icons/x.svg", of(error.localize())));
+                banners.push((banner(look, RED, "icons/x.svg", of(error.localize())), None));
             }
             for status in &snapshot.sources {
+                // Azure DevOps has no sign-in of its own in the title bar
+                // for most users, so its missing token says where to add one.
+                if status.key.provider == Provider::Azure
+                    && matches!(status.state, SyncState::SignIn)
+                {
+                    let text = fl!(
+                        "azure-devops-menu-connect-banner",
+                        repository = status.key.repository.as_str()
+                    );
+                    banners.push((
+                        banner(look, YELLOW, "icons/azure-devops.svg", of(text)),
+                        Some(Provider::Azure),
+                    ));
+                    continue;
+                }
                 let text = match &status.state {
                     SyncState::Failed(error) => failure_text(status.key.provider, error),
                     SyncState::Capped { count } => fl!(
@@ -702,19 +720,25 @@ impl OrchestratorView {
                 } else {
                     RED
                 };
-                banners.push(banner(look, hue, "icons/refresh.svg", of(text)));
+                banners.push((banner(look, hue, "icons/refresh.svg", of(text)), None));
             }
         }
         banners
             .into_iter()
             .enumerate()
-            .map(|(index, banner)| {
+            .map(|(index, (banner, sign_in))| {
                 banner
-                    .debug_selector(|| "orchestrator-banner".into())
+                    .debug_selector(move || match sign_in {
+                        Some(_) => "orchestrator-banner-sign-in".into(),
+                        None => "orchestrator-banner".into(),
+                    })
                     .id(("orchestrator-banner", index))
                     .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.ask_refresh();
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        match sign_in {
+                            Some(provider) => cx.emit(Event::SignIn(provider)),
+                            None => this.ask_refresh(),
+                        }
                         cx.notify();
                     }))
                     .into_any_element()

@@ -186,6 +186,8 @@ pub(crate) struct MenuState {
     pub(super) github_toasted: std::collections::HashSet<String>,
     /// The GitLab page's instances, fields, and work under way.
     pub(crate) gitlab: super::gitlab::GitLabMenu,
+    /// The Azure DevOps page's organizations, fields, and work under way.
+    pub(crate) azure: super::azure::AzureMenu,
     /// Saved devices whose removal is running, by endpoint ID. Kept after
     /// success until the catalog drops the device, so its header pulses
     /// until it disappears; the confirmation closes as soon as it starts.
@@ -426,6 +428,7 @@ impl MenuState {
             github_token: None,
             github_toasted: Default::default(),
             gitlab: Default::default(),
+            azure: Default::default(),
             removing_devices: Default::default(),
             github_selected: None,
             github_scroll: ScrollHandle::new(),
@@ -490,6 +493,7 @@ impl MenuState {
         self.gitlab.connecting = None;
         self.gitlab.form = false;
         self.gitlab.stop_lookups();
+        self.azure.stop_lookups();
         self.page = None;
         if let Some(palette) = self.palette.take() {
             self.palette_resume = Some(palette.resume());

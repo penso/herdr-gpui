@@ -89,6 +89,13 @@ const MAX_ACTIONS: usize = 4;
 /// Outcomes kept for the view between its polls.
 const MAX_NOTICES: usize = 8;
 
+/// Where the tokens pasted in the account menu are saved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stores {
+    pub azure: sheprd_credentials::Store,
+    pub gitlab: sheprd_credentials::Store,
+}
+
 /// Where the view's repository is and whom to read GitHub as.
 #[derive(Clone)]
 pub struct Request {
@@ -101,6 +108,8 @@ pub struct Request {
     /// The accounts GitHub is read with; each source uses the one that
     /// reads its repository's owner.
     pub token: Option<Tokens>,
+    /// Where Azure DevOps tokens pasted in the account menu are saved.
+    pub azure_store: sheprd_credentials::Store,
     /// Where GitLab tokens pasted in the account menu are saved.
     pub gitlab_store: sheprd_credentials::Store,
     /// The folder holding the databases, and agent-launcher's to carry
@@ -112,6 +121,8 @@ pub struct Request {
 enum Command {
     /// Sync every source now, reading GitHub as `token`.
     Refresh(Option<Tokens>),
+    /// Read pasted tokens from these stores, and sync now with them.
+    Stores(Stores),
     /// Do what the user asked, on a thread of its own.
     Act(Action),
     /// An action finished: read the database again, and sync when it changed
@@ -123,6 +134,22 @@ enum Command {
         endpoint: Option<String>,
         target: ConnectTarget,
     },
+}
+
+impl Request {
+    /// Where this request's pasted tokens are saved.
+    pub fn stores(&self) -> Stores {
+        Stores {
+            azure: self.azure_store,
+            gitlab: self.gitlab_store,
+        }
+    }
+
+    /// Reads pasted tokens from `stores` from now on.
+    pub fn set_stores(&mut self, stores: Stores) {
+        self.azure_store = stores.azure;
+        self.gitlab_store = stores.gitlab;
+    }
 }
 
 /// A pull request looked up for the open item.
@@ -153,7 +180,8 @@ pub enum SyncState {
     Capped {
         count: usize,
     },
-    /// GitHub needs a signed-in account, or GitLab a token that works.
+    /// GitHub needs a signed-in account, or GitLab or Azure DevOps a token
+    /// that works.
     SignIn,
     /// A provider or host this build cannot read yet, such as GitHub Enterprise.
     Unsupported,
@@ -284,6 +312,16 @@ impl Service {
         }
     }
 
+    /// Reads pasted tokens from `stores` from now on, syncing at once. False
+    /// when the queue is full: unlike a refresh, nothing already queued
+    /// carries the change, so the caller asks again.
+    pub fn set_stores(&self, stores: Stores) -> bool {
+        !matches!(
+            self.commands.try_send(Command::Stores(stores)),
+            Err(TrySendError::Full(_))
+        )
+    }
+
     /// Whether the view is on screen. Hidden, sources sync every
     /// [`schedule::HIDDEN_SYNC`]; shown again, a sync older than the visible
     /// period runs at the worker's next tick. A flag rather than a command,
@@ -337,9 +375,10 @@ struct Worker {
     /// and a refusal look again, so a new `glab auth login` or a renewed
     /// connected account is picked up without reopening the view.
     gitlab_token: Option<(String, Option<gitlab::account::Found>)>,
-    /// The Azure DevOps token, once looked up; Refresh and a refusal look
-    /// again, so a new `az login` is picked up without reopening the view.
-    azure_token: Option<Option<azure::token::Token>>,
+    /// The Azure DevOps token, once looked up, and the organization it is
+    /// for; Refresh and a refusal look again, so a new `az login` or a token
+    /// saved in the account menu is picked up without reopening the view.
+    azure_token: Option<(String, Option<azure::token::Found>)>,
     cooldown: Option<Duration>,
     /// Whether the view is on screen, as the UI last said.
     visible: Arc<AtomicBool>,
@@ -372,6 +411,12 @@ impl Worker {
             match commands.recv_timeout(wait) {
                 Ok(Command::Refresh(token)) => {
                     self.refreshed(token);
+                    let token = self.request.token.clone();
+                    self.sync(token.as_ref());
+                    last_sync = Instant::now();
+                }
+                Ok(Command::Stores(stores)) => {
+                    self.stores_changed(stores);
                     let token = self.request.token.clone();
                     self.sync(token.as_ref());
                     last_sync = Instant::now();
@@ -424,6 +469,13 @@ impl Worker {
         self.azure_token = None;
         self.retry.clear();
         self.checks.clear();
+    }
+
+    /// Reads pasted tokens from `stores`, forgetting those read from the old
+    /// ones, and everything else [`Self::refreshed`] does.
+    fn stores_changed(&mut self, stores: Stores) {
+        self.request.set_stores(stores);
+        self.refreshed(self.request.token.clone());
     }
 
     /// Starts `action` on a thread of its own, at most [`MAX_ACTIONS`] at once.
@@ -798,6 +850,7 @@ impl Worker {
                     self.retry.push((key.clone(), Instant::now() + wait));
                     match &error {
                         // Waits as a failure does, but offers the sign-in.
+                        Error::Azure(source) if source.needs_sign_in() => SyncState::SignIn,
                         Error::Gitlab(source) if source.needs_sign_in() => SyncState::SignIn,
                         _ => SyncState::Failed(Arc::new(error)),
                     }

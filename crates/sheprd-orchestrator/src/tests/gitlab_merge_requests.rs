@@ -168,7 +168,7 @@ fn merge_requests_are_listed_across_pages() {
 
 /// Answers each connection with the next `(status, body)`, returning the
 /// request lines it saw.
-fn serve(
+pub(super) fn serve(
     answers: Vec<(u16, String)>,
 ) -> (std::net::SocketAddr, std::thread::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

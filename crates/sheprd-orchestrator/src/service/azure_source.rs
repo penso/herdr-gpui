@@ -1,7 +1,8 @@
-//! Reading an Azure DevOps source with the token looked up once, and renewed
-//! when Azure DevOps refuses it: an Azure CLI token lasts about an hour, and
-//! the next one comes from the same sign-in, which also takes over from a
-//! refused personal access token.
+//! Reading an Azure DevOps source with its organization's token, looked up
+//! once and renewed when Azure DevOps refuses it: an Azure CLI token lasts
+//! about an hour, and the next one comes from the same sign-in, which also
+//! takes over from a refused personal access token, and a token pasted in the
+//! account menu may have replaced the refused one.
 
 use super::{Error, Result, SourceKey, SyncState, Worker, azure};
 use crate::Checkpoint;
@@ -46,14 +47,27 @@ impl Worker {
         key: &SourceKey,
         previous: Option<&Checkpoint>,
     ) -> Result<azure::Listing> {
-        if self.azure_token.is_none() {
+        let organization = azure::Repository::organization(key)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let looked_up = self
+            .azure_token
+            .as_ref()
+            .is_some_and(|(looked_up, _)| *looked_up == organization);
+        if !looked_up {
             let cancelled = &self.cancelled;
-            self.azure_token = Some(azure::token::lookup(&|| cancelled.load(Ordering::Relaxed)));
+            let token = azure::token::lookup(&organization, self.request.azure_store, &|| {
+                cancelled.load(Ordering::Relaxed)
+            });
+            self.azure_token = Some((organization.clone(), token));
         }
         match self.read_azure(key, previous) {
             Err(Error::Azure(azure::Error::Authentication)) => {
                 let cancelled = &self.cancelled;
-                self.azure_token = Some(azure::token::renew(&|| cancelled.load(Ordering::Relaxed)));
+                let token = azure::token::renew(&organization, self.request.azure_store, &|| {
+                    cancelled.load(Ordering::Relaxed)
+                });
+                self.azure_token = Some((organization, token));
                 self.read_azure(key, previous)
             }
             result => result,
@@ -65,14 +79,21 @@ impl Worker {
         key: &SourceKey,
         previous: Option<&Checkpoint>,
     ) -> Result<azure::Listing> {
-        let token = self.azure_token.as_ref().and_then(Option::as_ref);
+        let found = self
+            .azure_token
+            .as_ref()
+            .and_then(|(_, found)| found.as_ref());
         let cancelled = &self.cancelled;
         azure::sync(
             key,
-            token,
+            found.map(|found| &found.token),
             previous,
             &|| cancelled.load(Ordering::Relaxed),
             &mut self.cooldown,
         )
+        .map_err(|error| match (error, found) {
+            (Error::Azure(error), Some(found)) => Error::Azure(error.from_source(found.source)),
+            (error, _) => error,
+        })
     }
 }

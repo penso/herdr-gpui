@@ -103,6 +103,7 @@ pub use padding::Padding;
 pub(crate) use padding::{Axis, MAX_PADDING, Side, Sides};
 pub use remote::RemoteConfig;
 use serde::Deserialize;
+pub use sheprd_orchestrator::azure::Config as AzureDevOpsConfig;
 pub use sheprd_orchestrator::gitlab::Config as GitLabConfig;
 pub use sheprd_remote::config::AzureConfig;
 #[cfg(feature = "azure")]
@@ -178,6 +179,8 @@ pub struct Config {
     pub agents_placement: AgentsPlacement,
     /// What shows behind the main window's terminals and chrome.
     pub azure: AzureConfig,
+    /// Where Azure DevOps tokens pasted in the account menu are saved.
+    pub azure_devops: AzureDevOpsConfig,
     pub backdrop: Backdrop,
     pub bell: BellConfig,
     pub boat: BoatConfig,
@@ -416,6 +419,7 @@ impl Default for Config {
             agent_skill: AgentSkillConfig::default(),
             agents_placement: AgentsPlacement::default(),
             azure: AzureConfig::default(),
+            azure_devops: AzureDevOpsConfig::default(),
             backdrop: Backdrop::default(),
             bell: BellConfig::default(),
             boat: BoatConfig::default(),
@@ -509,6 +513,7 @@ struct Settings {
     agent_skill: AgentSkillConfig,
     agents_placement: AgentsPlacement,
     azure: AzureConfig,
+    azure_devops: AzureDevOpsConfig,
     backdrop: Backdrop,
     bell: BellConfig,
     boat: BoatConfig,
@@ -845,6 +850,7 @@ impl Config {
         settings.github.client_id_with_override(None)?;
         settings.github.check_accounts()?;
         config.github = settings.github;
+        config.azure_devops = settings.azure_devops;
         config.gitlab = settings.gitlab;
         #[cfg(feature = "azure")]
         settings.azure.check()?;

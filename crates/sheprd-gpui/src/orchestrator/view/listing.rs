@@ -44,6 +44,7 @@ impl OrchestratorView {
         self.skipped_repos
             .retain(|key| specs.iter().any(|spec| spec.key == *key));
         specs.retain(|spec| !self.skipped_repos.contains(&spec.key));
+        self.adopt_stores(&specs);
         let same = specs.len() == self.repos.len()
             && specs
                 .iter()
@@ -70,6 +71,27 @@ impl OrchestratorView {
             .retain(|key| self.repos.iter().any(|repo| repo.key == *key));
         self.refresh_rows();
         cx.notify();
+    }
+
+    /// Tells the workers kept across `set_repos` where pasted tokens are saved
+    /// now, or the account page and they would use different stores after
+    /// `allow_plaintext_credentials` changes. A full queue leaves the old
+    /// stores here, so the next tick asks again.
+    fn adopt_stores(&mut self, specs: &[RepoSpec]) {
+        for repo in &mut self.repos {
+            let Some(spec) = specs.iter().find(|spec| spec.key == repo.key) else {
+                continue;
+            };
+            let stores = spec.request.stores();
+            if stores != repo.request.stores()
+                && repo
+                    .service
+                    .as_ref()
+                    .is_none_or(|service| service.set_stores(stores))
+            {
+                repo.request.set_stores(stores);
+            }
+        }
     }
 
     /// Keep ordinary folders out of the project list without restarting a
