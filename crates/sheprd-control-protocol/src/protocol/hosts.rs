@@ -16,6 +16,13 @@ pub enum HostOp {
     Select {
         id: String,
     },
+    /// Mute or unmute `host` (an endpoint ID or label; absent, the caller's
+    /// host) as a whole.
+    Mute {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        host: Option<String>,
+        muted: bool,
+    },
     /// The pull request of the caller's workspace's branch.
     Pr,
     /// Its review comments, loaded on request.

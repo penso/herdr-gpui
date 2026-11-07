@@ -14,6 +14,11 @@ pub enum PrCommand {
 pub enum HostCommand {
     List,
     Select(String),
+    /// Mute or unmute a host by ID or label; absent, the caller's.
+    Mute {
+        host: Option<String>,
+        muted: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,6 +91,10 @@ pub(super) fn host(args: &mut Args) -> Result<HostCommand, CliError> {
     Ok(match verb.to_str() {
         Some("list") => HostCommand::List,
         Some("select") => HostCommand::Select(args.required_text("HOST")?),
+        Some(verb @ ("mute" | "unmute")) => HostCommand::Mute {
+            host: args.optional_text()?,
+            muted: verb == "mute",
+        },
         _ => return Err(unknown("host", verb)),
     })
 }

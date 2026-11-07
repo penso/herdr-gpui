@@ -2,7 +2,8 @@
 //! The sidebar host header's context menu. Saved SSH devices and cloud devices
 //! have this one, each with the actions its kind supports; a WSL
 //! distribution's only offers its removal (see `wsl`). Local is always
-//! present, and an explicit socket is not in the catalog.
+//! present, so it offers only its mute, and an explicit socket is not in the
+//! catalog.
 use super::setup;
 use crate::i18n::fl;
 use crate::{
@@ -12,56 +13,17 @@ use crate::{
     menu::Page,
     search_input::SearchInput,
 };
+#[cfg(feature = "cloud")]
+use actions::CLOUD_ACTIONS;
+use actions::{Action, LOCAL_ACTIONS, SSH_ACTIONS};
 use gpui::{prelude::*, *};
 use sheprd_client::ConnectTarget;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Action {
-    Rename,
-    /// Toggles the device's mute, which silences everything on it.
-    Mute,
-    /// Toggles `[devices.<id>] keybindings` between local and server.
-    ServerKeybindings,
-    /// Forwards one of the host's listening ports to this computer.
-    #[cfg(unix)]
-    ForwardPort,
-    /// Picks `[devices.<id>] theme`, the terminal's colors on this device.
-    Theme,
-    /// Opens Settings > Cloud devices on the device's provider.
-    #[cfg(feature = "cloud")]
-    ProviderSettings,
-    /// Runs the configured setup script on the cloud device again.
-    #[cfg(feature = "cloud")]
-    RunSetup,
-    Remove,
-}
-
-/// Each row's action and the message naming it.
-const SSH_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "host-menu-rename"),
-    (Action::Mute, "host-menu-mute"),
-    (Action::ServerKeybindings, "host-menu-server-keybindings"),
-    // Port forwards need an `ssh` control master, which Windows OpenSSH lacks.
-    #[cfg(unix)]
-    (Action::ForwardPort, "host-menu-forward-port"),
-    (Action::Theme, "host-menu-theme"),
-    (Action::Remove, "host-menu-remove"),
-];
-
-/// Port forwards, server keybindings, and the terminal theme go through the
-/// SSH profile, which a cloud device does not have.
-#[cfg(feature = "cloud")]
-const CLOUD_ACTIONS: &[(Action, &str)] = &[
-    (Action::Rename, "host-menu-rename"),
-    (Action::Mute, "host-menu-mute"),
-    (Action::ProviderSettings, "host-menu-cloud-settings"),
-    (Action::RunSetup, "host-menu-run-setup"),
-    (Action::Remove, "host-menu-remove"),
-];
 
 /// The saved entry the menu acts on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Saved {
+    /// This computer's daemon, which is not in any catalog.
+    Local,
     /// A catalog profile, which the `herdr machine` commands name.
     Ssh { profile: String },
     /// A machine in the GUI's cloud device list, keyed by its provider's ID.
@@ -106,6 +68,7 @@ pub(crate) struct HostMenu {
 impl HostMenu {
     fn actions(&self) -> &'static [(Action, &'static str)] {
         match self.saved {
+            Saved::Local => LOCAL_ACTIONS,
             Saved::Ssh { .. } => SSH_ACTIONS,
             #[cfg(feature = "cloud")]
             Saved::Cloud { .. } => CLOUD_ACTIONS,
@@ -117,8 +80,7 @@ impl HostMenu {
     fn profile(&self) -> Option<&str> {
         match &self.saved {
             Saved::Ssh { profile } => Some(profile),
-            #[cfg(feature = "cloud")]
-            Saved::Cloud { .. } => None,
+            _ => None,
         }
     }
 
@@ -162,7 +124,9 @@ impl SheprdWindow {
         };
         // The saved entry, not the live target: removal claims and names the
         // profile, whichever session the list has attached the device to.
+        let none = String::new();
         let (saved, target, session) = match endpoint.saved_target() {
+            _ if endpoint.id == crate::endpoint::LOCAL => (Saved::Local, &none, &none),
             ConnectTarget::Ssh { target, session } => {
                 // The CLI edits the default catalog, the one device setup also uses.
                 if let Some(reason) = self.device_setup_unavailable() {
@@ -209,7 +173,7 @@ impl SheprdWindow {
                 tracing::info!(
                     category = "device_remove",
                     id,
-                    "Host menu refused: the device is not a saved SSH or cloud device"
+                    "Host menu refused: the device is not Local or a saved device"
                 );
                 return;
             }
@@ -450,6 +414,8 @@ impl SheprdWindow {
         // credential that only matters once the device is gone.
         let background = cx.background_executor().spawn(async move {
             match saved {
+                // Local offers no removal.
+                Saved::Local => Ok(Ok(())),
                 Saved::Ssh { profile } => {
                     let _claim = setup::claim_saved(&target, &session)?;
                     setup::remove(&profile)?;
@@ -643,14 +609,16 @@ impl SheprdWindow {
                             .truncate()
                             .child(host.label.clone()),
                     )
-                    .child(
-                        div()
-                            .text_size(px(self.config.ui.size * 0.85))
-                            .text_color(rgb(theme.muted))
-                            .truncate()
-                            // The device's target and session.
-                            .child(format!("{} · {}", host.target, host.session)), // i18n: data
-                    ),
+                    .when(!host.target.is_empty(), |header| {
+                        header.child(
+                            div()
+                                .text_size(px(self.config.ui.size * 0.85))
+                                .text_color(rgb(theme.muted))
+                                .truncate()
+                                // The device's target and session.
+                                .child(format!("{} · {}", host.target, host.session)), // i18n: data
+                        )
+                    }),
             );
             let server_keys = self.config.keybinding_source(&host.id) == KeybindingSource::Server;
             let device_theme = self.device_theme_value(&host.id).map(str::to_owned);
@@ -934,6 +902,8 @@ impl SheprdWindow {
 /// in the GUI's own list for a cloud device. Blocks; run on a worker.
 fn rename(saved: &Saved, label: &str) -> crate::Result<()> {
     match saved {
+        // Local offers no rename.
+        Saved::Local => Ok(()),
         Saved::Ssh { profile } => setup::rename(profile, label),
         #[cfg(feature = "cloud")]
         Saved::Cloud { provider, id } => Ok(crate::cloud::rename(*provider, id, label)?),
@@ -948,6 +918,8 @@ fn removal_note(host: &HostMenu) -> String {
         return note;
     }
     match host.saved {
+        // Local offers no removal.
+        Saved::Local => String::new(),
         Saved::Ssh { .. } => fl!(
             "host-menu-remove-ssh-note",
             device = host.label.as_str(),
@@ -969,6 +941,7 @@ fn removal_note(host: &HostMenu) -> String {
 mod destroy;
 #[cfg(feature = "cloud")]
 use destroy::remove_label;
+mod actions;
 mod forwards;
 mod theme;
 

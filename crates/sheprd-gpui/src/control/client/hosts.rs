@@ -70,6 +70,7 @@ pub(super) fn host(command: HostCommand, context: &Context) -> crate::Result<Out
     let op = match command {
         HostCommand::List => HostOp::List,
         HostCommand::Select(id) => HostOp::Select { id },
+        HostCommand::Mute { host, muted } => HostOp::Mute { host, muted },
     };
     match context.call(Request::Host, op)? {
         Response::Done { message } => Ok(Output::message(message)),

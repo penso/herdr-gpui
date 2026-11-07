@@ -57,3 +57,21 @@ fn removing_a_device_forgets_its_mute(cx: &mut TestAppContext) {
         });
     });
 }
+
+#[gpui::test]
+fn local_mutes_from_its_menu_and_names_nothing_under_its_label(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_host_menu(crate::endpoint::LOCAL, point(px(10.), px(10.)), window, cx);
+            view.activate_host_menu(Action::Mute, window, cx);
+            assert_eq!(view.menu.page, Some(Page::Host));
+        });
+        assert!(Mutes::of(cx).is_some_and(|mutes| mutes.host(crate::endpoint::LOCAL)));
+    });
+    cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
+    assert!(cx.debug_bounds("host-muted-local").is_some());
+    assert!(cx.debug_bounds("host-menu-0").is_some());
+    assert!(cx.debug_bounds("host-menu-1").is_none());
+    view.read_with(cx, |view, _| assert!(host(view).target.is_empty()));
+}

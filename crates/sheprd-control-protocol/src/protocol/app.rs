@@ -182,6 +182,9 @@ pub struct HostInfo {
     /// "online", "connecting", "reconnecting", "detached", "disabled", ...
     pub status: String,
     pub selected: bool,
+    /// Its notifications are muted as a whole.
+    #[serde(default)]
+    pub muted: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

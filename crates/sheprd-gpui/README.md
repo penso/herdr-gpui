@@ -1282,14 +1282,14 @@ Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
 To quiet one device, workspace, or tab instead of every notification,
-right-click it: the menu of a saved SSH or cloud device's sidebar header has
+right-click it: the menu of a device's sidebar header, Local included, has
 **Mute notifications**, the workspace menu's header has **Mute** (**Unmute**
 while it is muted), and the tab menu has **Mute Notifications**. Muting a
 device silences everything on it, in every session, and muting a workspace
 silences every tab in it, including tabs opened later; a tab can also be muted
 on its own. While a workspace's or device's mute covers a tab, the tab's menu
-offers **Unmute Workspace** or **Unmute Device** instead. Local has no device
-menu, so it cannot be muted as a whole. Nothing from a muted device, workspace,
+offers **Unmute Workspace** or **Unmute Device** instead. `sheprd host mute`
+and `sheprd worktree mute` do the same from a pane. Nothing from a muted device, workspace,
 or tab asks for you: no toast, no OS
 notification, no notification sound, and its agents leave the Dock badge,
 the Windows taskbar overlay, and the Overview's count in the activity bar.

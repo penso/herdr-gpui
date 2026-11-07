@@ -39,7 +39,7 @@ fn host(view: &crate::SheprdWindow) -> &HostMenu {
 }
 
 #[gpui::test]
-fn right_clicking_a_saved_host_offers_removal_but_local_has_no_menu(cx: &mut TestAppContext) {
+fn right_clicking_a_saved_host_offers_removal_but_local_only_its_mute(cx: &mut TestAppContext) {
     let (view, cx) = cx.add_window_view(|window, cx| {
         crate::bind_keys(cx);
         let mut view = fixture_window(window, cx);
@@ -51,6 +51,12 @@ fn right_clicking_a_saved_host_offers_removal_but_local_has_no_menu(cx: &mut Tes
     let local = cx.debug_bounds(LOCAL_HEADER).unwrap();
     cx.simulate_mouse_down(local.center(), MouseButton::Right, Modifiers::default());
     cx.simulate_mouse_up(local.center(), MouseButton::Right, Modifiers::default());
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.menu.page, Some(Page::Host));
+        assert_eq!(host(view).saved, Saved::Local);
+        assert_eq!(host(view).actions(), super::LOCAL_ACTIONS);
+    });
+    cx.simulate_keystrokes("escape");
     assert!(view.read_with(cx, |view, _| view.menu.page.is_none()));
 
     let remote = cx.debug_bounds(HOST_HEADER).unwrap();

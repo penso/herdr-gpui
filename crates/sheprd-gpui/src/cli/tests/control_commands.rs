@@ -285,3 +285,30 @@ fn an_events_cursor_names_its_app_run() {
         CliError::InvalidValue("--after")
     );
 }
+
+#[test]
+fn mute_commands() {
+    assert_eq!(
+        command(&["host", "mute", "studio"]),
+        ControlCommand::Host(control::HostCommand::Mute {
+            host: Some("studio".into()),
+            muted: true
+        })
+    );
+    assert_eq!(
+        command(&["host", "unmute"]),
+        ControlCommand::Host(control::HostCommand::Mute {
+            host: None,
+            muted: false
+        })
+    );
+    for (words, expected) in [
+        (&["worktree"][..], control::WorktreeCommand::Status),
+        (&["worktree", "status"], control::WorktreeCommand::Status),
+        (&["worktree", "mute"], control::WorktreeCommand::Mute),
+        (&["worktree", "unmute"], control::WorktreeCommand::Unmute),
+    ] {
+        assert_eq!(command(words), ControlCommand::Worktree(expected));
+    }
+    assert!(parse(&["worktree", "silence"]).is_err());
+}

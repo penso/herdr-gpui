@@ -97,11 +97,12 @@ pub(super) fn hosts(hosts: &[HostInfo]) -> String {
         .iter()
         .map(|host| {
             format!(
-                "{} {} ({}): {}",
+                "{} {} ({}): {}{}",
                 if host.selected { ">" } else { " " },
                 host.label,
                 host.id,
-                host.status
+                host.status,
+                if host.muted { ", muted" } else { "" }
             )
         })
         .collect::<Vec<_>>()
