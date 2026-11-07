@@ -111,3 +111,28 @@ fn lines_join_across_frames_and_stay_bounded() {
         Err(Error::Protocol(Violation::LongLine(_)))
     ));
 }
+
+#[test]
+fn doc_events_name_no_terminal() {
+    let local = br#"{"jsonrpc":"2.0","method":"event","params":{"seq":43,"type":"doc","data":{"name":"sheprd","version":2}}}"#;
+    assert_eq!(
+        parse(local).unwrap(),
+        Some(Notice::Doc {
+            machine: None,
+            name: "sheprd".into(),
+            seq: 43,
+            version: 2,
+        })
+    );
+    let remote = br#"{"jsonrpc":"2.0","method":"event","params":{"seq":44,"type":"doc","machine":"rohan","data":{"name":"sheprd","version":3}}}"#;
+    assert!(matches!(
+        parse(remote).unwrap(),
+        Some(Notice::Doc { machine: Some(machine), version: 3, .. }) if machine == "rohan"
+    ));
+}
+
+#[test]
+fn a_doc_event_without_its_data_is_unreadable() {
+    let line = br#"{"jsonrpc":"2.0","method":"event","params":{"seq":43,"type":"doc"}}"#;
+    assert!(parse(line).is_err());
+}
