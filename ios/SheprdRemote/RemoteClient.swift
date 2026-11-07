@@ -200,6 +200,14 @@ final class RemoteClient: Sendable {
         )
     }
 
+    // MARK: Tags
+
+    /// Offers this phone's copy of the computer's tags; answers those that
+    /// stand, which are the computer's own if it heard of a later edit.
+    func offerTags(_ tags: Home.Tags, bearer: String) async throws -> Home.Tags {
+        try await send("PUT", "/api/v2/tags", body: tags, bearer: bearer)
+    }
+
     // MARK: Terminals
 
     /// Keys in Herdr's syntax (`TermInput`), at most 64.

@@ -16,8 +16,10 @@ public struct Home: Codable, Hashable, Sendable {
     /// its most pressing agent; older computers leave it out.
     public var working: Int?
     public var workspaces: [Workspace]
+    /// The tags this computer keeps; older computers leave them out.
+    public var tags: Tags?
 
-    public init(computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, workspaces: [Workspace]) {
+    public init(computer: String, fingerprint: String, connected: Bool, waiting: Int, load: Load? = nil, working: Int? = nil, workspaces: [Workspace], tags: Tags? = nil) {
         self.computer = computer
         self.fingerprint = fingerprint
         self.connected = connected
@@ -25,6 +27,24 @@ public struct Home: Codable, Hashable, Sendable {
         self.load = load
         self.working = working
         self.workspaces = workspaces
+        self.tags = tags
+    }
+
+    /// A computer's tags and when they were last edited, also the body and
+    /// answer of `PUT /api/v2/tags`.
+    public struct Tags: Codable, Hashable, Sendable {
+        public var tags: [String]
+        public var updatedMs: UInt64
+
+        public init(tags: [String], updatedMs: UInt64) {
+            self.tags = tags
+            self.updatedMs = updatedMs
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case tags
+            case updatedMs = "updated_ms"
+        }
     }
 
     /// CPU and memory in whole percentages, 0 to 100. Older computers

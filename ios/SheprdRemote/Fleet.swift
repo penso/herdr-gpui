@@ -238,6 +238,13 @@ final class Fleet {
     @ObservationIgnored var onSummary: (() -> Void)?
     /// Called when a computer's link comes online, for host pairing.
     @ObservationIgnored var onOnline: ((Computer) -> Void)?
+    /// The tags a computer's home reports.
+    @ObservationIgnored var onTags: ((Home.Tags, Computer) -> Void)?
+    /// What stood after this phone offered `Computer`'s tags.
+    @ObservationIgnored var onTagsAnswer: ((Home.Tags, Computer) -> Void)?
+    /// Devices with an offer of tags on its way, so a home arriving
+    /// meanwhile does not send it again.
+    @ObservationIgnored private var offeringTags = Set<String>()
 
     // MARK: Views
 
@@ -351,6 +358,21 @@ final class Fleet {
         return try await body(client, token)
     }
 
+    /// Offers `computer` this phone's copy of its tags. A computer that is
+    /// away or too old to keep tags refuses; the copy stays, and its next
+    /// home brings this back.
+    func offerTags(for computer: Computer) {
+        guard offeringTags.insert(computer.device).inserted else { return }
+        let offer = Home.Tags(tags: computer.tags, updatedMs: computer.tagsUpdatedMs)
+        Task {
+            defer { offeringTags.remove(computer.device) }
+            guard let answer = try? await call(computer.device, { client, token in
+                try await client.offerTags(offer, bearer: token)
+            }) else { return }
+            onTagsAnswer?(answer, computer)
+        }
+    }
+
     /// Closes the pane a chat runs in, which stops its agent in Sheprd.
     func closeChatPane(_ key: PaneKey) async throws {
         let pane = key.pane
@@ -407,6 +429,7 @@ final class Fleet {
             if case .revoked = status { stopLink(device) }
             if case .online = status { onOnline?(machines[index].computer) }
         case let .event(.home(home)):
+            if let tags = home.tags { onTags?(tags, machines[index].computer) }
             // The computer's load moves every few seconds; only the header
             // shows it, so the cache, widgets, and Spotlight wait for a
             // change to the workspaces.

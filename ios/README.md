@@ -95,6 +95,9 @@ and nothing goes through your phone.
      opens that workspace's screen in it.
    - `-otherAgents YES` unfolds a workspace's other agents.
    - `-newWorkspace YES` opens the new workspace form.
+   - `-computerTags work,lab` tags the first computer, `-computerTagFilter work`
+     filters Workspaces by a tag, and `-openComputer YES` opens the first
+     computer's page from that tab.
    - `-syncBar waiting|failed` shows the sync bar as if a change were on
      its way or had failed.
    - With `-openLink`, `-session YES` opens the chat's session sheet and

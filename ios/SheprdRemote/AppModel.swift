@@ -81,6 +81,7 @@ final class AppModel {
     let hostLinks: HostLinks
     let nearby = NearbyBrowser()
     let collapsed = CollapsedStore()
+    let tagFilter = TagFilterStore()
     let shortcuts = ShortcutStore()
     let bluetooth = NearbyBluetooth()
     /// Bluetooth presence with the computers that have it on.
@@ -118,6 +119,8 @@ final class AppModel {
         hostLinks.computers = { [weak self] in self?.computers ?? [] }
         hostLinks.onPaired = { [weak self] in self?.add($0) }
         fleet.onOnline = { [weak self] in self?.hostLinks.check($0) }
+        fleet.onTags = { [weak self] in self?.tagsArrived($0, for: $1) }
+        fleet.onTagsAnswer = { [weak self] in self?.tagsAnswered($0, for: $1) }
         fleet.onSummary = { [spotlight] in
             let summary = WidgetSummary.load()
             spotlight.update(summary)
@@ -133,6 +136,8 @@ final class AppModel {
     }
 
     func add(_ computer: Computer) {
+        var computer = computer
+        computer.tags = ComputerTags.carried(to: computer, from: computers)
         // A computer is its CA: pairing the same CA (or the same device id)
         // again replaces the old record. Names are display only.
         computers.removeAll { $0.fingerprint == computer.fingerprint || $0.device == computer.device }
@@ -148,6 +153,37 @@ final class AppModel {
         guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
         computers[index].presence = on
         save()
+    }
+
+    /// Replaces one computer's tags.
+    func setTags(_ tags: [String], for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        computers[index].tags = tags
+        computers[index].tagsUpdatedMs = UInt64(Date.now.timeIntervalSince1970 * 1000)
+        save()
+        // An edit made away from the computer goes when its home next arrives.
+        fleet.offerTags(for: computers[index])
+    }
+
+    /// What stands after this phone offered tags, which replaces its copy
+    /// even when older: a fast clock here is why they may be.
+    private func tagsAnswered(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }),
+              computers[index].tagsUpdatedMs == computer.tagsUpdatedMs else { return }
+        computers[index].adopt(remote)
+        save()
+    }
+
+    /// The tags `computer` keeps, as its home or an answer reports them.
+    private func tagsArrived(_ remote: Home.Tags, for computer: Computer) {
+        guard let index = computers.firstIndex(where: { $0.device == computer.device }) else { return }
+        switch ComputerTags.step(for: computers[index], remote: remote) {
+        case .none: break
+        case .adopt:
+            computers[index].adopt(remote)
+            save()
+        case .send: fleet.offerTags(for: computers[index])
+        }
     }
 
     /// Addresses a computer sent over Bluetooth, sealed to this phone.
