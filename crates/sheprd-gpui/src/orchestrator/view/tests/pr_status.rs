@@ -5,7 +5,7 @@ use crate::orchestrator::{
     PrStatus, PullRequest, Request, Review, Timing,
     view::{
         Look, OrchestratorView,
-        list::{review_text, row_tone, standing_word},
+        pr_cells::{review_text, row_tone, standing_word},
         rows::Tab,
     },
 };

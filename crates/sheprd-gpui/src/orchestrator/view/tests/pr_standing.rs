@@ -1,6 +1,6 @@
 use super::super::{
-    list::{row_tone, standing_word},
     look::Look,
+    pr_cells::{row_tone, standing_word},
 };
 use super::*;
 use crate::{

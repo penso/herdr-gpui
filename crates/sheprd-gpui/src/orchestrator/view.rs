@@ -19,6 +19,7 @@ mod look;
 mod markdown;
 pub(crate) mod pane;
 mod pills;
+mod pr_cells;
 mod projects;
 mod pull;
 mod remote;
