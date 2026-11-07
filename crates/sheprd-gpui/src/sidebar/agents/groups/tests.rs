@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::{Groups, group_label, is_coordinator};
 use crate::sidebar::layout_tests::snapshot;
-use sheprd_client::protocol::{ClientShellAgent, ClientShellSnapshot};
+use sheprd_client::protocol::{ClientShellAgent, ClientShellPane, ClientShellSnapshot};
 
 const SUFFIX: &str = "-coord";
 
@@ -19,6 +19,16 @@ fn sessions(names: &[&str]) -> ClientShellSnapshot {
         })
         .collect();
     snapshot
+}
+
+/// A pane with a Rename label.
+fn pane(id: &str, label: &str) -> ClientShellPane {
+    serde_json::from_value(serde_json::json!({
+        "pane_id": id, "workspace_id": "w0", "tab_id": "t0", "label": label,
+        "cwd": null, "foreground_cwd": null, "focused": false,
+        "right_click_passthrough": false,
+    }))
+    .unwrap()
 }
 
 fn groups<'a>(snapshot: &'a ClientShellSnapshot, selected: Option<&'a str>) -> Groups<'a> {
@@ -96,18 +106,20 @@ fn a_replaced_coordinator_keeps_its_group() {
 #[test]
 fn a_pane_label_names_a_session_the_agent_name_does_not() {
     let mut snapshot = sessions(&["claude", "codex"]);
-    let pane = |id: &str, label: &str| {
-        serde_json::from_value(serde_json::json!({
-            "pane_id": id, "workspace_id": "w0", "tab_id": "t0", "label": label,
-            "cwd": null, "foreground_cwd": null, "focused": false,
-            "right_click_passthrough": false,
-        }))
-        .unwrap()
-    };
     snapshot.panes = vec![pane("p0", " demo-coord "), pane("p1", "demo-12")];
     assert!(is_coordinator(&snapshot.agents[0], &snapshot, SUFFIX));
     assert!(!is_coordinator(&snapshot.agents[1], &snapshot, SUFFIX));
     assert_eq!(listed(&snapshot, "demo"), ["claude", "codex"]);
+}
+
+/// A group is only offered if its coordinator would be listed in it, so the
+/// name that places a session is the one that forms a group.
+#[test]
+fn a_session_with_two_coordinator_names_forms_only_the_group_it_joins() {
+    let mut snapshot = sessions(&["demo-coord", "other-1"]);
+    snapshot.panes = vec![pane("p0", "other-coord")];
+    assert_eq!(groups(&snapshot, None).names(), ["demo"]);
+    assert_eq!(listed(&snapshot, "demo"), ["demo-coord"]);
 }
 
 #[test]

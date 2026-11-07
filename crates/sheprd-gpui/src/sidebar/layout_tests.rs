@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 #[cfg(test)]
 mod agent_groups;
+#[cfg(test)]
 mod agent_menu;
 #[cfg(test)]
 mod agent_rows;

@@ -49,6 +49,16 @@ fn coordinated_group<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
     name.strip_suffix(suffix).filter(|group| !group.is_empty())
 }
 
+/// The group a session coordinates. Its first name that carries the suffix
+/// decides, so a session with two such names forms and joins the same one.
+fn coordinated<'a>(
+    agent: &'a ClientShellAgent,
+    snapshot: &'a ClientShellSnapshot,
+    suffix: &str,
+) -> Option<&'a str> {
+    session_names(agent, snapshot).find_map(|name| coordinated_group(name, suffix))
+}
+
 /// Whether `name` is `group` and then a separator, so `demolition-1` stays out
 /// of `demo`.
 fn names_worker_of(name: &str, group: &str) -> bool {
@@ -63,7 +73,7 @@ pub(in crate::sidebar) fn is_coordinator(
     snapshot: &ClientShellSnapshot,
     suffix: &str,
 ) -> bool {
-    session_names(agent, snapshot).any(|name| coordinated_group(name, suffix).is_some())
+    coordinated(agent, snapshot, suffix).is_some()
 }
 
 /// The groups the listed sessions form.
@@ -85,8 +95,7 @@ impl<'a> Groups<'a> {
     ) -> Self {
         let mut names: Vec<_> = sessions
             .into_iter()
-            .flat_map(|(agent, snapshot)| session_names(agent, snapshot))
-            .filter_map(|name| coordinated_group(name, suffix))
+            .filter_map(|(agent, snapshot)| coordinated(agent, snapshot, suffix))
             .chain(selected)
             .collect();
         names.sort_unstable();
@@ -105,13 +114,11 @@ impl<'a> Groups<'a> {
         agent: &'a ClientShellAgent,
         snapshot: &'a ClientShellSnapshot,
     ) -> Option<Member<'a>> {
-        let coordinated = session_names(agent, snapshot)
-            .find_map(|name| coordinated_group(name, self.suffix))
-            .map(|group| Member {
-                group,
-                role: GroupRole::Coordinator,
-            });
-        coordinated.or_else(|| {
+        let coordinator = coordinated(agent, snapshot, self.suffix).map(|group| Member {
+            group,
+            role: GroupRole::Coordinator,
+        });
+        coordinator.or_else(|| {
             session_names(agent, snapshot)
                 .flat_map(|name| {
                     self.names
