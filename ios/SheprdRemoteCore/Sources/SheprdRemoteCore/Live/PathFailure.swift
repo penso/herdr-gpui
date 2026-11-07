@@ -23,14 +23,18 @@ public struct UnreportedFailures: Equatable, Sendable {
 
 /// What a computer said when it refused a call.
 public enum Refusal {
+    /// The most of a refusal that is kept, in characters.
+    public static let limit = 300
+
     /// The daemon's `{"error": "..."}` as a sentence for the screen, else
-    /// the status with whatever came back.
-    public static func text(status: Int, body: String) -> String {
+    /// the status with whatever came back. Takes the whole answer: cut
+    /// first, a long message would no longer parse.
+    public static func text(status: Int, body: Data) -> String {
         struct Answer: Decodable { let error: String }
-        guard let answer = try? JSONDecoder().decode(Answer.self, from: Data(body.utf8)), !answer.error.isEmpty else {
-            return "The computer answered \(status): \(body)"
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: body), !answer.error.isEmpty else {
+            return "The computer answered \(status): \(String(decoding: body.prefix(limit), as: UTF8.self))"
         }
-        return answer.error
+        return String(answer.error.prefix(limit))
     }
 }
 
