@@ -66,6 +66,8 @@ pub enum ControlCommand {
     Devices,
     Orchestrator(OrchestratorCommand),
     Review,
+    /// The file tree of the caller's workspace's checkout.
+    Files,
     Chat(ChatCommand),
     Px0,
     Notes(NotesCommand),
@@ -169,6 +171,7 @@ pub const FAMILIES: &[(&str, &str)] = &[
         "A repository's issues, pull requests, and runs",
     ),
     ("review", "Open the review of the uncommitted changes"),
+    ("files", "Open the file tree of your checkout"),
     (
         "chat",
         "Native views of herdr-acp chats: start one, list them, show or hide one",
@@ -342,6 +345,10 @@ fn command(family: &'static str, args: &mut Args) -> Result<ControlCommand, CliE
         "review" => {
             tabs::open_only(args)?;
             ControlCommand::Review
+        }
+        "files" => {
+            tabs::open_only(args)?;
+            ControlCommand::Files
         }
         "chat" => ControlCommand::Chat(chat::chat(args)?),
         "px0" => {

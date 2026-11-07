@@ -7,9 +7,11 @@
 //! keeps each tab's view, made when the tab opens or is first seen after a
 //! restart. The file is read, outlined, and coloured on the background
 //! executor, colours last, so its text shows before a large file is
-//! coloured. Drawing only reads what those produced.
+//! coloured. Drawing only reads what those produced. `b` shows who last
+//! changed each line, read the same way (see `blame`).
 
 // i18n: migrated
+mod blame;
 mod render;
 
 use crate::{
@@ -23,7 +25,13 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use serde::{Deserialize, Serialize};
-use std::{cell::Cell, ops::Range, path::Path, rc::Rc, sync::Arc};
+use std::{
+    cell::Cell,
+    ops::Range,
+    path::Path,
+    rc::Rc,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 /// Lines coloured at most; the rest of a longer file draws plain.
 const MAX_COLOURED_LINES: usize = 20_000;
@@ -88,13 +96,23 @@ struct Text {
     widest: usize,
 }
 
+/// The file at `path` as it is on disk.
+fn raw_source(path: &Path) -> crate::Result<String> {
+    code_index::read_source(path).ok_or(crate::Error::CodeFileUnreadable)
+}
+
 impl Text {
     /// Reads the file at `path`. Its text is untrusted: as in a review,
     /// tabs become spaces and control and direction-override characters go
     /// before anything is shown, coloured, or outlined, so what is drawn is
     /// what was read.
+    #[cfg(test)]
     fn read(path: &Path) -> crate::Result<Self> {
-        let raw = code_index::read_source(path).ok_or(crate::Error::CodeFileUnreadable)?;
+        Ok(Self::of(path, &raw_source(path)?))
+    }
+
+    /// The file at `path`, holding `raw`.
+    fn of(path: &Path, raw: &str) -> Self {
         let mut source = String::with_capacity(raw.len());
         let mut lines = Vec::new();
         for line in raw.lines() {
@@ -120,12 +138,12 @@ impl Text {
                 line: found.line,
             })
             .collect();
-        Ok(Self {
+        Self {
             source,
             lines,
             outline,
             widest,
-        })
+        }
     }
 
     fn line(&self, index: usize) -> &str {
@@ -157,6 +175,15 @@ pub(crate) struct CodeView {
     width: Rc<Cell<f32>>,
     /// The newest read; an older one's result is dropped.
     load: u64,
+    blame: blame::Lines,
+    /// Stops the blame read nobody waits for any more.
+    blame_cancelled: Arc<AtomicBool>,
+}
+
+impl Drop for CodeView {
+    fn drop(&mut self) {
+        self.stop_blame();
+    }
 }
 
 impl CodeView {
@@ -298,6 +325,8 @@ impl SheprdWindow {
                 outline: true,
                 width: Rc::default(),
                 load: 0,
+                blame: blame::Lines::Off,
+                blame_cancelled: Arc::default(),
             },
         );
         true
@@ -318,15 +347,29 @@ impl SheprdWindow {
         view.load += 1;
         let load = view.load;
         let path = std::path::PathBuf::from(&file.path);
-        let read = cx
-            .background_executor()
-            .spawn(async move { Text::read(&path).map(Arc::new) });
+        let read = cx.background_executor().spawn({
+            let path = path.clone();
+            async move {
+                let raw = raw_source(&path)?;
+                crate::Result::Ok((Arc::new(Text::of(&path, &raw)), raw))
+            }
+        });
         let executor = cx.background_executor().clone();
         cx.spawn(async move |this, cx| {
-            let text = read.await;
+            let (text, raw) = match read.await {
+                Ok((text, raw)) => (Ok(text), Some(raw)),
+                Err(error) => (Err(error), None),
+            };
             let coloured = text.as_ref().ok().cloned();
             let current = this
-                .update(cx, |this, cx| this.code_view_read(id, load, text, cx))
+                .update(cx, |this, cx| {
+                    let current = this.code_view_read(id, load, text, cx);
+                    // Blame reads what was read, so its lines are these.
+                    if let Some(raw) = raw.filter(|_| current && this.code_blame_wanted(id)) {
+                        this.read_code_blame(id, load, path, raw, cx);
+                    }
+                    current
+                })
                 .unwrap_or(false);
             let Some(text) = coloured.filter(|_| current) else {
                 return;
@@ -369,6 +412,10 @@ impl SheprdWindow {
                 // Colours of other text would land on the wrong words.
                 if view.text().is_some_and(|old| old.source != text.source) {
                     view.spans = Arc::default();
+                    // As would commits on the wrong lines.
+                    if view.blame.shown().is_some() {
+                        view.blame = blame::Lines::Reading;
+                    }
                 }
                 view.state = State::Loaded(text);
                 if let Some(line) = view.target.take() {
@@ -435,6 +482,10 @@ impl SheprdWindow {
         }
         if keystroke.key == "e" && !modifiers.shift {
             self.open_code_view_in_editor(id, cx);
+            return true;
+        }
+        if keystroke.key == "b" && !modifiers.shift {
+            self.toggle_code_blame(id, cx);
             return true;
         }
         let Some(view) = self.code_views.get_mut(&id) else {

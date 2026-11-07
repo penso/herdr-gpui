@@ -258,6 +258,7 @@ impl SheprdWindow {
             Row::Commit => {
                 self.menu.page = Some(Page::GitCommit);
                 self.menu.input = Some(DialogInput::default());
+                self.menu.git_commit_staged = None;
             }
             Row::Push => self.start_git(Action::Push),
             Row::PullRequest => {
@@ -275,6 +276,19 @@ impl SheprdWindow {
         cx.notify();
     }
 
+    /// Files staged in the focused checkout.
+    fn git_staged(&self) -> u64 {
+        self.git.status().map_or(0, |status| status.staged)
+    }
+
+    /// Whether the commit takes only what is staged. Hunks staged on purpose
+    /// stay what the commit is about, so until the user chooses this follows
+    /// the status, which can land after the dialog opens.
+    pub(super) fn git_commits_staged(&self) -> bool {
+        let staged = self.git_staged() > 0;
+        staged && self.menu.git_commit_staged.unwrap_or(staged)
+    }
+
     fn start_git(&mut self, action: Action) {
         if let Err(error) = self.git.start(action, self.main_tokens()) {
             self.menu.error = Some(error.to_string());
@@ -284,11 +298,13 @@ impl SheprdWindow {
     }
 
     pub(super) fn submit_git_commit(&mut self, cx: &mut Context<Self>) {
-        if self
-            .menu
-            .input
-            .as_ref()
-            .is_some_and(|input| input.marked.is_some())
+        // A hunk still reaching the index decides what the commit takes.
+        if self.hunks_staging > 0
+            || self
+                .menu
+                .input
+                .as_ref()
+                .is_some_and(|input| input.marked.is_some())
         {
             return;
         }
@@ -298,7 +314,11 @@ impl SheprdWindow {
             .as_ref()
             .map(|input| input.text.trim().to_owned())
             .unwrap_or_default();
-        self.start_git(Action::Commit(message));
+        self.start_git(if self.git_commits_staged() {
+            Action::CommitStaged(message)
+        } else {
+            Action::Commit(message)
+        });
         if self.menu.error.is_none() {
             self.menu.input = None;
             self.menu.page = Some(Page::Git);
@@ -640,6 +660,29 @@ impl SheprdWindow {
         panel
     }
 
+    /// The commit dialog's choice to take only what is staged, offered when
+    /// something is.
+    fn render_git_commit_staged(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        div()
+            .id("git-commit-staged")
+            .debug_selector(|| "git-commit-staged".into())
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .cursor_pointer()
+            .child(crate::toggles::checkbox(
+                &self.theme,
+                14.,
+                self.git_commits_staged(),
+            ))
+            .child(fl!("git-commit-only-staged", count = self.git_staged()))
+            .on_click(cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.menu.git_commit_staged = Some(!this.git_commits_staged());
+                cx.notify();
+            }))
+    }
+
     /// The commit dialog wears the workspace dialogs' chrome: a titled header
     /// naming the branch, the body, then right-aligned actions. Its primary
     /// action stays unarmed until there is a message to commit.
@@ -650,7 +693,8 @@ impl SheprdWindow {
             .menu
             .input
             .as_ref()
-            .is_some_and(|input| !input.text.trim().is_empty());
+            .is_some_and(|input| !input.text.trim().is_empty())
+            && self.hunks_staging == 0;
         let mut body = div()
             .flex()
             .flex_col()
@@ -659,9 +703,17 @@ impl SheprdWindow {
             .py(px(12.))
             .child(
                 div()
+                    .debug_selector(|| "git-commit-note".into())
                     .text_color(rgb(theme.subtext()))
-                    .child(fl!("git-commit-note")),
+                    .child(if self.git_commits_staged() {
+                        fl!("git-commit-note-staged")
+                    } else {
+                        fl!("git-commit-note")
+                    }),
             )
+            .when(self.git_staged() > 0, |body| {
+                body.child(self.render_git_commit_staged(cx))
+            })
             .child(
                 div()
                     .debug_selector(|| "git-commit-summary".into())

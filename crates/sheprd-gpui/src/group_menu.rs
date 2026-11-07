@@ -31,6 +31,8 @@ enum Action {
     NewBrowserTab,
     /// The review tab of the checkout the Git chip tracks.
     Review,
+    /// The file tree tab of that checkout.
+    Files,
     /// The focused workspace's repository's issues, pull requests, and runs.
     Orchestrator,
     /// The workspace's VS Code tab, opened in this group.
@@ -60,6 +62,7 @@ impl Action {
         match self {
             Self::NewBrowserTab => fl!("group-menu-new-browser-tab").into(),
             Self::Review => fl!("group-menu-review").into(),
+            Self::Files => fl!("group-menu-files").into(),
             Self::Orchestrator => fl!("group-menu-orchestrator").into(),
             // A product's name.
             Self::VsCode => "VS Code".into(), // i18n: data
@@ -77,6 +80,7 @@ impl Action {
         match self {
             Self::NewBrowserTab => Some("icons/globe.svg"),
             Self::Review => Some("icons/diff-unified.svg"),
+            Self::Files => Some("icons/file.svg"),
             Self::Orchestrator => Some("icons/issue.svg"),
             Self::VsCode => Some(crate::browser::Editor::VsCode.icon()),
             Self::Px0 => Some(crate::browser::Editor::Px0.icon()),
@@ -101,7 +105,12 @@ impl Action {
     /// Which run of rows this one belongs to; a rule separates runs.
     fn section(&self) -> u8 {
         match self {
-            Self::NewBrowserTab | Self::Review | Self::Orchestrator | Self::VsCode | Self::Px0 => 0,
+            Self::NewBrowserTab
+            | Self::Review
+            | Self::Files
+            | Self::Orchestrator
+            | Self::VsCode
+            | Self::Px0 => 0,
             Self::Chat(_) => 1,
             Self::Port { .. } => 2,
             Self::Close | Self::CloseOthers | Self::CloseGroup => 3,
@@ -150,6 +159,7 @@ impl SheprdWindow {
         let mut actions = vec![Action::NewBrowserTab];
         if self.git.tracked().is_some() {
             actions.push(Action::Review);
+            actions.push(Action::Files);
         }
         if self.can_open_orchestrator() {
             actions.push(Action::Orchestrator);
@@ -216,6 +226,7 @@ impl SheprdWindow {
         match action {
             Action::NewBrowserTab => self.open_browser_tab_in(group, window, cx),
             Action::Review => self.open_review(window, cx),
+            Action::Files => self.open_file_tree(window, cx),
             Action::Orchestrator => self.open_orchestrator(window, cx),
             Action::VsCode => self.open_code(Some(group), window, cx),
             Action::Chat(agent) => self.start_chat_or_flash(agent, cx),

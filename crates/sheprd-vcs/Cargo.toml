@@ -15,12 +15,12 @@ sheprd-github.workspace = true
 sheprd-usage.workspace  = true
 secrecy.workspace      = true
 serde_json.workspace   = true
+tempfile.workspace     = true
 thiserror.workspace    = true
 tracing.workspace      = true
 
 [dev-dependencies]
 sheprd-github = { features = ["test-support"], workspace = true }
-tempfile.workspace = true
 
 [features]
 # Cloud machines as connections, which checkpoints do not run on.

@@ -28,6 +28,7 @@ error-vcs-git-commit-message = Enter a commit message of at most 4096 characters
 # shown for a step not listed here. $details is Git's own output.
 error-vcs-git-failed = { $kind ->
     [check-uncommitted] git check uncommitted files failed: { $details }
+    [check-tracked] git check the file is tracked failed: { $details }
     [check-unpushed] git check unpushed commits failed: { $details }
     [commit] git commit failed: { $details }
     [count-changes] git count changes failed: { $details }
@@ -46,13 +47,19 @@ error-vcs-git-failed = { $kind ->
     [read-commit-subject] git read the commit subject failed: { $details }
     [read-default-branch] git read the remote's default branch failed: { $details }
     [read-head] git read HEAD failed: { $details }
+    [read-blame] git read who changed each line failed: { $details }
     [read-new-commit] git read the new commit failed: { $details }
+    [read-staged] git read staged changes failed: { $details }
+    [read-unstaged] git read unstaged changes failed: { $details }
     [read-working-tree-changes] git read working tree changes failed: { $details }
     [read-working-tree-state] git read working tree state failed: { $details }
     [stage] git stage changes failed: { $details }
+    [stage-file] git stage the file failed: { $details }
+    [stage-hunk] git stage the hunk failed: { $details }
    *[other] git { $operation } failed: { $details }
 }
 error-vcs-git-no-checkout = No local checkout is focused.
+error-vcs-git-nothing-staged = Nothing to commit: no change is staged.
 error-vcs-git-nothing-to-commit = Nothing to commit: the checkout has no changes.
 # $kind is the step that failed. $operation is its English description,
 # shown for a step not listed here.
@@ -63,3 +70,15 @@ error-vcs-git-process = { $kind ->
 error-vcs-git-pull-request-base = This branch is the repository default branch; no pull request can be opened from it.
 error-vcs-git-pull-request-title = The branch has no commit to describe. Commit before opening a pull request.
 error-vcs-git-worker = Git worker stopped. Retry the operation.
+
+## Who changed each line of a file, in a code tab.
+
+error-vcs-blame-contents = Could not write the file's text for Git to read.
+error-vcs-blame-path = This file is not in a folder Git can read.
+error-vcs-blame-untracked = Git does not track this file, so it has no history to show.
+
+## Staging one hunk from a review.
+
+error-vcs-stage-changed = This hunk has changed since it was read. Look at it again before staging it.
+error-vcs-stage-nothing = Nothing to stage: this hunk is already staged.
+error-vcs-stage-patch = Could not write the hunk for Git to apply.

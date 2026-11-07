@@ -3,7 +3,7 @@
 `sheprd` is also a command line for the running Sheprd app. Herdr's own
 `herdr` CLI drives the daemon: workspaces, terminal tabs, panes, agents,
 worktrees, and notifications. `sheprd COMMAND` covers what only this
-client knows or draws: its windows, its own tabs (pages, code, reviews,
+client knows or draws: its windows, its own tabs (pages, code, reviews, file trees,
 Devices), the activity bar's sections, worktree notes, checkpoints, forwarded
 ports, and its settings.
 
@@ -93,7 +93,7 @@ Sheprd** entry, which both Windows installers add, runs this command through
 
 | Command | What it does |
 | --- | --- |
-| `tab [list]` | Pages, code, reviews, and Devices tabs with IDs |
+| `tab [list]` | Pages, code, reviews, file trees, and Devices tabs with IDs |
 | `tab focus\|close ID` | |
 | `browser open\|reload\|feedback` | See [browser tabs](../crates/sheprd-gpui/README.md#browser-tabs) |
 | `browser list` | Page tabs only |
@@ -108,6 +108,7 @@ Sheprd** entry, which both Windows installers add, runs this command through
 | `orchestrator [--repo PATH]` | Show the Issues section narrowed to your checkout's project, or PATH's |
 | `orchestrator items\|issues\|prs` | What it last synced, from its local database (no app needed) |
 | `review` | The review of your workspace's uncommitted changes |
+| `files` | The file tree of your workspace's local checkout, with each file's Git status |
 | `px0 [open]` | Open or focus px0 on your local workspace's checkout (macOS and Windows) |
 
 `px0 open` reuses one editor tab per workspace. It discovers a local px0

@@ -252,6 +252,9 @@ impl SheprdWindow {
         ];
         Review {
             checkout,
+            unstaged: None,
+            unstaged_read: 0,
+            staging: false,
             scope: super::Scope::default(),
             layout: Layout::default(),
             ignore_whitespace: false,

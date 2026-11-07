@@ -4,18 +4,44 @@
 
 use super::Localize;
 use crate::i18n::fl;
-use sheprd_vcs::{Error, checkpoint, code_index, git};
+use sheprd_vcs::{Error, blame, checkpoint, code_index, git, stage};
 
 impl Localize for Error {
     fn localize(&self) -> String {
         match self {
             // keep-sorted start
+            Self::Blame(error) => error.localize(),
             Self::Checkpoint(error) => error.localize(),
             #[cfg(feature = "azure")]
             Self::CloudHostUnsupported => fl!("error-vcs-cloud-host-unsupported"),
             Self::CodeIndex(error) => error.localize(),
             Self::Git(error) => error.localize(),
             Self::GitHub(error) => error.localize(),
+            Self::Stage(error) => error.localize(),
+            // keep-sorted end
+        }
+    }
+}
+
+impl Localize for blame::Error {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::Contents(_) => fl!("error-vcs-blame-contents"),
+            Self::Path => fl!("error-vcs-blame-path"),
+            Self::Untracked => fl!("error-vcs-blame-untracked"),
+            // keep-sorted end
+        }
+    }
+}
+
+impl Localize for stage::Error {
+    fn localize(&self) -> String {
+        match self {
+            // keep-sorted start
+            Self::Changed => fl!("error-vcs-stage-changed"),
+            Self::NothingToStage => fl!("error-vcs-stage-nothing"),
+            Self::Patch(_) => fl!("error-vcs-stage-patch"),
             // keep-sorted end
         }
     }
@@ -61,6 +87,7 @@ impl Localize for git::Error {
                 details = details.as_str()
             ),
             Self::NoCheckout => fl!("error-vcs-git-no-checkout"),
+            Self::NothingStaged => fl!("error-vcs-git-nothing-staged"),
             Self::NothingToCommit => fl!("error-vcs-git-nothing-to-commit"),
             Self::Process { operation, .. } => fl!(
                 "error-vcs-git-process",
@@ -83,8 +110,9 @@ impl Localize for git::Error {
 fn failed_step(operation: &str) -> &'static str {
     match operation {
         // keep-sorted start
+        "check the file is tracked" => "check-tracked", // i18n: data
         "check uncommitted files" => "check-uncommitted", // i18n: data
-        "check unpushed commits" => "check-unpushed",     // i18n: data
+        "check unpushed commits" => "check-unpushed",   // i18n: data
         "commit" => "commit",
         "count changes" => "count-changes", // i18n: data
         "count working tree changes" => "count-working-tree", // i18n: data
@@ -100,12 +128,17 @@ fn failed_step(operation: &str) -> &'static str {
         "push" => "push",
         "read attributes" => "read-attributes", // i18n: data
         "read HEAD" => "read-head",             // i18n: data
+        "read staged changes" => "read-staged", // i18n: data
         "read the commit subject" => "read-commit-subject", // i18n: data
         "read the new commit" => "read-new-commit", // i18n: data
         "read the remote's default branch" => "read-default-branch", // i18n: data
+        "read unstaged changes" => "read-unstaged", // i18n: data
+        "read who changed each line" => "read-blame", // i18n: data
         "read working tree changes" => "read-working-tree-changes", // i18n: data
         "read working tree state" => "read-working-tree-state", // i18n: data
         "stage changes" => "stage",             // i18n: data
+        "stage the file" => "stage-file",       // i18n: data
+        "stage the hunk" => "stage-hunk",       // i18n: data
         // keep-sorted end
         _ => "other",
     }

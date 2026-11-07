@@ -70,6 +70,7 @@ fn marks_grow_with_the_sidebar_font(cx: &mut gpui::TestAppContext) {
                     additions: 3,
                     deletions: 1,
                     untracked: 0,
+                    ..Default::default()
                 },
                 dirty: true,
             };

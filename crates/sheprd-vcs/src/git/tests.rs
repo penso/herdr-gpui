@@ -2,6 +2,7 @@
 use super::*;
 
 mod ahead;
+mod commit_staged;
 mod counted_probes;
 
 #[test]
@@ -105,6 +106,8 @@ fn status(additions: u64, deletions: u64, untracked: u64) -> Status {
         additions,
         deletions,
         untracked,
+        staged: 0,
+        index: 0,
     }
 }
 

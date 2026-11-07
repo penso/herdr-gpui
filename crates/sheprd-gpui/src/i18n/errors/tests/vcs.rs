@@ -1,5 +1,5 @@
 use super::*;
-use sheprd_vcs::{Error, checkpoint, code_index, git};
+use sheprd_vcs::{Error, blame, checkpoint, code_index, git, stage};
 use std::io;
 
 fn io() -> io::Error {
@@ -9,12 +9,28 @@ fn io() -> io::Error {
 #[test]
 fn every_variant_has_a_message() {
     assert_localized(&[
+        Error::Blame(blame::Error::Untracked),
         Error::Checkpoint(checkpoint::Error::Busy),
         #[cfg(feature = "azure")]
         Error::CloudHostUnsupported,
         Error::CodeIndex(code_index::Error::Root),
         Error::Git(git::Error::Busy),
         Error::GitHub(sheprd_github::Error::Query),
+        Error::Stage(stage::Error::Changed),
+    ]);
+}
+
+#[test]
+fn every_blame_variant_has_a_message() {
+    assert_localized(&[blame::Error::Path, blame::Error::Untracked]);
+}
+
+#[test]
+fn every_stage_variant_has_a_message() {
+    assert_localized(&[
+        stage::Error::Changed,
+        stage::Error::NothingToStage,
+        stage::Error::Patch(io()),
     ]);
 }
 
@@ -44,6 +60,7 @@ fn every_git_variant_has_a_message() {
         git::Error::Busy,
         git::Error::CommitMessage,
         git::Error::NoCheckout,
+        git::Error::NothingStaged,
         git::Error::NothingToCommit,
         git::Error::PullRequestBase,
         git::Error::PullRequestTitle,
@@ -51,6 +68,7 @@ fn every_git_variant_has_a_message() {
     ];
     errors.extend(
         [
+            "check the file is tracked",
             "check uncommitted files",
             "check unpushed commits",
             "commit",
@@ -69,7 +87,10 @@ fn every_git_variant_has_a_message() {
             "read HEAD",
             "read attributes",
             "read the commit subject",
+            "read staged changes",
             "read the new commit",
+            "read unstaged changes",
+            "read who changed each line",
             "read the remote's default branch",
             "read working tree changes",
             "read working tree state",

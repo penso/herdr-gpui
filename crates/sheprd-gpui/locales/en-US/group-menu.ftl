@@ -3,6 +3,7 @@
 
 group-menu-new-browser-tab = New Browser Tab
 group-menu-review = Review Changes
+group-menu-files = File Tree
 group-menu-orchestrator = Issues and pull requests
 group-menu-close-tab = Close Tab
 group-menu-close-others = Close Others

@@ -100,7 +100,12 @@ fn review_is_offered_for_a_tracked_checkout(cx: &mut TestAppContext) {
     });
     assert_eq!(
         actions(&view, cx, group),
-        [Action::NewBrowserTab, Action::Review, Action::Split]
+        [
+            Action::NewBrowserTab,
+            Action::Review,
+            Action::Files,
+            Action::Split
+        ]
     );
     run(&view, cx, group, Action::Review);
     view.read_with(cx, |view, _| {

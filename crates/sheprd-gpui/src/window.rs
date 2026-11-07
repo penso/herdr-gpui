@@ -199,6 +199,9 @@ pub(crate) struct SheprdWindow {
     /// dialog so the lanes can be compared later.
     pub(crate) fan_out: Option<crate::fan_out::FanOut>,
     pub(crate) file_transfer: Option<transfers::FileTransfer>,
+    /// File tree tabs' views, by tab.
+    pub(crate) file_trees:
+        std::collections::HashMap<crate::browser::TabId, crate::file_tree::FileTree>,
     /// The find bar, over the pane it searches.
     pub(crate) find: Option<find::FindBar>,
     /// How the find bar was left over each pane, to bring it back there.
@@ -219,6 +222,8 @@ pub(crate) struct SheprdWindow {
     /// The menu that resting opened, which the pointer closes by leaving it.
     pub(crate) hover_menu: Option<sidebar::HoverMenu>,
     pub(crate) hovered_terminal_link: bool,
+    /// Hunks on their way to the index, whose tabs may have closed since.
+    pub(crate) hunks_staging: usize,
     /// Names the missing icon font once a pane draws an icon it lacks.
     pub(crate) icon_font_notice: crate::icon_font_notice::IconFontNotice,
     #[cfg(feature = "integration-test")]

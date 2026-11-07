@@ -35,6 +35,7 @@ fn git_button_sits_left_of_the_account_slot_and_opens_its_menu(cx: &mut TestAppC
                     additions: 239,
                     deletions: 250,
                     untracked: 2,
+                    ..Default::default()
                 },
             );
             cx.notify();
@@ -106,6 +107,7 @@ fn uncommitted_changes_hide_zero_counts(cx: &mut TestAppContext) {
                         additions,
                         deletions,
                         untracked,
+                        ..Default::default()
                     },
                 );
                 cx.notify();
@@ -180,6 +182,7 @@ fn a_cached_pull_request_replaces_the_uncommitted_counts(cx: &mut TestAppContext
                     additions: 12,
                     deletions: 3,
                     untracked: 0,
+                    ..Default::default()
                 },
             );
             view.menu.github = crate::github::Auth::connected_fixture();

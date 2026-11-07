@@ -190,6 +190,7 @@ impl SheprdWindow {
             )],
             fan_out: None,
             file_transfer: None,
+            file_trees: Default::default(),
             find: None,
             find_memory: Default::default(),
             flash: None,
@@ -202,6 +203,7 @@ impl SheprdWindow {
             hover: None,
             hover_menu: None,
             hovered_terminal_link: false,
+            hunks_staging: 0,
             icon_font_notice: Default::default(),
             #[cfg(feature = "integration-test")]
             input_probe: smoke::InputProbe::default(),

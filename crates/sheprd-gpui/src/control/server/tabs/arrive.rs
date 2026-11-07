@@ -345,6 +345,45 @@ pub(super) fn review(
     );
 }
 
+/// The file tree of the workspace's checkout, once the window's Git worker
+/// follows that checkout, as for a review.
+pub(super) fn files(
+    caller: &Caller,
+    incoming: socket::Incoming,
+    watches: &mut Watches,
+    cx: &mut App,
+) {
+    open_there(
+        caller,
+        incoming,
+        watches,
+        cx,
+        |view| {
+            let input = view.git_input();
+            input.is_none() || view.git.tracked() == input.as_ref()
+        },
+        |view, workspace, window, cx| {
+            let Some(checkout) = view
+                .git_input()
+                .and_then(|input| ReviewCheckout::try_from(&input).ok())
+            else {
+                return Response::error(
+                    ErrorCode::Failed,
+                    format!("Workspace {workspace} has no local Git checkout to list"),
+                );
+            };
+            view.open_file_tree(window, cx);
+            opened(
+                view,
+                workspace,
+                "the file tree",
+                cx,
+                |location| matches!(location, Location::Files { checkout: open } if *open == checkout),
+            )
+        },
+    );
+}
+
 #[cfg(test)]
 mod tests;
 

@@ -81,6 +81,7 @@ commands-resize-pane-right = Resize Pane Right
 commands-resize-pane-up = Resize Pane Up
 commands-resume-palette = Resume Palette
 commands-review-changes = Review Changes
+commands-open-file-tree = File Tree
 commands-sessions = Sessions
 commands-settings = Settings
 commands-split-down = Split Down

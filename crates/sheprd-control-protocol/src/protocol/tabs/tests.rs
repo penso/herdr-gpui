@@ -49,6 +49,7 @@ fn tab_operations_round_trip() {
             repo: Some("/src".into()),
         },
         TabOp::Review,
+        TabOp::Files,
     ] {
         round_trip(op);
     }
@@ -112,6 +113,7 @@ fn page_and_arrival_operations_extend_the_answer_timeout() {
         PAGE_WAIT_SECONDS
     );
     assert_eq!(wait(TabOp::Review), ARRIVE_WAIT_SECONDS);
+    assert_eq!(wait(TabOp::Files), ARRIVE_WAIT_SECONDS);
     assert_eq!(wait(TabOp::Focus { id: 1 }), 0);
 }
 
@@ -158,6 +160,7 @@ fn kinds_are_named_as_json_spells_them() {
         TabKind::File,
         TabKind::Code,
         TabKind::Review,
+        TabKind::Files,
         TabKind::Orchestrator,
         TabKind::Devices,
         TabKind::Editor,

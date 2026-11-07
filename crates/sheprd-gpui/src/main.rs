@@ -65,6 +65,7 @@ mod editor;
 mod endpoint;
 mod error;
 mod fan_out;
+mod file_tree;
 mod find;
 mod font_picker;
 mod fonts;
@@ -192,7 +193,7 @@ use sheprd_commands as controls;
 // The log file and crash reports, without GPUI.
 use sheprd_diagnostics::{self as diagnostics, crash};
 // Git status and writes, checkpoints, and the code index, without GPUI.
-use sheprd_vcs::{checkpoint, code_index, git};
+use sheprd_vcs::{blame, checkpoint, code_index, git, stage};
 // Shared with herdr-client's own SSH and probe children.
 use sheprd_client::{local_path, login_env};
 // Cloud providers, host scripts, and Teleport's core; `cloud` and `teleport`

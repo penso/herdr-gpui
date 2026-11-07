@@ -7,7 +7,7 @@ use super::{
     lockfile,
     parse::parse,
 };
-use crate::pull_request::Input;
+use crate::{pull_request::Input, stage::Span};
 use std::{
     collections::{HashMap, HashSet},
     io::Read as _,
@@ -452,6 +452,40 @@ pub(crate) fn bodies(source: &Source, requests: &[Request], asked: bool) -> Vec<
         .collect();
     diff_files(source, &tracked, asked, &mut read);
     read
+}
+
+/// By file as Git names it, where the changes not staged yet are in the
+/// working tree's lines. Without context, so each span is one change.
+/// Blocking.
+pub(crate) fn unstaged(checkout: &str) -> crate::Result<HashMap<String, Vec<Span>>> {
+    let bytes = crate::git::git_bytes(
+        checkout,
+        &[
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-renames",
+            "--unified=0",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+        ],
+        "read unstaged changes", // i18n: data
+        Instant::now() + LOAD_TIMEOUT,
+        &|| false,
+        ASKED_OUTPUT,
+    )?;
+    Ok(parse(&text(bytes))
+        .into_iter()
+        .filter_map(|parsed| {
+            let Body::Loaded(lines) = parsed.body else {
+                return None;
+            };
+            Some((parsed.path, lines.spans().collect()))
+        })
+        .collect())
 }
 
 /// Reads tracked files' lines with one Git call, halving the batch when its

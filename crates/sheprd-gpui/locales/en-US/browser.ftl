@@ -24,6 +24,8 @@ browser-page-loading = Loading…
 browser-tab-new = New Tab
 # A review of a checkout's changes. $branch is its branch.
 browser-tab-review = Review · { $branch }
+# A file tree tab. $branch is a Git branch's name.
+browser-tab-files = Files · { $branch }
 # An orchestrator tab. $repo is a repository's name.
 browser-tab-orchestrator = Orchestrator · { $repo }
 browser-tab-devices = Devices

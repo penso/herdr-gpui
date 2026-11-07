@@ -50,6 +50,7 @@ fn a_row_shows_only_the_change_counts_the_setting_picks() {
             additions,
             deletions,
             untracked: 0,
+            ..Default::default()
         },
         dirty: true,
     };

@@ -51,6 +51,7 @@ impl SheprdWindow {
                     (Some(editor), _) => editor.icon(),
                     (_, Some(Location::Review { .. })) => "icons/diff-unified.svg",
                     (_, Some(Location::Code { .. })) => "icons/code.svg",
+                    (_, Some(Location::Files { .. })) => "icons/file.svg",
                     (_, Some(Location::Orchestrator { .. })) => "icons/pulse.svg",
                     (_, Some(Location::Devices)) => "icons/devices.svg",
                     (_, Some(Location::CoreTerminal { .. })) => "icons/terminal.svg",

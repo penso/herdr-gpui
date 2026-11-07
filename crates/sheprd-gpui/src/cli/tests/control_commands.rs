@@ -236,6 +236,13 @@ fn host_and_settings_commands() {
 }
 
 #[test]
+fn files_opens_the_file_tree() {
+    assert_eq!(command(&["files"]), ControlCommand::Files);
+    assert_eq!(command(&["files", "open"]), ControlCommand::Files);
+    assert!(parse(&["files", "list"]).is_err());
+}
+
+#[test]
 fn the_orchestrator_repository_may_come_before_the_verb() {
     for args in [
         &["orchestrator", "--repo", "/src/app"][..],
