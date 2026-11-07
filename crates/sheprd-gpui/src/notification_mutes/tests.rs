@@ -3,6 +3,8 @@ use super::*;
 use sheprd_client::protocol::ClientShellWorkspace;
 use std::time::Duration;
 
+mod hosts;
+
 /// Two workspaces: `w1` with tabs `w1:t1` and `w1:t2`, `w2` with `w2:t1`,
 /// one pane in each tab.
 fn snapshot(boot: &str, labels: [&str; 2]) -> ClientShellSnapshot {
@@ -362,7 +364,7 @@ fn saved_mutes_load_back_and_damaged_files_are_rejected() {
 
     let saved = |mute: &str| format!(r#"{{"mutes":[{{"endpoint":"local","session":"",{mute}}}]}}"#);
     let untimed = saved(r#""scope":"tab","id":"w1:t1","boot":"b","label":"one""#);
-    assert_eq!(parse(untimed.as_bytes()).unwrap()[0].muted_at, 0);
+    assert_eq!(parse(untimed.as_bytes()).unwrap().mutes[0].muted_at, 0);
     let empty_id = saved(r#""scope":"tab","id":"","boot":"b","label":"""#);
     assert!(matches!(parse(empty_id.as_bytes()), Err(Error::Invalid)));
     let control = saved(r#""scope":"tab","id":"w1:t1","boot":"b","label":"a\u0007""#);
@@ -451,6 +453,7 @@ fn the_largest_collection_the_store_accepts_reads_back() {
     }
     let bytes = serde_json::to_vec(&Saved {
         mutes: mutes.mutes.clone(),
+        hosts: Vec::new(),
     })
     .unwrap();
     assert!(
@@ -458,7 +461,7 @@ fn the_largest_collection_the_store_accepts_reads_back() {
         "{} bytes",
         bytes.len()
     );
-    assert_eq!(parse(&bytes).unwrap().len(), MAX_MUTES);
+    assert_eq!(parse(&bytes).unwrap().mutes.len(), MAX_MUTES);
     // The cut label still identifies its workspace.
     assert!(
         mutes

@@ -75,7 +75,9 @@ fn next_invoke(server: &mut Server) -> Value {
 
 fn press(keys: &[&str], cx: &mut gpui::VisualTestContext) {
     for key in keys {
-        cx.update(|window, cx| window.dispatch_keystroke(gpui::Keystroke::parse(key).unwrap(), cx));
+        cx.update(|window, cx| {
+            window.dispatch_keystroke(crate::keymap::parse_keystroke(key).unwrap(), cx)
+        });
     }
 }
 
@@ -203,7 +205,7 @@ fn a_copy_mode_mark_is_the_selection_of_its_connection(cx: &mut gpui::TestAppCon
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("plugin-selection");
     let key = |key: &str| gpui::KeyDownEvent {
-        keystroke: gpui::Keystroke::parse(key).unwrap(),
+        keystroke: crate::keymap::parse_keystroke(key).unwrap(),
         is_held: false,
         prefer_character_input: false,
     };

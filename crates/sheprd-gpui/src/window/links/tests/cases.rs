@@ -361,7 +361,7 @@ fn check(
     let (view, cx) = in_sandbox(&sandbox, surface, &peer, daemon, cx);
     let link = at(&view, cx, LINK.0, LINK.1);
     let elsewhere = at(&view, cx, ELSEWHERE.0, ELSEWHERE.1);
-    let (none, held) = (Modifiers::default(), Modifiers::secondary_key());
+    let (none, held) = (Modifiers::default(), crate::keymap::secondary_key());
 
     cx.simulate_mouse_move(elsewhere, None, none);
     cx.run_until_parked();

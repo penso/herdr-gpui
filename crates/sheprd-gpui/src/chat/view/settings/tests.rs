@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use core::prelude::v1::test;
+use gpui::AssetSource;
 use sheprd_chat_protocol::{Choice, ConfigOption};
 
 fn option(id: &str, category: OptionCategory) -> ConfigOption {
@@ -58,4 +59,16 @@ fn the_context_meter_leaves_out_the_cost() {
             display::tokens(1_000_000)
         )
     );
+}
+
+#[test]
+fn settings_at_hand_have_marks_of_their_own() {
+    let marks: Vec<_> = AT_HAND.into_iter().map(category_icon).collect();
+    for (index, mark) in marks.iter().enumerate() {
+        assert!(!marks[..index].contains(mark), "{mark} is used twice");
+        assert!(
+            matches!(crate::icons::Icons.load(mark), Ok(Some(_))),
+            "{mark} is not embedded"
+        );
+    }
 }

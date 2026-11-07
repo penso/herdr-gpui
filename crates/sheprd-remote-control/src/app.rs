@@ -9,5 +9,6 @@ mod error;
 pub mod pairing;
 pub mod qr;
 pub mod service;
+pub mod tags;
 
 pub use error::{Error, Result};

@@ -42,6 +42,7 @@ enum LiveSocket {
             }
             throw error
         }
+        let opened = ContinuousClock.now
         let events = AsyncThrowingStream<LiveEvent, Error> { continuation in
             let reader = Task {
                 // Keeps the client, and so its session and pinning, alive
@@ -61,6 +62,8 @@ enum LiveSocket {
                     }
                     continuation.finish()
                 } catch {
+                    let summary = PathFailure.summary(error, after: ContinuousClock.now - opened)
+                    log.notice("socket at \(client.origin, privacy: .public) ended: \(summary, privacy: .public)")
                     if (task.response as? HTTPURLResponse)?.statusCode == 401 {
                         // The token expired between minting and use.
                         await sessions.forget(computer)

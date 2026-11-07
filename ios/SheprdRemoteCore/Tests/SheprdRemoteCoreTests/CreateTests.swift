@@ -17,10 +17,12 @@ import Testing
         #expect(created.pane == "p7")
         #expect(created.workspace == "w3")
         #expect(created.prompted)
-        #expect(created.started)
+        #expect(created.started == true)
         // A new chat's answer has no workspace, and a slow chat no pane.
         let chat = try JSONDecoder().decode(Created.self, from: Data(#"{"pane":null,"prompted":false}"#.utf8))
         #expect(chat.pane == nil && chat.workspace == nil && !chat.prompted)
+        // A daemon too old for `start` says nothing, which is not a refusal.
+        #expect(chat.started == nil)
     }
 
     @Test func requestsEncodeTheFieldsTheDaemonReads() throws {

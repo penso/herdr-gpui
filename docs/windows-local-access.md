@@ -47,11 +47,11 @@ the GUI requests more access. `CanWrite` reports the stream's configured
 direction, not a completed protocol exchange.
 
 The config lock is a separate filesystem operation in
-`crates/sheprd-gpui/src/config/files.rs`. With the pinned Rust 1.96.1,
+`crates/sheprd-gpui/src/config/files.rs`. With the pinned Rust 1.99.0,
 `read(true).write(true).create(true).truncate(false)` maps to
 `GENERIC_READ | GENERIC_WRITE`, `OPEN_ALWAYS`, sharing read/write/delete, and
 no custom flags. `File::lock()` then calls `LockFileEx` for an exclusive lock.
-See [Rust's Windows filesystem implementation](https://github.com/rust-lang/rust/blob/1.96.1/library/std/src/sys/fs/windows.rs).
+See [Rust's Windows filesystem implementation](https://github.com/rust-lang/rust/blob/1.99.0/library/std/src/sys/fs/windows.rs).
 Creating a different file in the parent directory does not demonstrate access
 to an existing lock file: that file has its own attributes, ACL, and open
 handles. The two failures are not yet proven to have one cause.

@@ -5,7 +5,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use sheprd_remote_control::{
-    app::enroll,
+    app::{enroll, tags},
     control::DeviceId,
     server::{self, Invocation},
 };
@@ -23,6 +23,9 @@ fn main() -> ExitCode {
                 enroll::revoke(state_dir, DeviceId(device))?;
                 Ok(())
             });
+        }
+        Ok(Invocation::Tags { state_dir, offer }) => {
+            return host(state_dir, |state_dir| run_tags(state_dir, offer));
         }
         Ok(Invocation::Help) => {
             print!("{}", server::USAGE);
@@ -85,6 +88,23 @@ fn run_enroll(state_dir: &std::path::Path) -> sheprd_remote_control::Result<()> 
     println!(
         "{}",
         serde_json::to_string(&enrolled).map_err(std::io::Error::from)?
+    );
+    Ok(())
+}
+
+/// Prints the tags that stand once any offer on standard input was heard.
+fn run_tags(state_dir: &std::path::Path, offer: bool) -> sheprd_remote_control::Result<()> {
+    let offer = offer
+        .then(|| {
+            let mut text = String::new();
+            std::io::stdin().take(MAX_INPUT).read_to_string(&mut text)?;
+            serde_json::from_str(&text).map_err(std::io::Error::from)
+        })
+        .transpose()?;
+    let tags = tags::exchange(state_dir, offer)?;
+    println!(
+        "{}",
+        serde_json::to_string(&tags).map_err(std::io::Error::from)?
     );
     Ok(())
 }

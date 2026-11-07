@@ -12,7 +12,7 @@ fn a_dead_key_reaches_the_pane_only_as_the_composed_character(cx: &mut gpui::Tes
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, mut server) = connected_endpoint("dead-keys");
     let down = |keystroke: &str| gpui::KeyDownEvent {
-        keystroke: gpui::Keystroke::parse(keystroke).unwrap(),
+        keystroke: crate::keymap::parse_keystroke(keystroke).unwrap(),
         is_held: false,
         prefer_character_input: false,
     };

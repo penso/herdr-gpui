@@ -76,7 +76,7 @@ Rust and 8,000+ tests" — always next to what those crates *do*.
 | The one remote install: Herdr's own installer (`curl -fsSL https://herdr.dev/install.sh \| sh`) runs on new cloud machines, and only with the user's "Install Herdr" switch on. | GR:488-494 |
 | Upstream projects: Herdr at https://github.com/herdrdev/herdr (herdr.dev), and herdr-core ("Herdr 2") at https://github.com/herdrdev/herdr-core. | NOTICE, `crates/herdr-core-client/README.md:3` |
 | Attribution: Apache-2.0 (Copyright 2026 Fabien Penso). Parts of `herdr-protocol`, the shared settings schema, theme palettes, status indicators, and the Done/Request sounds are adapted from Herdr (Apache-2.0). Usage providers are ported from CodexBar (MIT). GitHub integration references Arbor (`GITHUB-NOTICE.md`). | R:497-501, `NOTICE`, `crates/herdr-protocol/NOTICE.md`, `docs/usage-providers.md:10-13` |
-| Built on Rust 1.96.1 and GPUI 0.3.6 (the `gpui-pre` crate). | R:273-276 |
+| Built on Rust 1.99.0 and GPUI 0.3.10 (the `gpui-pre` crate). | R:273-276 |
 | Versions are calendar-based: `YYYYMMDD.COUNTER`, tagged `vYYYYMMDD.COUNTER`. | GR:146-150, `scripts/release/package-windows.py:40` |
 | The current site at herdrui.dev uses the title "Herdr UI: a native window for the Herdr daemon" and the H1 "Herdr's TUI is great." Its description: "the window adds dispatch from issues, side-by-side review, checkpoints, Teleport and a Devices overview." | `site/index.html` |
 

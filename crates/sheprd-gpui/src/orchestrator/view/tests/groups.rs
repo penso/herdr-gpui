@@ -86,6 +86,7 @@ fn status(review: Option<Review>, requested: &[&str], checks: &[CheckState]) -> 
                 state: *state,
             })
             .collect(),
+        ..PrStatus::default()
     }
 }
 

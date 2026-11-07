@@ -39,7 +39,7 @@ fn math_lowercase_ink_has_the_optical_height_of_body_text() {
             let row_bytes = (drawn.width * 2.) as usize * 4;
             let ink_height = pixels
                 .chunks_exact(row_bytes)
-                .filter(|row| row.chunks_exact(4).any(|pixel| pixel[3] >= 64))
+                .filter(|row| row.as_chunks::<4>().0.iter().any(|pixel| pixel[3] >= 64))
                 .count() as f32
                 / 2.;
             // Typical sans prose has a lowercase height near .54em. Measure

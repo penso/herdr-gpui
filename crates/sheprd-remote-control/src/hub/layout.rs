@@ -8,7 +8,8 @@ use sheprd_client::protocol::{
 };
 use std::collections::HashSet;
 
-/// The most chats one daemon may list; the rest are left out.
+/// The most chats one Herdr daemon may list, and all its sessions together:
+/// the rest are left out. Each listed chat holds a thread here.
 pub(crate) const MAX_CHATS: usize = 64;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

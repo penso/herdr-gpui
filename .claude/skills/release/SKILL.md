@@ -116,8 +116,9 @@ Until the `WINDOWS_SIGNING_SUBJECT` repository variable is set, `windows-sign`,
 `homebrew` uses the **`homebrew`** environment and `winget` the **`winget`**
 environment. All have required reviewers, so the run pauses at each and waits.
 `sign` is additionally gated on the actor being `penso`. Betas skip `homebrew`
-and `winget`; `just release-promote` runs both. `winget` only warns until the
-first winget-pkgs version is submitted by hand (`scripts/release/README.md`).
+and `winget`; `just release-promote` runs both. `winget` only warns until
+`WINGET_TOKEN` is set and the first winget-pkgs version is submitted by hand
+(`scripts/release/README.md`).
 
 Approve a pending gate:
 

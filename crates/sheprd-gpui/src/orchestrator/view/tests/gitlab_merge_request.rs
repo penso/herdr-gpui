@@ -97,6 +97,7 @@ fn a_merge_request_cannot_inherit_github_checks() {
         review: None,
         requested: Vec::new(),
         checks: Vec::new(),
+        merge: Default::default(),
     };
     let statuses =
         std::collections::HashMap::from([((mr.key.source.repository.clone(), 7), status)]);

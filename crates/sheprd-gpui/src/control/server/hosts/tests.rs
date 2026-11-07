@@ -7,6 +7,7 @@ mod automation;
 #[cfg(feature = "cloud")]
 mod cloud_setup;
 mod info;
+mod muting;
 mod ports;
 mod pr;
 mod quota;

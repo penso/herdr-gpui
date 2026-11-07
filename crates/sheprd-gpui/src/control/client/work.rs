@@ -1,4 +1,4 @@
-//! `notes`, `checkpoint`, `scripts`, `teleport`, and `fan-out`.
+//! `notes`, `worktree`, `checkpoint`, `scripts`, `teleport`, and `fan-out`.
 mod checkpoint;
 mod here;
 mod scripts;
@@ -7,12 +7,12 @@ mod tests;
 
 use super::{Context, Output, unexpected};
 use crate::{
-    cli::control::{FanOut, NotesCommand, Script},
+    cli::control::{FanOut, NotesCommand, Script, WorktreeCommand},
     control::{
         ErrorCode,
         protocol::{
             Request, Response,
-            work::{FanOutRequest, NoteInfo, Reply, WorkOp},
+            work::{FanOutRequest, MuteInfo, NoteInfo, Reply, WorkOp},
         },
     },
 };
@@ -99,6 +99,33 @@ pub(super) fn notes(command: NotesCommand, context: &Context) -> crate::Result<O
             &serde_json::json!({ "note": null }),
         )?
         .nothing()),
+        response => Err(unexpected(response)),
+    }
+}
+
+/// What `worktree` says about a mute.
+pub(super) fn describe_mute(mute: &MuteInfo) -> String {
+    let MuteInfo {
+        workspace, host, ..
+    } = mute;
+    match (mute.muted, mute.host_muted) {
+        (true, false) => format!("{workspace} is muted"),
+        (true, true) => format!("{workspace} is muted, and so is its host {host}"),
+        (false, true) => format!("{workspace} is silent because its host {host} is muted"),
+        (false, false) => format!("{workspace} is not muted"),
+    }
+}
+
+pub(super) fn worktree(command: WorktreeCommand, context: &Context) -> crate::Result<Output> {
+    let op = match command {
+        WorktreeCommand::Status => WorkOp::MuteStatus,
+        WorktreeCommand::Mute => WorkOp::Mute { muted: true },
+        WorktreeCommand::Unmute => WorkOp::Mute { muted: false },
+    };
+    match context.call(Request::Work, op)? {
+        Response::Work {
+            reply: Reply::Mute { mute },
+        } => Output::data(describe_mute(&mute), &mute),
         response => Err(unexpected(response)),
     }
 }

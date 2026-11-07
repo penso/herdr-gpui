@@ -261,7 +261,7 @@ fn chooser_composition_neither_navigates_commits_nor_dismisses(cx: &mut TestAppC
             for key in ["down", "up", "enter", "escape"] {
                 view.control_font_key(
                     &KeyDownEvent {
-                        keystroke: Keystroke::parse(key).unwrap(),
+                        keystroke: crate::keymap::parse_keystroke(key).unwrap(),
                         is_held: false,
                         prefer_character_input: false,
                     },

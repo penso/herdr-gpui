@@ -35,18 +35,18 @@ fn a_wrapped_path_is_underlined_on_every_row_and_opens_from_any(cx: &mut gpui::T
 
     // Held over the second row, the link modifier has the whole path looked
     // for on disk; found, every row of it is underlined.
-    cx.simulate_mouse_move(tail, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(tail, None, crate::keymap::secondary_key());
     cx.run_until_parked();
     let rows = vec![(0, 15..60), (1, 0..7)];
     view.read_with(cx, |view, _| {
         let link = view.hovered_local_link().unwrap();
         assert_eq!(link.rows().collect::<Vec<_>>(), rows);
         for position in [head, tail] {
-            assert!(view.terminal_link_hovered(position, Modifiers::secondary_key()));
+            assert!(view.terminal_link_hovered(position, crate::keymap::secondary_key()));
         }
     });
     // Moving onto the first row keeps the same link.
-    cx.simulate_mouse_move(head, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(head, None, crate::keymap::secondary_key());
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         let link = view.hovered_local_link().unwrap();
@@ -56,7 +56,7 @@ fn a_wrapped_path_is_underlined_on_every_row_and_opens_from_any(cx: &mut gpui::T
     // A click on the second row's part opens the whole path.
     let alt = Modifiers {
         alt: true,
-        ..Modifiers::secondary_key()
+        ..crate::keymap::secondary_key()
     };
     modifier_click(cx, tail, alt);
     let real = real_path(&root.path().join(folder).join("notes.txt")).unwrap();
@@ -83,7 +83,7 @@ fn a_path_an_agent_wrapped_under_an_indent_opens_from_either_line(cx: &mut gpui:
     let tail = cell(&view, cx, 6, 1);
     let indent = cell(&view, cx, 1, 1);
 
-    cx.simulate_mouse_move(tail, None, Modifiers::secondary_key());
+    cx.simulate_mouse_move(tail, None, crate::keymap::secondary_key());
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
         let link = view.hovered_local_link().unwrap();
@@ -91,14 +91,14 @@ fn a_path_an_agent_wrapped_under_an_indent_opens_from_either_line(cx: &mut gpui:
             link.rows().collect::<Vec<_>>(),
             vec![(0, 25..60), (1, 4..25)]
         );
-        assert!(view.terminal_link_hovered(head, Modifiers::secondary_key()));
+        assert!(view.terminal_link_hovered(head, crate::keymap::secondary_key()));
         // The indent before the rest is not part of the link.
-        assert!(!view.terminal_link_hovered(indent, Modifiers::secondary_key()));
+        assert!(!view.terminal_link_hovered(indent, crate::keymap::secondary_key()));
     });
 
     let alt = Modifiers {
         alt: true,
-        ..Modifiers::secondary_key()
+        ..crate::keymap::secondary_key()
     };
     modifier_click(cx, tail, alt);
     let real = real_path(&root.path().join(folder).join("tile77-street2-round1.png")).unwrap();

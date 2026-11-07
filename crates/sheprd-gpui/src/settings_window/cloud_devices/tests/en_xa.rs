@@ -15,6 +15,10 @@ fn unconfigure(config: &mut crate::config::Config) {
     {
         config.boat = Default::default();
     }
+    #[cfg(feature = "boxd")]
+    {
+        config.boxd = Default::default();
+    }
     #[cfg(feature = "coder")]
     {
         config.coder = Default::default();
@@ -60,6 +64,8 @@ fn data() -> Vec<String> {
         "boat_…".into(),
         "never".into(),
     ]);
+    #[cfg(feature = "boxd")]
+    data.push(crate::boxd::DEFAULT_API_URL.into());
     #[cfg(feature = "coder")]
     data.extend([
         "https://coder.example.com".into(),

@@ -194,7 +194,7 @@ fn edit_menu_carries_standard_items_and_shortcut_labels(cx: &mut gpui::TestAppCo
             assert_eq!(bindings.len(), 1, "{name}");
             assert_eq!(
                 bindings[0].keystrokes()[0].inner(),
-                &gpui::Keystroke::parse(keystroke).unwrap()
+                &crate::keymap::parse_keystroke(keystroke).unwrap()
             );
             // No element sets the context, so the keystroke never dispatches
             // the action ahead of the focused element's own key handler.
@@ -426,6 +426,7 @@ fn hide_and_minimize_are_macos_only() {
 }
 
 /// View > Tab Layout lists every tab layout and checks the one in use.
+mod chat_layout;
 mod tab_layout;
 
 mod en_xa;

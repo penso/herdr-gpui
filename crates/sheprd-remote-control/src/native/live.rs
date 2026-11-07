@@ -244,6 +244,7 @@ async fn follow_home(state: Shared, out: Outbound) {
     let mut layout = state.hub.watch_layout();
     let mut pull_requests = state.pull_requests.subscribe();
     let mut load = state.load.clone();
+    let mut tags = state.tags.subscribe();
     let mut opened = state.opened.changed();
     let mut sent = None;
     loop {
@@ -266,6 +267,7 @@ async fn follow_home(state: Shared, out: Outbound) {
                 },
                 changed = layout.changed() => if changed.is_err() { return } else { break },
                 changed = pull_requests.changed() => if changed.is_err() { return } else { break },
+                changed = tags.changed() => if changed.is_err() { return } else { break },
                 changed = opened.changed() => if changed.is_err() { return } else { break },
                 // A stopped sampler leaves the last figures standing.
                 changed = load.changed(), if load.has_changed().is_ok() => if changed.is_ok() { break },

@@ -15,7 +15,7 @@ pub mod image;
 pub mod install;
 pub mod names;
 mod providers;
-#[cfg(any(feature = "opensandbox", feature = "sprites"))]
+#[cfg(any(feature = "boxd", feature = "opensandbox", feature = "sprites"))]
 pub mod socket;
 pub mod unsynced;
 mod value;

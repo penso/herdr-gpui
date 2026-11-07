@@ -68,9 +68,14 @@ impl SettingsWindow {
                     .debug_selector(|| "settings-theme-list".into())
                     // The child list scrolls first; keep wheel events inside the
                     // grid even at its edges or when the results are empty.
-                    .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+                    .on_scroll(|_, _, cx| cx.stop_propagation())
                     .flex_1()
                     .min_h(px(240.))
+                    // This height comes from `min_h` in a column of auto height,
+                    // so it is indefinite and a percentage on the list would
+                    // resolve to nothing: the list has to flex into it instead.
+                    .flex()
+                    .flex_col()
                     .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                         if !*hovered {
                             this.hover_theme(None, cx);
@@ -206,7 +211,8 @@ impl SettingsWindow {
                                 }),
                             )
                             .track_scroll(&browser.scroll)
-                            .h_full()
+                            .flex_1()
+                            .min_h_0()
                             .w_full(),
                         )
                     }),

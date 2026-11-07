@@ -138,7 +138,7 @@ fn settle(cx: &mut gpui::VisualTestContext) {
 
 #[gpui::test]
 fn the_focused_nested_agent_scrolls_into_view_once(cx: &mut gpui::TestAppContext) {
-    use gpui::{ScrollDelta, ScrollWheelEvent};
+    use gpui::{ScrollDelta, ScrollEvent};
 
     let (fixture, cx) = cx.add_window_view(crowded(30));
     let view = cx.update(|_, cx| fixture.read(cx).0.clone());
@@ -159,7 +159,7 @@ fn the_focused_nested_agent_scrolls_into_view_once(cx: &mut gpui::TestAppContext
         "{focused:?} in {list:?}"
     );
     // Scrolling away from an unchanged focus is the user's to keep.
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: list.center(),
         delta: ScrollDelta::Pixels(point(px(0.), px(200.))),
         ..Default::default()

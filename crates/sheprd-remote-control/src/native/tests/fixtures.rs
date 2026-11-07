@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    control::pull_requests::{PullRequests, Tone, WorkspacePullRequest},
+    control::pull_requests::{PullRequests, Tone, UnopenedBranch, WorkspacePullRequest},
     hub::Summary,
     load::Load,
 };
@@ -132,6 +132,12 @@ fn home() -> Home {
             url: "https://github.com/penso/herdr-gpui/pull/870".into(),
             tone: Tone::Waiting,
         }],
+        unopened: vec![UnopenedBranch {
+            workspace_id: "w3".into(),
+            cwd: "/work-spaces-tab".into(),
+            branch: "worktree/spaces-tab".into(),
+            commits: 3,
+        }],
     };
     Home::project(Sources {
         computer: "MacBook Pro",
@@ -145,6 +151,8 @@ fn home() -> Home {
         }),
         summaries: [("p1".to_owned(), summary)].into(),
         pull_requests: &pull_requests,
+        tags: crate::control::tags::ComputerTags::new(["work"], 1_770_000_000_000),
+        version: "20261106.1",
         waiting: 1,
     })
 }

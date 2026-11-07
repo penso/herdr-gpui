@@ -106,6 +106,8 @@ enum Action {
     Unmute,
     /// The tab is silent because its workspace is muted: lift that.
     UnmuteWorkspace,
+    /// The tab is silent because its device is muted: lift that.
+    UnmuteDevice,
     Close,
 }
 
@@ -118,6 +120,7 @@ impl Action {
             Self::Mute => fl!("tab-menu-mute"),
             Self::Unmute => fl!("tab-menu-unmute"),
             Self::UnmuteWorkspace => fl!("tab-menu-unmute-workspace"),
+            Self::UnmuteDevice => fl!("tab-menu-unmute-device"),
             Self::Close => fl!("tab-menu-close"),
         }
     }
@@ -204,7 +207,9 @@ impl SheprdWindow {
         }
         let connect = &self.endpoints[self.selected_endpoint].connection.target;
         let movable = pane_move::refusal(connect).is_none();
-        let mute = if self.muted_on_selected(Scope::Workspace, &target.workspace, cx) {
+        let mute = if self.selected_host_muted(cx) {
+            Action::UnmuteDevice
+        } else if self.muted_on_selected(Scope::Workspace, &target.workspace, cx) {
             Action::UnmuteWorkspace
         } else if self.muted_on_selected(Scope::Tab, &target.tab, cx) {
             Action::Unmute
@@ -298,6 +303,13 @@ impl SheprdWindow {
                     _ => (Scope::Tab, &target.tab),
                 };
                 self.set_muted_on_selected(scope, id, &target.boot, action == Action::Mute, cx);
+                self.dismiss_menu(window, cx);
+            }
+            Action::UnmuteDevice => {
+                if self.menu_target_current() {
+                    let id = self.endpoints[self.selected_endpoint].id.clone();
+                    self.set_host_muted(&id, false, cx);
+                }
                 self.dismiss_menu(window, cx);
             }
             Action::MoveToWorkspace => {

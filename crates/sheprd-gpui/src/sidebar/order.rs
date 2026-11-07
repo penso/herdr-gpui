@@ -37,7 +37,10 @@ impl SheprdWindow {
     pub(crate) fn sidebar_workspaces(&self) -> Vec<Row<'_>> {
         let multi = self.endpoints.len() > 1;
         self.listed_hosts()
-            .filter(|(index, _)| !(multi && self.endpoints[*index].collapsed))
+            .filter(|(index, _)| {
+                let endpoint = &self.endpoints[*index];
+                !(multi && (endpoint.collapsed || self.device_tag_folded(&endpoint.id)))
+            })
             .flat_map(|(index, snapshot)| {
                 let collapsed = if index == 0 {
                     &self.collapsed_repos
