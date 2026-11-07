@@ -33,6 +33,7 @@ mod naming;
 #[cfg(unix)]
 mod opening_script;
 mod prompt;
+mod prompt_review;
 mod repo;
 mod repo_output;
 #[cfg(unix)]

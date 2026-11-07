@@ -2537,7 +2537,15 @@ per-repository database in Sheprd's state directory, so a restart lists them
 at once and syncs after. The first time a repository opens, agent-launcher's
 database for it is copied in, with its runs. The tab uses agent-launcher's
 prompt profiles from `~/.config/agent-launcher/agents/<name>/prompt.md` (the
-built-in prompt when none is chosen). GitHub is read as the account used
+built-in prompt when none is chosen). A review keeps its read-only prompt and
+adds the chosen profile after it. A profile whose first line is
+`review: replace` is sent instead of that prompt, followed by any extra
+instructions, and the dialog marks it "replaces built-in". Its read-only
+safeguards and the steps that verify the pull request are then gone, so the
+profile has to state its own. The line itself is never sent. Such a profile can
+also use `{{ pr_title }}`, `{{ pr_link }}`, `{{ pr_body }}`, `{{ pr_number }}`,
+`{{ pr_head_ref }}`, `{{ pr_head_sha }}`, `{{ pr_head_repository }}`,
+`{{ pr_base_ref }}`, and `{{ pr_base_sha }}`. GitHub is read as the account used
 for pull requests on that host. A GitLab remote, on gitlab.com or a
 self-managed host, lists its open issues (not yet its merge requests), read
 with the `GITLAB_TOKEN` or `GITLAB_ACCESS_TOKEN` the checkout's `.envrc` sets
