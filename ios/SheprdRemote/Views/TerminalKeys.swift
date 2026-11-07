@@ -15,6 +15,8 @@ final class TermTyping {
     private(set) var problem: String?
     /// What was typed but is not on the screen yet.
     private(set) var echo = TermEcho()
+    /// What an input method is composing, typed once a candidate is picked.
+    var composing = ""
     private var pending: [TermInput.Send] = []
     private var draining = false
     private weak var fleet: Fleet?
@@ -129,11 +131,17 @@ struct TermKeyRows: View {
     var body: some View {
         let keys = model.termKeys.layout
         VStack(spacing: 6) {
-            row {
-                modifier("ctrl", .ctrl)
-                modifier("alt", .alt)
-                modifier("shift", .shift)
-                ForEach(keys.top) { key in termKey(key) }
+            // What an input method composes takes the top row's place, so
+            // it covers no terminal line and the terminal keeps its size.
+            if typing.composing.isEmpty {
+                row {
+                    modifier("ctrl", .ctrl)
+                    modifier("alt", .alt)
+                    modifier("shift", .shift)
+                    ForEach(keys.top) { key in termKey(key) }
+                }
+            } else {
+                composing(typing.composing)
             }
             row {
                 ForEach(keys.bottom) { key in termKey(key) }
@@ -186,6 +194,20 @@ struct TermKeyRows: View {
         Button(action: action) { TermKeyCap(label: label, tint: tint) }
             .buttonStyle(.plain)
             .buttonRepeatBehavior(repeats ? .enabled : .disabled)
+    }
+
+    private func composing(_ text: String) -> some View {
+        HStack(spacing: 0) {
+            Text(text).underline(pattern: .dot)
+            Text("▏").foregroundStyle(.tint)
+        }
+        .font(.system(.callout, design: .monospaced))
+        .lineLimit(1)
+        .truncationMode(.head)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Composing: \(text)")
     }
 
     private func modifier(_ label: String, _ flag: TermInput.Modifiers) -> some View {
@@ -248,7 +270,8 @@ extension View {
 
 /// An invisible text input that owns the keyboard: software keys arrive as
 /// text, and a hardware keyboard's arrows, Escape, Tab, and Control or
-/// Option combinations as key presses.
+/// Option combinations as key presses. Input methods compose in marked
+/// text (`TermInputView+TextInput.swift`) and type what they commit.
 struct TermKeyboard: UIViewRepresentable {
     let typing: TermTyping
     @Binding var shown: Bool
@@ -269,11 +292,23 @@ struct TermKeyboard: UIViewRepresentable {
     }
 }
 
-final class TermInputView: UIView, UIKeyInput {
+final class TermInputView: UIView {
     var typing: TermTyping?
+    var composition = TermComposition() {
+        didSet { typing?.composing = composition.marked }
+    }
+    var markedTextStyle: [NSAttributedString.Key: Any]?
+    weak var inputDelegate: (any UITextInputDelegate)?
+    lazy var tokenizer: any UITextInputTokenizer = UITextInputStringTokenizer(textInput: self)
 
     override var canBecomeFirstResponder: Bool { true }
     var hasText: Bool { true }
+
+    // Hiding the keyboard drops what is still being composed.
+    override func resignFirstResponder() -> Bool {
+        composition.mark("")
+        return super.resignFirstResponder()
+    }
 
     // A terminal wants what was typed, not what autocorrect guessed.
     var autocorrectionType: UITextAutocorrectionType = .no
@@ -282,15 +317,17 @@ final class TermInputView: UIView, UIKeyInput {
     var smartQuotesType: UITextSmartQuotesType = .no
     var smartDashesType: UITextSmartDashesType = .no
     var smartInsertDeleteType: UITextSmartInsertDeleteType = .no
-    var keyboardType: UIKeyboardType = .asciiCapable
+    // `.asciiCapable` would leave out the Chinese, Japanese, and Korean
+    // keyboards.
+    var keyboardType: UIKeyboardType = .default
     var returnKeyType: UIReturnKeyType = .default
 
     func insertText(_ text: String) {
-        typing?.type(text)
+        if let text = composition.insert(text) { typing?.type(text) }
     }
 
     func deleteBackward() {
-        typing?.press("backspace")
+        if composition.deleteBackward() { typing?.press("backspace") }
     }
 
     // ⌘V from a hardware keyboard, and Paste from the edit menu.
@@ -305,7 +342,11 @@ final class TermInputView: UIView, UIKeyInput {
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var unhandled = Set<UIPress>()
         for press in presses {
-            guard let key = press.key, let name = Self.name(for: key) else {
+            // While composing, plain arrows, Tab, and Escape pick candidates;
+            // Control and Option combinations (^C) still reach the pane.
+            guard let key = press.key, composition.marked.isEmpty || !key.modifierFlags.isDisjoint(with: [.control, .alternate]),
+                  let name = Self.name(for: key)
+            else {
                 unhandled.insert(press)
                 continue
             }
