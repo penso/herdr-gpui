@@ -3,28 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Herdr UI: a native window for the Herdr daemon</title>
-<meta name="description" content="Herdr UI is a native client for the Herdr daemon you already run. Same daemon, same sessions: the window adds dispatch from issues, side-by-side review, checkpoints, Teleport and a Devices overview.">
-<link rel="canonical" href="https://herdrui.dev/">
-<link rel="alternate" type="text/plain" href="llms.txt" title="Herdr UI for LLMs">
-<link rel="icon" type="image/png" href="assets/herdr-ui-icon-badge.png">
+<title>Sheprd: a native workspace for coding agents</title>
+<meta name="description" content="Bring coding agents, terminals and worktrees together in Sheprd. Dispatch from issues, review changes, restore checkpoints and move work between machines on macOS, Linux and Windows.">
+<link rel="canonical" href="https://sheprd.org/">
+<link rel="alternate" type="text/plain" href="llms.txt" title="Sheprd for LLMs">
+<link rel="icon" type="image/svg+xml" href="assets/sheprd-avatar.svg">
 <meta name="theme-color" content="#17181b">
 <script>try { var t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <meta property="og:type" content="website">
-<meta property="og:title" content="Herdr UI: a native window for the Herdr daemon">
-<meta property="og:description" content="Herdr's TUI is great. Here's what a window adds.">
-<meta property="og:url" content="https://herdrui.dev/">
-<meta property="og:site_name" content="Herdr UI">
-<meta property="og:image" content="https://herdrui.dev/assets/social-preview-dark.png?v=2">
+<meta property="og:title" content="Sheprd: a native workspace for coding agents">
+<meta property="og:description" content="Your agents, terminals and worktrees. One native workspace.">
+<meta property="og:url" content="https://sheprd.org/">
+<meta property="og:site_name" content="Sheprd">
+<meta property="og:image" content="https://sheprd.org/assets/sheprd-social-preview.png">
 <meta property="og:image:type" content="image/png">
-<meta property="og:image:width" content="1280">
-<meta property="og:image:height" content="640">
-<meta property="og:image:alt" content="Herdr UI: native client for the Herdr daemon on macOS, Linux and Windows, beside a window with a workspace sidebar and terminal panes.">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Sheprd wordmark and paw emblem">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Herdr UI: a native window for the Herdr daemon">
-<meta name="twitter:description" content="Herdr's TUI is great. Here's what a window adds.">
-<meta name="twitter:image" content="https://herdrui.dev/assets/social-preview-dark.png?v=2">
-<meta name="twitter:image:alt" content="Herdr UI: native client for the Herdr daemon on macOS, Linux and Windows, beside a window with a workspace sidebar and terminal panes.">
+<meta name="twitter:title" content="Sheprd: a native workspace for coding agents">
+<meta name="twitter:description" content="Your agents, terminals and worktrees. One native workspace.">
+<meta name="twitter:image" content="https://sheprd.org/assets/sheprd-social-preview.png">
+<meta name="twitter:image:alt" content="Sheprd wordmark and paw emblem">
 <link rel="stylesheet" href="assets/kit.css">
 <link rel="stylesheet" href="assets/site.css">
 <script src="assets/kit.js"></script>
@@ -33,69 +33,63 @@
 
 <div class="wrap">
   <nav>
-    <a class="brand" href="./"><img src="assets/herdr-ui-icon-badge.png" alt="">Herdr UI</a>
-    <a class="sec" href="#compare">Compare</a><a class="sec" href="#film" data-film-link hidden>Film</a><a class="sec" href="#shots" data-shots-link hidden>Screenshots</a><a class="sec" href="#install">Install</a>
+    <a class="brand" href="./"><img src="assets/sheprd-avatar.svg" alt="">Sheprd</a>
+    <a class="sec" href="#features">Features</a><a class="sec" href="names/">Meet Sheprd</a><a class="sec" href="#film" data-film-link hidden>Film</a><a class="sec" href="#shots" data-shots-link hidden>Screenshots</a><a class="sec" href="#install">Install</a>
     <button type="button" class="theme" id="theme" aria-label="Theme: system" title="Theme: system"><svg data-t="system" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><svg data-t="light" viewBox="0 0 24 24" aria-hidden="true" hidden><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg data-t="dark" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
-    <a class="gh" href="https://github.com/penso/herdr-gpui"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>GitHub<span class="stars" id="stars" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span id="stars-n"></span></span></a>
+    <a class="gh" href="https://github.com/sheprd-labs/sheprd"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>GitHub<span class="stars" id="stars" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span id="stars-n"></span></span></a>
   </nav>
 
   <header class="hero">
-    <span class="kicker"><i></i>Same daemon. Same sessions. Use both at once.</span>
-    <h1>Herdr’s TUI is great.<br><span class="soft">Here’s what a window adds.</span></h1>
-    <p class="lede">Herdr UI is a native client for the Herdr daemon you already run. Your terminals and agents stay in the daemon; the window adds dispatch from issues, side-by-side review, checkpoints, Teleport and a Devices overview.</p>
-    <div class="hero-cta"><a class="btn pri" href="#install">Install</a><a class="btn" href="https://github.com/penso/herdr-gpui/releases">Releases</a></div>
+    <span class="kicker"><i></i>Native on macOS, Linux and Windows</span>
+    <h1>Your agents. Your work.<br><span class="soft">One native workspace.</span></h1>
+    <p class="lede">Sheprd brings coding agents, terminals and worktrees together. Dispatch from issues, review changes side by side, restore checkpoints and Teleport work between machines. Your sessions keep running when you close the window.</p>
+    <div class="hero-cta"><a class="btn pri" href="#install">Install Sheprd</a><a class="btn" href="https://github.com/sheprd-labs/sheprd/releases">Releases</a></div>
   </header>
 
-  <div class="cmp-tabs" id="cmp-tabs" role="group" aria-label="Show one client"><button type="button" data-view="tui">herdr TUI</button><button type="button" data-view="gpui" aria-pressed="true">Herdr UI</button></div>
-  <div class="compare-fit" id="cmp-fit">
-    <div class="compare" id="cmp" aria-label="Drag to compare the Herdr TUI with Herdr UI">
-      <div class="layer"><div class="tui"><pre id="tui" aria-hidden="true"></pre></div></div>
-      <div class="layer gpui"><div data-hm-app="terminal" style="--h:420px"></div></div>
-      <div class="handle" id="handle" role="slider" aria-label="Comparison position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0"><span>‹›</span></div>
-    </div>
+  <div class="preview-fit" id="preview-fit" role="img" aria-label="Illustration of Sheprd with an agent sidebar and terminal panes">
+    <div class="preview" id="preview" aria-hidden="true"><div data-hm-app="terminal" style="--h:420px"></div></div>
   </div>
-  <div class="labels"><span data-view="tui"><b>herdr</b> in any terminal, local or over SSH</span><span data-view="gpui"><b>Herdr UI</b> a native, GPU-painted window</span></div>
-  <div class="same"><span>herdr TUI</span><span class="ln"></span><span class="daemon mono">herdr server · owns PTYs, agents, sessions</span><span class="ln"></span><span>Herdr UI</span></div>
+  <p class="preview-label">Sheprd workspace illustration · GPU-painted terminals, agents and worktrees</p>
 
   <section id="film" hidden>
-    <div class="sh"><div class="eyebrow">The film</div><h2>What the window does, in one take.</h2><p>From an issue to a merged change across two machines, while the TUI stays attached to the same session.</p></div>
+    <div class="sh"><div class="eyebrow">The film</div><h2>From issue to review, in one take.</h2><p>Follow agent work across two machines, from dispatch through review and Teleport.</p></div>
     <div class="film" id="film-box"></div>
   </section>
 
-  <section id="compare">
-    <div class="sh"><div class="eyebrow">Capability by capability</div><h2>What you get in each.</h2><p>Both clients talk to the same daemon, so this is not either-or. Keep the TUI in any terminal and over SSH; open the window when you want to dispatch, review and move work.</p></div>
+  <section id="features">
+    <div class="sh"><div class="eyebrow">Capability by capability</div><h2>Follow the work from start to finish.</h2><p>A native workspace to dispatch agents, keep track of their progress, review their changes and move work between hosts.</p></div>
     <div class="rows" id="rows"></div>
   </section>
 
   <section id="shots" hidden>
-    <div class="sh"><div class="eyebrow">Screenshots</div><h2>The parts only the window has.</h2><p>Click a screenshot to enlarge it.</p></div>
+    <div class="sh"><div class="eyebrow">Screenshots</div><h2>A closer look at Sheprd.</h2><p>Click a screenshot to enlarge it.</p></div>
     <div class="gal" id="gal"></div>
   </section>
 
   <section id="install">
     <div class="install">
-      <div><h2>Keep the TUI. Add Herdr UI.</h2><p>Install the app next to the Herdr you already have. It attaches to your daemon and never installs or upgrades it, so <a href="https://herdr.dev/">install Herdr</a> first.</p></div>
+      <div><h2>Make room for the work.</h2><p>Install Sheprd with its bundled <span class="mono">herdr-core</span> for local terminals, or connect to your existing Herdr daemon. Existing sessions stay where they are; closing Sheprd leaves them running.</p></div>
       <div><div class="os-tabs" role="tablist" aria-label="Platform" hidden>
           <button type="button" role="tab" id="tab-macos" aria-controls="os-macos" data-os="macos">macOS</button><button type="button" role="tab" id="tab-linux" aria-controls="os-linux" data-os="linux">Linux</button><button type="button" role="tab" id="tab-windows" aria-controls="os-windows" data-os="windows">Windows</button>
         </div>
         <div class="os" id="os-macos" role="tabpanel" aria-labelledby="tab-macos"><h3>macOS</h3>
-          <div class="cmd mono"><code><span class="p">$</span>brew install penso/tap/herdr-gpui</code><button type="button" class="copy">Copy</button></div>
-          <div class="plat">macOS 14.2+, signed, notarized, universal · or the <a href="https://github.com/penso/herdr-gpui/releases/latest">.dmg</a></div></div>
+          <div class="cmd mono"><code><span class="p">$</span>brew install sheprd-labs/tap/sheprd</code><button type="button" class="copy">Copy</button></div>
+          <div class="plat">macOS 14.2+, signed, notarized, universal · or the <a href="https://github.com/sheprd-labs/sheprd/releases/latest">.dmg</a>.</div></div>
         <div class="os" id="os-linux" role="tabpanel" aria-labelledby="tab-linux"><h3>Linux</h3>
-          <div class="cmd mono"><code><span class="p">$</span>curl -fsSL https://herdrui.dev/install.sh | sh</code><button type="button" class="copy">Copy</button></div>
-          <div class="plat">x86_64 and ARM64 · installs the checksummed .deb, .rpm or Arch package with APT, DNF or pacman (glibc 2.39+) · <a href="install.sh">read the script</a> · or <span class="mono">nix run github:penso/herdr-gpui</span></div></div>
+          <div class="cmd mono"><code><span class="p">$</span>curl -fsSL https://sheprd.org/install.sh | sh</code><button type="button" class="copy">Copy</button></div>
+          <div class="plat">x86_64 and ARM64 · installs the checksummed .deb, .rpm or Arch package with APT, DNF or pacman (glibc 2.39+) · <a href="install.sh">read the script</a> · or <span class="mono">nix run github:sheprd-labs/sheprd</span></div></div>
         <div class="os" id="os-windows" role="tabpanel" aria-labelledby="tab-windows"><h3>Windows</h3>
-          <div class="cmd mono"><code><span class="p">PS&gt;</span>irm https://herdrui.dev/install.ps1 | iex</code><button type="button" class="copy">Copy</button></div>
+          <div class="cmd mono"><code><span class="p">PS&gt;</span>irm https://sheprd.org/install.ps1 | iex</code><button type="button" class="copy">Copy</button></div>
           <div class="plat">x86_64 and ARM64 · installs for the current user, adds a Start menu entry · <a href="install.ps1">read the script</a> · WSL daemons work too</div></div>
-        <div class="plat"><a href="https://github.com/penso/herdr-gpui#install">All install options</a> · <a href="llms.txt">llms.txt</a></div>
-        <div class="both-note">Then run <span class="mono">herdr</span> in a terminal and open Herdr UI: both show the same panes.</div></div>
+        <div class="plat"><a href="https://github.com/sheprd-labs/sheprd#install">All install options</a> · <a href="llms.txt">llms.txt</a></div>
+        <div class="both-note">The command line is <span class="mono">sheprd</span>. Existing configuration and legacy entrypoints remain compatible.</div></div>
     </div>
   </section>
 </div>
 
-<footer><div class="wrap"><span>Herdr UI · Apache-2.0 · <a href="https://pen.so">Fabien Penso</a></span>
-  <span class="links"><a href="https://github.com/penso/herdr-gpui">GitHub</a><a href="https://github.com/penso/herdr-gpui/releases">Releases</a><a href="https://github.com/penso/herdr-gpui/blob/main/crates/herdr-gpui/README.md">Docs</a><a href="https://herdr.dev/">Herdr</a></span>
-  <span class="disc" id="disc"></span></div></footer>
+<footer><div class="wrap"><span>Sheprd · Apache-2.0 · <a href="https://pen.so">Fabien Penso</a></span>
+  <span class="links"><a href="https://github.com/sheprd-labs/sheprd">GitHub</a><a href="https://github.com/sheprd-labs/sheprd/releases">Releases</a><a href="https://github.com/sheprd-labs/sheprd/blob/main/crates/sheprd-gpui/README.md">Docs</a><a href="https://herdr.dev/">Herdr</a></span>
+  <span class="disc" id="disc">Independent project, not affiliated with or supported by Herdr or Herdr Code.</span></div></footer>
 
 <script src="assets/site.js"></script>
 </body>

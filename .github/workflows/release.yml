@@ -38,7 +38,7 @@ jobs:
     name: Release Workflow Security
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.repository == 'penso/herdr-gpui' &&
+      github.repository == 'sheprd-labs/sheprd' &&
       github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
@@ -50,7 +50,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           advanced-security: false
           online-audits: false
@@ -59,7 +59,7 @@ jobs:
     needs: audit
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.repository == 'penso/herdr-gpui' &&
+      github.repository == 'sheprd-labs/sheprd' &&
       github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
@@ -89,10 +89,10 @@ jobs:
           [[ "$CHANNEL" == stable || "$CHANNEL" == beta ]]
           [[ "$EXPECTED_SHA" == "$GITHUB_SHA" ]]
           [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]]
-          [[ "$(gh api repos/penso/herdr-gpui/git/ref/heads/main --jq .object.sha)" == "$EXPECTED_SHA" ]]
+          [[ "$(gh api repos/sheprd-labs/sheprd/git/ref/heads/main --jq .object.sha)" == "$EXPECTED_SHA" ]]
           # The calendar version is derived here, never dispatched: today's UTC
           # date and the next same-day counter after the tags GitHub already has.
-          version=$(gh api --paginate repos/penso/herdr-gpui/git/matching-refs/tags/v --jq '.[].ref' |
+          version=$(gh api --paginate repos/sheprd-labs/sheprd/git/matching-refs/tags/v --jq '.[].ref' |
             python3 scripts/release/next-version.py "$(date -u +%Y%m%d)")
           [[ "$version" =~ ^[1-9][0-9]{7}\.[1-9][0-9]*$ ]]
           printf 'version=%s\nsha=%s\nchannel=%s\n' "$version" "$EXPECTED_SHA" "$CHANNEL" >> "$GITHUB_OUTPUT"
@@ -105,7 +105,7 @@ jobs:
       # repository variable, is set; windows-sign then requires the Azure
       # variables too. Until then Windows ships unsigned and skips winget, and
       # those builds name no publisher, so their in-app updater stays off
-      # (herdr-updater/src/windows.rs) rather than trusting an unsigned installer.
+      # (sheprd-updater/src/windows.rs) rather than trusting an unsigned installer.
       - id: windows-signing
         env:
           WINDOWS_SIGNING_SUBJECT: ${{ vars.WINDOWS_SIGNING_SUBJECT }}
@@ -125,7 +125,7 @@ jobs:
   ci-gate:
     needs: validate
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -149,7 +149,7 @@ jobs:
   nix:
     needs: validate
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     permissions:
       contents: read
@@ -189,7 +189,7 @@ jobs:
       - name: Require Rosetta for the x86_64 executable
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/bin/true || sudo softwareupdate --install-rosetta --agree-to-license
-      - run: cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate --target "$TARGET"
+      - run: cargo build --locked --release -p sheprd-gpui -p sheprd-acp -p sheprd-remote-control -p sheprd-automate --target "$TARGET"
       # Nearby pairing's Bluetooth side, in Swift; the app starts it beside
       # its executable while the pairing dialog is open.
       - run: bash scripts/release/build-nearby.sh "$TARGET"
@@ -201,17 +201,17 @@ jobs:
       # CI does, so the smoke test finds it translated.
       - name: Translate the x86_64 executable once
         if: matrix.arch == 'x86_64'
-        run: '"target/$TARGET/release/herdr-gpui" --build-info'
-      - run: python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"
-      # The app starts chats with the herdr-acp beside its executable.
-      - run: '"target/$TARGET/release/herdr-acp" --help'
-      # Remote control runs the herdr-remote-control beside it as a user service.
-      - run: '"target/$TARGET/release/herdr-remote-control" --version'
-      # Automations run in the herdr-automate beside it.
-      - run: '"target/$TARGET/release/herdr-automate" --version'
+        run: '"target/$TARGET/release/sheprd" --build-info'
+      - run: python3 scripts/release/smoke-cli.py "target/$TARGET/release/sheprd"
+      # The app starts chats with the sheprd-acp beside its executable.
+      - run: '"target/$TARGET/release/sheprd-acp" --help'
+      # Remote control runs the sheprd-remote-control beside it as a user service.
+      - run: '"target/$TARGET/release/sheprd-remote-control" --version'
+      # Automations run in the sheprd-automate beside it.
+      - run: '"target/$TARGET/release/sheprd-automate" --version'
       - run: '"target/$TARGET/release/herdr-core" --version'
       - name: Install the notice generator
-        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: cargo-about@0.9.2
           fallback: none
@@ -221,11 +221,11 @@ jobs:
         with:
           name: macos-${{ matrix.arch }}
           path: |
-            target/${{ matrix.target }}/release/herdr-gpui
-            target/${{ matrix.target }}/release/herdr-acp
-            target/${{ matrix.target }}/release/herdr-remote-control
-            target/${{ matrix.target }}/release/herdr-automate
-            target/${{ matrix.target }}/release/herdr-nearby
+            target/${{ matrix.target }}/release/sheprd
+            target/${{ matrix.target }}/release/sheprd-acp
+            target/${{ matrix.target }}/release/sheprd-remote-control
+            target/${{ matrix.target }}/release/sheprd-automate
+            target/${{ matrix.target }}/release/sheprd-nearby
             target/${{ matrix.target }}/release/herdr-core
             target/${{ matrix.target }}/release/THIRD-PARTY-NOTICES.txt
           if-no-files-found: error
@@ -265,22 +265,22 @@ jobs:
       - name: Require the declared native target
         run: |
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
-      - run: cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"
+      - run: cargo build --locked --release -p sheprd-gpui -p sheprd-acp -p sheprd-remote-control -p sheprd-automate -p sheprd-nearby --target "$TARGET"
       # Herdr 2 terminals run in the pinned herdr-core beside it, fetched
       # and checked against its checksum in herdr-core.json.
       - run: python3 scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"
-      - run: python3 scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui"
-      # The app starts chats with the herdr-acp beside its executable.
-      - run: '"target/$TARGET/release/herdr-acp" --help'
-      # Remote control runs the herdr-remote-control beside it as a user service.
-      - run: '"target/$TARGET/release/herdr-remote-control" --version'
-      # Automations run in the herdr-automate beside it.
-      - run: '"target/$TARGET/release/herdr-automate" --version'
-      # Nearby pairing and presence run the herdr-nearby beside it.
-      - run: '"target/$TARGET/release/herdr-nearby" --version'
+      - run: python3 scripts/release/smoke-cli.py "target/$TARGET/release/sheprd"
+      # The app starts chats with the sheprd-acp beside its executable.
+      - run: '"target/$TARGET/release/sheprd-acp" --help'
+      # Remote control runs the sheprd-remote-control beside it as a user service.
+      - run: '"target/$TARGET/release/sheprd-remote-control" --version'
+      # Automations run in the sheprd-automate beside it.
+      - run: '"target/$TARGET/release/sheprd-automate" --version'
+      # Nearby pairing and presence run the sheprd-nearby beside it.
+      - run: '"target/$TARGET/release/sheprd-nearby" --version'
       - run: '"target/$TARGET/release/herdr-core" --version'
       - name: Install the notice generator
-        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: cargo-about@0.9.2
           fallback: none
@@ -289,33 +289,36 @@ jobs:
       - name: Package Linux executable
         run: |
           mkdir dist
-          bash scripts/release/package-linux.sh "$VERSION" "$TARGET" "target/$TARGET/release/herdr-gpui" dist "target/$TARGET/release/THIRD-PARTY-NOTICES.txt"
-          python3 scripts/update-manifest.py package-linux "target/$TARGET/release/herdr-gpui" "$TARGET" "$VERSION" \
-            "dist/herdr-gpui-$VERSION-$TARGET-update.tar.gz"
+          bash scripts/release/package-linux.sh "$VERSION" "$TARGET" "target/$TARGET/release/sheprd" dist "target/$TARGET/release/THIRD-PARTY-NOTICES.txt"
+          python3 scripts/update-manifest.py package-linux "target/$TARGET/release/sheprd" "$TARGET" "$VERSION" \
+            "dist/sheprd-$VERSION-$TARGET-update.tar.gz"
       # The .deb, .rpm and Arch packages repackage the manual archive's exact
       # files under /usr, so every Linux format ships the same binary.
       - name: Package distribution formats from the manual archive
         run: |
           nfpm=$(bash scripts/release/install-nfpm.sh "$RUNNER_TEMP/nfpm")
           python3 scripts/release/package-linux-distro.py "$VERSION" "$TARGET" \
-            "dist/Herdr-$VERSION-$TARGET.tar.gz" dist --nfpm "$nfpm"
+            "dist/Sheprd-$VERSION-$TARGET.tar.gz" dist --nfpm "$nfpm"
       - name: Install each package on its distribution and check its libraries
         run: bash scripts/release/smoke-linux-packages.sh "$VERSION" "$TARGET" dist
-      # Herdr UI copies this static herdr-remote-control onto SSH and cloud
+      # Sheprd copies this static sheprd-remote-control onto SSH and cloud
       # machines of this architecture to pair a phone with them, whatever
       # their glibc. It is listed in host-manifest.json (schema 4).
-      - name: Build the static herdr-remote-control for other machines
+      - name: Build the static sheprd-remote-control for other machines
         run: bash scripts/release/build-host.sh "$VERSION" "$HOST_TARGET" dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-package-${{ matrix.target }}
           path: |
-            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.deb
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.rpm
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.pkg.tar.zst
             dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.deb
             dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.rpm
             dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.pkg.tar.zst
-            dist/herdr-gpui-${{ needs.validate.outputs.version }}-${{ matrix.target }}-update.tar.gz
-            dist/herdr-remote-control-${{ needs.validate.outputs.version }}-${{ matrix.host }}
+            dist/sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}-update.tar.gz
+            dist/sheprd-remote-control-${{ needs.validate.outputs.version }}-${{ matrix.host }}
           if-no-files-found: error
           retention-days: 7
 
@@ -345,7 +348,7 @@ jobs:
       HERDR_RELEASE_VERSION: ${{ needs.validate.outputs.version }}
       HERDR_UPDATE_PUBLIC_KEY: ${{ vars.HERDR_UPDATE_PUBLIC_KEY }}
       # The publisher the in-app updater requires on a downloaded installer
-      # (herdr-updater/src/windows.rs); windows-sign checks the release is signed by it.
+      # (sheprd-updater/src/windows.rs); windows-sign checks the release is signed by it.
       # A repository variable: this job is outside the release environment.
       # Empty while signing is not set up, which turns that build's updater off.
       HERDR_WINDOWS_SIGNER: ${{ vars.WINDOWS_SIGNING_SUBJECT }}
@@ -358,18 +361,18 @@ jobs:
       - name: Require the declared native target
         run: |
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET"
-      - run: cargo build --locked --release -p herdr-gpui -p herdr-gpui-launcher -p herdr-acp -p herdr-remote-control -p herdr-automate -p herdr-nearby --target "$TARGET"
+      - run: cargo build --locked --release -p sheprd-gpui -p sheprd-launcher -p sheprd-acp -p sheprd-remote-control -p sheprd-automate -p sheprd-nearby --target "$TARGET"
       # Herdr 2 terminals run in the pinned herdr-core beside it; ARM64 gets
       # the x64 build, which Windows on ARM runs.
       - run: python scripts/release/fetch-herdr-core.py "$TARGET" "target/$TARGET/release"
-      - run: python scripts/release/smoke-cli.py "target/$TARGET/release/herdr-gpui.exe"
-      - run: '"target/$TARGET/release/herdr-acp.exe" --help'
-      - run: '"target/$TARGET/release/herdr-remote-control.exe" --version'
-      - run: '"target/$TARGET/release/herdr-automate.exe" --version'
-      - run: '"target/$TARGET/release/herdr-nearby.exe" --version'
+      - run: python scripts/release/smoke-cli.py "target/$TARGET/release/sheprd.exe"
+      - run: '"target/$TARGET/release/sheprd-acp.exe" --help'
+      - run: '"target/$TARGET/release/sheprd-remote-control.exe" --version'
+      - run: '"target/$TARGET/release/sheprd-automate.exe" --version'
+      - run: '"target/$TARGET/release/sheprd-nearby.exe" --version'
       - run: '"target/$TARGET/release/herdr-core.exe" --version'
       - name: Install the notice generator
-        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: cargo-about@0.9.2
           fallback: none
@@ -379,24 +382,24 @@ jobs:
       - name: Package Windows executable
         run: |
           mkdir dist
-          python scripts/release/package-windows.py "$VERSION" "$TARGET" "target/$TARGET/release/herdr-gpui.exe" "target/$TARGET/release/herdr-gpui-launcher.exe" dist "target/$TARGET/release/THIRD-PARTY-NOTICES.txt"
+          python scripts/release/package-windows.py "$VERSION" "$TARGET" "target/$TARGET/release/sheprd.exe" "target/$TARGET/release/sheprd-launcher.exe" dist "target/$TARGET/release/THIRD-PARTY-NOTICES.txt"
       - name: Install the pinned Inno Setup compiler
         run: python scripts/release/windows-installer.py install-iscc "$RUNNER_TEMP/inno-setup" > "$RUNNER_TEMP/iscc-path"
       - name: Build the Windows installer
-        run: python scripts/release/windows-installer.py build "$VERSION" "$TARGET" "dist/Herdr-$VERSION-$TARGET.zip" dist "$(cat "$RUNNER_TEMP/iscc-path")"
+        run: python scripts/release/windows-installer.py build "$VERSION" "$TARGET" "dist/Sheprd-$VERSION-$TARGET.zip" dist "$(cat "$RUNNER_TEMP/iscc-path")"
       - name: Install and uninstall the Windows installer
-        run: python scripts/release/windows-installer.py smoke "dist/Herdr-$VERSION-$TARGET-setup.exe"
+        run: python scripts/release/windows-installer.py smoke "dist/Sheprd-$VERSION-$TARGET-setup.exe"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-package-${{ matrix.target }}
           path: |
-            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.zip
-            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}-setup.exe
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.zip
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}-setup.exe
           if-no-files-found: error
           retention-days: 7
 
   # Signs the tested build without running it: unpack the zip, sign both
-  # executables (herdr-gpui.exe and its windowed launcher), check
+  # executables (sheprd.exe and its windowed launcher), check
   # nothing else changed, repack, then rebuild the installer with ISCC signing
   # its uninstaller and Setup.exe. Azure Artifact Signing trusts only this
   # repository's OIDC token for the protected release environment, so the
@@ -405,7 +408,7 @@ jobs:
     name: Windows signing (${{ matrix.target }})
     needs: [validate, windows, ci-gate]
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       needs.validate.outputs.windows_signed == 'true'
     strategy:
@@ -436,7 +439,7 @@ jobs:
           name: windows-package-${{ matrix.target }}
           path: unsigned
       - name: Unpack the tested executables without running them
-        run: python scripts/release/windows-signing.py unpack "unsigned/Herdr-$VERSION-$TARGET.zip" "$RUNNER_TEMP/signing"
+        run: python scripts/release/windows-signing.py unpack "unsigned/Sheprd-$VERSION-$TARGET.zip" "$RUNNER_TEMP/signing"
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -450,42 +453,48 @@ jobs:
           signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
           files: |
-            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-gpui.exe
-            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-gpui-launcher.exe
-            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-acp.exe
-            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-remote-control.exe
-            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-automate.exe
-            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-nearby.exe
-            ${{ runner.temp }}\signing\Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-core.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\sheprd.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\sheprd-launcher.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\sheprd-acp.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\sheprd-remote-control.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\sheprd-automate.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\sheprd-nearby.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-core.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-gpui.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-gpui-launcher.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-acp.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-remote-control.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-automate.exe
+            ${{ runner.temp }}\signing\Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}\herdr-nearby.exe
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
-          description: Herdr UI
-          description-url: https://herdrui.dev
+          description: Sheprd
+          description-url: https://sheprd.org
           exclude-environment-credential: true
           exclude-azure-cli-credential: false
           cache-dependencies: false
       - name: Repack the signed executables, refusing any change but the signatures
         run: |
           mkdir dist
-          python scripts/release/windows-signing.py repack "unsigned/Herdr-$VERSION-$TARGET.zip" "$RUNNER_TEMP/signing" dist
+          python scripts/release/windows-signing.py repack "unsigned/Sheprd-$VERSION-$TARGET.zip" "$RUNNER_TEMP/signing" dist
       - name: Install the pinned Inno Setup compiler
         run: python scripts/release/windows-installer.py install-iscc "$RUNNER_TEMP/inno-setup" > "$RUNNER_TEMP/iscc-path"
       - name: Build the signed Windows installer
-        run: python scripts/release/windows-installer.py build --sign "$VERSION" "$TARGET" "dist/Herdr-$VERSION-$TARGET.zip" dist "$(cat "$RUNNER_TEMP/iscc-path")"
+        run: python scripts/release/windows-installer.py build --sign "$VERSION" "$TARGET" "dist/Sheprd-$VERSION-$TARGET.zip" dist "$(cat "$RUNNER_TEMP/iscc-path")"
       - name: Require timestamped signatures from the release identity
         env:
           WINDOWS_SIGNING_SUBJECT: ${{ vars.WINDOWS_SIGNING_SUBJECT }}
         run: |
           test -n "$WINDOWS_SIGNING_SUBJECT"
           python scripts/release/windows-signing.py verify --subject "$WINDOWS_SIGNING_SUBJECT" \
-            "dist/Herdr-$VERSION-$TARGET.zip" "dist/Herdr-$VERSION-$TARGET-setup.exe"
+            "dist/Sheprd-$VERSION-$TARGET.zip" "dist/Sheprd-$VERSION-$TARGET-setup.exe"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-signed-${{ matrix.target }}
           path: |
-            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}.zip
-            dist/Herdr-${{ needs.validate.outputs.version }}-${{ matrix.target }}-setup.exe
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}.zip
+            dist/Sheprd-${{ needs.validate.outputs.version }}-${{ matrix.target }}-setup.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -520,7 +529,7 @@ jobs:
           name: windows-signed-${{ matrix.target }}
           path: dist
       - name: Install and uninstall the signed Windows installer
-        run: python scripts/release/windows-installer.py smoke --signed "dist/Herdr-$VERSION-$TARGET-setup.exe"
+        run: python scripts/release/windows-installer.py smoke --signed "dist/Sheprd-$VERSION-$TARGET-setup.exe"
 
   changelog:
     needs: validate
@@ -549,7 +558,7 @@ jobs:
           mkdir release-notes
           # A plain assignment, so `set -e` stops on a failed request instead
           # of silently dropping the betas and shortening the notes.
-          prereleases=$(gh api --paginate repos/penso/herdr-gpui/releases \
+          prereleases=$(gh api --paginate repos/sheprd-labs/sheprd/releases \
             --jq '.[] | select(.prerelease and (.draft | not)) | .tag_name')
           betas=()
           while IFS= read -r tag; do
@@ -584,12 +593,12 @@ jobs:
         run: |
           mkdir dist
           chmod +x scripts/release/cargo-locked.sh
-          python3 scripts/release/generate-sbom.py "dist/Herdr-$VERSION.cdx.json"
+          python3 scripts/release/generate-sbom.py "dist/Sheprd-$VERSION.cdx.json"
           git diff --exit-code -- Cargo.lock
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-sbom
-          path: dist/Herdr-${{ needs.validate.outputs.version }}.cdx.json
+          path: dist/Sheprd-${{ needs.validate.outputs.version }}.cdx.json
           if-no-files-found: error
           retention-days: 7
 
@@ -599,7 +608,7 @@ jobs:
     # skipped need skips this job unless its condition checks results itself.
     if: >-
       !cancelled() &&
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       needs.validate.result == 'success' && needs.ci-gate.result == 'success' &&
       needs.nix.result == 'success' &&
@@ -631,9 +640,9 @@ jobs:
       - name: Assemble without executing the downloaded binaries
         run: |
           mkdir dist
-          chmod +x binaries/arm64/herdr-gpui binaries/x86_64/herdr-gpui binaries/arm64/herdr-acp binaries/x86_64/herdr-acp binaries/arm64/herdr-remote-control binaries/x86_64/herdr-remote-control binaries/arm64/herdr-automate binaries/x86_64/herdr-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core binaries/arm64/herdr-nearby binaries/x86_64/herdr-nearby
+          chmod +x binaries/arm64/sheprd binaries/x86_64/sheprd binaries/arm64/sheprd-acp binaries/x86_64/sheprd-acp binaries/arm64/sheprd-remote-control binaries/x86_64/sheprd-remote-control binaries/arm64/sheprd-automate binaries/x86_64/sheprd-automate binaries/arm64/herdr-core binaries/x86_64/herdr-core binaries/arm64/sheprd-nearby binaries/x86_64/sheprd-nearby
           cmp binaries/arm64/THIRD-PARTY-NOTICES.txt binaries/x86_64/THIRD-PARTY-NOTICES.txt
-          bash scripts/release/package-macos.sh "$VERSION" binaries/arm64/herdr-gpui binaries/x86_64/herdr-gpui dist binaries/arm64/THIRD-PARTY-NOTICES.txt
+          bash scripts/release/package-macos.sh "$VERSION" binaries/arm64/sheprd binaries/x86_64/sheprd dist binaries/arm64/THIRD-PARTY-NOTICES.txt
       - name: Sign and notarize app and DMG (never launch the app)
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
@@ -642,7 +651,7 @@ jobs:
           APPLE_API_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ vars.APPLE_API_ISSUER_ID }}
           MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
-        run: bash scripts/release/sign-macos.sh "$VERSION" dist/Herdr.app dist
+        run: bash scripts/release/sign-macos.sh "$VERSION" dist/Sheprd.app dist
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: linux-package-x86_64-unknown-linux-gnu
@@ -687,7 +696,8 @@ jobs:
             -in dist/update-manifest.json -sigfile dist/update-manifest.sig
           test "$(wc -c < dist/update-manifest.sig | tr -d ' ')" = 64
           # Keep schema 1 unchanged for installed clients; package updaters use
-          # their own signed manifest with the six distribution assets.
+          # their own signed manifest with only the six legacy Herdr package
+          # names: the deployed bridge still selects those exact filenames.
           python3 scripts/update-manifest.py create dist "$VERSION" --packages
           "$OPENSSL" pkeyutl -sign -rawin -inkey "$KEY_DIR/private.pem" -passin pass: \
             -in dist/package-manifest.json -out dist/package-manifest.sig
@@ -703,7 +713,7 @@ jobs:
             -in dist/windows-manifest.json -sigfile dist/windows-manifest.sig
           test "$(wc -c < dist/windows-manifest.sig | tr -d ' ')" = 64
           # Host builds get a fourth manifest (schema 4): the static
-          # herdr-remote-control Herdr UI copies onto other machines.
+          # sheprd-remote-control Sheprd copies onto other machines.
           python3 scripts/update-manifest.py create dist "$VERSION" --hosts
           "$OPENSSL" pkeyutl -sign -rawin -inkey "$KEY_DIR/private.pem" -passin pass: \
             -in dist/host-manifest.json -out dist/host-manifest.sig
@@ -714,8 +724,8 @@ jobs:
         with:
           name: macos-signed
           path: |
-            dist/Herdr-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg
-            dist/herdr-gpui-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz
+            dist/Sheprd-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg
+            dist/sheprd-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz
             dist/update-manifest.json
             dist/update-manifest.sig
             dist/package-manifest.json
@@ -732,7 +742,7 @@ jobs:
     # Like sign: the Windows signing jobs may be skipped, never failed.
     if: >-
       !cancelled() &&
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       needs.validate.result == 'success' && needs.sign.result == 'success' &&
       needs.linux.result == 'success' && needs.metadata.result == 'success' &&
@@ -794,35 +804,35 @@ jobs:
       - uses: ./.github/actions/sign-artifacts # zizmor: ignore[self-repository]
         with:
           working-directory: dist
-          files: Herdr-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.deb Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.rpm Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.pkg.tar.zst Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.tar.gz Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.deb Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.rpm Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.pkg.tar.zst Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc.zip Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc.zip Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc-setup.exe Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc-setup.exe Herdr-${{ needs.validate.outputs.version }}.cdx.json herdr-gpui-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz herdr-gpui-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu-update.tar.gz herdr-gpui-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu-update.tar.gz update-manifest.json update-manifest.sig package-manifest.json package-manifest.sig windows-manifest.json windows-manifest.sig herdr-remote-control-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-musl herdr-remote-control-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-musl host-manifest.json host-manifest.sig
+          files: Sheprd-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.deb Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.rpm Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.pkg.tar.zst Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.tar.gz Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.deb Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.rpm Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.pkg.tar.zst Sheprd-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc.zip Sheprd-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc.zip Sheprd-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc-setup.exe Sheprd-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc-setup.exe Sheprd-${{ needs.validate.outputs.version }}.cdx.json sheprd-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu-update.tar.gz sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu-update.tar.gz update-manifest.json update-manifest.sig package-manifest.json package-manifest.sig windows-manifest.json windows-manifest.sig sheprd-remote-control-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-musl sheprd-remote-control-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-musl host-manifest.json host-manifest.sig
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
-            dist/Herdr-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg
-            dist/Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz
-            dist/Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.deb
-            dist/Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.rpm
-            dist/Herdr-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.pkg.tar.zst
-            dist/Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.tar.gz
-            dist/Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.deb
-            dist/Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.rpm
-            dist/Herdr-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.pkg.tar.zst
-            dist/Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc.zip
-            dist/Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc.zip
-            dist/Herdr-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc-setup.exe
-            dist/Herdr-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc-setup.exe
-            dist/Herdr-${{ needs.validate.outputs.version }}.cdx.json
-            dist/herdr-gpui-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz
-            dist/herdr-gpui-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu-update.tar.gz
-            dist/herdr-gpui-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu-update.tar.gz
+            dist/Sheprd-${{ needs.validate.outputs.version }}-universal-apple-darwin.dmg
+            dist/Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.tar.gz
+            dist/Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.deb
+            dist/Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.rpm
+            dist/Sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu.pkg.tar.zst
+            dist/Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.tar.gz
+            dist/Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.deb
+            dist/Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.rpm
+            dist/Sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu.pkg.tar.zst
+            dist/Sheprd-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc.zip
+            dist/Sheprd-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc.zip
+            dist/Sheprd-${{ needs.validate.outputs.version }}-x86_64-pc-windows-msvc-setup.exe
+            dist/Sheprd-${{ needs.validate.outputs.version }}-aarch64-pc-windows-msvc-setup.exe
+            dist/Sheprd-${{ needs.validate.outputs.version }}.cdx.json
+            dist/sheprd-${{ needs.validate.outputs.version }}-macos-universal.app.tar.gz
+            dist/sheprd-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-gnu-update.tar.gz
+            dist/sheprd-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-gnu-update.tar.gz
             dist/update-manifest.json
             dist/update-manifest.sig
             dist/package-manifest.json
             dist/package-manifest.sig
             dist/windows-manifest.json
             dist/windows-manifest.sig
-            dist/herdr-remote-control-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-musl
-            dist/herdr-remote-control-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-musl
+            dist/sheprd-remote-control-${{ needs.validate.outputs.version }}-x86_64-unknown-linux-musl
+            dist/sheprd-remote-control-${{ needs.validate.outputs.version }}-aarch64-unknown-linux-musl
             dist/host-manifest.json
             dist/host-manifest.sig
       - run: python3 scripts/release/artifact-manifest.py create "$VERSION" dist
@@ -836,7 +846,7 @@ jobs:
   publish:
     needs: [validate, attest, changelog]
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -847,7 +857,7 @@ jobs:
       VERSION: ${{ needs.validate.outputs.version }}
       RELEASE_SHA: ${{ needs.validate.outputs.sha }}
       CHANNEL: ${{ needs.validate.outputs.channel }}
-      GH_REPO: penso/herdr-gpui
+      GH_REPO: sheprd-labs/sheprd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -873,7 +883,7 @@ jobs:
           tag = "v" + os.environ["VERSION"]
           for path in (f"git/ref/tags/{tag}", f"releases/tags/{tag}"):
               request = urllib.request.Request(
-                  f"https://api.github.com/repos/penso/herdr-gpui/{path}",
+                  f"https://api.github.com/repos/sheprd-labs/sheprd/{path}",
                   headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
                            "Accept": "application/vnd.github+json"})
               try:
@@ -884,12 +894,12 @@ jobs:
               else:
                   raise SystemExit(f"Refusing existing {path}")
           PY
-          gh api repos/penso/herdr-gpui/git/refs -X POST \
+          gh api repos/sheprd-labs/sheprd/git/refs -X POST \
             -f "ref=refs/tags/v$VERSION" -f "sha=$RELEASE_SHA"
           # A beta is a GitHub prerelease: /releases/latest, and so the stable
           # updater channel and Homebrew, never see it until promote.yml flips it.
           channel=()
-          title="Herdr UI $VERSION"
+          title="Sheprd $VERSION"
           if [[ "$CHANNEL" == beta ]]; then
             channel=(--prerelease --latest=false)
             title="$title (beta)"
@@ -910,7 +920,7 @@ jobs:
           gh release download "v$VERSION" --dir verified
           cmp dist/SHA256SUMS verified/SHA256SUMS
           python3 scripts/release/artifact-manifest.py verify "$VERSION" verified
-          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          [[ "$(gh api "repos/sheprd-labs/sheprd/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
           gh release edit "v$VERSION" --draft=false
 
   # Betas stay out of the tap; promote.yml updates it when one is promoted.
@@ -918,7 +928,7 @@ jobs:
   homebrew:
     needs: [validate, publish]
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       needs.validate.outputs.channel == 'stable'
     runs-on: ubuntu-24.04
@@ -928,7 +938,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.validate.outputs.version }}
-      GH_REPO: penso/herdr-gpui
+      GH_REPO: sheprd-labs/sheprd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -941,15 +951,20 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
-          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          [[ "$(gh api "repos/sheprd-labs/sheprd/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
           gh release download "v$VERSION" --dir final \
-            --pattern "Herdr-$VERSION-universal-apple-darwin.dmg" --pattern SHA256SUMS
+            --pattern "Sheprd-$VERSION-universal-apple-darwin.dmg" --pattern SHA256SUMS
           checksum=$(python3 scripts/release/artifact-manifest.py dmg "$VERSION" final)
           bash scripts/release/render-cask.sh "$VERSION" "$checksum" > rendered-cask.rb
+          bash scripts/release/render-cask.sh "$VERSION" "$checksum" sheprd > rendered-sheprd-cask.rb
       - name: Commit only the tap cask using its dedicated deploy key
         env:
           HOMEBREW_TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
-        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-cask.rb
+        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-cask.rb penso/homebrew-tap
+      - name: Commit only the Sheprd tap cask using its dedicated deploy key
+        env:
+          HOMEBREW_TAP_SSH_KEY: ${{ secrets.SHEPRD_TAP_SSH_KEY }}
+        run: bash scripts/release/update-homebrew.sh "$VERSION" rendered-sheprd-cask.rb sheprd-labs/homebrew-tap
 
   # Keep these steps identical in release.yml and promote.yml. Betas never
   # reach winget: promote.yml submits one when it is promoted. Neither do
@@ -957,7 +972,7 @@ jobs:
   winget:
     needs: [validate, publish]
     if: >-
-      github.repository == 'penso/herdr-gpui' && github.ref == 'refs/heads/main' &&
+      github.repository == 'sheprd-labs/sheprd' && github.ref == 'refs/heads/main' &&
       github.actor == 'penso' && github.triggering_actor == 'penso' &&
       needs.validate.outputs.windows_signed == 'true' &&
       needs.validate.outputs.channel == 'stable'
@@ -968,7 +983,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.validate.outputs.version }}
-      GH_REPO: penso/herdr-gpui
+      GH_REPO: sheprd-labs/sheprd
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -981,7 +996,7 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "v$VERSION" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
-          [[ "$(gh api "repos/penso/herdr-gpui/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
+          [[ "$(gh api "repos/sheprd-labs/sheprd/git/ref/tags/v$VERSION" --jq .object.sha)" == "$RELEASE_SHA" ]]
           gh release download "v$VERSION" --dir final --pattern SHA256SUMS
       - name: Install the pinned Komac
         run: python3 scripts/release/winget.py install-komac "$RUNNER_TEMP/komac" > "$RUNNER_TEMP/komac-path"

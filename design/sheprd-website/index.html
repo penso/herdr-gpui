@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheprd · ten website concepts</title>
+<meta name="description" content="Ten website concepts for sheprd.org, with a positioning brief and a source-backed feature inventory.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/paw.svg">
+<link rel="stylesheet" href="assets/base.css">
+<link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="concept-ribbon"><span><strong>Design exploration</strong>: local mockups for sheprd.org, not deployed.</span><span>Pick a concept, shortlist a few, add a note, then send it.</span></div>
+
+<header class="wrap g-head">
+  <img src="assets/paw.svg" alt="Sheprd paw mark" width="64" height="64">
+  <div>
+    <h1>sheprd.org: ten website concepts</h1>
+    <p>Each concept tells the same, source-checked product story with a different structure, typography and visual direction. They share one feature dataset, so every status badge (shipped, opt-in, experimental, TestFlight, planned) matches across all ten.</p>
+  </div>
+</header>
+
+<main id="main">
+  <section class="wrap g-intro" aria-label="Brief">
+    <div>
+      <h2>Positioning</h2>
+      <p>“Run a team of coding agents from one native window.” Sheprd is presented on its own merits as a complete workbench for coding agents on macOS, Linux and Windows. It is not pitched as “a window for Herdr”: Herdr now has its own app.</p>
+    </div>
+    <div>
+      <h2>Read first</h2>
+      <ul>
+        <li><a href="README.md">Positioning brief</a>: audience, hero copy, workflows, and facts to confirm</li>
+        <li><a href="FEATURE-INVENTORY.md">Feature inventory</a>: about 70 features with source refs, status, platform gaps, and codebase metrics</li>
+      </ul>
+    </div>
+    <div>
+      <h2>Honesty rules</h2>
+      <p>Screenshots are real (demo data, pre-rename “Herdr UI” build). Hand-drawn UI is tagged <span class="tag-illustration">Illustration</span>. Commands match main after the Sheprd rename; sheprd.org and Sheprd-named builds are not out yet.</p>
+    </div>
+  </section>
+
+  <section class="wrap g-syn" id="the-guide" aria-labelledby="syn-h">
+    <a class="g-syn-shot" href="concepts/11-the-guide/index.html" aria-label="Open concept 11, The Guide"><img src="assets/thumbs/11-the-guide.jpg" alt="" width="960" height="600"></a>
+    <div>
+      <p class="g-syn-kicker">New · built from your shortlist</p>
+      <h2 id="syn-h">11 · The Guide</h2>
+      <p>One page combining what you marked, with 04 Atlas as its docs companion.</p>
+      <ul>
+        <li><b>01 Field Guide:</b> serif, cream paper, chapters, drop cap</li>
+        <li><b>02 Control Room:</b> the tagged agent board</li>
+        <li><b>03 The Loop:</b> the six-step rail, as Chapter II</li>
+        <li><b>05 Bento:</b> the tilted hero window</li>
+        <li><b>07 Everywhere:</b> the headline, machines, phone and platform list</li>
+        <li><b>08 and 10:</b> the feature table and directory, one set of filters</li>
+        <li><b>10 Keynote:</b> Get Sheprd at the bottom</li>
+      </ul>
+      <p class="g-actions"><a class="btn btn-primary" href="concepts/11-the-guide/index.html">Open The Guide</a> <a class="btn" href="concepts/04-atlas/index.html">Open docs companion</a> <a class="btn" href="herdrui-rename/index.html">Open herdrui.dev rename page</a></p>
+    </div>
+  </section>
+
+  <section class="wrap g-rec" id="recommendation" aria-labelledby="rec-h">
+    <h2 id="rec-h">Recommendation</h2>
+    <p id="rec-lede">My shortlist, written after building all ten:</p>
+    <ol id="rec-list"></ol>
+  </section>
+
+  <section class="wrap" aria-labelledby="concepts-h">
+    <div class="g-tools">
+      <h2 id="concepts-h">The ten concepts</h2>
+      <div class="g-view" role="group" aria-label="Preview style">
+        <button type="button" data-view="thumb" aria-pressed="true">Screenshots</button>
+        <button type="button" data-view="live" aria-pressed="false">Live previews</button>
+      </div>
+    </div>
+    <ul class="g-grid" id="grid"></ul>
+  </section>
+
+  <section class="wrap g-compare" aria-labelledby="cmp-h">
+    <h2 id="cmp-h">Comparison</h2>
+    <p>Ratings are my judgment, out of five. “Breadth” is how much of the feature set a visitor meets without searching. “Scan” is how fast someone skimming gets the point.</p>
+    <div class="g-table-wrap" tabindex="0" role="region" aria-label="Comparison table, scrolls sideways">
+      <table>
+        <thead><tr><th scope="col">#</th><th scope="col">Concept</th><th scope="col">Look</th><th scope="col">Structure</th><th scope="col">Hero</th><th scope="col">Breadth</th><th scope="col">Scan</th><th scope="col">Upkeep</th></tr></thead>
+        <tbody id="cmp"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="g-send" role="region" aria-label="Send your choice">
+  <div class="wrap">
+    <p id="pick-summary">Nothing picked yet.</p>
+    <label class="sr-only" for="note">Note for the agent</label>
+    <textarea id="note" placeholder="Optional note, for example: 03's rail with 05's tiles, warmer palette…"></textarea>
+    <button type="button" class="btn btn-primary" id="send" disabled>Send choice</button>
+    <span class="g-status" id="status" aria-live="polite"></span>
+  </div>
+</div>
+
+<footer class="wrap g-foot">
+  <p>Sheprd is an independent, open-source (Apache-2.0) client for Herdr's terminal servers (herdr server and herdr-core). It is not made, endorsed or supported by the <a href="https://herdr.dev">Herdr project</a>. Mockups live in <code>design/sheprd-website/</code> and are static files ready for Netlify.</p>
+</footer>
+
+<script src="gallery.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import tempfile
 import unittest
+from unittest import mock
 
 
 def load(name, path):
@@ -18,7 +19,7 @@ WINGET = load("winget", SCRIPTS / "winget.py")
 VERSION = "20260920.3"
 X64 = "a" * 64
 ARM64 = "b" * 64
-RELEASE = f"https://github.com/penso/herdr-gpui/releases/download/v{VERSION}"
+RELEASE = f"https://github.com/sheprd-labs/sheprd/releases/download/v{VERSION}"
 VERSION_MANIFEST = f"""# Created with komac v2.16.0
 PackageIdentifier: Penso.HerdrUI
 PackageVersion: '{VERSION}'
@@ -30,7 +31,7 @@ LOCALE = f"""PackageIdentifier: Penso.HerdrUI
 PackageVersion: '{VERSION}'
 PackageLocale: en-US
 Publisher: Herdr UI
-PackageName: Herdr UI
+PackageName: Sheprd
 Tags:
 - terminal
 ManifestType: defaultLocale
@@ -47,13 +48,13 @@ UpgradeBehavior: install
 ProductCode: '{{7FA70894-4FC0-4923-BDCB-B05F7475610A}}_is1'
 Installers:
 - Architecture: x64
-  InstallerUrl: {RELEASE}/Herdr-{VERSION}-x86_64-pc-windows-msvc-setup.exe
+  InstallerUrl: {RELEASE}/Sheprd-{VERSION}-x86_64-pc-windows-msvc-setup.exe
   InstallerSha256: {X64.upper()}
   AppsAndFeaturesEntries:
-  - DisplayName: Herdr UI
+  - DisplayName: Sheprd
     Publisher: Herdr UI
 - Architecture: arm64
-  InstallerUrl: {RELEASE}/Herdr-{VERSION}-aarch64-pc-windows-msvc-setup.exe
+  InstallerUrl: {RELEASE}/Sheprd-{VERSION}-aarch64-pc-windows-msvc-setup.exe
   InstallerSha256: {ARM64.upper()}
 ManifestType: installer
 ManifestVersion: 1.10.0
@@ -73,10 +74,10 @@ class WingetTests(unittest.TestCase):
         self.write(VERSION_MANIFEST, LOCALE, INSTALLER)
 
     def write_sums(self, arm64):
-        lines = [f"{'c' * 64}  Herdr-{VERSION}-x86_64-pc-windows-msvc.zip",
-                 f"{X64}  Herdr-{VERSION}-x86_64-pc-windows-msvc-setup.exe"]
+        lines = [f"{'c' * 64}  Sheprd-{VERSION}-x86_64-pc-windows-msvc.zip",
+                 f"{X64}  Sheprd-{VERSION}-x86_64-pc-windows-msvc-setup.exe"]
         if arm64:
-            lines.append(f"{ARM64}  Herdr-{VERSION}-aarch64-pc-windows-msvc-setup.exe")
+            lines.append(f"{ARM64}  Sheprd-{VERSION}-aarch64-pc-windows-msvc-setup.exe")
         self.sums.write_text("\n".join(lines) + "\n")
 
     def write(self, version, locale, installer):
@@ -86,11 +87,11 @@ class WingetTests(unittest.TestCase):
 
     def test_installers_come_from_the_published_checksums(self):
         self.assertEqual(WINGET.installers(VERSION, self.sums), {
-            "x64": (f"{RELEASE}/Herdr-{VERSION}-x86_64-pc-windows-msvc-setup.exe", X64),
-            "arm64": (f"{RELEASE}/Herdr-{VERSION}-aarch64-pc-windows-msvc-setup.exe", ARM64)})
+            "x64": (f"{RELEASE}/Sheprd-{VERSION}-x86_64-pc-windows-msvc-setup.exe", X64),
+            "arm64": (f"{RELEASE}/Sheprd-{VERSION}-aarch64-pc-windows-msvc-setup.exe", ARM64)})
         self.write_sums(arm64=False)
         self.assertEqual(list(WINGET.installers(VERSION, self.sums)), ["x64"])
-        self.sums.write_text(f"{ARM64}  Herdr-{VERSION}-aarch64-pc-windows-msvc-setup.exe\n")
+        self.sums.write_text(f"{ARM64}  Sheprd-{VERSION}-aarch64-pc-windows-msvc-setup.exe\n")
         with self.assertRaisesRegex(ValueError, "x86_64"):
             WINGET.installers(VERSION, self.sums)
         with self.assertRaises(ValueError):
@@ -106,7 +107,7 @@ class WingetTests(unittest.TestCase):
         WINGET.check(VERSION, self.sums, self.output)
 
     def test_rejects_manifests_that_differ_from_the_release(self):
-        x64_url = f"{RELEASE}/Herdr-{VERSION}-x86_64-pc-windows-msvc-setup.exe"
+        x64_url = f"{RELEASE}/Sheprd-{VERSION}-x86_64-pc-windows-msvc-setup.exe"
         cases = {
             "machine scope": ("installer", "Scope: user", "Scope: machine"),
             "not inno": ("installer", "InstallerType: inno", "InstallerType: exe"),
@@ -120,6 +121,7 @@ class WingetTests(unittest.TestCase):
             "other version": ("version", f"'{VERSION}'", "'20260920.2'"),
             "new publisher": ("locale", "Publisher: Herdr UI", "Publisher: Someone"),
             "no publisher": ("locale", "Publisher: Herdr UI\n", ""),
+            "old display name": ("locale", "PackageName: Sheprd", "PackageName: Herdr UI"),
         }
         for name, (manifest, old, new) in cases.items():
             texts = {"version": VERSION_MANIFEST, "locale": LOCALE, "installer": INSTALLER}
@@ -134,11 +136,45 @@ class WingetTests(unittest.TestCase):
             WINGET.check(VERSION, self.sums, self.output)
 
     def test_identity_matches_the_installer(self):
-        script = (SCRIPTS / "herdr-gpui.iss").read_text()
+        script = (SCRIPTS / "sheprd.iss").read_text()
         self.assertIn(f"\nAppPublisher={WINGET.PUBLISHER}\n", script)
         app_id = re.search(r"^AppId=\{(\{[0-9A-F-]+\})$", script, re.M)[1]
         self.assertEqual(WINGET.PRODUCT_CODE, app_id + "_is1")
         self.assertIn("\nPrivilegesRequired=lowest\n", script)
+
+    def test_submit_refreshes_branding_without_changing_upgrade_identity(self):
+        output = self.work / "generated"
+
+        def komac(arguments, **_):
+            if arguments[1] == "update":
+                self.output = output
+                self.directory = output / "manifests/p/Penso/HerdrUI" / VERSION
+                self.directory.mkdir(parents=True)
+                self.write(VERSION_MANIFEST, LOCALE.replace("PackageName: Sheprd", "PackageName: Herdr UI")
+                           + "PackageUrl: https://herdrui.dev\n", INSTALLER)
+            else:
+                self.assertEqual(arguments, ["komac", "submit", "--yes", str(self.directory)])
+
+        with mock.patch.dict(WINGET.os.environ, {"GITHUB_TOKEN": "test"}), \
+                mock.patch.object(WINGET, "published", return_value=True), \
+                mock.patch.object(WINGET.subprocess, "run", side_effect=komac) as run:
+            WINGET.submit(VERSION, self.sums, Path("komac"), output)
+        self.assertEqual([call.args[0][1] for call in run.call_args_list], ["update", "submit"])
+        locale = (self.directory / "Penso.HerdrUI.locale.en-US.yaml").read_text()
+        self.assertIn("Publisher: Herdr UI\n", locale)
+        self.assertIn("PackageName: Sheprd\n", locale)
+        self.assertIn("PackageUrl: https://sheprd.org\n", locale)
+
+    def test_submit_without_a_token_warns_and_runs_nothing(self):
+        env = {key: value for key, value in WINGET.os.environ.items() if key != "GITHUB_TOKEN"}
+        with mock.patch.dict(WINGET.os.environ, env, clear=True), \
+                mock.patch.object(WINGET, "published") as published, \
+                mock.patch.object(WINGET.subprocess, "run") as run, \
+                mock.patch("builtins.print") as printed:
+            WINGET.submit(VERSION, self.sums, Path("komac"), self.work / "unused")
+        published.assert_not_called()
+        run.assert_not_called()
+        self.assertIn("::warning::WINGET_TOKEN is not set", printed.call_args.args[0])
 
     def test_the_komac_pin_is_one_exact_release(self):
         self.assertRegex(WINGET.KOMAC_SHA256, r"^[0-9a-f]{64}$")

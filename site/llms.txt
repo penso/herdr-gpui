@@ -1,27 +1,31 @@
-# Herdr UI
+# Sheprd
 
-> Herdr UI (repository and package name `herdr-gpui`) is a native desktop client for macOS, Linux and Windows that attaches to a Herdr daemon (https://herdr.dev/) the user installed separately. It paints the daemon's terminal panes in a native window, next to Herdr's own TUI; both show the same sessions. It is an unaffiliated project, not made or supported by Herdr.
+> Sheprd is an independent native Rust/GPUI workspace for coding agents on macOS, Linux and Windows. It brings terminals, worktrees, agent status, issue dispatch, fan-out, code review, checkpoints, browser annotations and remote machines into one app. Website: https://sheprd.org. Repository: https://github.com/sheprd-labs/sheprd.
 
-Herdr UI never installs or upgrades the Herdr daemon; it only starts an already-installed `herdr server` when the session is absent. Install Herdr itself first by following https://herdr.dev/, then install Herdr UI with the command for the platform. Each command installs the latest stable release and needs no version number. Do not use `cargo install herdr-gpui`: the app is not published on crates.io.
+Releases include upstream herdr-core for local terminals. Sheprd can also attach to an existing Herdr daemon and starts an installed `herdr server` when needed. It does not replace or upgrade a personal daemon or automatically move existing Herdr sessions to herdr-core. Closing the app leaves daemon sessions running. Herdr / Herdr Code is a separate project with its own app; Sheprd is not affiliated with, endorsed by or supported by it.
 
-## Install
+Platform support varies by feature: embedded browser/VS Code tabs and page annotations are available on macOS and Windows; Linux opens pages in the system browser. Teleport, fan-out and dispatch are offered on macOS and Linux with supported hosts, not custom socket, WSL or development sessions. See the feature documentation for supported agents and host types.
 
-- macOS 14.2 or newer, Apple Silicon or Intel, with Homebrew: `brew install penso/tap/herdr-gpui`, then `open -a Herdr`. The cask installs the signed, notarized app, and the app updates itself through Homebrew.
-- Linux, x86_64 or ARM64, with APT, DNF or pacman and glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40, current Arch, or later): `curl -fsSL https://herdrui.dev/install.sh | sh`. The script downloads the `.deb`, `.rpm` or Arch package for the machine from GitHub Releases, checks its published SHA-256, and installs it with `sudo`, so it needs a terminal where sudo can ask for a password, or root. Afterwards run `herdr-gpui` or open Herdr UI from the applications menu. Source: https://herdrui.dev/install.sh
-- Linux with Nix: `nix run github:penso/herdr-gpui`.
-- Windows, x86_64 or ARM64, in PowerShell: `irm https://herdrui.dev/install.ps1 | iex`. It installs `herdr-gpui.exe` (the app and its command line) and `herdr-gpui-launcher.exe` (opens the app without a console window) for the current user under `%LOCALAPPDATA%\Programs\Herdr UI`, adds that directory to the user PATH and creates a Start menu shortcut to the launcher. Each release also has a per-user `Herdr-VERSION-TARGET-setup.exe` installer that installs the same files and adds an uninstaller under Settings > Apps. When Windows signing is set up for a release, its executables, installers and their uninstaller are Authenticode-signed, and a signed copy updates itself from Check for Updates by running the signed installer of the new release. An unsigned copy never updates itself: run the command or a newer installer again to update. Source: https://herdrui.dev/install.ps1
-- Any platform from source, with Rust installed: `git clone https://github.com/penso/herdr-gpui.git && cd herdr-gpui && just install`, which puts `herdr-gpui` in Cargo's bin directory. Linux and Windows need extra build dependencies listed in the README.
+Native ACP chat is on by default, and `[features] acp_chats = false` turns it off. Cloud integrations are unavailable on Windows, and some providers are experimental; check the provider documentation before choosing one. WSL devices are Windows-only. Code review currently reads local daemon checkouts.
 
-Manual downloads (macOS `.dmg`, Linux packages and tarballs, Windows zips), with checksums, Sigstore signatures and build provenance: https://github.com/penso/herdr-gpui/releases/latest
+## Install the latest stable release
 
-## Docs
+- macOS 14.2 or newer, Apple Silicon or Intel: `brew install sheprd-labs/tap/sheprd`, then `open -a Sheprd`. The app is signed and notarized. Homebrew installations update through Homebrew.
+- Linux x86_64 or ARM64, APT/DNF/pacman, glibc 2.39 or newer: `curl -fsSL https://sheprd.org/install.sh | sh`. The script verifies the release package's published SHA-256 and installs with sudo (or as root). Run `sheprd` or open Sheprd from the applications menu. The package name remains `herdr-gpui`, with a real `/usr/bin/herdr-gpui` compatibility entrypoint. Read the script: https://sheprd.org/install.sh.
+- Linux with Nix: `nix run github:sheprd-labs/sheprd`.
+- Windows x86_64 or ARM64, PowerShell: `irm https://sheprd.org/install.ps1 | iex`. Installs `sheprd.exe`, `sheprd-launcher.exe` and companion helpers for the current user, adds the installation directory to PATH and creates a Sheprd Start menu shortcut. The directory remains `%LOCALAPPDATA%\Programs\Herdr UI` for existing installs; `herdr-gpui.exe` and `herdr-gpui-launcher.exe` remain compatibility aliases. Both `sheprd://` and `herdr-gpui://` links open the app. Quit the app before updating; the script gracefully stops installed automation processes and refuses to replace other running installed helpers. It does not stop terminal daemons or change settings/services. Read the script: https://sheprd.org/install.ps1.
+- Source: `git clone https://github.com/sheprd-labs/sheprd.git && cd sheprd && just install`. See the README for platform build dependencies. Do not use `cargo install sheprd`: it is not published on crates.io.
 
-- [README](https://github.com/penso/herdr-gpui#readme): install options, platform notes, and how the client connects to the daemon
-- [GUI scope and configuration](https://github.com/penso/herdr-gpui/blob/main/crates/herdr-gpui/README.md): features, configuration file, keyboard shortcuts, devices and WSL
-- [App updates](https://github.com/penso/herdr-gpui/blob/main/docs/updating.md): how each install method updates
-- [Herdr](https://herdr.dev/): the daemon and TUI this app connects to
+Manual downloads: https://github.com/sheprd-labs/sheprd/releases/latest. Assets use `Sheprd-VERSION-TARGET` with macOS `.dmg`, Linux `.tar.gz`, `.deb`, `.rpm`, `.pkg.tar.zst`, and Windows `.zip` or `-setup.exe` suffixes. Releases include SHA-256 checksums. Signed Windows installations can update through Check for Updates using the signed installer; unsigned copies require running the installation command or a newer installer again.
 
-## Optional
+Companion binaries use `sheprd-acp`, `sheprd-automate`, `sheprd-nearby`, and `sheprd-remote-control`. The bundled upstream terminal daemon keeps its `herdr-core` name. Stable configuration locations, environment keys and platform application identities are retained for compatibility.
 
-- [Releases](https://github.com/penso/herdr-gpui/releases): all stable and beta releases
-- [Issues](https://github.com/penso/herdr-gpui/issues): bug reports for Herdr UI only; report daemon bugs to Herdr
+## Documentation
+
+- [README](https://github.com/sheprd-labs/sheprd#readme): installation and platform notes
+- [App scope and configuration](https://github.com/sheprd-labs/sheprd/blob/main/crates/sheprd-gpui/README.md): features, shortcuts, devices and WSL
+- [App updates](https://github.com/sheprd-labs/sheprd/blob/main/docs/updating.md): update behavior by install method
+- [Command line](https://github.com/sheprd-labs/sheprd/blob/main/docs/cli.md): control the running app with `sheprd`
+- [Releases](https://github.com/sheprd-labs/sheprd/releases): stable and beta releases
+- [Issues](https://github.com/sheprd-labs/sheprd/issues): Sheprd bug reports
+- [Herdr](https://herdr.dev/): separate upstream project

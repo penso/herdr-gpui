@@ -6,12 +6,12 @@ new worktree with a prompt. They are meant to be written by an agent from a
 sentence ("every day at 3am, pull main, run validation, then start an agent
 with this prompt") and reviewed by a person before they run.
 
-`herdr-automate` runs them: a small daemon per host that keeps going when
-Herdr UI quits and when Herdr itself is killed, and a command line for
-people, agents, and Herdr UI's Automations section.
+`sheprd-automate` runs them: a small daemon per host that keeps going when
+Sheprd quits and when Herdr itself is killed, and a command line for
+people, agents, and Sheprd's Automations section.
 
-Herdr UI's Automations section can be turned off in Settings, Sidebar, Show
-automations (`[sidebar] automations = false`). Herdr UI then leaves the
+Sheprd's Automations section can be turned off in Settings, Sidebar, Show
+automations (`[sidebar] automations = false`). Sheprd then leaves the
 section off the activity bar and neither reads nor starts any host's daemon;
 daemons already running keep running their approved scripts.
 
@@ -42,7 +42,7 @@ herdr.manual({ name = "deploy-preview" }, function(fire)
 end)
 ```
 
-`herdr-automate check nightly.luau` prints:
+`sheprd-automate check nightly.luau` prints:
 
 ```text
 nightly
@@ -152,22 +152,22 @@ the Luau type checker is not part of the embedded interpreter.
 On each host:
 
 ```sh
-herdr-automate repo add ~/code/app       # load ~/code/app/.herdr/automations
-herdr-automate install-service           # keep the daemon running (or: start)
-herdr-automate approve ~/code/app/.herdr/automations/nightly.luau
-herdr-automate status
+sheprd-automate repo add ~/code/app       # load ~/code/app/.herdr/automations
+sheprd-automate install-service           # keep the daemon running (or: start)
+sheprd-automate approve ~/code/app/.herdr/automations/nightly.luau
+sheprd-automate status
 ```
 
 The daemon starts by itself once there is something to run: `approve`,
 `run-now` and `repo add` (for a repository with scripts) start it when none
-is running, and Herdr UI starts it on any host that lists scripts with no
+is running, and Sheprd starts it on any host that lists scripts with no
 daemon up, retrying at most every five minutes. It rescans scripts every 30
 seconds. A script runs only once it is
 approved on that host, and only in the exact text approved: any change,
 including one a `git pull` brings in, waits for approval again. A person
 approves either at a terminal, typing the script's name after reading its
-plan, or in Herdr UI's dialog. `approve` refuses when its input is not a
-terminal or when the pane it runs in runs an agent, and `--hash` (Herdr UI's
+plan, or in Sheprd's dialog. `approve` refuses when its input is not a
+terminal or when the pane it runs in runs an agent, and `--hash` (Sheprd's
 path) is refused inside any Herdr pane. This guards against mistakes, not a
 hostile agent: an agent with a shell could run commands directly.
 
@@ -229,17 +229,26 @@ unit (Linux) or a logon task (Windows), printing what it writes. No admin
 rights are needed. The service runs the executable that installed it, with
 that command's `PATH` and state and config directories, so a
 `HERDR_AUTOMATE_HOME` or XDG directory set only in your shell still applies;
-run `install-service` again after moving either. The daemon restarts after a crash; `shutdown` stops it
-after its runs and it stays stopped. On a headless Linux host, a user unit
+run `install-service` again after moving either. The daemon restarts after a crash; `shutdown` stops its
+runs, then the daemon, and it stays stopped. On a headless Linux host, a user unit
 only runs while the user is logged in unless lingering is on
 (`loginctl enable-linger`); `install-service` does not change that for you.
+
+Updating the app does not update a running daemon. When a daemon runs another
+version than the app ships, its host's card under Automations offers
+**Update to VERSION**, on this computer as on a remote host: it copies the
+app's build into `~/.local/share/herdr-automate/bin/VERSION/`, relinks
+`~/.local/bin`, stops the daemon, and starts the new one through a service that
+names the copy. `shutdown` stops every run, so the update refuses while any is
+going: try again once they finish. On Windows, this computer's card offers
+no update, because the copy needs a shell.
 
 State lives in `~/.local/state/herdr-automate` (`%LOCALAPPDATA%` on
 Windows): the database, the daemon's log, and each run's step output.
 
 ## For agents
 
-Herdr UI installs a `herdr-automations` skill beside its browser skill (once
+Sheprd installs a `herdr-automations` skill beside its browser skill (once
 you agree), so agents in your panes know how to write a script, check its
 plan, and ask you to approve it. Its source is
 [`skills/herdr-automations/SKILL.md`](../skills/herdr-automations/SKILL.md).

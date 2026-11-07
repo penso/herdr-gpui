@@ -1,25 +1,26 @@
 #!/bin/sh
-# Installs the latest stable Herdr UI release on Linux through the system
-# package manager (APT, DNF or pacman), served at https://herdrui.dev/install.sh:
+# Installs the latest stable Sheprd release on Linux through the system
+# package manager (APT, DNF or pacman), served at https://sheprd.org/install.sh:
 #
-#   curl -fsSL https://herdrui.dev/install.sh | sh
+#   curl -fsSL https://sheprd.org/install.sh | sh
 #
 # It downloads the package for this machine from GitHub Releases, checks it
-# against the release's published SHA-256, and installs it with sudo. It never
-# installs, starts or upgrades the Herdr daemon. The package manager owns the
-# result, so later updates come from the app's App Updates panel.
+# against the release's published SHA-256, and installs it with sudo. The package
+# includes upstream herdr-core but never replaces a personal Herdr daemon.
+# The package manager owns the result (package name herdr-gpui is retained for
+# compatibility), so later updates come from the app's App Updates panel.
 set -eu
 
-repo=penso/herdr-gpui
+repo=sheprd-labs/sheprd
 
 fail() {
-  printf 'herdr-ui install: %s\n' "$1" >&2
+  printf 'sheprd install: %s\n' "$1" >&2
   exit 1
 }
 
 case $(uname -s) in
   Linux) ;;
-  Darwin) fail 'on macOS, run: brew install penso/tap/herdr-gpui' ;;
+  Darwin) fail 'on macOS, run: brew install sheprd-labs/tap/sheprd' ;;
   *) fail "unsupported system $(uname -s); see https://github.com/$repo#install" ;;
 esac
 
@@ -51,7 +52,7 @@ case $version in
   *) fail "unexpected latest release URL: $latest" ;;
 esac
 
-file=Herdr-$version-$arch-unknown-linux-gnu.$ext
+file=Sheprd-$version-$arch-unknown-linux-gnu.$ext
 base=https://github.com/$repo/releases/download/v$version
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
@@ -78,7 +79,4 @@ case $ext in
   pkg.tar.zst) $sudo pacman -U --noconfirm "$tmp/$file" ;;
 esac
 
-printf 'Installed Herdr UI %s. Start it from your applications menu or run: herdr-gpui\n' "$version"
-if ! command -v herdr >/dev/null 2>&1; then
-  printf 'Herdr UI needs the Herdr daemon, which is not on PATH. Install it from https://herdr.dev/\n'
-fi
+printf 'Installed Sheprd %s. Start it from your applications menu or run: sheprd\n' "$version"

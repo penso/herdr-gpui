@@ -1,8 +1,8 @@
 # Command line
 
-`herdr-gpui` is also a command line for the running Herdr UI. Herdr's own
+`sheprd` is also a command line for the running Sheprd app. Herdr's own
 `herdr` CLI drives the daemon: workspaces, terminal tabs, panes, agents,
-worktrees, and notifications. `herdr-gpui COMMAND` covers what only this
+worktrees, and notifications. `sheprd COMMAND` covers what only this
 client knows or draws: its windows, its own tabs (pages, code, reviews,
 Devices), the activity bar's sections, worktree notes, checkpoints, forwarded
 ports, and its settings.
@@ -11,20 +11,20 @@ Commands reach the app over a socket of its own,
 `$XDG_STATE_HOME/herdr/gpui/control.sock` (default `~/.local/state/`), which
 only your user can open; on Windows, over a named pipe (see
 [Windows](#windows)). An agent on an SSH host has no path to it; there,
-the app's shim at `~/.local/state/herdr/gpui/bin/herdr-gpui` offers
+the app's shim at `~/.local/state/herdr/gpui/bin/sheprd` offers
 `browser open` and `browser reload` through Herdr workspace metadata (see
-[remote agents](../crates/herdr-gpui/README.md#letting-agents-open-pages)),
+[remote agents](../crates/sheprd-gpui/README.md#letting-agents-open-pages)),
 and every other command exits 8. A few commands work from files alone and
 need no running app; they say so below.
 
-On Windows, `herdr-gpui.exe` is a console program, so a shell waits for it and
+On Windows, `sheprd.exe` is a console program, so a shell waits for it and
 sees its exit code; the installers put its directory on `PATH`. The Start menu
-opens `herdr-gpui-launcher.exe` instead, which starts it without a console
+opens `sheprd-launcher.exe` instead, which starts it without a console
 window.
 
 ```sh
-herdr-gpui --help              # every command
-herdr-gpui COMMAND --help      # one command
+sheprd --help              # every command
+sheprd COMMAND --help      # one command
 ```
 
 ## Options and output
@@ -45,7 +45,7 @@ Every command accepts:
 | 0 | Done |
 | 1 | Refused or failed |
 | 2 | Invalid arguments, or an address or file that cannot be shown |
-| 3 | Herdr UI is not running |
+| 3 | Sheprd is not running |
 | 4 | Nothing yet: no notes, no event, no pull request, condition not met |
 | 5 | The window, workspace, tab, host, or file is not there |
 | 6 | A dialog is open in the window, or the app is busy |
@@ -68,7 +68,7 @@ Every command accepts:
 | `window detach\|reconnect` | Detach from, or reconnect to, the selected host |
 | `ui sidebar\|statusbar [on\|off\|toggle]` | For this window and session |
 | `ui font-size +\|-\|reset\|POINTS` | The terminal font size for this session |
-| `ui panel workspaces\|overview\|pull-requests\|issues\|security\|automations\|ports\|usage` | Show an activity bar section: Workspaces with the sidebar expanded, Overview of what needs you on every host, the focused workspace's pull requests or issues across the window, the vulnerability reports and Dependabot alerts of your repositories, every host's automation scripts and runs, every port this computer's user listens on, or every host's plan usage |
+| `ui panel workspaces\|overview\|pull-requests\|issues\|tasks\|security\|automations\|ports\|usage` | Show an activity bar section: Workspaces with the sidebar expanded, Overview of what needs you on every host, the focused workspace's pull requests or issues across the window, Beads tasks across the window's projects, the vulnerability reports and Dependabot alerts of your repositories, every host's automation scripts and runs, every port this computer's user listens on, or every host's plan usage |
 | `run COMMAND` | Any app command by its `[keybindings]` name, as the palette runs it |
 | `commands` | The names `run` accepts (no app needed) |
 | `open DIR` | Open a folder as **Open Project** in the palette does, starting the app if needed (below) |
@@ -82,12 +82,12 @@ rooted in it or starts one, on the window's local Herdr, and brings the window
 forward. A dialog open in the window refuses it (exit 6); the palette shows
 anything that goes wrong after that, such as the folder disappearing.
 
-When no Herdr UI is running and no `--window` is given, `open` starts the app,
-as a plain `herdr-gpui` would, then asks again every quarter second until the
+When no Sheprd is running and no `--window` is given, `open` starts the app,
+as a plain `sheprd` would, then asks again every quarter second until the
 window has connected to the local Herdr and accepts the folder. It waits at
 most 20 seconds after starting the app, then exits 7. Explorer's **Open in
-Herdr UI** entry, which both Windows installers add, runs this command through
-`herdr-gpui-launcher.exe`, so no console window appears.
+Sheprd** entry, which both Windows installers add, runs this command through
+`sheprd-launcher.exe`, so no console window appears.
 
 ### The app's own tabs
 
@@ -95,7 +95,7 @@ Herdr UI** entry, which both Windows installers add, runs this command through
 | --- | --- |
 | `tab [list]` | Pages, code, reviews, and Devices tabs with IDs |
 | `tab focus\|close ID` | |
-| `browser open\|reload\|feedback` | See [browser tabs](../crates/herdr-gpui/README.md#browser-tabs) |
+| `browser open\|reload\|feedback` | See [browser tabs](../crates/sheprd-gpui/README.md#browser-tabs) |
 | `browser list` | Page tabs only |
 | `browser navigate ID URL` | Load another address in a page tab |
 | `browser back\|forward ID` | |
@@ -106,7 +106,7 @@ Herdr UI** entry, which both Windows installers add, runs this command through
 | `code edit FILE[:LINE]` | Your terminal editor, in a new pane beside yours |
 | `devices` | The Devices overview |
 | `orchestrator [--repo PATH]` | Show the Issues section narrowed to your checkout's project, or PATH's |
-| `orchestrator items\|issues\|prs` | What it last synced, from its local database (no app needed) |
+| `orchestrator items\|issues\|prs\|tasks` | What it last synced, from its local database (no app needed); `tasks` is the repository's Beads tasks, with each one's assignee, priority, and blockers in `--json` |
 | `review` | The review of your workspace's uncommitted changes |
 | `px0 [open]` | Open or focus px0 on your local workspace's checkout (macOS and Windows) |
 
@@ -115,7 +115,7 @@ workbench or starts an installed px0; `config set px0.url http://127.0.0.1:7777/
 selects an existing workbench, and `config unset px0.url` restores automatic
 discovery. `--json` returns the opened tab ID and workspace. Exit 0 means the
 tab opened; startup errors appear in that tab with Retry. Remote workspaces
-and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/README.md#px0).
+and builds without embedded pages return exit 8. See [px0](../crates/sheprd-gpui/README.md#px0).
 
 ### Worktrees and agents
 
@@ -123,6 +123,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | --- | --- |
 | `notes [list]` | Every worktree note |
 | `notes get\|clear`, `notes set TEXT` | The note on your checkout (its repository and branch) |
+| `worktree [status]`, `worktree mute\|unmute` | Whether your worktree's notifications are muted; silence them or let them through again |
 | `feedback [--wait S]` | Notes the user sent your pane from pages, reviews, or terminals |
 | `checkpoint [list]` | Checkpoints of the current directory's checkout, newest first (no app needed) |
 | `checkpoint create [LABEL]` | Take one now (no app needed) |
@@ -132,16 +133,32 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `scripts setup\|run` | Run one in a new tab; an unseen script still asks first. Archive removes the worktree, so it stays behind the app's delete dialog |
 | `teleport --to HOST` | Open the teleport dialog for your linked worktree, reviewing HOST; you confirm there |
 | `fan-out PROMPT [--agent KIND[:N]]...` | Open the fan-out dialog prefilled; you start it there |
-| `chat [status]` | The `herdr-acp` chat panes of the window's host, this machine or an SSH host: agent, status, model, context window use, and whether the chat view or the terminal shows |
+| `chat [status]` | The `sheprd-acp` chat panes of the window's host, this machine or an SSH host: agent, status, model, context window use, and whether the chat view or the terminal shows |
+| `chat convert [--pane ID]` | Move the terminal agent in your pane (or ID, else the focused one) into a `sheprd-acp` chat in the same pane, keeping its conversation (see [Moving a terminal agent into a chat](rich-chat.md#moving-a-terminal-agent-into-a-chat)). Returns once the move has started; `chat` shows the chat when it attaches. Exits 6 while the agent works, 5 when the pane has no terminal agent, and 8 for an agent or pane that cannot move |
 | `chat show\|hide\|toggle [--pane ID]` | Show the native chat view over your pane (or ID, else the focused one), or its terminal |
-| `chat new AGENT [--pane ID]` | Open a tab running a `herdr-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). On an SSH host the tab runs that host's `herdr-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). With no Herdr pane to go by, as when called from a Herdr 2 pane, a Herdr 2 tab in the active group splits its pane in use with the chat instead (see [Chats in Herdr 2 panes](rich-chat.md#chats-in-herdr-2-panes)); its pane id in `chat` is `core:` and the terminal's. Exits 8 when `herdr-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`herdr-acp agents` lists those that are) |
+| `chat new AGENT [--pane ID]` | Open a tab running a `sheprd-acp` chat with a built-in agent (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`) in the workspace and folder of your pane (or ID). On an SSH host the tab runs that host's `sheprd-acp` (see [Chats on SSH hosts](#chats-on-ssh-hosts)). With no Herdr pane to go by, as when called from a Herdr 2 pane, a Herdr 2 tab in the active group splits its pane in use with the chat instead (see [Chats in Herdr 2 panes](rich-chat.md#chats-in-herdr-2-panes)); its pane id in `chat` is `core:` and the terminal's. Exits 8 when `sheprd-acp` is missing here, the host cannot be reached, or the agent is not installed on it (`sheprd-acp agents` lists those that are) |
 
 ### Hosts
 
+A focus asked for on a connected host the window is not showing, such as
+`herdr --machine Homelab agent focus NAME`, switches the window to that host
+when it moves the host to another tab. The daemon reports nothing when the
+target is already its focused tab, or when the focus only moves between panes
+of one tab, so a script that must end up on the host runs `sheprd host select`
+as well. A focus waits until you stop typing or composing, so keys meant for
+one host do not reach another, and choosing a host yourself in the meantime
+cancels it. It leaves the host restored at the next launch as it was.
+It does not take the window while a dialog is open, or from another window
+already showing the host. A tab or workspace opening on a background host does
+not take it either.
+
 | Command | What it does |
 | --- | --- |
-| `host [list]`, `host select ID` | The window's hosts; show another one |
+| `host [list]`, `host select ID` | The window's hosts, with their tags; show another one |
+| `host mute\|unmute [HOST]` | Silence a host's notifications as a whole, or let them through again, by ID or label; absent, your host. Works while it is offline |
+| `host tag ID [TAG...]` | Replace the tags that group a host in the sidebar and on paired phones; with no tags, clear them. Each computer's daemon keeps its own tags, so a host away gets the edit once it is back |
 | `pr [status]\|checks\|comments\|open` | Your branch's pull request, on the window's selected host. `comments` needs your workspace focused |
+| `pr quota` | Last reported GraphQL points used, limit, and remaining, plus rate-limit retry delays for the window's GitHub accounts. `--json` returns records merged by login: known observations are preferred, then the latest reset window and greatest usage within it; retry delays retain the longest pause. Usage is never summed across credentials. Unavailable quotas are `null`. No network request is made. |
 | `ports [list]` | Ports your workspace listens on, and forwards |
 | `ports forward\|unforward PORT` | Forward a port of the SSH host to this machine |
 | `ports open PORT` | `localhost:PORT` in a tab, forwarded first when remote |
@@ -151,7 +168,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `usage`, `system` | Plan usage and load of the selected host: CPU, memory, disk, uptime, and its GPU and video memory when it has one and `show_gpu_load` or `show_sidebar_gpu_load` is on |
 | `security` | Private vulnerability reports in triage (titles and metadata only, never their descriptions) and open Dependabot alerts of the github.com repositories the window's workspaces hold, most severe first, as the Security section last read them. Exits 4 when there are none |
 | `security open REPOSITORY ALERT\|GHSA` | Show alert `ALERT` (its number) or private report `GHSA` (its GHSA ID) of `REPOSITORY` (`owner/name`) in the Security section, beside its list: the fix, the advisory, and the dependency for an alert; the report, its advisory draft, and its conversation for a report. Only items the section lists open; nothing on GitHub changes |
-| `automation approve FILE [--host ID]` | Open the approval of the automation script `FILE` in the app: its plan, caps, and content hash, for the user to approve or cancel. The command approves nothing. `FILE` is the script's path on the host as `herdr-automate status` lists it, resolved here when it exists; `--host` names the host by ID or label (default: your workspace's host). Exits 5 when the host does not list the script, 6 while a dialog is open or the host was not read yet |
+| `automation approve FILE [--host ID]` | Open the approval of the automation script `FILE` in the app: its plan, caps, and content hash, for the user to approve or cancel. The command approves nothing. `FILE` is the script's path on the host as `sheprd-automate status` lists it, resolved here when it exists; `--host` names the host by ID or label (default: your workspace's host). Exits 5 when the host does not list the script, 6 while a dialog is open or the host was not read yet |
 | `cloud [list]` | Saved cloud machines (no app needed) |
 | `cloud add` | Open the settings that add one |
 | `cloud images [list]` | Sandbox images built from projects' recipes (no app needed) |
@@ -175,7 +192,7 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 | `config reload` | Reread Herdr's config and this app's |
 | `theme [list]`, `theme set NAME` | The app theme. A device's terminal theme is `config set devices.ID.theme NAME`, with the ID from `host list` minus its `ssh:` prefix |
 | `font [list]`, `font set NAME`, `font reset` | |
-| `language [status]`, `language list`, `language set system\|TAG` | The language set and the locale Herdr UI shows, the languages there are, each with its name in itself as Settings > General lists it, or save the `language` setting (a BCP 47 tag; `en-XA` and `en-XB` are pseudo-locales). Only `status` asks the app, and without it reports what it would show |
+| `language [status]`, `language list`, `language set system\|TAG` | The language set and the locale Sheprd shows, the languages there are, each with its name in itself as Settings > General lists it, or save the `language` setting (a BCP 47 tag; `en-XA` and `en-XB` are pseudo-locales). Only `status` asks the app, and without it reports what it would show |
 | `keybinds [list]`, `keybinds check` | Shortcuts; custom Herdr commands this client cannot reach |
 | `caffeine [status]`, `caffeine on\|off\|toggle [--for 30m]` | Keep the machine awake |
 | `sound [list]`, `sound play [done\|request]`, `bell` | Sounds play at `sound.volume` percent (`config set sound.volume 30`) |
@@ -188,10 +205,10 @@ and builds without embedded pages return exit 8. See [px0](../crates/herdr-gpui/
 Boat's sandbox lifetime uses the existing config commands:
 
 ```sh
-herdr-gpui config set boat.auto_stop never
-herdr-gpui config set boat.auto_stop '"7200"'  # seconds, stored as a string
-herdr-gpui config get boat.auto_stop --json
-herdr-gpui cloud add                         # open Cloud devices, then choose Boat
+sheprd config set boat.auto_stop never
+sheprd config set boat.auto_stop '"7200"'  # seconds, stored as a string
+sheprd config get boat.auto_stop --json
+sheprd cloud add                         # open Cloud devices, then choose Boat
 ```
 
 `never` is the default: billing continues until the sandbox is stopped in Boat.
@@ -206,18 +223,18 @@ What a new cloud machine installs and runs when it first connects is set the
 same way, and `cloud setup` runs it again on one already saved:
 
 ```sh
-herdr-gpui config set cloud.agents '["claude", "opencode"]'
-herdr-gpui config set cloud.setup '"git config --global pull.rebase true"'
-herdr-gpui config set cloud.coder.agents '[]'   # nothing extra on Coder
-herdr-gpui cloud setup herdr-tidy-lark-aa
+sheprd config set cloud.agents '["claude", "opencode"]'
+sheprd config set cloud.setup '"git config --global pull.rebase true"'
+sheprd config set cloud.coder.agents '[]'   # nothing extra on Coder
+sheprd cloud setup herdr-tidy-lark-aa
 ```
 
 An agent that needs machines of its own asks for them with `cloud create`,
 then follows the batch with `cloud wait` until each is ready:
 
 ```sh
-herdr-gpui cloud create coder --count 10 --template dev --json
-herdr-gpui cloud wait 3 --timeout 600 --json   # again while it exits 4
+sheprd cloud create coder --count 10 --template dev --json
+sheprd cloud wait 3 --timeout 600 --json   # again while it exits 4
 ```
 
 The window asks once, saying how many machines of which provider, how they
@@ -232,7 +249,7 @@ destroy it like any other. Coder takes `--template` and `--preset` by name
 (without them, the deployment's only template and its default preset);
 Azure makes a Container Apps sandbox with `--sandbox`. Boat and Railway make
 their machines one at a time. Providers are named by key or name: azure,
-boat, coder, container, daytona, opensandbox, railway, sprites. The device
+boat, boxd, coder, container, daytona, opensandbox, railway, sprites. The device
 list keeps at most 64 cloud devices, counting those being made.
 
 `cloud exec` runs one command on a saved cloud machine, named as for
@@ -251,22 +268,22 @@ credentials there, such as Coder's external auth or a `gh auth login` in the
 `[cloud]` setup script.
 
 ```sh
-herdr-gpui cloud exec herdr-tidy-lark-aa --cwd ~/code -- git clone https://github.com/me/app
-herdr-gpui cloud exec herdr-tidy-lark-aa --cwd ~/code/app -- sh -c 'git switch -c fix && make test'
+sheprd cloud exec herdr-tidy-lark-aa --cwd ~/code -- git clone https://github.com/me/app
+sheprd cloud exec herdr-tidy-lark-aa --cwd ~/code/app -- sh -c 'git switch -c fix && make test'
 ```
 
 An agent that worked on cloud machines removes them with `cloud destroy`,
 naming each by its machine ID, host ID, or label (a label two machines share
 is refused), or with `--batch` every machine a batch named. The window asks
-once, listing each machine and what happens to it: Azure, Boat, Coder,
+once, listing each machine and what happens to it: Azure, Boat, boxd, Coder,
 Container, Daytona, OpenSandbox, and Sprites delete the machine with what
 goes with it and then forget it here;
 Railway VMs cannot be deleted from this app, so they are only forgotten and
 expire on their own. A dialog already open refuses the request (exit 6).
 
 ```sh
-herdr-gpui cloud destroy coder:5d1c… herdr-tidy-lark-aa --json
-herdr-gpui cloud wait 3 --timeout 600 --json
+sheprd cloud destroy coder:5d1c… herdr-tidy-lark-aa --json
+sheprd cloud wait 3 --timeout 600 --json
 ```
 
 `cloud wait` exits 0 once every machine went as asked, 1 once the batch
@@ -275,8 +292,11 @@ while it is still waiting for the user or running. A batch keeps going if the
 command or the window that asked goes away; the app keeps the last 32.
 
 Focus-on-hover between split terminal panes is on by default. Disable it with
-`herdr-gpui config set focus_follows_mouse false`.
+`sheprd config set focus_follows_mouse false`.
 The change applies live; `config get focus_follows_mouse` reads it back.
+
+An unnamed tab shows its number. To show its agent's terminal title instead,
+run `sheprd config set tab_labels.agent_title true`.
 
 ### Remote control
 
@@ -289,7 +309,7 @@ The change applies live; `config get focus_follows_mouse` reads it back.
 | `remote revoke DEVICE` | Ask in the window to revoke a paired device, named by its ID from `remote devices` or its name (a name two devices share is refused); the user confirms there |
 
 Remote control is turned on in Settings > Remote control, or with
-`config set remote.enabled true`; the app then installs the `herdr-remote-control`
+`config set remote.enabled true`; the app then installs the `sheprd-remote-control`
 daemon as a user service and keeps it in line with the `[remote]` settings.
 While it is off, `remote status` says so and exits 0; `pair`, `devices`,
 `revoke`, and `restart` exit 1. A dialog already open in the window refuses `pair` and
@@ -298,8 +318,8 @@ for `status`, where `status` is the daemon's own report, and
 `{"devices": [...]}` for `devices`.
 
 ```sh
-herdr-gpui remote status --json
-herdr-gpui remote revoke d_6f1c
+sheprd remote status --json
+sheprd remote revoke d_6f1c
 ```
 
 ### Mods
@@ -311,7 +331,7 @@ herdr-gpui remote revoke d_6f1c
 | `mod open NAME` | Show a mod's activity bar app in the window's body. Exits 5 when no running mod of that name has one, 8 while the activity bar is off |
 | `mod panel [show\|hide\|toggle]` | The panel of mod sections on the window's right: whether it shows and which mods have a section, or show, hide, or toggle it (also the `toggle_mod_panel` command) |
 | `mod logs NAME [--lines N]` | The last lines (default 50, at most 200) the mod wrote with `herdr.log`. Exits 4 when there are none |
-| `mod check DIR` | Load a mod folder, run its `init` and `view` once against an empty state, and report what it draws. Runs here; Herdr UI need not run. Exits 1 with the error and its line when the mod is invalid |
+| `mod check DIR` | Load a mod folder, run its `init` and `view` once against an empty state, and report what it draws. Runs here; Sheprd need not run. Exits 1 with the error and its line when the mod is invalid |
 
 Mods are folders of sandboxed Luau in `<config>/herdr/gpui-mods/` that add
 status bar items, sidebar sections, and palette commands; saving a file
@@ -320,8 +340,8 @@ for `list`, each with `name`, `places`, `commands`, `drawn`, and `error`, and
 `{"name", "valid", "elements", "places", "hash", "log"}` for `check`.
 
 ```sh
-herdr-gpui mod check ~/.config/herdr/gpui-mods/agents
-herdr-gpui mod logs agents --lines 20
+sheprd mod check ~/.config/herdr/gpui-mods/agents
+sheprd mod logs agents --lines 20
 ```
 
 ### Events
@@ -336,9 +356,9 @@ get only newer events. A cursor from an earlier run of the app gets every
 event the new run has kept, so a restart never hides events.
 
 ```sh
-herdr-gpui events --follow --kind tab_closed
-herdr-gpui wait tab-closed 12 --timeout 600
-herdr-gpui wait window            # also waits for the app to start
+sheprd events --follow --kind tab_closed
+sheprd wait tab-closed 12 --timeout 600
+sheprd wait window            # also waits for the app to start
 ```
 
 ## What stays in the app
@@ -351,24 +371,26 @@ a phone for remote control, and revoking one open the app's own dialog
 pointed at your checkout, the machines, or the device named, and the user
 confirms there.
 `cloud exec` asks nothing because it confirms nothing: it is the agent's own
-work, run on a machine the user saved. Nothing here installs, starts, stops,
-or upgrades Herdr on this computer, and `update` never installs the app;
+work, run on a machine the user saved. Launching the app or requesting a new
+terminal can start the appropriate local daemon: installed Herdr 1, or a
+user-installed/bundled herdr-core. Existing Herdr 1 sessions are not migrated,
+and no command upgrades a personal daemon. `update` never installs the app;
 `cloud create` installs Herdr only on the machines the user confirmed, as
 creating them in Settings does.
 
 Adding an SSH or local network device has no command: the Add Device dialog
-runs it. Its setup workspace runs `herdr-gpui __device-setup-attach SOCKET`,
+runs it. Its setup workspace runs `sheprd __device-setup-attach SOCKET`,
 an internal helper that shows the setup the app runs (see the Native Shell
 README's "Local Network access"); it is not a command to call yourself, and
 the socket it names is single use.
 
-Scrollback search is not repeated here: `herdr pane read` covers it. Moving a
+Herdr 1 scrollback search is not repeated here: `herdr pane read` covers it. Moving a
 window and capturing a whole window have no command because the app cannot
 do them.
 
 ## Links
 
-`herdr-gpui URL`, with a `herdr-gpui://` link as the only argument, hands the
+`sheprd URL`, with a `herdr-gpui://` link as the only argument, hands the
 link to the running app, or starts the app and follows it once it is
 connected. On Windows the installer registers the scheme, so the shell runs
 this for jump list entries, notification clicks, and links in other apps.
@@ -412,7 +434,7 @@ has. Pipe names are shared by all users of the machine, so:
   (`PIPE_REJECT_REMOTE_CLIENTS`), so it never joins a pipe someone else made
   and nothing off this machine can reach it. If another user made the name
   first, the app does not listen, and logs why.
-- `herdr-gpui COMMAND` opens the pipe at identification level, so the server
+- `sheprd COMMAND` opens the pipe at identification level, so the server
   can learn who called but cannot act as you, and checks that the pipe's
   owner is you before it sends anything. A pipe someone else owns is refused
   with exit 1.
@@ -424,28 +446,28 @@ can hold.
 
 ## Chats on SSH hosts
 
-Native chat views are opt-in: turn on **ACP chats** in Settings > General
-(`acp_chats = true` under `[features]`). While it is off, chat panes show
-their terminal and `chat new` exits 8.
+Native chat views are on by default: turn off **ACP chats** in Settings >
+General (`acp_chats = false` under `[features]`) to go without them. While it
+is off, chat panes show their terminal and `chat new` exits 8.
 
-Set the reading width with `herdr-gpui config set chat.max_width 1200`, or use
+Set the reading width with `sheprd config set chat.max_width 1200`, or use
 `0` for the full available width. Bounded widths range from 320 to 4000 logical
 pixels; the default is 800. Settings > General offers the same width slider and
 **Full-width chat** switch.
 
-A chat on an SSH host shows in the native chat view like a local one. Herdr UI
-runs `herdr-acp connect ID` on the host over the same SSH connection it uses
+A chat on an SSH host shows in the native chat view like a local one. Sheprd
+runs `sheprd-acp connect ID` on the host over the same SSH connection it uses
 for Herdr, and the program there sees an ordinary client on its own socket.
 Starting a chat there (`chat new`, or the workspace menu) runs the host's own
-`herdr-acp`, looked for in `~/.herdr/bin`, `~/.cargo/bin`, `~/.local/bin`, and
+`sheprd-acp`, looked for in `~/.herdr/bin`, `~/.cargo/bin`, `~/.local/bin`, and
 then the remote `PATH`. Install it on the host with:
 
 ```sh
-cargo install --locked --git https://github.com/penso/herdr-gpui herdr-acp --root ~/.herdr
+cargo install --locked --git https://github.com/sheprd-labs/sheprd sheprd-acp --root ~/.herdr
 ```
 
 The workspace menu offers only the agents whose own ACP command is installed
-on the host, as `herdr-acp agents` lists them; an agent `npx` would have to
+on the host, as `sheprd-acp agents` lists them; an agent `npx` would have to
 download first is left out.
 
 Files dropped on a remote chat are copied to the host first, into private
@@ -453,7 +475,7 @@ temporary files under its `${TMPDIR:-/tmp}`, and the copies are attached.
 
 ### Existing agent rendering
 
-Set `chat.render_existing = true` along with `features.acp_chats = true` to
+Set `chat.render_existing = true`, with `features.acp_chats` left on, to
 render existing Linux Codex/Claude conversations automatically. The original
 terminal input remains interactive in the same pane. `chat status --json`
 reports `input_mode` (`chat`, `terminal`, or `read_only`) and `session_id`;

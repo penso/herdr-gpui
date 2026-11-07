@@ -1,0 +1,818 @@
+//! The pairing dialog in a window: the daemon's pairing link as a QR with a
+//! countdown ring, the addresses and certificate fingerprint under it, then
+//! the approval step with the phone's name and matching code. The requests
+//! run off the UI thread; [`super::pairing`] decides what each answer means.
+
+use super::{
+    nearby,
+    pairing::{Answer, Pairing, Phase, spaced},
+    qr::{self, Qr},
+    supervisor::{Client, Lease, Supervisor},
+};
+use crate::{SheprdWindow, config::Theme, fonts::StyledFont, i18n::fl, menu::Page};
+use gpui::{prelude::*, *};
+use sheprd_remote_control::control::Request;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+mod addresses;
+mod hosts;
+
+/// What keeps this computer advertised for nearby pairing.
+type NearbyAdvert = nearby::Advert;
+
+/// How often the dialog looks for a request to send, and redraws its ring.
+const STEP: Duration = Duration::from_millis(250);
+/// The QR's side.
+const QR_SIDE: f32 = 176.;
+/// The countdown ring's diameter.
+const RING: f32 = 14.;
+/// The longest device name shown; the daemon bounds it too.
+const NAME_LIMIT: usize = 64;
+/// The page that always carries the current iPhone and iPad beta invite.
+const IPHONE_APP: &str = "https://sheprd.org/testflight/";
+
+/// The open pairing dialog. Dropping it, as closing the dialog does, cancels
+/// a pairing still open at the daemon, so its token stops working at once.
+pub(crate) struct PairingDialog {
+    pub(crate) pairing: Pairing,
+    /// The other machines the phone may be allowed on too.
+    pub(crate) hosts: Vec<hosts::Choice>,
+    addresses_scroll: ScrollHandle,
+    other_addresses: crate::motion::Toggle,
+    client: Option<Client>,
+    _addresses_task: Option<Task<()>>,
+    _lease: Option<Lease>,
+    /// The nearby advertisement while an offer shows; dropping it stops
+    /// advertising this computer for pairing.
+    _nearby: Option<NearbyAdvert>,
+    _task: Option<Task<()>>,
+}
+
+impl PairingDialog {
+    /// Cancels a pairing still open at the daemon, as closing the dialog
+    /// does. The dialog may still be drawn as it goes; it asks nothing more,
+    /// and no longer keeps the daemon polled at the open dialog's pace.
+    pub(crate) fn close(&mut self) {
+        self._nearby = None;
+        self._lease = None;
+        self._task = None;
+        self._addresses_task = None;
+        if let (Some(client), Some(id)) = (self.client.take(), self.pairing.id())
+            && self.pairing.cancels_on_close()
+        {
+            client.notify(Request::CancelPairing { id: id.clone() });
+        }
+    }
+}
+
+impl Drop for PairingDialog {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
+impl SheprdWindow {
+    /// Opens the pairing dialog, unless another page holds the window.
+    pub(crate) fn open_remote_pairing(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        self.open_remote_pairing_at(None, window, cx)
+    }
+
+    pub(crate) fn open_remote_pairing_at(
+        &mut self,
+        address: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.menu.page.is_some() || !self.open_menu(window, cx) {
+            return false;
+        }
+        let client = Supervisor::client(cx);
+        let pairing = match (&client, self.config.remote.enabled) {
+            (_, false) => Pairing::new(false),
+            (Some(_), true) => Pairing::new(true),
+            (None, true) => Pairing::failed(fl!("remote-pair-unavailable-here")),
+        };
+        let task = client
+            .clone()
+            .filter(|_| self.config.remote.enabled)
+            .map(|client| Self::drive_pairing(client, cx));
+        self.menu.remote_pairing = Some(PairingDialog {
+            pairing: pairing.with_address(address),
+            hosts: hosts::choices(Supervisor::hosts(cx)),
+            addresses_scroll: ScrollHandle::new(),
+            other_addresses: crate::motion::Toggle::default(),
+            client,
+            _addresses_task: None,
+            _lease: Supervisor::lease(cx),
+            _nearby: None,
+            _task: task,
+        });
+        self.menu.page = Some(Page::RemoteControl);
+        cx.notify();
+        true
+    }
+
+    /// Sends what the pairing asks for, one request at a time, until the
+    /// dialog closes.
+    fn drive_pairing(client: Client, cx: &mut Context<Self>) -> Task<()> {
+        cx.spawn(async move |this, cx| {
+            loop {
+                let next = this.update(cx, |view, cx| {
+                    let dialog = view.menu.remote_pairing.as_mut()?;
+                    let now = Instant::now();
+                    let ticket = dialog.pairing.next(now);
+                    if ticket.is_none() && dialog.pairing.countdown(now).is_some() {
+                        cx.notify();
+                    }
+                    Some(ticket)
+                });
+                let ticket = match next {
+                    Ok(Some(Some(ticket))) => ticket,
+                    Ok(Some(None)) => {
+                        cx.background_executor().timer(STEP).await;
+                        continue;
+                    }
+                    Ok(None) | Err(_) => return,
+                };
+                let result = client.request(ticket.request.clone()).await;
+                let open = this.update(cx, |view, cx| {
+                    let Some(dialog) = view.menu.remote_pairing.as_mut() else {
+                        return false;
+                    };
+                    let new_offer = matches!(
+                        &result,
+                        Ok(sheprd_remote_control::control::Response::Offer(_))
+                    );
+                    dialog.pairing.receive(&ticket, result, Instant::now());
+                    if new_offer {
+                        dialog.reveal_selected_address();
+                    }
+                    // Nearby pairing runs while an offer or its claim shows,
+                    // and stops once the pairing is answered or fails.
+                    match dialog.pairing.phase() {
+                        Phase::Showing { offer, .. } if dialog._nearby.is_none() => {
+                            let offer = (offer.fingerprint.clone(), offer.url.clone());
+                            dialog._nearby = Self::advertise_nearby(offer, cx);
+                        }
+                        Phase::Showing { .. } | Phase::Claimed { .. } => {}
+                        _ => dialog._nearby = None,
+                    }
+                    if matches!(dialog.pairing.phase(), Phase::Approved { .. }) {
+                        Supervisor::refresh(cx);
+                    }
+                    cx.notify();
+                    true
+                });
+                if !matches!(open, Ok(true)) {
+                    return;
+                }
+            }
+        })
+    }
+
+    /// Advertises this computer for nearby pairing while the offer shows,
+    /// through the app's one `herdr-nearby` helper, which relays each
+    /// phone's frame to the daemon. Nothing starts when the helper is not
+    /// beside the executable.
+    fn advertise_nearby(
+        (fingerprint, url): (String, String),
+        cx: &mut Context<Self>,
+    ) -> Option<NearbyAdvert> {
+        let line = nearby::advertise(&nearby::host_name(), &fingerprint, nearby::port(&url));
+        nearby::Station::advertise_pairing(cx, line)
+    }
+
+    fn answer_pairing(&mut self, allow: bool, cx: &mut Context<Self>) {
+        if let Some(dialog) = &mut self.menu.remote_pairing {
+            let ticked = hosts::ticked(&dialog.hosts);
+            dialog.pairing.answer_with_hosts(allow, ticked);
+            cx.notify();
+        }
+    }
+
+    fn restart_pairing(&mut self, cx: &mut Context<Self>) {
+        if let Some(dialog) = &mut self.menu.remote_pairing {
+            dialog.pairing.restart();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn remote_pairing_key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        window.prevent_default();
+        if event.keystroke.modifiers != Modifiers::default() {
+            return;
+        }
+        let key = event.keystroke.key.as_str();
+        if key == "escape" {
+            self.dismiss_menu(window, cx);
+            return;
+        }
+        let Some(dialog) = &self.menu.remote_pairing else {
+            return;
+        };
+        let Phase::Showing { offer, .. } = dialog.pairing.phase() else {
+            return;
+        };
+        // The dialog has no focus stops, so the app link has its own key.
+        if key == "enter" {
+            cx.open_url(IPHONE_APP);
+            return;
+        }
+        let count = offer.addresses.len();
+        if count == 0 {
+            return;
+        }
+        let selected = offer
+            .addresses
+            .iter()
+            .position(|address| offer.url.starts_with(&format!("{address}/")))
+            .unwrap_or(0);
+        let index = match key {
+            "up" => (selected + count - 1) % count,
+            "down" => (selected + 1) % count,
+            "home" => 0,
+            "end" => count - 1,
+            "right" | "left" => {
+                self.set_other_addresses(key == "right", cx);
+                return;
+            }
+            _ => return,
+        };
+        let address = offer.addresses[index].clone();
+        self.select_pairing_address(&address, cx);
+    }
+
+    fn select_pairing_address(&mut self, address: &str, cx: &mut Context<Self>) {
+        let Some(dialog) = &mut self.menu.remote_pairing else {
+            return;
+        };
+        if let Err(error) = dialog.pairing.select_address(address) {
+            tracing::warn!(%error, "Could not select pairing address");
+            return;
+        }
+        dialog.reveal_selected_address();
+        cx.notify();
+    }
+
+    /// Whether a remote control dialog is open, for the menu's layout.
+    pub(crate) fn remote_dialog_open(&self) -> bool {
+        matches!(
+            self.menu.page,
+            Some(Page::RemoteControl | Page::RevokeDevice | Page::RemoteHostAsk)
+        )
+    }
+
+    /// The open remote control dialog's body.
+    pub(crate) fn remote_page(&self, cx: &mut Context<Self>) -> Option<Div> {
+        match self.menu.page {
+            Some(Page::RemoteControl) => Some(self.render_pairing(cx)),
+            Some(Page::RevokeDevice) => Some(self.render_revoke(cx)),
+            Some(Page::RemoteHostAsk) => Some(self.render_host_ask(cx)),
+            _ => None,
+        }
+    }
+
+    fn render_pairing(&self, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        let Some(dialog) = &self.menu.remote_pairing else {
+            return div();
+        };
+        let body = match dialog.pairing.phase() {
+            Phase::Off => self.pairing_message(
+                &fl!("remote-pair-off"),
+                &fl!("remote-pair-off-detail"),
+                Some((
+                    "remote-pair-settings",
+                    fl!("remote-pair-open-settings"),
+                    Action::Settings,
+                )),
+                cx,
+            ),
+            Phase::Requesting => self.pairing_offer(None, cx),
+            Phase::Showing { .. } => self.pairing_offer(Some(&dialog.pairing), cx),
+            Phase::Claimed {
+                device_name,
+                code,
+                app,
+                answer,
+                ..
+            } => self.pairing_claim(device_name, code, app.as_deref(), *answer, cx),
+            Phase::Approved { device_name } => self.pairing_message(
+                &fl!("remote-pair-approved", device = name(device_name)),
+                &fl!("remote-pair-approved-detail"),
+                Some(("remote-pair-done", fl!("remote-pair-done"), Action::Close)),
+                cx,
+            ),
+            Phase::Denied => self.pairing_message(
+                &fl!("remote-pair-denied"),
+                &fl!("remote-pair-denied-detail"),
+                Some(("remote-pair-close", fl!("remote-pair-close"), Action::Close)),
+                cx,
+            ),
+            Phase::Expired { device_name } => self.pairing_message(
+                &fl!("remote-pair-expired", device = name(device_name)),
+                &fl!("remote-pair-expired-detail"),
+                Some((
+                    "remote-pair-again",
+                    fl!("remote-pair-new-code"),
+                    Action::Restart,
+                )),
+                cx,
+            ),
+            Phase::Failed { message } => self.pairing_message(
+                &fl!("remote-pair-failed"),
+                &crate::notifications::safe_text(message, 300),
+                Some((
+                    "remote-pair-retry",
+                    fl!("remote-pair-try-again"),
+                    Action::Restart,
+                )),
+                cx,
+            ),
+        };
+        div()
+            .debug_selector(|| "remote-pair".into())
+            .flex()
+            .flex_col()
+            .min_h_0()
+            .p(px(8.))
+            .gap(px(12.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(fl!("remote-pair-title")),
+                    )
+                    .child(
+                        div()
+                            .id("remote-pair-x")
+                            .debug_selector(|| "remote-pair-x".into())
+                            .role(Role::Button)
+                            .aria_label(fl!("remote-pair-close"))
+                            .p(px(4.))
+                            .rounded(px(crate::config::corners::SMALL))
+                            .cursor_pointer()
+                            .hover(|button| button.bg(rgb(theme.active)))
+                            .child(
+                                svg()
+                                    .path("icons/close.svg")
+                                    .size(px(12.))
+                                    .text_color(rgb(theme.subtext())),
+                            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.dismiss_menu(window, cx);
+                            })),
+                    ),
+            )
+            .child(body)
+    }
+
+    /// The QR with what the phone needs beside it; a placeholder square
+    /// until the daemon has answered.
+    fn pairing_offer(&self, pairing: Option<&Pairing>, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        let showing = pairing.and_then(|pairing| match pairing.phase() {
+            Phase::Showing { offer, qr, .. } => Some((offer, qr.clone())),
+            _ => None,
+        });
+        let countdown = pairing.and_then(|pairing| pairing.countdown(Instant::now()));
+        let square = match &showing {
+            Some((_, qr)) => qr_square(qr.clone()).into_any_element(),
+            None => div()
+                .size(px(QR_SIDE))
+                .rounded(px(crate::config::corners::CONTROL))
+                .bg(rgb(theme.active))
+                .into_any_element(),
+        };
+        let details = match &showing {
+            Some((offer, _)) => div()
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(fl!("remote-pair-scan")),
+                )
+                .child(
+                    div()
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!("remote-pair-choose-address")),
+                )
+                .child(self.pairing_selected_address(offer))
+                .children(countdown.map(|(left, share)| {
+                    div()
+                        .debug_selector(|| "remote-pair-countdown".into())
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .text_color(rgb(theme.subtext()))
+                        .child(ring(share, crate::menu::accent(theme), rgb(theme.active)))
+                        .child(fl!(
+                            "remote-pair-countdown",
+                            seconds = left.as_secs_f32().ceil() as u64
+                        ))
+                }))
+                .children(self.nearby_hint(cx))
+                .child(self.get_app_link()),
+            None => div()
+                .text_color(rgb(theme.subtext()))
+                .child(fl!("remote-pair-asking")),
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(16.))
+                    .items_start()
+                    .child(div().flex_none().child(square))
+                    .child(div().flex_1().min_w_0().child(details)),
+            )
+            .when_some(showing, |body, (offer, _)| {
+                body.child(self.pairing_addresses(offer, cx)).child(
+                    div()
+                        .debug_selector(|| "remote-pair-fingerprint".into())
+                        .text_font(&self.config.terminal)
+                        .text_size(px(10.))
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!(
+                            "remote-pair-fingerprint",
+                            fingerprint = crate::notifications::safe_text(&offer.fingerprint, 200)
+                        )),
+                )
+            })
+    }
+
+    /// One line on Bluetooth pairing, when the helper reported its radio.
+    fn nearby_hint(&self, cx: &App) -> Option<Div> {
+        self.menu.remote_pairing.as_ref()?;
+        let radio = nearby::Station::radio(cx)?;
+        let text = match radio {
+            nearby::Radio::On if cfg!(target_os = "macos") => fl!("remote-pair-nearby-mac"),
+            nearby::Radio::On => fl!("remote-pair-nearby"),
+            nearby::Radio::Unauthorized if cfg!(target_os = "macos") => {
+                fl!("remote-pair-nearby-allow-mac")
+            }
+            nearby::Radio::Unauthorized => fl!("remote-pair-nearby-allow"),
+            nearby::Radio::Off | nearby::Radio::Unsupported | nearby::Radio::Unknown => {
+                return None;
+            }
+        };
+        Some(
+            div()
+                .debug_selector(|| "remote-pair-nearby".into())
+                .text_color(rgb(self.theme.subtext()))
+                .child(text),
+        )
+    }
+
+    /// A link to the page with the current iPhone and iPad beta invite, so a
+    /// user who has no app yet can find it from the dialog that asks for it.
+    fn get_app_link(&self) -> Stateful<Div> {
+        let theme = &self.theme;
+        div()
+            .id("remote-pair-get-app")
+            .debug_selector(|| "remote-pair-get-app".into())
+            .cursor_pointer()
+            .text_color(crate::menu::accent(theme))
+            .hover(|s| s.underline())
+            .child(fl!("remote-pair-get-app"))
+            .on_click(|_, _, cx| {
+                cx.stop_propagation();
+                cx.open_url(IPHONE_APP);
+            })
+    }
+
+    fn pairing_claim(
+        &self,
+        device_name: &str,
+        code: &str,
+        app: Option<&str>,
+        answer: Option<Answer>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let theme = &self.theme;
+        let waiting = answer.is_some();
+        // The device's name, bold, inside the sentence that asks.
+        let device = name(device_name);
+        let asks = fl!("remote-pair-wants", device = device.clone());
+        let bold = asks.find(&device).map(|start| start..start + device.len());
+        div()
+            .debug_selector(|| "remote-pair-claim".into())
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(div().debug_selector(|| "remote-pair-device".into()).child(
+                StyledText::new(asks).with_highlights(bold.map(|range| {
+                    (
+                        range,
+                        HighlightStyle {
+                            font_weight: Some(FontWeight::BOLD),
+                            ..Default::default()
+                        },
+                    )
+                })),
+            ))
+            // Approving admits this origin to the daemon's API, so the user
+            // sees which app asked: one installed from another computer.
+            .when_some(app, |claim, app| {
+                claim.child(
+                    div()
+                        .debug_selector(|| "remote-pair-app".into())
+                        .text_color(rgb(theme.subtext()))
+                        .child(fl!(
+                            "remote-pair-app",
+                            app = crate::notifications::safe_text(app, 255)
+                        )),
+                )
+            })
+            .child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(fl!("remote-pair-same-code")),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "remote-pair-code".into())
+                    .text_font(&self.config.terminal)
+                    .text_size(px(28.))
+                    .line_height(px(36.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(spaced(code)),
+            )
+            .children(self.pairing_hosts(!waiting, cx))
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.))
+                    .child(
+                        button(
+                            theme,
+                            "remote-pair-deny",
+                            fl!("remote-pair-deny"),
+                            Tone::Plain,
+                            !waiting,
+                        )
+                        .when(!waiting, |button| {
+                            button.on_click(cx.listener(|this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.answer_pairing(false, cx);
+                            }))
+                        }),
+                    )
+                    .child(
+                        button(
+                            theme,
+                            "remote-pair-allow",
+                            if waiting {
+                                fl!("remote-pair-allowing")
+                            } else {
+                                fl!("remote-pair-allow")
+                            },
+                            Tone::Primary,
+                            !waiting,
+                        )
+                        .when(!waiting, |button| {
+                            button.on_click(cx.listener(|this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.answer_pairing(true, cx);
+                            }))
+                        }),
+                    ),
+            )
+    }
+
+    fn pairing_message(
+        &self,
+        title: &str,
+        detail: &str,
+        action: Option<(&'static str, String, Action)>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let theme = &self.theme;
+        div()
+            .debug_selector(|| "remote-pair-message".into())
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(title.to_owned()),
+            )
+            .child(
+                div()
+                    .text_color(rgb(theme.subtext()))
+                    .child(detail.to_owned()),
+            )
+            .children(action.map(|(id, label, action)| {
+                div().flex().justify_end().child(
+                    button(theme, id, label, Tone::Primary, true).on_click(cx.listener(
+                        move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            match action {
+                                Action::Close => this.dismiss_menu(window, cx),
+                                Action::Restart => this.restart_pairing(cx),
+                                Action::Settings => {
+                                    this.dismiss_menu(window, cx);
+                                    crate::settings_window::open_remote(
+                                        cx.entity().downgrade(),
+                                        cx,
+                                    );
+                                }
+                            }
+                        },
+                    )),
+                )
+            }))
+    }
+}
+
+/// What a message's button does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Action {
+    Close,
+    Restart,
+    Settings,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Tone {
+    Plain,
+    Primary,
+    Danger,
+}
+
+/// A dialog button; the caller adds `.on_click` when it is enabled.
+pub(super) fn button(
+    theme: &Theme,
+    id: &'static str,
+    label: impl Into<SharedString>,
+    tone: Tone,
+    enabled: bool,
+) -> Stateful<Div> {
+    let label = label.into();
+    let button = div()
+        .id(id)
+        .debug_selector(move || id.into())
+        .role(Role::Button)
+        .aria_label(label.clone());
+    crate::accessibility::disabled(button, !enabled)
+        .px(px(12.))
+        .py(px(6.))
+        .rounded(px(crate::config::corners::CONTROL))
+        .when(tone != Tone::Plain, |button| button.bg(rgb(theme.active)))
+        .when(tone == Tone::Danger, |button| {
+            button.text_color(crate::menu::danger(theme))
+        })
+        .when(tone == Tone::Primary, |button| {
+            button.text_color(crate::menu::accent(theme))
+        })
+        .when(enabled, |button| {
+            button
+                .cursor_pointer()
+                .hover(|button| button.bg(rgb(theme.active)))
+        })
+        .when(!enabled, |button| button.opacity(0.5))
+        .child(label)
+}
+
+/// A device name from a phone, made safe to draw.
+fn name(device_name: &str) -> String {
+    let name = crate::notifications::safe_text(device_name.trim(), NAME_LIMIT);
+    if name.is_empty() {
+        fl!("remote-pair-unnamed")
+    } else {
+        name
+    }
+}
+
+/// The origins a phone may reach this computer at, without their scheme.
+pub(crate) fn addresses(origins: &[String]) -> String {
+    origins
+        .iter()
+        .map(|origin| origin.strip_prefix("https://").unwrap_or(origin))
+        .map(|origin| crate::notifications::safe_text(origin, 100))
+        .collect::<Vec<_>>()
+        .join(" \u{b7} ")
+}
+
+/// The QR painted as quads: dark runs on a light square, whatever the
+/// theme, since scanners need the contrast.
+fn qr_square(qr: Arc<Qr>) -> impl IntoElement {
+    let painted = canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let side = f32::from(bounds.size.width.min(bounds.size.height));
+            let Some(layout) = qr::layout(side, qr.width()) else {
+                return;
+            };
+            let at = |x: f32, y: f32, width: f32, height: f32| {
+                Bounds::new(
+                    point(bounds.origin.x + px(x), bounds.origin.y + px(y)),
+                    size(px(width), px(height)),
+                )
+            };
+            window.paint_quad(fill(
+                at(layout.margin, layout.margin, layout.size, layout.size),
+                rgb(0xffffff),
+            ));
+            for run in qr.runs() {
+                window.paint_quad(fill(
+                    at(
+                        layout.origin + run.column as f32 * layout.module,
+                        layout.origin + run.row as f32 * layout.module,
+                        run.length as f32 * layout.module,
+                        layout.module,
+                    ),
+                    rgb(0x000000),
+                ));
+            }
+        },
+    )
+    .size_full();
+    div()
+        .debug_selector(|| "remote-pair-qr".into())
+        .size(px(QR_SIDE))
+        .child(painted)
+}
+
+/// The countdown: a faint full circle and, over it, the share left.
+fn ring(share: f32, color: Rgba, track: Rgba) -> impl IntoElement {
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let radius = f32::from(bounds.size.width.min(bounds.size.height)) / 2. - 1.5;
+            let center = (
+                f32::from(bounds.origin.x) + f32::from(bounds.size.width) / 2.,
+                f32::from(bounds.origin.y) + f32::from(bounds.size.height) / 2.,
+            );
+            for (share, color) in [(1., track), (share, color)] {
+                let points = arc(center, radius, share, 48);
+                let Some((first, rest)) = points.split_first() else {
+                    continue;
+                };
+                let mut path = PathBuilder::stroke(px(2.));
+                path.move_to(point(px(first.0), px(first.1)));
+                for (x, y) in rest {
+                    path.line_to(point(px(*x), px(*y)));
+                }
+                if let Ok(path) = path.build() {
+                    window.paint_path(path, color);
+                }
+            }
+        },
+    )
+    .size(px(RING))
+    .flex_none()
+}
+
+/// Points along a circle from twelve o'clock, clockwise, for `share` of a
+/// turn: `segments` for a whole turn, at least two for any part. Empty for
+/// nothing left.
+pub(crate) fn arc(center: (f32, f32), radius: f32, share: f32, segments: usize) -> Vec<(f32, f32)> {
+    let share = if share.is_finite() {
+        share.clamp(0., 1.)
+    } else {
+        0.
+    };
+    if share <= 0. || segments == 0 || radius <= 0. {
+        return Vec::new();
+    }
+    let steps = ((segments as f32 * share).ceil() as usize).max(1);
+    (0..=steps)
+        .map(|step| {
+            let angle = std::f32::consts::TAU * share * step as f32 / steps as f32
+                - std::f32::consts::FRAC_PI_2;
+            (
+                center.0 + radius * angle.cos(),
+                center.1 + radius * angle.sin(),
+            )
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests;

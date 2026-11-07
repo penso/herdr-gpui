@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-const source = readFileSync(new URL("../crates/herdr-remote-control/src/web/assets/app.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../crates/sheprd-remote-control/src/web/assets/app.js", import.meta.url), "utf8");
 const functions = ["offerHandoff", "adopt"].map((name) => {
   const match = source.match(new RegExp(`^async function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?^\\}`, "m"));
   assert.ok(match, `missing production function ${name}`);

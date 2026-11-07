@@ -1,0 +1,362 @@
+/* Source of app.css: `just web-css` compiles it with the Tailwind
+   standalone CLI, scanning the Rust templates and app.js for classes. The
+   compiled file is committed, so building the crate needs no Node. */
+@import "tailwindcss";
+@source "../render";
+@source "../render.rs";
+@source "./app.js";
+@source "./shell.html";
+
+:root {
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --raised: #2c2c2e;
+  --line: #38383a;
+  --text: #f2f2f7;
+  --muted: #8e8e93;
+  --faint: #636366;
+  --accent: #7c9cff;
+  --amber: #f2b33d;
+  --green: #4fd18b;
+  --red: #ff6b6b;
+  --pr-held: #f5a34b;
+  --pr-merged: #c792ea;
+  /* Agent status, Herdr's own palette (Catppuccin Mocha), as Sheprd and
+     the terminal client draw it. */
+  --st-working: #f9e2af; --st-blocked: #f38ba8; --st-done: #94e2d5; --st-idle: #a6e3a1; --st-unknown: #6c7086;
+  --term-bg: #0b0d10; --term-fg: #d6dae3;
+  --t0: #1c1f24; --t1: #ff6b6b; --t2: #4fd18b; --t3: #f2b33d; --t4: #7c9cff; --t5: #c792ea; --t6: #5fd7d7; --t7: #d6dae3;
+  --t8: #5b6273; --t9: #ff8787; --t10: #7ee2a8; --t11: #ffd27a; --t12: #a3b8ff; --t13: #dcb0f5; --t14: #8ae6e6; --t15: #ffffff;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2f2f7;
+    --surface: #ffffff;
+    --raised: #e5e5ea;
+    --line: #d1d1d6;
+    --text: #1c1c1e;
+    --muted: #6c6c70;
+    --faint: #aeaeb2;
+    --accent: #3b5bdb;
+    --amber: #c98a0b;
+    --green: #1f9d5c;
+    --red: #d64545;
+    --pr-held: #b96514;
+    --pr-merged: #8839ef;
+    /* The same hues darkened for light chrome, as Sheprd's Theme::ink. */
+    --st-working: #b07d12; --st-blocked: #d0345e; --st-done: #1b9a87; --st-idle: #2e9b45; --st-unknown: #8c8fa1;
+    --term-bg: #fbfbfc; --term-fg: #1d222b;
+    --t0: #1d222b; --t1: #c62828; --t2: #1f8a4c; --t3: #9a6b00; --t4: #2f54c8; --t5: #8e3fb5; --t6: #127e86; --t7: #5d6576;
+    --t8: #8b93a5; --t9: #e04848; --t10: #2aa865; --t11: #b98500; --t12: #4a6fe0; --t13: #a95ccd; --t14: #1a9aa3; --t15: #1d222b;
+    color-scheme: light;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-amber: var(--amber);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-claude: #d9643a;
+  --color-codex: #111111;
+  --color-gemini: #3b7cf0;
+  --color-copilot: #6e40c9;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  html, body { background: var(--bg); color: var(--text); }
+  /* No double-tap zoom: quick taps on a chevron or a key are taps. */
+  html { touch-action: manipulation; }
+  body {
+    font: 15px/1.45 var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    overscroll-behavior-y: none;
+    /* An installed iOS web app widens the whole page to fit anything that
+       sticks out, unlike Safari; `clip` keeps it at the screen's width
+       without making the body a scroll container, so sticky still works. */
+    overflow-x: clip;
+  }
+  /* Chrome on Android reads this from the root, not the body: without it a
+     swipe down on a terminal pulls to refresh and reloads the page. */
+  html:has(.term-page) { overscroll-behavior-y: none; }
+  [x-cloak] { display: none !important; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+}
+
+/* iOS uses an opaque fixed top edge for the installed app's status bar;
+   a translucent edge lets its system blur spill into the search field. */
+.status-bar-background { display: none; }
+@media (display-mode: standalone) {
+  body { padding-top: max(6px, env(safe-area-inset-top)); }
+  .status-bar-background {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto;
+    height: max(6px, env(safe-area-inset-top));
+    background: var(--bg);
+    pointer-events: none;
+    z-index: 40;
+  }
+}
+
+@layer components {
+  .group-list { @apply bg-surface rounded-2xl overflow-hidden; }
+  .searching [data-group] > ul { display: block !important; }
+  .row { @apply relative flex items-center gap-3 px-3 py-2.5 min-h-11; }
+  .group-list > li + li > .row::before, .group-list > li + li.row::before, .group-list > .row + .row::before {
+    content: ""; @apply absolute top-0 left-[52px] right-0 border-t border-line;
+  }
+  .badge { @apply text-[10.5px] text-muted border border-line rounded-md px-1.5; }
+  .pr-attention { color: var(--st-blocked); }
+  .pr-held { color: var(--pr-held); }
+  .pr-merged { color: var(--pr-merged); }
+  .pr-muted { color: var(--muted); }
+  .pr-ready { color: var(--st-idle); }
+  .pr-waiting { color: var(--st-working); }
+  .pill-amber { @apply text-[11px] font-bold text-black bg-amber rounded-full px-2 py-0.5; }
+  .count { @apply min-w-5 h-5 rounded-full text-[11px] font-bold grid place-items-center text-black px-1.5; }
+  /* Agent status in the user's Sheprd set (render/status.rs). */
+  .st-working { --st: var(--st-working); }
+  .st-blocked { --st: var(--st-blocked); }
+  .st-done { --st: var(--st-done); }
+  .st-idle { --st: var(--st-idle); }
+  .st-unknown { --st: var(--st-unknown); }
+  .status-dot { @apply w-2.5 h-2.5 rounded-full shrink-0; background: var(--st); }
+  .status-dot.st-working { animation: working 1.4s ease-in-out infinite; }
+  .status-dot.st-idle { background: transparent; box-shadow: inset 0 0 0 2px var(--st); }
+  .status-dot.st-unknown { @apply w-1.5 h-1.5; }
+  .status-mark { @apply grid place-items-center w-4 h-4 shrink-0; color: var(--st); }
+  .status-mark svg { @apply w-full h-full; }
+  /* Working turns, as in Sheprd. */
+  .status-mark.st-working svg { animation: spin 1.4s linear infinite; }
+  .status-tile { @apply w-5 h-5 rounded-md; background: color-mix(in srgb, var(--st) 22%, transparent); }
+  .status-tile svg { @apply w-3.5 h-3.5; }
+  .dot-corner { @apply absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-surface; }
+  .strip-card {
+    @apply flex shrink-0 basis-[82%] gap-2.5 items-center px-3 py-2.5 rounded-2xl border;
+    background: color-mix(in srgb, var(--amber) 16%, var(--surface));
+    border-color: color-mix(in srgb, var(--amber) 40%, transparent);
+  }
+  .install-hint {
+    @apply fixed left-3 right-3 z-30 flex items-center gap-3 p-3 rounded-2xl bg-surface border border-line shadow-xl;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  .toolbar {
+    @apply fixed left-4 right-4 flex justify-between items-center z-20;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+  .glass {
+    @apply flex gap-6 items-center px-5 py-2.5 rounded-full text-[19px] border border-white/10 shadow-xl;
+    background: color-mix(in srgb, var(--raised) 70%, transparent);
+    backdrop-filter: blur(18px) saturate(1.6);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  }
+  .glass > a { @apply relative min-w-7 grid place-items-center; }
+  .ring {
+    @apply inline-block w-6 h-6 rounded-full;
+    background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--raised) 0);
+    mask: radial-gradient(circle, transparent 7px, #000 8px);
+    -webkit-mask: radial-gradient(circle, transparent 7px, #000 8px);
+  }
+  .card { @apply bg-surface rounded-xl px-3 py-2.5 border border-transparent; }
+  .fold { @apply text-sm text-muted px-3 py-2 rounded-xl bg-surface; }
+  .tool { @apply bg-surface rounded-xl px-3 py-2 text-[13px]; }
+  .tool > summary { @apply cursor-pointer list-none; }
+  .code { @apply mt-2 p-2 rounded-lg bg-bg text-xs font-mono overflow-x-auto whitespace-pre max-h-80; }
+  .steps { @apply flex flex-col border-l-2 border-line ml-1.5; }
+  .st { @apply relative py-1 pl-4 text-[13px]; }
+  .st::before { content: ""; @apply absolute -left-[6px] top-2 w-2.5 h-2.5 rounded-full bg-raised border-2 border-bg; }
+  .st.ok::before { @apply bg-green; }
+  .st.run::before { @apply bg-amber; }
+  .st.todo { @apply text-faint; }
+  .sheet {
+    @apply fixed left-0 right-0 bottom-0 z-30 bg-surface rounded-t-3xl px-4 pt-2 flex flex-col gap-2 shadow-2xl;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    animation: rise .22s ease-out;
+  }
+  .btn { @apply rounded-2xl py-3.5 text-[15px] font-semibold bg-raised w-full; }
+  .btn-primary { @apply bg-accent text-white; }
+  .btn-subtle { @apply bg-transparent text-muted font-medium text-sm py-2; }
+  .composer {
+    @apply fixed left-0 right-0 bottom-0 z-20 bg-surface border-t border-line px-3 pt-2;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  /* The keyboard covers the home indicator, so its inset is only a gap. */
+  :root[data-keyboard] .composer { padding-bottom: 10px; }
+  .round-btn { @apply w-9 h-9 rounded-full grid place-items-center text-white shrink-0; }
+  .chip { @apply text-xs px-2 py-1 rounded-lg bg-raised whitespace-nowrap; }
+  .field { @apply bg-surface rounded-xl px-3 py-2.5 outline-none border border-transparent focus:border-accent; }
+  .agent-choice { @apply flex gap-2 items-center bg-surface p-2.5 rounded-xl border-[1.5px] border-transparent; }
+  .agent-choice:has(input:checked) { @apply border-accent; }
+  .section-title { @apply text-xs uppercase tracking-wider text-muted font-semibold mt-6 mb-1.5 px-1; }
+  .switch { @apply w-11 h-6 appearance-none rounded-full bg-raised relative transition checked:bg-green; }
+  .switch::after { content: ""; @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition; }
+  .switch:checked::after { transform: translateX(20px); }
+  .switch:disabled { @apply opacity-40; }
+  .prose { @apply leading-relaxed break-words; }
+  .prose p { @apply my-2; }
+  .prose pre { @apply my-2 p-2 rounded-lg bg-surface text-xs overflow-x-auto; }
+  .prose code { @apply font-mono text-[0.9em] bg-raised rounded px-1; }
+  .prose pre code { @apply bg-transparent p-0; }
+  .prose ul { @apply list-disc pl-5 my-2; }
+  .prose ol { @apply list-decimal pl-5 my-2; }
+  .prose a { @apply text-accent underline; }
+  .prose h1, .prose h2, .prose h3 { @apply font-bold mt-3 mb-1; }
+  .prose table { @apply block overflow-x-auto text-sm my-2; }
+  .prose td, .prose th { @apply border border-line px-2 py-1; }
+  /* Terminal tabs. The page fills the visual viewport, which app.js keeps
+     at the height above the keyboard. */
+  .term-page {
+    @apply fixed left-0 right-0 top-0 flex flex-col bg-bg z-10;
+    height: var(--vvh, 100dvh);
+    padding-top: env(safe-area-inset-top);
+  }
+  .term-screen {
+    @apply flex-1 min-h-0 overflow-auto m-0 px-2 py-1.5 whitespace-pre;
+    overscroll-behavior: contain;
+    font: var(--term-size, 11px)/1.32 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--term-bg); color: var(--term-fg);
+  }
+  /* An inline span paints its background over the font's height only, so
+     colored rows showed the screen between them as stripes. As inline
+     blocks the runs fill the whole line box; a run never spans a line. */
+  .term-screen span { display: inline-block; vertical-align: top; }
+  /* Typing not on the screen yet: dotted, as a terminal never draws. */
+  .term-echo {
+    @apply px-3 py-1 overflow-x-auto whitespace-pre text-muted border-t border-line;
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--term-bg); scrollbar-width: none;
+  }
+  .term-echo span { @apply underline decoration-dotted underline-offset-4; }
+  .term-echo::after { content: "▏"; @apply text-accent; }
+  .term-input {
+    @apply fixed bottom-0 left-0 w-px h-px opacity-0 pointer-events-none;
+    /* 16px keeps Safari from zooming the page when it takes focus. */
+    font-size: 16px;
+  }
+  .pill-button { @apply h-9 px-4 rounded-full bg-raised text-[15px] font-semibold grid place-items-center shrink-0; }
+  .pill-button.primary { @apply bg-accent text-white; }
+  .tbtn { @apply w-8 h-8 rounded-full grid place-items-center bg-raised text-[13px] font-semibold shrink-0; }
+  .tbtn.herdr { @apply bg-accent text-white; }
+  .tchip { @apply shrink-0 text-xs px-2.5 py-1 rounded-full bg-raised whitespace-nowrap; }
+  .tchip.on { @apply bg-accent text-white; }
+  .tkeys { @apply flex flex-col gap-1 px-1.5 pt-1.5 bg-surface border-t border-line; padding-bottom: 6px; }
+  .tkeys-row { @apply flex gap-1; }
+  .tkey {
+    @apply shrink-0 min-w-[30px] h-[34px] px-1.5 rounded-lg bg-raised font-mono text-[12.5px] font-semibold grid place-items-center;
+    touch-action: manipulation;
+  }
+  .tkey.on { @apply bg-accent text-white; }
+  .tkey.stop { @apply bg-red text-white; }
+  .tkeys-row .grow { @apply flex-1; }
+  .sheet-backdrop { @apply fixed inset-0 z-30 bg-black/45; }
+  .tsheet {
+    @apply fixed left-0 right-0 bottom-0 z-40 bg-surface rounded-t-3xl px-3 pt-2 shadow-2xl;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    animation: rise .22s ease-out;
+  }
+  .tsheet .grab { @apply w-9 h-1 rounded-full bg-line mx-auto mb-2; }
+  .tsheet h4 { @apply text-xs uppercase tracking-wider text-muted font-semibold mb-2 px-0.5; }
+  /* The session sheet the chat title opens (render/session.rs). */
+  .settings-sheet {
+    @apply overflow-y-auto top-0 bottom-auto rounded-t-none rounded-b-3xl pb-2;
+    max-height: 85dvh;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    animation: drop .24s ease-out;
+  }
+  .settings-label { @apply text-xs uppercase tracking-wider text-muted font-semibold mt-4 mb-1.5 px-0.5; }
+  .settings-sheet .tsheet-list { @apply mt-0; }
+  .settings-sheet .tsheet-list + .tsheet-list, .settings-sheet .segmented + .tsheet-list { @apply mt-4; }
+  .settings-choice { @apply gap-3 min-h-12 cursor-pointer; }
+  .settings-check { @apply text-accent shrink-0 invisible; }
+  .settings-choice:has(input:checked) .settings-check { @apply visible; }
+  .segmented { @apply flex bg-raised rounded-xl p-0.5; }
+  .segmented label { @apply flex-1; }
+  .segmented span { @apply block text-center py-2.5 text-[15px] rounded-[10px]; }
+  .segmented input:checked + span { @apply bg-surface font-semibold shadow-sm; }
+  /* Commands under a typed "/" in the composer. */
+  .slash-list { @apply mb-2 rounded-2xl border border-line bg-surface overflow-hidden; }
+  .slash-list > button { @apply flex flex-col items-start w-full min-h-12 px-3.5 py-2 text-left; }
+  .slash-list > button + button { @apply border-t border-line; }
+  .slash-list > button[hidden] { display: none; }
+  .agent-mark svg { width: 62%; height: 62%; }
+  /* The project picker of a new workspace (render/picker.rs). */
+  .picker-page {
+    @apply fixed inset-0 z-50 bg-bg flex flex-col;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    animation: rise .22s ease-out;
+  }
+  .picker-page[hidden] { display: none; }
+  /* 16px keeps Safari from zooming in when the field takes focus. */
+  .picker-search { @apply text-[16px] py-2; }
+  .picker-list { @apply flex-1 overflow-y-auto pb-10; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .picker-row { @apply gap-3 min-h-14; }
+  .picker-row[hidden], .picker-list section[hidden] { display: none; }
+  .picker-row[aria-pressed="true"] .settings-check { @apply visible; }
+  .tiles { @apply grid grid-cols-4 gap-2; }
+  .tile { @apply flex flex-col items-center gap-1.5 bg-raised rounded-2xl py-3.5 text-[13.5px] font-medium; }
+  .tile.danger { @apply text-red; }
+  .tsheet-list { @apply grid gap-px mt-3 rounded-xl overflow-hidden; }
+  .tsheet-list > * { @apply flex justify-between items-center bg-raised px-4 py-3.5 text-[16px] text-left w-full; }
+  /* The 16-color palette, from the theme; 256-color and RGB values come
+     inline. */
+  .t-fg0 { color: var(--t0); } .t-fg1 { color: var(--t1); } .t-fg2 { color: var(--t2); } .t-fg3 { color: var(--t3); }
+  .t-fg4 { color: var(--t4); } .t-fg5 { color: var(--t5); } .t-fg6 { color: var(--t6); } .t-fg7 { color: var(--t7); }
+  .t-fg8 { color: var(--t8); } .t-fg9 { color: var(--t9); } .t-fg10 { color: var(--t10); } .t-fg11 { color: var(--t11); }
+  .t-fg12 { color: var(--t12); } .t-fg13 { color: var(--t13); } .t-fg14 { color: var(--t14); } .t-fg15 { color: var(--t15); }
+  .t-bg0 { background: var(--t0); } .t-bg1 { background: var(--t1); } .t-bg2 { background: var(--t2); } .t-bg3 { background: var(--t3); }
+  .t-bg4 { background: var(--t4); } .t-bg5 { background: var(--t5); } .t-bg6 { background: var(--t6); } .t-bg7 { background: var(--t7); }
+  .t-bg8 { background: var(--t8); } .t-bg9 { background: var(--t9); } .t-bg10 { background: var(--t10); } .t-bg11 { background: var(--t11); }
+  .t-bg12 { background: var(--t12); } .t-bg13 { background: var(--t13); } .t-bg14 { background: var(--t14); } .t-bg15 { background: var(--t15); }
+  .t-fg-bg { color: var(--term-bg); } .t-bg-fg { background: var(--term-fg); }
+  .t-b { font-weight: 700; } .t-d { opacity: .6; } .t-i { font-style: italic; }
+  .t-u { text-decoration: underline; } .t-s { text-decoration: line-through; } .t-h { visibility: hidden; }
+  .banner { @apply fixed top-0 left-0 right-0 z-40 text-center text-xs py-1 bg-amber text-black; padding-top: calc(4px + env(safe-area-inset-top)); }
+}
+
+/* Navigation slides like an iOS stack (app.js `slide`): a pushed screen
+   comes in from the right over the list, which drifts left and dims; going
+   back plays it in reverse. */
+::view-transition-group(root) { animation-duration: 0.38s; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+::view-transition-old(root), ::view-transition-new(root) {
+  animation-duration: inherit;
+  animation-timing-function: inherit;
+  mix-blend-mode: normal;
+}
+html[data-slide="push"]::view-transition-old(root) { animation-name: slide-under-left; }
+html[data-slide="push"]::view-transition-new(root) { animation-name: slide-in-right; box-shadow: -8px 0 24px rgb(0 0 0 / 0.18); }
+html[data-slide="pop"]::view-transition-old(root) { animation-name: slide-out-right; z-index: 1; box-shadow: -8px 0 24px rgb(0 0 0 / 0.18); }
+html[data-slide="pop"]::view-transition-new(root) { animation-name: slide-from-under-left; }
+@keyframes slide-in-right { from { transform: translateX(100%); } }
+@keyframes slide-out-right { to { transform: translateX(100%); } }
+@keyframes slide-under-left { to { transform: translateX(-30%); filter: brightness(0.85); } }
+@keyframes slide-from-under-left { from { transform: translateX(-30%); filter: brightness(0.85); } }
+
+/* The session sheet shows only while <html data-sheet="settings">. */
+html:not([data-sheet="settings"]) .settings-only { display: none; }
+/* The title's chevron turns up while the sheet hangs from it. */
+html[data-sheet="settings"] [data-open-settings] .icon { transform: rotate(180deg); }
+[data-open-settings] .icon { transition: transform .2s; }
+
+/* The row of the chat or terminal the list was just left for. */
+.came-from { animation: came-from 1.6s ease-out; }
+@keyframes came-from {
+  0%, 35% { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  100% { background: transparent; }
+}
+@keyframes working { 50% { opacity: 0.35; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status-dot.st-working, .status-mark.st-working svg { animation: none; } }
+@keyframes drop { from { transform: translateY(-100%); } to { transform: none; } }
+@keyframes rise { from { transform: translateY(100%); } to { transform: none; } }

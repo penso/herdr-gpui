@@ -143,7 +143,7 @@ struct SettingsStatus: View {
                 }
                 Section {
                     NavigationLink { } label: { Label("Send diagnostics", systemImage: "stethoscope") }
-                    NavigationLink { } label: { Label("About Herdr Remote", systemImage: "info.circle") }
+                    NavigationLink { } label: { Label("About Sheprd", systemImage: "info.circle") }
                 }
             }
             .navigationTitle("Settings")

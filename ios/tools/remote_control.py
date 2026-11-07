@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Drive a sandbox herdr-remote-control daemon through its control socket,
-as Herdr UI's pairing dialog does, for the simulator loop.
+"""Drive a sandbox sheprd-remote-control daemon through its control socket,
+as Sheprd's pairing dialog does, for the simulator loop.
 
     remote_control.py STATE_DIR pair      # prints the pairing link
     remote_control.py STATE_DIR approve   # approves the claimed pairing
 
-Frames are little-endian u32 lengths then JSON (herdr_chat_protocol::frame).
+Frames are little-endian u32 lengths then JSON (sheprd_chat_protocol::frame).
 """
 
 import json

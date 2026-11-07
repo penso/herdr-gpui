@@ -81,13 +81,13 @@ enum Sample {
         Computer(
             name: "MacBook Pro", symbol: "laptopcomputer", via: "Wi-Fi · 192.168.1.20",
             workspaces: [
-                Workspace(name: "herdr-gpui", branch: "mobile-app", chats: [
+                Workspace(name: "sheprd", branch: "mobile-app", chats: [
                     Chat(title: "Equalize splits command", agent: .claude, status: .working,
                          detail: "Running just ci", elapsed: "4:12", progress: 0.6),
                     Chat(title: "Fix mise discovery on SSH", agent: .codex, status: .needsYou,
                          detail: "Allow `git push origin fix/mise`?"),
                     Chat(title: "zsh — just test-gui", agent: .terminal, status: .idle,
-                         detail: "~/code/herdr-gpui"),
+                         detail: "~/code/sheprd"),
                 ]),
                 Workspace(name: "moltis", branch: "main", chats: [
                     Chat(title: "Voice pipeline latency", agent: .claude, status: .unread,
@@ -117,7 +117,7 @@ enum Sample {
     ]
 
     static let questions: [Question] = [
-        Question(computer: "MacBook Pro", workspace: "herdr-gpui", chat: "Fix mise discovery on SSH",
+        Question(computer: "MacBook Pro", workspace: "sheprd", chat: "Fix mise discovery on SSH",
                  agent: .codex, prompt: "Run `git push origin fix/mise`?",
                  options: ["Allow once", "Always allow", "Deny"], isPermission: true),
         Question(computer: "studio", workspace: "site", chat: "Hero animation",
