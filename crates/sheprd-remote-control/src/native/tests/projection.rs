@@ -38,6 +38,7 @@ fn project(summaries: HashMap<String, Summary>, pull_requests: &PullRequests) ->
         load: None,
         summaries,
         pull_requests,
+        tags: Default::default(),
     })
 }
 

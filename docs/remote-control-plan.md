@@ -357,6 +357,22 @@ phone never disturbs the desktop's layout.
   Until then the app holds one subscription, for one computer
   (`herdr.push-host`); Settings on any other says where notifications come
   from, and a notification opens its page on the computer shown.
+- **Tags.** Each computer's daemon keeps the tags that group it, such as
+  `personal` and `work` (`tags.json`), for every phone and desktop that
+  reaches it. No client has to match its name for a computer to another's.
+  - **The rule.** A client offers its copy with the time it was edited, and
+    the daemon answers with what stands: the latest edit wins, whole. An
+    offer counts as made by the daemon's clock at the latest, so a fast
+    clock cannot outlast later edits.
+  - **Phones.** `home` carries the tags, and `PUT /api/v2/tags` offers an
+    edit. An edit made while a computer is away is sent when its home next
+    arrives.
+  - **Sheprd.** It keeps a copy by endpoint ID, so a device away still shows
+    its tags. It meets this computer's daemon over the control socket and a
+    connected machine's by running `sheprd-remote-control tags --offer` over
+    SSH: at once after an edit, else every two minutes. A machine without
+    the program is not given one for this: no phone is paired with it, so
+    the copy is all there is.
 - **Other machines.** Allowing a phone on one computer also pairs it with
   the SSH and cloud machines that computer's Sheprd connects to. The phone
   reaches each machine's own daemon directly, so it keeps them while that

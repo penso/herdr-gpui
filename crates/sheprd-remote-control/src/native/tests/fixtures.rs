@@ -145,6 +145,7 @@ fn home() -> Home {
         }),
         summaries: [("p1".to_owned(), summary)].into(),
         pull_requests: &pull_requests,
+        tags: crate::control::tags::ComputerTags::new(["work"], 1_770_000_000_000),
     })
 }
 

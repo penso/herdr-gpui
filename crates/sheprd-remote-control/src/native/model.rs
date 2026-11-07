@@ -4,7 +4,10 @@
 
 use crate::{
     ansi::{self, Color, Style},
-    control::pull_requests::{PullRequests, Tone, WorkspacePullRequest},
+    control::{
+        pull_requests::{PullRequests, Tone, WorkspacePullRequest},
+        tags::ComputerTags,
+    },
     hub::{self, ChatRow, Layout, Summary},
     load::Load,
 };
@@ -30,6 +33,9 @@ pub(crate) struct Home {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) working: Option<usize>,
     pub(crate) workspaces: Vec<Workspace>,
+    /// The tags this computer carries; older servers leave them out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tags: Option<ComputerTags>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -292,6 +298,7 @@ pub(crate) struct Sources<'a> {
     pub(crate) load: Option<Load>,
     pub(crate) summaries: HashMap<String, Summary>,
     pub(crate) pull_requests: &'a PullRequests,
+    pub(crate) tags: ComputerTags,
 }
 
 impl Home {
@@ -303,6 +310,7 @@ impl Home {
             load,
             mut summaries,
             pull_requests,
+            tags,
         } = sources;
         let waiting = summaries.values().map(|summary| summary.questions).sum();
         let workspaces = layout
@@ -336,6 +344,7 @@ impl Home {
             waiting,
             load,
             working: Some(layout.working),
+            tags: Some(tags),
             workspaces,
         }
     }

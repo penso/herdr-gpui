@@ -116,6 +116,7 @@ pub async fn run(options: Options) -> Result<()> {
         push,
         reports: Mutex::new(web::report_limit()),
         seen: Mutex::new(seen),
+        tags: web::Tags::load(&options.state_dir),
         typed: web::Typed::default(),
         uploads: web::Uploads::new(&options.state_dir),
     });

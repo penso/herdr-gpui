@@ -20,6 +20,7 @@ mod origins;
 mod pace;
 mod render;
 mod stream;
+mod tags;
 mod terminal;
 mod uploads;
 
@@ -31,6 +32,7 @@ pub(crate) use origins::Origins;
 pub(crate) use pace::Typed;
 pub(crate) use render::now_ms;
 pub(crate) use stream::Connected;
+pub(crate) use tags::Tags;
 pub(crate) use terminal::read_screen;
 pub(crate) use uploads::Uploads;
 
@@ -92,6 +94,8 @@ pub(crate) struct State {
     pub(crate) reports: Mutex<auth::RateLimiter<std::net::IpAddr>>,
     /// Origins served before, which an installed app may still send.
     pub(crate) seen: Mutex<Origins>,
+    /// This computer's tags, which its phones and desktops share.
+    pub(crate) tags: Tags,
     /// Panes phones type into, so their screens are read again at once.
     pub(crate) typed: Typed,
     pub(crate) uploads: Uploads,
@@ -208,6 +212,7 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/api/v2/live", get(crate::native::live))
         .route("/api/v2/new", get(crate::native::new_options))
         .route("/api/v2/search", get(crate::native::search))
+        .route("/api/v2/tags", get(tags::get).put(tags::put))
         .route("/api/v2/workspaces", post(crate::native::create_workspace))
         .route(
             "/api/v2/workspaces/{workspace}/chats",
@@ -362,6 +367,8 @@ pub(crate) fn bearer(headers: &HeaderMap) -> Option<&str> {
 pub(crate) enum ApiError {
     // keep-sorted start
     #[error(transparent)]
+    App(#[from] crate::app::Error),
+    #[error(transparent)]
     Auth(#[from] auth::Error),
     #[error("that is not a folder you can start a workspace in")]
     Folder,
@@ -409,7 +416,9 @@ impl IntoResponse for ApiError {
                 | auth::Error::StoreFormat { .. }
                 | auth::Error::Random(_),
             ) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::Upload(uploads::Error::Write(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::App(_) | Self::Upload(uploads::Error::Write(_)) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
             Self::Auth(_) | Self::Folder | Self::Invalid(_) | Self::Push(_) | Self::Upload(_) => {
                 StatusCode::BAD_REQUEST
             }
