@@ -120,3 +120,34 @@ fn authoritative_start_also_never_exposes_truncated_edits_as_diffs() {
         );
     }
 }
+
+#[test]
+fn a_huge_command_never_costs_a_failure_its_output() {
+    let limit = crate::project::MAX_ENTRY_TEXT;
+    let command = "a\n".repeat(limit);
+    let mut bridge = opened();
+    prompt(&mut bridge, 2);
+    start(&mut bridge, "c", "bash", json!({"command": command}));
+    partial(&mut bridge, "c", "bash", "working");
+    let failed = end(&mut bridge, "c", "bash", "exit code 2", true);
+    let texts = texts(&failed[0]);
+    assert_eq!(texts.last().copied(), Some("exit code 2"));
+    assert!(texts.iter().map(|text| text.len()).sum::<usize>() <= limit);
+}
+
+#[test]
+fn a_huge_command_keeps_its_preview_when_the_final_result_has_none() {
+    let limit = crate::project::MAX_ENTRY_TEXT;
+    let mut bridge = opened();
+    prompt(&mut bridge, 2);
+    start(
+        &mut bridge,
+        "c",
+        "bash",
+        json!({"command": "a\n".repeat(limit)}),
+    );
+    partial(&mut bridge, "c", "bash", "latest");
+    let done = bridge.on_harness(&json!({"type":"tool_execution_end","toolCallId":"c",
+        "toolName":"bash","result":{},"isError":false}));
+    assert_eq!(texts(&done[0]).last().copied(), Some("latest"));
+}

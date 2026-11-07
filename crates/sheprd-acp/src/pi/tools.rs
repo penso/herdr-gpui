@@ -54,6 +54,11 @@ pub(super) fn call(id: &str, name: &str, args: &Value) -> wire::ToolCall {
     call
 }
 
+/// Whether a finished call's card is about its input, not its output.
+fn shows_input(name: &str, failed: bool) -> bool {
+    !failed && matches!(name, "edit" | "write" | "read")
+}
+
 /// What a finished call adds: its output, except for an edit, whose diff
 /// already shows, unless it failed.
 pub(super) fn finished(name: &str, result: &Value, failed: bool) -> wire::ToolCallUpdateFields {
@@ -63,7 +68,7 @@ pub(super) fn finished(name: &str, result: &Value, failed: bool) -> wire::ToolCa
         wire::ToolCallStatus::Completed
     };
     let fields = wire::ToolCallUpdateFields::new().status(Some(status));
-    if !failed && matches!(name, "edit" | "write" | "read") {
+    if shows_input(name, failed) {
         return fields;
     }
     fields.content(content::result(
@@ -123,9 +128,9 @@ impl Progress {
             .content(Some(content))
     }
 
-    /// What the finished call shows: its whole input again, and the final
-    /// result in place of the last partial one, which stays when the final
-    /// result carries none.
+    /// What the finished call shows: its input again, whole when that fits,
+    /// and the final result in place of the last partial one, which stays
+    /// when the final result carries none.
     pub(super) fn finish(
         self,
         name: &str,
@@ -140,17 +145,23 @@ impl Progress {
         } else {
             wire::ToolCallStatus::Completed
         };
-        // The card's input comes first, as it did when the call started.
+        let media = sheprd_chat_protocol::MAX_IMAGE_DATA;
+        let output = content::result(result, PARTIAL_TEXT, media)
+            .or(self.latest)
+            .unwrap_or_default();
         let room = MAX_ENTRY_TEXT.saturating_sub(content::size(&self.full));
-        let output = content::result(result, room, sheprd_chat_protocol::MAX_IMAGE_DATA)
-            .or_else(|| self.latest.filter(|latest| content::size(latest) <= room));
+        // Both fit, or the input is what the card is for, or the output is:
+        // a failure's reason must not give way to the command that caused it.
+        let content: Vec<_> = if content::size(&output) <= room {
+            self.full.into_iter().chain(output).collect()
+        } else if shows_input(name, failed) {
+            let output = content::result(result, room, media).unwrap_or_default();
+            self.full.into_iter().chain(output).collect()
+        } else {
+            self.base.into_iter().chain(output).collect()
+        };
         wire::ToolCallUpdateFields::new()
             .status(Some(status))
-            .content(Some(
-                self.full
-                    .into_iter()
-                    .chain(output.into_iter().flatten())
-                    .collect(),
-            ))
+            .content(Some(content))
     }
 }
