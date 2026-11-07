@@ -78,6 +78,9 @@ final class Fleet {
         /// changed in between as it happened.
         var watching = false
         var id: String { computer.device }
+        /// The computer answered and runs a Sheprd too old for this app. A
+        /// cached `home` may predate an update, so only a fresh one counts.
+        var needsUpdate: Bool { !stale && home?.needsUpdate == true }
     }
 
     private(set) var machines: [Machine] = []

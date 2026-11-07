@@ -5,6 +5,7 @@
 mod addresses;
 mod bonjour;
 mod control;
+pub(crate) use control::version;
 mod listener;
 mod live;
 mod notifier;
@@ -123,6 +124,7 @@ pub async fn run(options: Options) -> Result<()> {
         seen: Mutex::new(seen),
         tags: web::Tags::load(&options.state_dir),
         typed: web::Typed::default(),
+        updates: Mutex::default(),
         uploads: web::Uploads::new(&options.state_dir),
     });
     remember_origins(&state);

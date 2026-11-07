@@ -135,11 +135,14 @@ private struct ComputerRow: View {
     var computer: Computer
 
     var body: some View {
-        let status = model.fleet.machines.first { $0.id == computer.device }?.status
+        let machine = model.fleet.machines.first { $0.id == computer.device }
+        let status = machine?.status
         VStack(alignment: .leading, spacing: 2) {
             Text(model.displayName(computer))
             if status == .revoked {
                 ComputerStatusLine(status: .revoked).font(.caption)
+            } else if status == .outdated || machine?.needsUpdate == true {
+                ComputerStatusLine(status: .outdated).font(.caption)
             } else if let vouching = model.vouching(computer) {
                 Text("via \(model.displayName(vouching))").font(.caption).foregroundStyle(.secondary)
             } else if let kind = computer.origins.lazy.map(OriginKind.init(origin:)).first(where: { $0 != .loopback }) {

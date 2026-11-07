@@ -403,15 +403,31 @@ extension AppModel {
             if unsent { fleet.cache.save(draft: Cache.Draft(text: prompt, pictures: []), device: device, pane: pane) }
             pendingRoute = .chat(PaneKey(device: device, pane: pane), title: title)
         }
-        let unset = start != nil && !created.started
+        let unset = startProblem(created, start: start, device: device)
         guard unsent else {
-            if unset { notice = Self.startMissed }
+            if let unset { notice = unset }
             return
         }
         let unsentNotice = created.pane == nil
             ? "The chat started, but your first prompt was not sent. Open the chat from Home and send it again:\n\n\(prompt)"
             : "The chat started, but your first prompt was not sent. It is in the chat's message box: send it when the agent is ready."
-        notice = unset ? "\(Self.startMissed)\n\n\(unsentNotice)" : unsentNotice
+        notice = unset.map { "\($0)\n\n\(unsentNotice)" } ?? unsentNotice
+    }
+
+    /// What to say about a chat that did not start as asked, if anything. A
+    /// computer too old for `start` never tried, and that is what is said,
+    /// with its own alert title.
+    func startProblem(_ created: Created, start: ChatStart?, device: String) -> String? {
+        guard start != nil else { return nil }
+        switch created.started {
+        case true: return nil
+        case false: return Self.startMissed
+        case nil:
+            noticeTitle = "Update Sheprd"
+            let name = computers.first { $0.device == device }.map(displayName) ?? "This computer"
+            let prompt = created.prompted ? " Your first prompt ran in that mode too." : ""
+            return "\(name) runs an older Sheprd that cannot start a chat in the mode you picked, so this chat is in the agent's default.\(prompt) Update it from the computer's page in Settings."
+        }
     }
 
     /// Said when a chat may be in another mode than the one the person saw.

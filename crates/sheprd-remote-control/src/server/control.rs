@@ -13,7 +13,7 @@ use std::{
     path::Path,
     sync::Arc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::watch;
 
@@ -203,6 +203,17 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
                     code: ErrorCode::Other,
                     message: error.to_string(),
                 },
+            };
+        }
+        Request::AppUpdate { instance, update } => {
+            if !update.valid() {
+                return Response::Error {
+                    code: ErrorCode::Unsupported,
+                    message: "Invalid update report".into(),
+                };
+            }
+            return Response::AppUpdate {
+                requested: state.updates().report(instance, update, Instant::now()),
             };
         }
         Request::Shutdown => {

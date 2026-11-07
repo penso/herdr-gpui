@@ -40,6 +40,7 @@ fn project(summaries: HashMap<String, Summary>, pull_requests: &PullRequests) ->
         summaries,
         pull_requests,
         tags: Default::default(),
+        version: "20261106.1",
     })
 }
 
