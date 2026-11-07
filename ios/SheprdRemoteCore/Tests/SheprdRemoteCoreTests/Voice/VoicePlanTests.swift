@@ -158,6 +158,17 @@ import Testing
         #expect(VoiceBranch.name(for: topic) == branch)
     }
 
+    @Test func onlyATopicAboutTheSameWorkIsDoubted() {
+        #expect(VoiceBranch.doubtful(topic: "login, redirect fog", task: "fix the redirect loop"))
+        #expect(!VoiceBranch.doubtful(topic: "caching", task: "add an etag"))
+        #expect(!VoiceBranch.doubtful(topic: "the redirect loop", task: "fix the redirect loop"))
+    }
+
+    @Test func aTidiedBranchKeepsItsKind() {
+        #expect(VoiceBranch.name(for: "redirect loop", topic: "login redirect bug") == "fix/redirect-loop")
+        #expect(VoiceBranch.name(for: "redirect loop", topic: "login redirect") == "feature/redirect-loop")
+    }
+
     @Test func aBranchStaysShortAndValid() throws {
         let name = try #require(VoiceBranch.name(for: String(repeating: "wordy phrasing ", count: 20)))
         #expect(name.count < 50)

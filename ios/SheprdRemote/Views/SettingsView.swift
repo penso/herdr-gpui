@@ -12,7 +12,9 @@ struct SettingsView: View {
     @State private var editMode = EditMode.inactive
     @AppStorage(AppLock.setting, store: AppLock.store) private var requireFaceID = false
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
-    @AppStorage(VoiceSpeaker.setting) private var voiceSpeaks = true
+    @AppStorage(VoiceSettings.speaksKey) private var voiceSpeaks = true
+    @AppStorage(VoiceSettings.confirmsKey) private var voiceConfirms = false
+    @AppStorage(VoiceSettings.languageKey) private var voicePhoneLanguage = false
 
     var body: some View {
         List {
@@ -63,8 +65,14 @@ struct SettingsView: View {
                     LabeledContent("Text Shortcuts", value: "\(model.shortcuts.shortcuts.count)")
                 }
             }
-            Section("Voice") {
+            Section {
                 Toggle("Speak Results", isOn: $voiceSpeaks)
+                Toggle("Confirm by Voice", isOn: $voiceConfirms)
+                Toggle("Use Phone Language", isOn: $voicePhoneLanguage)
+            } header: {
+                Text("Voice")
+            } footer: {
+                Text("Confirm by Voice reads the plan aloud and starts on a plain yes, for a new worktree only. Anything else still needs a tap. Use Phone Language is experimental: commands other than English are less reliable, and cannot stop or answer a chat.")
             }
             Section("Terminal") {
                 NavigationLink {

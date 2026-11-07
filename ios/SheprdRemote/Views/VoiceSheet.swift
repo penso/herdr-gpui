@@ -32,7 +32,7 @@ struct VoiceSheet: View {
         case let .failed(reason):
             VoiceProblem(title: "That did not work", detail: reason, session: session)
         case let .answered(words):
-            VoiceAnswered(words: words)
+            VoiceAnswered(words: words, waiting: session.waiting)
         default:
             // Scrolls rather than truncates: the sentence is what is checked.
             ScrollView {
@@ -56,6 +56,8 @@ struct VoiceSheet: View {
             VoiceWorkspaceCard(plan: plan, session: session)
         case let .chat(plan):
             VoiceChatCard(plan: plan)
+        case let .fanOut(plan):
+            VoiceFanOutCard(plan: plan)
         case .needsMe, .unknown:
             EmptyView()
         }
@@ -67,6 +69,8 @@ struct VoiceSheet: View {
             HStack {
                 VoiceWave(levels: session.listener.levels)
                 Spacer()
+                if session.awaitingYes { Text("Say yes to start").font(.headline) }
+                Spacer()
                 Button("Stop listening", systemImage: "stop.fill") { session.stopListening() }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.glassProminent)
@@ -74,8 +78,10 @@ struct VoiceSheet: View {
                     .controlSize(.large)
                     .disabled(session.phase != .listening)
             }
-        case .thinking, .running:
+        case .thinking:
             ProgressView().frame(maxWidth: .infinity, minHeight: 44)
+        case .running:
+            VoiceRunning(since: session.runningSince) { model.voice = nil }
         default:
             VoiceConfirm(session: session) { model.voice = nil }
         }
@@ -314,6 +320,58 @@ private struct VoiceWorkspaceCard: View {
     }
 }
 
+/// One line per computer, and those it cannot run on.
+private struct VoiceFanOutCard: View {
+    let plan: VoicePlan.FanOut
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(plan.plans, id: \.computer?.id) { one in
+                HStack(spacing: 12) {
+                    Image(systemName: "desktopcomputer").foregroundStyle(VoiceSlot.computer.tint).frame(width: 26)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(one.computer?.name ?? "").font(.body.weight(.medium))
+                        Text([one.project?.name, one.agent?.name].compactMap(\.self).joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if let prompt = plan.plans.first?.prompt, !prompt.isEmpty {
+                Divider()
+                Text(prompt).font(.body.weight(.medium))
+            }
+            if !plan.skipped.isEmpty {
+                Text("Skipping \(plan.skipped.joined(separator: ", "))").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+    }
+}
+
+/// Starting can take several seconds. Closing leaves it going; once the
+/// agent runs, the computer's Live Activity carries on from here.
+private struct VoiceRunning: View {
+    let since: Date?
+    let close: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Starting…").font(.headline)
+                if let since {
+                    Text(since, style: .timer).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button("Close", action: close).buttonStyle(.glass)
+        }
+        .frame(minHeight: 44)
+    }
+}
+
 private struct VoiceChatCard: View {
     let plan: VoicePlan.Chat
 
@@ -355,8 +413,20 @@ private struct VoiceConfirm: View {
     private var runnable: Bool {
         switch session.plan {
         case let .workspace(plan): plan.question == nil
+        case let .fanOut(plan): !plan.plans.isEmpty
         case let .chat(plan): plan.action != .unanswerable
         case .needsMe, .unknown: false
+        }
+    }
+
+    /// The button says what it will do.
+    private var action: String {
+        guard case let .chat(plan) = session.plan else { return "Start" }
+        return switch plan.action {
+        case .answer: "Answer"
+        case .ask: "Send"
+        case .stop: "Stop"
+        case .open, .unanswerable: "Start"
         }
     }
 
@@ -379,7 +449,7 @@ private struct VoiceConfirm: View {
                     .buttonStyle(.glass)
                 if runnable {
                     Button { Task { await session.confirm() } } label: {
-                        Text("Start").frame(maxWidth: .infinity).frame(height: 36)
+                        Text(action).frame(maxWidth: .infinity).frame(height: 36)
                     }
                     .buttonStyle(.glassProminent)
                 }
@@ -416,17 +486,18 @@ private struct VoiceDoneView: View {
 private struct VoiceAnswered: View {
     @Environment(AppModel.self) private var model
     let words: String
+    let waiting: [VoiceSession.Waiting]
 
     var body: some View {
         Text(words).font(.title3.weight(.semibold))
-        List(model.fleet.chatItems.filter(\.needsYou)) { item in
+        List(waiting) { item in
             Button {
                 model.voice = nil
-                model.pendingRoute = .chat(item.key, title: item.chat.title)
+                model.pendingRoute = item.route
             } label: {
                 VStack(alignment: .leading) {
-                    Text(item.chat.title)
-                    Text(model.displayName(item.computer)).font(.caption).foregroundStyle(.secondary)
+                    Text(item.title)
+                    Text(item.computer).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }

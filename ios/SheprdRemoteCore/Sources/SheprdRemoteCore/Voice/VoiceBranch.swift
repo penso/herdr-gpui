@@ -7,6 +7,21 @@ public enum VoiceBranch {
     private static let dropped: Set<String> = ["the", "a", "an", "my", "our", "some", "this", "that", "of", "to", "for", "thing", "stuff", "about"]
     private static let longest = 40
 
+    /// Whether `topic` shares words with `task` and has some it does not:
+    /// a topic about the same work with a word that may be misheard. A
+    /// topic sharing nothing is just another way of saying it, left alone.
+    public static func doubtful(topic: String, task: String) -> Bool {
+        let said = Set(VoiceNames.words(task).map(\.text))
+        let meaning = VoiceNames.words(topic).map(\.text).filter { !dropped.contains($0) && !fixes.contains($0) }
+        return meaning.contains(where: said.contains) && !meaning.allSatisfy(said.contains)
+    }
+
+    /// `name` for tidied words, keeping the kind the original topic gave.
+    public static func name(for words: String, topic: String) -> String? {
+        let fixing = VoiceNames.words(topic).map(\.text).contains(where: fixes.contains)
+        return name(for: fixing ? "\(words) fix" : words)
+    }
+
     public static func name(for topic: String) -> String? {
         let words = VoiceNames.words(topic).map(\.text)
         let meaning = words.filter { !dropped.contains($0) && !fixes.contains($0) }

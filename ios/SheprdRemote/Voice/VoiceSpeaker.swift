@@ -1,10 +1,23 @@
 import AVFoundation
 
+/// The choices in Settings > Voice.
+enum VoiceSettings {
+    static let speaksKey = "voiceSpeaks"
+    static let confirmsKey = "voiceConfirms"
+    static let languageKey = "voicePhoneLanguage"
+
+    static var speaks: Bool { UserDefaults.standard.object(forKey: speaksKey) as? Bool ?? true }
+    /// A spoken yes starts a new worktree, for use without looking.
+    static var confirms: Bool { UserDefaults.standard.bool(forKey: confirmsKey) }
+    /// Commands in the phone's language rather than English. Only the
+    /// model can read those, and less reliably.
+    static var phoneLanguage: Bool { UserDefaults.standard.bool(forKey: languageKey) }
+    static var english: Bool { !phoneLanguage || Locale.current.language.languageCode == .english }
+}
+
 /// Says short results and questions aloud, unless turned off in Settings.
 @MainActor
 final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate {
-    static let setting = "voiceSpeaks"
-
     private let synthesizer = AVSpeechSynthesizer()
     private var finished: CheckedContinuation<Void, Never>?
 
@@ -13,13 +26,10 @@ final class VoiceSpeaker: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.delegate = self
     }
 
-    static var enabled: Bool {
-        UserDefaults.standard.object(forKey: setting) as? Bool ?? true
-    }
-
     /// Returns once it has been said, so the microphone does not hear it.
-    func say(_ words: String) async {
-        guard Self.enabled else { return }
+    /// `always` is for a question that needs an answer by voice.
+    func say(_ words: String, always: Bool = false) async {
+        guard always || VoiceSettings.speaks else { return }
         stop()
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback, options: .duckOthers)

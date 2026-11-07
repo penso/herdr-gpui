@@ -30,6 +30,13 @@ public enum VoiceAnswer: Hashable, Sendable {
     case saying(String)
 }
 
+/// Several computers named for one command.
+public enum VoiceFanOut: Hashable, Sendable {
+    case computers([String])
+    /// Every computer that is online.
+    case every
+}
+
 /// What was understood so far: only what was said, with nothing filled in.
 /// `VoicePlan` fills in the rest.
 public struct VoiceDraft: Hashable, Sendable {
@@ -40,6 +47,7 @@ public struct VoiceDraft: Hashable, Sendable {
     /// `VoiceCatalog.Computer.id`.
     public var computer: String?
     public var leastBusy = false
+    public var fanOut: VoiceFanOut?
     public var project: String?
     /// `AgentChoice.id`.
     public var agent: String?
@@ -100,7 +108,11 @@ extension VoiceDraft {
         if draft.chat == nil, let title = reading.chat, heard(title, partly: true) {
             draft.chat = catalog.chats.first { $0.title == title }?.id
         }
-        if draft.topic == nil, let topic = reading.topic, contains(topic) { draft.topic = topic }
+        if draft.topic == nil, let topic = reading.topic, contains(topic) {
+            draft.topic = topic
+            // Only a worktree is about something.
+            draft.worktree = true
+        }
         if draft.task == nil, let task = reading.task, contains(task) { draft.task = task }
         guard !draft.sure, let intent = VoiceIntent(rawValue: reading.action) else { return draft }
         switch intent {

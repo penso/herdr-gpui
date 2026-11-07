@@ -16,7 +16,7 @@ import Testing
         var seconds: [Double] = []
         for item in cases {
             let started = Date()
-            var draft = VoiceParser.parse(item.u, catalog: catalog)
+            var draft = VoiceParser.parse(item.u, catalog: catalog, english: name != "french")
             if model, !draft.sure, let reading = await VoiceModel.read(item.u, catalog: catalog) {
                 draft = draft.adopting(reading, catalog: catalog)
             }
@@ -37,13 +37,27 @@ import Testing
     /// `VOICE_EVAL=1 swift test --filter VoiceEvalTests`.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["VOICE_EVAL"] != nil))
     func report() async throws {
-        for name in ["tuning", "heldout", "heldout2", "transcribed"] {
+        for name in ["tuning", "heldout", "heldout2", "transcribed", "french"] {
             for model in [false, true] {
                 let result = try await score(name, model: model)
                 let median = result.seconds[result.seconds.count / 2]
                 let worst = result.seconds.last ?? 0
                 print("SCORE \(name) \(model ? "rules+model" : "rules") \(result.passed)/\(result.total) median \(String(format: "%.2f", median))s worst \(String(format: "%.2f", worst))s")
             }
+        }
+    }
+
+    /// Prints what the model makes of garbled topics, to read by eye.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["VOICE_EVAL"] != nil))
+    func tidying() async {
+        let cases = [
+            ("login, redirect fog", "fix the redirect loop after the OAuth callback returns"),
+            ("the sidebar rose height", "fix the row height"),
+            ("caching", "add an etag"),
+        ]
+        for (topic, task) in cases {
+            let words = await VoiceModel.tidy(topic: topic, task: task) ?? "nil"
+            print("TIDY \(topic) -> \(words) -> \(VoiceBranch.name(for: words, topic: topic) ?? "nil")")
         }
     }
 }

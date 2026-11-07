@@ -121,7 +121,13 @@ and nothing goes through your phone.
 The waveform button on Home, the Talk to Sheprd Control (for the Action
 button), and Siri open a sheet that listens for a command, such as "new
 worktree on studio about the login bug, and ask Claude to fix it". Commands
-are read as English, whatever the phone's language.
+are read as English unless Settings > Voice > Use Phone Language is on, which
+is experimental: only the model reads those, and it cannot stop or answer a
+chat. They can refer back ("stop it", "same thing on the mini"), name several
+computers ("on every host"), and reach agents in terminal tabs, which take
+pasted text and Escape but show no structured questions. How long the app
+waits for more words depends on what was said (`VoiceEndpoint`). Confirm by
+Voice reads the plan aloud and takes a plain yes, for a new worktree only.
 
 | Step | Where | What |
 | --- | --- | --- |

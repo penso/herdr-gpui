@@ -4,6 +4,8 @@ import Foundation
 /// checked against the fleet, so the card shows exactly what would run.
 public enum VoicePlan: Hashable, Sendable {
     case chat(Chat)
+    /// One command on several computers.
+    case fanOut(FanOut)
     case needsMe
     /// Not a command this app knows.
     case unknown
@@ -37,6 +39,13 @@ public enum VoicePlan: Hashable, Sendable {
         }
     }
 
+    public struct FanOut: Hashable, Sendable {
+        public var plans: [Workspace]
+        /// Computers it cannot run on, by name: offline, or without the
+        /// project or agent.
+        public var skipped: [String]
+    }
+
     /// One thing the app has to ask.
     public enum Question: Hashable, Sendable {
         /// `named` was asked for by name and is not on the computer.
@@ -68,8 +77,21 @@ public enum VoicePlan: Hashable, Sendable {
         switch self {
         case .needsMe, .unknown: false
         case let .chat(chat): chat.action != .open
-        case .workspace: true
+        case .fanOut, .workspace: true
         }
+    }
+
+    /// Whether a spoken yes may run it. Only a new worktree: it touches no
+    /// existing checkout, and an unwanted one is simply deleted.
+    public var confirmableByVoice: Bool {
+        if case let .workspace(plan) = self { plan.question == nil && !plan.branch.isEmpty } else { false }
+    }
+
+    /// The card read aloud, for someone not looking at it.
+    public var readBack: String? {
+        guard case let .workspace(plan) = self, let agent = plan.agent, let computer = plan.computer, let project = plan.project else { return nil }
+        let task = plan.prompt.isEmpty ? "" : " to \(plan.prompt)"
+        return "\(agent.name) on \(computer.name), in \(project.name)\(task). Say yes to start."
     }
 
     /// Fills in `draft`, or says what is missing.
@@ -77,7 +99,9 @@ public enum VoicePlan: Hashable, Sendable {
         switch draft.intent {
         case .needsMe: return .needsMe
         case .none: return .unknown
-        case .newWorkspace: return .workspace(workspace(draft, catalog: catalog))
+        case .newWorkspace:
+            if let fanOut = draft.fanOut { return .fanOut(fanOutPlan(fanOut, draft, catalog: catalog)) }
+            return .workspace(workspace(draft, catalog: catalog))
         case .askChat, .stopChat, .openChat, .answerChat:
             guard let chat = catalog.chats.first(where: { $0.id == draft.chat }) else { return .unknown }
             return .chat(Chat(chat: chat, action: action(draft, chat: chat)))
@@ -91,6 +115,22 @@ public enum VoicePlan: Hashable, Sendable {
         plan.prompt = draft.task ?? draft.text
         plan.branch = draft.branch ?? ""
         return .workspace(plan)
+    }
+
+    private static func fanOutPlan(_ fanOut: VoiceFanOut, _ draft: VoiceDraft, catalog: VoiceCatalog) -> FanOut {
+        let targets: [VoiceCatalog.Computer] = switch fanOut {
+        case .every: catalog.computers
+        case let .computers(ids): ids.compactMap { id in catalog.computers.first { $0.id == id } }
+        }
+        var result = FanOut(plans: [], skipped: [])
+        for computer in targets {
+            var one = draft
+            one.fanOut = nil
+            one.computer = computer.id
+            let plan = workspace(one, catalog: catalog)
+            if plan.question == nil { result.plans.append(plan) } else { result.skipped.append(computer.name) }
+        }
+        return result
     }
 
     private static func action(_ draft: VoiceDraft, chat: VoiceCatalog.Chat) -> Chat.Action {

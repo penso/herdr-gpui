@@ -14,7 +14,8 @@ public enum VoiceModel {
     new_workspace starts an agent in a project or makes a worktree. ask_chat sends words to an existing chat. \
     stop_chat stops one. open_chat shows one. answer_chat allows or denies a chat's question. \
     needs_me asks what is waiting. Anything else is none. Copy the task word for word; never reword it. \
-    Use unspecified when the sentence does not say.
+    Use unspecified when the sentence does not say. The sentence may be in any language: the actions stay as listed, \
+    and the task stays in the sentence's language.
     """
 
     public static var available: Bool {
@@ -40,6 +41,19 @@ public enum VoiceModel {
             topic: value("topic"),
             task: value("task")
         )
+    }
+
+    /// A topic the transcriber may have garbled, put right by the task
+    /// spoken with it: "login, redirect fog" with "fix the redirect loop".
+    /// Only a branch's name comes from this, shown on the card first.
+    public static func tidy(topic: String, task: String) async -> String? {
+        guard available else { return nil }
+        let session = LanguageModelSession(instructions: """
+        A speech transcriber may have misheard a topic. Using the task, reply with two to four plain lowercase English \
+        words naming the work, for a git branch. Reply with only those words.
+        """)
+        let answer = try? await session.respond(to: "Topic: \(topic)\nTask: \(task)", options: GenerationOptions(temperature: 0))
+        return answer?.content
     }
 
     private static func schema(_ catalog: VoiceCatalog) throws -> GenerationSchema {

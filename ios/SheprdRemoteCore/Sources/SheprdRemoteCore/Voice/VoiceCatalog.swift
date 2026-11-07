@@ -75,14 +75,18 @@ public struct VoiceCatalog: Hashable, Sendable {
         public var computer: String
         /// The question waiting, if any.
         public var question: Permission?
+        /// An agent running in a terminal tab rather than a native chat. It
+        /// takes typed text and keys, and shows no structured questions.
+        public var terminal: Bool
         public var id: String { "\(device)/\(pane)" }
 
-        public init(device: String, pane: String, title: String, computer: String, question: Permission? = nil) {
+        public init(device: String, pane: String, title: String, computer: String, question: Permission? = nil, terminal: Bool = false) {
             self.device = device
             self.pane = pane
             self.title = title
             self.computer = computer
             self.question = question
+            self.terminal = terminal
         }
     }
 

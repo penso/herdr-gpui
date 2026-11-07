@@ -37,11 +37,18 @@ public enum VoiceParser {
     private static let skipped: Set<String> = ["the", "my", "our", "a"]
     private static let chatNouns: Set<String> = ["chat", "tab", "session", "agent"]
 
-    /// Reads `text`.
-    public static func parse(_ text: String, catalog: VoiceCatalog) -> VoiceDraft {
+    /// Reads `text`, which may refer to `context`. In another language the
+    /// rules can only pick out names; the model reads the rest.
+    public static func parse(_ text: String, catalog: VoiceCatalog, context: VoiceContext? = nil, english: Bool = true) -> VoiceDraft {
         var draft = VoiceDraft(text: text)
         let words = VoiceNames.words(text)
         guard !words.isEmpty else { return draft }
+        guard english else {
+            draft = edit(draft, saying: text, catalog: catalog)
+            draft.text = text
+            return draft
+        }
+        if let repeated = repeating(context, saying: text, words: words, catalog: catalog) { return repeated }
         let spoken = words.filter { !fillers.contains($0.text) }
         let lower = text.lowercased()
         if needsMe.contains(where: lower.contains) {
@@ -49,6 +56,7 @@ public enum VoiceParser {
             draft.sure = true
             return draft
         }
+        if readPronoun(spoken, into: &draft, context: context) { return draft }
         if readChatCommand(spoken, into: &draft, catalog: catalog) { return draft }
         if let first = spoken.first?.text, refused.contains(first) {
             draft.sure = true
@@ -185,6 +193,10 @@ public enum VoiceParser {
     /// its place left in the prompt.
     private static func peelPlaces(from task: ArraySlice<VoiceWord>, into draft: inout VoiceDraft, catalog: VoiceCatalog) -> Int {
         var end = task.endIndex
+        if let every = everyComputer(in: Array(task)), every.upperBound == task.count {
+            draft.fanOut = .every
+            end = task.startIndex + every.lowerBound
+        }
         while end > task.startIndex {
             let rest = Array(task[task.startIndex..<end])
             if draft.computer == nil, let place = trailingPlace(in: rest, before: ["on", "at"], names: catalog.computers.map(\.name), partly: true) {
@@ -308,7 +320,10 @@ public enum VoiceParser {
             VoiceNames.find(computer.name, in: words, partly: true).map { (computer, $0) }
         }
         // "About studio lighting" says what it is about, not where.
-        let computer = computers.filter { !follows(topicWords, $0.1, in: words) }.max { $0.1.score < $1.1.score }
+        let named = computers.filter { !follows(topicWords, $0.1, in: words) }
+        let computer = named.max { $0.1.score < $1.1.score }
+        if named.count > 1 { draft.fanOut = .computers(named.sorted { $0.1.range.lowerBound < $1.1.range.lowerBound }.map(\.0.id)) }
+        if everyComputer(in: words) != nil { draft.fanOut = .every }
         if let computer {
             draft.computer = computer.0.id
             draft.marks.append(VoiceMark(range: computer.1.range, slot: .computer))

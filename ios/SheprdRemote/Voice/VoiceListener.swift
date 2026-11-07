@@ -30,8 +30,8 @@ final class VoiceListener {
         settled = ""
         guess = ""
         guard await AVAudioApplication.requestRecordPermission() else { throw VoiceError.noMicrophone }
-        // Commands are read as English, whatever the phone's language.
-        let wanted = Locale.current.language.languageCode == .english ? Locale.current : Locale(identifier: "en-US")
+        let wanted = Locale.current.language.languageCode == .english || VoiceSettings.phoneLanguage
+            ? Locale.current : Locale(identifier: "en-US")
         guard let locale = await DictationTranscriber.supportedLocale(equivalentTo: wanted) else { throw VoiceError.noLanguage }
         let transcriber = DictationTranscriber(locale: locale, preset: .progressiveShortDictation)
         if let install = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
@@ -42,7 +42,8 @@ final class VoiceListener {
         }
         guard mine == attempt else { return }
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+        // AirPods and car kits are the point of talking without looking.
+        try session.setCategory(.record, mode: .measurement, options: [.duckOthers, .allowBluetoothHFP])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         let (input, feeding) = AsyncStream.makeStream(of: AnalyzerInput.self)
         let analyzer = SpeechAnalyzer(modules: [transcriber])

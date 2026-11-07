@@ -56,6 +56,11 @@ final class AppModel {
     var creating: Creating?
     /// A spoken command under way, shown as a sheet over every tab.
     var voice: VoiceSession?
+    /// A command asked for while the app was locked; the unlock runs it.
+    struct PendingTalk { var words: String? }
+    @ObservationIgnored var pendingTalk: PendingTalk?
+    /// What the last command was about, so the next can say "it".
+    @ObservationIgnored var voiceContext = VoiceContext()
     /// What each computer last offered a new workspace, by device, so a
     /// spoken command need not wait for the computers to answer again.
     @ObservationIgnored var voiceOptions: [String: NewOptions] = [:]
@@ -133,11 +138,37 @@ final class AppModel {
 
     /// Opens the voice sheet, listening, or with `words` already said.
     func talk(saying words: String? = nil) {
-        // A locked app must not start listening behind its cover.
-        guard voice == nil, !fleet.machines.isEmpty, !LockState.shared.hidesNames else { return }
+        // A locked app must not start listening behind its cover: this
+        // waits for the unlock, which is why the Action button still works.
+        if LockState.shared.hidesNames {
+            pendingTalk = PendingTalk(words: words)
+            return
+        }
+        guard voice == nil, !fleet.machines.isEmpty else { return }
         let session = VoiceSession(model: self)
         voice = session
         Task { await session.begin(saying: words) }
+    }
+
+    /// Native chats, then agents in terminal tabs that are not also one.
+    private func voiceChats() -> [VoiceCatalog.Chat] {
+        let chats = fleet.chatItems.map { item in
+            VoiceCatalog.Chat(
+                device: item.computer.device,
+                pane: item.chat.pane,
+                title: item.chat.title,
+                computer: displayName(item.computer),
+                question: item.question
+            )
+        }
+        let panes = Set(chats.map(\.id))
+        let terminals = fleet.agentTerminals.compactMap { item -> VoiceCatalog.Chat? in
+            guard let pane = item.terminal.agentPane?.pane, !panes.contains("\(item.computer.device)/\(pane)") else { return nil }
+            // A numbered tab cannot be told apart out loud; its workspace can.
+            let title = Int(item.title) == nil ? item.title : item.workspace.label
+            return VoiceCatalog.Chat(device: item.computer.device, pane: pane, title: title, computer: displayName(item.computer), terminal: true)
+        }
+        return chats + terminals
     }
 
     /// What can be named out loud right now.
@@ -153,15 +184,7 @@ final class AppModel {
                     options: voiceOptions[machine.id]
                 )
             },
-            chats: fleet.chatItems.map { item in
-                VoiceCatalog.Chat(
-                    device: item.computer.device,
-                    pane: item.chat.pane,
-                    title: item.chat.title,
-                    computer: displayName(item.computer),
-                    question: item.question
-                )
-            },
+            chats: voiceChats(),
             recentDevice: recentDevice,
             recentAgent: recentAgent
         )
