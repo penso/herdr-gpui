@@ -36,6 +36,7 @@ struct ComputerScreen: View {
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
             }
+            ComputerTagsSection(computer: computer)
             Section {
                 ForEach(addresses, id: \.origin) { address in
                     LabeledContent {

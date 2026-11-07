@@ -184,6 +184,18 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
             }
             Err(error) => Err(error),
         },
+        Request::Tags { offer } => {
+            let Some(offer) = offer else {
+                return Response::Tags(state.tags.current());
+            };
+            return match state.tags.offer(offer, now) {
+                Ok(tags) => Response::Tags(tags),
+                Err(error) => Response::Error {
+                    code: ErrorCode::Unsaved,
+                    message: error.to_string(),
+                },
+            };
+        }
         Request::Indicators { set } => {
             return match state.look.set(crate::web::Indicators::from_config(&set)) {
                 Ok(()) => Response::Done,

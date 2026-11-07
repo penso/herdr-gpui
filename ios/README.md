@@ -97,6 +97,9 @@ and nothing goes through your phone.
    - `-renameWorkspace YES` opens a workspace's rename alert. It lists the
      local Herdr daemon's real workspaces, so pressing Rename changes one.
    - `-newWorkspace YES` opens the new workspace form.
+   - `-computerTags work,lab` tags the first computer, `-computerTagFilter work`
+     filters Workspaces by a tag, and `-openComputer YES` opens the first
+     computer's page from that tab.
    - `-syncBar waiting|failed` shows the sync bar as if a change were on
      its way or had failed.
    - With `-openLink`, `-session YES` opens the chat's session sheet and

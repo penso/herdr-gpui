@@ -14,6 +14,11 @@ pub enum PrCommand {
 pub enum HostCommand {
     List,
     Select(String),
+    /// Replace a host's tags; none clears them.
+    Tag {
+        id: String,
+        tags: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,6 +91,11 @@ pub(super) fn host(args: &mut Args) -> Result<HostCommand, CliError> {
     Ok(match verb.to_str() {
         Some("list") => HostCommand::List,
         Some("select") => HostCommand::Select(args.required_text("HOST")?),
+        Some("tag") => HostCommand::Tag {
+            id: args.required_text("HOST")?,
+            tags: std::iter::from_fn(|| args.optional_text().transpose())
+                .collect::<Result<_, _>>()?,
+        },
         _ => return Err(unknown("host", verb)),
     })
 }

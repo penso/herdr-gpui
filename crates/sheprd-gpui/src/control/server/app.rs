@@ -40,6 +40,7 @@ impl SheprdWindow {
                     label: endpoint.label.clone(),
                     status: status.to_owned(),
                     selected,
+                    tags: self.device_tags.of(&endpoint.id).to_vec(),
                 }
             })
             .collect()

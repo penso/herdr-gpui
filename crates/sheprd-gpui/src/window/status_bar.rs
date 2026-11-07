@@ -8,6 +8,7 @@ use crate::i18n::{Localize, fl};
 use crate::{
     APP_VERSION,
     config::status_bar::{AwakeScope, Button},
+    device_tags::Status,
     state::ConnectionStatus,
 };
 use gpui::{prelude::*, *};
@@ -59,6 +60,7 @@ impl SheprdWindow {
             .text_color(rgb(self.theme.foreground))
             .children(self.render_agent_model(cx))
             .children(usage)
+            .children(self.render_device_tags_status(cx))
             .when_some(
                 self.prefix_armed
                     .then(|| self.keymap().prefix_label())
@@ -195,6 +197,32 @@ impl SheprdWindow {
     /// The focused agent's model, from the `model` and `effort` tokens its
     /// integration reports. For Claude, clicking it opens Claude's own model
     /// picker; other agents show the model only.
+    /// How tags stand with the phones, once something is tagged and a phone
+    /// is paired to read them.
+    fn render_device_tags_status(&self, cx: &Context<Self>) -> Option<Div> {
+        let status = crate::device_tags::DeviceTags::status(cx)?;
+        let phones = crate::remote::Supervisor::devices(cx)?.len();
+        if phones == 0 {
+            return None;
+        }
+        let theme = &self.theme;
+        let (color, text) = match status {
+            Status::Synced => (theme.palette[2], fl!("device-tags-synced", count = phones)),
+            Status::Waiting(count) => (theme.palette[3], fl!("device-tags-waiting", count = count)),
+        };
+        Some(
+            div()
+                .debug_selector(|| "device-tags-status".into())
+                .row()
+                .flex_none()
+                .items_center()
+                .gap(px(4.))
+                .text_color(rgb(theme.subtext()))
+                .child(glyph("icons/phone.svg", theme.ink(color)))
+                .child(text),
+        )
+    }
+
     fn render_agent_model(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         let agent = self.focused_agent()?;
         let label = model_label(agent)?;

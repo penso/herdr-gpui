@@ -183,6 +183,9 @@ extension RootView {
         case "settings": tab = .settings
         default: break
         }
+        if let tags = defaults.string(forKey: "computerTags"), let computer = model.computers.first {
+            model.setTags(tags.split(separator: ",").map(String.init), for: computer)
+        }
         if defaults.bool(forKey: "newWorkspace") {
             try? await Task.sleep(for: .seconds(2))
             model.creating = .workspace(device: nil)

@@ -57,6 +57,7 @@ mod control;
 mod copy_mode;
 mod core_terminals;
 mod daemon;
+mod device_tags;
 mod devices_overview;
 mod dialog_input;
 mod direction;

@@ -47,9 +47,9 @@ struct WorkspacesTab: View {
         .task { if UserDefaults.standard.bool(forKey: "openComputer") { details = model.computers.first?.device } }
         #endif
         .toolbar {
-            if query.isEmpty, model.fleet.machines.count > 1 {
+            if query.isEmpty, machines.count > 1 {
                 ToolbarItem(placement: .topBarTrailing) {
-                    let shown = model.fleet.machines.map(\.id)
+                    let shown = machines.map(\.id)
                     let folded = model.collapsed.computers.allCollapsed(shown)
                     Button(
                         folded ? "Expand All" : "Collapse All",
@@ -68,7 +68,8 @@ struct WorkspacesTab: View {
 
     private var list: some View {
         List {
-            ForEach(model.fleet.machines) { machine in
+            TagFilterBar()
+            ForEach(machines) { machine in
                 let collapsed = model.collapsed.computers.contains(machine.id)
                 Section {
                     if !collapsed { HostRows(computer: machine.computer) }
@@ -112,8 +113,14 @@ struct WorkspacesTab: View {
         }
     }
 
+    /// The computers the tag filter leaves.
+    private var machines: [Fleet.Machine] {
+        let tag = ComputerTags.active(model.tagFilter.tag, among: model.computers)
+        return model.fleet.machines.filter { $0.computer.matches(tag: tag) }
+    }
+
     private var openWorkspaces: Int {
-        model.fleet.machines
+        machines
             .filter { !model.collapsed.computers.contains($0.id) }
             .reduce(0) { $0 + ($1.home?.workspaces.count ?? 0) }
     }
@@ -175,6 +182,11 @@ private struct MachineHeader<Actions: View>: View {
                 if collapsed, let held {
                     Spacer(minLength: 0)
                     Text(held).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            if !machine.computer.tags.isEmpty {
+                PillFlow {
+                    ForEach(machine.computer.tags, id: \.self) { TagPill(tag: $0) }
                 }
             }
         }
@@ -269,13 +281,17 @@ struct RepositoryAvatar: View {
 
     private static let tints: [Color] = [.green, .orange, .blue, .purple, .pink, .teal, .indigo, .brown]
 
+    /// The color `label` picks, here and on tag pills.
+    static func tint(_ label: String) -> Color {
+        tints[label.unicodeScalars.reduce(0) { $0 &+ Int($1.value) } % tints.count]
+    }
+
     var body: some View {
-        let sum = label.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
         Text(label.first.map { String($0).uppercased() } ?? "?")
             .font(.system(size: size * 0.55, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(Self.tints[sum % Self.tints.count].gradient, in: .rect(cornerRadius: size * 0.3))
+            .background(Self.tint(label).gradient, in: .rect(cornerRadius: size * 0.3))
             .accessibilityHidden(true)
     }
 }

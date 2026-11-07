@@ -101,6 +101,7 @@ pub(crate) struct SheprdWindow {
     pub(crate) _activation: Subscription,
     pub(crate) _appearance: Subscription,
     pub(crate) _browser_tabs: Subscription,
+    pub(crate) _device_tags: Subscription,
     pub(crate) _host_theme: Subscription,
     /// Another window may mute or unmute what this one shows.
     pub(crate) _notification_mutes: Subscription,
@@ -182,6 +183,13 @@ pub(crate) struct SheprdWindow {
     /// The device IDs in the order the user dragged them into; see
     /// `endpoint::order`.
     pub(crate) device_order: Vec<String>,
+    /// The tag the sidebar's switch narrows the list to.
+    pub(crate) device_tag_filter: Option<String>,
+    /// The sections folded in the sidebar, for this run like a host's fold;
+    /// see `sidebar::tag_groups`.
+    pub(crate) device_tag_folds: std::collections::HashSet<Option<String>>,
+    /// This app's copy of every device's tags.
+    pub(crate) device_tags: std::sync::Arc<crate::device_tags::Tags>,
     /// Each saved device's terminal theme, read off the UI thread.
     pub(crate) device_themes: device_themes::DeviceThemes,
     /// The Devices overview's activity history and open tabs.
@@ -698,6 +706,7 @@ impl SheprdWindow {
         }
         self.publish_remote_pull_requests(cx);
         self.sync_remote_hosts(window, cx);
+        self.reach_device_tags(cx);
         self.update_merged_cleanup(window, cx);
         if self.update_git() {
             cx.notify();

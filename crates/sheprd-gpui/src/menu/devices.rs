@@ -214,7 +214,19 @@ impl SheprdWindow {
     }
 
     pub(crate) fn device_visible(&self, id: &str) -> bool {
-        self.device_filter.shows(id)
+        self.device_filter.shows(id) && self.device_tag_visible(id)
+    }
+
+    /// Whether the tag switch lists `id`. The device on screen is always
+    /// listed, as it is for a device scope.
+    fn device_tag_visible(&self, id: &str) -> bool {
+        self.device_tag_filter
+            .as_deref()
+            .is_none_or(|tag| self.device_tags.has(id, tag))
+            || self
+                .endpoints
+                .get(self.selected_endpoint)
+                .is_some_and(|endpoint| endpoint.id == id)
     }
 
     /// Lists `scope`'s devices in the sidebar, from the top: the rows a scroll

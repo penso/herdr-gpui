@@ -119,6 +119,12 @@
         "chats": [],
         "terminals": []
       }
-    ]
+    ],
+    "tags": {
+      "tags": [
+        "work"
+      ],
+      "updated_ms": 1770000000000
+    }
   }
 }
