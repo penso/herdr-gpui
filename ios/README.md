@@ -245,7 +245,10 @@ The two must match, so switch both together.
 Detailed, the default, shows the chat and its current step. Generic shows the
 agent and what it is doing in general. A computer chooses in Sheprd's Settings >
 Remote control (`live_activities` in `[remote]`), and a phone chooses with Keep
-Generic in its Settings. The stricter choice wins.
+Generic in its Settings. The stricter choice wins. Turning on Keep Generic ends
+the activities showing, since a title set when one starts cannot change. Choosing
+Generic on the computer applies from the next activity, so one already showing
+keeps its title until it ends.
 
 Questions, their answer buttons, and failure messages also need `notifications =
 "excerpt"`, the default. With `"generic"` a question shows Open, which answers in

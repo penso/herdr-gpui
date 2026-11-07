@@ -101,6 +101,18 @@ final class ActivityTokens {
         }
     }
 
+    /// Tells the computers about Keep Generic. Turned on, it also ends what
+    /// is showing: an activity's title and workspace are fixed when it
+    /// starts, so no later push could take them off the lock screen.
+    /// Computers hear first, so what they start next is already generic.
+    func genericChanged(to generic: Bool) async {
+        await sync()
+        guard generic else { return }
+        for activity in Activity<ChatActivityAttributes>.activities {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
+    }
+
     /// Sends each paired computer (or only the one with CA `only`) its
     /// tokens.
     func sync(only: Fingerprint? = nil) async {

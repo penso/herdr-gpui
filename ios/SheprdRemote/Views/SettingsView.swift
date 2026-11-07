@@ -68,8 +68,8 @@ struct SettingsView: View {
                     Label("Live Activities are off for Sheprd. Turn them on in Settings.", systemImage: "exclamationmark.triangle")
                 }
                 Toggle("Keep Generic", isOn: $genericActivities)
-                    .onChange(of: genericActivities) {
-                        Task { await model.tokens.sync() }
+                    .onChange(of: genericActivities) { _, generic in
+                        Task { await model.tokens.genericChanged(to: generic) }
                     }
                 #if DEBUG
                 Button("Start a sample activity") { model.startSample() }
