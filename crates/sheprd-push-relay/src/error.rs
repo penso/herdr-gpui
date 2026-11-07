@@ -13,10 +13,11 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
-    #[error("the relay's database failed")]
-    Database(#[from] rusqlite::Error),
     #[error("{} has no APNs config", path.display())]
     NoApnsConfig { path: PathBuf },
+    #[cfg(not(feature = "postgres"))]
+    #[error("this relay was built without Postgres")]
+    NoPostgres,
     #[error("{} is open to other users", path.display())]
     NotPrivate { path: PathBuf },
     #[error("could not start the runtime")]
@@ -31,8 +32,8 @@ pub enum Error {
     SecretSize { path: PathBuf },
     #[error("the server failed")]
     Serve(#[source] io::Error),
-    #[error("the database task did not finish")]
-    Task(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    Store(#[from] crate::store::Error),
     // keep-sorted end
 }
 

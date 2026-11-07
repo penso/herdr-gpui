@@ -14,7 +14,8 @@
 //! - [`credential`]: what proves a device may push, valid for thirty days.
 //! - [`handle`]: a token and credential sealed to the relay.
 //! - [`limit`]: rate limits, in memory.
-//! - [`store`]: revocations, the only state kept on disk.
+//! - [`store`]: revocations, the only state kept, in memory unless the
+//!   operator chooses a database.
 //! - [`relay`]: the checks, in order, and the reply each one gives.
 //! - [`web`]: the HTTP API.
 //!
@@ -33,7 +34,7 @@ pub mod web;
 
 pub use error::{Error, Result};
 pub use handle::{Handle, Kind};
-pub use options::{Options, USAGE};
+pub use options::{Backend, Options, USAGE};
 pub use serve::serve;
 
 #[cfg(test)]

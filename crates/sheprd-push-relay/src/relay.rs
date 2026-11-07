@@ -6,7 +6,7 @@ use crate::{
     credential::{Credential, DeviceId, Issuer},
     handle::{Handle, Keyring},
     limit::{Limiter, Rates, source_key},
-    store::{Revoked, Store},
+    store::{Memory, Revoked, Store},
 };
 use serde::{Deserialize, Serialize};
 use sheprd_apns::{DeviceToken, Host, MAX_PAYLOAD, Outcome, Priority, Push, PushType, Sender};
@@ -87,23 +87,23 @@ struct Limits {
 }
 
 /// One relay instance serves one APNs environment.
-pub struct Relay<G> {
+pub struct Relay<G, S = Memory> {
     environment: Host,
     gateway: G,
     issuer: Issuer,
     keys: Keyring,
     limits: Mutex<Limits>,
-    store: Store,
+    store: S,
 }
 
-impl<G: Gateway> Relay<G> {
+impl<G: Gateway, S: Store> Relay<G, S> {
     #[must_use]
     pub fn new(
         gateway: G,
         environment: Host,
         issuer: Issuer,
         keys: Keyring,
-        store: Store,
+        store: S,
         rates: Rates,
     ) -> Self {
         Self {

@@ -17,7 +17,7 @@ use sheprd_push_relay::{
     handle::{Keyring, key_id},
     limit::Rates,
     relay::{Gateway, PushRequest, Relay, Reply, RevokeRequest},
-    store::Store,
+    store::Sqlite,
 };
 use std::{
     collections::VecDeque,
@@ -118,7 +118,7 @@ async fn nothing_of_a_push_reaches_the_disk_or_the_logs() {
         Host::Production,
         Issuer::new(&secret).unwrap(),
         Keyring::new(key, None),
-        Store::open(dir.path().join("relay.sqlite")).unwrap(),
+        Sqlite::open(dir.path().join("relay.sqlite")).unwrap(),
         Rates::default(),
     );
 

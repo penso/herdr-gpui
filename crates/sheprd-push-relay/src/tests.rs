@@ -5,7 +5,7 @@ use crate::{
     handle::{Keyring, key_id},
     limit::{Rate, Rates},
     relay::{Gateway, PushRequest, Relay},
-    store::Store,
+    store::Memory,
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use p256::SecretKey;
@@ -16,7 +16,6 @@ use std::{
     net::IpAddr,
     sync::{Arc, Mutex},
 };
-use tempfile::TempDir;
 
 mod credential;
 mod handle;
@@ -125,17 +124,15 @@ impl Gateway for Apple {
     }
 }
 
-/// A relay on a mock APNs with a database in a temporary directory.
+/// A relay on a mock APNs.
 struct Fixture {
     apple: Apple,
-    dir: TempDir,
     relay: Relay<Apple>,
-    store: Store,
+    store: Memory,
 }
 
 fn fixture_with(rates: Rates) -> Fixture {
-    let dir = tempfile::tempdir().unwrap();
-    let store = Store::open(dir.path().join("relay.sqlite")).unwrap();
+    let store = Memory::default();
     let apple = Apple::default();
     let relay = Relay::new(
         apple.clone(),
@@ -147,7 +144,6 @@ fn fixture_with(rates: Rates) -> Fixture {
     );
     Fixture {
         apple,
-        dir,
         relay,
         store,
     }

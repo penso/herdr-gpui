@@ -1,12 +1,12 @@
-//! Starting the relay: its secrets, its database, and its socket.
+//! Starting the relay: its secrets, its store, and its socket.
 
 use crate::{
-    Error, Options, Result,
+    Backend, Error, Options, Result,
     credential::Issuer,
     handle::Keyring,
     limit::Rates,
     relay::Relay,
-    store::Store,
+    store::{Memory, Sqlite, Store},
     web::{self, Source},
 };
 use sheprd_apns::{Config, Sender, is_private, load_secret_key};
@@ -24,6 +24,30 @@ const MIN_SECRET: usize = 32;
 
 /// Runs the relay until it is told to stop.
 pub async fn serve(options: Options) -> Result<()> {
+    match &options.backend {
+        Backend::Memory => run(&options, Memory::default()).await,
+        Backend::Postgres => postgres(&options).await,
+        Backend::Sqlite(path) => run(&options, Sqlite::open(path)?).await,
+    }
+}
+
+#[cfg(feature = "postgres")]
+async fn postgres(options: &Options) -> Result<()> {
+    use crate::store::Postgres;
+    let path = options.secrets.join("postgres-url");
+    let url = String::from_utf8(read_private(&path)?)
+        .map_err(|_| Error::SecretSize { path: path.clone() })?;
+    let ca = options.secrets.join("postgres-ca.pem");
+    let ca = ca.exists().then_some(ca.as_path());
+    run(options, Postgres::connect(url.trim(), ca).await?).await
+}
+
+#[cfg(not(feature = "postgres"))]
+async fn postgres(_: &Options) -> Result<()> {
+    Err(Error::NoPostgres)
+}
+
+async fn run(options: &Options, store: impl Store) -> Result<()> {
     let config = Config::load(&options.secrets)?.ok_or_else(|| Error::NoApnsConfig {
         path: options.secrets.clone(),
     })?;
@@ -38,7 +62,6 @@ pub async fn serve(options: Options) -> Result<()> {
     );
     let secret = options.secrets.join("credential-secret");
     let issuer = Issuer::new(&read_secret(&secret)?).ok_or(Error::SecretSize { path: secret })?;
-    let store = Store::open(&options.database)?;
     let relay = Relay::new(
         Sender::new(config)?,
         environment,
@@ -69,20 +92,26 @@ pub async fn serve(options: Options) -> Result<()> {
     .map_err(Error::Serve)
 }
 
-/// The credential secret, refusing a file others can read or a short one.
-pub(crate) fn read_secret(path: &Path) -> Result<Vec<u8>> {
-    let owned = || -> PathBuf { path.to_owned() };
+/// A secret file's bytes, refusing one others can read.
+fn read_private(path: &Path) -> Result<Vec<u8>> {
     let read = |source| Error::SecretRead {
-        path: owned(),
+        path: path.to_owned(),
         source,
     };
     if !is_private(&fs::symlink_metadata(path).map_err(read)?) {
-        return Err(Error::NotPrivate { path: owned() });
+        return Err(Error::NotPrivate {
+            path: path.to_owned(),
+        });
     }
-    let text = fs::read_to_string(path).map_err(read)?;
-    let hex = text.trim();
+    fs::read(path).map_err(read)
+}
+
+/// The credential secret, refusing a file others can read or a short one.
+pub(crate) fn read_secret(path: &Path) -> Result<Vec<u8>> {
+    let owned = || -> PathBuf { path.to_owned() };
+    let text = read_private(path)?;
+    let hex = text.trim_ascii();
     let bytes: Option<Vec<u8>> = hex
-        .as_bytes()
         .chunks(2)
         .map(|pair| {
             let pair = std::str::from_utf8(pair).ok()?;
@@ -94,7 +123,7 @@ pub(crate) fn read_secret(path: &Path) -> Result<Vec<u8>> {
         .ok_or_else(|| Error::SecretSize { path: owned() })
 }
 
-async fn purge(store: Store) {
+async fn purge(store: impl Store) {
     let mut ticks = tokio::time::interval(PURGE);
     loop {
         ticks.tick().await;

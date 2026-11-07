@@ -10,11 +10,9 @@ use http_body_util::BodyExt as _;
 use std::net::SocketAddr;
 use tower::ServiceExt as _;
 
-fn app(rates: Rates, source: Source) -> (Router, Apple, TempDir) {
-    let Fixture {
-        apple, dir, relay, ..
-    } = fixture_with(rates);
-    (router(relay, source), apple, dir)
+fn app(rates: Rates, source: Source) -> (Router, Apple) {
+    let Fixture { apple, relay, .. } = fixture_with(rates);
+    (router(relay, source), apple)
 }
 
 fn post(path: &str, body: impl Into<Body>) -> Request<Body> {
@@ -47,7 +45,7 @@ fn body(handle: String) -> String {
 
 #[tokio::test]
 async fn a_push_is_delivered_with_the_wire_names() {
-    let (app, apple, _dir) = app(Rates::default(), Source::Peer);
+    let (app, apple) = app(Rates::default(), Source::Peer);
     let wire = json!({
         "handle": live_handle(1),
         "payload": PAYLOAD,
@@ -62,7 +60,7 @@ async fn a_push_is_delivered_with_the_wire_names() {
 
 #[tokio::test]
 async fn each_reply_has_its_status() {
-    let (app, apple, _dir) = app(Rates::default(), Source::Peer);
+    let (app, apple) = app(Rates::default(), Source::Peer);
     let (status, text) = send(&app, post("/v1/push", body("junk".to_owned()))).await;
     assert_eq!(
         (status, text.as_str()),
@@ -89,7 +87,7 @@ async fn each_reply_has_its_status() {
 
 #[tokio::test]
 async fn a_caller_cannot_choose_the_topic_or_host() {
-    let (app, apple, _dir) = app(Rates::default(), Source::Peer);
+    let (app, apple) = app(Rates::default(), Source::Peer);
     for field in ["topic", "topic_suffix", "host", "token"] {
         let mut wire = json!({
             "handle": live_handle(1),
@@ -110,7 +108,7 @@ async fn a_caller_cannot_choose_the_topic_or_host() {
 
 #[tokio::test]
 async fn malformed_bodies_quote_nothing_back() {
-    let (app, _apple, _dir) = app(Rates::default(), Source::Peer);
+    let (app, _apple) = app(Rates::default(), Source::Peer);
     let (status, text) = send(&app, post("/v1/push", "{\"handle\":\"quoted\"")).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(text, r#"{"outcome":"invalid"}"#);
@@ -122,7 +120,7 @@ async fn malformed_bodies_spend_the_source_limit() {
         source: tight(1),
         ..Rates::default()
     };
-    let (app, _apple, _dir) = app(rates, Source::Peer);
+    let (app, _apple) = app(rates, Source::Peer);
     let (status, _) = send(&app, post("/v1/push", "junk")).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let (status, _) = send(&app, post("/v1/push", "junk")).await;
@@ -131,14 +129,14 @@ async fn malformed_bodies_spend_the_source_limit() {
 
 #[tokio::test]
 async fn bodies_are_bounded() {
-    let (app, _apple, _dir) = app(Rates::default(), Source::Peer);
+    let (app, _apple) = app(Rates::default(), Source::Peer);
     let (status, _) = send(&app, post("/v1/push", "x".repeat(17 * 1024))).await;
     assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
 }
 
 #[tokio::test]
 async fn a_revoke_is_answered() {
-    let (app, _apple, _dir) = app(Rates::default(), Source::Peer);
+    let (app, _apple) = app(Rates::default(), Source::Peer);
     let handle = live_handle(1);
     let wire = json!({ "handle": handle }).to_string();
     let (status, text) = send(&app, post("/v1/revoke", wire)).await;
@@ -152,7 +150,7 @@ async fn a_revoke_is_answered() {
 
 #[tokio::test]
 async fn the_health_check_needs_nothing() {
-    let (app, _apple, _dir) = app(Rates::default(), Source::Peer);
+    let (app, _apple) = app(Rates::default(), Source::Peer);
     let request = Request::get("/healthz").body(Body::empty()).unwrap();
     let (status, text) = send(&app, request).await;
     assert_eq!((status, text.as_str()), (StatusCode::OK, "ok"));
@@ -173,7 +171,7 @@ async fn forwarded_addresses_count_only_behind_a_proxy() {
         ..Rates::default()
     };
     // Without a proxy, a caller cannot dodge the limit by naming addresses.
-    let (app_direct, _apple, _dir) = app(rates, Source::Peer);
+    let (app_direct, _apple) = app(rates, Source::Peer);
     let (status, _) = send(&app_direct, forwarded("198.51.100.1")).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     let (status, _) = send(&app_direct, forwarded("198.51.100.2")).await;
@@ -181,11 +179,30 @@ async fn forwarded_addresses_count_only_behind_a_proxy() {
 
     // Behind one, the last entry is what the proxy saw; earlier ones are the
     // caller's own claims.
-    let (proxied, _apple, _dir) = app(rates, Source::Proxy);
+    let (proxied, _apple) = app(rates, Source::Proxy);
     let (status, _) = send(&proxied, forwarded("1.1.1.1, 198.51.100.1")).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     let (status, _) = send(&proxied, forwarded("2.2.2.2, 198.51.100.1")).await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     let (status, _) = send(&proxied, forwarded("198.51.100.2")).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+/// The daemon's client and this relay must agree on the wire.
+#[test]
+fn the_daemons_body_is_what_the_relay_reads() {
+    use sheprd_apns::{Priority, Push, PushType, push_body};
+    let push = Push {
+        body: br#"{"aps":{}}"#.to_vec(),
+        collapse_id: Some("chat-1".to_owned()),
+        priority: Priority::Low,
+        push_type: PushType::Background,
+    };
+    let body = push_body("the-handle", &push).unwrap().unwrap();
+    let read: PushRequest = serde_json::from_slice(&body).unwrap();
+    assert_eq!(read.handle, "the-handle");
+    assert_eq!(read.payload.as_bytes(), push.body);
+    assert_eq!(read.collapse_id.as_deref(), Some("chat-1"));
+    assert_eq!(read.priority, Priority::Low);
+    assert_eq!(read.push_type, PushType::Background);
 }

@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     credential::LIFETIME_S,
     relay::{Reply, RevokeRequest},
-    store::Revoked,
+    store::{Revoked, Store},
 };
 
 fn alert(fixture_handle: String) -> PushRequest {
@@ -291,4 +291,18 @@ async fn a_handle_is_limited_alone() {
         let push = alert(handle(PHONE, "alert", id));
         assert_eq!(fixture.relay.push(source(), push, NOW_MS).await, expected);
     }
+}
+
+/// What a restart on the memory store means: a relay with an empty store and
+/// the same keys takes the handles the daemons already hold.
+#[tokio::test]
+async fn a_handle_made_before_a_restart_works_after_it() {
+    let handle = handle(PHONE, "alert", 1);
+    let before = fixture();
+    let reply = before.relay.push(source(), alert(handle.clone()), NOW_MS);
+    assert_eq!(reply.await, Reply::Delivered);
+    drop(before);
+    let after = fixture();
+    let reply = after.relay.push(source(), alert(handle), NOW_MS);
+    assert_eq!(reply.await, Reply::Delivered);
 }

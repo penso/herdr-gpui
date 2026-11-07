@@ -223,6 +223,9 @@ unicode-segmentation = "1"
 unicode-width        = "0.2.2"
 ureq                 = "3"
 webpki-roots         = "1"
+# The push relay's optional shared store; TLS comes from `rustls` above.
+tokio-postgres       = { default-features = false, features = ["runtime"], version = "0.7" }
+tokio-postgres-rustls = "0.13"
 uuid                 = { features = ["serde", "v4", "v5"], version = "1" }
 # Window shell properties behind the taskbar relaunch identity; the version
 # GPUI's Windows platform already links.

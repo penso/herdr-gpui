@@ -2,17 +2,25 @@
 //! read-only, so none of them reach the process's arguments or environment.
 
 use crate::{Error, Result};
-use std::{ffi::OsString, net::SocketAddr, path::PathBuf};
+use std::{
+    ffi::{OsStr, OsString},
+    net::SocketAddr,
+    path::PathBuf,
+};
 
 pub const USAGE: &str = "\
 sheprd-push-relay: forwards sealed pushes to APNs for the iOS app.
 
-Usage: sheprd-push-relay --secrets DIR --database FILE [--listen ADDRESS] [--behind-proxy]
+Usage: sheprd-push-relay --secrets DIR [--store STORE] [--listen ADDRESS] [--behind-proxy]
 
   --secrets DIR      Holds apns/config.json, apns/AuthKey.p8, relay-key.pem,
                      optionally relay-key-previous.pem, and credential-secret
                      (32 or more bytes as hex). All private to this user.
-  --database FILE    The SQLite file for revocations.
+  --store STORE      Where revocations live: memory (default), sqlite:FILE, or
+                     postgres, which reads postgres-url from the secrets and
+                     trusts postgres-ca.pem there if there is one. Pushes keep
+                     working through a restart in any of them; memory forgets
+                     revocations, which then lapse with their credentials.
   --listen ADDRESS   Where to listen (default 127.0.0.1:8080).
   --behind-proxy     Take the caller's address from X-Forwarded-For. Use only
                      when nothing can reach the relay except that proxy.
@@ -20,11 +28,34 @@ Usage: sheprd-push-relay --secrets DIR --database FILE [--listen ADDRESS] [--beh
 
 const DEFAULT_LISTEN: ([u8; 4], u16) = ([127, 0, 0, 1], 8080);
 
+/// Which store to run, as `--store` names it.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub enum Backend {
+    // keep-sorted start
+    #[default]
+    Memory,
+    Postgres,
+    Sqlite(PathBuf),
+    // keep-sorted end
+}
+
+impl Backend {
+    fn parse(text: &OsStr) -> Option<Self> {
+        let text = text.to_str()?;
+        match text.split_once(':') {
+            None if text == "memory" => Some(Self::Memory),
+            None if text == "postgres" => Some(Self::Postgres),
+            Some(("sqlite", path)) if !path.is_empty() => Some(Self::Sqlite(path.into())),
+            _ => None,
+        }
+    }
+}
+
 /// What the relay was started with.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Options {
+    pub backend: Backend,
     pub behind_proxy: bool,
-    pub database: PathBuf,
     pub listen: SocketAddr,
     pub secrets: PathBuf,
 }
@@ -33,8 +64,8 @@ impl Options {
     /// The options in `arguments`, or `None` when they ask for help.
     pub fn parse(arguments: impl IntoIterator<Item = OsString>) -> Result<Option<Self>> {
         let mut arguments = arguments.into_iter();
+        let mut backend = Backend::default();
         let mut behind_proxy = false;
-        let mut database = None;
         let mut listen = SocketAddr::from(DEFAULT_LISTEN);
         let mut secrets = None;
         while let Some(argument) = arguments.next() {
@@ -45,7 +76,6 @@ impl Options {
             };
             match argument.to_str() {
                 Some("--behind-proxy") => behind_proxy = true,
-                Some("--database") => database = Some(PathBuf::from(value()?)),
                 Some("--help") => return Ok(None),
                 Some("--listen") => {
                     let text = value()?;
@@ -55,6 +85,10 @@ impl Options {
                         .ok_or(Error::Argument { argument: text })?;
                 }
                 Some("--secrets") => secrets = Some(PathBuf::from(value()?)),
+                Some("--store") => {
+                    let text = value()?;
+                    backend = Backend::parse(&text).ok_or(Error::Argument { argument: text })?;
+                }
                 _ => return Err(Error::Argument { argument }),
             }
         }
@@ -62,8 +96,8 @@ impl Options {
             argument: name.into(),
         };
         Ok(Some(Self {
+            backend,
             behind_proxy,
-            database: database.ok_or_else(|| missing("--database"))?,
             listen,
             secrets: secrets.ok_or_else(|| missing("--secrets"))?,
         }))

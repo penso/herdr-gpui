@@ -1,4 +1,4 @@
-use crate::{Error, Options};
+use crate::{Backend, Error, Options};
 use std::{ffi::OsString, net::SocketAddr, path::PathBuf};
 
 fn parse(arguments: &[&str]) -> crate::Result<Option<Options>> {
@@ -7,11 +7,9 @@ fn parse(arguments: &[&str]) -> crate::Result<Option<Options>> {
 
 #[test]
 fn takes_the_required_paths_and_defaults_to_loopback() {
-    let options = parse(&["--secrets", "/s", "--database", "/d"])
-        .unwrap()
-        .unwrap();
+    let options = parse(&["--secrets", "/s"]).unwrap().unwrap();
     assert_eq!(options.secrets, PathBuf::from("/s"));
-    assert_eq!(options.database, PathBuf::from("/d"));
+    assert_eq!(options.backend, Backend::Memory);
     assert!(options.listen.ip().is_loopback());
     assert!(!options.behind_proxy);
 }
@@ -24,12 +22,13 @@ fn takes_every_option() {
         "0.0.0.0:9000",
         "--secrets",
         "/s",
-        "--database",
-        "/d",
+        "--store",
+        "sqlite:/d",
     ])
     .unwrap()
     .unwrap();
     assert!(options.behind_proxy);
+    assert_eq!(options.backend, Backend::Sqlite(PathBuf::from("/d")));
     assert_eq!(
         options.listen,
         "0.0.0.0:9000".parse::<SocketAddr>().unwrap()
@@ -45,15 +44,31 @@ fn help_starts_nothing() {
 fn bad_arguments_are_refused() {
     for arguments in [
         &[][..],
-        &["--secrets", "/s"],
-        &["--database", "/d"],
+        &["--store", "memory"],
         &["--secrets"],
         &["--nope"],
-        &["--secrets", "/s", "--database", "/d", "--listen", "here"],
+        &["--secrets", "/s", "--listen", "here"],
+        &["--secrets", "/s", "--store", "redis"],
+        &["--secrets", "/s", "--store", "sqlite:"],
+        &["--secrets", "/s", "--store", "memory:/d"],
+        &[
+            "--secrets",
+            "/s",
+            "--store",
+            "postgres://user:secret@host/db",
+        ],
     ] {
         assert!(
             matches!(parse(arguments), Err(Error::Argument { .. })),
             "{arguments:?}"
         );
     }
+}
+
+#[test]
+fn postgres_takes_no_address_on_the_command_line() {
+    let options = parse(&["--secrets", "/s", "--store", "postgres"])
+        .unwrap()
+        .unwrap();
+    assert_eq!(options.backend, Backend::Postgres);
 }

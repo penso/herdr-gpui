@@ -1,20 +1,36 @@
-//! The one file the relay keeps: revocations. No token or payload may ever
-//! reach it, which a test checks. Losing it costs only the revocations.
+//! What the relay keeps: revocations, and nothing else. No token or payload
+//! may ever reach a store, which a test checks.
+//!
+//! Which one runs is the operator's choice:
+//!
+//! - [`Memory`], the default, needs no disk or database. A restart forgets
+//!   revocations, so a revoked handle works again until its credential
+//!   expires, at most thirty days on. Pushes keep working through a restart:
+//!   each one carries its own sealed handle.
+//! - [`Sqlite`] keeps them in a file.
+//! - `Postgres`, with the `postgres` feature, keeps them in a database that
+//!   several relays can share.
 
-use crate::{Result, credential::DeviceId};
-use rusqlite::{Connection, params};
+use crate::credential::DeviceId;
 use std::{
-    path::Path,
-    sync::{Arc, Mutex, PoisonError},
+    collections::HashMap,
+    future::Future,
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
 
-const SCHEMA: &str = "
-    PRAGMA journal_mode = WAL;
-    CREATE TABLE IF NOT EXISTS revoked (
-        id TEXT PRIMARY KEY NOT NULL,
-        until_s INTEGER NOT NULL
-    ) WITHOUT ROWID;
-";
+mod error;
+#[cfg(feature = "postgres")]
+mod postgres;
+mod sqlite;
+
+pub use error::{Error, Result};
+#[cfg(feature = "postgres")]
+pub use postgres::Postgres;
+pub use sqlite::Sqlite;
+
+/// The most revocations [`Memory`] holds. Past this it refuses a new one, so
+/// the caller hears it failed rather than the relay running out of memory.
+const MAX_MEMORY: usize = 1 << 20;
 
 /// What a revocation covers. Handle and device ids share one table, so each
 /// is stored under its own prefix.
@@ -36,70 +52,59 @@ impl Revoked {
     }
 }
 
-/// The database, on blocking threads so a slow disk does not hold the runtime.
-#[derive(Clone)]
-pub struct Store {
-    connection: Arc<Mutex<Connection>>,
+/// Where revocations live. An error means the answer is unknown: the relay
+/// then refuses the push, since the revocation may be in force.
+pub trait Store: Clone + Send + Sync + 'static {
+    /// Revokes `what` until `until_s`, after which its credential has
+    /// expired anyway and the record can go. Revoking twice keeps the later
+    /// date.
+    fn revoke(&self, what: &Revoked, until_s: u64) -> impl Future<Output = Result<()>> + Send;
+
+    /// Whether the device or the handle has been revoked.
+    fn is_revoked(
+        &self,
+        device: DeviceId,
+        handle: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Drops revocations whose credentials have expired, returning how many.
+    fn purge(&self, now_s: u64) -> impl Future<Output = Result<usize>> + Send;
 }
 
-impl Store {
-    /// Opens or creates the database at `path`. Blocking file I/O.
-    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let connection = Connection::open(path)?;
-        connection.execute_batch(SCHEMA)?;
-        Ok(Self {
-            connection: Arc::new(Mutex::new(connection)),
-        })
-    }
+/// Revocations for as long as the process runs.
+#[derive(Clone, Debug, Default)]
+pub struct Memory {
+    revoked: Arc<Mutex<HashMap<String, u64>>>,
+}
 
-    async fn with<T: Send + 'static>(
-        &self,
-        work: impl FnOnce(&Connection) -> rusqlite::Result<T> + Send + 'static,
-    ) -> Result<T> {
-        let connection = self.connection.clone();
-        let result = tokio::task::spawn_blocking(move || {
-            work(&connection.lock().unwrap_or_else(PoisonError::into_inner))
-        })
-        .await?;
-        Ok(result?)
+impl Memory {
+    fn revoked(&self) -> MutexGuard<'_, HashMap<String, u64>> {
+        self.revoked.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
 
-    /// Revokes `what` until `until_s`, after which its credential has expired
-    /// anyway and the row can go.
-    pub async fn revoke(&self, what: &Revoked, until_s: u64) -> Result<()> {
+impl Store for Memory {
+    async fn revoke(&self, what: &Revoked, until_s: u64) -> Result<()> {
         let key = what.key();
-        let until_s = i64::try_from(until_s).unwrap_or(i64::MAX);
-        self.with(move |connection| {
-            connection.execute(
-                "INSERT INTO revoked (id, until_s) VALUES (?1, ?2)
-                 ON CONFLICT (id) DO UPDATE SET until_s = max(until_s, ?2)",
-                params![key, until_s],
-            )
-        })
-        .await?;
+        let mut revoked = self.revoked();
+        if revoked.len() >= MAX_MEMORY && !revoked.contains_key(&key) {
+            return Err(Error::Full);
+        }
+        let until = revoked.entry(key).or_default();
+        *until = until_s.max(*until);
         Ok(())
     }
 
-    /// Whether the device or the handle has been revoked.
-    pub async fn is_revoked(&self, device: DeviceId, handle: &str) -> Result<bool> {
-        let device = Revoked::Device(device).key();
-        let handle = Revoked::Handle(handle.to_owned()).key();
-        self.with(move |connection| {
-            connection.query_row(
-                "SELECT EXISTS (SELECT 1 FROM revoked WHERE id IN (?1, ?2))",
-                params![device, handle],
-                |row| row.get(0),
-            )
-        })
-        .await
+    async fn is_revoked(&self, device: DeviceId, handle: &str) -> Result<bool> {
+        let revoked = self.revoked();
+        Ok(revoked.contains_key(&Revoked::Device(device).key())
+            || revoked.contains_key(&Revoked::Handle(handle.to_owned()).key()))
     }
 
-    /// Drops revocations whose credentials have expired, returning how many.
-    pub async fn purge(&self, now_s: u64) -> Result<usize> {
-        let now_s = i64::try_from(now_s).unwrap_or(i64::MAX);
-        self.with(move |connection| {
-            connection.execute("DELETE FROM revoked WHERE until_s <= ?1", params![now_s])
-        })
-        .await
+    async fn purge(&self, now_s: u64) -> Result<usize> {
+        let mut revoked = self.revoked();
+        let before = revoked.len();
+        revoked.retain(|_, until_s| *until_s > now_s);
+        Ok(before - revoked.len())
     }
 }

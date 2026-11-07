@@ -1,7 +1,10 @@
 //! The HTTP API. Bodies are bounded and parsed here, so that a parse error's
 //! text, which can quote the request, never reaches a response or a log.
 
-use crate::relay::{Gateway, PushRequest, Relay, Reply, RevokeRequest};
+use crate::{
+    relay::{Gateway, PushRequest, Relay, Reply, RevokeRequest},
+    store::Store,
+};
 use axum::{
     Json, Router,
     body::Bytes,
@@ -30,8 +33,8 @@ pub enum Source {
     Proxy,
 }
 
-struct Shared<G> {
-    relay: Relay<G>,
+struct Shared<G, S> {
+    relay: Relay<G, S>,
     source: Source,
 }
 
@@ -56,38 +59,38 @@ impl IntoResponse for Reply {
 }
 
 /// The relay's routes.
-pub fn router<G: Gateway>(relay: Relay<G>, source: Source) -> Router {
+pub fn router<G: Gateway, S: Store>(relay: Relay<G, S>, source: Source) -> Router {
     Router::new()
         .route("/healthz", get(|| async { "ok" }))
-        .route("/v1/push", post(push::<G>))
-        .route("/v1/revoke", post(revoke::<G>))
+        .route("/v1/push", post(push::<G, S>))
+        .route("/v1/revoke", post(revoke::<G, S>))
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .with_state(Arc::new(Shared { relay, source }))
 }
 
-async fn push<G: Gateway>(
-    State(shared): State<Arc<Shared<G>>>,
+async fn push<G: Gateway, S: Store>(
+    State(shared): State<Arc<Shared<G, S>>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Reply {
     let source = source(shared.source, peer, &headers);
     let now_ms = now_ms();
-    match parsed::<PushRequest, G>(&shared.relay, source, &body, now_ms) {
+    match parsed::<PushRequest, G, S>(&shared.relay, source, &body, now_ms) {
         Ok(request) => shared.relay.push(source, request, now_ms).await,
         Err(reply) => reply,
     }
 }
 
-async fn revoke<G: Gateway>(
-    State(shared): State<Arc<Shared<G>>>,
+async fn revoke<G: Gateway, S: Store>(
+    State(shared): State<Arc<Shared<G, S>>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Reply {
     let source = source(shared.source, peer, &headers);
     let now_ms = now_ms();
-    match parsed::<RevokeRequest, G>(&shared.relay, source, &body, now_ms) {
+    match parsed::<RevokeRequest, G, S>(&shared.relay, source, &body, now_ms) {
         Ok(request) => shared.relay.revoke(source, request, now_ms).await,
         Err(reply) => reply,
     }
@@ -95,8 +98,8 @@ async fn revoke<G: Gateway>(
 
 /// The request in `body`. A malformed one still spends the source's limit,
 /// or junk could be sent without any.
-fn parsed<T: DeserializeOwned, G: Gateway>(
-    relay: &Relay<G>,
+fn parsed<T: DeserializeOwned, G: Gateway, S: Store>(
+    relay: &Relay<G, S>,
     source: IpAddr,
     body: &[u8],
     now_ms: u64,
