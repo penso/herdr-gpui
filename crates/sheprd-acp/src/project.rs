@@ -247,6 +247,12 @@ impl Projector {
         self.tools.retain(|_, id| *id >= before);
     }
 
+    /// Forgets the calls of entries a rewind dropped, `from` on. Ids keep
+    /// growing past them, so nothing a client drew is taken for a new entry.
+    pub(crate) fn forget_from(&mut self, from: EntryId) {
+        self.tools.retain(|_, id| *id < from);
+    }
+
     /// Records a call a bridge may have tagged, with the activity it starts
     /// or reports and its sub-agent's latest step.
     fn tagged(
@@ -639,6 +645,7 @@ pub(crate) fn session(id: &wire::SessionId, cwd: &std::path::Path) -> SessionInf
     SessionInfo {
         cwd: Some(cwd.display().to_string()),
         id: id.0.to_string(),
+        rewind: false,
         title: None,
     }
 }

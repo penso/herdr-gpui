@@ -5,6 +5,7 @@
 //! requests.
 
 mod bridge;
+mod rewind;
 mod tools;
 
 use std::ffi::OsString;

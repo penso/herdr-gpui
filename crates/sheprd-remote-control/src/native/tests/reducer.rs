@@ -300,6 +300,7 @@ fn session() -> Vector {
             session: Some(SessionInfo {
                 cwd: Some("/work".into()),
                 id: "s1".into(),
+                rewind: false,
                 title: Some("Equalize".into()),
             }),
         },

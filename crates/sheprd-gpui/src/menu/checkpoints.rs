@@ -48,18 +48,43 @@ impl SheprdWindow {
     /// Whether an agent in the dialog's workspace is mid-turn, and so may
     /// keep changing the files a restore puts back.
     fn checkpoint_agent_working(&self) -> bool {
-        let Some(view) = &self.checkpoints.view else {
-            return false;
-        };
+        self.checkpoints
+            .view
+            .as_ref()
+            .is_some_and(|view| self.workspace_agent_working(&view.workspace_id))
+    }
+
+    /// Whether an agent in `workspace` is mid-turn.
+    pub(crate) fn workspace_agent_working(&self, workspace: &str) -> bool {
         self.live.snapshot.as_ref().is_some_and(|snapshot| {
             snapshot.agents.iter().any(|agent| {
-                agent.workspace_id == view.workspace_id
+                agent.workspace_id == workspace
                     && matches!(
                         agent.agent_status,
                         AgentStatus::Working | AgentStatus::Blocked
                     )
             })
         })
+    }
+
+    /// Says an agent may keep changing the files, with a glyph and in the
+    /// secondary color: it is a caution, and red is for what failed.
+    pub(crate) fn render_agent_working_warning(&self) -> Div {
+        let color = self.theme.subtext();
+        div()
+            .flex()
+            .items_start()
+            .gap(px(6.))
+            .text_color(rgb(color))
+            .child(
+                svg()
+                    .path("icons/warning.svg")
+                    .flex_none()
+                    .mt(px(2.))
+                    .size(px(12.))
+                    .text_color(rgb(color)),
+            )
+            .child(div().min_w_0().child(fl!("checkpoints-agent-working")))
     }
 
     pub(crate) fn checkpoints_key(
@@ -137,9 +162,8 @@ impl SheprdWindow {
                 .child(line(fl!("checkpoints-undo-note")).text_color(muted));
             if self.checkpoint_agent_working() {
                 body = body.child(
-                    line(fl!("checkpoints-agent-working"))
-                        .debug_selector(|| "checkpoints-agent-working".into())
-                        .text_color(danger),
+                    self.render_agent_working_warning()
+                        .debug_selector(|| "checkpoints-agent-working".into()),
                 );
             }
         } else {

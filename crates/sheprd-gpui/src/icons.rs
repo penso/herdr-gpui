@@ -348,6 +348,7 @@ embedded_icons! {
     "trash.svg",
     "user.svg",
     "vscode.svg",
+    "warning.svg",
     "whitespace.svg",
     "window-maximize.svg",
     "window-minimize.svg",

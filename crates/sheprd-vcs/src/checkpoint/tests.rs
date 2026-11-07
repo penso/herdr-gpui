@@ -3,6 +3,7 @@
 use super::*;
 use sheprd_client::protocol::ClientShellWorktree;
 
+mod origin;
 mod wanted;
 mod wsl_hosts;
 
@@ -68,6 +69,7 @@ fn queued(checkpoints: &Checkpoints) -> Vec<(Checkout, Request)> {
 fn capture(label: &str) -> Request {
     Request::Capture {
         label: label.into(),
+        origin: None,
     }
 }
 
@@ -76,22 +78,22 @@ fn turns_starting_and_ending_queue_one_checkpoint_per_checkout() {
     use AgentStatus::*;
     let mut checkpoints = Checkpoints::default();
     // The first snapshot only records what agents are doing.
-    checkpoints.observe("local", &Host::Local, &with([Working, Working]));
+    checkpoints.observe("local", &Host::Local, &with([Working, Working]), |_| None);
     assert!(queued(&checkpoints).is_empty());
 
     // p0 finishes; p1's workspace has no checkout, so nothing for it.
     let done = with([Done, Idle]);
-    checkpoints.observe("local", &Host::Local, &done);
+    checkpoints.observe("local", &Host::Local, &done, |_| None);
     assert_eq!(
         queued(&checkpoints),
         [(feature(), capture("Claude Code finished a turn"))]
     );
     // The same snapshot again is not a new transition.
-    checkpoints.observe("local", &Host::Local, &done);
+    checkpoints.observe("local", &Host::Local, &done, |_| None);
     assert_eq!(queued(&checkpoints).len(), 1);
 
     // A new turn before the first checkpoint ran merges into it.
-    checkpoints.observe("local", &Host::Local, &with([Working, Idle]));
+    checkpoints.observe("local", &Host::Local, &with([Working, Idle]), |_| None);
     assert_eq!(
         queued(&checkpoints),
         [(feature(), capture("Before Claude Code's turn"))]
@@ -102,20 +104,20 @@ fn turns_starting_and_ending_queue_one_checkpoint_per_checkout() {
 fn permission_prompts_and_restarts_are_not_turns() {
     use AgentStatus::*;
     let mut checkpoints = Checkpoints::default();
-    checkpoints.observe("local", &Host::Local, &with([Working, Idle]));
-    checkpoints.observe("local", &Host::Local, &with([Blocked, Idle]));
-    checkpoints.observe("local", &Host::Local, &with([Working, Idle]));
+    checkpoints.observe("local", &Host::Local, &with([Working, Idle]), |_| None);
+    checkpoints.observe("local", &Host::Local, &with([Blocked, Idle]), |_| None);
+    checkpoints.observe("local", &Host::Local, &with([Working, Idle]), |_| None);
     assert!(queued(&checkpoints).is_empty(), "still the same turn");
 
     // A restarted daemon reports fresh statuses; no turn spans it.
     let mut restarted = (*with([Idle, Idle])).clone();
     restarted.boot_id = "another boot".into();
-    checkpoints.observe("local", &Host::Local, &Arc::new(restarted));
+    checkpoints.observe("local", &Host::Local, &Arc::new(restarted), |_| None);
     assert!(queued(&checkpoints).is_empty());
 
     // Blocked, then given up on: the turn ended.
-    checkpoints.observe("local", &Host::Local, &with([Blocked, Idle]));
-    checkpoints.observe("local", &Host::Local, &with([Idle, Idle]));
+    checkpoints.observe("local", &Host::Local, &with([Blocked, Idle]), |_| None);
+    checkpoints.observe("local", &Host::Local, &with([Idle, Idle]), |_| None);
     assert_eq!(queued(&checkpoints).len(), 1);
 }
 
@@ -124,16 +126,16 @@ fn endpoints_and_hosts_are_kept_apart() {
     use AgentStatus::*;
     let remote = Host::Ssh("me@box".into());
     let mut checkpoints = Checkpoints::default();
-    checkpoints.observe("local", &Host::Local, &with([Working, Idle]));
-    checkpoints.observe("ssh:box", &remote, &with([Idle, Idle]));
-    checkpoints.observe("local", &Host::Local, &with([Idle, Idle]));
-    checkpoints.observe("ssh:box", &remote, &with([Idle, Idle]));
+    checkpoints.observe("local", &Host::Local, &with([Working, Idle]), |_| None);
+    checkpoints.observe("ssh:box", &remote, &with([Idle, Idle]), |_| None);
+    checkpoints.observe("local", &Host::Local, &with([Idle, Idle]), |_| None);
+    checkpoints.observe("ssh:box", &remote, &with([Idle, Idle]), |_| None);
     assert_eq!(
         queued(&checkpoints),
         [(feature(), capture("Claude Code finished a turn"))]
     );
 
-    checkpoints.observe("ssh:box", &remote, &with([Working, Idle]));
+    checkpoints.observe("ssh:box", &remote, &with([Working, Idle]), |_| None);
     assert_eq!(checkpoints.lanes.len(), 2);
     assert_eq!(checkpoints.lanes[&remote].queue[0].checkout.host, remote);
 }
@@ -152,13 +154,13 @@ fn queues_are_bounded() {
     let mut checkpoints = Checkpoints::default();
     for index in 0..QUEUE_LIMIT + 5 {
         let checkout = Checkout::new(Host::Local, &format!("/r{index}/.git"), Some("main"));
-        checkpoints.capture(checkout.unwrap(), "turn".into());
+        checkpoints.capture(checkout.unwrap(), "turn".into(), None);
     }
     assert_eq!(queued(&checkpoints).len(), QUEUE_LIMIT);
     for index in 0..HOST_LIMIT + 5 {
         let host = Host::Ssh(format!("box{index}"));
         let checkout = Checkout::new(host, "/r/.git", Some("main")).unwrap();
-        checkpoints.capture(checkout, "turn".into());
+        checkpoints.capture(checkout, "turn".into(), None);
     }
     assert_eq!(checkpoints.lanes.len(), HOST_LIMIT);
 }
@@ -170,6 +172,7 @@ fn checkpoint(id: &str, branch: &str) -> Checkpoint {
         label: "turn".into(),
         branch: Some(branch.into()),
         diff: Diff::default(),
+        origin: None,
     }
 }
 
@@ -187,7 +190,7 @@ fn answer(checkpoints: &mut Checkpoints, request: Request, answer: Answer) -> Ve
 #[test]
 fn the_dialog_lists_first_and_restores_only_after_confirming() {
     let mut checkpoints = Checkpoints::default();
-    checkpoints.capture(feature(), "turn".into());
+    checkpoints.capture(feature(), "turn".into(), None);
     checkpoints.open(feature(), "repo".into(), "w4".into());
     assert_eq!(
         queued(&checkpoints)[0],

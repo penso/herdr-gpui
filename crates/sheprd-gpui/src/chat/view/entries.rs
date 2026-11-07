@@ -134,6 +134,7 @@ impl SheprdWindow {
                     }
                     _ => self.chat_text_size(),
                 };
+                let prompt = matches!(entry.kind, EntryKind::User { .. });
                 let message = match body.as_deref() {
                     Some(Body::Message(parts)) => self.render_chat_message(
                         pane_id,
@@ -154,12 +155,17 @@ impl SheprdWindow {
                                 chat.expanded.contains(&entry.id),
                                 cx,
                             ))
-                            .child(self.render_chat_copy(
-                                entry.id.0,
-                                text,
-                                CopyPlacement::Footer,
-                                cx,
-                            ));
+                            .child({
+                                let edit = prompt
+                                    .then(|| self.render_chat_rewind_button(chat, entry.id, cx));
+                                self.render_chat_copy(
+                                    entry.id.0,
+                                    text,
+                                    CopyPlacement::Footer,
+                                    edit,
+                                    cx,
+                                )
+                            });
                         return self.render_chat_entry_row(chat, index, card);
                     }
                     _ => self.render_chat_text(
@@ -171,6 +177,7 @@ impl SheprdWindow {
                         cx,
                     ),
                 };
+                let edit = prompt.then(|| self.render_chat_rewind_button(chat, entry.id, cx));
                 div()
                     .group("chat-agent-message")
                     .child(message)
@@ -178,6 +185,7 @@ impl SheprdWindow {
                         entry.id.0,
                         text,
                         copy_placement(body.as_deref()),
+                        edit,
                         cx,
                     ))
             }
@@ -691,7 +699,13 @@ impl SheprdWindow {
                                     cx,
                                 )),
                         )
-                        .child(self.render_chat_copy(id.0, details, CopyPlacement::Footer, cx)),
+                        .child(self.render_chat_copy(
+                            id.0,
+                            details,
+                            CopyPlacement::Footer,
+                            None,
+                            cx,
+                        )),
                 )
             })
     }

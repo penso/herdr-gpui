@@ -94,6 +94,10 @@ error-chat-rejection-agent-unavailable = the program could not deliver the comma
 # $count is the most files one prompt takes.
 error-chat-rejection-too-many-attachments = a prompt takes at most { $count } files
 error-chat-rejection-queue-full = too many prompts are waiting; wait for the turn to end
+error-chat-rejection-cannot-rewind = this agent cannot go back to an earlier prompt
+error-chat-rejection-unknown-prompt = that prompt is no longer in the conversation
+error-chat-rejection-turn-running = stop the running turn first
+error-chat-rejection-rewind-failed = the agent could not go back to that prompt
 error-chat-rejection-unknown-file = an attached file does not exist or cannot be read
 error-chat-rejection-unsupported = this chat program is older than Sheprd; start a new chat to use that
 error-chat-rejection-other = the program refused the command

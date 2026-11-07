@@ -185,6 +185,7 @@ fn plans_commands_usage_and_titles_are_projected() {
     transcript.session = Some(SessionInfo {
         cwd: None,
         id: "s".to_owned(),
+        rewind: false,
         title: None,
     });
     apply(

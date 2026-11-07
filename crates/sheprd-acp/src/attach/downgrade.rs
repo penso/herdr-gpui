@@ -46,7 +46,10 @@ impl Downgrade {
                         self.clients = Some(count);
                         Change::Clients { count }
                     }
-                    Change::Activity { .. } => Change::Clients {
+                    Change::Activity { .. } if self.revision < 1 => Change::Clients {
+                        count: self.clients?,
+                    },
+                    Change::PromptFiles { .. } => Change::Clients {
                         count: self.clients?,
                     },
                     change => change,

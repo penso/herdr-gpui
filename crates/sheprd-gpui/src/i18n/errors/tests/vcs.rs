@@ -24,6 +24,7 @@ fn every_checkpoint_variant_has_a_message() {
         checkpoint::Error::Branch,
         checkpoint::Error::Busy,
         checkpoint::Error::Checkout,
+        checkpoint::Error::Hosts,
         checkpoint::Error::Missing,
         checkpoint::Error::Output,
         checkpoint::Error::Script(sheprd_client::Error::Disconnected),

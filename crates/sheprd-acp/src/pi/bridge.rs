@@ -19,7 +19,7 @@ const MAX_MODELS: usize = 64;
 
 /// What a command sent to pi is waiting for.
 #[derive(Debug)]
-enum Pending {
+pub(super) enum Pending {
     State,
     Models,
     Commands,
@@ -32,6 +32,14 @@ enum Pending {
         value: String,
     },
     Abort,
+    /// The messages to find the prompt of the session's [`out::REWIND`] in.
+    RewindMessages {
+        acp: wire::RequestId,
+        rewind: out::Rewind,
+    },
+    RewindFork(wire::RequestId),
+    /// The state that names the session a fork opened.
+    RewindState(wire::RequestId),
 }
 
 /// A dialog an extension opened, waiting for its answer.
@@ -61,7 +69,7 @@ pub(super) struct Bridge {
     opening: Option<wire::RequestId>,
     pending: HashMap<String, Pending>,
     prompt: Option<wire::RequestId>,
-    session: String,
+    pub(super) session: String,
     /// The `get_state` answer, kept until the models are in too.
     state: Option<Value>,
     thinking: Option<String>,
@@ -125,7 +133,7 @@ impl Translator for Bridge {
 }
 
 impl Bridge {
-    fn command(&mut self, mut command: Value, pending: Pending) -> Out {
+    pub(super) fn command(&mut self, mut command: Value, pending: Pending) -> Out {
         self.next_id += 1;
         let id = format!("herdr-{}", self.next_id);
         command["id"] = json!(id);
@@ -146,6 +154,7 @@ impl Bridge {
                 self.opened()
             }
             "session/prompt" => self.prompt(id, params),
+            out::REWIND => self.rewind(id, params),
             "session/set_config_option" => {
                 let Some((setting, value)) = out::chosen(params) else {
                     return vec![out::reply(id, Err(wire::Error::invalid_params()))];
@@ -347,6 +356,11 @@ impl Bridge {
                 (Some(_), None) => Vec::new(),
             },
             Pending::Stats => self.stats(&data),
+            Pending::RewindMessages { acp, rewind } => {
+                self.rewind_messages(acp, &rewind, &data, failed)
+            }
+            Pending::RewindFork(acp) => self.rewind_forked(acp, &data, failed),
+            Pending::RewindState(acp) => self.rewound(acp, &data, failed),
             Pending::Setting {
                 acp,
                 setting,

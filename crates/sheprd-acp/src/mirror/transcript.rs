@@ -403,6 +403,7 @@ impl Projection {
         }
         self.transcript.session = Some(SessionInfo {
             id: limited(id, MAX_ID),
+            rewind: false,
             cwd: (!cwd.is_empty()).then(|| limited(cwd, MAX_CWD)),
             title: None,
         });

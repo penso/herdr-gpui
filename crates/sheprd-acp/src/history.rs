@@ -25,18 +25,31 @@ use crate::{
 /// The history of `session`, read from `agent`'s config directory as the
 /// agent, started in `cwd`, finds it.
 pub(crate) fn load(agent: TranscriptAgent, session: &str, cwd: &Path) -> Result<Transcript> {
+    read(agent, session, &base(agent, cwd)?)
+}
+
+/// The log Claude keeps of `session`, as Claude started in `cwd` finds it.
+pub(crate) fn claude_log(session: &str, cwd: &Path) -> Result<PathBuf> {
+    log_path(
+        TranscriptAgent::Claude,
+        session,
+        &base(TranscriptAgent::Claude, cwd)?,
+    )
+}
+
+/// The directory `agent`, started in `cwd`, keeps its logs in.
+fn base(agent: TranscriptAgent, cwd: &Path) -> Result<PathBuf> {
     let (variable, default) = match agent {
         TranscriptAgent::Claude => ("CLAUDE_CONFIG_DIR", ".claude"),
         TranscriptAgent::Codex => ("CODEX_HOME", ".codex"),
     };
-    let base = config_directory(
+    config_directory(
         std::env::var_os(variable),
         std::env::home_dir().as_deref(),
         default,
         cwd,
     )
-    .ok_or(Error::NoHome)?;
-    read(agent, session, &base)
+    .ok_or(Error::NoHome)
 }
 
 /// The directory an agent keeps its logs in: its override, which a relative
@@ -56,6 +69,12 @@ fn config_directory(
 
 /// The history of `session` from the one log under `base` that holds it.
 fn read(agent: TranscriptAgent, session: &str, base: &Path) -> Result<Transcript> {
+    let path = log_path(agent, session, base)?;
+    Source::new(path, agent).read()?.ok_or(Error::NotFound)
+}
+
+/// The one log under `base` that holds `session`.
+fn log_path(agent: TranscriptAgent, session: &str, base: &Path) -> Result<PathBuf> {
     let candidates = match agent {
         TranscriptAgent::Claude => identity::claude_logs(base, session)?,
         TranscriptAgent::Codex => identity::codex_logs(base, session)?,
@@ -68,7 +87,7 @@ fn read(agent: TranscriptAgent, session: &str, base: &Path) -> Result<Transcript
     if logs.next().is_some() {
         return Err(Error::Ambiguous);
     }
-    Source::new(path, agent).read()?.ok_or(Error::NotFound)
+    Ok(path)
 }
 
 #[cfg(test)]

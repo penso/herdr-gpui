@@ -258,6 +258,40 @@ Multiline display equations preserve TeX line breaks, including a standalone
 `=`. Equations scale with prose and align with inline baselines. Failed display
 previews show a notice and readable LaTeX; copying retains the formula source.
 
+### Going back to an earlier prompt
+
+**Edit from here**, the pencil beside **Copy** on each of your prompts, puts
+that prompt's text and files back in the composer. Sending the edit drops that prompt and
+everything after it from the chat and from what the agent knows, then sends the
+edit in its place. **Cancel** or Escape puts back what you were writing.
+
+Choose what happens to the files above the composer:
+
+- **Keep files** leaves the checkout as it is.
+- **Restore files** first restores the checkpoint from the start of that
+  prompt's turn, as the Checkpoints dialog does, which saves the current state
+  as a checkpoint so the restore can be undone. If the restore fails, the chat
+  stays as it was.
+
+A prompt only has a checkpoint when Sheprd was watching as its turn started,
+with **Checkpoint agent turns** on, and the checkpoint is still among the
+checkout's newest. Without one, **Restore files** is unavailable and the bar
+says why. If an agent is working in the workspace the bar repeats the
+Checkpoints dialog's warning, and a turn running in this chat must be stopped
+before the edit can go out. Files attached in an earlier run of the chat aren't
+known any more, so the bar asks you to attach them again.
+
+Claude, Codex and pi go back by forking their session from before the prompt,
+so the chat continues in a new session id and the old session stays in the
+agent's own history. Claude's fork restarts its process. Agents reached through
+ACP, including `--acp` adapters, Gemini, Copilot and OpenCode, have no way to do
+this, so their pencil is dimmed and its tooltip says the option is unavailable.
+
+To reach these controls from the keyboard, press Focus Next Region (F6) until
+the chat holds the keyboard, then Tab between each prompt's **Edit from here**.
+From the composer, Tab moves to **Keep files** and **Restore files**, and Enter
+or Space picks one.
+
 With rich chat focused, **Ctrl+-**, **Ctrl++** (or **Ctrl+=**) and **Ctrl+0**
 change or reset text size on Linux and Windows, including while typing in the
 original agent editor. macOS uses Cmd. The **View** menu provides the same font

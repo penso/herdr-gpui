@@ -12,6 +12,8 @@ pub enum Error {
     Busy,
     #[error("No checkout of this branch was found on its host.")]
     Checkout,
+    #[error("Too many hosts are busy with checkpoints.")]
+    Hosts,
     #[error("That checkpoint no longer exists.")]
     Missing,
     #[error("Checkpoint output was not understood.")]

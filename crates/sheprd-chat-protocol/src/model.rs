@@ -55,6 +55,10 @@ pub struct Transcript {
     pub permissions: Vec<Permission>,
     #[serde(default)]
     pub plan: Vec<PlanEntry>,
+    /// The files prompts sent in this run carried, oldest first. A prompt
+    /// from an earlier run's log has none here: its log keeps only names.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompt_files: Vec<PromptFiles>,
     /// Prompts waiting for the current turn to end, oldest first.
     #[serde(default)]
     pub queued: Vec<Queued>,
@@ -454,11 +458,22 @@ impl Attachment {
     }
 }
 
+/// The files one prompt carried.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PromptFiles {
+    pub attachments: Vec<Attachment>,
+    /// The prompt's entry.
+    pub id: EntryId,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SessionInfo {
     #[serde(default)]
     pub cwd: Option<String>,
     pub id: String,
+    /// The agent can go back to an earlier prompt (`Command::Rewind`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rewind: bool,
     #[serde(default)]
     pub title: Option<String>,
 }

@@ -316,6 +316,15 @@ impl SheprdWindow {
         }
     }
 
+    /// Whether the focused pane shows a chat, for its keyboard region.
+    pub(crate) fn chat_shown(&self) -> bool {
+        self.live
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.focused_pane_id.as_deref())
+            .is_some_and(|pane_id| self.chats.shown(pane_id))
+    }
+
     /// Whether a chat owns the keyboard, so its hidden terminal cannot act
     /// on a keystroke bubbling out of the overlay or one of its fields.
     pub(crate) fn chat_focused(&self, window: &Window, cx: &App) -> bool {
@@ -570,6 +579,10 @@ impl SheprdWindow {
         let found = assist::completions(pane.session.transcript(), &text).len();
         let key = event.keystroke.key.as_str();
         match key {
+            "escape" if pane.rewind.is_some() => self.cancel_chat_rewind(pane_id, window, cx),
+            "tab" if found == 0 && pane.rewind.is_some() => {
+                self.focus_chat_rewind_choice(pane_id, window, cx);
+            }
             "tab" if found > 0 => {
                 let Some(name) = assist::completions(pane.session.transcript(), &text)
                     .get(pane.completion)
@@ -900,6 +913,9 @@ impl SheprdWindow {
         }
         if !text.trim().is_empty() {
             pane.history.push(&text, pane.session.transcript());
+        }
+        if pane.rewind.is_some() {
+            return self.submit_chat_rewind(pane_id, text);
         }
         let attachments = pane
             .attachments

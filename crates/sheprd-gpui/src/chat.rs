@@ -31,6 +31,7 @@ mod prepared;
 pub(crate) mod preview;
 mod reader;
 mod restore;
+mod rewind;
 mod rich;
 mod selection;
 mod session;
@@ -44,6 +45,12 @@ pub(crate) mod widgets;
 mod window;
 
 pub(crate) use chats::{ChatInput, Chats, LauncherDeck, Toward};
+
+/// The prompt whose turn the chat in `pane` is running, as a checkpoint
+/// taken for it goes by.
+pub(crate) fn prompt_origin(chats: &Chats, pane: &str) -> Option<crate::checkpoint::Origin> {
+    rewind::running_origin(pane, chats.pane(pane)?.session.transcript())
+}
 
 /// The wall clock in milliseconds since the Unix epoch, which the program
 /// on this machine stamps a running turn with.

@@ -58,3 +58,28 @@ fn permission(id: u64) -> Permission {
         title: "Run cargo test?".to_owned(),
     }
 }
+
+#[test]
+fn a_prompts_files_are_kept_until_its_entry_is_dropped() {
+    let mut transcript = Transcript::new("Claude");
+    let files = |id| PromptFiles {
+        attachments: vec![Attachment {
+            path: "/work/notes.md".to_owned(),
+        }],
+        id: EntryId(id),
+    };
+    for id in [1, 5] {
+        let files = files(id);
+        transcript.apply(&Change::PromptFiles { files }).unwrap();
+    }
+    transcript
+        .apply(&Change::Truncate { before: EntryId(3) })
+        .unwrap();
+    assert_eq!(transcript.prompt_files, [files(5)]);
+}
+
+#[test]
+fn a_transcript_from_before_rewinds_reads_as_unable() {
+    let session: SessionInfo = serde_json::from_str(r#"{"id": "s"}"#).unwrap();
+    assert!(!session.rewind);
+}

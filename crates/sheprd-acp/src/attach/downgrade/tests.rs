@@ -86,3 +86,25 @@ fn an_older_client_without_a_snapshot_is_dropped_rather_than_guessed_at() {
     let epoch = Cursor::new_epoch();
     assert_eq!(downgrade.message(change(activity(), 1, epoch)), None);
 }
+
+#[test]
+fn a_client_before_prompt_files_keeps_its_cursor_without_them() {
+    let cursor = Cursor::new_epoch();
+    let mut client = Downgrade::new(1);
+    assert!(client.message(snapshot(2, cursor)).is_some());
+    let files = Change::PromptFiles {
+        files: sheprd_chat_protocol::PromptFiles {
+            attachments: Vec::new(),
+            id: sheprd_chat_protocol::EntryId(1),
+        },
+    };
+    assert_eq!(
+        client.message(change(files, 1, cursor)),
+        Some(change(Change::Clients { count: 2 }, 1, cursor))
+    );
+    // It reads activities, which came a revision earlier.
+    assert_eq!(
+        client.message(change(activity(), 2, cursor)),
+        Some(change(activity(), 2, cursor))
+    );
+}

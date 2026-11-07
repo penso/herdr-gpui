@@ -59,14 +59,20 @@ fn staged_metadata_reports_a_finished_turn() {
     live.apply(ClientEvent::Snapshot(Arc::new(done)));
     assert!(Arc::ptr_eq(live.snapshot.as_ref().unwrap(), &displayed));
     let mut checkpoints = Checkpoints::default();
-    checkpoints.observe("local", &Host::Local, &displayed);
-    checkpoints.observe("local", &Host::Local, live.latest_snapshot().unwrap());
+    checkpoints.observe("local", &Host::Local, &displayed, |_| None);
+    checkpoints.observe(
+        "local",
+        &Host::Local,
+        live.latest_snapshot().unwrap(),
+        |_| None,
+    );
     assert_eq!(
         checkpoints.queued(),
         [(
             Checkout::new(Host::Local, KEY, Some("feature")).unwrap(),
             Request::Capture {
                 label: "Claude Code finished a turn".into(),
+                origin: None,
             }
         )]
     );

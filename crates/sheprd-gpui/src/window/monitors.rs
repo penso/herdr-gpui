@@ -119,13 +119,22 @@ impl SheprdWindow {
             ) else {
                 continue;
             };
-            self.checkpoints.observe(&endpoint.id, &host, snapshot);
+            let chats = &self.chats;
+            self.checkpoints
+                .observe(&endpoint.id, &host, snapshot, |pane| {
+                    crate::chat::prompt_origin(chats, pane)
+                });
             watched.push(endpoint.id.as_str());
         }
         self.checkpoints
             .retain_endpoints(|endpoint| watched.contains(&endpoint));
         let (changed, restored) = self.checkpoints.poll();
+        for found in self.checkpoints.take_found() {
+            self.chat_rewind_found(found);
+        }
         for restored in restored {
+            let failure = restored.result.as_ref().err().map(not_restored);
+            self.chat_rewind_restored(&restored.checkout, failure);
             let flash = match restored.result {
                 Ok(()) => Flash::success(fl!(
                     "window-notices-checkpoint-restored",
@@ -135,6 +144,7 @@ impl SheprdWindow {
             };
             self.show_flash(flash, cx);
         }
+        self.poll_chat_rewinds(cx);
         if changed {
             cx.notify();
         }

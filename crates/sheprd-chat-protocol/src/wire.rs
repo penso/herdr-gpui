@@ -3,15 +3,15 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Attachment, Change, MAX_ATTACHMENTS, OptionValue, PermissionId, Transcript};
+use crate::{Attachment, Change, EntryId, MAX_ATTACHMENTS, OptionValue, PermissionId, Transcript};
 
 /// The attach protocol version; a client and program must agree exactly.
 pub const VERSION: u32 = 1;
 
 /// Additions to [`VERSION`] a client declares it reads in its greeting:
-/// 1 is `Change::Activity`. A program sends a client of an earlier revision
-/// only what that client can decode.
-pub const REVISION: u32 = 1;
+/// 1 is `Change::Activity`, 2 is `Change::PromptFiles`. A program sends a
+/// client of an earlier revision only what that client can decode.
+pub const REVISION: u32 = 2;
 
 /// The longest prompt a client may send, in bytes.
 pub const MAX_PROMPT_SIZE: usize = 256 * 1024;
@@ -87,6 +87,18 @@ pub enum ClientMessage {
 pub enum Command {
     /// Sends a prompt now, or queues it behind the running turn.
     Prompt {
+        text: String,
+        /// Files sent with it, at most [`MAX_ATTACHMENTS`].
+        #[serde(default)]
+        attachments: Vec<Attachment>,
+    },
+    /// Takes the conversation back to just before the prompt `before`, so
+    /// neither the transcript nor the agent keeps it or anything after it,
+    /// and sends `text` in its place. The transcript comes back as a new
+    /// snapshot. Acknowledged once that is done or has failed, when the
+    /// conversation stays as it was.
+    Rewind {
+        before: EntryId,
         text: String,
         /// Files sent with it, at most [`MAX_ATTACHMENTS`].
         #[serde(default)]
@@ -176,6 +188,14 @@ pub enum Rejection {
     QueueFull,
     #[error("an attached file does not exist or cannot be read")]
     UnknownFile,
+    #[error("this agent cannot go back to an earlier prompt")]
+    CannotRewind,
+    #[error("that prompt is no longer in the conversation")]
+    UnknownPrompt,
+    #[error("stop the running turn first")]
+    TurnRunning,
+    #[error("the agent could not go back to that prompt")]
+    RewindFailed,
     /// A command this program's version does not know, from a newer client.
     #[error("this chat program is older than Sheprd; start a new chat to use that")]
     Unsupported,

@@ -12,6 +12,7 @@ error-vcs-checkpoint-missing = That checkpoint no longer exists.
 error-vcs-checkpoint-output = Checkpoint output was not understood.
 error-vcs-checkpoint-script = Checkpoint Git commands failed
 error-vcs-checkpoint-thread = Could not start the checkpoint worker
+error-vcs-checkpoint-hosts = Too many hosts are busy with checkpoints.
 error-vcs-checkpoint-unborn = This checkout has no commit yet, so it has no checkpoints.
 error-vcs-checkpoint-worker = The checkpoint worker stopped.
 

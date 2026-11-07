@@ -40,6 +40,7 @@ impl<R: FnMut(Update)> Session<R> {
                 self.session_opened(matches!(pending, Pending::LoadSession), result);
             }
             Pending::Prompt => self.turn_ended(id, result),
+            Pending::Rewind => self.rewound(result),
             Pending::SetOption => match result {
                 Ok(value) => {
                     if let Some(options) = value.get("configOptions") {
@@ -86,6 +87,7 @@ impl<R: FnMut(Update)> Session<R> {
             embedded: prompts.embedded_context,
             image: prompts.image,
         };
+        self.rewinds = crate::harness::out::rewinds(&response.agent_capabilities);
         let cwd = self.config.cwd.clone();
         match self.config.load.clone() {
             Some(id) if response.agent_capabilities.load_session => {
@@ -161,9 +163,8 @@ impl<R: FnMut(Update)> Session<R> {
         };
         self.ready = true;
         (self.report)(Update::Opened(id.0.to_string()));
-        self.emit(Change::Session {
-            session: Some(project::session(&id, &self.config.cwd)),
-        });
+        let session = Some(self.session_info(&id));
+        self.emit(Change::Session { session });
         if let Some(modes) = modes {
             self.emit(Change::Modes {
                 modes: Some(project::modes(modes)),
@@ -174,6 +175,7 @@ impl<R: FnMut(Update)> Session<R> {
         }
         self.projector.close();
         self.status(Status::Idle);
+        self.finish_rewind();
         self.next_queued();
     }
 
@@ -386,5 +388,6 @@ impl<R: FnMut(Update)> Session<R> {
         let notice = self.projector.notice(level, message);
         self.emit(notice);
         self.status(Status::Exited { message: summary });
+        self.abandon_rewind();
     }
 }

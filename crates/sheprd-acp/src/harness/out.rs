@@ -1,6 +1,7 @@
 //! The ACP messages every translator sends the session.
 
 use acp::v1 as wire;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::Out;
@@ -22,7 +23,7 @@ pub(crate) fn reply(id: wire::RequestId, result: Result<Value, wire::Error>) -> 
 
 /// A request of the harness's own the session answers, such as a permission
 /// question.
-pub(crate) fn ask(id: i64, method: &str, params: &impl serde::Serialize) -> Out {
+pub(crate) fn ask(id: i64, method: &str, params: &impl Serialize) -> Out {
     Out::Session(Inbound::Request {
         id: wire::RequestId::Number(id),
         method: method.to_owned(),
@@ -56,7 +57,7 @@ pub(crate) fn notice(
     )
 }
 
-pub(crate) fn to_value(value: &impl serde::Serialize) -> Result<Value, wire::Error> {
+pub(crate) fn to_value(value: &impl Serialize) -> Result<Value, wire::Error> {
     serde_json::to_value(value).map_err(|_| wire::Error::internal_error())
 }
 
@@ -71,11 +72,61 @@ pub(crate) fn text(text: &str) -> wire::ToolCallContent {
     )))
 }
 
+/// The session's request to go back to before an earlier prompt, with a
+/// [`Rewind`], which only a translator answers: ACP has no such method. The
+/// result names the session that continues, when it is a new one.
+pub(crate) const REWIND: &str = "_sheprd/rewind";
+/// The handshake's mark that the agent answers [`REWIND`].
+const REWINDS: &str = "sheprd.rewind";
+
+/// The prompt an agent goes back to before.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Rewind {
+    /// Which prompt of that text, counting from the newest, 1 being the last.
+    pub occurrence: usize,
+    pub session_id: String,
+    /// The text the user typed, which the agent's own history is matched on.
+    pub text: String,
+}
+
+impl Rewind {
+    /// The index in `prompts`, each prompt's text oldest first, of the prompt
+    /// to go back to before.
+    pub(crate) fn find<'a>(
+        &self,
+        prompts: impl DoubleEndedIterator<Item = &'a str>,
+    ) -> Option<usize> {
+        let mut prompts: Vec<&str> = prompts.collect();
+        let mut left = self.occurrence;
+        while let Some(prompt) = prompts.pop() {
+            if prompt == self.text {
+                left -= 1;
+                if left == 0 {
+                    return Some(prompts.len());
+                }
+            }
+        }
+        None
+    }
+}
+
+/// Whether an agent's handshake says it answers [`REWIND`].
+pub(crate) fn rewinds(capabilities: &wire::AgentCapabilities) -> bool {
+    capabilities
+        .meta
+        .as_ref()
+        .is_some_and(|meta| meta.get(REWINDS) == Some(&Value::Bool(true)))
+}
+
 /// The capabilities every translator offers: pictures and files in prompts,
-/// and continuing a session.
+/// continuing a session, and going back to an earlier prompt.
 pub(crate) fn initialized() -> Result<Value, wire::Error> {
+    let mut meta = serde_json::Map::new();
+    meta.insert(REWINDS.to_owned(), Value::Bool(true));
     let capabilities = wire::AgentCapabilities::new()
         .load_session(true)
+        .meta(meta)
         .prompt_capabilities(
             wire::PromptCapabilities::new()
                 .image(true)

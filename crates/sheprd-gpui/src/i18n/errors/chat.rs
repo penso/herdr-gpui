@@ -191,6 +191,10 @@ impl Localize for sheprd_chat_protocol::Rejection {
             ),
             Self::QueueFull => fl!("error-chat-rejection-queue-full"),
             Self::UnknownFile => fl!("error-chat-rejection-unknown-file"),
+            Self::CannotRewind => fl!("error-chat-rejection-cannot-rewind"),
+            Self::UnknownPrompt => fl!("error-chat-rejection-unknown-prompt"),
+            Self::TurnRunning => fl!("error-chat-rejection-turn-running"),
+            Self::RewindFailed => fl!("error-chat-rejection-rewind-failed"),
             Self::Unsupported => fl!("error-chat-rejection-unsupported"),
             Self::Other => fl!("error-chat-rejection-other"),
         }

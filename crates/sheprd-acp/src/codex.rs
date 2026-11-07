@@ -9,6 +9,7 @@ mod approval;
 mod background;
 mod bridge;
 mod items;
+mod rewind;
 mod settings;
 
 use std::ffi::OsString;
