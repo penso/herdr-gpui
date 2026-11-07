@@ -35,6 +35,9 @@ mod hidden;
 mod kit;
 mod layouts;
 mod location;
+mod machine_tab;
+#[cfg(target_os = "macos")]
+pub(crate) use machine_tab::open_in as open_machine_in;
 #[cfg(any(target_os = "macos", windows, test))]
 mod markdown;
 #[cfg(any(target_os = "macos", windows))]

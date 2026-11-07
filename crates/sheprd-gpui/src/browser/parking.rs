@@ -8,8 +8,8 @@
 //! types is not enough, since the drag then passes to the views that contain
 //! it and never to the page beneath. So a hidden page is moved, at its own
 //! size, to where no pointer reaches it.
+use objc2_app_kit::NSView;
 use objc2_foundation::NSPoint;
-use wry::WebViewExtMacOS as _;
 
 /// Far outside any window, in the coordinates of the view that holds a page.
 const AWAY: NSPoint = NSPoint::new(-100_000., -100_000.);
@@ -19,14 +19,13 @@ pub(super) struct Parked(NSPoint);
 
 /// Moves `view` out of the window's area. Call it once per hiding: a second
 /// call would keep the place it was moved to.
-pub(super) fn park(view: &wry::WebView) -> Parked {
-    let view = view.webview();
+pub(super) fn park(view: &NSView) -> Parked {
     let place = view.frame().origin;
     view.setFrameOrigin(AWAY);
     Parked(place)
 }
 
 /// Moves `view` back to where it was before [`park`].
-pub(super) fn unpark(view: &wry::WebView, Parked(place): Parked) {
-    view.webview().setFrameOrigin(place);
+pub(super) fn unpark(view: &NSView, Parked(place): Parked) {
+    view.setFrameOrigin(place);
 }

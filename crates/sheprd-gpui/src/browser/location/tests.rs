@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod machine;
+
 #[test]
 fn only_preview_frames_count_as_local() {
     for local in [

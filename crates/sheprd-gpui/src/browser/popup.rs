@@ -91,7 +91,7 @@ pub(super) fn build(
     // as long as the view, and wry keeps the delegate it forwards to.
     unsafe { webview.setUIDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
     // Built hidden, above its opener, whose drags it would otherwise take.
-    let place = parking::park(&view);
+    let place = parking::park(&webview);
     // Boxed so that a popup stays small in the event that carries it.
     let built = Box::new(Built {
         view,

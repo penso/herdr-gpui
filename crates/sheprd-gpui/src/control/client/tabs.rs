@@ -3,12 +3,12 @@ mod items;
 
 use super::{Context, Output, unexpected};
 use crate::{
-    cli::control::{CodeCommand, FileAt, OrchestratorCommand, TabCommand},
+    cli::control::{CodeCommand, FileAt, MachineCommand, OrchestratorCommand, TabCommand},
     control::{
         ErrorCode,
         protocol::{
             Request, Response,
-            tabs::{Reply, TabInfo, TabOp},
+            tabs::{MachineInfo, Reply, TabInfo, TabOp},
         },
     },
 };
@@ -145,6 +145,61 @@ pub(super) fn code(command: CodeCommand, context: &Context) -> crate::Result<Out
 pub(super) fn devices(context: &Context) -> crate::Result<Output> {
     let response = context.call(Request::Tab, TabOp::Devices)?;
     opened("the Devices overview", response)
+}
+
+pub(super) fn machine(command: MachineCommand, context: &Context) -> crate::Result<Output> {
+    match command {
+        MachineCommand::Open { name } => {
+            let response = context.call(Request::Tab, TabOp::Machine { name })?;
+            opened("the machine", response)
+        }
+        MachineCommand::List => machines(context.call(Request::Tab, TabOp::MachineList)?),
+        MachineCommand::Set {
+            name,
+            cpus,
+            memory_gib,
+            display,
+        } => context.act(
+            Request::Tab,
+            TabOp::MachineSet {
+                name,
+                cpus,
+                memory_gib,
+                display,
+            },
+        ),
+        MachineCommand::Suspend { name } => {
+            context.act(Request::Tab, TabOp::MachineSuspend { name })
+        }
+        MachineCommand::Delete { name } => context.act(Request::Tab, TabOp::MachineDelete { name }),
+    }
+}
+
+fn machines(response: Response) -> crate::Result<Output> {
+    let Response::Tab {
+        reply: Reply::Machines { machines },
+    } = response
+    else {
+        return Err(unexpected(response));
+    };
+    let json = serde_json::json!({ "machines": machines });
+    if machines.is_empty() {
+        return Ok(Output::data("No virtual Macs", &json)?.nothing());
+    }
+    let lines: Vec<String> = machines.iter().map(machine_line).collect();
+    Output::data(lines.join("\n"), &json)
+}
+
+fn machine_line(machine: &MachineInfo) -> String {
+    format!(
+        "{}\t{}\t{} CPUs\t{} GB\t{}\t{:.1} GB on disk",
+        machine.name,
+        machine.state.name(),
+        machine.cpus,
+        machine.memory_gib,
+        machine.display,
+        machine.disk_bytes as f64 / 1e9,
+    )
 }
 
 pub(super) fn px0(context: &Context) -> crate::Result<Output> {

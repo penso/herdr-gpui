@@ -35,6 +35,7 @@ use objc2::{
     ClassType, MainThreadMarker, rc::Retained, runtime::AnyObject, runtime::NSObjectProtocol, sel,
 };
 use objc2_app_kit::{NSEvent, NSEventMask, NSEventModifierFlags, NSEventType};
+use objc2_virtualization::VZVirtualMachineView;
 use objc2_web_kit::WKWebView;
 use std::{
     cell::{OnceCell, RefCell},
@@ -229,10 +230,14 @@ fn deliver(event: &NSEvent) -> bool {
     let Some(page) = event
         .window(mtm)
         .and_then(|window| window.firstResponder())
-        .filter(|responder| responder.isKindOfClass(WKWebView::class()))
+        .filter(|responder| {
+            responder.isKindOfClass(WKWebView::class())
+                || responder.isKindOfClass(VZVirtualMachineView::class())
+        })
     else {
         return false;
     };
+    let machine = page.isKindOfClass(VZVirtualMachineView::class());
     match event.r#type() {
         NSEventType::KeyDown => {
             let flags = event.modifierFlags();
@@ -259,7 +264,14 @@ fn deliver(event: &NSEvent) -> bool {
             if leaves(&typed(held, &plain, &shifted)) {
                 return false;
             }
-            match route(held, &shifted.to_lowercase()) {
+            // A machine is a whole Mac: quit, hide, and the edit keys are
+            // its own, as they are in any virtual machine's window.
+            let route = if machine {
+                Route::Page
+            } else {
+                route(held, &shifted.to_lowercase())
+            };
+            match route {
                 Route::Page => page.keyDown(event),
                 Route::App => return false,
                 Route::Edit(edit) => {

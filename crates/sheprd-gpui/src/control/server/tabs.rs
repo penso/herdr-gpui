@@ -2,6 +2,7 @@
 //! of `browser`: the app's own tabs, which the `browser::Store` keeps for
 //! every window.
 mod arrive;
+mod machines;
 mod page;
 
 use super::{Watches, main_windows, not_found, socket, valid_caller};
@@ -42,6 +43,16 @@ pub(super) fn serve(
         TabOp::Code { path, line } => arrive::code(&caller, &path, line, incoming, watches, cx),
         TabOp::Edit { path, line } => arrive::edit(&caller, &path, line, incoming, watches, cx),
         TabOp::Devices => arrive::devices(&caller, incoming, watches, cx),
+        TabOp::Machine { name } => arrive::machine(&caller, name, incoming, watches, cx),
+        TabOp::MachineDelete { name } => machines::delete(&caller, name, incoming, cx),
+        TabOp::MachineList => machines::list(incoming, cx),
+        TabOp::MachineSet {
+            name,
+            cpus,
+            memory_gib,
+            display,
+        } => machines::set(name, (cpus, memory_gib, display), incoming, cx),
+        TabOp::MachineSuspend { name } => machines::suspend(name, incoming, cx),
         TabOp::Orchestrator { repo } => arrive::orchestrator(&caller, repo, incoming, watches, cx),
         TabOp::Review => arrive::review(&caller, incoming, watches, cx),
         TabOp::Px0 => arrive::px0(&caller, incoming, watches, cx),
@@ -63,6 +74,7 @@ fn kind(tab: &Tab) -> TabKind {
         Some(Location::Code { .. }) => TabKind::Code,
         Some(Location::Devices) => TabKind::Devices,
         Some(Location::CoreTerminal { .. }) => TabKind::CoreTerminal,
+        Some(Location::Machine { .. }) => TabKind::Machine,
     }
 }
 
@@ -88,6 +100,7 @@ fn location(tab: &Tab) -> Option<String> {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(","),
+        Location::Machine { name } => name.to_string(),
         Location::Devices => return None,
     })
 }

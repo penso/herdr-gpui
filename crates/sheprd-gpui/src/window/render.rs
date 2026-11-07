@@ -757,6 +757,9 @@ impl Render for SheprdWindow {
                         Some(crate::browser::Location::CoreTerminal { .. }) => {
                             self.render_core_terminal_tab(slot, &tab, cx)
                         }
+                        Some(crate::browser::Location::Machine { .. }) => {
+                            self.render_machine_tab(&tab, cx)
+                        }
                         _ => self.render_review_tab(slot, &tab, cx),
                     }
                 }

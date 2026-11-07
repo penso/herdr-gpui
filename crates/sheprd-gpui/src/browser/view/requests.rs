@@ -261,8 +261,10 @@ impl SheprdWindow {
         let Some(page) = self.browser.pages.page(id) else {
             return Ok(false);
         };
-        page.raw()
-            .evaluate_script_with_callback(PAGE_TEXT_SCRIPT, done)?;
+        let Some(view) = page.web() else {
+            return Ok(false);
+        };
+        view.evaluate_script_with_callback(PAGE_TEXT_SCRIPT, done)?;
         Ok(true)
     }
 }
@@ -292,7 +294,10 @@ impl SheprdWindow {
             width: f64::from(f32::from(bounds.size.width)),
             height: f64::from(f32::from(bounds.size.height)),
         };
-        crate::browser::snapshot::capture(page.raw(), rect, done);
+        let Some(view) = page.web() else {
+            return false;
+        };
+        crate::browser::snapshot::capture(view, rect, done);
         true
     }
 }

@@ -194,6 +194,7 @@ font-kit.workspace              = true
 block2.workspace                = true
 dispatch2.workspace             = true
 objc2-core-foundation.workspace = true
+objc2-virtualization.workspace  = true
 objc2-web-kit.workspace         = true
 objc2-user-notifications.workspace = true
 cocoa                        = { optional = true, workspace = true }

@@ -15,6 +15,8 @@ mod layouts;
 mod navigation;
 mod pages;
 pub(crate) use layouts::{apply_loaded_layout, layout_load_revision};
+#[cfg(target_os = "macos")]
+pub(crate) use pages::machines::open as open_machines;
 pub(crate) use pages::remote_control::open as open_remote;
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
 mod native;
@@ -169,6 +171,8 @@ struct SettingsWindow {
     code: controls::code::CodeSettings,
     px0: controls::px0::Px0Settings,
     chat_env: controls::chat_env::ChatEnvSettings,
+    #[cfg(target_os = "macos")]
+    machines: pages::machines::MachinesPage,
     remote: pages::remote_control::RemoteSettings,
     /// The open override dropdown, if any; its list renders inside its button.
     dropdown: Option<ui::Dropdown>,
@@ -334,6 +338,8 @@ impl SettingsWindow {
             code: Default::default(),
             px0: Default::default(),
             chat_env: Default::default(),
+            #[cfg(target_os = "macos")]
+            machines: Default::default(),
             remote: Default::default(),
             dropdown: None,
             number_edit: None,
@@ -703,6 +709,10 @@ impl SettingsWindow {
         if section == Section::General {
             self.open_chat_env_settings(cx);
         }
+        #[cfg(target_os = "macos")]
+        if section == Section::Machines {
+            self.open_machines(cx);
+        }
         if section == Section::RemoteControl {
             self.open_remote_control(cx);
         } else {
@@ -742,6 +752,8 @@ impl Render for SettingsWindow {
                 Section::Integrations => self.render_integration_controls(cx),
                 Section::Plugins => self.render_plugin_controls(cx),
                 Section::Code => self.render_code_controls(window, cx),
+                #[cfg(target_os = "macos")]
+                Section::Machines => self.render_machines(cx),
                 Section::RemoteControl => self.render_remote_control(cx),
                 #[cfg(feature = "cloud")]
                 Section::CloudDevices => self.render_cloud_devices(cx),

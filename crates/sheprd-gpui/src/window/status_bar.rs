@@ -118,6 +118,7 @@ impl SheprdWindow {
             .children(self.render_system_load())
             .children(self.render_gpu_load())
             .children(self.render_network_quality(cx))
+            .children(self.machines_status(cx))
             .children(self.caffeine_button(items.keep_awake, cx))
             .when(items.theme.shown(), |bar| {
                 bar.child(
@@ -313,6 +314,16 @@ impl SheprdWindow {
             let flash = super::Flash::warning(error.localize());
             let _ = view.update(cx, |this, cx| this.show_flash(flash, cx));
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn machines_status(&self, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+        self.render_machines_status(cx)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn machines_status(&self, _: &mut Context<Self>) -> Option<Stateful<Div>> {
+        None
     }
 
     /// Hidden by `keep_awake = false` only while off: the cup is the one

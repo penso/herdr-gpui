@@ -28,3 +28,4 @@ browser-tab-review = Review · { $branch }
 browser-tab-orchestrator = Orchestrator · { $repo }
 browser-tab-devices = Devices
 browser-tab-terminal = Terminal
+browser-tab-machine = { $name }

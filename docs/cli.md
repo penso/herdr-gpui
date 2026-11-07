@@ -105,6 +105,11 @@ Sheprd** entry, which both Windows installers add, runs this command through
 | `code open FILE[:LINE]` | A read-only code tab at a line |
 | `code edit FILE[:LINE]` | Your terminal editor, in a new pane beside yours |
 | `devices` | The Devices overview |
+| `machine [open [NAME]]` | The virtual Mac called NAME (default `default`) in a tab, started or resumed if it is not running. Closing the tab leaves it running; quitting Sheprd saves it (Apple silicon Macs) |
+| `machine list` | Each machine's state, CPUs, memory, display, and disk use. Exits 4 when there are none |
+| `machine set NAME [--cpus N] [--memory GB] [--display fit\|WxH]` | What it boots with next, after it next shuts down |
+| `machine suspend NAME` | Save it and stop it; it resumes where it was when next shown |
+| `machine delete NAME` | Ask in Settings to delete it and free its disk; the user confirms there |
 | `orchestrator [--repo PATH]` | Show the Issues section narrowed to your checkout's project, or PATH's |
 | `orchestrator items\|issues\|prs` | What it last synced, from its local database (no app needed) |
 | `review` | The review of your workspace's uncommitted changes |
