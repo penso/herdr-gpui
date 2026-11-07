@@ -234,6 +234,14 @@ after its runs and it stays stopped. On a headless Linux host, a user unit
 only runs while the user is logged in unless lingering is on
 (`loginctl enable-linger`); `install-service` does not change that for you.
 
+Updating the app does not update a running daemon. When a daemon runs another
+version than the app ships, its host's card under Automations offers
+**Update to VERSION**, on this computer as on a remote host: it copies the
+app's build into `~/.local/share/herdr-automate/bin/VERSION/`, relinks
+`~/.local/bin`, stops the daemon once its runs finish, and starts the new one
+through a service that names the copy. On Windows, this computer's card offers
+no update, because the copy needs a shell.
+
 State lives in `~/.local/state/herdr-automate` (`%LOCALAPPDATA%` on
 Windows): the database, the daemon's log, and each run's step output.
 

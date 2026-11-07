@@ -49,16 +49,29 @@ pub(crate) fn run_within(
     idle: Duration,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>, Error> {
+    let local = host.is_local().then(|| local_command(host, args));
+    run_on(host, local, args, input, idle, cancelled)
+}
+
+/// Runs `local` on this machine, or `args` as a script line on any other.
+fn run_on(
+    host: &Host,
+    local: Option<std::process::Command>,
+    args: &[&str],
+    input: impl Read + Send,
+    idle: Duration,
+    cancelled: &AtomicBool,
+) -> Result<Vec<u8>, Error> {
     let limits = ScriptLimits {
         output: OUTPUT,
         idle,
     };
     let mut output = Vec::new();
-    let result = if host.is_local() {
-        let command = local_command(host, args);
-        sheprd_client::run_script_command(command, input, &mut output, limits, cancelled)
-    } else {
-        host.stream(&line(args), input, &mut output, limits, cancelled)
+    let result = match local {
+        Some(command) => {
+            sheprd_client::run_script_command(command, input, &mut output, limits, cancelled)
+        }
+        None => host.stream(&line(args), input, &mut output, limits, cancelled),
     };
     match result {
         Ok(_) => Ok(output),
@@ -66,12 +79,24 @@ pub(crate) fn run_within(
     }
 }
 
-/// `herdr-automate ARGS` on this machine. The app may have been started from
-/// a Herdr pane, and `approve` refuses to run inside one (an agent there
-/// must not approve its own script), so the pane's ID is not passed on.
+/// The app's own `herdr-automate ARGS` on this machine.
 pub(crate) fn local_command(host: &Host, args: &[&str]) -> std::process::Command {
     let program = bundled().map_or_else(|| PROGRAM.to_owned(), |path| path.display().to_string());
-    let mut command = host.local_command(&program);
+    command_for(host, &program, args)
+}
+
+/// `herdr-automate ARGS` on this machine as `install` left it in the user's
+/// home, not the app's copy: `install-service` and `start` name the
+/// executable they run, and the daemon must outlive the app's bundle.
+pub(crate) fn installed_command(host: &Host, args: &[&str]) -> std::process::Command {
+    command_for(host, PROGRAM, args)
+}
+
+/// The app may have been started from a Herdr pane, and `approve` refuses to
+/// run inside one (an agent there must not approve its own script), so the
+/// pane's ID is not passed on.
+fn command_for(host: &Host, program: &str, args: &[&str]) -> std::process::Command {
+    let mut command = host.local_command(program);
     command.args(args).env_remove("HERDR_PANE_ID");
     command
 }
@@ -206,7 +231,30 @@ pub(crate) fn act_within(
     idle: Duration,
     cancelled: &AtomicBool,
 ) -> Result<Done, Error> {
-    let done: Done = query_within(host, args, idle, cancelled)?;
+    answered(query_within(host, args, idle, cancelled)?)
+}
+
+/// [`act_within`] through the `herdr-automate` installed on `host`, which on
+/// this machine is not the one the app ships ([`installed_command`]).
+pub(crate) fn act_installed(
+    host: &Host,
+    args: &[&str],
+    idle: Duration,
+    cancelled: &AtomicBool,
+) -> Result<Done, Error> {
+    let args: Vec<&str> = args.iter().copied().chain(["--json"]).collect();
+    let local = host.is_local().then(|| installed_command(host, &args));
+    answered(parse(&run_on(
+        host,
+        local,
+        &args,
+        &[][..],
+        idle,
+        cancelled,
+    )?)?)
+}
+
+fn answered(done: Done) -> Result<Done, Error> {
     if !done.ok {
         return Err(refused(&done.message));
     }

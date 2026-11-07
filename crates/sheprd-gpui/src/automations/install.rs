@@ -123,11 +123,12 @@ pub(crate) fn install(
     if update {
         // `start` does nothing while a daemon holds the lock: stop the old
         // one first. It lets its runs finish, which can take a while.
-        fetch::act_within(host, &["shutdown"], SHUTDOWN_IDLE, cancelled)?;
+        fetch::act_installed(host, &["shutdown"], SHUTDOWN_IDLE, cancelled)?;
     }
     // On an update too: the service names the executable it runs, and the
-    // one written before names the old version.
-    fetch::act(host, &["install-service"], cancelled)?;
-    let started = fetch::act(host, &["start"], cancelled)?;
+    // one written before names the old version. On this machine that must
+    // be the copy just made, never the app's own.
+    fetch::act_installed(host, &["install-service"], fetch::IDLE, cancelled)?;
+    let started = fetch::act_installed(host, &["start"], fetch::IDLE, cancelled)?;
     Ok(started.message)
 }
