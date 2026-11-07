@@ -11,11 +11,13 @@ macro_rules! agent_icons {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub(crate) enum AgentIcon {
             $($variant,)+
+            /// A session that coordinates others, whatever agent it runs.
+            Coordinator,
             Generic,
         }
 
         impl AgentIcon {
-            const ALL: &[Self] = &[$(Self::$variant,)+ Self::Generic];
+            const ALL: &[Self] = &[$(Self::$variant,)+ Self::Coordinator, Self::Generic];
 
             pub(crate) fn from_identity(identity: Option<&str>) -> Self {
                 match identity {
@@ -27,6 +29,7 @@ macro_rules! agent_icons {
             pub(crate) fn path(self) -> &'static str {
                 match self {
                     $(Self::$variant => concat!("icons/agent-", $label, ".", $extension),)+
+                    Self::Coordinator => "icons/agent-coordinator.svg",
                     Self::Generic => "icons/agent-generic.svg",
                 }
             }
@@ -36,6 +39,9 @@ macro_rules! agent_icons {
                     $(Self::$variant => include_bytes!(concat!(
                         "../../../assets/icons/agent-", $label, ".", $extension
                     )),)+
+                    Self::Coordinator => {
+                        include_bytes!("../../../assets/icons/agent-coordinator.svg")
+                    }
                     Self::Generic => include_bytes!("../../../assets/icons/agent-generic.svg"),
                 }
             }
@@ -466,8 +472,9 @@ mod tests {
             assert!(!seen.contains(&icon), "{label}");
             seen.push(icon);
         }
-        // No marks for labels Herdr does not emit, beyond the fallback.
-        assert_eq!(AgentIcon::ALL.len(), HERDR_AGENT_LABELS.len() + 1);
+        // No marks for labels Herdr does not emit, beyond the coordinator's
+        // and the fallback.
+        assert_eq!(AgentIcon::ALL.len(), HERDR_AGENT_LABELS.len() + 2);
         assert_eq!(listed.len(), AgentIcon::ALL.len());
     }
 

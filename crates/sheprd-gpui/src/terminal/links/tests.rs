@@ -295,4 +295,5 @@ mod drive_paths;
 mod escaped_paths;
 mod external;
 mod paths;
+mod wide_paths;
 mod wrapped;
