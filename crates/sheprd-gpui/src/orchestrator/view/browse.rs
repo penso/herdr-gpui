@@ -146,7 +146,7 @@ impl OrchestratorView {
         let theme = &self.look.theme;
         div()
             .absolute()
-            .top(px(MENU_TOP))
+            .top(px(MENU_TOP + self.search_line()))
             .right(px(16.))
             .w(px(width))
             .p_1()
@@ -171,7 +171,7 @@ impl OrchestratorView {
         let theme = &self.look.theme;
         div()
             .absolute()
-            .top(px(MENU_TOP))
+            .top(px(MENU_TOP + self.search_line()))
             .bottom(px(MENU_GAP))
             .right(px(16.))
             .w(px(width))

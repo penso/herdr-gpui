@@ -37,12 +37,17 @@ pub(super) const AUTHOR_TITLE_MIN: f32 = 280.;
 /// The gap between a row's cells, and its padding on either side.
 const CELL_GAP: f32 = 8.;
 const ROW_PADDING: f32 = 16.;
+/// The list width below which the search field takes its own line, at the
+/// usual text size: the Pull requests list's controls fill the row.
+const SEARCH_BESIDE_WIDTH: f32 = 960.;
+/// What that line adds above a dropdown.
+const SEARCH_LINE: f32 = 40.;
 /// The columns saying where a pull request stands, at the usual text size:
 /// see [`Look::column`].
-const STATUS_WIDTH: f32 = 72.;
+const STATUS_WIDTH: f32 = 80.;
 const CHECKS_WIDTH: f32 = 70.;
 /// The review column, wide enough for "approved with suggestions".
-const REVIEW_WIDTH: f32 = 160.;
+const REVIEW_WIDTH: f32 = 168.;
 
 /// Why the list is empty.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +64,24 @@ impl OrchestratorView {
     /// Whether rows keep only the columns that fit beside an open item.
     fn compact(&self) -> bool {
         self.detail.is_some()
+    }
+
+    /// Whether the search field sits above its controls, not beside them.
+    pub(super) fn search_stacked(&self) -> bool {
+        self.tab == Tab::PullRequests && self.list_width.get() < self.search_fit()
+    }
+
+    fn search_fit(&self) -> f32 {
+        self.look.column(SEARCH_BESIDE_WIDTH)
+    }
+
+    /// How far a dropdown moves down for the search field's own line.
+    pub(super) fn search_line(&self) -> f32 {
+        if self.search_stacked() {
+            SEARCH_LINE
+        } else {
+            0.
+        }
     }
 
     /// Whether rows name their author: always, unless an open item leaves
@@ -257,7 +280,10 @@ impl OrchestratorView {
             .overflow_hidden()
             .flex()
             .flex_col()
-            .child(measure(self.list_width.clone(), self.author_fit()))
+            .child(measure(
+                self.list_width.clone(),
+                [self.author_fit(), self.search_fit()],
+            ))
             // Column heads over nothing to line up are clutter.
             .when(count > 0, |el| el.child(column_head(look, &head)))
             .child(list)
@@ -780,13 +806,14 @@ impl OrchestratorView {
 }
 
 /// Records the list's width as it lays out, and draws again when that moves
-/// it across `fit`, so rows gain or lose their author on the next frame.
-fn measure(width: Rc<Cell<f32>>, fit: f32) -> impl IntoElement {
+/// it across a width in `fits`, so rows gain or lose their author and the
+/// search field its line on the next frame.
+fn measure(width: Rc<Cell<f32>>, fits: [f32; 2]) -> impl IntoElement {
     canvas(
         move |bounds, window, _| {
             let now = f32::from(bounds.size.width);
             let before = width.replace(now);
-            if (before >= fit) != (now >= fit) {
+            if fits.iter().any(|fit| (before >= *fit) != (now >= *fit)) {
                 window.refresh();
             }
         },

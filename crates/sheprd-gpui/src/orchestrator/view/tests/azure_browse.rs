@@ -184,7 +184,7 @@ fn an_organizations_own_pull_requests_and_browsed_repositories_join_the_list(
         listed(&view, cx),
         ["contoso/Fabrikam/web!1", "contoso/Fabrikam/api!2"]
     );
-    assert!(cx.debug_bounds("orchestrator-state-menu").is_none());
+    assert!(cx.debug_bounds("orchestrator-state-all").is_none());
     // The Open toggle still narrows to open and draft ones.
     click(cx, "orchestrator-open");
     assert_eq!(listed(&view, cx), ["contoso/Fabrikam/web!1"]);

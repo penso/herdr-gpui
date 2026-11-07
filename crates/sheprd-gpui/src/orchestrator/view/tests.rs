@@ -31,6 +31,7 @@ mod repo_name;
 mod review_requested;
 mod row_start;
 mod rows;
+mod search_row;
 mod sessions;
 mod sign_in;
 mod source_chip;

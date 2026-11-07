@@ -486,14 +486,13 @@ impl OrchestratorView {
         let look = &self.look;
         let theme = &look.theme;
         let filters = self.filters;
-        let mut row = div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap_2()
-            .px_4()
-            .py_2()
-            .child(self.render_search_field(window, cx));
+        let stacked = self.search_stacked();
+        let search = self.render_search_field(window, cx);
+        let mut row = div().flex_none().flex().items_center().gap_2();
+        let mut beside = Some(search);
+        if !stacked {
+            row = row.px_4().py_2().children(beside.take());
+        }
         let (state, projects) = match self.tab {
             Tab::PullRequests => (
                 Some(self.render_state_control(cx)),
@@ -594,7 +593,7 @@ impl OrchestratorView {
                     .children(projects);
             }
         }
-        row.children(project_filter).child(
+        let row = row.children(project_filter).child(
             div()
                 .id("orchestrator-sort")
                 .flex_none()
@@ -610,7 +609,21 @@ impl OrchestratorView {
                     this.toggle_menu(Menu::Sort);
                     cx.notify();
                 })),
-        )
+        );
+        match beside {
+            // Too narrow for both: the field keeps a line, the controls wrap.
+            Some(search) => div()
+                .debug_selector(|| "orchestrator-search-stacked".into())
+                .flex_none()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .px_4()
+                .py_2()
+                .child(search)
+                .child(row.flex_wrap()),
+            None => row,
+        }
     }
 
     /// One outlined field, the magnifier inside: the outline turns accent
@@ -620,6 +633,7 @@ impl OrchestratorView {
         let look = &self.look;
         let focused = self.search.read(cx).focus.is_focused(window);
         look.search_frame("orchestrator-search", focused)
+            .debug_selector(|| "orchestrator-search".into())
             .child(div().flex_1().min_w_0().child(self.search.clone()))
             .when(!self.query.is_empty(), |field| {
                 field.child(
@@ -642,7 +656,7 @@ impl OrchestratorView {
         deferred(crate::motion::pop_in(
             div()
                 .absolute()
-                .top(px(120.))
+                .top(px(120. + self.search_line()))
                 .right(px(16.))
                 .w(px(200.))
                 .p_1()
