@@ -173,15 +173,25 @@ final class Fleet {
 
     // MARK: Drafts
 
-    /// Keeps what a chat's composer holds across launches; `nil` removes it.
-    func save(draft: Cache.Draft?, for key: PaneKey) {
+    /// Keeps what a chat's composer holds across launches; `nil` removes it,
+    /// unless another window's composer still holds a draft of that chat.
+    func save(draft: Cache.Draft?, for key: PaneKey, by composer: UUID? = nil) {
+        let emptied = drafts.set(key, drafted: draft != nil, by: composer)
+        guard draft != nil || emptied else { return }
         cache.save(draft: draft, device: key.device, pane: key.pane)
-        drafts.set(key, drafted: draft != nil)
     }
 
     /// The composer changed, for a list beside it on iPad.
-    func composer(_ key: PaneKey, drafted: Bool) {
-        drafts.set(key, drafted: drafted)
+    func composer(_ composer: UUID, in key: PaneKey, drafted: Bool) {
+        drafts.set(key, drafted: drafted, by: composer)
+    }
+
+    func composerOpened(_ composer: UUID, in key: PaneKey) {
+        drafts.open(key, composer: composer)
+    }
+
+    func composerClosed(_ composer: UUID, in key: PaneKey) {
+        drafts.close(key, composer: composer)
     }
 
     /// Empties the cache, the drafts kept in it with the rest. A chat still
