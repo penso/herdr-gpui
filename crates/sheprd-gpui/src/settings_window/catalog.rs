@@ -447,6 +447,12 @@ pub(super) const CATALOG: &[Entry] = &[
     ),
     entry(
         Section::Notifications,
+        "notif-quiet-hours",
+        "settings-notif-quiet-hours",
+        "settings-notif-quiet-hours-description",
+    ),
+    entry(
+        Section::Notifications,
         "notif-show",
         "settings-notif-show",
         "",

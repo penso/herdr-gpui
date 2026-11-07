@@ -27,6 +27,10 @@ fn global_options_apply_anywhere_after_the_command() {
             window: Some(7),
         }
     );
+    assert_eq!(
+        command(&["window", "alerts"]),
+        ControlCommand::Window(WindowCommand::Alerts)
+    );
     // A bare family runs its listing.
     assert_eq!(
         command(&["tab"]),

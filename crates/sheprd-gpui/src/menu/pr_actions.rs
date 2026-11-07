@@ -268,7 +268,7 @@ impl SheprdWindow {
         })
     }
 
-    fn pr_button(
+    pub(super) fn pr_button(
         &self,
         id: &'static str,
         label: impl Into<SharedString>,
@@ -294,7 +294,7 @@ impl SheprdWindow {
             .child(label.into())
     }
 
-    fn pr_footer(&self) -> Div {
+    pub(super) fn pr_footer(&self) -> Div {
         div()
             .flex()
             .justify_end()

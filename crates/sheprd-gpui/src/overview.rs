@@ -7,17 +7,29 @@
 //! (`closed`, `reopen`); a column beside the list shows each host's load
 //! and ports, and folds away.
 //!
+//! The page also acts on agents without opening them: a blocked row shows
+//! the end of its pane (`excerpt`), a follow-up waits for the agent to be
+//! back at its prompt (`replies`), and several rows can be handled at once
+//! (`selection`, `batch`). Recent alerts wait in a shelf of their own
+//! (`alerts`).
+//!
 //! Everything it shows is already in the window: the endpoints' snapshots,
 //! the orchestrator views' runs, the pull request prefetch, and the system
 //! load and port monitors. Drawing reads that prepared state only.
 // i18n: migrated
 
+mod alerts;
+mod batch;
 mod closed;
+mod excerpt;
 mod hosts;
 mod marks;
 mod model;
+mod notes;
 mod presets;
 mod reopen;
+mod replies;
+mod selection;
 mod view;
 
 #[cfg(test)]
@@ -25,6 +37,7 @@ mod tests;
 
 pub(crate) use marks::Marks;
 pub(crate) use model::{Key, Open, Row, Sections, State};
+pub(crate) use replies::MAX_TEXT as MAX_REPLY;
 
 use crate::{SheprdWindow, i18n::fl, orchestrator::RunState, sidebar::ActivityPanel};
 use gpui::{prelude::*, *};
@@ -47,6 +60,13 @@ pub enum Error {
     ReopenRequest(#[source] std::sync::Arc<crate::Error>),
     #[error("Unexpected daemon response while opening the agent's tab")]
     ReopenResponse,
+    #[error(transparent)]
+    ReplyHost(crate::pane_move::Error),
+    /// Herdr's own refusal: `code` is its wire code, `message` remote text.
+    #[error("{message}")]
+    ReplyRefused { code: String, message: String },
+    #[error("Cannot run the host's herdr command: {0}")]
+    ReplyScript(#[source] sheprd_client::Error),
 }
 
 /// The page's own state in a window.
@@ -74,6 +94,19 @@ pub(crate) struct Page {
     /// When the latest row needing the user entered its state, on the last
     /// tick, so the bar's count can tell new from already seen.
     needing_since: Option<SystemTime>,
+    /// Whether agents idle for over an hour are unfolded.
+    idle_open: bool,
+    alerts_open: bool,
+    /// How many alerts the page last drew from, across its hosts.
+    alerts_drawn: u64,
+    /// The end of each blocked agent's pane, while the page is shown.
+    excerpts: Vec<excerpt::Excerpt>,
+    selection: selection::Selection,
+    /// Whether the batch bar's snooze menu is open.
+    batch_menu: bool,
+    replies: replies::Replies,
+    /// The rows the open reply dialog answers.
+    reply_to: Vec<Row>,
 }
 
 impl Default for Page {
@@ -91,6 +124,14 @@ impl Default for Page {
             scroll: ScrollHandle::new(),
             drawn: (0, 0, 0, 0, 0),
             needing_since: None,
+            idle_open: false,
+            alerts_open: false,
+            alerts_drawn: 0,
+            excerpts: Vec::new(),
+            selection: Default::default(),
+            batch_menu: false,
+            replies: Default::default(),
+            reply_to: Vec::new(),
         }
     }
 }
@@ -237,11 +278,24 @@ impl SheprdWindow {
             .closed
             .retain_hosts(|id| endpoints.iter().any(|endpoint| endpoint.id == id));
         self.poll_overview_reopen(cx);
+        self.poll_overview_replies(cx);
+        self.refresh_overview_excerpts(&rows, cx);
         Marks::update(cx, |marks| {
             marks.wake(rows.iter().map(|row| (&row.key, row.state)), now)
         });
         let revision = Marks::of(cx).map_or(0, Marks::revision);
         let sections = Sections::of(rows, Marks::of(cx), now);
+        let unfolded = self.overview.idle_open;
+        if self
+            .overview
+            .selection
+            .retain(sections.active(unfolded).map(|row| &row.key))
+        {
+            if self.overview.selection.is_empty() {
+                self.overview.batch_menu = false;
+            }
+            cx.notify();
+        }
         let (needing, working) = (sections.needing(), sections.working.len());
         let minute = now
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -258,6 +312,56 @@ impl SheprdWindow {
         if drawn != self.overview.drawn || needing_since != self.overview.needing_since {
             self.overview.drawn = drawn;
             self.overview.needing_since = needing_since;
+            cx.notify();
+        }
+        let alerts = self.overview_alerts_revision();
+        if alerts != self.overview.alerts_drawn {
+            self.overview.alerts_drawn = alerts;
+            if shown {
+                cx.notify();
+            }
+        }
+    }
+
+    /// Reads the end of each blocked agent's pane while the page is shown.
+    fn refresh_overview_excerpts(&mut self, rows: &[Row], cx: &mut Context<Self>) {
+        if self.activity_section() != Some(ActivityPanel::Overview) {
+            return;
+        }
+        let mut excerpts = Vec::new();
+        for row in rows.iter().filter(|row| row.state == State::Blocked) {
+            let Some((id, pane)) = row.pane() else {
+                continue;
+            };
+            let Some((index, endpoint)) = self
+                .endpoints
+                .iter()
+                .enumerate()
+                .find(|(_, endpoint)| endpoint.id == id)
+            else {
+                continue;
+            };
+            let live = if index == self.selected_endpoint {
+                &self.live
+            } else {
+                &endpoint.live
+            };
+            let Some(boot) = live.snapshot.as_deref().map(|s| s.boot_id.as_str()) else {
+                continue;
+            };
+            let surface = live.surface.as_ref();
+            if let Some(lines) =
+                excerpt::of_pane(surface, &endpoint.last_seen, boot, pane, row.since)
+            {
+                excerpts.push(excerpt::Excerpt {
+                    endpoint: id.to_owned(),
+                    pane: pane.to_owned(),
+                    lines,
+                });
+            }
+        }
+        if excerpts != self.overview.excerpts {
+            self.overview.excerpts = excerpts;
             cx.notify();
         }
     }
@@ -297,6 +401,8 @@ impl SheprdWindow {
     /// a run's item in the Issues section.
     fn open_overview_row(&mut self, row: &Row, window: &mut Window, cx: &mut Context<Self>) {
         self.overview.menu = None;
+        self.overview.selection.clear();
+        self.overview.batch_menu = false;
         Marks::update(cx, |marks| marks.seen(&row.key));
         match &row.open {
             Open::Pane {
@@ -375,6 +481,7 @@ impl SheprdWindow {
 
     fn mark_overview_row(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut Marks) -> bool) {
         self.overview.menu = None;
+        self.overview.batch_menu = false;
         Marks::update(cx, f);
         cx.notify();
     }

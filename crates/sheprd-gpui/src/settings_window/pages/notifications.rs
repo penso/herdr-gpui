@@ -6,7 +6,7 @@ use super::{
 };
 use crate::settings_window::inputs::{DropdownField, NumberField};
 use crate::{
-    config::preferences::Preference,
+    config::{QuietHours, preferences::Preference},
     herdr_settings::{Edit, ToastDelivery},
     i18n::fl,
 };
@@ -83,6 +83,7 @@ impl SettingsWindow {
                         cx,
                     )),
             )
+            .child(self.quiet_hours_row(cx))
             .child(ui::section(
                 theme,
                 &fl!("settings-notifications-section-toasts"),
@@ -150,6 +151,60 @@ impl SettingsWindow {
                 ),
             )
             .child(self.volume_row(cx))
+    }
+
+    /// The quiet hours, from common windows. One set by hand in the config
+    /// file stays on offer.
+    fn quiet_hours_row(&self, cx: &mut Context<Self>) -> ui::Row {
+        const FIELD: DropdownField = DropdownField::QuietHours;
+        let configured = self.config.notifications.quiet_hours;
+        let choices = quiet_hours_choices(configured);
+        let selected = choices
+            .iter()
+            .position(|choice| *choice == configured)
+            .unwrap_or(0);
+        let options: Vec<SharedString> = choices
+            .iter()
+            .map(|choice| {
+                SharedString::from(choice.map_or_else(
+                    || fl!("settings-notifications-quiet-off"),
+                    |hours| hours.to_string(),
+                ))
+            })
+            .collect();
+        let current = options.get(selected).cloned().unwrap_or_default();
+        let view = cx.entity().downgrade();
+        let (opener, picker, dismisser) = (view.clone(), view.clone(), view);
+        ui::row(
+            &self.theme,
+            "notif-quiet-hours",
+            fl!("settings-notif-quiet-hours"),
+        )
+        .tag(ui::Source::Sheprd)
+        .description(fl!("settings-notif-quiet-hours-description"))
+        .control(ui::dropdown(
+            &self.theme,
+            FIELD.selector(),
+            current,
+            false,
+            !self.quitting && self.closing.is_none(),
+            self.dropdown.as_ref().filter(|open| open.field == FIELD),
+            move |window, cx| {
+                let options = options.clone();
+                let _ = opener.update(cx, |this, cx| {
+                    this.open_dropdown(FIELD, options, selected, window, cx)
+                });
+            },
+            move |index, window, cx| {
+                let _ = picker.update(cx, |this, cx| {
+                    this.pick_dropdown(FIELD, index, cx);
+                    window.focus(&this.focus, cx);
+                });
+            },
+            move |window, cx| {
+                let _ = dismisser.update(cx, |this, cx| this.close_dropdown(window, cx));
+            },
+        ))
     }
 
     /// The delay in seconds: a typed field with steppers, and a reset when the
@@ -230,4 +285,23 @@ impl SettingsWindow {
                 },
             ))
     }
+}
+
+/// What the quiet hours row offers: off, the common windows, and `configured`
+/// when it is none of them.
+pub(in crate::settings_window) fn quiet_hours_choices(
+    configured: Option<QuietHours>,
+) -> Vec<Option<QuietHours>> {
+    let mut choices = vec![
+        None,
+        Some(QuietHours::at_hours(20, 8)),
+        Some(QuietHours::at_hours(21, 7)),
+        Some(QuietHours::at_hours(22, 7)),
+        Some(QuietHours::at_hours(22, 8)),
+        Some(QuietHours::at_hours(23, 7)),
+    ];
+    if !choices.contains(&configured) {
+        choices.push(configured);
+    }
+    choices
 }

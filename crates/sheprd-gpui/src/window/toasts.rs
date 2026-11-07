@@ -203,6 +203,7 @@ impl SheprdWindow {
             crate::notification_mutes::Mutes::any(cx),
             hidden,
             self.active,
+            self.config.notifications.quiet(),
             self.pending_toast,
             now,
         )

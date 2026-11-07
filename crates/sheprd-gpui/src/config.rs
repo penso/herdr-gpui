@@ -92,7 +92,7 @@ pub use github::{GitHubAccount, GitHubConfig};
 pub use layout::{Density, Layout, LayoutMode, Style};
 pub(crate) use notifications::NotificationDelivery;
 pub use notifications::{
-    BellConfig, ClipboardToast, ClipboardToastPosition, NotificationConfig, SoundConfig,
+    BellConfig, ClipboardToast, ClipboardToastPosition, NotificationConfig, QuietHours, SoundConfig,
 };
 use notifications::{ClipboardToastSettings, NotificationSettings};
 pub use option_as_alt::{OptionAsAlt, OptionKeys};

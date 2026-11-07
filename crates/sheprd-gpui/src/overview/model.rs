@@ -12,10 +12,15 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use sheprd_client::protocol::{AgentStatus, ClientShellAgent, ClientShellSnapshot};
-use std::{collections::HashMap, time::SystemTime};
+use std::{
+    collections::HashMap,
+    time::{Duration, SystemTime},
+};
 
 /// Untrusted titles are cut here: a row has one line for them.
 const TITLE_LIMIT: usize = 200;
+/// How long an agent stays idle before it folds into the "+N idle" row.
+const LONG_IDLE: Duration = Duration::from_secs(60 * 60);
 
 /// What a row stands for, as the user's marks remember it. Pane and
 /// workspace ids do not survive a daemon restart, so an agent is the host,
@@ -139,6 +144,16 @@ pub(crate) struct Row {
     /// The agent's workspace or tab is muted: listed, but counting for
     /// nothing in the activity bar.
     pub muted: bool,
+}
+
+impl Row {
+    /// The host and pane of an agent's row; a run has neither.
+    pub(crate) fn pane(&self) -> Option<(&str, &str)> {
+        match &self.open {
+            Open::Pane { endpoint, pane, .. } => Some((endpoint, pane)),
+            Open::Run(_) => None,
+        }
+    }
 }
 
 /// When each agent entered its state. The daemon reports the order of
@@ -290,6 +305,8 @@ pub(crate) struct Sections {
     pub working: Vec<Row>,
     pub ready: Vec<Row>,
     pub idle: Vec<Row>,
+    /// Idle for [`LONG_IDLE`] or more, folded into one row.
+    pub long_idle: Vec<Row>,
     /// With when each wakes.
     pub snoozed: Vec<(Row, SystemTime)>,
     pub settled: Vec<Row>,
@@ -310,6 +327,7 @@ impl Sections {
                     State::Blocked | State::Failed => sections.needs.push(row),
                     State::Working => sections.working.push(row),
                     State::Done => sections.ready.push(row),
+                    State::Idle if long_idle(&row, now) => sections.long_idle.push(row),
                     State::Idle => sections.idle.push(row),
                 },
             }
@@ -325,8 +343,21 @@ impl Sections {
             && self.working.is_empty()
             && self.ready.is_empty()
             && self.idle.is_empty()
+            && self.long_idle.is_empty()
             && self.snoozed.is_empty()
             && self.settled.is_empty()
+    }
+
+    /// The rows that take the page's actions, top to bottom as drawn, which
+    /// a Shift click selects a range of. Folded rows are not drawn.
+    pub(crate) fn active(&self, unfolded: bool) -> impl Iterator<Item = &Row> {
+        self.pinned
+            .iter()
+            .chain(&self.needs)
+            .chain(&self.ready)
+            .chain(&self.working)
+            .chain(&self.idle)
+            .chain(self.long_idle.iter().filter(move |_| unfolded))
     }
 
     /// The rows the activity bar counts: those that need the user and are
@@ -348,4 +379,12 @@ impl Sections {
     pub(crate) fn needing_since(&self) -> Option<SystemTime> {
         self.counted().filter_map(|row| row.since).max()
     }
+}
+
+/// Whether `row` has sat idle long enough to fold. A row whose start this
+/// client never saw stays listed.
+fn long_idle(row: &Row, now: SystemTime) -> bool {
+    row.since
+        .and_then(|since| now.duration_since(since).ok())
+        .is_some_and(|idle| idle >= LONG_IDLE)
 }

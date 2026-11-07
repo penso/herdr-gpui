@@ -37,6 +37,7 @@ fn shared_notifications_inherit_without_resetting_session() -> anyhow::Result<()
                     delay_seconds: 7,
                     position: ToastHerdrPosition::TopLeft,
                     finished: true,
+                    quiet_hours: None,
                 }
             );
             for (font, original) in [
@@ -96,6 +97,7 @@ fn shared_notifications_respect_each_explicit_native_override() -> anyhow::Resul
                     delay_seconds,
                     position,
                     finished: true,
+                    quiet_hours: None,
                 },
                 "{text}"
             );
@@ -361,6 +363,7 @@ fn notification_settings_defaults_bounds_corners_and_strict_types() -> anyhow::R
                     delay_seconds: delay,
                     position,
                     finished: true,
+                    quiet_hours: None,
                 }
             );
         }

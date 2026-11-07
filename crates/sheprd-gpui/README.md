@@ -1259,7 +1259,17 @@ enabled = false
 delay_seconds = 1
 position = "bottom-right"
 finished = true
+quiet_hours = "22:00-08:00"
 ```
+
+`quiet_hours` has no shared Herdr counterpart and is unset by default. It names
+a daily window, by this computer's clock, when sounds, the terminal bell, toasts,
+and OS notifications stay silent. The window may cross midnight, and one that
+ends where it starts is empty. What arrives in it is not delivered afterwards:
+the Dock or taskbar badge and the Overview keep updating, and the alerts wait
+under **Recent alerts**. A toast already showing stays, and feedback for what you
+did, such as a failed action, still appears. Settings > Notifications offers
+common windows, and keeps one set here.
 
 `finished` has no shared Herdr counterpart and defaults to `true`. Set it to
 `false` to stop "finished" toasts and OS notifications while keeping "needs
@@ -2385,11 +2395,37 @@ window at once, and `sheprd ui panel NAME` shows a section.
   folds the sidebar to its rail.
 - **Overview** shows what needs you on every connected host: agents waiting on
   you and failed runs first, in a card of their own, then finished agents
-  ready for review, working agents by host, and idle ones. Hovering a row
-  offers **Snooze** (until a preset time), **Settle**, **Pin**, and **Open**;
-  snoozed and settled rows fold away at the bottom and come back once their
-  time comes or the agent works or asks again. These marks are this client's
-  own. An agent whose pane closes or that exits, while its host stays up,
+  ready for review, working agents by host, and idle ones. Agents idle for over
+  an hour fold into one **+N idle** row that opens on click. Hovering a row
+  offers **Reply**, **Snooze** (until a preset time), **Settle**, **Pin**, and
+  **Open**; snoozed and settled rows fold away at the bottom and come back once
+  their time comes or the agent works or asks again. These marks are this
+  client's own. Shift or Cmd/Ctrl click selects rows, and a bar over the list
+  then settles, snoozes, or replies to all of them.
+
+  A blocked agent's row shows the last lines of its pane, so you can read what
+  it wants. They come from what this client already holds, as Go To's preview
+  does: an agent in a tab this client has not shown since it blocked shows none.
+
+  **Reply** writes a follow-up that waits under the row, where it can be
+  cancelled, until the agent is back at its prompt, then goes through `herdr
+  agent prompt` on the agent's host. Herdr refuses a prompt to an agent asking
+  for input before anything reaches the pane, so a reply never lands on an
+  approval; it just waits again. A pane takes its replies one at a time, in
+  order. A reply whose agent left is dropped with a warning, and one that fails
+  stays under the row with the reason. Replies live in the window: quitting
+  drops those not yet sent. They need a host whose `herdr` command this client
+  can run: this computer, an SSH host, or a cloud machine, but not a WSL
+  distribution, a custom socket, or a `--dev` session, and not from a Windows
+  client.
+
+  **Recent alerts** keeps each host's last few dozen "finished" and "needs you"
+  alerts in this window until it closes, including those held back by quiet
+  hours or with delivery off; clicking one goes to its pane.
+  **Notification History** in the palette opens it, and `sheprd window alerts`
+  prints it. An alert about the tab you are looking at is not kept.
+
+  An agent whose pane closes or that exits, while its host stays up,
   waits under **Closed** at the bottom: **Reopen** starts it again in a new
   tab of its workspace, in the folder it ran in, continuing its last
   conversation there where the agent offers that (`claude --continue`,

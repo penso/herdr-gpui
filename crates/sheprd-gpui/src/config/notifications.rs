@@ -1,6 +1,8 @@
 //! Toasts, OS notifications, agent sound volume, and the terminal bell.
 use super::Config;
+use chrono::Timelike;
 use serde::Deserialize;
+use std::fmt;
 
 /// Where the "copied to clipboard" flash sits, and whether it appears at all.
 /// Resolved from the daemon's `[ui.toast.clipboard]`, then from this GUI's own
@@ -87,6 +89,74 @@ fn sound_volume<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u8, D::Error> 
         .ok_or_else(|| serde::de::Error::custom("sound.volume must be between 0 and 100"))
 }
 
+/// A daily window when sounds, toasts, and OS notifications are held back,
+/// written `22:00-08:00`. It may cross midnight; a window that ends where it
+/// starts is empty. Times are this machine's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct QuietHours {
+    /// Minutes after midnight, the end excluded.
+    start: u16,
+    end: u16,
+}
+
+impl QuietHours {
+    const MINUTES: u16 = 24 * 60;
+
+    pub(crate) const fn at_hours(start: u16, end: u16) -> Self {
+        Self {
+            start: start * 60,
+            end: end * 60,
+        }
+    }
+
+    /// Reads `HH:MM-HH:MM`.
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        fn minutes(text: &str) -> Option<u16> {
+            let (hours, minutes) = text.trim().split_once(':')?;
+            let (hours, minutes): (u16, u16) = (hours.parse().ok()?, minutes.parse().ok()?);
+            (hours < 24 && minutes < 60).then_some(hours * 60 + minutes)
+        }
+        let (start, end) = text.split_once('-')?;
+        Some(Self {
+            start: minutes(start)?,
+            end: minutes(end)?,
+        })
+    }
+
+    /// Whether `minute`, counted from midnight, falls in the window.
+    pub(crate) fn holds(self, minute: u16) -> bool {
+        let minute = minute % Self::MINUTES;
+        if self.start <= self.end {
+            (self.start..self.end).contains(&minute)
+        } else {
+            minute >= self.start || minute < self.end
+        }
+    }
+}
+
+impl fmt::Display for QuietHours {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:02}:{:02}-{:02}:{:02}",
+            self.start / 60,
+            self.start % 60,
+            self.end / 60,
+            self.end % 60
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for QuietHours {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(d)?;
+        Self::parse(&text)
+            // Part of TOML's parser text, which errors show as written.
+            // i18n: data
+            .ok_or_else(|| serde::de::Error::custom("quiet_hours must look like 22:00-08:00"))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct NotificationConfig {
@@ -104,6 +174,9 @@ pub struct NotificationConfig {
     /// counterpart: turning it off keeps "needs attention" and custom
     /// notifications, so a hook can post its own summary in their place.
     pub finished: bool,
+    /// GUI-only, like `finished`. The badge and the Overview keep updating.
+    #[serde(skip)]
+    pub quiet_hours: Option<QuietHours>,
 }
 
 impl Default for NotificationConfig {
@@ -114,6 +187,7 @@ impl Default for NotificationConfig {
             delay_seconds: 1,
             position: sheprd_client::protocol::ToastHerdrPosition::BottomRight,
             finished: true,
+            quiet_hours: None,
         }
     }
 }
@@ -155,6 +229,7 @@ pub(crate) struct NotificationSettings {
     delay_seconds: Option<u64>,
     position: Option<sheprd_client::protocol::ToastHerdrPosition>,
     finished: Option<bool>,
+    quiet_hours: Option<QuietHours>,
 }
 
 /// Where a daemon notification that passes the shared policy is presented.
@@ -174,6 +249,14 @@ impl NotificationConfig {
         } else {
             NotificationDelivery::Off
         }
+    }
+
+    /// Whether this moment falls in the quiet hours, by this machine's clock.
+    pub(crate) fn quiet(self) -> bool {
+        self.quiet_hours.is_some_and(|hours| {
+            let now = chrono::Local::now();
+            hours.holds((now.hour() * 60 + now.minute()) as u16)
+        })
     }
 }
 
@@ -197,6 +280,7 @@ impl NotificationSettings {
             delay_seconds: self.delay_seconds.unwrap_or(base.delay_seconds),
             position: self.position.unwrap_or(base.position),
             finished: self.finished.unwrap_or(base.finished),
+            quiet_hours: self.quiet_hours.or(base.quiet_hours),
         }
     }
 }

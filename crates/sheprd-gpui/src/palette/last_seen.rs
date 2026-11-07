@@ -229,7 +229,7 @@ impl LastSeen {
     }
 
     /// Remembered frames of `boot` with when each was left, newest first.
-    pub(super) fn frames<'a>(
+    pub(crate) fn frames<'a>(
         &'a self,
         boot: &'a str,
     ) -> impl Iterator<Item = (&'a Arc<PaneSurfaceFrame>, u64)> {

@@ -11,6 +11,7 @@ pub enum AppCommand {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WindowCommand {
     List,
+    Alerts,
     New {
         session: Option<String>,
     },
@@ -52,6 +53,7 @@ pub(super) fn window(args: &mut Args) -> Result<WindowCommand, CliError> {
     };
     Ok(match verb.to_str() {
         Some("list") => WindowCommand::List,
+        Some("alerts") => WindowCommand::Alerts,
         Some("new") => WindowCommand::New {
             session: args.text_option("--session")?,
         },

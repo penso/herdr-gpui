@@ -204,6 +204,11 @@ pub(super) fn window(call: Call<WindowOp>, cx: &mut App) -> Response {
                 windows: windows(cx),
             },
         },
+        WindowOp::Alerts => in_window(caller, cx, |view, _, _| Response::App {
+            reply: Reply::Alerts {
+                alerts: view.alert_infos(),
+            },
+        }),
         WindowOp::New { session } => {
             let target = match session {
                 Some(name) => {

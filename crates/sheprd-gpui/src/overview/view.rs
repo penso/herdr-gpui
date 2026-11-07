@@ -1,10 +1,11 @@
 //! The Overview page as drawn: a summary line, then the list beside the
 //! host column. A row shows its state, agent, title, checkout, host, pull
-//! request, and how long it has been so; hovering it offers Snooze, Settle,
-//! Pin, and Open, or on a closed agent Reopen and Forget. With nothing to
-//! list, the page says what it is for.
+//! request, and how long it has been so; hovering it offers Reply, Snooze,
+//! Settle, Pin, and Open, or on a closed agent Reopen and Forget. Shift or
+//! Cmd/Ctrl click selects rows for the batch bar. With nothing to list, the
+//! page says what it is for.
 
-use super::{Marks, Row, Sections, State, presets};
+use super::{Key, Marks, Row, Sections, State, presets};
 use crate::{
     SheprdWindow, config::corners, devices_overview::Look, fonts::StyledFont, i18n::fl,
     icons::AgentIcon, pull_request::Outcome,
@@ -35,9 +36,9 @@ enum Shelf {
 }
 
 /// What every row of one frame draws with.
-struct Frame<'a> {
-    look: Look<'a>,
-    now: SystemTime,
+pub(super) struct Frame<'a> {
+    pub(super) look: Look<'a>,
+    pub(super) now: SystemTime,
     local: DateTime<Local>,
 }
 
@@ -51,7 +52,10 @@ impl SheprdWindow {
         };
         let sections = self.overview_sections(cx);
         let theme = frame.look.theme;
-        let list = if sections.is_empty() && self.overview.closed.is_empty() {
+        let nothing = sections.is_empty()
+            && self.overview.closed.is_empty()
+            && self.overview_alerts().is_empty();
+        let list = if nothing {
             overview_empty(&frame.look)
         } else {
             self.overview_list(&frame, &sections, cx)
@@ -70,6 +74,7 @@ impl SheprdWindow {
             .text_font(frame.look.ui)
             .text_size(px(frame.look.ui.size))
             .child(self.overview_summary(&frame.look, &sections))
+            .children(self.overview_batch(&frame.look, &sections, cx))
             .child(
                 div()
                     .flex()
@@ -144,7 +149,17 @@ impl SheprdWindow {
         let look = &frame.look;
         let theme = look.theme;
         let row = |row: &Row, shelf: Shelf, cx: &mut Context<Self>| {
-            self.overview_row(frame, row, shelf, cx)
+            let drawn = self.overview_row(frame, row, shelf, cx);
+            match self.overview_row_notes(look, row, shelf == Shelf::Active, cx) {
+                Some(notes) => div()
+                    .flex_none()
+                    .flex()
+                    .flex_col()
+                    .child(drawn)
+                    .child(notes)
+                    .into_any_element(),
+                None => drawn,
+            }
         };
         let mut list = div().px_4().pb_4().flex().flex_col();
         if !sections.pinned.is_empty() {
@@ -239,20 +254,38 @@ impl SheprdWindow {
             }
             list = list.child(row(working, Shelf::Active, cx));
         }
-        if !sections.idle.is_empty() {
+        if !sections.idle.is_empty() || !sections.long_idle.is_empty() {
             list = list.child(heading(
                 look,
                 fl!("overview-idle"),
-                Some(sections.idle.len()),
+                Some(sections.idle.len() + sections.long_idle.len()),
             ));
             for idle in &sections.idle {
+                list = list.child(row(idle, Shelf::Active, cx));
+            }
+        }
+        if !sections.long_idle.is_empty() {
+            list = list.child(self.overview_shelf(
+                look,
+                ShelfId::LongIdle,
+                sections.long_idle.len(),
+                cx,
+            ));
+        }
+        if self.overview.idle_open {
+            for idle in &sections.long_idle {
                 list = list.child(row(idle, Shelf::Active, cx));
             }
         }
         // The shelves of rows held out of the way, each only when it holds
         // some: an empty one is a click that shows nothing.
         let closed = self.overview.closed.len();
-        if sections.snoozed.is_empty() && sections.settled.is_empty() && closed == 0 {
+        let alerts = self.overview_alerts();
+        if sections.snoozed.is_empty()
+            && sections.settled.is_empty()
+            && closed == 0
+            && alerts.is_empty()
+        {
             return list;
         }
         list = list.child(div().mt_3().h(px(1.)).bg(rgb(theme.active)));
@@ -282,6 +315,14 @@ impl SheprdWindow {
                 list = list.child(row(&agent.row, Shelf::Closed(agent.id, agent.closed), cx));
             }
         }
+        if !alerts.is_empty() {
+            list = list.child(self.overview_shelf(look, ShelfId::Alerts, alerts.len(), cx));
+        }
+        if self.overview.alerts_open {
+            for alert in alerts {
+                list = list.child(self.overview_alert(frame, alert, cx));
+            }
+        }
         list
     }
 
@@ -308,6 +349,16 @@ impl SheprdWindow {
                 "overview-closed",
                 fl!("overview-closed"),
                 self.overview.closed_open,
+            ),
+            ShelfId::Alerts => (
+                "overview-alerts",
+                fl!("overview-alerts"),
+                self.overview.alerts_open,
+            ),
+            ShelfId::LongIdle => (
+                "overview-long-idle",
+                fl!("overview-long-idle", count = count),
+                self.overview.idle_open,
             ),
         };
         div()
@@ -336,12 +387,17 @@ impl SheprdWindow {
                     .text_color(rgb(theme.muted)),
             )
             .child(label)
-            .child(count.to_string())
+            // This one says its count in words.
+            .when(!matches!(shelf, ShelfId::LongIdle), |row| {
+                row.child(count.to_string())
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 let open = match shelf {
                     ShelfId::Snoozed => &mut this.overview.snoozed_open,
                     ShelfId::Settled => &mut this.overview.settled_open,
                     ShelfId::Closed => &mut this.overview.closed_open,
+                    ShelfId::Alerts => &mut this.overview.alerts_open,
+                    ShelfId::LongIdle => &mut this.overview.idle_open,
                 };
                 *open = !*open;
                 cx.notify();
@@ -370,6 +426,7 @@ impl SheprdWindow {
             .and_then(|marks| marks.get(&row.key))
             .is_some_and(|mark| mark.pinned);
         let menu_open = self.overview.menu.as_ref() == Some(&row.key);
+        let selected = shelf == Shelf::Active && self.overview.selection.contains(&row.key);
         let glyph = match row.state {
             State::Failed => svg()
                 .path("icons/error.svg")
@@ -419,6 +476,7 @@ impl SheprdWindow {
             .rounded(px(corners::CONTROL))
             .cursor_pointer()
             .hover(|style| style.bg(rgb(theme.active)))
+            .when(selected, |row| row.bg(rgb(theme.active)))
             .when(shelf != Shelf::Active, |row| row.opacity(0.7))
             .child(div().w(px(12.)).flex().justify_center().child(glyph))
             .child(crate::icons::icon(icon, 15., theme.foreground))
@@ -501,8 +559,11 @@ impl SheprdWindow {
                     ),
             )
             .child(actions)
-            .on_click(cx.listener(move |this, _, window, cx| {
-                if let Shelf::Closed(id, _) = shelf {
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                let modifiers = event.modifiers();
+                if shelf == Shelf::Active && (modifiers.shift || modifiers.secondary()) {
+                    this.select_overview_row(&clicked.key, modifiers.shift, cx);
+                } else if let Shelf::Closed(id, _) = shelf {
                     this.open_closed_agent(id, window, cx);
                 } else {
                     this.open_overview_row(&clicked, window, cx);
@@ -528,37 +589,14 @@ impl SheprdWindow {
             _ => row.key.selector(),
         };
         let action = |name: &'static str, icon: &'static str, label: String| {
-            div()
-                .id(SharedString::from(format!("overview-{name}-{key}")))
-                .debug_selector({
-                    let id = format!("overview-{name}-{key}");
-                    move || id.clone()
-                })
-                .h(px(22.))
-                .px(px(6.))
-                .flex()
-                .items_center()
-                .gap_1()
-                .rounded(px(corners::SMALL))
-                .border_1()
-                .border_color(rgb(theme.active))
-                .bg(rgb(theme.background))
-                .cursor_pointer()
-                .text_size(look.small())
-                .child(
-                    svg()
-                        .path(icon)
-                        .size(px(11.))
-                        .flex_none()
-                        .text_color(rgb(theme.subtext())),
-                )
-                .child(label)
+            pill(format!("overview-{name}-{key}"), icon, label, look)
         };
-        let (snooze, settle, pin, restore, open) = (
+        let (snooze, settle, pin, restore, open, reply) = (
             row.key.clone(),
             (row.key.clone(), row.state),
             row.key.clone(),
             row.key.clone(),
+            row.clone(),
             row.clone(),
         );
         let mut actions = div()
@@ -610,6 +648,16 @@ impl SheprdWindow {
             );
         }
         if shelf == Shelf::Active {
+            if row.pane().is_some() {
+                actions = actions.child(
+                    action("reply", "icons/pencil.svg", fl!("overview-reply")).on_click(
+                        cx.listener(move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.open_overview_reply(vec![reply.clone()], window, cx);
+                        }),
+                    ),
+                );
+            }
             actions = actions
                 .child(
                     action("snooze", "icons/coffee.svg", fl!("overview-snooze")).on_click(
@@ -674,7 +722,7 @@ impl SheprdWindow {
                         .top(px(30.))
                         .right_0()
                         .child(crate::motion::pop_in(
-                            self.snooze_menu(row, look, cx),
+                            self.snooze_menu(vec![(row.key.clone(), row.state)], look, cx),
                             "overview-snooze-menu",
                         )),
                 )
@@ -684,7 +732,13 @@ impl SheprdWindow {
         actions
     }
 
-    fn snooze_menu(&self, row: &Row, look: &Look, cx: &mut Context<Self>) -> Div {
+    /// The times `targets` can be snoozed until.
+    pub(super) fn snooze_menu(
+        &self,
+        targets: Vec<(Key, State)>,
+        look: &Look,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let theme = look.theme;
         let mut menu = div()
             .debug_selector(|| "overview-snooze-menu".into())
@@ -707,7 +761,7 @@ impl SheprdWindow {
                     .child(fl!("overview-snooze-until")),
             );
         for (index, preset) in presets::presets(&Local::now()).into_iter().enumerate() {
-            let (key, state, until) = (row.key.clone(), row.state, preset.until);
+            let (targets, until) = (targets.clone(), preset.until);
             menu = menu.child(
                 div()
                     .id(("overview-snooze-preset", index))
@@ -727,7 +781,15 @@ impl SheprdWindow {
                     .child(look.mono(preset.when))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
-                        this.mark_overview_row(cx, |marks| marks.snooze(&key, state, until));
+                        // One row's own menu leaves the selection alone.
+                        if this.overview.batch_menu {
+                            this.overview.selection.clear();
+                        }
+                        this.mark_overview_row(cx, |marks| {
+                            targets.iter().fold(false, |changed, (key, state)| {
+                                marks.snooze(key, *state, until) | changed
+                            })
+                        });
                     })),
             );
         }
@@ -741,6 +803,10 @@ enum ShelfId {
     Snoozed,
     Settled,
     Closed,
+    /// Recent alerts, newest first.
+    Alerts,
+    /// Agents idle long enough to fold, as the one "+N idle" row.
+    LongIdle,
 }
 
 /// What the page is for, while it has nothing to list.
@@ -774,6 +840,34 @@ fn overview_empty(look: &Look) -> Div {
                 .text_color(rgb(theme.muted))
                 .child(fl!("overview-empty")),
         )
+}
+
+/// A small labelled button, as rows and the batch bar offer their actions.
+pub(super) fn pill(id: String, icon: &'static str, label: String, look: &Look) -> Stateful<Div> {
+    let theme = look.theme;
+    let selector = id.clone();
+    div()
+        .id(SharedString::from(id))
+        .debug_selector(move || selector.clone())
+        .h(px(22.))
+        .px(px(6.))
+        .flex()
+        .items_center()
+        .gap_1()
+        .rounded(px(corners::SMALL))
+        .border_1()
+        .border_color(rgb(theme.active))
+        .bg(rgb(theme.background))
+        .cursor_pointer()
+        .text_size(look.small())
+        .child(
+            svg()
+                .path(icon)
+                .size(px(11.))
+                .flex_none()
+                .text_color(rgb(theme.subtext())),
+        )
+        .child(label)
 }
 
 fn heading(look: &Look, label: String, count: Option<usize>) -> Div {

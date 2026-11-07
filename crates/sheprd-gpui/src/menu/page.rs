@@ -72,6 +72,8 @@ pub(crate) enum Page {
     OpenCheckout,
     /// Asks before opening a terminal hyperlink with an unlisted scheme.
     OpenLink,
+    /// A reply to one or several of the Overview's agents.
+    OverviewReply,
     Palette,
     Pane,
     /// The processes under the pane menu's pane.
@@ -185,6 +187,20 @@ impl Page {
                 | Self::PrReview
                 | Self::PrComment
                 | Self::PrMerge
+        )
+    }
+
+    /// The Git popover, its dialogs, and the Overview's reply, which share a
+    /// width that follows the window.
+    pub(crate) fn popover_sized(self) -> bool {
+        matches!(
+            self,
+            Self::Git
+                | Self::GitCommit
+                | Self::PrReview
+                | Self::PrComment
+                | Self::PrMerge
+                | Self::OverviewReply
         )
     }
 

@@ -613,6 +613,10 @@ impl SheprdWindow {
                 self.open_devices_overview(window, cx);
                 return;
             }
+            Command::NotificationHistory => {
+                self.show_notification_history(window, cx);
+                return;
+            }
             Command::NewCoreTerminal => {
                 self.new_core_terminal(window, cx);
                 return;

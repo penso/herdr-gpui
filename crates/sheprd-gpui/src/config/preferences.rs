@@ -45,6 +45,8 @@ pub(crate) enum Preference {
     NotificationPosition(Option<ToastHerdrPosition>),
     /// `[notifications] finished`: GUI-only, so there is no shared value to follow.
     NotificationFinished(bool),
+    /// `[notifications] quiet_hours`: GUI-only; `None` removes the window.
+    NotificationQuietHours(Option<QuietHours>),
     ClipboardEnabled(Option<bool>),
     ClipboardPosition(Option<ClipboardToastPosition>),
     /// `[terminal] padding_x` or `padding_y`: both sides of one axis.
@@ -213,6 +215,11 @@ impl Config {
                 Preference::NotificationFinished(value) => {
                     (Some("notifications"), "finished", Some(value.into()))
                 }
+                Preference::NotificationQuietHours(value) => (
+                    Some("notifications"),
+                    "quiet_hours",
+                    value.map(|hours| hours.to_string().into()),
+                ),
                 Preference::ClipboardEnabled(value) => {
                     (Some("clipboard_toast"), "enabled", value.map(Into::into))
                 }

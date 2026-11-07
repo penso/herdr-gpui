@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+mod alert_lines;
 mod chat_lines;
 mod remote_lines;
 
