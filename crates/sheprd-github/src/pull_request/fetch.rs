@@ -27,7 +27,7 @@ fragment PullRequestFields on PullRequest {
   commits(last: 1) { nodes { commit { statusCheckRollup {
     contexts(first: 100) {
       pageInfo { hasNextPage }
-      nodes { __typename ... on CheckRun { name status conclusion } ... on StatusContext { context state } }
+      nodes { __typename ... on CheckRun { name status conclusion databaseId detailsUrl } ... on StatusContext { context state targetUrl } }
     }
   } } } }
 }"#

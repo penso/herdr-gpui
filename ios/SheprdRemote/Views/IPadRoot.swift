@@ -49,6 +49,8 @@ struct IPadRoot: View {
             case let .workspace(key)?:
                 // Unfolding a phone that was showing one.
                 NavigationStack { WorkspaceScreen(key: key).withRoutes() }.id(key)
+            case let .changes(key)?:
+                NavigationStack { ChangesScreen(key: key).withRoutes() }.id(key)
             case nil:
                 ContentUnavailableView("Pick a chat", systemImage: "bubble.left.and.text.bubble.right",
                                        description: Text("What needs you is at the top of the list."))

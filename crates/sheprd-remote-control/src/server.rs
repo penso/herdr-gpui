@@ -102,6 +102,7 @@ pub async fn run(options: Options) -> Result<()> {
         apps,
         auth: Mutex::new(auth),
         authority,
+        changes: Default::default(),
         computer: options::computer_name(),
         connected: Mutex::new(HashMap::new()),
         fingerprint,

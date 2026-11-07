@@ -43,6 +43,7 @@ struct SheprdRemoteApp: App {
                 case let .chat(key, title)?: ChatScreen(key: key, title: title).withRoutes()
                 case let .term(key, title)?: TerminalScreen(key: key, title: title)
                 case let .workspace(key)?: WorkspaceScreen(key: key).withRoutes()
+                case let .changes(key)?: ChangesScreen(key: key).withRoutes()
                 case nil: ContentUnavailableView("Nothing to show", systemImage: "questionmark.bubble")
                 }
             }

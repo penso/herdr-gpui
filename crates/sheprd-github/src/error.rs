@@ -18,6 +18,8 @@ pub enum Error {
     #[error("GitHub authorization failed. Check OAuth application settings.")]
     Authorization,
     #[error(transparent)]
+    CheckLog(#[from] crate::check_log::Error),
+    #[error(transparent)]
     Cli(#[from] crate::cli::Error),
     // Not transparent: the client error stays in the source chain, where
     // `StorageFailure::find` and the chain printers look for it.

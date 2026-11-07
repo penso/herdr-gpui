@@ -70,6 +70,8 @@ pub(crate) struct State {
     pub(crate) auth: Mutex<Auth>,
     /// Present when the daemon issues its own certificates.
     pub(crate) authority: Option<Authority>,
+    /// Phones' questions about workspaces, waiting for Sheprd.
+    pub(crate) changes: crate::native::changes::Mailbox,
     pub(crate) computer: String,
     /// Streams open per device.
     pub(crate) connected: Mutex<HashMap<DeviceId, usize>>,
@@ -210,8 +212,24 @@ pub(crate) fn router(state: Shared) -> Router {
         .route("/api/v2/search", get(crate::native::search))
         .route("/api/v2/workspaces", post(crate::native::create_workspace))
         .route(
+            "/api/v2/workspaces/{workspace}/changes",
+            get(crate::native::changes::files),
+        )
+        .route(
+            "/api/v2/workspaces/{workspace}/changes/diff",
+            get(crate::native::changes::diff),
+        )
+        .route(
             "/api/v2/workspaces/{workspace}/chats",
             post(crate::native::start_chat),
+        )
+        .route(
+            "/api/v2/workspaces/{workspace}/checks",
+            get(crate::native::changes::checks),
+        )
+        .route(
+            "/api/v2/workspaces/{workspace}/checks/{job}/log",
+            get(crate::native::changes::check_log),
         )
         .route("/f/home", get(fragments::home))
         .route("/f/board", get(fragments::board))
@@ -363,6 +381,8 @@ pub(crate) enum ApiError {
     // keep-sorted start
     #[error(transparent)]
     Auth(#[from] auth::Error),
+    #[error(transparent)]
+    Changes(#[from] crate::native::changes::Error),
     #[error("that is not a folder you can start a workspace in")]
     Folder,
     #[error(transparent)]
@@ -388,6 +408,7 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Changes(error) => error.status(),
             Self::TooManyStreams => StatusCode::TOO_MANY_REQUESTS,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Auth(auth::Error::RateLimited | auth::Error::NearbyBusy) => {

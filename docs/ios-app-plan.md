@@ -310,6 +310,44 @@ app learns the pane it should open:
   A prompt over 256 KiB, an unknown agent, a folder not offered, or an
   invalid branch is answered 400 before anything is created.
 
+A workspace's changes and its pull request's checks are read-only and
+worked out by Sheprd, which alone reads the checkout: the phone does no Git
+work, and the daemon does none either. Bounds are in
+`crates/sheprd-remote-control/src/control/changes.rs`.
+
+- `GET /api/v2/workspaces/{workspace}/changes?scope=uncommitted|branch`
+  answers `{"base"?, "total": 3, "files": [{"path", "old_path"?, "status",
+  "added"?, "removed"?, "shown"}]}`. `scope` defaults to `uncommitted`;
+  `base` names what `branch` compared with. `total` counts every changed
+  file, and `files` holds at most the first 500. `shown` is `text`,
+  `binary`, `too_large`, or `unreadable`.
+- `GET /api/v2/workspaces/{workspace}/changes/diff?scope=&path=` answers
+  `{"path", "shown", "lines": [{"kind", "old"?, "new"?, "text"}],
+  "truncated": false}`. `path` must be one the list gave; anything else
+  answers 404, so a phone cannot read other files. At most 3,000 lines,
+  512 KiB, and 500 characters a line; `truncated` says lines were cut.
+- `GET /api/v2/workspaces/{workspace}/checks` answers `{"number"?, "checks":
+  [{"name", "state", "job"?, "url"?}]}` from the desktop's pull request
+  cache, so it is as fresh as the desktop's last lookup. `state` is `passed`,
+  `failed`, `pending`, or `skipped`. `job` is present only on a failed
+  GitHub Actions check.
+- `GET /api/v2/workspaces/{workspace}/checks/{job}/log` answers
+  `{"excerpt"}`: at most 8 KiB, ending on the log's last error, without
+  timestamps or colors. Only a `job` the list gave is read. The phone puts
+  it in a prompt to a chat of the workspace with the usual `POST
+  /api/chat/{pane}/command`, after showing it and asking; the daemon does
+  not send it anywhere itself.
+
+The daemon cannot call Sheprd, so a question waits in a bounded mailbox.
+While a phone is connected, Sheprd holds one `Request::ChangeAsks` open on
+the control socket, answers each question on a background thread, and
+replies with `Request::ChangeAnswer`, which the daemon checks against the
+same bounds. A question answers 503 at once when Sheprd is closed, 429 when
+16 already wait, 504 when no answer comes within 25 s, 409 when the
+workspace has no repository or base branch, and 404 when the workspace or
+file is gone. Workspaces on other hosts have no Sheprd beside their daemon,
+so they answer 503.
+
 ## Connectivity
 
 - Each computer stores every address it reported: LAN, Tailscale,

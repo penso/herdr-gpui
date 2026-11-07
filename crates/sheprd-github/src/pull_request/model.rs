@@ -230,9 +230,25 @@ pub(super) struct Check {
     status: CheckStatus,
     #[serde(default)]
     conclusion: Outcome,
+    /// A check run's id. For a GitHub Actions check it is also its job's id,
+    /// which is how the job's log is read.
+    #[serde(default, rename = "databaseId")]
+    database_id: Option<u64>,
+    /// Where a person reads it: a check run's `detailsUrl` or a status
+    /// context's `targetUrl`. Dropped on parse unless it is `https`.
+    #[serde(default, rename = "detailsUrl", alias = "targetUrl")]
+    pub(super) url: Option<String>,
 }
 
 impl Check {
+    /// The GitHub Actions job this check ran as, if it did: other apps'
+    /// check runs have ids too, but no log GitHub serves.
+    fn job(&self) -> Option<u64> {
+        self.database_id
+            .filter(|_| self.kind == CheckKind::CheckRun)
+            .filter(|_| self.url.as_deref().is_some_and(actions_url))
+    }
+
     pub(super) fn outcome(&self) -> Outcome {
         match self.kind {
             CheckKind::StatusContext => self.state,
@@ -240,6 +256,22 @@ impl Check {
             CheckKind::CheckRun => Outcome::Pending,
         }
     }
+}
+
+/// Whether `url` is a run on GitHub Actions, as its check runs link to.
+fn actions_url(url: &str) -> bool {
+    url.strip_prefix("https://github.com/")
+        .is_some_and(|path| path.contains("/actions/runs/"))
+}
+
+/// One check as the checks list shows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CheckDetail<'a> {
+    pub name: &'a str,
+    pub outcome: Outcome,
+    /// The GitHub Actions job whose log can be read, if it has one.
+    pub job: Option<u64>,
+    pub url: Option<&'a str>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -394,6 +426,19 @@ impl PullRequest {
             .iter()
             .flatten()
             .map(|check| (check.name.as_str(), check.outcome()))
+    }
+
+    /// [`Self::check_list`] with what a person can follow each check to.
+    pub fn check_details(&self) -> impl Iterator<Item = CheckDetail<'_>> {
+        self.status_check_rollup
+            .iter()
+            .flatten()
+            .map(|check| CheckDetail {
+                name: &check.name,
+                outcome: check.outcome(),
+                job: check.job(),
+                url: check.url.as_deref(),
+            })
     }
 
     pub fn checks(&self) -> String {

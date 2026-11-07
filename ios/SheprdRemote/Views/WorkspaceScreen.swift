@@ -15,6 +15,8 @@ struct WorkspaceScreen: View {
     @State private var showsOthers = false
     /// A tab just started, shown as soon as it exists.
     @State private var opened: Route?
+    /// Files changed and not committed; `nil` until Sheprd says.
+    @State private var changedFiles: Int?
 
     private static let terminal = "terminal"
 
@@ -39,6 +41,9 @@ struct WorkspaceScreen: View {
                     // Plain text and a chevron, like the rows below, not a
                     // tinted web link.
                     Link(destination: url) { PullRequestRow(pullRequest: pullRequest) }.tint(.primary)
+                }
+                if workspace.branch != nil {
+                    NavigationLink(value: Route.changes(key)) { ChangesRow(count: changedFiles) }
                 }
             }
             Section {
@@ -71,6 +76,8 @@ struct WorkspaceScreen: View {
             #if DEBUG
             // The simulator loop's `-otherAgents YES` unfolds the agents.
             if UserDefaults.standard.bool(forKey: "otherAgents") { showsOthers = true }
+            // `-openChanges YES` opens the workspace's changes.
+            if UserDefaults.standard.bool(forKey: "openChanges"), opened == nil { opened = .changes(key) }
             #endif
         }
         // This screen is right behind what it opens, so Back is the way here.
@@ -87,6 +94,14 @@ struct WorkspaceScreen: View {
                 }
                 try? await Task.sleep(for: .seconds(3))
             }
+        }
+        // Again on each return, as an agent may have changed more since.
+        .task(id: machine.status) {
+            guard isOnline(machine), workspace.branch != nil else { return }
+            let (device, id) = (key.device, key.workspace)
+            changedFiles = try? await model.fleet.call(device) { client, token in
+                try await client.changes(workspace: id, scope: .uncommitted, bearer: token)
+            }.total
         }
         .alert("The tab did not start", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
         } message: {
@@ -276,6 +291,32 @@ private struct PullRequestRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Pull request \(pullRequest.number), \(tone.label)")
         .accessibilityAddTraits(.isLink)
+    }
+}
+
+/// Opens the workspace's changes, saying how many files are uncommitted.
+private struct ChangesRow: View {
+    var count: Int?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "plusminus").font(.system(size: 14, weight: .semibold))
+                .frame(width: 28, height: 28).background(.fill.secondary, in: .rect(cornerRadius: 28 * 0.28))
+            Text("Changes").frame(maxWidth: .infinity, alignment: .leading)
+            if let count {
+                Text(count, format: .number).foregroundStyle(.secondary).monospacedDigit()
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
+    private var label: String {
+        switch count {
+        case nil: "Changes"
+        case 1?: "Changes, 1 file"
+        case let count?: "Changes, \(count) files"
+        }
     }
 }
 

@@ -215,9 +215,15 @@ fn parse_with_owner(text: &str, owner: &str, repo: &str, branch: &str, head_owne
     }
     for check in pr.status_check_rollup.iter_mut().flatten() {
         check.name = clean(&check.name).chars().take(128).collect();
+        check.url = check.url.take().filter(|url| check_url(url));
     }
     pr.checks_summary = pr.checks();
     Ok(Some(pr))
+}
+
+/// Whether a check's link may be offered: remote text a phone opens.
+fn check_url(url: &str) -> bool {
+    url.len() <= 2048 && url.starts_with("https://") && !url.chars().any(char::is_control)
 }
 
 /// The one pull request a branch stands for, among those already narrowed to

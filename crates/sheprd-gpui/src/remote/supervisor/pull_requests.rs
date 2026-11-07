@@ -1,6 +1,11 @@
-//! Share the desktop's prepared PR cache, never credentials or a second lookup.
+//! Share the desktop's prepared PR cache, never credentials or a second lookup,
+//! and keep what answers phones' questions about each workspace beside it.
 use super::*;
-use crate::{SheprdWindow, pull_request::Origin};
+use crate::{
+    SheprdWindow,
+    pull_request::Origin,
+    remote::changes::{Source, Sources},
+};
 use gpui::Context;
 use sheprd_remote_control::control::pull_requests::{MAX_PULL_REQUESTS, WorkspacePullRequest};
 
@@ -37,19 +42,37 @@ impl SheprdWindow {
         let view = self
             .endpoint_pr_view(0)
             .filter(|view| view.origin == Origin::Local);
+        let tokens = self
+            .endpoint_pr_profile(0)
+            .map(|profile| self.tokens_over(profile));
+        let mut sources = Sources {
+            boot_id: snapshot.boot_id.clone(),
+            ..Sources::default()
+        };
         let mut entries = Vec::new();
         for workspace in &snapshot.workspaces {
-            let Some((view, tree, branch)) = view
+            let found = view
                 .as_ref()
                 .zip(workspace.worktree.as_ref())
                 .zip(workspace.branch.as_ref())
-                .map(|((view, tree), branch)| (view, tree, branch))
-            else {
+                .and_then(|((view, tree), branch)| {
+                    let pr = self.menu.pr_cache.peek(view, &tree.key, branch)?;
+                    Some((pr, branch))
+                });
+            sources.workspaces.insert(
+                workspace.workspace_id.clone(),
+                Source::new(
+                    workspace.clone(),
+                    found.as_ref().map(|(pr, _)| &**pr),
+                    tokens.as_ref(),
+                ),
+            );
+            let Some((pr, branch)) = found else {
                 continue;
             };
-            let Some(pr) = self.menu.pr_cache.peek(view, &tree.key, branch) else {
+            if entries.len() == MAX_PULL_REQUESTS {
                 continue;
-            };
+            }
             let badge = WorkspacePullRequest {
                 workspace_id: workspace.workspace_id.clone(),
                 cwd: workspace.new_workspace_cwd.clone(),
@@ -61,19 +84,17 @@ impl SheprdWindow {
             if badge.valid() {
                 entries.push(badge);
             }
-            if entries.len() == MAX_PULL_REQUESTS {
-                break;
-            }
         }
         entries.sort_by(|left, right| left.workspace_id.cmp(&right.workspace_id));
         let update = PullRequests {
             boot_id: snapshot.boot_id.clone(),
             entries,
         };
+        let supervisor = cx.global_mut::<Supervisor>();
+        supervisor.set_change_sources(sources);
         if !update.valid() {
             return;
         }
-        let supervisor = cx.global_mut::<Supervisor>();
         supervisor.pull_requests_checked = Some(Instant::now());
         if supervisor.pull_requests.as_deref() != Some(&update) {
             supervisor.pull_requests = Some(Arc::new(update));

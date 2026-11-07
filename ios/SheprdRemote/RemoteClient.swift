@@ -81,7 +81,7 @@ enum RemoteError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case let .status(code, body): "The computer answered \(code): \(body)"
+        case let .status(code, body): apiErrorMessage(body).map { "\($0)." } ?? "The computer answered \(code): \(body)"
         case .notHTTP: "The computer's answer was not HTTP."
         case .unreachable: "None of the computer's addresses answered."
         }
@@ -242,15 +242,49 @@ final class RemoteClient: Sendable {
         let _: EmptyAnswer = try await send("POST", "/api/term/\(Self.segment(pane))/rename", body: Body(label: label), bearer: bearer)
     }
 
+    /// A workspace's changed files, which Sheprd reads from its checkout.
+    func changes(workspace: String, scope: ChangeScope, bearer: String) async throws -> ChangeList {
+        try await send("GET", "\(Self.changesPath(workspace))?\(Self.query(["scope": scope.rawValue]))",
+                       bearer: bearer, timeout: Self.askTimeout)
+    }
+
+    /// One listed file's diff.
+    func fileDiff(_ path: String, workspace: String, scope: ChangeScope, bearer: String) async throws -> FileDiff {
+        let query = Self.query(["path": path, "scope": scope.rawValue])
+        return try await send("GET", "\(Self.changesPath(workspace))/diff?\(query)", bearer: bearer, timeout: Self.askTimeout)
+    }
+
+    /// The checks of a workspace's pull request.
+    func checks(workspace: String, bearer: String) async throws -> PullRequestChecks {
+        try await send("GET", "/api/v2/workspaces/\(Self.segment(workspace))/checks", bearer: bearer, timeout: Self.askTimeout)
+    }
+
+    /// An excerpt of a failing check's log.
+    func checkLog(job: UInt64, workspace: String, bearer: String) async throws -> CheckLogExcerpt {
+        try await send("GET", "/api/v2/workspaces/\(Self.segment(workspace))/checks/\(job)/log",
+                       bearer: bearer, timeout: Self.askTimeout)
+    }
+
+    /// Longer than the computer waits for Sheprd (`ANSWER_WAIT`), so it is
+    /// the computer that says what went wrong.
+    private static let askTimeout: TimeInterval = 30
+
+    private static func changesPath(_ workspace: String) -> String {
+        "/api/v2/workspaces/\(segment(workspace))/changes"
+    }
+
+    private static func query(_ items: [String: String]) -> String {
+        var components = URLComponents()
+        components.queryItems = items.sorted { $0.key < $1.key }.map(URLQueryItem.init)
+        // A query string reads `+` as a space.
+        return (components.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B")
+    }
+
     /// What was said in this computer's chats; nil from a daemon that
     /// cannot search, so the phone's index answers instead.
     func search(_ query: String, bearer: String) async throws -> SearchAnswer? {
-        var components = URLComponents()
-        components.queryItems = [URLQueryItem(name: "q", value: query)]
-        // A query string reads `+` as a space.
-        let encoded = (components.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B")
         do {
-            return try await send("GET", "/api/v2/search?\(encoded)", bearer: bearer)
+            return try await send("GET", "/api/v2/search?\(Self.query(["q": query]))", bearer: bearer)
         } catch RemoteError.status(404, _) {
             return nil
         }

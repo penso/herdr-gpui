@@ -9,6 +9,7 @@
 //! in the daemon.
 
 use sheprd_chat_protocol::{read_frame, write_frame};
+pub mod changes;
 pub mod hosts;
 pub mod pull_requests;
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,9 @@ use std::{
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 /// How long a client waits for the daemon's answer.
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long `Request::ChangeAsks` waits for a phone's question: within
+/// [`RESPONSE_TIMEOUT`], so an empty answer is not taken for a dead daemon.
+pub const ASK_WAIT: Duration = Duration::from_secs(4);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -189,6 +193,14 @@ pub enum Request {
     /// `herdr-remote-control enroll` asks. Sheprd never sends it to its
     /// own daemon.
     Enroll(hosts::Enroll),
+    /// Takes the phones' questions about workspaces, waiting up to
+    /// [`ASK_WAIT`] for one. Sheprd sends it while a phone is connected.
+    ChangeAsks,
+    /// What Sheprd found for an [`changes::Ask`].
+    ChangeAnswer {
+        id: changes::AskId,
+        answer: changes::Answer,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -231,6 +243,9 @@ pub enum Response {
         revokes: Vec<hosts::HostRevoke>,
     },
     Enrolled(hosts::Enrolled),
+    ChangeAsks {
+        asks: Vec<changes::Ask>,
+    },
 }
 
 /// The daemon's answer to a nearby phone's first step, the same JSON over

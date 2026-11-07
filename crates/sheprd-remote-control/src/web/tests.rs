@@ -13,6 +13,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tower::ServiceExt;
 
 mod apps;
+mod changes;
 #[cfg(unix)]
 mod echo;
 mod handoff;
@@ -58,6 +59,7 @@ pub(crate) fn state_with(dir: &std::path::Path, hub: Arc<Hub>) -> Shared {
         apns: None,
         apps: auth.apps(),
         auth: Mutex::new(auth),
+        changes: Default::default(),
         computer: "Studio".into(),
         connected: Mutex::new(HashMap::new()),
         fingerprint: authority.fingerprint().to_owned(),

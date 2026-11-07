@@ -94,6 +94,9 @@ and nothing goes through your phone.
    - `-tab workspaces|settings` opens that tab, and `-openWorkspace ID`
      opens that workspace's screen in it.
    - `-otherAgents YES` unfolds a workspace's other agents.
+   - With `-openWorkspace`, `-openChanges YES` opens its changes; then
+     `-openDiff PATH` opens a file's diff, and `-sendLog YES` opens the
+     confirmation for the first failing check's log.
    - `-newWorkspace YES` opens the new workspace form.
    - `-syncBar waiting|failed` shows the sync bar as if a change were on
      its way or had failed.

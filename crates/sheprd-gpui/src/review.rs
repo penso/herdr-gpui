@@ -2,7 +2,7 @@
 //! diff, notes on its lines, and sending them back to the agent the way page
 //! annotations go (see `agent_notes`).
 // i18n: migrated
-mod diff;
+pub(crate) mod diff;
 mod error;
 pub(crate) mod highlight;
 mod notes;
