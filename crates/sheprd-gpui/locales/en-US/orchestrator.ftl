@@ -305,6 +305,8 @@ orchestrator-section-branch = BRANCH
 orchestrator-section-extra = EXTRA INSTRUCTIONS
 # The prompt that ships with the app, beside the repository's own profiles.
 orchestrator-profile-built-in = built-in
+# A profile that a review sends instead of the built-in prompt and its safeguards.
+orchestrator-profile-replaces = { $name } (replaces built-in)
 orchestrator-agents-failed = Could not discover agents. Select the host to retry.
 orchestrator-agents-looking = Looking for installed agents…
 orchestrator-agents-none = No supported agent is installed on this host.

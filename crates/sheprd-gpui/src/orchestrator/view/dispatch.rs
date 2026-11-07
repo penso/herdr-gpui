@@ -570,7 +570,7 @@ impl OrchestratorView {
                 .profiles
                 .iter()
                 .enumerate()
-                .map(|(index, profile)| (Some(index), profile.name.clone())),
+                .map(|(index, profile)| (Some(index), profile_label(profile, dialog.review))),
         );
         let segmented = div()
             .flex()
@@ -769,6 +769,20 @@ impl OrchestratorView {
             }
             _ => false,
         }
+    }
+}
+
+/// A profile's name in the dialog. Only a review has a built-in prompt a
+/// profile may keep, so only there is replacing it worth saying.
+fn profile_label(profile: &prompt::Profile, review: bool) -> String {
+    match (review, profile.review) {
+        (true, prompt::Review::Replace) => {
+            fl!(
+                "orchestrator-profile-replaces",
+                name = profile.name.as_str()
+            )
+        }
+        _ => profile.name.clone(),
     }
 }
 

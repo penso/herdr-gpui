@@ -85,6 +85,21 @@ Each becomes a run owned by `branch`, shown like any other but never written,
 and only when no recorded run already has that branch. It opens its workspace;
 it has no Stop, Send, or Remove, since no application owns it.
 
+## Review profiles
+
+`compose_review` keeps the built-in read-only prompt and appends the chosen
+profile. `Profile::parse` takes a first line of `review: replace` out of the
+template and sets `Review::Replace`, and such a profile is the whole prompt
+(plus extra instructions), rendered with the `pr_` variables as well as the
+`issue_` ones. The marker is removed at load so that no render path can send
+it, including an issue dispatch, where the same profile replaces the built-in
+prompt anyway. Other profiles never see the `pr_` variables: they are left as
+written, as they were before the marker existed. `{{ pr_title }}` and
+`{{ pr_body }}` stay marked as untrusted, and ref and repository names outside
+`valid_branch`'s characters are withheld, since Git allows `$(…)` in a branch
+name and a profile may put one in a command. The rest of what the built-in
+prompt guards is the profile author's to keep.
+
 ## Tasks
 
 Tasks is a third list on the same view, not a store of its own: Beads remains
