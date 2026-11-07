@@ -4,6 +4,7 @@ use crate::{
         CoreTerminalView, Look,
         worker::{self, Command},
     },
+    i18n::{fl, leak_tests::under_en_xa},
     terminal_painter::TerminalPainter,
 };
 use gpui::{
@@ -97,7 +98,10 @@ fn reads_as_a_terminal_and_offers_insertion_only_while_it_takes_typing(cx: &mut 
         view.update(cx, |view, cx| {
             let terminal = node(view, window, cx);
             assert_eq!(terminal.role(), Role::Terminal);
-            assert_eq!(terminal.label(), Some("Terminal"));
+            assert_eq!(
+                terminal.label(),
+                Some(fl!("window-input-terminal").as_str())
+            );
             assert!(!terminal.supports_action(Action::SetValue));
 
             window.focus(view.focus_handle(), cx);
@@ -112,6 +116,20 @@ fn reads_as_a_terminal_and_offers_insertion_only_while_it_takes_typing(cx: &mut 
             window.focus(&field, cx);
             assert!(!node(view, window, cx).supports_action(Action::SetValue));
         })
+    });
+}
+
+#[test]
+fn the_label_follows_the_language() {
+    under_en_xa("core terminal label en-XA leak", |cx, _| {
+        let (view, cx, _) = open(cx, false);
+        cx.update(|window, cx| {
+            view.update(cx, |view, cx| {
+                let terminal = node(view, window, cx);
+                let label = terminal.label().unwrap();
+                assert!(sheprd_i18n::pseudo::is_marked(label), "{label}");
+            })
+        });
     });
 }
 

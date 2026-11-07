@@ -4,6 +4,7 @@
 //! target.
 
 use super::CoreTerminalView;
+use crate::i18n::fl;
 use gpui::{accesskit::ActionData, prelude::*, *};
 use sheprd_backend::ClientPaneInputEvent;
 
@@ -15,7 +16,7 @@ impl CoreTerminalView {
         cx: &Context<Self>,
     ) -> Stateful<Div> {
         root.role(Role::Terminal)
-            .aria_label("Terminal")
+            .aria_label(fl!("window-input-terminal"))
             // AccessKit maps Terminal to AXTextArea on macOS. SetValue makes
             // AXValue settable without changing the reading role.
             .when(self.takes_accessible_text(window), |root| {
