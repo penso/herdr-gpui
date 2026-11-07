@@ -211,3 +211,33 @@ fn closing_the_sheet_marks_the_notes_read(cx: &mut TestAppContext) {
     assert_eq!(sent["params"], serde_json::json!({"version": "1.0.1"}));
     assert_eq!(view.read_with(cx, |view, _| view.menu.page), None);
 }
+
+/// A native page draws above the window on Windows, so one the card reaches
+/// hides until the card is dismissed.
+#[cfg(windows)]
+#[gpui::test]
+fn the_card_covers_the_pages_it_reaches_until_it_is_dismissed(cx: &mut TestAppContext) {
+    let peer = MockPeer::advertising(&["product_announcement.dismiss"]);
+    let (view, cx) = connected(cx, &peer, snapshot());
+    let present = |view: &Entity<SheprdWindow>, cx: &mut VisualTestContext| {
+        view.update(cx, |view, cx| {
+            view.present_browser(cx);
+            cx.notify();
+        });
+        draw(cx);
+    };
+    present(&view, cx);
+    let card = cx.debug_bounds("announcement").unwrap();
+    let presented = view.read_with(cx, |view, _| view.presented_overlays());
+    assert_eq!(presented.len(), 1, "{presented:?}");
+    assert!(
+        card.contains(&presented[0].origin),
+        "{presented:?} {card:?}"
+    );
+
+    view.update(cx, |view, cx| {
+        view.dismiss_announcement("1.0.0", "announcement-v1", cx);
+    });
+    present(&view, cx);
+    assert!(view.read_with(cx, |view, _| view.presented_overlays().is_empty()));
+}

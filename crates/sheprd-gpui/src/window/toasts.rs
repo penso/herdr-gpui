@@ -346,7 +346,7 @@ impl SheprdWindow {
                 corners.push(
                     corner(position, width)
                         .children(cards)
-                        .children(self.overlay_probe())
+                        .children(self.overlay_probe(crate::browser::Overlay::Toasts))
                         .into_any_element(),
                 );
             }
@@ -378,29 +378,35 @@ fn corner(position: ToastHerdrPosition, width: Pixels) -> Div {
 }
 
 impl SheprdWindow {
-    /// Whether toasts, ones still sliding out among them, or the
-    /// file-transfer card show now, as their renders decide: nothing shows
+    /// Whether `overlay` shows now, as its render decides: toasts count ones
+    /// still sliding out, and nothing shows
     /// over an open menu or in a window too small.
     /// Only Windows hides pages under these.
     #[cfg(windows)]
-    pub(crate) fn overlays_shown(&self) -> bool {
+    pub(crate) fn overlay_shown(&self, overlay: crate::browser::Overlay) -> bool {
+        use crate::browser::Overlay;
         if self.menu.page.is_some() {
             return false;
         }
-        self.file_transfer.is_some()
-            || (!self.toasts_hidden
-                && (self
-                    .toast_motion
-                    .leaving(crate::motion::now())
-                    .next()
-                    .is_some()
-                    || self.endpoints.iter().any(|endpoint| {
-                        endpoint
-                            .toasts
-                            .entries
-                            .iter()
-                            .any(|(_, notice)| notice.visible)
-                    })))
+        match overlay {
+            Overlay::FileTransfer => self.file_transfer.is_some(),
+            Overlay::Notice(card) => self.notice_shown(card),
+            Overlay::Toasts => {
+                !self.toasts_hidden
+                    && (self
+                        .toast_motion
+                        .leaving(crate::motion::now())
+                        .next()
+                        .is_some()
+                        || self.endpoints.iter().any(|endpoint| {
+                            endpoint
+                                .toasts
+                                .entries
+                                .iter()
+                                .any(|(_, notice)| notice.visible)
+                        }))
+            }
+        }
     }
 }
 

@@ -97,6 +97,7 @@ pub(crate) use underlay::{
     AroundPages, around as around_pages, ground as ground_around_pages,
     picture as picture_around_pages,
 };
+pub(crate) use view::present::Overlay;
 pub(crate) use view::{Browser, PageOpened, scope};
 pub(crate) use zoom::Zoom;
 

@@ -416,7 +416,8 @@ impl SheprdWindow {
             } else {
                 theme.muted
             };
-            let icon_path = crate::icons::AgentIcon::from_identity(agent.agent.as_deref()).path();
+            let icon_path =
+                super::agents::agent_icon(agent, snapshot, &self.config.sidebar_style).path();
             // The host letter shares the workspace number's column. With one
             // host there is no letter, so the icon takes that column and still
             // starts on the badge's left edge.
