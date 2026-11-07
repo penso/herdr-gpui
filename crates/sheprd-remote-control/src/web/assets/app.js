@@ -220,6 +220,8 @@ async function api(path, options = {}) {
     if (error.status !== 401 || options.auth === false) throw error;
     app.session = null;
     await signIn();
+    // Bound for one computer (`computer`): never retried with another's token.
+    if (options.computer && app.device?.fingerprint !== options.computer) throw error;
     return call(path, options);
   }
 }
@@ -1328,6 +1330,9 @@ const links = { vouch: null, rows: [], run: 0, posting: new Set() };
 /// lists in a row end the checking.
 const LINK_POLL_MS = 2000;
 const LINK_RETRIES = 15;
+/// How long after a key is saved a list may not show it yet: a page
+/// reloaded while handing one over no longer knows it is in flight.
+const LINK_POST_MS = 5000;
 /// What each state says, and the button it offers.
 const LINK_STATES = {
   allowed: { text: "Pairing…" },
@@ -1347,21 +1352,37 @@ function holdsLink(link) {
   return link.state === "paired" && hosts().some((host) => bare(host.fingerprint) === bare(link.fingerprint));
 }
 
-/// Makes a key for `link`'s machine alone and hands its public half to the
-/// computer shown. It is saved only once the computer took it: a refused
-/// key must not replace one still being enrolled.
+/// Makes a key for `link`'s machine alone and hands its public half to
+/// `vouch`, the computer shown. One attempt at a time, so a new key never
+/// replaces one being enrolled: the next list settles the last one first.
+/// The key is saved before it is sent, as the computer may take it and the
+/// answer never arrive. True when the computer refused it.
 async function postLink(vouch, link) {
   const name = waitingName(vouch, link.host);
-  if (links.posting.has(name)) return;
+  if (links.posting.has(name)) return false;
   links.posting.add(name);
   try {
+    if (await waitingKey(vouch, link.host)) return false;
     const { pair, publicKey } = await newDeviceKey();
-    const path = `/api/v2/hosts/${encodeURIComponent(link.host)}/pair`;
-    const answer = await (await api(path, { method: "POST", body: { public_key: publicKey } })).json();
     const waiting = { pair, replaces: link.device || null, since: Date.now() };
     await keyStore("readwrite", (store) => store.put(waiting, name));
-    link.state = answer.state;
+    // Saved under `vouch`, so it goes to `vouch` or nowhere. Nothing waits
+    // from here to the request leaving, which carries that computer's token.
+    if (app.device?.fingerprint !== vouch) {
+      await dropWaiting(vouch, link.host);
+      return false;
+    }
+    const path = `/api/v2/hosts/${encodeURIComponent(link.host)}/pair`;
+    const options = { method: "POST", body: { public_key: publicKey }, origin: app.origin, computer: vouch };
+    link.state = (await (await api(path, options)).json()).state;
+    return false;
   } catch (error) {
+    // No answer: the computer may have taken it, and the next list says.
+    if (error instanceof TypeError) {
+      link.state = "pending";
+      return false;
+    }
+    await dropWaiting(vouch, link.host).catch(() => {});
     link.state = "failed";
     link.reason =
       error.status === 429
@@ -1369,6 +1390,7 @@ async function postLink(vouch, link) {
         : error.status === 404
           ? "Your computer no longer knows this machine."
           : error.message;
+    return true;
   } finally {
     links.posting.delete(name);
   }
@@ -1395,9 +1417,11 @@ async function keepLink(vouch, link, pair) {
     link: link.host,
   };
   await saveKey(host, pair);
+  // Read again, with no wait before the write: the list may have changed
+  // during the key's, and an older copy would drop what was added.
+  if (hosts().some((other) => other.fingerprint === host.fingerprint)) keepHost(host);
+  else saveHosts([...hosts(), host]);
   if (same && same.id !== host.id) await dropKey(same).catch(() => {});
-  if (same) keepHost(host);
-  else saveHosts([...list, host]);
   return true;
 }
 
@@ -1407,14 +1431,17 @@ async function settleLink(vouch, link, asked) {
   if (links.posting.has(waitingName(vouch, link.host))) return { waits: true };
   const waiting = await waitingKey(vouch, link.host);
   if (!waiting) return { waits: false };
-  // A list older than the key says nothing about it. While the computer
-  // keeps the request the machine reads `asking` or `pending`; any other
-  // state ended it, and `paired` then names the key it enrolled, unless
-  // that is still the device this key was to replace.
-  if (waiting.since >= asked || link.state === "asking" || link.state === "pending") return { waits: true };
-  await dropWaiting(vouch, link.host);
+  // A list from before the computer had the key says nothing about it.
+  // While the computer keeps the request the machine reads `asking` or
+  // `pending`; any other state ended it, and `paired` then names the key it
+  // enrolled, unless that is still the device this key was to replace.
+  const early = waiting.since + LINK_POST_MS >= asked;
+  if (early || link.state === "asking" || link.state === "pending") return { waits: true };
   const enrolled = link.state === "paired" && link.device !== waiting.replaces;
-  return { waits: false, kept: enrolled && (await keepLink(vouch, link, waiting.pair)) };
+  const kept = enrolled && (await keepLink(vouch, link, waiting.pair));
+  // Only now: a reload before this finds the key and keeps the machine.
+  await dropWaiting(vouch, link.host);
+  return { waits: false, kept };
 }
 
 /// Lists the machines of the computer shown and pairs the ones the desktop
@@ -1444,7 +1471,9 @@ async function followLinks() {
     if (rows) {
       failures = 0;
       links.rows = rows;
-      const settled = await Promise.all(rows.map((link) => settleLink(vouch, link, asked)));
+      // One at a time: each may add to the computers list.
+      const settled = [];
+      for (const link of rows) settled.push(await settleLink(vouch, link, asked));
       if (!current()) return;
       if (first) {
         const allowed = rows.filter((link, index) => link.state === "allowed" && !settled[index].waits);
@@ -1495,10 +1524,10 @@ function drawLinks() {
 async function pairLink(host) {
   const link = links.rows.find((row) => row.host === host);
   if (!link || links.vouch !== app.device?.fingerprint) return;
-  await postLink(links.vouch, link);
+  const refused = await postLink(links.vouch, link);
   drawLinks();
   // Another list now would replace why the computer refused the key.
-  if (link.state !== "failed") followLinks();
+  if (!refused) followLinks();
 }
 
 /// Explains how to trust the machine with `fingerprint`. Unlike the iOS
