@@ -29,4 +29,5 @@ tokio-rustls.workspace   = true
 webpki-roots.workspace   = true
 
 [dev-dependencies]
+hyper      = { features = ["server"], workspace = true }
 tempfile.workspace = true

@@ -8,6 +8,8 @@
 //! - [`ProviderToken`]: the JWT APNs authenticates a provider by, refreshed
 //!   every fifty minutes.
 //! - [`Sender`]: the HTTP/2 request to `api.push.apple.com` or the sandbox.
+//! - [`RelayClient`]: the same through the push relay, for a daemon with no
+//!   key of its own.
 //! - [`seal`]: sealing to a P-256 key, and opening with its private half.
 //! - [`DeviceToken`]: a checked push token.
 //!
@@ -17,6 +19,7 @@
 mod config;
 mod error;
 mod jwt;
+mod relay;
 pub mod seal;
 mod send;
 mod token;
@@ -24,6 +27,7 @@ mod token;
 pub use config::{Config, dir, is_private, load_secret_key};
 pub use error::{Error, Result};
 pub use jwt::ProviderToken;
+pub use relay::{RelayClient, RelayHost, RelayOutcome, push_body};
 pub use send::{Host, MAX_PAYLOAD, Outcome, Priority, Push, PushType, Sender};
 pub use token::DeviceToken;
 

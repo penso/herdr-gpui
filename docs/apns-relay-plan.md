@@ -7,7 +7,7 @@ pushes from each user's `sheprd-remote-control` daemon to Apple.
 
 - **Opt-in.** It is off until the user turns it on, in a setting that explains
   what the relay sees.
-- **Cheap to run.** One Docker image built by CI, on any small host, with SQLite.
+- **Cheap to run.** One Docker image built by CI, on any small host, with no database.
   TestFlight has about 120 downloads, so nothing here needs to scale yet.
 - **Little to steal.** The server stores no push tokens and no chat content, and
   it has no route to anyone's computer.
@@ -127,20 +127,57 @@ forget good tokens.
 
 ### 4. Storage
 
-One SQLite file on a Docker volume, through the workspace's `rusqlite`.
+Memory by default, so a droplet needs nothing but the image and its secrets. The
+`Store` trait has three implementations, chosen with `--store`:
+
+| `--store` | Keeps | For |
+| --- | --- | --- |
+| `memory` (default) | Nothing across a restart | One small host |
+| `sqlite:FILE` | A file on a volume | One host where revocations must survive |
+| `postgres` (feature) | `postgres-url` in the secrets, and `postgres-ca.pem` beside it for a private CA | Several relays sharing state |
+
+What a store holds:
 
 | Table | Holds |
 | --- | --- |
-| `devices` | Attested public key, assertion counter, APNs environment, first and last seen dates |
 | `revoked` | Handle ids and device ids, removed once they would have expired |
+| `devices` (with App Attest, not built) | Attested public key, assertion counter, APNs environment, first and last seen dates |
 
-**Tokens and payloads never go in the database or the logs.** That rule is what
-keeps a stolen disk from being useful, so a test should enforce it: send a push
-through the relay, then search the database and captured logs for the token and
-payload.
+**Tokens and payloads never go in a store or the logs.** That rule is what keeps
+a stolen disk from being useful, and a test enforces it: it sends a push through
+the relay, then searches the database and captured logs for the token and payload.
 
-The database needs no backup. If it is lost, phones attest again. Rate limits
-live in memory and reset on restart.
+Rate limits live in memory and reset on restart.
+
+### Restarts
+
+The relay holds nothing a push depends on: each push carries its own handle, and
+a credential proves itself with the relay's secret. So after a restart on the
+memory store the next push simply works, with no phone or computer doing anything.
+
+| After a restart on `memory` | Effect |
+| --- | --- |
+| Pushes | Keep working at once |
+| Revocations | Forgotten. A revoked handle works again until its credential expires, at most 30 days on. Such a handle reaches only its own phone, and an alert sent with it shows only the fixed cover text. Use `sqlite:` or `postgres` to rule it out. |
+| Attested keys, once App Attest exists | Forgotten. A phone attests again the next time it renews, in the foreground. |
+| Rate limits | Reset |
+
+**The secrets must survive.** `relay-key.pem` and `credential-secret` live on the
+host, outside any store. Lose or replace them, as a rebuilt droplet would, and every
+handle stops working: the relay answers `refused`, the daemon reports the handle
+stale, and each phone repairs itself when it next opens.
+
+### Staying connected
+
+Every step can be repeated, so recovery needs no coordination:
+
+- **Phone.** Sends everything (`POST /api/apns`) each time it comes to the
+  foreground. The daemon replaces what it held, so repeating it changes nothing.
+- **Daemon.** `RelayClient` holds no state about the relay. A dropped connection is
+  opened again, and a failed call is tried twice more within seconds. A repeated push
+  shows once, since pushes for a chat share a collapse id. `Stale` means only
+  the phone can help, so it waits for the next registration.
+- **Revoking** twice is harmless, so a daemon may repeat it until it hears back.
 
 ### 5. Revoke
 
@@ -247,7 +284,7 @@ and only for as long as they stay undetected.
 
 | What they get | What it allows |
 | --- | --- |
-| The database | Attested public keys and dates. No tokens, content, or secrets. |
+| A store, if one is used | Revocations, and attested public keys and dates. No tokens, content, or secrets. |
 | The APNs key | Nothing on its own: Apple also needs a device token, and tokens exist only inside handles, which daemons hold. It is scoped to this app's topic (spike 1), so other apps on the team are out of reach. |
 | The relay's private key | Opens handles, but the server stores none. To use it they would also need a handle from a daemon or the wire. |
 | Live access to the running process | The real exposure. They see tokens, timing, and size for pushes sent while they are in. |
@@ -279,7 +316,8 @@ forged text, though not the plain alert.
 
 - The image has no shell or package manager, runs as a non-root user with a
   read-only filesystem, drops all capabilities, and sets `no-new-privileges`.
-- The only writable path is the SQLite volume. Secrets are mounted files.
+- The default store writes nothing. With `sqlite:`, the only writable path is its
+  volume. Secrets are mounted files.
 - Only ports 80 and 443 are open, with SSH by key only, or none where the host
   offers a console.
 - Egress goes to APNs only, if the host allows filtering it. Checking an
@@ -339,7 +377,7 @@ sender move here from `sheprd-remote-control`, so the daemon's own-key mode and
 the relay share one implementation. No GPUI.
 
 **New crate, `crates/sheprd-push-relay`.** The relay binary, on Tokio and axum
-as `sheprd-remote-control` is, with `rusqlite` from the workspace. It has its own
+as `sheprd-remote-control` is, with stores behind a trait. It has its own
 `Error`, bounded bodies, and tests with a mock APNs. Keys, the credential secret,
 and deployment config stay on the host and out of the repository.
 
@@ -399,7 +437,8 @@ handles, expiry, revocation, kind checks, limits, each APNs reply, and the test
 that no token or payload reaches disk or logs. Still to build, after spike 3: App
 Attest, `POST /v1/attest`, the signed relay key, and the `devices` table. Until
 then nothing issues credentials, so the relay cannot serve a real phone. Also
-still to add: the counters.
+still to add: the counters. Stores and `RelayClient` are built; the daemon uses
+the client once `Delivery` lands in phase 4.
 
 **3. Image and host.** Add the Dockerfile, the workflow, and the compose file.
 Bring up a sandbox relay on a small host.
@@ -452,7 +491,8 @@ Before phase 5 offers the relay to anyone, from issue #1056:
 - Build it in Rust in this repository, with Docker images from CI.
 - Run it on a cheap host, such as DigitalOcean.
 - Opt-in, in settings, with an explanation of what the relay sees.
-- SQLite for now. Revisit only if one instance stops being enough.
+- Memory by default, with SQLite and Postgres behind the `Store` trait for when
+  revocations must survive a restart or instances share state.
 - Full Live Activities with meaningful detail at launch, sealed end to end.
 - The relay lives on `sheprd.org`: `push.sheprd.org`, and
   `push-sandbox.sheprd.org` for development.

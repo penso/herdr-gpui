@@ -5,6 +5,7 @@ use p256::{SecretKey, ecdsa::SigningKey};
 
 mod config;
 mod jwt;
+mod relay;
 mod seal;
 mod send;
 mod token;

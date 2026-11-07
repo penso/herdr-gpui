@@ -180,14 +180,7 @@ impl Sender {
     }
 
     pub fn new(config: Config) -> Result<Self> {
-        let mut roots = RootCertStore::empty();
-        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        let mut tls = ClientConfig::builder_with_provider(Arc::new(ring::default_provider()))
-            .with_safe_default_protocol_versions()
-            .map_err(Error::Tls)?
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-        tls.alpn_protocols = vec![b"h2".to_vec()];
+        let tls = tls()?;
         let token = ProviderToken::new(
             config.key.clone(),
             config.team_id.clone(),
@@ -260,6 +253,19 @@ impl Sender {
         tokio::spawn(connection);
         Ok(sender)
     }
+}
+
+/// HTTP/2 over TLS to a public host.
+pub(crate) fn tls() -> Result<ClientConfig> {
+    let mut roots = RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let mut tls = ClientConfig::builder_with_provider(Arc::new(ring::default_provider()))
+        .with_safe_default_protocol_versions()
+        .map_err(Error::Tls)?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    tls.alpn_protocols = vec![b"h2".to_vec()];
+    Ok(tls)
 }
 
 async fn send_on(
