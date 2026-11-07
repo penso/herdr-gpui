@@ -13,7 +13,7 @@ use super::{Shared, State};
 use crate::hub::Layout;
 use sheprd_client::protocol::AgentStatus;
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     sync::{Mutex, MutexGuard, PoisonError},
 };
 use tokio::sync::watch;
@@ -28,9 +28,10 @@ pub(crate) struct Opened {
 
 #[derive(Debug, Default)]
 struct Marks {
-    /// Finished panes a phone opened; a pane leaves when it is no longer
-    /// `Done`, so its next finish counts again.
-    opened: HashSet<String>,
+    /// Finished panes a phone opened, with the finish that was seen. One
+    /// that finished again since counts again, however quickly it did, so
+    /// nothing depends on noticing the work in between.
+    opened: HashMap<String, Finish>,
     /// Views open on each pane now: what finishes in one was seen.
     watching: HashMap<String, usize>,
 }
@@ -44,15 +45,40 @@ impl Default for Opened {
     }
 }
 
-/// Every agent's pane and status, in chats and terminals alike.
-fn statuses(layout: &Layout) -> HashMap<&str, AgentStatus> {
-    let chats = layout.chats().map(|chat| (chat.pane.as_str(), chat.status));
+/// Tells one finish of an agent from the next: when it happened, if known.
+type Finish = Option<u64>;
+
+/// What a chat's transcript says, beyond the layout.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct ChatFacts {
+    pub(crate) finish: Finish,
+    pub(crate) questions: usize,
+}
+
+/// An agent as this module sees it.
+#[derive(Clone, Copy)]
+struct Agent {
+    finish: Finish,
+    status: AgentStatus,
+}
+
+/// Every agent by pane, in chats and terminals alike.
+fn agents(layout: &Layout, chat: impl Fn(&str) -> ChatFacts) -> HashMap<&str, Agent> {
+    let chats = layout.chats().map(|row| {
+        let finish = chat(&row.pane).finish;
+        let status = row.status;
+        (row.pane.as_str(), Agent { finish, status })
+    });
     let terminals = layout
         .workspaces
         .iter()
         .flat_map(|workspace| workspace.terminals.iter())
         .filter_map(|terminal| terminal.agent.as_ref())
-        .map(|agent| (agent.pane.as_str(), agent.status));
+        .map(|agent| {
+            let finish = agent.changed_ms;
+            let status = agent.status;
+            (agent.pane.as_str(), Agent { finish, status })
+        });
     chats.chain(terminals).collect()
 }
 
@@ -63,25 +89,28 @@ impl Opened {
 
     /// Records that a phone showed `pane`; only a finished agent stays
     /// recorded, since one still working has not finished what was seen.
-    pub(crate) fn open(&self, layout: &Layout, pane: &str) {
-        if statuses(layout).get(pane) == Some(&AgentStatus::Done)
-            && self.marks().opened.insert(pane.to_owned())
-        {
+    pub(crate) fn open(&self, layout: &Layout, pane: &str, chat: impl Fn(&str) -> ChatFacts) {
+        let agents = agents(layout, chat);
+        let Some(agent) = agents.get(pane).filter(|agent| is_done(agent)) else {
+            return;
+        };
+        let seen = self.marks().opened.insert(pane.to_owned(), agent.finish);
+        if seen != Some(agent.finish) {
             self.changed
                 .send_modify(|moved| *moved = moved.wrapping_add(1));
         }
     }
 
     /// A view of `pane` opened.
-    pub(super) fn begin(&self, layout: &Layout, pane: &str) {
+    pub(super) fn begin(&self, layout: &Layout, pane: &str, chat: impl Fn(&str) -> ChatFacts) {
         *self.marks().watching.entry(pane.to_owned()).or_default() += 1;
-        self.open(layout, pane);
+        self.open(layout, pane, chat);
     }
 
     /// A view of `pane` closed. What finished in it was seen, even if
     /// nothing asked for the count while it was open.
-    pub(super) fn end(&self, layout: &Layout, pane: &str) {
-        self.open(layout, pane);
+    pub(super) fn end(&self, layout: &Layout, pane: &str, chat: impl Fn(&str) -> ChatFacts) {
+        self.open(layout, pane, chat);
         let mut marks = self.marks();
         if let Some(views) = marks.watching.get_mut(pane) {
             *views -= 1;
@@ -96,35 +125,42 @@ impl Opened {
         self.changed.subscribe()
     }
 
-    /// The panes that want the user now; `questions` says how many a chat
-    /// has waiting. Also forgets what no longer applies.
+    /// The panes that want the user now; `chat` says what a chat's
+    /// transcript holds. Also forgets what no longer applies.
     pub(crate) fn needing(
         &self,
         layout: &Layout,
-        questions: impl Fn(&str) -> usize,
+        chat: impl Fn(&str) -> ChatFacts,
     ) -> BTreeSet<String> {
-        let statuses = statuses(layout);
+        let agents = agents(layout, &chat);
         let mut marks = self.marks();
         let Marks { opened, watching } = &mut *marks;
-        opened.retain(|pane| statuses.get(pane.as_str()) == Some(&AgentStatus::Done));
-        opened.extend(
-            watching
-                .keys()
-                .filter(|pane| statuses.get(pane.as_str()) == Some(&AgentStatus::Done))
-                .cloned(),
-        );
-        let chats = layout.chats().map(|chat| chat.pane.as_str());
-        let asking = chats.filter(|pane| questions(pane) > 0);
-        let waiting = statuses
+        opened.retain(|pane, seen| {
+            agents
+                .get(pane.as_str())
+                .is_some_and(|agent| is_done(agent) && agent.finish == *seen)
+        });
+        for pane in watching.keys() {
+            if let Some(agent) = agents.get(pane.as_str()).filter(|agent| is_done(agent)) {
+                opened.insert(pane.clone(), agent.finish);
+            }
+        }
+        let chats = layout.chats().map(|row| row.pane.as_str());
+        let asking = chats.filter(|pane| chat(pane).questions > 0);
+        let waiting = agents
             .iter()
-            .filter(|(pane, status)| match status {
+            .filter(|(pane, agent)| match agent.status {
                 AgentStatus::Blocked => true,
-                AgentStatus::Done => !opened.contains(**pane),
+                AgentStatus::Done => !opened.contains_key(**pane),
                 AgentStatus::Idle | AgentStatus::Unknown | AgentStatus::Working => false,
             })
             .map(|(pane, _)| *pane);
         asking.chain(waiting).map(str::to_owned).collect()
     }
+}
+
+fn is_done(agent: &Agent) -> bool {
+    agent.status == AgentStatus::Done
 }
 
 /// A phone's view of one pane, for as long as this lives.
@@ -135,7 +171,9 @@ pub(crate) struct Watching {
 
 impl Watching {
     pub(crate) fn new(state: &Shared, pane: &str) -> Self {
-        state.opened.begin(&state.hub.layout(), pane);
+        state
+            .opened
+            .begin(&state.hub.layout(), pane, |pane| state.chat_facts(pane));
         Self {
             pane: pane.to_owned(),
             state: state.clone(),
@@ -145,17 +183,33 @@ impl Watching {
 
 impl Drop for Watching {
     fn drop(&mut self) {
-        self.state.opened.end(&self.state.hub.layout(), &self.pane);
+        let state = &self.state;
+        state.opened.end(&state.hub.layout(), &self.pane, |pane| {
+            state.chat_facts(pane)
+        });
     }
 }
 
 impl State {
+    /// What `pane`'s chat holds; nothing for a pane that is not a chat.
+    fn chat_facts(&self, pane: &str) -> ChatFacts {
+        self.hub.chat(pane).map_or_else(ChatFacts::default, |link| {
+            let summary = link.summary();
+            ChatFacts {
+                finish: summary.last_turn_ended_ms,
+                questions: summary.questions,
+            }
+        })
+    }
+
+    /// Records that a phone showed `pane`.
+    pub(crate) fn mark_opened(&self, layout: &Layout, pane: &str) {
+        self.opened.open(layout, pane, |pane| self.chat_facts(pane));
+    }
+
     /// The panes that want the user now.
     pub(crate) fn attention(&self) -> BTreeSet<String> {
-        self.opened.needing(&self.hub.layout(), |pane| {
-            self.hub
-                .chat(pane)
-                .map_or(0, |link| link.summary().questions)
-        })
+        self.opened
+            .needing(&self.hub.layout(), |pane| self.chat_facts(pane))
     }
 }

@@ -75,7 +75,7 @@ pub(super) async fn chat(
     let layout = state.hub.layout();
     let (workspace, row) = layout.chat(&pane).ok_or(ApiError::NotFound)?;
     let link = state.hub.chat(&pane).ok_or(ApiError::NotFound)?;
-    state.opened.open(&layout, &pane);
+    state.mark_opened(&layout, &pane);
     Ok(Html(
         render::chat(workspace, row, &link.view(), now_ms()).into_string(),
     ))
