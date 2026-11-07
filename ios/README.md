@@ -94,6 +94,8 @@ and nothing goes through your phone.
    - `-tab workspaces|settings` opens that tab, and `-openWorkspace ID`
      opens that workspace's screen in it.
    - `-otherAgents YES` unfolds a workspace's other agents.
+   - `-renameWorkspace YES` opens a workspace's rename alert. It lists the
+     local Herdr daemon's real workspaces, so pressing Rename changes one.
    - `-newWorkspace YES` opens the new workspace form.
    - `-syncBar waiting|failed` shows the sync bar as if a change were on
      its way or had failed.
