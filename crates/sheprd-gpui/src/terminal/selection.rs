@@ -291,18 +291,30 @@ pub(super) fn shown(cell: &CellData) -> &str {
 /// The cells of one row that read as text, each with its column, counted from
 /// the first cell, and the columns it spans. The wire skip flag is not a
 /// wide-cell marker: continuation cells can be ordinary blanks, so a wide
-/// grapheme covers the cells its width takes, and the scan starts at the
+/// grapheme covers the blank cells its width takes, and the scan starts at the
 /// row's first cell so a range starting on a continuation recognizes it too.
+/// Text in a covered cell is its own: a symbol Unicode counts as wide may sit
+/// in one column, as an emoji presentation sequence can.
 pub(super) fn graphemes(cells: &[CellData]) -> impl Iterator<Item = (usize, usize, &CellData)> {
     let mut covered = 0;
     cells.iter().enumerate().filter_map(move |(column, cell)| {
-        if column < covered || cell.skip {
+        if cell.skip || (column < covered && cell.symbol.trim().is_empty()) {
             return None;
         }
         let span = cell.symbol.width().max(1).min(cells.len() - column);
         covered = column + span;
         Some((column, span, cell))
     })
+}
+
+/// Whether each of `cells`, the start of a row, only continues the wide
+/// grapheme before it, by the reading of [`graphemes`].
+pub(super) fn continuations(cells: &[CellData]) -> Vec<bool> {
+    let mut continuing = vec![true; cells.len()];
+    for (column, _, _) in graphemes(cells) {
+        continuing[column] = false;
+    }
+    continuing
 }
 
 /// The columns of the word a double click at `column` chooses. An explicit
@@ -320,20 +332,21 @@ fn word(frame: &FrameData, region: &Region, row: u16, column: u16) -> Option<Ran
         .cells
         .get(offset + usize::from(columns.start)..offset + usize::from(columns.end))?;
     // A wide character's continuation cells belong to the cell that drew it.
-    let source = |index: usize| (0..=index).rev().find(|&i| !cells[i].skip).unwrap_or(index);
+    let continuing = continuations(cells);
+    let source = |index: usize| (0..=index).rev().find(|&i| !continuing[i]).unwrap_or(index);
     let hit = source(usize::from(column - columns.start));
     if let Some(link) = cells[hit].hyperlink {
         return Some(run(columns.start, hit, cells.len(), &|i| {
-            cells[i].skip || cells[i].hyperlink == Some(link)
+            continuing[i] || cells[i].hyperlink == Some(link)
         }));
     }
 
     // Byte offsets into the row's text, so a plain URL maps back to columns.
     let mut text = String::new();
     let mut starts = Vec::with_capacity(cells.len());
-    for cell in cells {
+    for (cell, &continues) in cells.iter().zip(&continuing) {
         starts.push(text.len());
-        if cell.skip {
+        if continues {
             continue;
         }
         let symbol = shown(cell);

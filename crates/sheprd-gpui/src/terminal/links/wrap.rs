@@ -11,7 +11,7 @@
 //! when the backslash ends the row above.
 
 use super::super::selection::separates;
-use super::{MAX_ROW_BYTES, path::starts_with_drive, shown};
+use super::{MAX_ROW_BYTES, continuations, path::starts_with_drive, shown};
 use sheprd_client::protocol::{CellData, FrameData};
 use std::ops::{Range, RangeInclusive};
 
@@ -19,10 +19,15 @@ use std::ops::{Range, RangeInclusive};
 /// so a screen of unbroken text costs a bounded amount per pointer move.
 pub(super) const MAX_WRAPPED_ROWS: u16 = 16;
 
-/// Whether a cell reads as nothing. A wide glyph's continuation cell is part
-/// of that glyph, not a blank.
+/// Whether a cell reads as nothing, unless it continues a wide glyph, which
+/// only the row around it can tell: see [`continuations`].
 fn blank(cell: &CellData) -> bool {
     !cell.skip && shown(cell).chars().all(char::is_whitespace)
+}
+
+/// Whether text reaches the last of `cells`, a whole row of the area.
+fn fills(cells: &[CellData]) -> bool {
+    cells.last().is_some_and(|cell| !blank(cell)) || continuations(cells).last() == Some(&true)
 }
 
 /// Whether `cells` start with a drive, as in `C:\`, in whose word a
@@ -61,6 +66,7 @@ impl Words {
     /// leaves the carried word, and whether it started with a drive, as it is.
     fn of(cells: &[CellData], from: Option<Reading>) -> Self {
         let mut breaks = Vec::with_capacity(cells.len());
+        let continuing = continuations(cells);
         let mut indent = from.is_some_and(|reading| !reading.escape);
         let Reading {
             mut escape,
@@ -70,12 +76,13 @@ impl Words {
             drive: starts_drive(cells),
         });
         for (index, cell) in cells.iter().enumerate() {
-            if indent && blank(cell) {
+            let stops = !continuing[index] && blank(cell);
+            if indent && stops {
                 breaks.push(true);
                 continue;
             }
             indent = false;
-            if cell.skip || std::mem::take(&mut escape) {
+            if continuing[index] || std::mem::take(&mut escape) {
                 breaks.push(false);
                 continue;
             }
@@ -85,7 +92,7 @@ impl Words {
             } else if separates(first) {
                 drive = cells.get(index + 1..).is_some_and(starts_drive);
             }
-            breaks.push(blank(cell));
+            breaks.push(stops);
         }
         Self {
             breaks,
@@ -160,11 +167,7 @@ impl<'a> Area<'a> {
     /// carries its reading into the next only where the two join, so a row
     /// under one it does not go on from is read afresh.
     fn line(&self, row: u16) -> Option<Line> {
-        let filled = |row: u16| {
-            self.cells(row)
-                .and_then(<[CellData]>::last)
-                .is_some_and(|cell| !blank(cell))
-        };
+        let filled = |row: u16| self.cells(row).is_some_and(fills);
         let mut first = row;
         while row - first < MAX_WRAPPED_ROWS && first.checked_sub(1).is_some_and(filled) {
             first -= 1;
@@ -238,7 +241,7 @@ impl<'a> Area<'a> {
 
     /// The text of `rows`, bounded like a single row's; `None` past that
     /// bound or the area.
-    pub(super) fn read(&self, rows: RangeInclusive<u16>) -> Option<Run<'a>> {
+    pub(super) fn read(&self, rows: RangeInclusive<u16>) -> Option<Run> {
         let first = *rows.start();
         let rows = rows
             .map(|row| self.cells(row))
@@ -252,12 +255,13 @@ impl<'a> Area<'a> {
             indents.push(if reading.is_some() { words.indent() } else { 0 });
             reading = Some(words.end);
         }
+        let continuing: Vec<_> = rows.iter().map(|cells| continuations(cells)).collect();
         let mut text = String::new();
         let mut starts = Vec::with_capacity(rows.iter().map(|cells| cells.len()).sum());
-        for (cells, &indent) in rows.iter().zip(&indents) {
+        for ((cells, continuing), &indent) in rows.iter().zip(&continuing).zip(&indents) {
             for (index, cell) in cells.iter().enumerate() {
                 starts.push(text.len());
-                if cell.skip || index < indent {
+                if continuing[index] || index < indent {
                     continue;
                 }
                 let symbol = shown(cell);
@@ -270,7 +274,7 @@ impl<'a> Area<'a> {
         Some(Run {
             columns: self.columns.clone(),
             first,
-            rows,
+            continuing,
             indents,
             starts,
             text,
@@ -311,10 +315,11 @@ impl Line {
 
 /// Consecutive rows of one area read as one text, and where each cell's text
 /// starts in it, so a link found in the text maps back to its cells.
-pub(super) struct Run<'a> {
+pub(super) struct Run {
     columns: Range<u16>,
     first: u16,
-    rows: Vec<&'a [CellData]>,
+    /// Whether each cell of each row only continues a wide glyph.
+    continuing: Vec<Vec<bool>>,
     /// The breaks each row after the first starts with, which are no part of
     /// the line it continues.
     indents: Vec<usize>,
@@ -323,7 +328,7 @@ pub(super) struct Run<'a> {
     pub(super) text: String,
 }
 
-impl Run<'_> {
+impl Run {
     /// Where the text of cell `index` of frame row `row` starts.
     pub(super) fn start_of(&self, row: u16, index: usize) -> Option<usize> {
         let width = usize::from(self.columns.end - self.columns.start);
@@ -340,16 +345,15 @@ impl Run<'_> {
             self.columns.start + cells.start as u16..self.columns.start + cells.end as u16
         };
         (self.first..=u16::MAX)
-            .zip(self.rows.iter().zip(&self.indents))
+            .zip(self.continuing.iter().zip(&self.indents))
             .zip(self.starts.chunks(width.max(1)))
-            .filter_map(|((row, (cells, &indent)), starts)| {
-                let on = |i: &usize| !cells[*i].skip && range.contains(&starts[*i]);
-                let first = (indent..cells.len()).find(on)?;
-                let last = (0..cells.len()).rev().find(on)?;
+            .filter_map(|((row, (continuing, &indent)), starts)| {
+                let cells = continuing.len();
+                let on = |i: &usize| !continuing[*i] && range.contains(&starts[*i]);
+                let first = (indent..cells).find(on)?;
+                let last = (0..cells).rev().find(on)?;
                 // A wide character's continuation cells belong to the link too.
-                let end = (last + 1..cells.len())
-                    .find(|&i| !cells[i].skip)
-                    .unwrap_or(cells.len());
+                let end = (last + 1..cells).find(|&i| !continuing[i]).unwrap_or(cells);
                 Some((row, columns(first..end)))
             })
             .collect()
