@@ -530,11 +530,13 @@ fn install(
     {
         pane.steps.set(true, crate::motion::now(), true);
     }
-    // One call's output open, the rest folded, as a reader leaves them.
+    // A call's output and an edit's diff open, the rest folded, as a reader
+    // leaves them.
     if options.case == "tools"
         && let Some(pane) = view.chats.pane_mut(PANE)
     {
-        pane.expanded.insert(EntryId(3));
+        pane.toggle_expanded(EntryId(3));
+        pane.toggle_expanded(EntryId(5));
     }
     if !options.read_only && !existing {
         let font = view.config.ui.clone();
@@ -672,6 +674,15 @@ fn visuals_ready(view: &SheprdWindow) -> Result<bool> {
                     });
                 }
             }
+            // Only opened previews ask for a grammar; plain ones never land.
+            Body::Tool(summary) => ids.extend(
+                summary
+                    .previews
+                    .iter()
+                    .flat_map(super::prepared::tool::Preview::codes)
+                    .map(|code| code.id)
+                    .filter(|id| pane.prepared.visuals.wants(*id)),
+            ),
             _ => {}
         }
     }

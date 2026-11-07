@@ -43,6 +43,15 @@ fn tools_start_folded_and_toggle_their_complete_output(cx: &mut TestAppContext) 
         content.size.height > header.size.height * 6.,
         "output beyond the old six-line preview is drawn"
     );
+    // The opened card outgrew this small window and the list followed its
+    // end, so its header has to come back into view to be clicked.
+    let chat = cx.debug_bounds("chat-view").unwrap();
+    cx.simulate_event(gpui::ScrollEvent {
+        position: chat.center(),
+        delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(200.))),
+        ..Default::default()
+    });
+    poll(&view, &program, cx);
     let header = cx.debug_bounds("chat-tool-1").unwrap();
     cx.simulate_click(header.center(), Modifiers::default());
     poll(&view, &program, cx);
