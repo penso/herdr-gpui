@@ -417,6 +417,48 @@ phone never disturbs the desktop's layout.
   - **What it needs.** A machine is reachable only at an address its CA
     covers: a LAN, Tailscale, or `.local` address. A machine reached only
     through a provider's proxy is paired but unreachable from the phone.
+  - **The web app.** It pairs the same machines directly, with what a
+    browser allows. Nothing is relayed through this computer.
+    - **Pairing.** Computers lists the machines of the computer shown, read
+      from `GET /api/v2/hosts` on every connect. Allowed machines get a key
+      without asking, and the others a Pair button. Each key is a new
+      non-extractable WebCrypto key, kept in IndexedDB as `link:COMPUTER:HOST`
+      until the machine holds it, so it outlives a reload, and then as that
+      machine's device key. The machine joins the computers list, marked
+      `via` this computer, and lists no machines of its own, so pairings do
+      not chain.
+    - **CORS.** The page calls the machine from its own origin, which the
+      machine has never met. `POST /api/v2/hosts/{host}/pair` passes on the
+      request's `Origin` as `app`, and the machine admits it until the
+      device is revoked. Unlike a claim, this computer's own origin counts,
+      since to the machine it is another computer's. A daemon that answers
+      `Enroll` without `app` predates this and would refuse the page, so
+      `enroll` revokes the device and fails as outdated.
+    - **Trust.** A page cannot be told which certificate to expect, so the
+      phone must trust each machine's authority itself, once per machine,
+      and the app cannot do that for the user. A machine that does not
+      answer opens Set up: its `/ca.mobileconfig` and `/ca.pem` at each of
+      its addresses, the fingerprint this computer reported, the steps, and
+      Check again. The files come from the machine over a connection the
+      phone does not trust yet, so comparing that fingerprint is the check.
+    - **What a browser cannot do.**
+      - Tell an untrusted certificate from a machine that is off or out of
+        reach, or from a CORS refusal: each is the same network error, so
+        the app names them all rather than guess.
+      - Pin. The trust described under Several computers applies: the page
+        at the app's origin can use every key it holds. A computer that
+        vouches for a machine reaches it over SSH already, so this gives it
+        nothing new.
+      - Share a key across origins. Only the app that paired a machine
+        holds its key: the machine's own page has none, and a browser and a
+        Home Screen app that keep separate storage each pair for themselves
+        (Pair again, which replaces the device).
+      - Start without the computer it was installed from, except from its
+        service worker's cache, which needs that computer's certificate
+        trusted when the app first ran. Listing and pairing machines need
+        the computer awake; using a paired one does not.
+      - Notify from several machines at once: the app holds one push
+        subscription (Several computers).
   - **Which build a machine gets.** Sheprd copies every build over SSH,
     so the machine needs no internet:
     - A machine like this computer, or any Mac when this is a release (its

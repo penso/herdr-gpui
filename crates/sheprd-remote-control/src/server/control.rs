@@ -168,6 +168,7 @@ pub(crate) fn answer(state: &State, stop: &watch::Sender<bool>, request: Request
         Request::HostRevoked(revoke) => state.auth().host_revoked(&revoke).map(|()| Response::Done),
         Request::Enroll(enroll) => state.auth().enroll(&enroll, now).map(|device| {
             Response::Enrolled(control::hosts::Enrolled {
+                app: enroll.app,
                 device,
                 computer: state.computer.clone(),
                 fingerprint: state.fingerprint.clone(),

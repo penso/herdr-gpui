@@ -156,8 +156,27 @@ fn enroll_then_keep(
 
 fn add_phone(input: &Input, state_dir: &Path) -> super::Result<Enrolled> {
     let address = control::address(state_dir);
-    match control::request(&address, &Request::Enroll(input.enroll.clone())) {
-        Ok(Response::Enrolled(enrolled)) => Ok(enrolled),
+    let answer = control::request(&address, &Request::Enroll(input.enroll.clone()));
+    read_answer(input, state_dir, answer)
+}
+
+/// What the daemon's `answer` to adding the phone means.
+fn read_answer(
+    input: &Input,
+    state_dir: &Path,
+    answer: Result<Response, control::Error>,
+) -> super::Result<Enrolled> {
+    match answer {
+        Ok(Response::Enrolled(enrolled)) if enrolled.app == input.enroll.app => Ok(enrolled),
+        // A daemon from before web apps took the phone, but it would refuse
+        // the app holding the key, so the pairing fails rather than look
+        // paired and never connect.
+        Ok(Response::Enrolled(enrolled)) => {
+            if let Err(error) = revoke(state_dir, enrolled.device) {
+                tracing::warn!(%error, "Could not remove a phone whose pairing failed");
+            }
+            Err(Error::Outdated.into())
+        }
         Ok(_) => Err(Error::Unexpected.into()),
         // A daemon from before `Enroll` closes without answering.
         Err(control::Error::NoAnswer | control::Error::Frame(_)) => Err(Error::Outdated.into()),

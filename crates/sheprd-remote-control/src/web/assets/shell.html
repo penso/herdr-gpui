@@ -86,6 +86,52 @@
       <button type="button" class="row text-accent w-full text-left" data-add-computer>Add a computer</button>
     </div>
     <p class="text-muted text-xs px-4 pt-2">In Sheprd on that computer, open Settings › Remote control and choose Pair a device, then scan its code here.</p>
+    <div data-links hidden>
+      <h2 class="text-muted text-xs px-4 mt-6 pb-2">Machines <span data-links-computer></span> connects to</h2>
+      <div class="group-list" data-link-list></div>
+      <p class="text-muted text-xs px-4 pt-2">This phone pairs with each machine directly and reaches it without <span data-links-computer></span>, so it keeps them while that computer sleeps.</p>
+    </div>
+  </div>
+</template>
+
+<template id="t-link">
+  <div class="row w-full">
+    <span class="flex-1 min-w-0">
+      <b class="block truncate font-semibold" data-name></b>
+      <small class="block text-muted" data-state></small>
+    </span>
+    <button type="button" class="chip text-accent shrink-0" data-link-pair hidden></button>
+  </div>
+</template>
+
+<template id="t-host-trust">
+  <div class="flex flex-col gap-3 pb-16">
+    <header class="flex items-center gap-2 pt-1.5">
+      <a href="/computers" data-nav class="grid place-items-center text-accent w-8 h-9 -ml-1.5 shrink-0" aria-label="Back">
+        <svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      </a>
+      <h1 class="text-[22px] font-bold truncate">Set up <span data-name></span></h1>
+    </header>
+    <p class="text-muted text-sm px-4">It is paired. This phone only has to trust its certificate, once per machine: a browser connects only to certificates the phone trusts. The iOS app is told which one to expect, but a web app cannot be.</p>
+    <p class="text-amber text-sm px-4" data-trust-none hidden>Sheprd has no address for this machine that a phone can use. A machine reached only through a provider's proxy is paired, but a phone cannot reach it.</p>
+    <div class="flex flex-col gap-3" data-trust-steps>
+      <div class="group-list" data-trust-addresses></div>
+      <p class="text-muted text-xs px-4">Use an address this phone can reach now. The browser warns that the connection is not private, because it does not trust the machine yet; continue to get the certificate.</p>
+      <p class="text-muted text-xs px-4">Trust it only if its SHA-256 fingerprint is the one your computer reported: <span class="font-mono break-all" data-fingerprint></span></p>
+      <p class="text-muted text-xs px-4">iPhone: install the profile in Settings › General › VPN &amp; Device Management, then turn on full trust in Settings › General › About › Certificate Trust Settings. Android: install the file as a CA certificate in Settings.</p>
+    </div>
+    <button type="button" class="btn btn-primary" data-trust-check>Check again</button>
+    <p class="text-muted text-sm text-center px-4" data-trust-state></p>
+  </div>
+</template>
+
+<template id="t-trust-address">
+  <div class="row flex-col items-start gap-1">
+    <b class="font-mono text-sm break-all" data-address></b>
+    <div class="flex gap-2">
+      <a class="chip text-accent" href="/ca.mobileconfig" target="_blank" rel="noopener" data-computer>iPhone profile</a>
+      <a class="chip text-accent" href="/ca.pem" target="_blank" rel="noopener" download="herdr-remote-ca.pem" data-computer>Android certificate</a>
+    </div>
   </div>
 </template>
 

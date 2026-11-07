@@ -76,6 +76,7 @@ fn the_daemon_enrolls_a_phone_and_says_where_it_answers() {
             public_key,
             via: "MacBook Pro".into(),
             replace: None,
+            app: None,
         }),
     );
     let Response::Enrolled(enrolled) = response else {
@@ -100,10 +101,40 @@ fn the_daemon_enrolls_a_phone_and_says_where_it_answers() {
                 public_key: "nope".into(),
                 via: "MacBook Pro".into(),
                 replace: None,
+                app: None,
             })
         ),
         Response::Error { .. }
     ));
+}
+
+#[test]
+fn the_daemon_says_which_web_app_it_admits() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = web::tests::state(dir.path());
+    let (stop, _) = watch::channel(false);
+    let key = p256::ecdsa::SigningKey::from_slice(&[7; 32]).unwrap();
+    let app = "https://mac.tail1234.ts.net:7443";
+    let enroll = |app: &str| {
+        Request::Enroll(Enroll {
+            name: "iPhone".into(),
+            public_key: crate::auth::encode(key.verifying_key().to_sec1_point(false).as_bytes()),
+            via: "MacBook Pro".into(),
+            replace: None,
+            app: Some(app.into()),
+        })
+    };
+    let Response::Enrolled(enrolled) = control::answer(&state, &stop, enroll(app)) else {
+        panic!("not enrolled");
+    };
+    assert_eq!(enrolled.app.as_deref(), Some(app));
+    assert!(state.admits(app));
+    // Only an origin a browser could send is kept.
+    assert!(matches!(
+        control::answer(&state, &stop, enroll("http://mac.local")),
+        Response::Error { .. }
+    ));
+    assert!(!state.admits("http://mac.local"));
 }
 
 #[test]

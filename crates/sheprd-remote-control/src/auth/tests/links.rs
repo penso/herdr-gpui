@@ -27,6 +27,7 @@ pub(super) fn enrolled(device: &str) -> Enrolled {
         computer: "devbox".into(),
         fingerprint: "11:22:33".into(),
         origins: vec!["https://100.64.0.7:7443".into()],
+        app: None,
     }
 }
 
@@ -99,7 +100,7 @@ fn an_allowed_host_is_paired_through_herdr_ui() {
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
     let key = public_key(&signing_key(2));
     assert_eq!(
-        auth.ask_host(&device, &devbox(), &key, T0).unwrap(),
+        auth.ask_host(&device, &devbox(), &key, None, T0).unwrap(),
         HostState::Pending
     );
     let taken = auth.take_host_pairings(T0);
@@ -114,7 +115,7 @@ fn an_allowed_host_is_paired_through_herdr_ui() {
     assert!(auth.take_host_pairings(T0).is_empty());
     // While Sheprd works on it, the phone cannot start another.
     assert!(matches!(
-        auth.ask_host(&device, &devbox(), &key, T0),
+        auth.ask_host(&device, &devbox(), &key, None, T0),
         Err(Error::Links(crate::auth::links::Error::Busy))
     ));
 
@@ -143,7 +144,7 @@ fn pairing_a_paired_host_again_replaces_its_device() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
     let key = public_key(&signing_key(2));
-    auth.ask_host(&device, &devbox(), &key, T0).unwrap();
+    auth.ask_host(&device, &devbox(), &key, None, T0).unwrap();
     auth.take_host_pairings(T0);
     auth.host_paired(
         &device,
@@ -153,7 +154,8 @@ fn pairing_a_paired_host_again_replaces_its_device() {
         T0,
     )
     .unwrap();
-    auth.ask_host(&device, &devbox(), &key, T0 + 1).unwrap();
+    auth.ask_host(&device, &devbox(), &key, None, T0 + 1)
+        .unwrap();
     let taken = auth.take_host_pairings(T0 + 1);
     assert_eq!(taken[0].replace, Some(DeviceId("d-old".into())));
 }
@@ -164,7 +166,7 @@ fn a_host_not_allowed_asks_the_desktop_first() {
     let (mut auth, device) = paired(dir.path(), &[]);
     let key = public_key(&signing_key(2));
     assert_eq!(
-        auth.ask_host(&device, &gpu(), &key, T0).unwrap(),
+        auth.ask_host(&device, &gpu(), &key, None, T0).unwrap(),
         HostState::Asking
     );
     let taken = auth.take_host_pairings(T0);
@@ -180,7 +182,7 @@ fn a_failure_is_shown_until_the_phone_retries() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
     let key = public_key(&signing_key(2));
-    auth.ask_host(&device, &devbox(), &key, T0).unwrap();
+    auth.ask_host(&device, &devbox(), &key, None, T0).unwrap();
     auth.take_host_pairings(T0);
     auth.host_paired(
         &device,
@@ -197,7 +199,8 @@ fn a_failure_is_shown_until_the_phone_retries() {
     };
     assert_eq!(reason.len(), control::hosts::MAX_REASON);
     assert_eq!(
-        auth.ask_host(&device, &devbox(), &key, T0 + 1).unwrap(),
+        auth.ask_host(&device, &devbox(), &key, None, T0 + 1)
+            .unwrap(),
         HostState::Pending
     );
 }
@@ -207,9 +210,9 @@ fn work_herdr_ui_never_finishes_fails_and_untaken_work_lapses() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox(), gpu()]);
     let key = public_key(&signing_key(2));
-    auth.ask_host(&device, &devbox(), &key, T0).unwrap();
+    auth.ask_host(&device, &devbox(), &key, None, T0).unwrap();
     auth.take_host_pairings(T0);
-    auth.ask_host(&device, &gpu(), &key, T0).unwrap();
+    auth.ask_host(&device, &gpu(), &key, None, T0).unwrap();
     let later = T0 + TAKEN_TTL_MS;
     assert!(matches!(
         state_of(&mut auth, &device, &devbox(), later),
@@ -241,12 +244,13 @@ fn unknown_hosts_and_bad_keys_are_refused() {
             &device,
             &HostId("ssh:elsewhere".into()),
             &public_key(&signing_key(2)),
+            None,
             T0
         ),
         Err(Error::Links(crate::auth::links::Error::UnknownHost))
     ));
     assert!(matches!(
-        auth.ask_host(&device, &devbox(), "not a key", T0),
+        auth.ask_host(&device, &devbox(), "not a key", None, T0),
         Err(Error::InvalidKey)
     ));
     assert!(matches!(
@@ -254,6 +258,7 @@ fn unknown_hosts_and_bad_keys_are_refused() {
             &DeviceId("nobody".into()),
             &devbox(),
             &public_key(&signing_key(2)),
+            None,
             T0
         ),
         Err(Error::UnknownDevice)
@@ -268,7 +273,7 @@ fn unknown_hosts_and_bad_keys_are_refused() {
 fn an_answer_with_a_bad_enrollment_is_refused() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
-    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), T0)
+    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), None, T0)
         .unwrap();
     auth.take_host_pairings(T0);
     let mut bad = enrolled("d");
@@ -283,7 +288,7 @@ fn an_answer_with_a_bad_enrollment_is_refused() {
 fn revoking_a_phone_owes_its_hosts_a_revocation() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox(), gpu()]);
-    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), T0)
+    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), None, T0)
         .unwrap();
     auth.take_host_pairings(T0);
     auth.host_paired(
@@ -321,6 +326,7 @@ fn an_enrolled_phone_signs_in_with_its_own_key() {
                 public_key: public_key(&key),
                 via: "MacBook Pro".into(),
                 replace: None,
+                app: None,
             },
             T0,
         )
@@ -347,6 +353,7 @@ fn enrolling_again_replaces_only_an_enrolled_device() {
         public_key: public_key(&signing_key(4)),
         via: "MacBook Pro".into(),
         replace,
+        app: None,
     };
     let first = auth.enroll(&enroll(None), T0).unwrap();
     let second = auth.enroll(&enroll(Some(first.clone())), T0).unwrap();
@@ -378,7 +385,7 @@ fn a_device_list_from_before_hosts_still_loads() {
 fn a_host_that_answers_after_the_phone_was_revoked_is_owed_a_revocation() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
-    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), T0)
+    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), None, T0)
         .unwrap();
     auth.take_host_pairings(T0);
     // Revoked while Sheprd was still enrolling it on the host.
@@ -405,7 +412,7 @@ fn a_host_that_answers_after_the_phone_was_revoked_is_owed_a_revocation() {
 fn a_host_that_answers_after_its_request_timed_out_is_owed_a_revocation() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
-    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), T0)
+    auth.ask_host(&device, &devbox(), &public_key(&signing_key(2)), None, T0)
         .unwrap();
     auth.take_host_pairings(T0);
     let late = T0 + TAKEN_TTL_MS;
@@ -426,4 +433,36 @@ fn a_host_that_answers_after_its_request_timed_out_is_owed_a_revocation() {
             .is_err()
     );
     assert_eq!(auth.host_revokes().len(), 1);
+}
+
+#[test]
+fn a_web_app_origin_goes_with_its_key_to_the_host() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut auth, device) = paired(dir.path(), &[devbox()]);
+    let app = "https://mac.tail1234.ts.net:7443";
+    let key = public_key(&signing_key(2));
+    auth.ask_host(&device, &devbox(), &key, Some(app.into()), T0)
+        .unwrap();
+    assert_eq!(auth.take_host_pairings(T0)[0].app.as_deref(), Some(app));
+}
+
+#[test]
+fn an_enrolled_web_app_stays_admitted_only_while_its_device_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut auth = auth(dir.path());
+    let app = "https://mac.tail1234.ts.net:7443";
+    let enroll = |seed: u8, replace: Option<DeviceId>| Enroll {
+        name: "iPhone".into(),
+        public_key: public_key(&signing_key(seed)),
+        via: "MacBook Pro".into(),
+        replace,
+        app: Some(app.into()),
+    };
+    let first = auth.enroll(&enroll(3, None), T0).unwrap();
+    assert_eq!(auth.devices().apps(), [app]);
+    // A new key replaces the device; the app stays admitted through it.
+    let second = auth.enroll(&enroll(4, Some(first)), T0).unwrap();
+    assert_eq!(auth.devices().apps(), [app]);
+    assert!(auth.revoke(&second).unwrap());
+    assert!(auth.devices().apps().is_empty());
 }

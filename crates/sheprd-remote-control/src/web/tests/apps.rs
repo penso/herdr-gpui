@@ -215,9 +215,9 @@ async fn a_malformed_origin_cannot_claim() {
 
 #[test]
 fn only_https_origins_are_app_origins() {
-    assert_eq!(api::app_origin(APP).as_deref(), Some(APP));
-    assert!(api::app_origin("https://[fd7a:115c::1]:7443").is_some());
-    assert!(api::app_origin("https://mac.tail1234.ts.net").is_some());
+    assert_eq!(app_origin(APP).as_deref(), Some(APP));
+    assert!(app_origin("https://[fd7a:115c::1]:7443").is_some());
+    assert!(app_origin("https://mac.tail1234.ts.net").is_some());
     for bad in [
         "https://",
         "http://a",
@@ -225,9 +225,9 @@ fn only_https_origins_are_app_origins() {
         "https://a?b",
         "https://a b",
     ] {
-        assert!(api::app_origin(bad).is_none(), "{bad}");
+        assert!(app_origin(bad).is_none(), "{bad}");
     }
-    assert!(api::app_origin(&format!("https://{}", "a".repeat(260))).is_none());
+    assert!(app_origin(&format!("https://{}", "a".repeat(260))).is_none());
 }
 
 #[tokio::test]

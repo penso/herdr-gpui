@@ -87,6 +87,7 @@ fn a_later_request_is_asked_about_and_closing_declines(cx: &mut TestAppContext) 
             public_key: "KEY".into(),
             confirm: true,
             replace: None,
+            app: None,
         },
         target: None,
         via: "MacBook Pro".into(),

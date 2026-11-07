@@ -11,13 +11,14 @@ fn an_attempt_that_outlasted_a_retry_cannot_answer_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
     let first = public_key(&signing_key(2));
-    auth.ask_host(&device, &devbox(), &first, T0).unwrap();
+    auth.ask_host(&device, &devbox(), &first, None, T0).unwrap();
     auth.take_host_pairings(T0);
     // The phone gave up and asked again with a new key, which Sheprd
     // took while the first attempt still ran.
     let late = T0 + crate::auth::links::TAKEN_TTL_MS;
     let second = public_key(&signing_key(3));
-    auth.ask_host(&device, &devbox(), &second, late).unwrap();
+    auth.ask_host(&device, &devbox(), &second, None, late)
+        .unwrap();
     assert_eq!(auth.take_host_pairings(late).len(), 1);
     assert!(
         auth.host_paired(
@@ -60,7 +61,7 @@ fn a_revocation_whose_save_failed_is_saved_by_the_retry() {
     let dir = tempfile::tempdir().unwrap();
     let (mut auth, device) = paired(dir.path(), &[devbox()]);
     let key = public_key(&signing_key(2));
-    auth.ask_host(&device, &devbox(), &key, T0).unwrap();
+    auth.ask_host(&device, &devbox(), &key, None, T0).unwrap();
     auth.take_host_pairings(T0);
     auth.host_paired(
         &device,

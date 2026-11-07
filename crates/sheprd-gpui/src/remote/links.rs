@@ -156,6 +156,7 @@ fn enroll(job: &Job, cancelled: &AtomicBool) -> Result<Enrolled, Error> {
             public_key: job.pairing.public_key.clone(),
             via: job.via.clone(),
             replace: job.pairing.replace.clone(),
+            app: job.pairing.app.clone(),
         },
         apns: job.apns.clone(),
     };

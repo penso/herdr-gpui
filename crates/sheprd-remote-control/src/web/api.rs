@@ -92,7 +92,7 @@ pub(super) async fn claim(
 
 /// `origin` when it is an `https://` origin as a browser sends it: a host
 /// and an optional port, nothing more, at most 255 bytes.
-pub(super) fn app_origin(origin: &str) -> Option<String> {
+pub(crate) fn app_origin(origin: &str) -> Option<String> {
     let host = origin.strip_prefix("https://")?;
     let valid = !host.is_empty()
         && origin.len() <= 255
