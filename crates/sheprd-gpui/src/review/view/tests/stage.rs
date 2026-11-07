@@ -213,6 +213,34 @@ fn an_untracked_file_stages_whole(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+fn a_stage_finishing_after_the_chrome_moved_says_nothing_of_the_new_checkout(
+    cx: &mut gpui::TestAppContext,
+) {
+    let dir = checkout();
+    let (view, cx) = window(cx, None);
+    open(&view, cx, dir.path());
+    let hunks = headers(&view, cx);
+    let other = Input {
+        checkout: Some("/elsewhere".into()),
+        repo_key: None,
+        branch: "main".into(),
+    };
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let id = the(view);
+            view.stage_review_hunk(id, 0, hunks[0], cx);
+            view.git = Git::fixture(other, Status::default());
+        })
+    });
+    cx.run_until_parked();
+
+    assert_ne!(git(dir.path(), &["diff", "--cached", "--name-only"]), "");
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.git.status().unwrap().staged, 0);
+    });
+}
+
+#[gpui::test]
 fn a_new_file_grown_since_the_review_stages_nothing(cx: &mut gpui::TestAppContext) {
     let dir = checkout();
     let root = dir.path();

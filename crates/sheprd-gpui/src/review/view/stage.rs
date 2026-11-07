@@ -170,10 +170,18 @@ impl SheprdWindow {
         if let Some(review) = self.reviews.get_mut(&id) {
             review.staging = false;
         }
+        // The chrome may have moved to another checkout, which this says
+        // nothing about.
+        let tracked = self
+            .reviews
+            .get(&id)
+            .is_some_and(|review| self.git.tracked() == Some(&review.checkout));
+        let now = Instant::now();
         match staged {
-            Ok(()) => self.git.refresh_staged(Instant::now()),
+            Ok(()) if tracked => self.git.refresh_staged(now),
+            Ok(()) => {}
             Err(error) => {
-                self.git.refresh(Instant::now());
+                self.git.refresh(now);
                 self.show_flash(Flash::warning(error.localize()), cx);
             }
         }

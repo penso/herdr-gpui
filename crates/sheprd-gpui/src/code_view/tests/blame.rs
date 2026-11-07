@@ -96,6 +96,31 @@ fn the_lines_on_screen_are_those_blamed(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn new_text_shows_no_commits_until_its_own_are_read(cx: &mut TestAppContext) {
+    let (dir, path) = checkout();
+    let (view, cx) = window(cx);
+    open_focused(&view, cx, &path, None);
+    cx.simulate_keystrokes("b");
+    cx.run_until_parked();
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let (id, load) = view
+                .code_views
+                .iter()
+                .next()
+                .map(|(id, code)| (*id, code.load))
+                .unwrap();
+            let text = Arc::new(Text::of(&path, "fn zero() {}\nfn one() {}\n"));
+            view.code_view_read(id, load, Ok(text), cx);
+            let code = &view.code_views[&id];
+            assert!(code.blame.wanted());
+            assert!(code.blame.shown().is_none());
+        })
+    });
+    drop(dir);
+}
+
+#[gpui::test]
 fn opening_the_file_again_keeps_blame_on_and_current(cx: &mut TestAppContext) {
     let (dir, path) = checkout();
     let (view, cx) = window(cx);

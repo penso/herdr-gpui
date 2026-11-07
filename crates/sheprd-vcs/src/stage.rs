@@ -6,8 +6,11 @@
 //! everything unstaged there goes to the index. The patch is cut from Git's
 //! own bytes rather than the text the review shows, which is cleaned for
 //! display. A review can be out of date when the file has moved on, so every
-//! line about to be staged is first compared with what the user saw, lines
-//! going as well as lines arriving, and the file itself with the lines shown.
+//! line about to be staged is first compared with what the user saw, and the
+//! file with the lines shown. What the index loses is not compared: it can
+//! hold an edit staged earlier that the review, against HEAD, never showed.
+//! Lines gone since the review are found by reading that diff against HEAD
+//! again.
 //!
 //! Writes run to their deadline and are never cancelled, as `git.rs`'s are
 //! not. Blocking, for a background executor.
@@ -102,8 +105,7 @@ pub struct Hunk {
     /// The working tree's lines shown in the hunk, by line number, cleaned
     /// for display.
     pub lines: HashMap<u32, String>,
-    /// The lines shown as removed, cleaned the same way. Earlier hunks
-    /// staged move these lines' numbers, so they go by their text.
+    /// The lines shown as removed against HEAD, cleaned the same way.
     pub removed: Vec<String>,
 }
 
@@ -115,32 +117,11 @@ pub fn stage_hunk(
     clean: impl Fn(&str) -> String,
 ) -> crate::Result<()> {
     let deadline = Instant::now() + DEADLINE;
-    let spec = literal(&hunk.path);
-    // Every setting that shapes the output is spelled out, whatever the
-    // user configured: the patch has to apply as it stands.
-    let diff = git_bytes(
-        checkout,
-        &[
-            "diff",
-            "--no-color",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--no-renames",
-            "--src-prefix=a/",
-            "--dst-prefix=b/",
-            "--unified=3",
-            "--inter-hunk-context=0",
-            "--",
-            &spec,
-        ],
-        "read unstaged changes",
-        deadline,
-        &|| false,
-        MAX_DIFF,
-    )?;
+    let diff = read_diff(checkout, &[], &hunk.path, deadline)?;
     let patch = patch(&diff, hunk, &clean)?;
     // After the diff: the patch is what was read, and what it leaves out of
-    // a changed file only the file can show.
+    // a changed file only these can show.
+    check_removed(checkout, hunk, &clean, deadline)?;
     check_file(checkout, hunk, &clean, false)?;
     // Git takes the patch from a file: the process runner closes stdin.
     // Private to this user, as the patch holds the file's lines.
@@ -174,6 +155,74 @@ pub fn stage_file(
         Instant::now() + DEADLINE,
         &|| false,
     )?;
+    Ok(())
+}
+
+/// One file's diff from `base`, the index when empty. Every setting that
+/// shapes the output is spelled out, whatever the user configured: the patch
+/// has to apply as it stands.
+fn read_diff(
+    checkout: &str,
+    base: &[&str],
+    path: &str,
+    deadline: Instant,
+) -> crate::Result<Vec<u8>> {
+    let spec = literal(path);
+    let mut args = vec!["diff"];
+    args.extend_from_slice(base);
+    args.extend([
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-renames",
+        "--src-prefix=a/",
+        "--dst-prefix=b/",
+        "--unified=3",
+        "--inter-hunk-context=0",
+        "--",
+        &spec,
+    ]);
+    git_bytes(
+        checkout,
+        &args,
+        "read unstaged changes",
+        deadline,
+        &|| false,
+        MAX_DIFF,
+    )
+}
+
+/// Refuses a file losing a line against HEAD around `hunk` that the review
+/// did not show going. With no commit yet there is nothing to lose.
+fn check_removed(
+    checkout: &str,
+    hunk: &Hunk,
+    clean: impl Fn(&str) -> String,
+    deadline: Instant,
+) -> crate::Result<()> {
+    let verify = ["rev-parse", "--verify", "--quiet", "HEAD"];
+    if git(checkout, &verify, "find HEAD", deadline, &|| false).is_err() {
+        return Ok(());
+    }
+    let diff = read_diff(checkout, &["HEAD"], &hunk.path, deadline)?;
+    let mut shown: HashMap<&str, usize> = HashMap::new();
+    for line in &hunk.removed {
+        *shown.entry(line).or_default() += 1;
+    }
+    let (_, parts) = split(&diff);
+    let walked = parts.into_iter().filter_map(read_hunk);
+    for part in walked.filter(|part| part.span.touches(hunk.span)) {
+        for (_, kind, text) in &part.lines {
+            if *kind != LineKind::Removed {
+                continue;
+            }
+            let text = clean(&String::from_utf8_lossy(text));
+            match shown.get_mut(text.as_str()) {
+                Some(left) if *left > 0 => *left -= 1,
+                _ => return Err(Error::Changed.into()),
+            }
+        }
+    }
     Ok(())
 }
 
@@ -234,10 +283,6 @@ fn patch(diff: &[u8], hunk: &Hunk, clean: impl Fn(&str) -> String) -> Result<Vec
     let (header, parts) = split(diff);
     let mut patch = header.to_vec();
     let mut staged = false;
-    let mut removed: HashMap<&str, usize> = HashMap::new();
-    for line in &hunk.removed {
-        *removed.entry(line).or_default() += 1;
-    }
     for part in parts {
         let Some(walked) = read_hunk(part) else {
             continue;
@@ -252,11 +297,7 @@ fn patch(diff: &[u8], hunk: &Hunk, clean: impl Fn(&str) -> String) -> Result<Vec
                 LineKind::Added => shown == Some(&text),
                 // A context line can lie beyond the lines shown.
                 LineKind::Context => shown.is_none_or(|shown| *shown == text),
-                LineKind::Removed => removed.get_mut(text.as_str()).is_some_and(|left| {
-                    let some = *left > 0;
-                    *left = left.saturating_sub(1);
-                    some
-                }),
+                LineKind::Removed => true,
             };
             if !same {
                 return Err(Error::Changed);

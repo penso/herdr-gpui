@@ -72,6 +72,34 @@ fn a_removed_line_shown_once_covers_one_removal() {
 }
 
 #[test]
+fn a_line_staged_then_edited_again_stages_as_shown() {
+    let (dir, checkout) = checkout();
+    let root = dir.path();
+    std::fs::write(root.join("a.txt"), numbered(&[(5, "middle")])).unwrap();
+    git(root, &["add", "a.txt"]);
+    std::fs::write(root.join("a.txt"), numbered(&[(5, "final")])).unwrap();
+
+    // The review, against HEAD, shows line 5 becoming `final`.
+    stage_hunk(&checkout, &hunk(5, "final"), same).unwrap();
+
+    assert_eq!(git(root, &["show", ":a.txt"]), numbered(&[(5, "final")]));
+}
+
+#[test]
+fn a_checkout_with_no_commit_yet_stages_a_hunk() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(root, &["init", "-q"]);
+    std::fs::write(root.join("a.txt"), numbered(&[])).unwrap();
+    git(root, &["add", "a.txt"]);
+    std::fs::write(root.join("a.txt"), numbered(&[(5, "five")])).unwrap();
+
+    stage_hunk(root.to_str().unwrap(), &hunk(5, "five"), same).unwrap();
+
+    assert_eq!(git(root, &["show", ":a.txt"]), numbered(&[(5, "five")]));
+}
+
+#[test]
 fn a_new_file_that_grew_since_it_was_shown_stages_nothing() {
     let (dir, checkout) = checkout();
     let root = dir.path();

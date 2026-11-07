@@ -412,6 +412,10 @@ impl SheprdWindow {
                 // Colours of other text would land on the wrong words.
                 if view.text().is_some_and(|old| old.source != text.source) {
                     view.spans = Arc::default();
+                    // As would commits on the wrong lines.
+                    if view.blame.shown().is_some() {
+                        view.blame = blame::Lines::Reading;
+                    }
                 }
                 view.state = State::Loaded(text);
                 if let Some(line) = view.target.take() {
