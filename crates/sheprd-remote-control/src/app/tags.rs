@@ -41,6 +41,27 @@ pub fn save(file: &Path, tags: &ComputerTags) -> super::Result<()> {
     fs::rename(&partial, file).map_err(|source| failed("replace", source))
 }
 
+/// Runs `work` as the only process changing `file`: with no daemon running,
+/// each `tags --offer` is its own process, and one that read an older copy
+/// could otherwise finish last. The system frees the lock if its holder dies.
+/// Blocking.
+pub fn locked<T>(file: &Path, work: impl FnOnce() -> super::Result<T>) -> super::Result<T> {
+    let path = file.with_extension("lock");
+    let failed = |operation, source| super::Error::Io {
+        operation,
+        path: path.clone(),
+        source,
+    };
+    let lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|source| failed("open", source))?;
+    lock.lock().map_err(|source| failed("lock", source))?;
+    work()
+}
+
 /// Offers `offer` to the tags in `state_dir` and returns those that stand:
 /// through the daemon when one runs, so its phones hear of it at once, else
 /// in the file it reads when it starts. Blocking.
@@ -54,20 +75,22 @@ pub fn exchange(state_dir: &Path, offer: Option<ComputerTags>) -> super::Result<
         Ok(_) => Err(super::Error::Unexpected),
         Err(control::Error::Connect(_)) => {
             let file = file(state_dir);
-            let saved = load(&file);
             let Some(offer) = offer else {
-                return Ok(saved);
+                return Ok(load(&file));
             };
-            let merged = saved.clone().merged(offer, now_ms());
-            if merged != saved {
-                fs::create_dir_all(state_dir).map_err(|source| super::Error::Io {
-                    operation: "create",
-                    path: state_dir.to_owned(),
-                    source,
-                })?;
-                save(&file, &merged)?;
-            }
-            Ok(merged)
+            fs::create_dir_all(state_dir).map_err(|source| super::Error::Io {
+                operation: "create",
+                path: state_dir.to_owned(),
+                source,
+            })?;
+            locked(&file, || {
+                let saved = load(&file);
+                let merged = saved.clone().merged(offer, now_ms());
+                if merged != saved {
+                    save(&file, &merged)?;
+                }
+                Ok(merged)
+            })
         }
         Err(error) => Err(error.into()),
     }

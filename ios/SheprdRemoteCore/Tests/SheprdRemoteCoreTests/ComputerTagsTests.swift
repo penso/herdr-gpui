@@ -136,16 +136,25 @@ import Testing
 
     @Test func offersGoOneAtATimeAndOnlyTheLatestWaits() {
         var offers = TagOffers<Int>()
-        let first = offers.begin("a", 1)
-        let other = offers.begin("b", 1)
-        let second = offers.begin("a", 2)
-        let third = offers.begin("a", 3)
+        let first = offers.begin("a", 1, edit: 10)
+        let other = offers.begin("b", 1, edit: 10)
+        let second = offers.begin("a", 2, edit: 20)
+        let third = offers.begin("a", 3, edit: 30)
         #expect(first && other && !second && !third)
         let next = offers.finish("a")
         let none = offers.finish("a")
         let otherNext = offers.finish("b")
         #expect(next == 3 && none == nil && otherNext == nil)
-        let again = offers.begin("a", 4)
+        let again = offers.begin("a", 4, edit: 40)
         #expect(again)
+    }
+
+    @Test func theEditGoingIsNotQueuedAgain() {
+        var offers = TagOffers<Int>()
+        let first = offers.begin("a", 1, edit: 10)
+        let replay = offers.begin("a", 1, edit: 10)
+        #expect(first && !replay)
+        let next = offers.finish("a")
+        #expect(next == nil)
     }
 }

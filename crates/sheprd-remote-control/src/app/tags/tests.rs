@@ -38,3 +38,21 @@ fn with_no_daemon_the_file_takes_the_offer() {
     assert_eq!(exchange(&state_dir, Some(stale)).unwrap(), offer);
     assert_eq!(exchange(&state_dir, None).unwrap(), offer);
 }
+
+#[test]
+fn processes_offering_at_once_leave_the_latest() {
+    let dir = tempfile::tempdir().unwrap();
+    let workers: Vec<_> = (1..=32_u64)
+        .map(|edit| {
+            let dir = dir.path().to_owned();
+            std::thread::spawn(move || {
+                let offer = ComputerTags::new([format!("tag{edit}")], edit);
+                exchange(&dir, Some(offer)).unwrap();
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    assert_eq!(load(&file(dir.path())), ComputerTags::new(["tag32"], 32));
+}

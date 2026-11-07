@@ -365,7 +365,7 @@ final class Fleet {
     /// away or too old to keep tags refuses; the copy stays, and its next
     /// home brings this back.
     func offerTags(for computer: Computer) {
-        guard tagOffers.begin(computer.device, computer) else { return }
+        guard tagOffers.begin(computer.device, computer, edit: computer.tagsUpdatedMs) else { return }
         let offer = Home.Tags(tags: computer.tags, updatedMs: computer.tagsUpdatedMs)
         Task {
             defer {

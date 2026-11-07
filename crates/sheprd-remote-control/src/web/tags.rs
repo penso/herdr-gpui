@@ -47,7 +47,7 @@ impl Tags {
         let stored = self.current();
         let merged = stored.clone().merged(offer, now_ms);
         if merged != stored {
-            app::tags::save(&self.file, &merged)?;
+            app::tags::locked(&self.file, || app::tags::save(&self.file, &merged))?;
             self.current.send_replace(merged.clone());
         }
         Ok(merged)

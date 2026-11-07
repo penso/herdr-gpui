@@ -84,27 +84,31 @@ public enum SyncStep: Equatable, Sendable {
     case send
 }
 
-/// The tag offers being sent, one at a time per computer. An offer made
-/// while another is going waits, and only the latest does: it holds every
-/// edit before it.
+/// The tag offers being sent, one at a time per computer. A new edit made
+/// while another goes waits, and only the latest does: it holds every edit
+/// before it. The edit going is not queued again, as a home that arrives
+/// first would ask: the answer settles it, and a replay could undo what
+/// another client did since.
 public struct TagOffers<Offer: Sendable>: Sendable {
-    private var going = Set<String>()
+    private var going: [String: UInt64] = [:]
     private var next: [String: Offer] = [:]
 
     public init() {}
 
-    /// Whether `offer` can go now; if not, it waits for [`finish`].
-    public mutating func begin(_ device: String, _ offer: Offer) -> Bool {
-        guard going.insert(device).inserted else {
-            next[device] = offer
-            return false
+    /// Whether `offer`, the edit made at `edit`, can go now; if not, it
+    /// waits for `finish`.
+    public mutating func begin(_ device: String, _ offer: Offer, edit: UInt64) -> Bool {
+        guard let sending = going[device] else {
+            going[device] = edit
+            return true
         }
-        return true
+        if sending != edit { next[device] = offer }
+        return false
     }
 
     /// Ends the offer going to `device`, and returns the one to send next.
     public mutating func finish(_ device: String) -> Offer? {
-        going.remove(device)
+        going[device] = nil
         return next.removeValue(forKey: device)
     }
 }
