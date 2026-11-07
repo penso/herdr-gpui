@@ -7,6 +7,7 @@ mod custom_reference;
 mod literal_plus;
 mod pane_keys;
 mod platform_defaults;
+mod prefix_chords;
 mod shift_enter;
 
 fn overrides(entries: &[(&str, Binding)]) -> BTreeMap<String, Binding> {
